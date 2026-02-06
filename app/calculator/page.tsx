@@ -44,6 +44,8 @@ type TerminalRow = {
   city: string | null;
   terminal_name: string | null;
   carded_on: string | null; // "YYYY-MM-DD" (null if not carded)
+  // Optional: view may expose an expiration date; if present we use it for display
+  expires_on?: string | null;
   status: "valid" | "expired" | "not_carded";
   starred: boolean | null;
 };
@@ -53,7 +55,7 @@ type TerminalCatalogRow = {
   state: string | null;
   city: string | null;
   terminal_name: string | null;
-  timezone: string | null;
+  timezone?: string | null;
   active: boolean | null;
 };
 
@@ -164,24 +166,15 @@ const styles = {
 
 export default function CalculatorPage() {
   const [authEmail, setAuthEmail] = useState<string>("");
+const [authUserId, setAuthUserId] = useState<string>("");
 
 const [equipOpen, setEquipOpen] = useState(false);
 const [locOpen, setLocOpen] = useState(false);
 const [termOpen, setTermOpen] = useState(false);
+const [catalogOpen, setCatalogOpen] = useState(false);
 
-const [getCardedMode, setGetCardedMode] = useState(false);
-const [getCardedBusyId, setGetCardedBusyId] = useState<string | null>(null);
-
-const [useCustomCardedDate, setUseCustomCardedDate] = useState(false);
-const [customCardedDate, setCustomCardedDate] = useState<string>(""); // YYYY-MM-DD
-
-const [cardedOn, setCardedOn] = useState<string>(() => {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`; // input[type=date] wants YYYY-MM-DD
-});
+const [cardingBusyId, setCardingBusyId] = useState<string | null>(null);
+const [catalogExpandedId, setCatalogExpandedId] = useState<string | null>(null);
 
   // -----------------------
   // Data (from Supabase)
@@ -207,42 +200,80 @@ const [cardedOn, setCardedOn] = useState<string>(() => {
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedTerminalId, setSelectedTerminalId] = useState("");
 
-  async function toggleTerminalStar(terminalId: string) {
-    // Find current value (optimistic flip)
-    const current = terminals.find((t) => String(t.terminal_id) === String(terminalId));
-    const next = !Boolean(current?.starred);
+const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null);
 
-    setTerminals((prev) =>
-      sortMyTerminals(
-        prev.map((t) =>
-          String(t.terminal_id) === String(terminalId) ? { ...t, starred: next } : t
-        ) as TerminalRow[]
-      )
-    );
+  async function toggleTerminalStar(terminalId: string, currentlyStarred: boolean) {
+  // Ensure we have the current user id (needed for INSERT policies)
+  let uid = authUserId;
+  if (!uid) {
+    const { data } = await supabase.auth.getUser();
+    uid = data.user?.id ?? "";
+    if (uid) setAuthUserId(uid);
+  }
 
+  if (!uid) {
+    setTermError("Not logged in.");
+    return;
+  }
+
+  // Optimistic UI update (unstar removes row from My Terminals list)
+  setTerminals((prev) =>
+    prev.filter((t) => String(t.terminal_id) !== String(terminalId) || currentlyStarred)
+  );
+
+  if (currentlyStarred) {
     const { error } = await supabase
       .from("my_terminals")
-      .update({ starred: next })
+      .delete()
+      .eq("user_id", uid)
       .eq("terminal_id", terminalId);
 
     if (error) {
-      // revert
-      setTerminals((prev) =>
-        sortMyTerminals(
-          prev.map((t) =>
-            String(t.terminal_id) === String(terminalId) ? { ...t, starred: !next } : t
-          ) as TerminalRow[]
-        )
-      );
       setTermError(error.message);
+      await loadMyTerminals();
+    }
+    return;
+  }
+
+  const { error } = await supabase
+    .from("my_terminals")
+    .upsert({ user_id: uid, terminal_id: terminalId, is_starred: true }, { onConflict: "user_id,terminal_id" });
+
+  if (error) {
+    setTermError(error.message);
+    await loadMyTerminals();
+    return;
+  }
+
+  await loadMyTerminals();
+}
+
+
+
+async function doGetCardedForTerminal(terminalId: string) {
+  try {
+    setTermError(null);
+    setCardingBusyId(String(terminalId));
+
+    const cardedOnISO = new Date().toISOString().slice(0, 10);
+
+    const { error: rpcError } = await supabase.rpc("get_carded", {
+      p_terminal_id: terminalId,
+      p_carded_on: cardedOnISO,
+    });
+
+    if (rpcError) {
+      setTermError(rpcError.message);
       return;
     }
 
-    // refresh from view (keeps status in sync too)
     await loadMyTerminals();
+    setSelectedTerminalId(String(terminalId));
+    setTermOpen(false);
+  } finally {
+    setCardingBusyId(null);
   }
-
-
+}
 
 // Terminal catalog (for Location picker only)
 const [terminalCatalog, setTerminalCatalog] = useState<TerminalCatalogRow[]>([]);
@@ -274,6 +305,11 @@ const [catalogError, setCatalogError] = useState<string | null>(null);
   // -----------------------
   // Derived selections
   // -----------------------
+const myTerminalIdSet = useMemo(
+  () => new Set((terminals ?? []).map((x) => String(x.terminal_id))),
+  [terminals]
+);
+
 
   const selectedCombo = useMemo(
     () => combos.find((c) => String(c.combo_id) === String(selectedComboId)) ?? null,
@@ -306,14 +342,11 @@ const terminalLabel =
 
 const terminalEnabled = Boolean(locationLabel);
 
-const terminalCardedText = selectedTerminal?.carded_on
-  ? formatMDY(selectedTerminal.carded_on)
+const terminalDisplayISO = selectedTerminal ? terminalDisplayDate_(selectedTerminal) : null;
+const terminalCardedText = terminalDisplayISO ? formatMDY(terminalDisplayISO) : undefined;
+const terminalCardedClass = terminalCardedText
+  ? (selectedTerminal?.status === "expired" || isPastISO_(terminalDisplayISO) ? "text-red-500" : "text-white/50")
   : undefined;
-
-const terminalCardedClass =
-  terminalCardedText
-    ? (selectedTerminal?.status === "expired" ? "text-red-500" : "text-white/50")
-    : undefined;
 
 
 
@@ -371,6 +404,56 @@ function formatMDY(dateLike: string) {
   const [y, m, d] = ymd.split("-");
   return `${m}-${d}-${y}`;
 }
+
+
+function isoToday_() {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function isPastISO_(iso: string | null | undefined) {
+  if (!iso) return false;
+  // Lexicographic compare works for YYYY-MM-DD
+  return iso < isoToday_();
+}
+
+function normalizeStatus_(raw: any): "valid" | "expired" | "not_carded" {
+  const s =
+    raw?.status ??
+    raw?.card_status ??
+    raw?.access_status ??
+    raw?.carded_status ??
+    raw?.terminal_status ??
+    raw?.my_terminal_status;
+
+  if (s === "valid" || s === "expired" || s === "not_carded") return s;
+
+  // Fallback: if we have any date, assume valid (we'll still color red if date is past)
+  return raw?.carded_on ? "valid" : "not_carded";
+}
+
+function normalizeTerminalRow_(raw: any): TerminalRow {
+  const expires =
+    raw?.expires_on ?? raw?.expires_at ?? raw?.expiration_on ?? raw?.expiration_date ?? raw?.expiry_on ?? null;
+
+  return {
+    terminal_id: String(raw?.terminal_id ?? ""),
+    state: raw?.state ?? null,
+    city: raw?.city ?? null,
+    terminal_name: raw?.terminal_name ?? raw?.name ?? null,
+    carded_on: raw?.carded_on ?? null,
+    expires_on: expires,
+    status: normalizeStatus_(raw),
+    starred: raw?.starred ?? raw?.is_starred ?? null,
+  };
+}
+
+function terminalDisplayDate_(t: TerminalRow) {
+  // Prefer expires_on if present, else fall back to carded_on
+  return (t.expires_on ?? t.carded_on) || null;
+}
+
+
+
 
 const productNameById = useMemo(() => {
   const m = new Map<string, string>();
@@ -665,6 +748,7 @@ useEffect(() => {
   (async () => {
     const { data } = await supabase.auth.getUser();
     setAuthEmail(data.user?.email ?? "");
+    setAuthUserId(data.user?.id ?? "");
   })();
 }, []);
 
@@ -700,20 +784,17 @@ useEffect(() => {
 
     const { data, error } = await supabase
       .from("my_terminals_with_status")
-      .select("terminal_id, state, city, terminal_name, carded_on, starred:is_starred")
+      .select("*")
       .order("state", { ascending: true })
       .order("city", { ascending: true })
-      .order("terminal_name", { ascending: true })
-      //.returns<TerminalRow[]>();
-
-console.log("first row:", data && data[0]);
+      .order("terminal_name", { ascending: true });
 
     if (error) {
       setTermError(error.message);
       setTerminals([]);
     } else {
-      setTerminals(sortMyTerminals((data ?? []) as TerminalRow[]));
-    }
+      setTerminals(sortMyTerminals((data ?? []).map(normalizeTerminalRow_)));
+}
 
     setTermLoading(false);
   }
@@ -898,12 +979,13 @@ const cities = useMemo(() => {
       (t) => (t.state ?? "").trim() === selectedState && (t.city ?? "").trim() === selectedCity
     )
     .sort((a, b) => {
-        const aStar = Boolean(a.starred);
-        const bStar = Boolean(b.starred);
-        if (aStar !== bStar) return aStar ? -1 : 1;
-        return String(a.terminal_name ?? "").localeCompare(String(b.terminal_name ?? ""));
-      });
-}, [terminalCatalog, selectedState, selectedCity]);
+  const aInMy = myTerminalIdSet.has(String(a.terminal_id));
+  const bInMy = myTerminalIdSet.has(String(b.terminal_id));
+  if (aInMy !== bInMy) return aInMy ? -1 : 1;
+  return String(a.terminal_name ?? "").localeCompare(String(b.terminal_name ?? ""));
+})
+
+}, [terminalCatalog, selectedState, selectedCity, myTerminalIdSet]);
 
   return (
     <div style={styles.page}>
@@ -922,15 +1004,8 @@ const cities = useMemo(() => {
   terminalSelected={Boolean(selectedTerminalId)}
 />
 
-<div style={{ fontSize: 12, opacity: 0.7, marginTop: 6, whiteSpace: "pre-wrap" }}>
-  debug:
-  {"\n"}selectedTerminalId={String(selectedTerminalId)}
-  {"\n"}terminalsCount={String(terminals?.length ?? 0)}
-  {"\n"}firstTerminal={JSON.stringify(terminals?.[0] ?? null)}
-  {"\n"}carded_on={String(selectedTerminal?.carded_on)}
-  {"\n"}status={String(selectedTerminal?.status)}
-  {"\n"}starred={String(selectedTerminal?.starred)}
-</div>
+
+
 
 
 </div>
@@ -1040,7 +1115,7 @@ const cities = useMemo(() => {
   const k = t.terminal_id ? String(t.terminal_id) : `term-${idx}`;
   return (
     <option key={k} value={t.terminal_id ?? ""}>
-      {`${t.starred ? "★ " : ""}${t.terminal_name ?? "(unnamed terminal)"}${t.status === "expired" ? " — EXPIRED" : t.status === "not_carded" ? " — NOT CARDED" : ""}`}
+      {t.terminal_name ?? "(unnamed terminal)"}
     </option>
   );
 })}
@@ -1050,11 +1125,17 @@ const cities = useMemo(() => {
         </div>
 
         {selectedTerminal && (
-          <div style={styles.help}>
-            Selected: <strong>{selectedTerminal.terminal_name}</strong>
-            {selectedTerminal.timezone ? ` • ${selectedTerminal.timezone}` : ""}
-          </div>
-        )}
+  <div style={styles.help}>
+    Selected: <strong>{selectedTerminal.terminal_name}</strong>
+    {(() => {
+      const tz =
+        terminalCatalog.find((x) => String(x.terminal_id) === String(selectedTerminalId))?.timezone ??
+        "";
+      return tz ? ` • ${tz}` : "";
+    })()}
+  </div>
+)}
+
       </section>
 
       {/* Products */}
@@ -1432,151 +1513,249 @@ const cities = useMemo(() => {
 
 <FullscreenModal
   open={termOpen}
-  title="Select Terminal"
-  onClose={() => {
-    setGetCardedMode(false);
-    setTermOpen(false);
-  }}
+  title="My Terminals"
+  onClose={() => setTermOpen(false)}
 >
   {!selectedState || !selectedCity ? (
     <div className="text-sm text-white/60">Select a city first.</div>
-  ) : getCardedMode ? (
-    /* ================= GET CARDED MODE ================= */
-
-    
+  ) : (
     <div className="space-y-3">
       <div className="text-sm text-white/70">
-        Get carded in{" "}
+        Showing terminals in{" "}
         <span className="text-white">
           {selectedCity}, {selectedState}
         </span>
       </div>
 
       {termError ? <div className="text-sm text-red-400">{termError}</div> : null}
-<div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-  <div className="flex items-center justify-between gap-3">
-    <div>
-      <div className="text-sm font-semibold text-white">Carded date</div>
-      <div className="text-xs text-white/50">
-        Leave off for today’s date. Use this if the driver forgot to enter it.
-      </div>
-    </div>
 
-    <button
-      type="button"
-      onClick={() => {
-        setUseCustomCardedDate((v) => !v);
-        // When turning ON, default to today if empty
-        if (!useCustomCardedDate && !customCardedDate) {
-          const d = new Date();
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth() + 1).padStart(2, "0");
-          const dd = String(d.getDate()).padStart(2, "0");
-          setCustomCardedDate(`${yyyy}-${mm}-${dd}`);
-        }
-      }}
-      className={[
-        "rounded-xl border px-3 py-2 text-xs transition",
-        useCustomCardedDate
-          ? "border-white/25 bg-black text-white"
-          : "border-white/10 bg-transparent text-white/70 hover:bg-white/5",
-      ].join(" ")}
-    >
-      {useCustomCardedDate ? "Custom" : "Today"}
-    </button>
-  </div>
+      {terminalsFiltered.filter((t) => t.status !== "not_carded").length === 0 ? (
+        <div className="text-sm text-white/60">No terminals saved for this city.</div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          {terminalsFiltered
+            .filter((t) => t.status !== "not_carded")
+            .map((t, idx) => {
+              const active = String(t.terminal_id) === String(selectedTerminalId);
+              const displayISO = terminalDisplayDate_(t);
+              const expired = t.status === "expired" || isPastISO_(displayISO);
+              const isExpanded = expandedTerminalId === String(t.terminal_id);
+              const busy = String(cardingBusyId) === String(t.terminal_id);
 
-  {useCustomCardedDate ? (
-    <div className="mt-3">
-      <input
-        type="date"
-        value={customCardedDate}
-        onChange={(e) => setCustomCardedDate(e.target.value)}
-        className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-      />
-      <div className="mt-1 text-[11px] text-white/40">
-        Selected: <span className="tabular-nums">{customCardedDate || "(none)"}</span>
-      </div>
+              const selectTerminal = () => {
+                setSelectedTerminalId(String(t.terminal_id));
+                setTermOpen(false);
+              };
+
+              return (
+                <div
+                  key={t.terminal_id ? String(t.terminal_id) : `my-${idx}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={selectTerminal}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      selectTerminal();
+                    }
+                  }}
+                  className={[
+                    "rounded-2xl border transition cursor-pointer select-none px-3 py-3",
+                    active ? "border-white/30 bg-white/5" : "border-white/10 hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* icon well (match top tiles vibe) */}
+                    <div className="shrink-0 p-1">
+                      <div
+                        className={[
+                          "h-14 w-14 rounded-xl border flex items-center justify-center text-xs",
+                          active ? "border-white/20 bg-black text-orange-400" : "border-white/10 bg-[#2a2a2a] text-white/50",
+                        ].join(" ")}
+                        aria-hidden="true"
+                      >
+                        Img
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-white truncate">
+                        {t.terminal_name ?? "(unnamed terminal)"}
+                      </div>
+
+                      {displayISO ? (
+                        <div className={["mt-1 text-xs tabular-nums", expired ? "text-red-400" : "text-white/50"].join(" ")}>
+                          {formatMDY(displayISO)}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* right controls: star + view (side-by-side) */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTerminalStar(String(t.terminal_id), true);
+                        }}
+                        className="rounded-lg px-2 py-1 text-sm text-yellow-300/90 hover:text-yellow-200"
+                        aria-label="Remove from My Terminals"
+                        title="Remove from My Terminals"
+                      >
+                        ★
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedTerminalId(isExpanded ? null : String(t.terminal_id));
+                        }}
+                        className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/80 hover:bg-white/10"
+                        aria-label="View terminal details"
+                        title="View"
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+
+                  {expired ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          doGetCardedForTerminal(String(t.terminal_id));
+                        }}
+                        className={[
+                          "w-full rounded-xl border px-3 py-2 text-sm",
+                          busy
+                            ? "border-red-400/10 bg-red-400/10 text-red-200/60"
+                            : "border-red-400/20 bg-red-400/10 text-red-200 hover:bg-red-400/15",
+                        ].join(" ")}
+                      >
+                        {busy ? "Getting carded…" : "Get carded"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {isExpanded ? (
+                    <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+                      <div className="text-white/80 font-semibold">Terminal details</div>
+                      <div className="mt-1">Business-card placeholder.</div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => {
+          setTermOpen(false);
+          setCatalogExpandedId(null);
+          setCatalogOpen(true);
+        }}
+        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white/80 hover:bg-white/10"
+      >
+        + Get carded
+      </button>
     </div>
-  ) : null}
-</div>
+  )}
+</FullscreenModal>
+
+<FullscreenModal
+  open={catalogOpen}
+  title="Get Carded"
+  onClose={() => {
+    setCatalogOpen(false);
+    setTermOpen(true);
+  }}
+>
+  {!selectedState || !selectedCity ? (
+    <div className="text-sm text-white/60">Select a city first.</div>
+  ) : (
+    <div className="space-y-3">
+      <div className="text-sm text-white/70">
+        Terminal catalog for{" "}
+        <span className="text-white">
+          {selectedCity}, {selectedState}
+        </span>
+      </div>
+
+      {termError ? <div className="text-sm text-red-400">{termError}</div> : null}
+      {catalogError ? <div className="text-sm text-red-400">{catalogError}</div> : null}
 
       {catalogTerminalsInCity.length === 0 ? (
-        <div className="text-sm text-white/60">
-          No terminals in the catalog for this city.
-        </div>
+        <div className="text-sm text-white/60">No terminals found for this city.</div>
       ) : (
         <div className="grid grid-cols-1 gap-2">
           {catalogTerminalsInCity.map((t, idx) => {
-            const busy = getCardedBusyId === String(t.terminal_id);
+            const id = String(t.terminal_id);
+            const isInMy = myTerminalIdSet.has(id);
+            const isExpanded = catalogExpandedId === id;
 
             return (
-              <button
-                key={t.terminal_id ? String(t.terminal_id) : `term-btn-${t.terminal_name ?? "unknown"}-${idx}`}
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  try {
-                    setTermError(null);
-                    setGetCardedBusyId(String(t.terminal_id));
-
-                  const todayISO = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-const cardedOnISO =
-  useCustomCardedDate && customCardedDate
-    ? customCardedDate
-    : todayISO;
-
-const { error: rpcError } = await supabase.rpc("get_carded", {
-  p_terminal_id: t.terminal_id,
-  p_carded_on: cardedOnISO,
-});
-
-
-
-
-                    if (rpcError) {
-                      setTermError(rpcError.message);
-                      return;
-                    }
-
-                    const { data: fresh, error: freshErr } = await supabase
-  .from("my_terminals_with_status")
-  .select("*")
-  .limit(5);
-console.log("my_terminals_with_status first row:", fresh?.[0]);
-console.log("my_terminals_with_status keys:", fresh?.[0] ? Object.keys(fresh[0]) : []);
-
-
-                    console.log("my_terminals_with_status first row:", fresh?.[0]);
-
-
-                    setTerminals(sortMyTerminals(fresh ?? []));
-                    setSelectedTerminalId(String(t.terminal_id));
-                    setGetCardedMode(false);
-                    setTermOpen(false);
-                  } catch (e: any) {
-                    setTermError(e?.message ?? String(e));
-                  } finally {
-                    setGetCardedBusyId(null);
+              <div
+                key={t.terminal_id ? id : `cat-${idx}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setCatalogExpandedId(isExpanded ? null : id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setCatalogExpandedId(isExpanded ? null : id);
                   }
                 }}
-                className={[
-                  "rounded-2xl border px-4 py-3 text-left transition",
-                  busy ? "opacity-60 pointer-events-none" : "border-white/10 hover:bg-white/5",
-                ].join(" ")}
+                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 cursor-pointer select-none"
               >
-                <div className="text-sm font-semibold text-white">
-                  {`${t.starred ? "★ " : ""}${t.terminal_name ?? "(unnamed terminal)"}${t.status === "expired" ? " — EXPIRED" : t.status === "not_carded" ? " — NOT CARDED" : ""}`}
-                  {busy ? <span className="ml-2 text-xs text-white/50">Adding…</span> : null}
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 p-1">
+                    <div className="h-14 w-14 rounded-xl border border-white/10 bg-[#2a2a2a] flex items-center justify-center text-xs text-white/50">
+                      Img
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-white truncate">
+                      {t.terminal_name ?? "(unnamed terminal)"}
+                    </div>
+                    <div className="mt-1 text-xs text-white/50">
+                      {t.city}, {t.state}
+                    </div>
+                  </div>
+
+                  {/* multi-select star (membership) */}
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTerminalStar(id, isInMy);
+                      }}
+                      className={[
+                        "rounded-lg px-2 py-1 text-sm transition",
+                        isInMy ? "text-yellow-300/90 hover:text-yellow-200" : "text-white/50 hover:text-white",
+                      ].join(" ")}
+                      aria-label={isInMy ? "Remove from My Terminals" : "Add to My Terminals"}
+                      title={isInMy ? "Remove from My Terminals" : "Add to My Terminals"}
+                    >
+                      {isInMy ? "★" : "☆"}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-1 text-xs text-white/50">
-                  {t.city ?? ""}
-                  {t.city ? ", " : ""}
-                  {t.state ?? ""}
-                </div>
-              </button>
+                {isExpanded ? (
+                  <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white/70">
+                    <div className="text-white/80 font-semibold">Terminal details</div>
+                    <div className="mt-1">Business-card placeholder.</div>
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -1584,142 +1763,18 @@ console.log("my_terminals_with_status keys:", fresh?.[0] ? Object.keys(fresh[0])
 
       <button
         type="button"
-        onClick={() => setGetCardedMode(false)}
-        className="pt-2 text-xs text-white/50 hover:text-white"
+        onClick={() => {
+          setCatalogOpen(false);
+          setTermOpen(true);
+        }}
+        className="w-full rounded-2xl bg-white text-black px-4 py-3 text-sm font-semibold hover:bg-white/90"
       >
-        ← Back
+        Done
       </button>
     </div>
-  ) : (
-    /* ================= NORMAL MODE ================= */
-<div className="space-y-3">
-  <div className="text-sm text-white/70">
-    Showing terminals in{" "}
-    <span className="text-white">
-      {selectedCity}, {selectedState}
-    </span>
-  </div>
-
-  {terminalsFiltered.length === 0 ? (
-    <div className="text-sm text-white/60">No terminals saved for this city.</div>
-  ) : (
-    <div className="grid grid-cols-1 gap-2">
-      {terminalsFiltered.map((t, idx) => {
-        const active = String(t.terminal_id) === String(selectedTerminalId);
-
-        const selectTerminal = () => {
-          setSelectedTerminalId(String(t.terminal_id));
-          setTermOpen(false);
-        };
-
-        return (
-          <div
-            key={t.terminal_id ? String(t.terminal_id) : `term-btn-${idx}`}
-            role="button"
-            tabIndex={0}
-            onClick={selectTerminal}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                selectTerminal();
-              }
-            }}
-            className={[
-              "rounded-2xl border px-4 py-3 text-left transition cursor-pointer select-none",
-              active ? "border-white/30 bg-white/5" : "border-white/10 hover:bg-white/5",
-            ].join(" ")}
-          >
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleTerminalStar(String(t.terminal_id));
-                }}
-                className={[
-                  "rounded-lg px-2 py-1 text-sm transition",
-                  t.starred ? "text-yellow-300/90 hover:text-yellow-200" : "text-white/50 hover:text-white",
-                ].join(" ")}
-                aria-label={t.starred ? "Unstar terminal" : "Star terminal"}
-                title={t.starred ? "Starred" : "Star"}
-              >
-                {t.starred ? "★" : "☆"}
-              </button>
-
-              <div className="text-sm font-semibold text-white">
-                {t.terminal_name ?? "(unnamed terminal)"}
-              </div>
-
-              <div className="ml-auto flex items-center gap-2">
-                <span
-                  className={[
-                    "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                    t.status === "valid"
-                      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                      : t.status === "expired"
-                      ? "border-red-400/20 bg-red-400/10 text-red-200"
-                      : "border-white/10 bg-white/5 text-white/60",
-                  ].join(" ")}
-                >
-                  {t.status === "valid" ? "Valid" : t.status === "expired" ? "Expired" : "Not carded"}
-                </span>
-
-                {t.carded_on ? (
-                  <div
-                    className={[
-                      "text-xs tabular-nums",
-                      t.status === "expired" ? "text-red-500" : "text-white/70",
-                    ].join(" ")}
-                  >
-                    {formatMDY(t.carded_on)}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {t.status !== "valid" ? (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGetCardedMode(true);
-                  }}
-                  className={[
-                    "rounded-xl border px-3 py-2 text-xs transition",
-                    t.status === "expired"
-                      ? "border-red-400/20 bg-red-400/10 text-red-200 hover:bg-red-400/15"
-                      : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10",
-                  ].join(" ")}
-                >
-                  {t.status === "expired" ? "Update carded date" : "Get carded"}
-                </button>
-              </div>
-            ) : null}
-
-            <div className="mt-1 text-xs text-white/50">
-              {t.city ?? ""}
-              {t.city ? ", " : ""}
-              {t.state ?? ""}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  )}
-
-  {/* Get Carded link (always available) */}
-  <button
-    type="button"
-    onClick={() => setGetCardedMode(true)}
-    className="pt-2 text-xs text-white/50 hover:text-white"
-  >
-    + Get Carded
-  </button>
-</div>
-
   )}
 </FullscreenModal>
+
 
 
     </div>
