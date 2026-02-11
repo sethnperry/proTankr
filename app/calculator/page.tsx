@@ -3,7 +3,7 @@
 import { QuickPanel } from "./QuickPanel";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 import { TopTiles } from "./TopTiles";
@@ -86,6 +86,11 @@ type CompRow = {
 type ProductRow = {
   product_id: string;
   product_name: string | null;
+  display_name?: string | null;
+  description?: string | null;
+  product_code?: string | null;
+  button_code?: string | null;
+  hex_code?: string | null;
   api_60: number | null;
   alpha_per_f: number | null;
 };
@@ -177,7 +182,23 @@ const styles = {
     fontSize: 12,
     opacity: 0.9,
   } as React.CSSProperties,
+
+  smallBtn: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.06)",
+    color: "white",
+    cursor: "pointer",
+    fontSize: 13,
+    lineHeight: 1.1,
+    whiteSpace: "nowrap",
+  } as React.CSSProperties,
+
 };
+
+const PLAN_SNAPSHOT_VERSION = 1;
+
 
 export default function CalculatorPage() {
   const [authEmail, setAuthEmail] = useState<string>("");
@@ -537,8 +558,401 @@ const [catalogEditingDateId, setCatalogEditingDateId] = useState<string | null>(
   // Per-compartment planning inputs
   const [compPlan, setCompPlan] = useState<Record<number, CompPlanInput>>({});
 
+
+  // Per-compartment headspace override (0..0.30). Does NOT change true max_gallons; used for planning.
+  const [compHeadspacePct, setCompHeadspacePct] = useState<Record<number, number>>({});
+
+  // Compartment modal
+  const [compModalOpen, setCompModalOpen] = useState(false);
+  const [compModalComp, setCompModalComp] = useState<number | null>(null);
+
   // Volume-bias "CG" slider
   const [cgSlider, setCgSlider] = useState<number>(0.25); // 0..1 ; 0.25 is neutral (offset zero)
+  
+  // SNAPSHOT SYSTEM (DO NOT REFACTOR CASUALLY)
+// - localStorage = hot cache
+// - Supabase = background sync
+// - payload versioned
+// - scoped by user + terminal + combo
+
+  
+  /************************************************************
+   * Step 6a — Local Snapshot Slots (foundation)
+   * - Autosave "last" plan per terminal (slot 0) to localStorage
+   * - 1..5 quick slots: tap loads if exists; if empty, tap saves current plan
+   * - Right-click / long-press behavior can be added later (for now: Shift+Click overwrites)
+   ************************************************************/
+  type PlanSnapshot = {
+    v: 1;
+    savedAt: number;
+    terminalId: string;
+    tempF: number;
+    cgSlider: number;
+    compPlan: Record<number, CompPlanInput>;
+  };
+
+  const PLAN_SLOTS = [1, 2, 3, 4, 5] as const;
+
+  const planScopeKey = useMemo(() => {
+    // per user if logged in, else anon
+    const who = authUserId ? `u:${authUserId}` : "anon";
+    const term = selectedTerminalId ? `t:${selectedTerminalId}` : "t:none";
+    return `proTankr:${who}:${term}`;
+  
+    const cid = String(selectedComboId || "");
+}, [authUserId, selectedTerminalId, selectedComboId]);
+
+  const [slotBump, setSlotBump] = useState(0);
+
+
+  const planStoreKey = useCallback(
+    (slot: number) => `${planScopeKey}:plan:slot:${slot}`,
+    [planScopeKey]
+  );
+
+  
+
+function parsePlanPayload(raw: string | null) {
+  if (!raw) return null;
+  try {
+    const obj: any = JSON.parse(raw);
+    // Back-compat: older payloads were just { tempF, cgSlider, compPlan }
+    if (obj && typeof obj === "object" && obj.version == null) {
+      return {
+        version: 0,
+        savedAtISO: "",
+        terminalId: String(selectedTerminalId || ""),
+        comboId: String(selectedComboId || ""),
+        tempF: typeof obj.tempF === "number" ? obj.tempF : undefined,
+        cgSlider: typeof obj.cgSlider === "number" ? obj.cgSlider : undefined,
+        compPlan: obj.compPlan ?? undefined,
+      };
+    }
+
+
+// =======================
+// Step 7: Supabase sync for plan slots (cross-device), while keeping localStorage as hot cache
+// =======================
+const serverSyncEnabled = Boolean(authUserId); // only when logged in
+
+const serverSyncInFlightRef = useRef(false);
+const serverLastPulledScopeRef = useRef<string>(""); // to avoid repeated pulls
+const serverWriteDebounceRef = useRef<any>(null);
+
+async function serverFetchSlots_(): Promise<Record<number, any>> {
+  if (!authUserId || !selectedTerminalId || !selectedComboId) return {};
+  const { data, error } = await supabase
+    .from("user_plan_slots")
+    .select("slot,payload,updated_at")
+    .eq("user_id", authUserId)
+    .eq("terminal_id", String(selectedTerminalId))
+    .eq("combo_id", String(selectedComboId))
+    .in("slot", [0, 1, 2, 3, 4, 5]);
+
+  if (error) {
+    console.warn("serverFetchSlots error:", error.message);
+    return {};
+  }
+  const out: Record<number, any> = {};
+  (data || []).forEach((r: any) => {
+    out[Number(r.slot)] = r.payload ?? null;
+  });
+  return out;
+}
+
+async function serverUpsertSlot_(slot: number, payload: any) {
+  if (!authUserId || !selectedTerminalId || !selectedComboId) return;
+  const row = {
+    user_id: authUserId,
+    terminal_id: String(selectedTerminalId),
+    combo_id: String(selectedComboId),
+    slot,
+    payload,
+  };
+  const { error } = await supabase.from("user_plan_slots").upsert(row, {
+    onConflict: "user_id,terminal_id,combo_id,slot",
+  });
+  if (error) console.warn("serverUpsertSlot error:", error.message);
+}
+
+async function serverDeleteSlot_(slot: number) {
+  if (!authUserId || !selectedTerminalId || !selectedComboId) return;
+  const { error } = await supabase
+    .from("user_plan_slots")
+    .delete()
+    .eq("user_id", authUserId)
+    .eq("terminal_id", String(selectedTerminalId))
+    .eq("combo_id", String(selectedComboId))
+    .eq("slot", slot);
+  if (error) console.warn("serverDeleteSlot error:", error.message);
+}
+
+function compareSavedAt_(a: any, b: any) {
+  const aISO = String(a?.savedAtISO || "");
+  const bISO = String(b?.savedAtISO || "");
+  const at = aISO ? Date.parse(aISO) : 0;
+  const bt = bISO ? Date.parse(bISO) : 0;
+  return at - bt; // >0 means a newer
+}
+
+// Pull server slots once per scope; merge into localStorage (server wins if newer)
+useEffect(() => {
+  if (!serverSyncEnabled) return;
+  if (!planScopeKey) return;
+  if (!selectedTerminalId || !selectedComboId) return;
+  if (serverSyncInFlightRef.current) return;
+  if (serverLastPulledScopeRef.current === planScopeKey) return;
+
+  serverSyncInFlightRef.current = true;
+
+  (async () => {
+    try {
+      const server = await serverFetchSlots_();
+
+      for (const s of [0, 1, 2, 3, 4, 5]) {
+        const sp = server[s];
+        if (!sp) continue;
+
+        const localRaw = typeof window !== "undefined" ? localStorage.getItem(planStoreKey(s)) : null;
+        const lp = parsePlanPayload(localRaw);
+
+        if (!lp || compareSavedAt_(sp, lp) > 0) {
+          try {
+            localStorage.setItem(planStoreKey(s), JSON.stringify(sp));
+            setSlotBump((v) => v + 1);
+          } catch {}
+        }
+      }
+
+      // After merging slot0, apply it if it's safe
+      const local0 = parsePlanPayload(typeof window !== "undefined" ? localStorage.getItem(planStoreKey(0)) : null);
+      if (local0 && compartments?.length) {
+        const safeToApply =
+          !planDirtyRef.current ||
+          Object.keys(compPlan || {}).length === 0 ||
+          (lastAppliedScopeRef.current !== planScopeKey);
+
+        if (safeToApply) {
+          if (typeof local0.tempF === "number") setTempF(local0.tempF);
+          if (typeof local0.cgSlider === "number") setCgSlider(local0.cgSlider);
+          if (local0.compPlan && typeof local0.compPlan === "object") setCompPlan(local0.compPlan);
+          planDirtyRef.current = false;
+          lastAppliedScopeRef.current = planScopeKey;
+        }
+      }
+
+      serverLastPulledScopeRef.current = planScopeKey;
+    } finally {
+      serverSyncInFlightRef.current = false;
+    }
+  })();
+}, [serverSyncEnabled, planScopeKey, selectedTerminalId, selectedComboId, compartments, slotBump]);
+
+async function syncSlotToServer_(slot: number) {
+  if (!serverSyncEnabled) return;
+  const payload = parsePlanPayload(typeof window !== "undefined" ? localStorage.getItem(planStoreKey(slot)) : null);
+  if (!payload) return;
+  await serverUpsertSlot_(slot, payload);
+}
+
+async function afterLocalSlotWrite_(slot: number) {
+  if (!serverSyncEnabled) return;
+  if (slot === 0) {
+    if (serverWriteDebounceRef.current) clearTimeout(serverWriteDebounceRef.current);
+    serverWriteDebounceRef.current = setTimeout(() => {
+      syncSlotToServer_(0);
+    }, 1200);
+    return;
+  }
+  await syncSlotToServer_(slot);
+}
+
+async function afterLocalSlotDelete_(slot: number) {
+  if (!serverSyncEnabled) return;
+  await serverDeleteSlot_(slot);
+}
+    return obj;
+  } catch {
+    return null;
+  }
+}
+const safeReadJSON_ = useCallback((key: string) => {
+    try {
+      if (typeof window === "undefined") return null;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const safeWriteJSON_ = useCallback((key: string, value: any) => {
+    try {
+      if (typeof window === "undefined") return;
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const [slotHas, setSlotHas] = useState<Record<number, boolean>>({});
+
+  const refreshSlotHas_ = useCallback(() => {
+    if (!selectedTerminalId) {
+      setSlotHas({});
+      return;
+    }
+    const next: Record<number, boolean> = {};
+    for (const s of PLAN_SLOTS) next[s] = !!safeReadJSON_(planStoreKey(s));
+    setSlotHas(next);
+  }, [PLAN_SLOTS, planStoreKey, safeReadJSON_, selectedTerminalId]);
+
+  const planRestoreReadyRef = useRef<string | null>(null);
+  const planDirtyRef = useRef<boolean>(false);
+  const autosaveTimerRef = useRef<any>(null);
+const lastAppliedScopeRef = useRef<string>("");
+
+  const buildSnapshot_ = useCallback(
+    (terminalId: string): PlanSnapshot => ({
+      v: 1,
+      savedAt: Date.now(),
+      terminalId,
+      tempF: Number(tempF) || 60,
+      cgSlider: Number(cgSlider) || 0.25,
+      compPlan,
+    }),
+    [tempF, cgSlider, compPlan]
+  );
+
+  const applySnapshot_ = useCallback(
+    (snap: PlanSnapshot) => {
+      setTempF(Number(snap.tempF) || 60);
+      setCgSlider(Number(snap.cgSlider) || 0.25);
+      setCompPlan(snap.compPlan || {});
+    },
+    [setTempF, setCgSlider, setCompPlan]
+  );
+
+  // Restore slot 0 ("last") whenever terminal changes.
+  useEffect(() => {
+    if (!selectedTerminalId) return;
+
+    const key = planStoreKey(0);
+    const raw = safeReadJSON_(key) as PlanSnapshot | null;
+    planRestoreReadyRef.current = planScopeKey;
+
+    if (raw && raw.v === 1 && String(raw.terminalId) === String(selectedTerminalId)) {
+      applySnapshot_(raw);
+    }
+
+    // allow autosave after initial restore
+    queueMicrotask(() => {
+      if (planRestoreReadyRef.current === planScopeKey) planRestoreReadyRef.current = null;
+    });
+
+    refreshSlotHas_();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTerminalId, planScopeKey]);
+
+  // Mark dirty when plan inputs change (after restore is complete)
+  useEffect(() => {
+    if (!selectedTerminalId) return;
+    if (planRestoreReadyRef.current) return; // still restoring
+    planDirtyRef.current = true;
+  }, [selectedTerminalId, tempF, cgSlider, compPlan]);
+
+  // Debounced autosave of slot 0 ("last")
+  useEffect(() => {
+    if (!selectedTerminalId) return;
+    if (planRestoreReadyRef.current) return;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      if (!selectedTerminalId) return;
+      if (!planDirtyRef.current) return;
+      const snap = buildSnapshot_(String(selectedTerminalId));
+      safeWriteJSON_(planStoreKey(0), snap);
+      planDirtyRef.current = false;
+      refreshSlotHas_();
+    }, 350);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [selectedTerminalId, tempF, cgSlider, compPlan, buildSnapshot_, planStoreKey, safeWriteJSON_, refreshSlotHas_]);
+
+  const saveToSlot_ = useCallback(
+    (slot: number) => {
+      if (!selectedTerminalId) return;
+      const snap = buildSnapshot_(String(selectedTerminalId));
+      safeWriteJSON_(planStoreKey(slot), snap);
+      refreshSlotHas_();
+    },
+    [selectedTerminalId, buildSnapshot_, safeWriteJSON_, planStoreKey, refreshSlotHas_]
+  );
+
+  const loadFromSlot_ = useCallback(
+    (slot: number) => {
+      if (!selectedTerminalId) return;
+      const raw = safeReadJSON_(planStoreKey(slot)) as PlanSnapshot | null;
+      if (!raw || raw.v !== 1) return;
+      if (String(raw.terminalId) !== String(selectedTerminalId)) return;
+      planRestoreReadyRef.current = planScopeKey;
+      applySnapshot_(raw);
+      queueMicrotask(() => {
+        if (planRestoreReadyRef.current === planScopeKey) planRestoreReadyRef.current = null;
+      });
+    },
+    [selectedTerminalId, planStoreKey, safeReadJSON_, applySnapshot_, planScopeKey]
+  );
+
+  const SnapshotSlots = (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Plan slots</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {PLAN_SLOTS.map((n) => {
+          const has = !!slotHas[n];
+          const disabled = !selectedTerminalId;
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={disabled}
+              onClick={(e) => {
+                // If empty -> save. If exists -> load.
+                // Hold Shift to overwrite/save even if it exists.
+                if (e.shiftKey || !has) saveToSlot_(n);
+                else loadFromSlot_(n);
+              }}
+              style={{
+                borderRadius: 12,
+                padding: "8px 12px",
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: has ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                color: "white",
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.5 : 1,
+                minWidth: 44,
+              }}
+              title={
+                !selectedTerminalId
+                  ? "Select a terminal first"
+                  : has
+                  ? "Tap to load. Shift+Tap to overwrite."
+                  : "Tap to save current plan"
+              }
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.6 }}>
+        Tip: Tap an empty number to save. Tap a filled number to load. Hold <strong>Shift</strong> to overwrite.
+      </div>
+    </div>
+  );
   
 
   // -----------------------
@@ -804,7 +1218,27 @@ const productNameById = useMemo(() => {
   // Active compartments (non-empty with a chosen product and valid lbs/gal)
   // -----------------------
 
-  type ActiveComp = {
+  
+  const headspacePctForComp = useCallback(
+    (compNumber: number) => {
+      const raw = Number(compHeadspacePct[compNumber] ?? 0);
+      if (!Number.isFinite(raw)) return 0;
+      return Math.max(0, Math.min(0.3, raw));
+    },
+    [compHeadspacePct]
+  );
+
+  const effectiveMaxGallonsForComp = useCallback(
+    (compNumber: number, trueMaxGallons: number) => {
+      const pct = headspacePctForComp(compNumber);
+      const eff = trueMaxGallons * (1 - pct);
+      // Keep it stable & display-friendly
+      return Math.max(0, Math.floor(eff));
+    },
+    [headspacePctForComp]
+  );
+
+type ActiveComp = {
     compNumber: number;
     maxGallons: number;
     position: number;
@@ -821,7 +1255,8 @@ const productNameById = useMemo(() => {
 
     for (const c of compartments) {
       const compNumber = Number(c.comp_number);
-      const maxGallons = Number(c.max_gallons ?? 0);
+      const trueMaxGallons = Number(c.max_gallons ?? 0);
+      const maxGallons = effectiveMaxGallonsForComp(compNumber, trueMaxGallons);
       // We want +position = FRONT, -position = REAR.
 // If your DB currently has +position = REAR, flip it here.
 const positionRaw = Number(c.position ?? 0);
@@ -1016,6 +1451,17 @@ const plannedResult = useMemo(() => {
 }, [selectedTrailerId, activeComps, allowedLbs, cgBias, capacityGallonsActive]);
 
 const planRows = plannedResult.planRows;
+
+const plannedGallonsByComp = useMemo<Record<number, number>>(() => {
+  const m: Record<number, number> = {};
+  for (const r of planRows as any[]) {
+    const n = Number((r as any).comp_number ?? (r as any).compNumber ?? 0);
+    const g = Number((r as any).planned_gallons ?? (r as any).plannedGallons ?? 0);
+    if (Number.isFinite(n)) m[n] = g;
+  }
+  return m;
+}, [planRows]);
+
 
 const plannedWeightLbs = useMemo(() => {
   return planRows.reduce((sum, r: any) => {
@@ -1493,6 +1939,11 @@ useEffect(() => {
           products (
             product_id,
             product_name,
+            display_name,
+            description,
+            product_code,
+            button_code,
+            hex_code,
             api_60,
             alpha_per_f
           )
@@ -1651,6 +2102,8 @@ useEffect(() => {
   locationSelected={Boolean(selectedCity && selectedState)}
   terminalSelected={Boolean(selectedTerminalId)}
 />
+        {SnapshotSlots}
+
 
 
 
@@ -2012,6 +2465,186 @@ console.log("MAIN selectedTerminal", {
         {!selectedTrailerId && <div style={styles.help}>Select equipment to load compartments.</div>}
         {compError && <div style={styles.error}>Error loading compartments: {compError}</div>}
 
+
+        {/* Driver compartment strip (primary interface) */}
+        {selectedTrailerId && !compLoading && !compError && compartments.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: compartments.length >= 5 ? 10 : 18,
+                flexWrap: "nowrap",
+              }}
+            >
+              {(() => {
+                const n = compartments.length;
+                const baseW = n === 1 ? 220 : 160;
+                const w = n >= 5 ? 132 : baseW;
+                const h = 330;
+                const ordered = [...compartments].slice().sort((a,b)=>Number(a.comp_number)-Number(b.comp_number)).reverse();
+                return ordered.map((c) => {
+                  const compNumber = Number(c.comp_number);
+                  const trueMax = Number(c.max_gallons ?? 0);
+                  const headPct = headspacePctForComp(compNumber);
+                  const effMax = effectiveMaxGallonsForComp(compNumber, trueMax);
+                  const planned = plannedGallonsByComp[compNumber] ?? 0;
+                  const plannedPct = trueMax > 0 ? Math.max(0, Math.min(1, planned / trueMax)) : 0;
+                  const capPct = trueMax > 0 ? Math.max(0, Math.min(1, effMax / trueMax)) : 0;
+                  const visualTopGap = 0.08; // keeps a bit of visible headspace even when full
+                  const fillPct = Math.max(0, Math.min(1, Math.min(plannedPct, capPct) * (1 - visualTopGap)));
+
+                  const sel = compPlan[compNumber];
+                  const isEmpty = !!sel?.empty || !sel?.productId;
+                  const prod = !isEmpty ? terminalProducts.find((p) => p.product_id === sel?.productId) : null;
+
+                  const productName = isEmpty
+                    ? ""
+                    : ((prod?.display_name ?? prod?.product_name ?? "").trim() || "Product");
+
+                  const code = isEmpty
+                    ? "MT"
+                    : String(prod?.button_code ?? prod?.product_code ?? (productName.split(/\s+/)[0] || "PRD"))
+                        .trim()
+                        .toUpperCase();
+
+                  const codeColor = isEmpty
+                    ? "rgba(180,220,255,0.9)"
+                    : (typeof prod?.hex_code === "string" && prod.hex_code.trim()
+                        ? prod.hex_code.trim()
+                        : "rgba(255,255,255,0.9)");
+
+                  const atMax = headPct <= 0.000001;
+
+                  return (
+                    <div
+                      key={String(c.comp_number)}
+                      onClick={() => {
+                        setCompModalComp(compNumber);
+                        setCompModalOpen(true);
+                      }}
+                      style={{
+                        width: w,
+                        height: h,
+                        borderRadius: 18,
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        padding: 14,
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        userSelect: "none",
+                      }}
+                      title={`Comp ${compNumber}`}
+                    >
+                      {/* Comp number label (amber when at max) */}
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 800,
+                          letterSpacing: 0.2,
+                          marginBottom: 10,
+                          color: atMax ? "#ffb020" : "rgba(255,255,255,0.72)",
+                        }}
+                      >
+                        {compNumber}
+                      </div>
+
+
+                      {/* Tank */}
+                      <div
+                        style={{
+                          width: "100%",
+                          flex: 1,
+                          borderRadius: 16,
+                          background: "rgba(255,255,255,0.08)",
+                          position: "relative",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {/* Capped headspace tint (no line) */}
+                        {headPct > 0 && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              height: `${Math.max(0, Math.min(1, headPct)) * 100}%`,
+                              background: "rgba(0,0,0,0.16)",
+                            }}
+                          />
+                        )}
+{/* Fluid */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            height: `${fillPct * 100}%`,
+                            background: "rgba(185,245,250,0.85)",
+                          }}
+                        />
+
+                        {/* Wavy surface line */}
+                        {fillPct > 0 && (
+                          <svg
+                            width="100%"
+                            height="16"
+                            viewBox="0 0 100 16"
+                            preserveAspectRatio="none"
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              right: 0,
+                              bottom: `calc(${fillPct * 100}% - 8px)`,
+                              opacity: 0.9,
+                            }}
+                          >
+                            <path
+                              d="M0,8 C10,2 20,14 30,8 C40,2 50,14 60,8 C70,2 80,14 90,8 C95,6 98,6 100,8"
+                              fill="none"
+                              stroke="rgba(120,210,220,0.95)"
+                              strokeWidth="2"
+                            />
+                          </svg>
+                        )}
+                      </div>
+
+                      {/* Product button */}
+                      <div
+                        style={{
+                          marginTop: 12,
+                          width: 78,
+                          height: 52,
+                          borderRadius: 14,
+                          background: "rgba(0,0,0,0.75)",
+                          border: `1px solid ${codeColor}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 800,
+                          fontSize: 20,
+                          color: codeColor,
+                        }}
+                      >
+                        {code}
+                      </div>
+
+                      {/* Planned gallons */}
+                      <div style={{ marginTop: 8, fontSize: 16, color: "rgba(220,220,220,0.85)" }}>
+                        {planned > 0 ? Math.round(planned).toString() : ""}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
+
         {selectedTrailerId && !compLoading && !compError && compartments.length === 0 && (
           <div style={styles.help}>No compartments found for this trailer.</div>
         )}
@@ -2080,7 +2713,327 @@ console.log("MAIN selectedTerminal", {
             </tbody>
           </table>
         )}
-      </section>
+      
+        <FullscreenModal
+          open={compModalOpen}
+          title={compModalComp != null ? `Compartment ${compModalComp}` : "Compartment"}
+          onClose={() => {
+            setCompModalOpen(false);
+            setCompModalComp(null);
+          }}
+        >
+          {compModalComp == null ? null : (() => {
+            const compNumber = compModalComp;
+            const c = compartments.find((x) => Number(x.comp_number) === compNumber);
+            const trueMax = Number(c?.max_gallons ?? 0);
+            const headPct = headspacePctForComp(compNumber);
+            const effMax = effectiveMaxGallonsForComp(compNumber, trueMax);
+            const sel = compPlan[compNumber];
+            const isEmpty = !!sel?.empty || !sel?.productId;
+
+            return (
+              <div style={{ display: "grid", gap: 16 }}>
+                <div style={{ ...styles.help }}>
+                  Adjust headspace to stay safely below the top probe and set the product for compartment{" "}
+                  <strong>{compNumber}</strong>.
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr",
+                    gap: 14,
+                  }}
+                >
+                  {/* Zoomed compartment + vertical slider */}
+                  <div style={{ display: "flex", gap: 18, alignItems: "stretch", flexWrap: "wrap" }}>
+                    {/* Comp visual */}
+                    <div
+                      style={{
+                        width: 240,
+                        maxWidth: "100%",
+                        borderRadius: 18,
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        padding: 14,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, opacity: 0.9 }}>Max Volume</div>
+                        <div style={{ fontWeight: 800 }}>{Math.round(trueMax)} gal</div>
+                      </div>
+
+                      <div
+                        style={{
+                          height: 280,
+                          borderRadius: 16,
+                          background: "rgba(255,255,255,0.08)",
+                          position: "relative",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {/* Capped headspace tint */}
+                        {headPct > 0 && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              height: `${Math.max(0, Math.min(1, headPct)) * 100}%`,
+                              background: "rgba(0,0,0,0.16)",
+                            }}
+                          />
+                        )}
+
+                        {/* Visual fill based on planned/true max, capped */}
+                        {(() => {
+                          const planned = plannedGallonsByComp[compNumber] ?? 0;
+                          const plannedPct = trueMax > 0 ? Math.max(0, Math.min(1, planned / trueMax)) : 0;
+                          const capPct = trueMax > 0 ? Math.max(0, Math.min(1, effMax / trueMax)) : 0;
+                          const visualTopGap = 0.08;
+                          const fillPct = Math.max(0, Math.min(1, Math.min(plannedPct, capPct) * (1 - visualTopGap)));
+
+                          return (
+                            <>
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  height: `${fillPct * 100}%`,
+                                  background: "rgba(185,245,250,0.85)",
+                                }}
+                              />
+                              {fillPct > 0 && (
+                                <svg
+                                  width="100%"
+                                  height="16"
+                                  viewBox="0 0 100 16"
+                                  preserveAspectRatio="none"
+                                  style={{
+                                    position: "absolute",
+                                    left: 0,
+                                    right: 0,
+                                    bottom: `calc(${fillPct * 100}% - 8px)`,
+                                    opacity: 0.9,
+                                  }}
+                                >
+                                  <path
+                                    d="M0,8 C10,2 20,14 30,8 C40,2 50,14 60,8 C70,2 80,14 90,8 C95,6 98,6 100,8"
+                                    fill="none"
+                                    stroke="rgba(120,210,220,0.95)"
+                                    strokeWidth="2"
+                                  />
+                                </svg>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Capped at input + return button */}
+                      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ fontWeight: 700, opacity: 0.9 }}>Capped at</div>
+                        </div>
+
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={Math.round(effMax)}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            if (!Number.isFinite(v) || trueMax <= 0) return;
+                            const capped = Math.max(0, Math.min(trueMax, v));
+                            const pct = Math.max(0, Math.min(0.95, 1 - capped / trueMax));
+                            setCompHeadspacePct((prev) => ({ ...prev, [compNumber]: pct }));
+                          }}
+                          style={{ ...styles.input, width: "100%" }}
+                        />
+
+                        <button
+                          style={{ ...styles.smallBtn, width: "100%" }}
+                          onClick={() => setCompHeadspacePct((prev) => ({ ...prev, [compNumber]: 0 }))}
+                        >
+                          Return to max
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Vertical slider (headspace %) */}
+                    <div
+                      style={{
+                        display: "grid",
+                        alignContent: "start",
+                        justifyItems: "center",
+                        paddingTop: 10,
+                        minWidth: 90,
+                      }}
+                    >
+                      <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>Headspace</div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={30}
+                        step={1}
+                        value={Math.round(headPct * 100)}
+                        onChange={(e) => {
+                          const pct = Number(e.target.value) / 100;
+                          setCompHeadspacePct((prev) => ({ ...prev, [compNumber]: pct }));
+                        }}
+                        style={{
+                          height: 280,
+                          width: 28,
+                          WebkitAppearance: "slider-vertical" as any,
+                          writingMode: "bt-lr" as any,
+                        }}
+                      />
+                      <div style={{ ...styles.badge, marginTop: 10 }}>{Math.round(headPct * 100)}%</div>
+                    </div>
+                  </div>
+
+                  {/* Product selection */}
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <strong>Product</strong>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                        gap: 12,
+                      }}
+                    >
+                      {/* MT / Empty */}
+                      <button
+                        style={{
+                          textAlign: "left",
+                          padding: 14,
+                          borderRadius: 16,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: isEmpty ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+                          color: "white",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setCompPlan((prev) => ({
+                            ...prev,
+                            [compNumber]: { empty: true, productId: "" },
+                          }));
+                          setCompModalOpen(false);
+                          setCompModalComp(null);
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div
+                            style={{
+                              width: 54,
+                              height: 44,
+                              borderRadius: 12,
+                              border: "1px solid rgba(180,220,255,0.9)",
+                              background: "rgba(0,0,0,0.35)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 900,
+                              letterSpacing: 0.5,
+                              color: "rgba(180,220,255,0.9)",
+                              flex: "0 0 auto",
+                            }}
+                          >
+                            MT
+                          </div>
+                          <div style={{ display: "grid", gap: 2 }}>
+                            <div style={{ fontWeight: 800 }}>MT (Empty)</div>
+                            <div style={{ opacity: 0.7, fontSize: 13 }}>Leave this compartment empty</div>
+                          </div>
+                        </div>
+                      </button>
+
+                      {terminalProducts.map((p) => {
+                        const selected = !isEmpty && sel?.productId === p.product_id;
+                        const btnCode = ((p.button_code ?? p.product_code ?? "").trim() || "PRD").toUpperCase();
+                        const btnColor = (p.hex_code ?? "").trim() || "rgba(255,255,255,0.85)";
+                        const name = (p.product_name ?? p.display_name ?? "").trim() || "Product";
+                        const sub = (p.description ?? "").trim();
+
+                        return (
+                          <button
+                            key={p.product_id}
+                            style={{
+                              textAlign: "left",
+                              padding: 14,
+                              borderRadius: 16,
+                              border: "1px solid rgba(255,255,255,0.14)",
+                              background: selected ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)",
+                              color: "white",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              setCompPlan((prev) => ({
+                                ...prev,
+                                [compNumber]: { empty: false, productId: p.product_id },
+                              }));
+                              setCompModalOpen(false);
+                              setCompModalComp(null);
+                            }}
+                            title={name}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <div
+                                style={{
+                                  width: 54,
+                                  height: 44,
+                                  borderRadius: 12,
+                  border: `1px solid ${btnColor}`,
+                                  background: "rgba(0,0,0,0.35)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: 900,
+                                  letterSpacing: 0.5,
+                                  color: btnColor,
+                                  flex: "0 0 auto",
+                                }}
+                              >
+                                {btnCode.toUpperCase()}
+                              </div>
+                              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    fontWeight: 800,
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {name}
+                                </div>
+                                <div style={{ opacity: 0.7, fontSize: 13, lineHeight: 1.25 }}>
+                                  {sub || "\u00A0"}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+})()}
+        </FullscreenModal>
+
+</section>
 
       {/* Plan (Phase 5.5) */}
 <section style={styles.section}>
