@@ -4,6 +4,8 @@ import { QuickPanel } from "./QuickPanel";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { beginLoad } from "@/lib/supabase/load";
+
 
 // UI theme constants (keep local + simple)
 const TEMP_TRACK_BLUE = "rgba(0,194,216,0.26)";
@@ -542,6 +544,24 @@ function toggleCityStar(state: string, city: string) {
 
   // Location modal UX
   const [statePickerOpen, setStatePickerOpen] = useState(false);
+
+// =======================
+// Load (begin_load RPC)
+// =======================
+const [activeLoadId, setActiveLoadId] = useState<string | null>(null);
+const [beginLoadBusy, setBeginLoadBusy] = useState(false);
+
+// Derive city_id from citiesCatalog using selectedState + selectedCity
+const selectedCityId = useMemo<string | null>(() => {
+  if (!selectedState || !selectedCity) return null;
+  const st = normState(selectedState);
+  const ct = normCity(selectedCity);
+  const row = (citiesCatalog as any[]).find(
+    (c) => normState(String(c?.state_code ?? "")) === st && normCity(String(c?.city_name ?? "")) === ct
+  );
+  return row?.city_id ? String(row.city_id) : null;
+}, [citiesCatalog, selectedState, selectedCity]);
+
 
 // Persistence (localStorage; per-user when logged in, anon fallback if not)
 const skipResetRef = useRef(false);
@@ -2445,6 +2465,88 @@ useEffect(() => {
   })();
 }, [authUserId, selectedState, selectedCity, catalogTerminalsInCity]);
 
+// =======================
+// begin_load → Supabase
+// =======================
+async function beginLoadToSupabase() {
+  if (beginLoadBusy) return;
+
+  try {
+    setBeginLoadBusy(true);
+
+    if (!selectedComboId) throw new Error("Select equipment first.");
+    if (!selectedTerminalId) throw new Error("Select terminal first.");
+    if (!selectedState || !selectedCity) throw new Error("Select location first.");
+    if (!selectedCityId) throw new Error("City ID not found.");
+    if (!planRows || planRows.length === 0) throw new Error("No plan to load.");
+
+    const lines = (planRows as any[])
+      .filter((r) => r.productId && Number(r.planned_gallons ?? 0) > 0)
+      .map((r) => {
+        const gallons = Number(r.planned_gallons ?? 0);
+        const lpg = Number(r.lbsPerGal ?? 0);
+        const lbs = gallons * lpg;
+
+        return {
+          comp_number: Number(r.comp_number),
+          product_id: String(r.productId),
+          planned_gallons: Number.isFinite(gallons) ? gallons : null,
+          planned_lbs: Number.isFinite(lbs) ? lbs : null,
+          temp_f: tempF ?? null,
+        };
+      });
+
+    if (lines.length === 0) throw new Error("No filled compartments.");
+
+    const planned_total_gal = Number.isFinite(Number(plannedGallonsTotal)) ? Number(plannedGallonsTotal) : null;
+    const planned_total_lbs = Number.isFinite(Number(plannedWeightLbs)) ? Number(plannedWeightLbs) : null;
+
+    const planned_gross_lbs =
+      Number.isFinite(Number(tare)) &&
+      Number.isFinite(Number(buffer)) &&
+      Number.isFinite(Number(plannedWeightLbs))
+        ? Number(tare) + Number(buffer) + Number(plannedWeightLbs)
+        : null;
+
+    const payload = {
+      combo_id: selectedComboId,
+      terminal_id: selectedTerminalId,
+      state_code: selectedState,
+      city_id: selectedCityId,
+
+      cg_bias: Number.isFinite(Number(cgBias)) ? Number(cgBias) : null,
+      ambient_temp_f: ambientTempF ?? null,
+      product_temp_f: tempF ?? null,
+
+      planned_totals: {
+        planned_total_gal,
+        planned_total_lbs,
+        planned_gross_lbs,
+      },
+
+      planned_snapshot: {
+        v: PLAN_SNAPSHOT_VERSION,
+        created_at: new Date().toISOString(),
+        totals: { planned_total_gal, planned_total_lbs, planned_gross_lbs },
+        lines,
+      },
+
+      lines,
+    };
+
+    const result = await beginLoad(payload);
+
+    setActiveLoadId(result.load_id);
+    alert(`Load started.\nLoad ID:\n${result.load_id}`);
+  } catch (err: any) {
+    console.error(err);
+    alert(err?.message ?? "Failed to begin load.");
+  } finally {
+    setBeginLoadBusy(false);
+  }
+}
+
+
   return (
     <div style={styles.page}>
       <h1 style={{ marginBottom: 6 }}>Calculator</h1>
@@ -3642,12 +3744,54 @@ console.log("MAIN selectedTerminal", {
 
       {/* Plan (Phase 5.5) */}
 <section style={styles.section}>
-  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-    <h2 style={{ margin: 0 }}>Plan</h2>
+  <div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+  }}
+>
+  <h2 style={{ margin: 0 }}>Plan</h2>
+
+  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
     <span style={styles.badge}>
       {planRows.length === 0 ? "No plan yet" : `${planRows.length} rows`}
     </span>
+
+    <button
+      type="button"
+      onClick={beginLoadToSupabase}
+      disabled={
+        beginLoadBusy ||
+        !selectedComboId ||
+        !selectedTerminalId ||
+        !selectedState ||
+        !selectedCity ||
+        !selectedCityId ||
+        planRows.length === 0
+      }
+      style={{
+        ...(styles as any).button,
+        padding: "10px 14px",
+        opacity:
+          beginLoadBusy ||
+          !selectedComboId ||
+          !selectedTerminalId ||
+          !selectedState ||
+          !selectedCity ||
+          !selectedCityId ||
+          planRows.length === 0
+            ? 0.55
+            : 1,
+      }}
+    >
+      {beginLoadBusy ? "Loading…" : activeLoadId ? "Load started" : "Load"}
+    </button>
   </div>
+</div>
+
 
   <div style={styles.help}>
     Target: <strong>{targetGallonsRoundedText || targetGallonsText}</strong> gal
@@ -3680,6 +3824,7 @@ console.log("MAIN selectedTerminal", {
   const lpg = Number(r.lbsPerGal ?? 0);
   const plannedLbs = g * lpg;
 
+  
   return (
     <tr key={r.comp_number}>
       <td style={styles.td}>{r.comp_number}</td>
