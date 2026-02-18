@@ -69,7 +69,7 @@ export default function EquipmentBar(props: {
           <div style={styles.help}>
             Selected:{" "}
             <strong>
-              Truck {selectedCombo.truck_id ?? "?"} + Trailer {selectedCombo.trailer_id ?? "?"}
+              {selectedCombo.combo_name ?? `${selectedCombo.truck_id ?? "?"} / ${selectedCombo.trailer_id ?? "?"}`}
             </strong>
           </div>
         )}

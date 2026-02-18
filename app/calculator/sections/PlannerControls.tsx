@@ -35,6 +35,9 @@ export default function PlannerControls(props: any) {
     // modal state
     compModalOpen,
     compModalComp,
+
+    // NEW: plan slots UI (built in page.tsx)
+    snapshotSlots,
   } = props;
 
   return (
@@ -52,6 +55,22 @@ export default function PlannerControls(props: any) {
 
       {!selectedTrailerId && <div style={styles.help}>Select equipment to load compartments.</div>}
       {compError && <div style={styles.error}>Error loading compartments: {compError}</div>}
+
+      
+
+      {/* Plan slots (centered above compartments) */}
+      {selectedTrailerId && snapshotSlots ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 8,
+            marginBottom: 10,
+          }}
+        >
+          {snapshotSlots}
+        </div>
+      ) : null}
 
       {/* Driver compartment strip (primary interface) */}
       {selectedTrailerId && !compLoading && !compError && compartments.length > 0 && (
