@@ -251,7 +251,12 @@ export function useLocation(authUserId: string) {
   }, [authUserId, effectiveLocKey, userLocKey, selectedState, selectedCity, selectedTerminalId]);
 
   // ── Ambient temp ──────────────────────────────────────────────────────────
-
+type AmbientCacheEntry = {
+  ts: number;
+  tempF: number;
+  lat?: number | null;
+  lon?: number | null;
+};
   useEffect(() => {
     if (!selectedState || !selectedCity) {
       setAmbientTempF(null);
@@ -265,7 +270,7 @@ export function useLocation(authUserId: string) {
     if (!apiKey) { setAmbientTempF(null); return; }
 
     const cacheKey = ambientKey(selectedState, selectedCity);
-    const cached = AMBIENT_CACHE.get(cacheKey);
+    const cached = AMBIENT_CACHE.get(cacheKey) as AmbientCacheEntry | undefined;
     if (cached && Date.now() - cached.ts < AMBIENT_TTL_MS) {
       setAmbientTempF(cached.tempF);
       if (cached.lat != null) setLocationLat(cached.lat);
@@ -285,11 +290,11 @@ export function useLocation(authUserId: string) {
             setLocationLat(lat);
             setLocationLon(lon);
             // Store in cache entry so subsequent hits get lat/lon too
-            const existing = AMBIENT_CACHE.get(cacheKey);
-            if (existing) {
-              (existing as any).lat = lat;
-              (existing as any).lon = lon;
-            }
+            const existing = AMBIENT_CACHE.get(cacheKey) as AmbientCacheEntry | undefined;
+if (existing) {
+  existing.lat = lat;
+  existing.lon = lon;
+}
           },
         });
         if (typeof temp === "number" && Number.isFinite(temp)) {
