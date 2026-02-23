@@ -1,225 +1,109 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"link" | "code">("link");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
-  const nextPath = useMemo(() => searchParams.get("next") ?? "/calculator", [searchParams]);
-
-  async function sendMagicLink(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setStatus(null);
+    setError(null);
+    setSent(false);
 
-    try {
-      if (!normalizedEmail.includes("@")) {
-        setStatus("Please enter a valid email address.");
-        return;
-      }
-
-      // Must be allow-listed in Supabase Auth settings.
-      const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
-
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: {
-          emailRedirectTo,
-          shouldCreateUser: true,
-        },
-      });
-
-      if (error) {
-        setStatus(error.message);
-        return;
-      }
-
-      setStatus(
-        "Email sent. Use the magic link OR switch to “Enter code” and paste the 6-digit code from the email."
-      );
-    } finally {
-      setLoading(false);
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError("Please enter your email.");
+      return;
     }
-  }
 
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setStatus(null);
-
+    setSending(true);
     try {
-      if (!normalizedEmail.includes("@")) {
-        setStatus("Enter the same email you requested the code for.");
-        return;
-      }
+      const emailRedirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback?next=${encodeURIComponent("/calculator")}`
+          : undefined;
 
-      const token = code.replace(/\s+/g, "");
-      if (token.length < 4) {
-        setStatus("Enter the 6-digit code from the email.");
-        return;
-      }
-
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: normalizedEmail,
-        token,
-        type: "magiclink",
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: trimmed,
+        options: { emailRedirectTo },
       });
 
-      if (error) {
-        setStatus(error.message);
-        return;
-      }
+      if (otpError) throw otpError;
 
-      if (!data?.session) {
-        setStatus("No session returned. Try requesting a fresh code and entering it again.");
-        return;
-      }
-
-      router.replace(nextPath);
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to send magic link.");
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 440 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Sign in</h1>
-      <p style={{ marginTop: 8, opacity: 0.8 }}>
-        Enter your email. We’ll send a magic link, and you can also sign in using the 6-digit code from the email.
-      </p>
+    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ marginBottom: 12 }}>Login</h1>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button
-          type="button"
-          onClick={() => setMode("link")}
-          style={{
-            padding: "8px 10px",
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: mode === "link" ? "rgba(255,255,255,0.10)" : "transparent",
-            color: "white",
-            cursor: "pointer",
-          }}
-        >
-          Magic link
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("code")}
-          style={{
-            padding: "8px 10px",
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: mode === "code" ? "rgba(255,255,255,0.10)" : "transparent",
-            color: "white",
-            cursor: "pointer",
-          }}
-        >
-          Enter code
-        </button>
-      </div>
+      {error && (
+        <div style={{ marginBottom: 12, padding: 10, borderRadius: 8, background: "rgba(255,0,0,0.08)" }}>
+          {error}
+        </div>
+      )}
 
-      <div style={{ marginTop: 14 }}>
-        <label style={{ display: "block", fontSize: 13, opacity: 0.8, marginBottom: 6 }}>Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          required
-          style={{
-            width: "100%",
-            padding: 12,
-            fontSize: 16,
-            borderRadius: 12,
-            border: "1px solid rgba(255,255,255,0.14)",
-            background: "rgba(0,0,0,0.25)",
-            color: "white",
-            outline: "none",
-          }}
-        />
-      </div>
-
-      {mode === "link" ? (
-        <form onSubmit={sendMagicLink} style={{ marginTop: 12 }}>
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: 10,
-              padding: 12,
-              width: "100%",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: loading ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.12)",
-              color: "white",
-              cursor: loading ? "not-allowed" : "pointer",
-              fontWeight: 600,
-            }}
-          >
-            {loading ? "Sending…" : "Send magic link"}
-          </button>
-
-          <p style={{ marginTop: 10, fontSize: 13, opacity: 0.75 }}>
-            After sign-in you’ll go to: <b>{nextPath}</b>
-          </p>
-        </form>
+      {sent ? (
+        <div style={{ padding: 12, borderRadius: 10, background: "rgba(0,255,0,0.08)" }}>
+          Magic link sent. Check your email and open the link to finish signing in.
+        </div>
       ) : (
-        <form onSubmit={verifyCode} style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 13, opacity: 0.8, marginBottom: 6 }}>6-digit code</label>
-          <input
-            inputMode="numeric"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="123456"
-            style={{
-              width: "100%",
-              padding: 12,
-              fontSize: 16,
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: "rgba(0,0,0,0.25)",
-              color: "white",
-              outline: "none",
-              letterSpacing: 2,
-            }}
-          />
+        <form onSubmit={onSubmit}>
+          <label style={{ display: "block", marginBottom: 8 }}>
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@email.com"
+              autoComplete="email"
+              inputMode="email"
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 6,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.15)",
+                background: "rgba(255,255,255,0.06)",
+              }}
+            />
+          </label>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={sending}
             style={{
-              marginTop: 10,
-              padding: 12,
               width: "100%",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: loading ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.12)",
-              color: "white",
-              cursor: loading ? "not-allowed" : "pointer",
-              fontWeight: 600,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "none",
+              cursor: sending ? "not-allowed" : "pointer",
+              opacity: sending ? 0.7 : 1,
             }}
           >
-            {loading ? "Verifying…" : "Sign in with code"}
+            {sending ? "Sending…" : "Send magic link"}
           </button>
-
-          <p style={{ marginTop: 10, fontSize: 13, opacity: 0.75 }}>
-            Use the newest email. Codes and links are single-use and can expire quickly.
-          </p>
         </form>
       )}
 
-      {status && <p style={{ marginTop: 12, opacity: 0.9 }}>{status}</p>}
+      <div style={{ marginTop: 14, fontSize: 12, opacity: 0.75 }}>
+        After signing in you’ll be redirected to: <code>/calculator</code>
+      </div>
     </main>
   );
 }
