@@ -31,11 +31,11 @@ export default function LoginPage() {
   typeof window !== "undefined"
     ? window.location.hostname === "localhost"
       ? window.location.origin
-      : "https://www.protankr.com"
+      : "https://protankr.com" // <-- FORCE production domain
     : undefined;
 
 const emailRedirectTo = origin
-  ? `${origin}/auth/callback?next=${encodeURIComponent("/calculator")}`
+  ? `${origin.replace(/\/$/, "")}/auth/callback?next=${encodeURIComponent("/calculator")}`
   : undefined;
 
       const { error: otpError } = await supabase.auth.signInWithOtp({
