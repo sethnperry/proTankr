@@ -27,10 +27,16 @@ export default function LoginPage() {
 
     setSending(true);
     try {
-      const emailRedirectTo =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=${encodeURIComponent("/calculator")}`
-          : undefined;
+      const origin =
+  typeof window !== "undefined"
+    ? window.location.hostname === "localhost"
+      ? window.location.origin
+      : "https://www.protankr.com"
+    : undefined;
+
+const emailRedirectTo = origin
+  ? `${origin}/auth/callback?next=${encodeURIComponent("/calculator")}`
+  : undefined;
 
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: trimmed,
