@@ -27,16 +27,13 @@ export default function LoginPage() {
 
     setSending(true);
     try {
-      const origin =
-  typeof window !== "undefined"
-    ? window.location.hostname === "localhost"
-      ? window.location.origin
-      : "https://protankr.com" // <-- FORCE production domain
-    : undefined;
+      const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-const emailRedirectTo = origin
-  ? `${origin.replace(/\/$/, "")}/auth/callback?next=${encodeURIComponent("/calculator")}`
-  : undefined;
+const emailRedirectTo = isLocalhost
+  ? "http://localhost:3000/auth/callback?next=%2Fcalculator"
+  : "https://www.protankr.com/auth/callback?next=%2Fcalculator";
 
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: trimmed,
