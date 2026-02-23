@@ -1,49 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [msg, setMsg] = useState("Signing you in...");
 
+  const nextPath = useMemo(() => searchParams.get("next") ?? "/calculator", [searchParams]);
+
   useEffect(() => {
-  (async () => {
-    try {
-      console.log("[AuthCallback] href:", window.location.href);
+    let cancelled = false;
 
-      // Let Supabase auto-detect tokens in URL
-      const { data, error } = await supabase.auth.getSession();
+    (async () => {
+      try {
+        // Supabase magic links typically arrive as PKCE: /auth/callback?code=...
+        const code = searchParams.get("code");
 
-      if (error) {
-        setMsg("Auth error: " + error.message);
-        return;
+        if (code) {
+          setMsg("Completing sign-in...");
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            if (!cancelled) setMsg(`Auth error: ${error.message}`);
+            return;
+          }
+
+          if (!cancelled) router.replace(nextPath);
+          return;
+        }
+
+        // Fallback for older/implicit flows: session tokens in URL hash.
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          if (!cancelled) setMsg("Auth error: " + error.message);
+          return;
+        }
+
+        if (!data.session) {
+          if (!cancelled) setMsg("No session found. Open the newest magic link, or request a fresh one.");
+          return;
+        }
+
+        if (!cancelled) router.replace(nextPath);
+      } catch (e: any) {
+        if (!cancelled) setMsg("Auth error: " + (e?.message ?? String(e)));
       }
+    })();
 
-      if (!data.session) {
-        setMsg("No session found. Open the newest magic link.");
-        return;
-      }
-
-      router.replace("/calculator");
-    } catch (e: any) {
-      setMsg("Auth error: " + (e?.message ?? String(e)));
-    }
-  })();
-}, [router]);
-
+    return () => {
+      cancelled = true;
+    };
+  }, [router, searchParams, nextPath]);
 
   return (
     <main style={{ padding: 24 }}>
       <h1 style={{ fontSize: 20, fontWeight: 700 }}>Signing in…</h1>
-
-      <p style={{ opacity: 0.7, fontSize: 12, wordBreak: "break-all" }}>
-        href: {typeof window !== "undefined" ? window.location.href : ""}
-      </p>
-
       <p style={{ marginTop: 12 }}>{msg}</p>
     </main>
   );
 }
-

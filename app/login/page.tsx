@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"link" | "code">("link");
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+  const nextPath = useMemo(() => searchParams.get("next") ?? "/calculator", [searchParams]);
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -26,14 +28,13 @@ export default function LoginPage() {
         return;
       }
 
-      // IMPORTANT: keep redirect on the same origin you’re using (localhost vs vercel)
-      const emailRedirectTo = `${window.location.origin}/auth/callback?next=/calculator`;
+      // Must be allow-listed in Supabase Auth settings.
+      const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
           emailRedirectTo,
-          // shouldCreateUser defaults to true; leaving explicit for clarity.
           shouldCreateUser: true,
         },
       });
@@ -68,8 +69,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Supabase email OTP verification uses type: "magiclink"
-      // (This works for the 6-digit code / token flow and avoids URL parameter issues.)
       const { data, error } = await supabase.auth.verifyOtp({
         email: normalizedEmail,
         token,
@@ -82,12 +81,11 @@ export default function LoginPage() {
       }
 
       if (!data?.session) {
-        // Very rare, but keep it explicit for debugging
         setStatus("No session returned. Try requesting a fresh code and entering it again.");
         return;
       }
 
-      router.replace("/calculator");
+      router.replace(nextPath);
     } finally {
       setLoading(false);
     }
@@ -100,7 +98,6 @@ export default function LoginPage() {
         Enter your email. We’ll send a magic link, and you can also sign in using the 6-digit code from the email.
       </p>
 
-      {/* Mode toggle */}
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <button
           type="button"
@@ -132,7 +129,6 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Email input shared */}
       <div style={{ marginTop: 14 }}>
         <label style={{ display: "block", fontSize: 13, opacity: 0.8, marginBottom: 6 }}>Email</label>
         <input
@@ -175,7 +171,7 @@ export default function LoginPage() {
           </button>
 
           <p style={{ marginTop: 10, fontSize: 13, opacity: 0.75 }}>
-            Tip: If links keep expiring, switch to <b>Enter code</b> and paste the 6-digit code from the email.
+            After sign-in you’ll go to: <b>{nextPath}</b>
           </p>
         </form>
       ) : (
@@ -227,4 +223,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
