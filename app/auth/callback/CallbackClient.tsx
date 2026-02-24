@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,31 +22,24 @@ export default function CallbackClient() {
   useEffect(() => {
     const hash = typeof window !== "undefined" ? window.location.hash : "";
 
-    // Handle hash errors (otp_expired etc.)
+    // Hash error (otp_expired etc.)
     if (hash && hash.includes("error=")) {
       const hp = parseHashParams(hash);
       const desc = hp.error_description ? decodeURIComponent(hp.error_description) : "";
       const code = hp.error_code ?? "";
       const err = hp.error ?? "access_denied";
 
-      let m = "Magic link error: " + err;
-      if (code) m += " (" + code + ")";
-      if (desc) m += " — " + desc;
-      m += ". Request a new link.";
-
-      setMsg(m);
+      setMsg(
+        `Magic link error: ${err}${code ? ` (${code})` : ""}${desc ? ` — ${desc}` : ""}. ` +
+          `Request a new link from the login page.`
+      );
       return;
     }
 
     const code = searchParams.get("code");
     if (code) {
       setMsg("Completing sign-in…");
-      const url =
-        "/auth/confirm?code=" +
-        encodeURIComponent(code) +
-        "&next=" +
-        encodeURIComponent(nextPath);
-
+      const url = `/auth/confirm?code=${encodeURIComponent(code)}&next=${encodeURIComponent(nextPath)}`;
       window.location.replace(url);
       return;
     }
@@ -58,7 +51,7 @@ export default function CallbackClient() {
         return;
       }
       if (!data.session) {
-        setMsg("No session found. Open the newest magic link or request a new one.");
+        setMsg("No session found. Open the newest magic link, or request a fresh one.");
         return;
       }
       router.replace(nextPath);
@@ -69,6 +62,7 @@ export default function CallbackClient() {
     <main style={{ padding: 24, maxWidth: 680, margin: "0 auto" }}>
       <h1 style={{ fontSize: 20, fontWeight: 700 }}>Signing in…</h1>
       <p style={{ marginTop: 12 }}>{msg}</p>
+
       <div style={{ marginTop: 16 }}>
         <a href="/login" style={{ textDecoration: "underline" }}>
           Back to login

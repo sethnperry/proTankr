@@ -15,6 +15,8 @@
  *   types.ts                — all shared types
  */
 
+
+
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase/client";

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ActiveCompanySelect from "@/lib/ui/ActiveCompanySelect";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,11 +25,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
+  <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <div style={{ padding: 12, borderBottom: "1px solid #333" }}>
+      <ActiveCompanySelect />
+    </div>
+    {children}
+  </body>
+</html>
   );
 }
