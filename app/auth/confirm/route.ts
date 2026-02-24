@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-type CookieToSet = { name: string; value: string; options?: any };
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: any;
+};
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
+
   const code = url.searchParams.get("code");
   const next = url.searchParams.get("next") ?? "/calculator";
 
@@ -20,6 +25,7 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL("/login?error=missing_env", url.origin));
   }
 
+  // ✅ NEXT 15 FIX — must await cookies()
   const cookieStore = await cookies();
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -43,7 +49,7 @@ export async function GET(req: Request) {
     );
   }
 
-  // Prevent open redirects; forces same-origin
+  // Prevent open redirects (same-origin only)
   const redirectTo = new URL(next, url.origin);
   return NextResponse.redirect(redirectTo);
 }
