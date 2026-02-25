@@ -777,7 +777,7 @@ export default function CalculatorPage() {
         >
           {equipment.equipmentLabel ?? "Select Equipment"}
         </button>
-        <NavMenu email={authEmail} userId={authUserId} />
+        <NavMenu />
       </div>
 
       <LocationBar

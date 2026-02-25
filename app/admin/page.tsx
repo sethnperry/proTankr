@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import NavMenu from "@/lib/ui/NavMenu";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -463,9 +464,12 @@ export default function AdminPage() {
     <div style={css.page}>
 
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={css.heading}>{companyName}</h1>
-        <p style={css.subheading}>Company Admin</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, gap: 12 }}>
+        <div>
+          <h1 style={css.heading}>{companyName}</h1>
+          <p style={css.subheading}>Company Admin</p>
+        </div>
+        <NavMenu />
       </div>
 
       {/* ── USERS ── */}
