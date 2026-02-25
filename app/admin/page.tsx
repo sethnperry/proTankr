@@ -376,23 +376,33 @@ export default function AdminPage() {
       }
 
       // Members
+      // Load members with emails via RPC (emails aren't accessible from client directly)
       const { data: memberRows } = await supabase
         .from("user_companies")
-        .select("user_id, role, profile:profiles(display_name), user:auth_users_view(email)")
+        .select("user_id, role")
         .eq("company_id", cid);
 
-      // Since we can't join auth.users from client, get emails via a different approach
-      // We'll fetch profiles and show display_name + truncated user_id
       const { data: profileRows } = await supabase
         .from("profiles")
         .select("user_id, display_name");
 
-      const profileMap = Object.fromEntries((profileRows ?? []).map(p => [p.user_id, p.display_name]));
+      // Get emails for members via RPC
+      const memberIds = (memberRows ?? []).map((m: any) => m.user_id);
+      let emailMap: Record<string, string> = {};
+      if (memberIds.length > 0) {
+        const { data: emailRows } = await supabase
+          .rpc("get_company_member_emails", { p_company_id: cid });
+        for (const row of (emailRows ?? []) as any[]) {
+          emailMap[row.user_id] = row.email;
+        }
+      }
+
+      const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.user_id, p.display_name]));
 
       const cleanMembers: Member[] = ((memberRows ?? []) as any[]).map(m => ({
         user_id: m.user_id,
         role: m.role,
-        email: m.user_id, // fallback — we'll show truncated ID if email unavailable
+        email: emailMap[m.user_id] ?? "",
         display_name: profileMap[m.user_id] ?? null,
       }));
       setMembers(cleanMembers);
@@ -662,16 +672,16 @@ function MemberRow({ member, companyId, supabase, onRefresh }: {
     onRefresh();
   }
 
-  const label = member.display_name
-    || `User …${member.user_id.slice(-8)}`;
+  const label = member.display_name || member.email || `User …${member.user_id.slice(-8)}`;
+  const sublabel = member.display_name && member.email ? member.email : null;
 
   return (
     <div style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
-        <div style={{ fontSize: 11, color: T.muted, marginTop: 2, fontFamily: "monospace" }}>
-          {member.user_id.slice(0, 18)}…
-        </div>
+        {sublabel && (
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{sublabel}</div>
+        )}
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
         <select

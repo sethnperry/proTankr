@@ -74,9 +74,8 @@ export default function NavMenu() {
     setActiveId(id);
     setIsAdmin(memberships.find(m => m.company_id === id)?.role === "admin");
     await supabase.rpc("set_active_company", { p_company_id: id });
-    setSwitching(false);
-    setOpen(false);
-    router.refresh();
+    // Hard reload so all client hooks re-fetch under the new company
+    window.location.reload();
   }
 
   async function signOut() {
