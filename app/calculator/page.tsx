@@ -1,4 +1,5 @@
 "use client";
+import NavMenu from "@/lib/ui/NavMenu";
 
 /**
  * page.tsx — CalculatorPage
@@ -768,19 +769,15 @@ export default function CalculatorPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={styles.page}>
-      {/* Equipment header + email on same line */}
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
+      {/* Equipment header + nav menu on same line */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
         <button type="button" onClick={() => setEquipOpen(true)}
           style={{ background: "transparent", border: "none", padding: 0, margin: 0, cursor: "pointer", textAlign: "left", color: equipment.selectedCombo ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.45)", fontWeight: 900, fontSize: "clamp(18px, 2.8vw, 28px)", letterSpacing: 0.2, textDecoration: "none" }}
           aria-label="Select equipment"
         >
           {equipment.equipmentLabel ?? "Select Equipment"}
         </button>
-        {authEmail && (
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", fontWeight: 600, letterSpacing: 0.2, whiteSpace: "nowrap", flexShrink: 0 }}>
-            {authEmail}
-          </div>
-        )}
+        <NavMenu email={authEmail} userId={authUserId} />
       </div>
 
       <LocationBar
