@@ -46,8 +46,8 @@ type Combo = {
   tare_lbs: number;
   target_weight: number | null;
   active: boolean;
-  truck?: { truck_name: string } | null;
-  trailer?: { trailer_name: string } | null;
+  truck?: { truck_name: string } | { truck_name: string }[] | null;
+  trailer?: { trailer_name: string } | { trailer_name: string }[] | null;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -432,7 +432,7 @@ export default function AdminPage() {
         .select("combo_id, combo_name, truck_id, trailer_id, tare_lbs, target_weight, active, truck:trucks(truck_name), trailer:trailers(trailer_name)")
         .eq("company_id", cid)
         .order("combo_name");
-      setCombos((comboRows ?? []) as Combo[]);
+      setCombos((comboRows ?? []) as unknown as Combo[]);
 
     } catch (e: any) {
       setErr(e?.message ?? "Load failed.");
