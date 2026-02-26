@@ -23,7 +23,7 @@ type License = {
   license_class: string | null;
   endorsements: string[];
   restrictions: string[];
-  card_number: string | null;
+  license_number: string | null;
   issue_date: string | null;
   expiration_date: string | null;
   state_code: string | null;
@@ -369,6 +369,130 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
 }
 
 // ─────────────────────────────────────────────────────────────
+// Terminal Access Editor (inside EditDriverModal)
+// ─────────────────────────────────────────────────────────────
+
+type AllTerminal = { terminal_id: string; terminal_name: string; city: string | null; state: string | null; };
+
+function TerminalAccessEditor({ userId, companyId, supabase, existing, onReload }: {
+  userId: string;
+  companyId: string;
+  supabase: ReturnType<typeof createSupabaseBrowser>;
+  existing: TerminalAccess[];
+  onReload: () => void;
+}) {
+  const [allTerminals,   setAllTerminals]   = useState<AllTerminal[]>([]);
+  const [addTerminalId,  setAddTerminalId]  = useState("");
+  const [addCardedOn,    setAddCardedOn]    = useState(new Date().toISOString().split("T")[0]);
+  const [saving,         setSaving]         = useState(false);
+  const [err,            setErr]            = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.from("terminals").select("terminal_id, terminal_name, city, state")
+      .eq("active", true).order("terminal_name")
+      .then(({ data }) => {
+        setAllTerminals((data ?? []) as AllTerminal[]);
+        const first = (data ?? [])[0] as any;
+        if (first && !addTerminalId) setAddTerminalId(first.terminal_id);
+      });
+  }, [supabase]);
+
+  const existingIds = new Set(existing.map(t => t.terminal_id));
+  const available = allTerminals.filter(t => !existingIds.has(t.terminal_id));
+
+  async function addAccess() {
+    if (!addTerminalId) return;
+    setSaving(true); setErr(null);
+    const { error } = await supabase.rpc("admin_get_carded", {
+      p_user_id: userId,
+      p_terminal_id: addTerminalId,
+      p_carded_on: addCardedOn,
+      p_company_id: companyId,
+    });
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    onReload();
+    // Move to next available terminal
+    const next = available.find(t => t.terminal_id !== addTerminalId);
+    if (next) setAddTerminalId(next.terminal_id);
+  }
+
+  async function removeAccess(terminalId: string) {
+    setSaving(true); setErr(null);
+    const { error } = await supabase.rpc("admin_remove_terminal_access", {
+      p_user_id: userId,
+      p_terminal_id: terminalId,
+      p_company_id: companyId,
+    });
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    onReload();
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <SubSectionTitle>Terminal Access ({existing.length})</SubSectionTitle>
+      {err && <Banner msg={err} type="error" />}
+
+      {/* Existing terminals */}
+      {existing.length === 0 ? (
+        <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>No terminal cards on file.</div>
+      ) : (
+        <div style={{ marginBottom: 14 }}>
+          {existing.map(t => {
+            const color = expiryColor(t.days_until_expiry);
+            return (
+              <div key={t.terminal_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}`, gap: 8 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{t.terminal_name}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>{[t.city, t.state].filter(Boolean).join(", ")}</div>
+                </div>
+                <div style={{ textAlign: "right" as const, flexShrink: 0 }}>
+                  <div style={{ fontSize: 12, color }}>{t.is_expired ? "EXPIRED" : expiryLabel(t.days_until_expiry)}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>Carded {fmtDate(t.carded_on)}</div>
+                </div>
+                <button
+                  onClick={() => removeAccess(t.terminal_id)}
+                  disabled={saving}
+                  style={{ ...css.btn("ghost"), padding: "4px 8px", color: T.danger, borderColor: `${T.danger}33`, fontSize: 11, flexShrink: 0 }}
+                >
+                  Remove
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add terminal row */}
+      {available.length > 0 && (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" as const }}>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <label style={css.label}>Add Terminal</label>
+            <select value={addTerminalId} onChange={e => setAddTerminalId(e.target.value)}
+              style={{ ...css.select, width: "100%" }}>
+              {available.map(t => (
+                <option key={t.terminal_id} value={t.terminal_id}>
+                  {t.terminal_name}{t.city ? ` — ${t.city}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ width: 140 }}>
+            <label style={css.label}>Carded On</label>
+            <input type="date" value={addCardedOn} onChange={e => setAddCardedOn(e.target.value)} style={css.input} />
+          </div>
+          <button onClick={addAccess} disabled={saving || !addTerminalId}
+            style={{ ...css.btn("primary"), marginBottom: 1 }}>
+            {saving ? "Adding…" : "Add"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Driver Profile Modal
 // ─────────────────────────────────────────────────────────────
 
@@ -434,7 +558,7 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
           setLicClass(d.license.license_class ?? "");
           setLicEndorse((d.license.endorsements ?? []).join(", "));
           setLicRestrict((d.license.restrictions ?? []).join(", "));
-          setLicNumber(d.license.card_number ?? "");
+          setLicNumber(d.license.license_number ?? "");
           setLicIssue(d.license.issue_date ?? "");
           setLicExpiry(d.license.expiration_date ?? "");
           setLicState(d.license.state_code ?? "");
@@ -582,31 +706,19 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
 
           <hr style={css.divider} />
 
-          {/* ── Terminal Access (read-only) ── */}
-          <SubSectionTitle>Terminal Access ({terminals.length})</SubSectionTitle>
-          {terminals.length === 0 ? (
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>No terminal cards on file.</div>
-          ) : (
-            <div style={{ marginBottom: 14 }}>
-              {terminals.map(t => {
-                const color = expiryColor(t.days_until_expiry);
-                return (
-                  <div key={t.terminal_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}`, gap: 8 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{t.terminal_name}</div>
-                      <div style={{ fontSize: 11, color: T.muted }}>{[t.city, t.state].filter(Boolean).join(", ")}</div>
-                    </div>
-                    <div style={{ textAlign: "right" as const, flexShrink: 0 }}>
-                      <div style={{ fontSize: 12, color }}>
-                        {t.is_expired ? "EXPIRED" : expiryLabel(t.days_until_expiry)}
-                      </div>
-                      <div style={{ fontSize: 11, color: T.muted }}>Carded {fmtDate(t.carded_on)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* ── Terminal Access ── */}
+          <hr style={css.divider} />
+          <TerminalAccessEditor
+            userId={member.user_id}
+            companyId={companyId}
+            supabase={supabase}
+            existing={terminals}
+            onReload={() => {
+              // Reload profile to refresh terminals list
+              supabase.rpc("get_driver_profile", { p_user_id: member.user_id, p_company_id: companyId })
+                .then(({ data }) => { if (data) setProfile(data as DriverProfile); });
+            }}
+          />
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
