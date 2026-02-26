@@ -872,7 +872,11 @@ function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
   async function remove() {
     if (!confirm(`Remove ${member.email} from the company?`)) return;
     setSaving(true);
-    await supabase.from("user_companies").delete().eq("user_id", member.user_id).eq("company_id", companyId);
+    await supabase.rpc("admin_remove_member", {
+      p_user_id:    member.user_id,
+      p_email:      member.email || null,
+      p_company_id: companyId,
+    });
     setSaving(false);
     onRefresh();
   }
@@ -1041,8 +1045,13 @@ function InviteModal({ companyId, supabase, onClose, onDone }: {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Invite failed.");
+        setStatus({ type: "success", msg: `Invite email sent to ${email.trim()}. They'll receive a magic link to join.` });
+      } else {
+        // Existing user — already re-added to company, no email needed
+        setStatus({ type: "success", msg: `${email.trim()} already has an account and has been added to the company. They can log in now.` });
+        setEmail("");
+        setTimeout(() => onDone(), 1500); // close & refresh list
       }
-      setStatus({ type: "success", msg: `Invite sent to ${email.trim()}.` });
       setEmail("");
     } catch (e: any) {
       setStatus({ type: "error", msg: e?.message ?? "Failed to send invite." });
