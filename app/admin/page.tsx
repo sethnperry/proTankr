@@ -17,6 +17,7 @@ type Member = {
   division: string | null;
   region: string | null;
   local_area: string | null;
+  employee_number: string | null;
 };
 
 type License = {
@@ -515,6 +516,7 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
   const [division,    setDivision]    = useState(member.division ?? "");
   const [region,      setRegion]      = useState(member.region ?? "");
   const [localArea,   setLocalArea]   = useState(member.local_area ?? "");
+  const [employeeNumber, setEmployeeNumber] = useState(member.employee_number ?? "");
 
   // License
   const [licClass,    setLicClass]    = useState("");
@@ -553,6 +555,7 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
         setDivision(d.profile?.division ?? "");
         setRegion(d.profile?.region ?? "");
         setLocalArea(d.profile?.local_area ?? "");
+        setEmployeeNumber((d.profile as any)?.employee_number ?? member.employee_number ?? "");
 
         if (d.license) {
           setLicClass(d.license.license_class ?? "");
@@ -588,11 +591,12 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
     setSuccess(false);
 
     const payload: any = {
-      display_name: displayName || null,
-      hire_date:    hireDate || null,
-      division:     division || null,
-      region:       region || null,
-      local_area:   localArea || null,
+      display_name:    displayName || null,
+      hire_date:       hireDate || null,
+      division:        division || null,
+      region:          region || null,
+      local_area:      localArea || null,
+      employee_number: employeeNumber || null,
     };
 
     if (licClass || licNumber || licExpiry) {
@@ -655,9 +659,10 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
           <FieldRow>
             <Field label="Display Name" half><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={css.input} placeholder="Full name" /></Field>
             <Field label="Hire Date" half><input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} style={css.input} /></Field>
+            <Field label="Employee #" half><input value={employeeNumber} onChange={e => setEmployeeNumber(e.target.value)} style={css.input} placeholder="e.g. EMP-001" /></Field>
             <Field label="Division" half><input value={division} onChange={e => setDivision(e.target.value)} style={css.input} placeholder="e.g. Southeast" /></Field>
             <Field label="Region" half><input value={region} onChange={e => setRegion(e.target.value)} style={css.input} placeholder="e.g. Region 3" /></Field>
-            <Field label="Local Area"><input value={localArea} onChange={e => setLocalArea(e.target.value)} style={css.input} placeholder="e.g. Tampa Bay" /></Field>
+            <Field label="Local Area" half><input value={localArea} onChange={e => setLocalArea(e.target.value)} style={css.input} placeholder="e.g. Tampa Bay" /></Field>
           </FieldRow>
 
           <hr style={css.divider} />
@@ -734,7 +739,7 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Expanded Member Card (inline in the list)
+// Member Card — collapsed + expanded
 // ─────────────────────────────────────────────────────────────
 
 function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
@@ -784,121 +789,119 @@ function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
     onRefresh();
   }
 
-  const label    = member.display_name || member.email || `User …${member.user_id.slice(-8)}`;
-  const sublabel = member.display_name ? member.email : null;
+  const name     = member.display_name || member.email || `User …${member.user_id.slice(-8)}`;
+  const subEmail = member.display_name ? member.email : null;
 
-  const lic      = preview?.license;
-  const med      = preview?.medical;
-  const twic     = preview?.twic;
+  const lic       = preview?.license;
+  const med       = preview?.medical;
+  const twic      = preview?.twic;
   const terminals = preview?.terminals ?? [];
-
-  const licDays  = daysUntil(lic?.expiration_date);
-  const medDays  = daysUntil(med?.expiration_date);
-  const twicDays = daysUntil(twic?.expiration_date);
-
+  const licDays   = daysUntil(lic?.expiration_date);
+  const medDays   = daysUntil(med?.expiration_date);
+  const twicDays  = daysUntil(twic?.expiration_date);
   const expiringSoon = [licDays, medDays, twicDays, ...terminals.map(t => t.days_until_expiry)]
     .some(d => d != null && d < 30);
 
   return (
     <div style={{ ...css.card, padding: 0, overflow: "hidden" }}>
-      {/* ── Main row ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
-        {/* Expand toggle */}
-        <button type="button" onClick={toggle} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 16, padding: 0, flexShrink: 0, width: 20, textAlign: "center" as const, transition: "transform 150ms", transform: expanded ? "rotate(90deg)" : "none" }}>
-          ›
-        </button>
 
-        {/* Identity */}
+      {/* ── Collapsed row ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={toggle}>
+        {/* Chevron */}
+        <span style={{ color: T.muted, fontSize: 14, transition: "transform 150ms", transform: expanded ? "rotate(90deg)" : "none", flexShrink: 0, userSelect: "none" as const }}>›</span>
+
+        {/* Name + email */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
+            <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{name}</span>
             {expiringSoon && <span style={css.tag(T.warning)}>⚠ Expiring</span>}
           </div>
-          {sublabel && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{sublabel}</div>}
-          {(member.division || member.region) && (
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>
-              {[member.division, member.region, member.local_area].filter(Boolean).join(" · ")}
-            </div>
-          )}
+          {subEmail && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{subEmail}</div>}
         </div>
 
-        {/* Controls */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-          <button onClick={() => onEditProfile(member)} style={{ ...css.btn("subtle"), fontSize: 11 }}>Edit</button>
-          <select value={member.role} onChange={e => changeRole(e.target.value)} disabled={saving}
-            style={{ ...css.select, fontSize: 12, padding: "5px 8px" }}>
-            <option value="driver">Driver</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button onClick={remove} disabled={saving}
-            style={{ ...css.btn("ghost"), padding: "5px 10px", color: T.danger, borderColor: `${T.danger}44`, fontSize: 12 }}>
-            Remove
-          </button>
-        </div>
+        {/* Edit button — far right in collapsed view */}
+        <button
+          onClick={e => { e.stopPropagation(); onEditProfile(member); }}
+          style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0 }}
+        >
+          Edit
+        </button>
       </div>
 
       {/* ── Expanded section ── */}
       {expanded && (
-        <div style={{ borderTop: `1px solid ${T.border}`, padding: "14px 14px 14px 44px", background: T.surface2 }}>
+        <div style={{ borderTop: `1px solid ${T.border}`, background: T.surface2 }}>
+
+          {/* Employee # + Role row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: `1px solid ${T.border}`, flexWrap: "wrap" as const }}>
+            {member.employee_number && (
+              <div style={{ fontSize: 12, color: T.muted }}>
+                <span style={{ fontWeight: 700, color: T.text }}>#{member.employee_number}</span>
+              </div>
+            )}
+            <div style={{ flex: 1 }} />
+            {/* Role dropdown */}
+            <select value={member.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
+              style={{ ...css.select, fontSize: 12, padding: "5px 8px" }}>
+              <option value="driver">Driver</option>
+              <option value="admin">Admin</option>
+            </select>
+            {/* Remove */}
+            <button onClick={e => { e.stopPropagation(); remove(); }} disabled={saving}
+              style={{ ...css.btn("ghost"), padding: "5px 10px", color: T.danger, borderColor: `${T.danger}44`, fontSize: 12 }}>
+              Remove
+            </button>
+          </div>
+
+          {/* Compliance cards */}
           {loading ? (
-            <div style={{ fontSize: 12, color: T.muted, padding: "8px 0" }}>Loading…</div>
+            <div style={{ fontSize: 12, color: T.muted, padding: "12px 14px" }}>Loading…</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8, padding: "12px 14px" }}>
 
-              {/* Profile details */}
-              {(member.hire_date || member.division || member.region) && (
-                <ComplianceCard title="Profile" color={T.info}>
-                  {member.hire_date && <DataRow label="Hired" value={fmtDate(member.hire_date)} />}
-                  {member.division  && <DataRow label="Division" value={member.division} />}
-                  {member.region    && <DataRow label="Region" value={member.region} />}
-                  {member.local_area && <DataRow label="Local" value={member.local_area} />}
-                </ComplianceCard>
-              )}
-
-              {/* Driver's license */}
-              <ComplianceCard title="Driver's License" color={expiryColor(licDays)} empty="Not on file">
+              {/* License */}
+              <ComplianceCard title="Driver's License" color={lic ? expiryColor(licDays) : T.border}>
                 {lic ? (
                   <>
-                    <DataRow label="Class" value={lic.license_class ? `Class ${lic.license_class}` : "—"} />
-                    {lic.endorsements?.length > 0 && <DataRow label="Endorsements" value={lic.endorsements.join(", ")} />}
-                    {lic.restrictions?.length > 0 && <DataRow label="Restrictions" value={lic.restrictions.join(", ")} />}
+                    {lic.license_class && <DataRow label="Class" value={`Class ${lic.license_class}`} />}
+                    {lic.license_number && <DataRow label="License #" value={lic.license_number} />}
+                    {(lic.endorsements?.length ?? 0) > 0 && <DataRow label="Endorsements" value={lic.endorsements.join(", ")} />}
                     <DataRow label="Expires" value={fmtDate(lic.expiration_date)} highlight={expiryColor(licDays)} />
-                    <DataRow label="" value={<span style={css.tag(expiryColor(licDays))}>{expiryLabel(licDays)}</span>} />
+                    <div><span style={css.tag(expiryColor(licDays))}>{expiryLabel(licDays)}</span></div>
                   </>
-                ) : null}
+                ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
               </ComplianceCard>
 
-              {/* Medical card */}
-              <ComplianceCard title="Medical Card" color={expiryColor(medDays)} empty="Not on file">
+              {/* Medical */}
+              <ComplianceCard title="Medical Card" color={med ? expiryColor(medDays) : T.border}>
                 {med ? (
                   <>
-                    <DataRow label="Issued" value={fmtDate(med.issue_date)} />
                     <DataRow label="Expires" value={fmtDate(med.expiration_date)} highlight={expiryColor(medDays)} />
-                    <DataRow label="" value={<span style={css.tag(expiryColor(medDays))}>{expiryLabel(medDays)}</span>} />
+                    <div><span style={css.tag(expiryColor(medDays))}>{expiryLabel(medDays)}</span></div>
                   </>
-                ) : null}
+                ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
               </ComplianceCard>
 
               {/* TWIC */}
-              <ComplianceCard title="TWIC Card" color={expiryColor(twicDays)} empty="Not on file">
+              <ComplianceCard title="TWIC Card" color={twic ? expiryColor(twicDays) : T.border}>
                 {twic ? (
                   <>
                     {twic.card_number && <DataRow label="Card #" value={twic.card_number} />}
                     <DataRow label="Expires" value={fmtDate(twic.expiration_date)} highlight={expiryColor(twicDays)} />
-                    <DataRow label="" value={<span style={css.tag(expiryColor(twicDays))}>{expiryLabel(twicDays)}</span>} />
+                    <div><span style={css.tag(expiryColor(twicDays))}>{expiryLabel(twicDays)}</span></div>
                   </>
-                ) : null}
+                ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
               </ComplianceCard>
 
-              {/* Terminal access */}
-              <ComplianceCard title={`Terminals (${terminals.length})`} color={T.accent} empty="No terminals">
+              {/* Terminals */}
+              <ComplianceCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}>
                 {terminals.length > 0 ? terminals.slice(0, 4).map(t => (
                   <DataRow key={t.terminal_id}
-                    label={t.terminal_name}
+                    label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
                     value={<span style={css.tag(expiryColor(t.days_until_expiry))}>{expiryLabel(t.days_until_expiry)}</span>}
                   />
-                )) : null}
-                {terminals.length > 4 && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>+{terminals.length - 4} more</div>}
+                )) : <div style={{ fontSize: 12, color: T.muted }}>No terminals</div>}
+                {terminals.length > 4 && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>+{terminals.length - 4} more — click Edit to manage</div>}
               </ComplianceCard>
 
             </div>
@@ -1174,6 +1177,12 @@ export default function AdminPage() {
   const [loading,     setLoading]     = useState(true);
   const [err,         setErr]         = useState<string | null>(null);
 
+  // Section collapse state
+  const [usersOpen,    setUsersOpen]    = useState(true);
+  const [trucksOpen,   setTrucksOpen]   = useState(true);
+  const [trailersOpen, setTrailersOpen] = useState(true);
+  const [combosOpen,   setCombosOpen]   = useState(true);
+
   // Sort + filter for members
   const [search,    setSearch]    = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
@@ -1206,21 +1215,22 @@ export default function AdminPage() {
 
       // Members
       const { data: memberRows } = await supabase.from("user_companies").select("user_id, role").eq("company_id", cid);
-      const { data: profileRows } = await supabase.from("profiles").select("user_id, display_name, hire_date, division, region, local_area");
+      const { data: profileRows } = await supabase.from("profiles").select("user_id, display_name, hire_date, division, region, local_area, employee_number");
       const { data: emailRows } = await supabase.rpc("get_company_member_emails", { p_company_id: cid });
 
       const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.user_id, p]));
       const emailMap = Object.fromEntries(((emailRows ?? []) as any[]).map(r => [r.user_id, r.email]));
 
       setMembers(((memberRows ?? []) as any[]).map(m => ({
-        user_id:      m.user_id,
-        role:         m.role,
-        email:        emailMap[m.user_id] ?? "",
-        display_name: profileMap[m.user_id]?.display_name ?? null,
-        hire_date:    profileMap[m.user_id]?.hire_date ?? null,
-        division:     profileMap[m.user_id]?.division ?? null,
-        region:       profileMap[m.user_id]?.region ?? null,
-        local_area:   profileMap[m.user_id]?.local_area ?? null,
+        user_id:         m.user_id,
+        role:            m.role,
+        email:           emailMap[m.user_id] ?? "",
+        display_name:    profileMap[m.user_id]?.display_name ?? null,
+        hire_date:       profileMap[m.user_id]?.hire_date ?? null,
+        division:        profileMap[m.user_id]?.division ?? null,
+        region:          profileMap[m.user_id]?.region ?? null,
+        local_area:      profileMap[m.user_id]?.local_area ?? null,
+        employee_number: profileMap[m.user_id]?.employee_number ?? null,
       })));
 
       // Trucks
@@ -1265,7 +1275,9 @@ export default function AdminPage() {
         (m.display_name ?? "").toLowerCase().includes(q) ||
         m.email.toLowerCase().includes(q) ||
         (m.division ?? "").toLowerCase().includes(q) ||
-        (m.region ?? "").toLowerCase().includes(q)
+        (m.region ?? "").toLowerCase().includes(q) ||
+        (m.local_area ?? "").toLowerCase().includes(q) ||
+        (m.employee_number ?? "").toLowerCase().includes(q)
       );
     }
     ms.sort((a, b) => {
@@ -1311,117 +1323,150 @@ export default function AdminPage() {
 
       {/* ── USERS ── */}
       <section style={{ marginBottom: 32 }}>
-        <div style={css.sectionHead}>
-          <h2 style={css.sectionTitle}>Users ({filteredMembers.length}{members.length !== filteredMembers.length ? ` of ${members.length}` : ""})</h2>
+        <div style={{ ...css.sectionHead }}>
+          <h2
+            style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" as const, flex: 1 }}
+            onClick={() => setUsersOpen(v => !v)}
+          >
+            <span style={{ transition: "transform 150ms", transform: usersOpen ? "rotate(90deg)" : "none", display: "inline-block", fontSize: 14 }}>›</span>
+            Users ({members.length})
+          </h2>
           <button style={css.btn("primary")} onClick={() => setInviteModal(true)}>+ Invite</button>
         </div>
 
-        {/* Search + sort toolbar */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" as const, alignItems: "center" }}>
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, email, division…"
-            style={{ ...css.input, width: "auto", flex: 1, minWidth: 160, padding: "7px 10px" }}
-          />
-          <select value={filterRole} onChange={e => setFilterRole(e.target.value as any)}
-            style={{ ...css.select, fontSize: 12, padding: "7px 10px" }}>
-            <option value="">All roles</option>
-            <option value="admin">Admin</option>
-            <option value="driver">Driver</option>
-          </select>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const }}>
-            <SortBtn field="name" label="Name" />
-            <SortBtn field="role" label="Role" />
-            <SortBtn field="division" label="Division" />
-            <SortBtn field="region" label="Region" />
-            <SortBtn field="hire_date" label="Hire Date" />
-          </div>
-        </div>
+        {usersOpen && (
+          <>
+            {/* Row 1: Search + role filter */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" as const }}>
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, email, employee #, division, region…"
+                style={{ ...css.input, flex: 1, minWidth: 200, padding: "7px 10px" }}
+              />
+              <select value={filterRole} onChange={e => setFilterRole(e.target.value as any)}
+                style={{ ...css.select, fontSize: 12, padding: "7px 10px" }}>
+                <option value="">All roles</option>
+                <option value="admin">Admin</option>
+                <option value="driver">Driver</option>
+              </select>
+            </div>
 
-        {filteredMembers.length === 0 && (
-          <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>
+            {/* Row 2: Sort buttons */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" as const }}>
+              <SortBtn field="name" label="Name" />
+              <SortBtn field="role" label="Role" />
+              <SortBtn field="division" label="Division" />
+              <SortBtn field="region" label="Region" />
+              <SortBtn field="hire_date" label="Hire Date" />
+            </div>
+
+            {filteredMembers.length === 0 && (
+              <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>
+            )}
+            {filteredMembers.map(m => (
+              <MemberCard
+                key={m.user_id}
+                member={m}
+                companyId={companyId!}
+                supabase={supabase}
+                onRefresh={loadAll}
+                onEditProfile={setProfileModal}
+              />
+            ))}
+          </>
         )}
-        {filteredMembers.map(m => (
-          <MemberCard
-            key={m.user_id}
-            member={m}
-            companyId={companyId!}
-            supabase={supabase}
-            onRefresh={loadAll}
-            onEditProfile={setProfileModal}
-          />
-        ))}
       </section>
 
       <hr style={css.divider} />
 
       {/* ── TRUCKS ── */}
       <section style={{ marginBottom: 32, marginTop: 28 }}>
-        <div style={css.sectionHead}>
-          <h2 style={css.sectionTitle}>Trucks ({trucks.filter(t => t.active).length} active)</h2>
-          <button style={css.btn("primary")} onClick={() => setTruckModal("new")}>+ Add Truck</button>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" as const }} onClick={() => setTrucksOpen(v => !v)}>
+          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ transition: "transform 150ms", transform: trucksOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
+            Trucks ({trucks.filter(t => t.active).length} active)
+          </h2>
+          <button style={css.btn("primary")} onClick={e => { e.stopPropagation(); setTruckModal("new"); }}>+ Add Truck</button>
         </div>
-        {trucks.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trucks yet.</div>}
-        {trucks.map(t => (
-          <div key={t.truck_id} style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{t.truck_name}</div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
-                {t.region && <span>{t.region}</span>}
-                <span style={css.tag(t.active ? T.success : T.muted)}>{t.active ? "Active" : "Inactive"}</span>
+        {trucksOpen && (
+          <>
+            {trucks.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trucks yet.</div>}
+            {trucks.map(t => (
+              <div key={t.truck_id} style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{t.truck_name}</div>
+                  <div style={{ fontSize: 12, color: T.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+                    {t.region && <span>{t.region}</span>}
+                    <span style={css.tag(t.active ? T.success : T.muted)}>{t.active ? "Active" : "Inactive"}</span>
+                  </div>
+                </div>
+                <button style={css.btn("subtle")} onClick={() => setTruckModal(t)}>Edit</button>
               </div>
-            </div>
-            <button style={css.btn("subtle")} onClick={() => setTruckModal(t)}>Edit</button>
-          </div>
-        ))}
+            ))}
+          </>
+        )}
       </section>
 
       <hr style={css.divider} />
 
       {/* ── TRAILERS ── */}
       <section style={{ marginBottom: 32, marginTop: 28 }}>
-        <div style={css.sectionHead}>
-          <h2 style={css.sectionTitle}>Trailers ({trailers.filter(t => t.active).length} active)</h2>
-          <button style={css.btn("primary")} onClick={() => setTrailerModal("new")}>+ Add Trailer</button>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" as const }} onClick={() => setTrailersOpen(v => !v)}>
+          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ transition: "transform 150ms", transform: trailersOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
+            Trailers ({trailers.filter(t => t.active).length} active)
+          </h2>
+          <button style={css.btn("primary")} onClick={e => { e.stopPropagation(); setTrailerModal("new"); }}>+ Add Trailer</button>
         </div>
-        {trailers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trailers yet.</div>}
-        {trailers.map(t => (
-          <div key={t.trailer_id} style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{t.trailer_name}</div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
-                <span>{(t.compartments ?? []).length} comps</span>
-                {t.region && <span>· {t.region}</span>}
-                <span style={css.tag(t.active ? T.success : T.muted)}>{t.active ? "Active" : "Inactive"}</span>
+        {trailersOpen && (
+          <>
+            {trailers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trailers yet.</div>}
+            {trailers.map(t => (
+              <div key={t.trailer_id} style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{t.trailer_name}</div>
+                  <div style={{ fontSize: 12, color: T.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+                    <span>{(t.compartments ?? []).length} comps</span>
+                    {t.region && <span>· {t.region}</span>}
+                    <span style={css.tag(t.active ? T.success : T.muted)}>{t.active ? "Active" : "Inactive"}</span>
+                  </div>
+                </div>
+                <button style={css.btn("subtle")} onClick={() => setTrailerModal(t)}>Edit</button>
               </div>
-            </div>
-            <button style={css.btn("subtle")} onClick={() => setTrailerModal(t)}>Edit</button>
-          </div>
-        ))}
+            ))}
+          </>
+        )}
       </section>
 
       <hr style={css.divider} />
 
       {/* ── COMBOS ── */}
       <section style={{ marginTop: 28 }}>
-        <div style={css.sectionHead}>
-          <h2 style={css.sectionTitle}>Equipment Combos ({combos.filter(c => c.active).length} active)</h2>
-          <button style={css.btn("primary")} onClick={() => setComboModal("new")}>+ Add Combo</button>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" as const }} onClick={() => setCombosOpen(v => !v)}>
+          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ transition: "transform 150ms", transform: combosOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
+            Equipment Combos ({combos.filter(c => c.active).length} active)
+          </h2>
+          <button style={css.btn("primary")} onClick={e => { e.stopPropagation(); setComboModal("new"); }}>+ Add Combo</button>
         </div>
-        {combos.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No combos yet.</div>}
-        {combos.map(c => (
-          <div key={c.combo_id} style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{c.combo_name}</div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
-                <span>Tare {c.tare_lbs?.toLocaleString()} lbs</span>
-                {c.target_weight && <span>· Target {c.target_weight.toLocaleString()} lbs</span>}
-                <span style={css.tag(c.active ? T.success : T.muted)}>{c.active ? "Active" : "Inactive"}</span>
+        {combosOpen && (
+          <>
+            {combos.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No combos yet.</div>}
+            {combos.map(c => (
+              <div key={c.combo_id} style={{ ...css.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{c.combo_name}</div>
+                  <div style={{ fontSize: 12, color: T.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+                    <span>Tare {c.tare_lbs?.toLocaleString()} lbs</span>
+                    {c.target_weight && <span>· Target {c.target_weight.toLocaleString()} lbs</span>}
+                    <span style={css.tag(c.active ? T.success : T.muted)}>{c.active ? "Active" : "Inactive"}</span>
+                  </div>
+                </div>
+                <button style={css.btn("subtle")} onClick={() => setComboModal(c)}>Edit</button>
               </div>
-            </div>
-            <button style={css.btn("subtle")} onClick={() => setComboModal(c)}>Edit</button>
-          </div>
-        ))}
+            ))}
+          </>
+        )}
       </section>
 
       {/* ── Modals ── */}
