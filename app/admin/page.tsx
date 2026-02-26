@@ -494,6 +494,80 @@ function TerminalAccessEditor({ userId, companyId, supabase, existing, onReload 
 }
 
 // ─────────────────────────────────────────────────────────────
+// Port ID Editor
+// ─────────────────────────────────────────────────────────────
+
+type PortId = { port_name: string; expiration_date: string };
+
+function PortIdEditor({ portIds, onChange }: { portIds: PortId[]; onChange: (p: PortId[]) => void }) {
+  function update(i: number, field: keyof PortId, val: string) {
+    onChange(portIds.map((p, idx) => idx === i ? { ...p, [field]: val } : p));
+  }
+  function add() { onChange([...portIds, { port_name: "", expiration_date: "" }]); }
+  function remove(i: number) { onChange(portIds.filter((_, idx) => idx !== i)); }
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      {portIds.length === 0 && (
+        <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>No port IDs on file.</div>
+      )}
+      {portIds.map((p, i) => {
+        const days = daysUntil(p.expiration_date || null);
+        const color = expiryColor(days);
+        return (
+          <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap" as const }}>
+            <div style={{ flex: 1, minWidth: 130 }}>
+              {i === 0 && <label style={css.label}>Port Name</label>}
+              <input value={p.port_name} onChange={e => update(i, "port_name", e.target.value)}
+                style={css.input} placeholder="e.g. Port of Tampa" />
+            </div>
+            <div style={{ flex: 1, minWidth: 130 }}>
+              {i === 0 && <label style={css.label}>Expiration Date</label>}
+              <input type="date" value={p.expiration_date} onChange={e => update(i, "expiration_date", e.target.value)}
+                style={{ ...css.input, color: p.expiration_date ? color : undefined }} />
+            </div>
+            {/* Remove button — circle with minus */}
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              title="Remove"
+              style={{
+                width: 28, height: 28, borderRadius: "50%",
+                border: `1px solid ${T.danger}55`,
+                background: `${T.danger}15`,
+                color: T.danger, fontSize: 16, lineHeight: 1,
+                cursor: "pointer", flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 1,
+              }}
+            >−</button>
+          </div>
+        );
+      })}
+      {/* Add button — circle with plus */}
+      <button
+        type="button"
+        onClick={add}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "none", border: "none", cursor: "pointer",
+          color: T.info, fontSize: 12, fontWeight: 600, padding: "2px 0",
+        }}
+      >
+        <span style={{
+          width: 22, height: 22, borderRadius: "50%",
+          border: `1px solid ${T.info}55`,
+          background: `${T.info}15`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 15, lineHeight: 1,
+        }}>+</span>
+        Add Port ID
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Driver Profile Modal
 // ─────────────────────────────────────────────────────────────
 
@@ -537,6 +611,9 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
   const [twicIssue,   setTwicIssue]   = useState("");
   const [twicExpiry,  setTwicExpiry]  = useState("");
 
+  // Port IDs
+  const [portIds, setPortIds] = useState<{ port_name: string; expiration_date: string }[]>([]);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -575,6 +652,9 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
           setTwicNumber(d.twic.card_number ?? "");
           setTwicIssue(d.twic.issue_date ?? "");
           setTwicExpiry(d.twic.expiration_date ?? "");
+        }
+        if ((d as any).port_ids) {
+          setPortIds((d as any).port_ids ?? []);
         }
       } catch (e: any) {
         setErr(e?.message ?? "Load failed.");
@@ -626,6 +706,9 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
         expiration_date: twicExpiry || null,
       };
     }
+
+    // Always include port_ids (empty array clears them)
+    payload.port_ids = portIds.filter(p => p.port_name.trim());
 
     try {
       const { error } = await supabase.rpc("upsert_driver_profile", {
@@ -685,6 +768,7 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
             <Field label="License Number" half><input value={licNumber} onChange={e => setLicNumber(e.target.value)} style={css.input} placeholder="License #" /></Field>
             <Field label="Endorsements" half><input value={licEndorse} onChange={e => setLicEndorse(e.target.value)} style={css.input} placeholder="H, N, X (comma separated)" /></Field>
             <Field label="Restrictions" half><input value={licRestrict} onChange={e => setLicRestrict(e.target.value)} style={css.input} placeholder="B, E (comma separated)" /></Field>
+            <div style={{ width: "100%" }} />{/* force dates to their own row */}
             <Field label="Issue Date" half><input type="date" value={licIssue} onChange={e => setLicIssue(e.target.value)} style={css.input} /></Field>
             <Field label="Expiration Date" half><input type="date" value={licExpiry} onChange={e => setLicExpiry(e.target.value)} style={css.input} /></Field>
           </FieldRow>
@@ -705,13 +789,17 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
           <SubSectionTitle>TWIC Card</SubSectionTitle>
           <FieldRow>
             <Field label="Card Number" half><input value={twicNumber} onChange={e => setTwicNumber(e.target.value)} style={css.input} placeholder="TWIC #" /></Field>
+            <div style={{ width: "calc(50% - 5px)" }} />{/* spacer to push dates to next row */}
             <Field label="Issue Date" half><input type="date" value={twicIssue} onChange={e => setTwicIssue(e.target.value)} style={css.input} /></Field>
             <Field label="Expiration Date" half><input type="date" value={twicExpiry} onChange={e => setTwicExpiry(e.target.value)} style={css.input} /></Field>
           </FieldRow>
 
           <hr style={css.divider} />
 
-          {/* ── Terminal Access ── */}
+          {/* ── Port IDs ── */}
+          <SubSectionTitle>Port IDs</SubSectionTitle>
+          <PortIdEditor portIds={portIds} onChange={setPortIds} />
+
           <hr style={css.divider} />
           <TerminalAccessEditor
             userId={member.user_id}
@@ -893,7 +981,20 @@ function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
                 ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
               </ComplianceCard>
 
-              {/* Terminals */}
+              {/* Port IDs */}
+              {(() => {
+                const ports = (preview as any)?.port_ids ?? [];
+                return (
+                  <ComplianceCard title={`Port IDs (${ports.length})`} color={ports.length > 0 ? T.info : T.border}>
+                    {ports.length > 0 ? ports.map((p: any, i: number) => {
+                      const d = daysUntil(p.expiration_date);
+                      return <DataRow key={i} label={p.port_name || "—"} value={<span style={css.tag(expiryColor(d))}>{expiryLabel(d)}</span>} />;
+                    }) : <div style={{ fontSize: 12, color: T.muted }}>None on file</div>}
+                  </ComplianceCard>
+                );
+              })()}
+
+              {/* Terminals — count only in collapsed card */}
               <ComplianceCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}>
                 {terminals.length > 0 ? terminals.slice(0, 4).map(t => (
                   <DataRow key={t.terminal_id}
