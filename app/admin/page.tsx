@@ -51,6 +51,7 @@ type Trailer = {
 type Combo = {
   combo_id: string; combo_name: string; truck_id: string; trailer_id: string;
   tare_lbs: number; target_weight: number | null; active: boolean;
+  claimed_by?: string | null;
   truck?: { truck_name: string } | { truck_name: string }[] | null;
   trailer?: { trailer_name: string } | { trailer_name: string }[] | null;
   in_use_by_name?: string | null;
@@ -683,7 +684,7 @@ function ComboModal({ combo, companyId, trucks, trailers, onClose, onDone, onDec
       <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
         <div style={{ display: "flex", gap: 8 }}>
           {!isNew && <button style={{ ...btnSz, color: T.danger, borderColor: `${T.danger}44` }} onClick={deleteCombo} disabled={saving}>Delete</button>}
-          {!isNew && onDecouple && <button style={btnSz} onClick={onDecouple} disabled={saving}>Decouple</button>}
+          {!isNew && onDecouple && <button style={{ ...btnSz, color: T.warning, borderColor: `${T.warning}44` }} onClick={onDecouple} disabled={saving}>Decouple</button>}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={btnSz} onClick={onClose}>Cancel</button>
@@ -854,40 +855,42 @@ export default function AdminPage() {
         local_area: profileMap[m.user_id]?.local_area ?? null, employee_number: profileMap[m.user_id]?.employee_number ?? null,
       })));
 
-      // Trucks — fetch all permit columns
-      const { data: truckRows } = await supabase.from("trucks").select("*").eq("company_id", cid).order("truck_name");
-      // Resolve in_use_by display names
-      const allUserIds = new Set<string>();
-      (truckRows ?? []).forEach((t: any) => t.in_use_by && allUserIds.add(t.in_use_by));
+      // Trucks + trailers via roster RPC (joins active combo → claimed_by → profile display name)
+      const { data: rosterData, error: rosterErr } = await supabase.rpc("get_equipment_roster", { p_company_id: cid });
+      if (rosterErr) throw rosterErr;
+      const roster = rosterData as { trucks: any[]; trailers: any[] };
+      const truckRows    = roster?.trucks   ?? [];
+      const trailerRows  = roster?.trailers ?? [];
 
-      const { data: trailerRows } = await supabase.from("trailers").select("*").eq("company_id", cid).order("trailer_name");
-      (trailerRows ?? []).forEach((t: any) => t.in_use_by && allUserIds.add(t.in_use_by));
-
-      // Combos
-      const { data: comboRows } = await supabase.from("equipment_combos")
-        .select("combo_id, combo_name, truck_id, trailer_id, tare_lbs, target_weight, active, truck:trucks(truck_name), trailer:trailers(trailer_name)")
-        .eq("company_id", cid).eq("active", true).order("combo_name");
-
-      // Fetch display names for in_use_by
-      let nameMap: Record<string, string> = {};
-      if (allUserIds.size > 0) {
-        const { data: nameRows } = await supabase.from("profiles").select("user_id, display_name").in("user_id", Array.from(allUserIds));
-        nameMap = Object.fromEntries((nameRows ?? []).map((r: any) => [r.user_id, r.display_name ?? r.user_id]));
-      }
-
-      const tIds = (trailerRows ?? []).map((t: any) => t.trailer_id);
+      // Compartments
+      const tIds = trailerRows.map((t: any) => t.trailer_id);
       let compMap: Record<string, Compartment[]> = {};
       if (tIds.length > 0) {
-        const { data: compRows } = await supabase.from("trailer_compartments").select("trailer_id, comp_number, max_gallons, position").in("trailer_id", tIds).order("comp_number");
+        const { data: compRows } = await supabase.from("trailer_compartments")
+          .select("trailer_id, comp_number, max_gallons, position")
+          .in("trailer_id", tIds).order("comp_number");
         for (const c of (compRows ?? []) as any[]) {
           if (!compMap[c.trailer_id]) compMap[c.trailer_id] = [];
           compMap[c.trailer_id].push({ comp_number: c.comp_number, max_gallons: c.max_gallons, position: c.position });
         }
       }
 
-      setTrucks(((truckRows ?? []) as any[]).map(t => ({ ...t, in_use_by_name: t.in_use_by ? nameMap[t.in_use_by] ?? null : null })));
-      setTrailers(((trailerRows ?? []) as Trailer[]).map(t => ({ ...t, compartments: compMap[(t as any).trailer_id] ?? [], in_use_by_name: (t as any).in_use_by ? nameMap[(t as any).in_use_by] ?? null : null })));
-      setCombos((comboRows ?? []) as unknown as Combo[]);
+      // Active combos — include claimed_by for display
+      const { data: comboRows } = await supabase.from("equipment_combos")
+        .select("combo_id, combo_name, truck_id, trailer_id, tare_lbs, target_weight, active, claimed_by, truck:trucks(truck_name), trailer:trailers(trailer_name)")
+        .eq("company_id", cid).eq("active", true).order("combo_name");
+
+      // Resolve combo claimed_by to display names
+      const claimedIds = [...new Set((comboRows ?? []).map((c: any) => c.claimed_by).filter(Boolean))];
+      let claimedNameMap: Record<string, string> = {};
+      if (claimedIds.length > 0) {
+        const { data: claimedNames } = await supabase.from("profiles").select("user_id, display_name").in("user_id", claimedIds);
+        claimedNameMap = Object.fromEntries((claimedNames ?? []).map((r: any) => [r.user_id, r.display_name ?? ""]));
+      }
+
+      setTrucks(truckRows as Truck[]);
+      setTrailers(trailerRows.map((t: any) => ({ ...t, compartments: compMap[t.trailer_id] ?? [] })) as Trailer[]);
+      setCombos(((comboRows ?? []) as any[]).map(c => ({ ...c, in_use_by_name: c.claimed_by ? claimedNameMap[c.claimed_by] ?? null : null })) as unknown as Combo[]);
     } catch (e: any) { setErr(e?.message ?? "Load failed."); }
     finally { setLoading(false); }
   }, []);
@@ -1089,7 +1092,12 @@ export default function AdminPage() {
       {comboModal && comboModal !== "new" && (
         <ComboModal combo={comboModal} companyId={companyId!} trucks={trucks} trailers={trailers}
           onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }}
-          onDecouple={() => { setComboModal(null); /* decouple modal would open here */ loadAll(); }}
+          onDecouple={async () => {
+          if (!confirm(`Decouple this combo?`)) return;
+          await supabase.rpc("decouple_combo", { p_combo_id: (comboModal as Combo).combo_id });
+          setComboModal(null);
+          loadAll();
+        }}
         />
       )}
       {coupleModal && <CoupleModal companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} onClose={() => setCoupleModal(false)} onDone={() => { setCoupleModal(false); loadAll(); }} />}
