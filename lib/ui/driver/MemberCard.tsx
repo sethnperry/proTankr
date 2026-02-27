@@ -35,7 +35,20 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
       const { data } = await supabase.rpc("get_driver_profile", {
         p_user_id: member.user_id, p_company_id: companyId,
       });
-      setPreview(data as DriverProfile);
+      const d = data as DriverProfile;
+      setPreview(d);
+      // Update the local member header with freshly saved profile fields
+      if (d?.profile) {
+        setLocalMember(prev => ({
+          ...prev,
+          display_name:    d.profile!.display_name    ?? prev.display_name,
+          hire_date:       d.profile!.hire_date       ?? prev.hire_date,
+          division:        d.profile!.division        ?? prev.division,
+          region:          d.profile!.region          ?? prev.region,
+          local_area:      d.profile!.local_area      ?? prev.local_area,
+          employee_number: (d.profile as any).employee_number ?? prev.employee_number,
+        }));
+      }
     } finally { setLoading(false); }
   }
 
