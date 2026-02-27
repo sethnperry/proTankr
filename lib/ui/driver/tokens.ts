@@ -140,9 +140,9 @@ export function fmtDate(d: string | null | undefined): string {
 export function expiryColor(days: number | null): string {
   if (days == null) return T.muted;
   if (days < 0)    return T.danger;
+  if (days < 7)    return T.danger;
   if (days < 30)   return T.warning;
-  if (days < 90)   return T.accent;
-  return T.success;
+  return T.muted;  // grey when healthy — no green
 }
 
 export function daysUntil(dateStr: string | null | undefined): number | null {

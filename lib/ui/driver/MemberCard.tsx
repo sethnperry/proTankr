@@ -1,9 +1,9 @@
 // lib/ui/driver/MemberCard.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "./tokens";
+import { T, css, fmtDate, expiryColor, daysUntil } from "./tokens";
 import { DataRow } from "./primitives";
 import { AttachmentManager, PaperclipBadge, useAttachmentCounts } from "./AttachmentManager";
 import type { Member, DriverProfile } from "./types";
@@ -231,13 +231,7 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
               <ExpandableCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}
                 summary={terminals.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{terminals.length} terminal{terminals.length !== 1 ? "s" : ""} — tap to expand</div> : null}
                 empty={terminals.length === 0}>
-                {[...terminals].sort((a: any, b: any) => a.days_until_expiry - b.days_until_expiry).map((t: any) => (
-                  <ExpiryRow key={t.terminal_id}
-                    label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
-                    date={t.is_expired ? "Expired" : fmtDate(t.expires_on)}
-                    days={t.days_until_expiry}
-                  />
-                ))}
+                <TerminalGroups terminals={terminals} />
               </ExpandableCard>
 
             </div>
@@ -268,15 +262,122 @@ function ExpandableCard({ title, color, summary, children, empty }: {
   );
 }
 
+// ── Terminal groups — grouped by city/state, collapsed ────────
+
+function TerminalGroups({ terminals }: { terminals: any[] }) {
+  const [openGroups, setOpenGroups] = React.useState<Set<string>>(new Set());
+
+  // Group by "City, ST"
+  const groups = React.useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const t of terminals) {
+      const key = [t.city, t.state].filter(Boolean).join(", ") || "Unknown";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    // Sort each group by days_until_expiry ascending
+    for (const [, rows] of map) {
+      rows.sort((a: any, b: any) => (a.days_until_expiry ?? 9999) - (b.days_until_expiry ?? 9999));
+    }
+    // Sort groups: groups with expired/soonest first
+    return Array.from(map.entries()).sort(([, a], [, b]) => {
+      const aMin = a[0]?.days_until_expiry ?? 9999;
+      const bMin = b[0]?.days_until_expiry ?? 9999;
+      return aMin - bMin;
+    });
+  }, [terminals]);
+
+  function toggleGroup(key: string) {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  if (terminals.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 2 }}>
+      {groups.map(([cityState, rows]) => {
+        const open = openGroups.has(cityState);
+        const activeCount = rows.filter((t: any) => !t.is_expired).length;
+        const expiredCount = rows.length - activeCount;
+        const worstDays = rows[0]?.days_until_expiry ?? null;
+        const groupColor = expiryColor(worstDays);
+
+        return (
+          <div key={cityState} style={{ marginBottom: 6 }}>
+            {/* Group header row */}
+            <div
+              onClick={() => toggleGroup(cityState)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: "5px 0", userSelect: "none" as const }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <span style={{ color: groupColor, fontSize: 10, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block", flexShrink: 0 }}>›</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{cityState}</span>
+                <span style={{ fontSize: 10, color: T.muted, flexShrink: 0 }}>
+                  {activeCount} active{expiredCount > 0 ? `, ${expiredCount} expired` : ""}
+                </span>
+              </div>
+              {!open && (
+                <span style={{ fontSize: 11, color: groupColor, fontWeight: 600, flexShrink: 0 }}>
+                  {worstDays != null && worstDays < 0 ? `${Math.abs(worstDays)}d ago` : worstDays != null ? `+${worstDays}d` : "—"}
+                </span>
+              )}
+            </div>
+
+            {/* Expanded terminal rows */}
+            {open && (
+              <div style={{ paddingLeft: 16, borderLeft: `2px solid ${T.border}`, marginLeft: 4 }}>
+                {rows.map((t: any) => (
+                  <ExpiryRow
+                    key={t.terminal_id}
+                    label={t.terminal_name || cityState}
+                    date={t.is_expired ? t.expires_on || "Expired" : t.expires_on || "—"}
+                    days={t.days_until_expiry}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Expiry row ────────────────────────────────────────────────
+// Format: [label left]  [MM-DD-YYYY (+/-Nd) right-aligned]
+// Color:  muted=healthy, warning=<30d, danger=expired
+
+function fmtExpiryInline(isoOrFormatted: string, days: number | null): string {
+  if (!isoOrFormatted || isoOrFormatted === "—") return "—";
+  try {
+    const d = new Date(isoOrFormatted.includes(",") ? isoOrFormatted : isoOrFormatted + "T00:00:00");
+    if (isNaN(d.getTime())) return isoOrFormatted;
+    const mm   = String(d.getMonth() + 1).padStart(2, "0");
+    const dd   = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const base = `${mm}-${dd}-${yyyy}`;
+    if (days == null)  return base;
+    if (days < 0)      return `${base} (${days}d)`;
+    if (days === 0)    return `${base} (today)`;
+    return `${base} (+${days}d)`;
+  } catch { return isoOrFormatted; }
+}
 
 function ExpiryRow({ label, date, days }: { label?: string; date: string; days: number | null }) {
   const color = expiryColor(days);
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 4, fontSize: 12 }}>
-      {label && <span style={{ color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: "45%" }}>{label}</span>}
-      <span style={{ color: T.text, flexShrink: 0 }}>{date}</span>
-      <span style={{ ...css.tag(color), flexShrink: 0 }}>{expiryLabel(days)}</span>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4, fontSize: 12 }}>
+      {label
+        ? <span style={{ color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, minWidth: 0, flex: 1 }}>{label}</span>
+        : <span style={{ flex: 1 }} />
+      }
+      <span style={{ color, fontWeight: (days != null && days < 30) ? 600 : 400, flexShrink: 0, textAlign: "right" as const }}>
+        {fmtExpiryInline(date, days)}
+      </span>
     </div>
   );
 }
