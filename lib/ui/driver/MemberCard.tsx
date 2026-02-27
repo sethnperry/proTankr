@@ -61,7 +61,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
 
   // Build the meta line: Emp. #xxx · Hired date · Division · Region
   const metaParts: string[] = [];
-  if (member.employee_number) metaParts.push(`Emp. #${member.employee_number}`);
+  if (member.employee_number) metaParts.push(`#${member.employee_number}`);
   if (member.hire_date)       metaParts.push(`Hired ${fmtDate(member.hire_date)}`);
   if (member.division)        metaParts.push(member.division);
   if (member.region)          metaParts.push(member.region);
