@@ -28,7 +28,7 @@ export default function LoginPage() {
     ? "http://localhost:3000"
     : "https://www.protankr.com";
 
-const emailRedirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/calculator")}`;
+const emailRedirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/profile")}`;
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: trimmed,
         options: { emailRedirectTo },
@@ -99,7 +99,7 @@ const emailRedirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent("/ca
       )}
 
       <div style={{ marginTop: 14, fontSize: 12, opacity: 0.75 }}>
-        After signing in you’ll be redirected to: <code>/calculator</code>
+        After signing in you’ll be redirected to: <code>/profile</code>
       </div>
     </main>
   );
