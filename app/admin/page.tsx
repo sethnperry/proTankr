@@ -88,9 +88,8 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
 // Invite Modal
 // ─────────────────────────────────────────────────────────────
 
-function InviteModal({ companyId, supabase, onClose, onDone }: {
+function InviteModal({ companyId, onClose, onDone }: {
   companyId: string;
-  supabase: typeof supabase;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -152,9 +151,8 @@ function InviteModal({ companyId, supabase, onClose, onDone }: {
 // Truck Modal
 // ─────────────────────────────────────────────────────────────
 
-function TruckModal({ truck, companyId, supabase, onClose, onDone }: {
+function TruckModal({ truck, companyId, onClose, onDone }: {
   truck: Truck | null; companyId: string;
-  supabase: typeof supabase;
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !truck;
@@ -206,9 +204,8 @@ function TruckModal({ truck, companyId, supabase, onClose, onDone }: {
 // Trailer Modal
 // ─────────────────────────────────────────────────────────────
 
-function TrailerModal({ trailer, companyId, supabase, onClose, onDone }: {
+function TrailerModal({ trailer, companyId, onClose, onDone }: {
   trailer: Trailer | null; companyId: string;
-  supabase: typeof supabase;
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !trailer;
@@ -280,9 +277,8 @@ function TrailerModal({ trailer, companyId, supabase, onClose, onDone }: {
 // Combo Modal
 // ─────────────────────────────────────────────────────────────
 
-function ComboModal({ combo, companyId, trucks, trailers, supabase, onClose, onDone }: {
+function ComboModal({ combo, companyId, trucks, trailers, onClose, onDone }: {
   combo: Combo | null; companyId: string; trucks: Truck[]; trailers: Trailer[];
-  supabase: typeof supabase;
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !combo;
@@ -445,7 +441,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
