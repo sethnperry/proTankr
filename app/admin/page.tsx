@@ -1109,8 +1109,16 @@ function InviteModal({ companyId, supabase, onClose, onDone }: {
       });
       if (error) throw error;
       if ((data as any)?.status === "pending") {
+        // Get the current session JWT to authenticate the API route
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token ?? "";
+
         const res = await fetch("/api/admin/invite", {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
           body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role }),
         });
         let json: any = {};
