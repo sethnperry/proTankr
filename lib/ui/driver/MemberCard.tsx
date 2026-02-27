@@ -12,7 +12,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   companyId: string;
   supabase: ReturnType<typeof createSupabaseBrowser>;
   onRefresh: () => void;
-  onEditProfile: (m: Member) => void;
+  onEditProfile: (m: Member, onSaved: () => void) => void;
   hideRoleDropdown?: boolean;
   hideRemove?: boolean;
 }) {
@@ -22,8 +22,8 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   const [saving,            setSaving]            = useState(false);
   const [terminalsExpanded, setTerminalsExpanded] = useState(false);
 
-  async function loadPreview() {
-    if (preview || loading) return;
+  async function loadPreview(force = false) {
+    if (!force && (preview || loading)) return;
     setLoading(true);
     try {
       const { data } = await supabase.rpc("get_driver_profile", {
@@ -82,17 +82,23 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     <div style={{ ...css.card, padding: 0, overflow: "hidden" }}>
 
       {/* ── Collapsed row ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={toggle}>
-        <span style={{ color: T.muted, fontSize: 14, transition: "transform 150ms", transform: expanded ? "rotate(90deg)" : "none", flexShrink: 0, userSelect: "none" as const }}>›</span>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={toggle}>
+        <span style={{ color: T.muted, fontSize: 14, transition: "transform 150ms", transform: expanded ? "rotate(90deg)" : "none", flexShrink: 0, userSelect: "none" as const, marginTop: 2 }}>›</span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{
               fontWeight: member.display_name ? 600 : 400,
               fontSize: member.display_name ? 14 : 13,
               color: member.display_name ? T.text : T.muted,
+              minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
+              flex: 1,
             }}>{name}</span>
-            {expiringSoon && <span style={css.tag(T.warning)}>⚠ Expiring</span>}
+            {expiringSoon && <span style={css.tag(T.warning)}>⚠</span>}
+            <button onClick={e => { e.stopPropagation(); onEditProfile(member, () => { onRefresh(); loadPreview(true); }); }}
+              style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0, padding: "3px 8px" }}>
+              Edit
+            </button>
           </div>
           {subEmail && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{subEmail}</div>}
           {metaLine
@@ -100,11 +106,6 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
             : <div style={{ fontSize: 11, color: T.muted, marginTop: 1, fontStyle: "italic" }}>No profile set up yet</div>
           }
         </div>
-
-        <button onClick={e => { e.stopPropagation(); onEditProfile(member); }}
-          style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0 }}>
-          Edit
-        </button>
       </div>
 
       {/* ── Expanded section ── */}
