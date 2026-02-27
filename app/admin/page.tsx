@@ -571,12 +571,13 @@ function PortIdEditor({ portIds, onChange }: { portIds: PortId[]; onChange: (p: 
 // Driver Profile Modal
 // ─────────────────────────────────────────────────────────────
 
-function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
+function DriverProfileModal({ member, companyId, supabase, onClose, onDone, onRemove }: {
   member: Member;
   companyId: string;
   supabase: ReturnType<typeof createSupabaseBrowser>;
   onClose: () => void;
   onDone: () => void;
+  onRemove: () => void;
 }) {
   const [profile,  setProfile]  = useState<DriverProfile | null>(null);
   const [loading,  setLoading]  = useState(true);
@@ -856,7 +857,21 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
           />
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+            <button
+              style={{ ...css.btn("ghost"), color: T.danger, borderColor: `${T.danger}44`, marginRight: "auto" }}
+              onClick={async () => {
+                if (!confirm(`Remove ${member.email} from the company? Their data will be preserved.`)) return;
+                await supabase.rpc("admin_remove_member", {
+                  p_user_id: member.user_id,
+                  p_email: member.email || null,
+                  p_company_id: companyId,
+                });
+                onRemove();
+              }}
+            >
+              Remove User
+            </button>
             <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
             <button style={css.btn("primary")} onClick={save} disabled={saving}>
               {saving ? "Saving…" : "Save Profile"}
@@ -1645,7 +1660,7 @@ export default function AdminPage() {
 
       {/* ── Modals ── */}
       {inviteModal && <InviteModal companyId={companyId!} supabase={supabase} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
-      {profileModal && <DriverProfileModal member={profileModal} companyId={companyId!} supabase={supabase} onClose={() => setProfileModal(null)} onDone={() => { setProfileModal(null); loadAll(); }} />}
+      {profileModal && <DriverProfileModal member={profileModal} companyId={companyId!} supabase={supabase} onClose={() => setProfileModal(null)} onDone={() => { setProfileModal(null); loadAll(); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
       {truckModal && <TruckModal truck={truckModal === "new" ? null : truckModal} companyId={companyId!} supabase={supabase} onClose={() => setTruckModal(null)} onDone={() => { setTruckModal(null); loadAll(); }} />}
       {trailerModal && <TrailerModal trailer={trailerModal === "new" ? null : trailerModal} companyId={companyId!} supabase={supabase} onClose={() => setTrailerModal(null)} onDone={() => { setTrailerModal(null); loadAll(); }} />}
       {comboModal && <ComboModal combo={comboModal === "new" ? null : comboModal} companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} supabase={supabase} onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }} />}
