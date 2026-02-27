@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const [member,     setMember]     = useState<Member | null>(null);
   const [companyId,  setCompanyId]  = useState<string | null>(null);
   const [editing,    setEditing]    = useState(false);
+  const [onSavedCb,  setOnSavedCb]  = useState<((updated: Partial<Member>) => void) | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [err,        setErr]        = useState<string | null>(null);
 
@@ -87,9 +88,9 @@ export default function ProfilePage() {
             companyId={companyId}
             supabase={supabase}
             onRefresh={load}
-            onEditProfile={() => setEditing(true)}
-            hideRoleDropdown  // can't reassign own role
-            hideRemove        // can't remove yourself
+            onEditProfile={(m, onSaved) => { setOnSavedCb(() => onSaved); setEditing(true); }}
+            hideRoleDropdown
+            hideRemove
           />
 
           {editing && (
@@ -98,8 +99,7 @@ export default function ProfilePage() {
               companyId={companyId}
               supabase={supabase}
               onClose={() => setEditing(false)}
-              onDone={() => { setEditing(false); load(); }}
-              // no onRemove prop = no Remove User button
+              onDone={(updated) => { setEditing(false); load(); onSavedCb?.(updated); }}
             />
           )}
         </>

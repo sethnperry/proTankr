@@ -12,7 +12,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   companyId: string;
   supabase: ReturnType<typeof createSupabaseBrowser>;
   onRefresh: () => void;
-  onEditProfile: (m: Member, onSaved: () => void) => void;
+  onEditProfile: (m: Member, onSaved: (updated: Partial<Member>) => void) => void;
   hideRoleDropdown?: boolean;
   hideRemove?: boolean;
 }) {
@@ -21,6 +21,12 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   const [loading,           setLoading]           = useState(false);
   const [saving,            setSaving]            = useState(false);
   const [terminalsExpanded, setTerminalsExpanded] = useState(false);
+  // Local copy of member so card updates immediately after save
+  const [localMember, setLocalMember] = useState<Member>(member);
+  // Keep in sync if parent re-renders with new data
+  if (member.display_name !== localMember.display_name && member.display_name) {
+    setLocalMember(member);
+  }
 
   async function loadPreview(force = false) {
     if (!force && (preview || loading)) return;
@@ -56,15 +62,14 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     onRefresh();
   }
 
-  const name     = member.display_name || member.email || `User …${member.user_id.slice(-8)}`;
-  const subEmail = member.display_name ? member.email : null;
+  const name     = localMember.display_name || localMember.email || `User …${localMember.user_id.slice(-8)}`;
+  const subEmail = localMember.display_name ? localMember.email : null;
 
-  // Build the meta line: Emp. #xxx · Hired date · Division · Region
   const metaParts: string[] = [];
-  if (member.employee_number) metaParts.push(`Emp. #${member.employee_number}`);
-  if (member.hire_date)       metaParts.push(`Hired ${fmtDate(member.hire_date)}`);
-  if (member.division)        metaParts.push(member.division);
-  if (member.region)          metaParts.push(member.region);
+  if (localMember.employee_number) metaParts.push(`Emp. #${localMember.employee_number}`);
+  if (localMember.hire_date)       metaParts.push(`Hired ${fmtDate(localMember.hire_date)}`);
+  if (localMember.division)        metaParts.push(localMember.division);
+  if (localMember.region)          metaParts.push(localMember.region);
   const metaLine = metaParts.join(" · ");
 
   const lic       = preview?.license;
@@ -95,7 +100,11 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
               flex: 1,
             }}>{name}</span>
             {expiringSoon && <span style={css.tag(T.warning)}>⚠</span>}
-            <button onClick={e => { e.stopPropagation(); onEditProfile(member, () => { onRefresh(); loadPreview(true); }); }}
+            <button onClick={e => { e.stopPropagation(); onEditProfile(localMember, (updated) => {
+              setLocalMember(m => ({ ...m, ...updated }));
+              onRefresh();
+              loadPreview(true);
+            }); }}
               style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0, padding: "3px 8px" }}>
               Edit
             </button>
@@ -117,7 +126,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: `1px solid ${T.border}`, flexWrap: "wrap" as const }}>
               <div style={{ flex: 1 }} />
               {!hideRoleDropdown && (
-                <select value={member.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
+                <select value={localMember.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
                   style={{ ...css.select, fontSize: 12, padding: "5px 8px" }}>
                   <option value="driver">Driver</option>
                   <option value="admin">Admin</option>

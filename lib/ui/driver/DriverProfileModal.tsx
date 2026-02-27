@@ -13,7 +13,7 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
   companyId: string;
   supabase: ReturnType<typeof createSupabaseBrowser>;
   onClose: () => void;
-  onDone: () => void;
+  onDone: (updated: Partial<Member>) => void;
   onRemove?: () => void; // optional — omit on ProfilePage to hide Remove User button
 }) {
   const [profile,  setProfile]  = useState<DriverProfile | null>(null);
@@ -156,7 +156,14 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
       });
       if (error) throw error;
       setSuccess(true);
-      setTimeout(() => onDone(), 800);
+      setTimeout(() => onDone({
+        display_name:    displayName || null,
+        hire_date:       hireDate || null,
+        division:        division || null,
+        region:          region || null,
+        local_area:      localArea || null,
+        employee_number: employeeNumber || null,
+      }), 800);
     } catch (e: any) {
       setErr(e?.message ?? "Save failed.");
     } finally {
@@ -172,7 +179,7 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
   }
 
   return (
-    <Modal title={`Edit Profile — ${member.display_name || member.email}`} onClose={onClose} wide>
+    <Modal title={`Edit Profile — ${displayName || member.email}`} onClose={onClose} wide>
       {err     && <Banner msg={err} type="error" />}
       {success && <Banner msg="Saved successfully." type="success" />}
 

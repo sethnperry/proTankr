@@ -378,7 +378,7 @@ export default function AdminPage() {
   const [filterRole, setFilterRole] = useState<"" | "admin" | "driver">("");
 
   const [inviteModal,  setInviteModal]  = useState(false);
-  const [profileModal, setProfileModal] = useState<Member | null>(null);
+  const [profileModal, setProfileModal] = useState<{ member: Member; onSaved: (updated: Partial<Member>) => void } | null>(null);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -531,7 +531,9 @@ export default function AdminPage() {
             {filteredMembers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>}
             {filteredMembers.map(m => (
               <MemberCard key={m.user_id} member={m} companyId={companyId!} supabase={supabase}
-                onRefresh={loadAll} onEditProfile={setProfileModal} />
+                onRefresh={loadAll} onEditProfile={(member, onSaved) => {
+                  setProfileModal({ member, onSaved });
+                }} />
             ))}
           </>
         )}
@@ -631,7 +633,7 @@ export default function AdminPage() {
 
       {/* ── Modals ── */}
       {inviteModal  && <InviteModal companyId={companyId!} supabase={supabase} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
-      {profileModal && <DriverProfileModal member={profileModal} companyId={companyId!} supabase={supabase} onClose={() => setProfileModal(null)} onDone={() => { setProfileModal(null); loadAll(); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
+      {profileModal && <DriverProfileModal member={profileModal.member} companyId={companyId!} supabase={supabase} onClose={() => setProfileModal(null)} onDone={(updated) => { profileModal.onSaved(updated); setProfileModal(null); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
       {truckModal   && <TruckModal   truck={truckModal === "new" ? null : truckModal} companyId={companyId!} supabase={supabase} onClose={() => setTruckModal(null)} onDone={() => { setTruckModal(null); loadAll(); }} />}
       {trailerModal && <TrailerModal trailer={trailerModal === "new" ? null : trailerModal} companyId={companyId!} supabase={supabase} onClose={() => setTrailerModal(null)} onDone={() => { setTrailerModal(null); loadAll(); }} />}
       {comboModal   && <ComboModal   combo={comboModal === "new" ? null : comboModal} companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} supabase={supabase} onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }} />}
