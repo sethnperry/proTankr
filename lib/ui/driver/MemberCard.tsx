@@ -1,13 +1,14 @@
 // lib/ui/driver/MemberCard.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
 import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "./tokens";
 import { DataRow } from "./primitives";
+import { AttachmentManager, PaperclipBadge, useAttachmentCounts } from "./AttachmentManager";
 import type { Member, DriverProfile } from "./types";
 
-export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile, hideRoleDropdown, hideRemove }: {
+export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile, hideRoleDropdown, hideRemove, currentUserId }: {
   member: Member;
   companyId: string;
   supabase: ReturnType<typeof createSupabaseBrowser>;
@@ -15,13 +16,26 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   onEditProfile: (m: Member, onSaved: () => void) => void;
   hideRoleDropdown?: boolean;
   hideRemove?: boolean;
+  currentUserId: string;
 }) {
-  const [expanded,  setExpanded]  = useState(false);
-  const [preview,   setPreview]   = useState<DriverProfile | null>(null);
-  const [loading,   setLoading]   = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  // Local member state so header updates immediately after save without parent re-render
-  const [local,     setLocal]     = useState<Member>(member);
+  const [expanded, setExpanded] = useState(false);
+  const [preview,  setPreview]  = useState<DriverProfile | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [local,    setLocal]    = useState<Member>(member);
+
+  // Sync local header when parent re-fetches member list
+  useEffect(() => {
+    setLocal(member);
+  }, [member.display_name, member.hire_date, member.division, member.region, member.employee_number]);
+
+  // Attachment counts for paperclip badge
+  const licCounts  = useAttachmentCounts(supabase, companyId, "license", [member.user_id]);
+  const medCounts  = useAttachmentCounts(supabase, companyId, "medical", [member.user_id]);
+  const twicCounts = useAttachmentCounts(supabase, companyId, "twic",    [member.user_id]);
+  const totalAttachments = (licCounts[member.user_id]  ?? 0)
+                         + (medCounts[member.user_id]  ?? 0)
+                         + (twicCounts[member.user_id] ?? 0);
 
   async function reload(force = false) {
     if (!force && (preview || loading)) return;
@@ -32,7 +46,6 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
       });
       const d = data as DriverProfile & { profile: any };
       setPreview(d);
-      // Pull fresh header fields from the returned profile object
       if (d?.profile) {
         setLocal(prev => ({
           ...prev,
@@ -70,7 +83,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     onRefresh();
   }
 
-  const name     = local.display_name || local.email || `User …${local.user_id.slice(-8)}`;
+  const name    = local.display_name || local.email || `User …${local.user_id.slice(-8)}`;
   const subEmail = local.display_name ? local.email : null;
   const hasName  = !!local.display_name;
 
@@ -89,7 +102,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   const licDays   = daysUntil(lic?.expiration_date);
   const medDays   = daysUntil(med?.expiration_date);
   const twicDays  = daysUntil(twic?.expiration_date);
-  const expiringSoon = [licDays, medDays, twicDays, ...terminals.map(t => t.days_until_expiry)]
+  const expiringSoon = [licDays, medDays, twicDays, ...terminals.map((t: any) => t.days_until_expiry)]
     .some(d => d != null && d < 30);
 
   return (
@@ -109,11 +122,9 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
             }}>{name}</span>
             {expiringSoon && <span style={css.tag(T.warning)}>⚠</span>}
+            <PaperclipBadge count={totalAttachments} />
             <button
-              onClick={e => {
-                e.stopPropagation();
-                onEditProfile(local, () => reload(true));
-              }}
+              onClick={e => { e.stopPropagation(); onEditProfile(local, () => reload(true)); }}
               style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0, padding: "3px 8px" }}
             >
               Edit
@@ -166,6 +177,11 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                   {(lic.restrictions?.length ?? 0) > 0 && <DataRow label="Restrictions" value={lic.restrictions.join(", ")} />}
                   <ExpiryRow date={fmtDate(lic.expiration_date)} days={licDays} />
                 </>}
+                <AttachmentManager
+                  entityType="license" entityId={member.user_id}
+                  companyId={companyId} supabase={supabase} currentUserId={currentUserId}
+                  slots={[{ key: "front", label: "Front" }, { key: "back", label: "Back" }]}
+                />
               </ExpandableCard>
 
               <ExpandableCard title="Medical Card" color={med ? expiryColor(medDays) : T.border}
@@ -175,6 +191,11 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                   {med.examiner_name && <DataRow label="Examiner" value={med.examiner_name} />}
                   <ExpiryRow date={fmtDate(med.expiration_date)} days={medDays} />
                 </>}
+                <AttachmentManager
+                  entityType="medical" entityId={member.user_id}
+                  companyId={companyId} supabase={supabase} currentUserId={currentUserId}
+                  slots={[{ key: "card", label: "Card" }]}
+                />
               </ExpandableCard>
 
               <ExpandableCard title="TWIC Card" color={twic ? expiryColor(twicDays) : T.border}
@@ -184,6 +205,11 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                   {twic.card_number && <DataRow label="Card #" value={twic.card_number} />}
                   <ExpiryRow date={fmtDate(twic.expiration_date)} days={twicDays} />
                 </>}
+                <AttachmentManager
+                  entityType="twic" entityId={member.user_id}
+                  companyId={companyId} supabase={supabase} currentUserId={currentUserId}
+                  slots={[{ key: "front", label: "Front" }, { key: "back", label: "Back" }]}
+                />
               </ExpandableCard>
 
               <ExpandableCard title={`Port IDs (${ports.length})`} color={ports.length > 0 ? T.info : T.border}
@@ -198,7 +224,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
               <ExpandableCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}
                 summary={terminals.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{terminals.length} terminal{terminals.length !== 1 ? "s" : ""} — tap to expand</div> : null}
                 empty={terminals.length === 0}>
-                {[...terminals].sort((a, b) => a.days_until_expiry - b.days_until_expiry).map(t => (
+                {[...terminals].sort((a: any, b: any) => a.days_until_expiry - b.days_until_expiry).map((t: any) => (
                   <ExpiryRow key={t.terminal_id}
                     label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
                     date={t.is_expired ? "Expired" : fmtDate(t.expires_on)}
@@ -222,15 +248,15 @@ function ExpandableCard({ title, color, summary, children, empty }: {
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div onClick={() => { if (!empty) setOpen(v => !v); }}
-      style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${color}`, cursor: empty ? "default" : "pointer", userSelect: "none" as const }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (open || empty) ? 8 : 0 }}>
+    <div onClick={() => setOpen(v => !v)}
+      style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${color}`, cursor: "pointer", userSelect: "none" as const }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 8 : 0 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color }}>{title}</div>
-        {!empty && <span style={{ fontSize: 11, color: T.muted, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>}
+        <span style={{ fontSize: 11, color: T.muted, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
       </div>
-      {!open && !empty && summary && <div>{summary}</div>}
-      {empty && <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
-      {open && !empty && <div>{children}</div>}
+      {!open && summary && <div>{summary}</div>}
+      {!open && empty && !summary && <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
+      {open && <div onClick={e => e.stopPropagation()}>{children}</div>}
     </div>
   );
 }

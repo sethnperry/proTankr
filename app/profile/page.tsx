@@ -91,6 +91,7 @@ export default function ProfilePage() {
             onEditProfile={(m, onSaved) => { setOnSavedCb(() => onSaved); setEditing(true); }}
             hideRoleDropdown
             hideRemove
+            currentUserId={member.user_id}
           />
 
           {editing && (

@@ -359,6 +359,7 @@ export default function AdminPage() {
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [companyId,   setCompanyId]   = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [companyName, setCompanyName] = useState<string>("");
   const [members,     setMembers]     = useState<Member[]>([]);
   const [trucks,      setTrucks]      = useState<Truck[]>([]);
@@ -389,6 +390,7 @@ export default function AdminPage() {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user?.id;
       if (!uid) { setErr("Not authenticated."); setLoading(false); return; }
+      setCurrentUserId(uid);
 
       const { data: settings } = await supabase.from("user_settings").select("active_company_id").eq("user_id", uid).maybeSingle();
       const cid = settings?.active_company_id as string | null;
@@ -531,7 +533,8 @@ export default function AdminPage() {
             {filteredMembers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>}
             {filteredMembers.map(m => (
               <MemberCard key={m.user_id} member={m} companyId={companyId!} supabase={supabase}
-                onRefresh={loadAll} onEditProfile={(member, onSaved) => setProfileModal({ member, onSaved })} />
+                onRefresh={loadAll} onEditProfile={(member, onSaved) => setProfileModal({ member, onSaved })}
+                currentUserId={currentUserId} />
             ))}
           </>
         )}
