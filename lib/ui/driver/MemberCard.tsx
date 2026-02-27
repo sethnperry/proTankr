@@ -164,7 +164,7 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8, padding: "12px 14px" }}>
 
               <ExpandableCard title="Driver's License" color={lic ? expiryColor(licDays) : T.border}
-                summary={lic ? <ExpiryRow date={fmtDate(lic.expiration_date)} days={licDays} /> : null}
+                summary={lic ? <span style={{ fontSize: 12, color: expiryColor(licDays) }}>{fmtExpiryInline(fmtDate(lic.expiration_date), licDays)}</span> : null}
                 empty={!lic}>
                 {lic && <>
                   {lic.license_class  && <DataRow label="Class"        value={`Class ${lic.license_class}`} />}
@@ -182,7 +182,7 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
               </ExpandableCard>
 
               <ExpandableCard title="Medical Card" color={med ? expiryColor(medDays) : T.border}
-                summary={med ? <ExpiryRow date={fmtDate(med.expiration_date)} days={medDays} /> : null}
+                summary={med ? <span style={{ fontSize: 12, color: expiryColor(medDays) }}>{fmtExpiryInline(fmtDate(med.expiration_date), medDays)}</span> : null}
                 empty={!med}>
                 {med && <>
                   {med.examiner_name && <DataRow label="Examiner" value={med.examiner_name} />}
@@ -196,7 +196,7 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
               </ExpandableCard>
 
               <ExpandableCard title="TWIC Card" color={twic ? expiryColor(twicDays) : T.border}
-                summary={twic ? <ExpiryRow date={fmtDate(twic.expiration_date)} days={twicDays} /> : null}
+                summary={twic ? <span style={{ fontSize: 12, color: expiryColor(twicDays) }}>{fmtExpiryInline(fmtDate(twic.expiration_date), twicDays)}</span> : null}
                 empty={!twic}>
                 {twic && <>
                   {twic.card_number && <DataRow label="Card #" value={twic.card_number} />}
@@ -210,7 +210,11 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
               </ExpandableCard>
 
               <ExpandableCard title={`Port IDs (${ports.length})`} color={ports.length > 0 ? T.info : T.border}
-                summary={ports.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{ports.length} port{ports.length !== 1 ? "s" : ""} on file</div> : null}
+                summary={ports.length > 0 ? (() => {
+                  const soonest = [...ports].sort((a: any, b: any) => (daysUntil(a.expiration_date) ?? 9999) - (daysUntil(b.expiration_date) ?? 9999))[0];
+                  const d = daysUntil(soonest?.expiration_date);
+                  return <span style={{ fontSize: 12, color: expiryColor(d) }}>{fmtExpiryInline(fmtDate(soonest?.expiration_date || ""), d)}{ports.length > 1 ? ` +${ports.length - 1}` : ""}</span>;
+                })() : null}
                 empty={ports.length === 0}>
                 {ports.map((p: any, i: number) => {
                   const d = daysUntil(p.expiration_date);
@@ -229,7 +233,13 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
               </ExpandableCard>
 
               <ExpandableCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}
-                summary={terminals.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{terminals.length} terminal{terminals.length !== 1 ? "s" : ""} — tap to expand</div> : null}
+                summary={terminals.length > 0 ? (() => {
+                  const expired = terminals.filter((t: any) => t.is_expired).length;
+                  const active  = terminals.length - expired;
+                  const color   = expired > 0 ? T.warning : T.muted;
+                  const label   = expired > 0 ? `${active} active, ${expired} expired` : `${active} active`;
+                  return <span style={{ fontSize: 11, color }}>{label}</span>;
+                })() : null}
                 empty={terminals.length === 0}>
                 <TerminalGroups terminals={terminals} />
               </ExpandableCard>
@@ -251,13 +261,22 @@ function ExpandableCard({ title, color, summary, children, empty }: {
   return (
     <div onClick={() => setOpen(v => !v)}
       style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${color}`, cursor: "pointer", userSelect: "none" as const }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 8 : 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color }}>{title}</div>
-        <span style={{ fontSize: 11, color: T.muted, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
+      {/* Title row: label left, collapsed-summary center-right, chevron far-right */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color, flexShrink: 0 }}>{title}</div>
+        {!open && (
+          <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "flex-end" }}>
+            {summary
+              ? summary
+              : empty
+                ? <span style={{ fontSize: 12, color: T.muted }}>Not on file</span>
+                : null
+            }
+          </div>
+        )}
+        <span style={{ fontSize: 11, color: T.muted, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block", flexShrink: 0 }}>›</span>
       </div>
-      {!open && summary && <div>{summary}</div>}
-      {!open && empty && !summary && <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
-      {open && <div onClick={e => e.stopPropagation()}>{children}</div>}
+      {open && <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>{children}</div>}
     </div>
   );
 }
