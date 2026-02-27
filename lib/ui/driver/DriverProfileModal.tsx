@@ -50,7 +50,9 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
   const [twicExpiry, setTwicExpiry] = useState("");
 
   // HazMat
-  const [hazmatLinked, setHazmatLinked] = useState(false);
+  const [hazmatLinked,  setHazmatLinked]  = useState(false);
+  const [hazmatIssue,   setHazmatIssue]   = useState("");
+  const [hazmatExpiry,  setHazmatExpiry]  = useState("");
 
   // Port IDs
   const [portIds, setPortIds] = useState<{ port_name: string; expiration_date: string }[]>([]);
@@ -89,7 +91,11 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
           setMedExaminer(d.medical.examiner_name ?? "");
           setMedAttachedToLic(!!(d.medical as any).attached_to_license);
         }
-        setHazmatLinked(!!(d as any).hazmat_linked_to_license);
+        if (d.license) {
+          setHazmatLinked(!!(d.license as any).hazmat_linked_to_license);
+          setHazmatIssue((d.license as any).hazmat_issue_date ?? "");
+          setHazmatExpiry((d.license as any).hazmat_expiration_date ?? "");
+        }
         if (d.twic) {
           setTwicNumber(d.twic.card_number ?? "");
           setTwicIssue(d.twic.issue_date ?? "");
@@ -122,10 +128,13 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         license_class:   licClass || null,
         endorsements:    licEndorse ? licEndorse.split(/[,\s]+/).map(s => s.trim()).filter(Boolean) : [],
         restrictions:    licRestrict ? licRestrict.split(/[,\s]+/).map(s => s.trim()).filter(Boolean) : [],
-        card_number:     licNumber || null,
+        license_number:  licNumber || null,
         issue_date:      licIssue || null,
         expiration_date: licExpiry || null,
         state_code:      licState || null,
+        hazmat_linked_to_license: hazmatLinked,
+        hazmat_issue_date:        hazmatLinked ? null : (hazmatIssue || null),
+        hazmat_expiration_date:   hazmatLinked ? null : (hazmatExpiry || null),
       };
     }
     if (medExpiry || medIssue) {
@@ -136,8 +145,7 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         attached_to_license: medAttachedToLic,
       };
     }
-    // Always save hazmat flag even if no other hazmat data
-    payload.hazmat_linked_to_license = hazmatLinked;
+    // hazmat flags are now nested inside payload.license
     if (twicNumber || twicExpiry) {
       payload.twic = {
         card_number:     twicNumber || null,
@@ -260,8 +268,8 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
           {hazmatLinked
             ? <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>HazMat will renew on <strong style={{ color: T.text }}>{fmtDate(licExpiry) || "—"}</strong> with the CDL.</div>
             : <FieldRow>
-                <Field label="Issue Date" half><input type="date" value={licIssue} readOnly style={{ ...css.input, opacity: 0.4 }} /></Field>
-                <Field label="Expiration Date" half><input type="date" value={licExpiry} readOnly style={{ ...css.input, opacity: 0.4 }} /></Field>
+                <Field label="Issue Date" half><input type="date" value={hazmatIssue} onChange={e => setHazmatIssue(e.target.value)} style={css.input} /></Field>
+                <Field label="Expiration Date" half><input type="date" value={hazmatExpiry} onChange={e => setHazmatExpiry(e.target.value)} style={css.input} /></Field>
               </FieldRow>
           }
 
