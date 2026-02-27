@@ -61,7 +61,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
 
   // Build the meta line: Emp. #xxx · Hired date · Division · Region
   const metaParts: string[] = [];
-  if (member.employee_number) metaParts.push(`#${member.employee_number}`);
+  if (member.employee_number) metaParts.push(`Emp. #${member.employee_number}`);
   if (member.hire_date)       metaParts.push(`Hired ${fmtDate(member.hire_date)}`);
   if (member.division)        metaParts.push(member.division);
   if (member.region)          metaParts.push(member.region);
@@ -87,11 +87,18 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-            <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{name}</span>
+            <span style={{
+              fontWeight: member.display_name ? 600 : 400,
+              fontSize: member.display_name ? 14 : 13,
+              color: member.display_name ? T.text : T.muted,
+            }}>{name}</span>
             {expiringSoon && <span style={css.tag(T.warning)}>⚠ Expiring</span>}
           </div>
           {subEmail && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{subEmail}</div>}
-          {metaLine && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{metaLine}</div>}
+          {metaLine
+            ? <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{metaLine}</div>
+            : <div style={{ fontSize: 11, color: T.muted, marginTop: 1, fontStyle: "italic" }}>No profile set up yet</div>
+          }
         </div>
 
         <button onClick={e => { e.stopPropagation(); onEditProfile(member); }}
