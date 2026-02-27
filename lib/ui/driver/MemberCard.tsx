@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
 import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "./tokens";
-import { ComplianceCard, DataRow } from "./primitives";
+import { DataRow } from "./primitives";
 import type { Member, DriverProfile } from "./types";
 
 export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile, hideRoleDropdown, hideRemove }: {
@@ -12,41 +12,36 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   companyId: string;
   supabase: ReturnType<typeof createSupabaseBrowser>;
   onRefresh: () => void;
-  onEditProfile: (m: Member, onSaved: (updated: Partial<Member>) => void) => void;
+  onEditProfile: (m: Member, onSaved: () => void) => void;
   hideRoleDropdown?: boolean;
   hideRemove?: boolean;
 }) {
-  const [expanded,          setExpanded]          = useState(false);
-  const [preview,           setPreview]           = useState<DriverProfile | null>(null);
-  const [loading,           setLoading]           = useState(false);
-  const [saving,            setSaving]            = useState(false);
-  const [terminalsExpanded, setTerminalsExpanded] = useState(false);
-  // Local copy of member so card updates immediately after save
-  const [localMember, setLocalMember] = useState<Member>(member);
-  // Keep in sync if parent re-renders with new data
-  if (member.display_name !== localMember.display_name && member.display_name) {
-    setLocalMember(member);
-  }
+  const [expanded,  setExpanded]  = useState(false);
+  const [preview,   setPreview]   = useState<DriverProfile | null>(null);
+  const [loading,   setLoading]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  // Local member state so header updates immediately after save without parent re-render
+  const [local,     setLocal]     = useState<Member>(member);
 
-  async function loadPreview(force = false) {
+  async function reload(force = false) {
     if (!force && (preview || loading)) return;
     setLoading(true);
     try {
       const { data } = await supabase.rpc("get_driver_profile", {
         p_user_id: member.user_id, p_company_id: companyId,
       });
-      const d = data as DriverProfile;
+      const d = data as DriverProfile & { profile: any };
       setPreview(d);
-      // Update the local member header with freshly saved profile fields
+      // Pull fresh header fields from the returned profile object
       if (d?.profile) {
-        setLocalMember(prev => ({
+        setLocal(prev => ({
           ...prev,
-          display_name:    d.profile!.display_name    ?? prev.display_name,
-          hire_date:       d.profile!.hire_date       ?? prev.hire_date,
-          division:        d.profile!.division        ?? prev.division,
-          region:          d.profile!.region          ?? prev.region,
-          local_area:      d.profile!.local_area      ?? prev.local_area,
-          employee_number: (d.profile as any).employee_number ?? prev.employee_number,
+          display_name:    d.profile.display_name    ?? null,
+          hire_date:       d.profile.hire_date       ?? null,
+          division:        d.profile.division        ?? null,
+          region:          d.profile.region          ?? null,
+          local_area:      d.profile.local_area      ?? null,
+          employee_number: d.profile.employee_number ?? null,
         }));
       }
     } finally { setLoading(false); }
@@ -55,7 +50,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   function toggle() {
     const next = !expanded;
     setExpanded(next);
-    if (next) loadPreview();
+    if (next) reload();
   }
 
   async function changeRole(role: string) {
@@ -66,7 +61,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   }
 
   async function remove() {
-    if (!confirm(`Remove ${member.email} from the company?`)) return;
+    if (!confirm(`Remove ${local.email} from the company?`)) return;
     setSaving(true);
     await supabase.rpc("admin_remove_member", {
       p_user_id: member.user_id, p_email: member.email || null, p_company_id: companyId,
@@ -75,14 +70,15 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     onRefresh();
   }
 
-  const name     = localMember.display_name || localMember.email || `User …${localMember.user_id.slice(-8)}`;
-  const subEmail = localMember.display_name ? localMember.email : null;
+  const name     = local.display_name || local.email || `User …${local.user_id.slice(-8)}`;
+  const subEmail = local.display_name ? local.email : null;
+  const hasName  = !!local.display_name;
 
   const metaParts: string[] = [];
-  if (localMember.employee_number) metaParts.push(`Emp. #${localMember.employee_number}`);
-  if (localMember.hire_date)       metaParts.push(`Hired ${fmtDate(localMember.hire_date)}`);
-  if (localMember.division)        metaParts.push(localMember.division);
-  if (localMember.region)          metaParts.push(localMember.region);
+  if (local.employee_number) metaParts.push(`Emp. #${local.employee_number}`);
+  if (local.hire_date)       metaParts.push(`Hired ${fmtDate(local.hire_date)}`);
+  if (local.division)        metaParts.push(local.division);
+  if (local.region)          metaParts.push(local.region);
   const metaLine = metaParts.join(" · ");
 
   const lic       = preview?.license;
@@ -99,26 +95,27 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   return (
     <div style={{ ...css.card, padding: 0, overflow: "hidden" }}>
 
-      {/* ── Collapsed row ── */}
+      {/* ── Collapsed header ── */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={toggle}>
         <span style={{ color: T.muted, fontSize: 14, transition: "transform 150ms", transform: expanded ? "rotate(90deg)" : "none", flexShrink: 0, userSelect: "none" as const, marginTop: 2 }}>›</span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{
-              fontWeight: member.display_name ? 600 : 400,
-              fontSize: member.display_name ? 14 : 13,
-              color: member.display_name ? T.text : T.muted,
-              minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
-              flex: 1,
+              fontWeight: hasName ? 600 : 400,
+              fontSize: hasName ? 14 : 13,
+              color: hasName ? T.text : T.muted,
+              flex: 1, minWidth: 0,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
             }}>{name}</span>
             {expiringSoon && <span style={css.tag(T.warning)}>⚠</span>}
-            <button onClick={e => { e.stopPropagation(); onEditProfile(localMember, (updated) => {
-              setLocalMember(m => ({ ...m, ...updated }));
-              onRefresh();
-              loadPreview(true);
-            }); }}
-              style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0, padding: "3px 8px" }}>
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onEditProfile(local, () => reload(true));
+              }}
+              style={{ ...css.btn("subtle"), fontSize: 11, flexShrink: 0, padding: "3px 8px" }}
+            >
               Edit
             </button>
           </div>
@@ -134,12 +131,11 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
       {expanded && (
         <div style={{ borderTop: `1px solid ${T.border}`, background: T.surface2 }}>
 
-          {/* Meta row: role + remove (only when relevant) */}
           {(!hideRoleDropdown || !hideRemove) && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: `1px solid ${T.border}`, flexWrap: "wrap" as const }}>
               <div style={{ flex: 1 }} />
               {!hideRoleDropdown && (
-                <select value={localMember.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
+                <select value={local.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
                   style={{ ...css.select, fontSize: 12, padding: "5px 8px" }}>
                   <option value="driver">Driver</option>
                   <option value="admin">Admin</option>
@@ -154,7 +150,6 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
             </div>
           )}
 
-          {/* Compliance cards */}
           {loading ? (
             <div style={{ fontSize: 12, color: T.muted, padding: "12px 14px" }}>Loading…</div>
           ) : (
@@ -200,25 +195,17 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                 })}
               </ExpandableCard>
 
-              {/* Terminals */}
-              {(() => {
-                const sorted   = [...terminals].sort((a, b) => a.days_until_expiry - b.days_until_expiry);
-                const preview3 = sorted.slice(0, 3);
-                const rest     = sorted.slice(3);
-                return (
-                  <ExpandableCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}
-                    summary={terminals.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{terminals.length} terminal{terminals.length !== 1 ? "s" : ""} — tap to expand</div> : null}
-                    empty={terminals.length === 0}>
-                    {sorted.map(t => (
-                      <ExpiryRow key={t.terminal_id}
-                        label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
-                        date={t.is_expired ? "Expired" : fmtDate(t.expires_on)}
-                        days={t.days_until_expiry}
-                      />
-                    ))}
-                  </ExpandableCard>
-                );
-              })()}
+              <ExpandableCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}
+                summary={terminals.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{terminals.length} terminal{terminals.length !== 1 ? "s" : ""} — tap to expand</div> : null}
+                empty={terminals.length === 0}>
+                {[...terminals].sort((a, b) => a.days_until_expiry - b.days_until_expiry).map(t => (
+                  <ExpiryRow key={t.terminal_id}
+                    label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
+                    date={t.is_expired ? "Expired" : fmtDate(t.expires_on)}
+                    days={t.days_until_expiry}
+                  />
+                ))}
+              </ExpandableCard>
 
             </div>
           )}
@@ -228,58 +215,33 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   );
 }
 
-// ── Expandable compliance card — tap to show details ──────────
+// ── Expandable compliance card ────────────────────────────────
 
 function ExpandableCard({ title, color, summary, children, empty }: {
-  title: string;
-  color: string;
-  summary?: React.ReactNode;
-  children?: React.ReactNode;
-  empty?: boolean;
+  title: string; color: string; summary?: React.ReactNode; children?: React.ReactNode; empty?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-
   return (
-    <div
-      onClick={() => { if (!empty) setOpen(v => !v); }}
-      style={{
-        background: T.surface2,
-        border: `1px solid ${T.border}`,
-        borderRadius: T.radiusSm,
-        padding: "10px 12px",
-        marginBottom: 8,
-        borderLeft: `3px solid ${color}`,
-        cursor: empty ? "default" : "pointer",
-        userSelect: "none" as const,
-      }}
-    >
-      {/* Header row */}
+    <div onClick={() => { if (!empty) setOpen(v => !v); }}
+      style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${color}`, cursor: empty ? "default" : "pointer", userSelect: "none" as const }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (open || empty) ? 8 : 0 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color }}>{title}</div>
         {!empty && <span style={{ fontSize: 11, color: T.muted, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>}
       </div>
-
-      {/* Collapsed: show summary */}
-      {!open && !empty && summary && (
-        <div>{summary}</div>
-      )}
-
-      {/* Empty state */}
+      {!open && !empty && summary && <div>{summary}</div>}
       {empty && <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
-
-      {/* Expanded: show children */}
       {open && !empty && <div>{children}</div>}
     </div>
   );
 }
 
-// ── Expiry row: label · date · days-badge on same line ────────
+// ── Expiry row ────────────────────────────────────────────────
 
 function ExpiryRow({ label, date, days }: { label?: string; date: string; days: number | null }) {
   const color = expiryColor(days);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 4, fontSize: 12 }}>
-      {label && <span style={{ color: T.muted, flexShrink: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: "45%" }}>{label}</span>}
+      {label && <span style={{ color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: "45%" }}>{label}</span>}
       <span style={{ color: T.text, flexShrink: 0 }}>{date}</span>
       <span style={{ ...css.tag(color), flexShrink: 0 }}>{expiryLabel(days)}</span>
     </div>

@@ -531,9 +531,7 @@ export default function AdminPage() {
             {filteredMembers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>}
             {filteredMembers.map(m => (
               <MemberCard key={m.user_id} member={m} companyId={companyId!} supabase={supabase}
-                onRefresh={loadAll} onEditProfile={(member, onSaved) => {
-                  setProfileModal({ member, onSaved });
-                }} />
+                onRefresh={loadAll} onEditProfile={(member, onSaved) => setProfileModal({ member, onSaved })} />
             ))}
           </>
         )}
