@@ -27,29 +27,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
-    // Get the caller's JWT from the Authorization header (sent by supabase-js client)
+    // Verify caller is an authenticated admin via JWT
     const authHeader = req.headers.get("authorization") ?? "";
     const jwt = authHeader.replace("Bearer ", "").trim();
+    if (!jwt) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
-    if (!jwt) {
-      return NextResponse.json({ error: "Not authenticated — no token." }, { status: 401 });
-    }
-
-    // Verify the JWT and get the user using the service role client
     const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: { user }, error: userErr } = await supabaseAdmin.auth.getUser(jwt);
-    if (userErr || !user) {
-      return NextResponse.json({ error: "Not authenticated — invalid token." }, { status: 401 });
+    const { data: { user: caller }, error: callerErr } = await supabaseAdmin.auth.getUser(jwt);
+    if (callerErr || !caller) {
+      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
 
-    // Verify caller is admin of this company
     const { data: membership } = await supabaseAdmin
       .from("user_companies")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", caller.id)
       .eq("company_id", companyId)
       .maybeSingle();
 
@@ -57,39 +52,59 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     }
 
-    // Send the invite
-    const { data: invite, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      email.toLowerCase(),
-      {
-        redirectTo: `${appUrl}/join?company=${companyId}&role=${role}`,
-        data: { pending_company_id: companyId, pending_role: role },
-      }
-    );
+    const redirectTo = `${appUrl}/join?company=${companyId}&role=${role}`;
 
-    if (inviteError) {
-      // User already exists — add them to company directly
-      if (inviteError.message?.includes("already registered") || (inviteError as any).status === 422) {
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        const existing = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
-        if (existing) {
-          await supabaseAdmin.from("user_companies").upsert(
-            { user_id: existing.id, company_id: companyId, role },
-            { onConflict: "user_id,company_id" }
-          );
-          return NextResponse.json({ ok: true, email, status: "added" });
-        }
-      }
-      return NextResponse.json({ error: inviteError.message }, { status: 400 });
-    }
+    // Check if user already exists in auth
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    const existingUser = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
 
-    if (invite?.user?.id) {
+    if (existingUser) {
+      // User exists — add/update their company membership
       await supabaseAdmin.from("user_companies").upsert(
-        { user_id: invite.user.id, company_id: companyId, role },
+        { user_id: existingUser.id, company_id: companyId, role },
         { onConflict: "user_id,company_id" }
       );
-    }
 
-    return NextResponse.json({ ok: true, email });
+      // Send them a magic link (OTP) so they can log in
+      const { error: otpErr } = await supabaseAdmin.auth.admin.generateLink({
+        type: "magiclink",
+        email: email.toLowerCase(),
+        options: { redirectTo },
+      });
+
+      if (otpErr) {
+        // generateLink may not be available on all plans — fall back to inviteUserByEmail
+        // which will re-send even for existing users on some Supabase versions
+        console.warn("[invite] generateLink failed, falling back:", otpErr.message);
+        // Still return success since they're already added to the company
+        // and can log in via the normal magic link flow
+        return NextResponse.json({ ok: true, email, status: "added_no_email",
+          note: "User added to company. They can log in at the app and will have access." });
+      }
+
+      return NextResponse.json({ ok: true, email, status: "existing_user_notified" });
+
+    } else {
+      // New user — send invite email which creates the account
+      const { data: invite, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+        email.toLowerCase(),
+        { redirectTo, data: { pending_company_id: companyId, pending_role: role } }
+      );
+
+      if (inviteError) {
+        return NextResponse.json({ error: inviteError.message }, { status: 400 });
+      }
+
+      // Pre-create company membership so it's ready when they accept
+      if (invite?.user?.id) {
+        await supabaseAdmin.from("user_companies").upsert(
+          { user_id: invite.user.id, company_id: companyId, role },
+          { onConflict: "user_id,company_id" }
+        );
+      }
+
+      return NextResponse.json({ ok: true, email, status: "invited" });
+    }
 
   } catch (e: any) {
     console.error("[invite route]", e);

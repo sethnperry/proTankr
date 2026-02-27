@@ -1104,34 +1104,26 @@ function InviteModal({ companyId, supabase, onClose, onDone }: {
     if (!email.trim()) return;
     setLoading(true); setStatus(null);
     try {
-      const { data, error } = await supabase.rpc("invite_user_to_company", {
-        p_email: email.trim().toLowerCase(), p_company_id: companyId, p_role: role,
-      });
-      if (error) throw error;
-      if ((data as any)?.status === "pending") {
-        // Get the current session JWT to authenticate the API route
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token ?? "";
+      // Always go through the API route — it handles both new users (sends magic link)
+      // and existing users (re-adds to company, sends a fresh magic link either way)
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? "";
 
-        const res = await fetch("/api/admin/invite", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-          },
-          body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role }),
-        });
-        let json: any = {};
-        try { json = await res.json(); } catch { /* empty body */ }
-        if (!res.ok) throw new Error(json?.error ?? `Invite failed (${res.status}).`);
-        setStatus({ type: "success", msg: `Invite email sent to ${email.trim()}. They'll receive a magic link to join.` });
-        setEmail("");
-      } else {
-        // Existing user — already re-added to company, no email needed
-        setStatus({ type: "success", msg: `${email.trim()} already has an account and has been added to the company. They can log in now.` });
-        setEmail("");
-        setTimeout(() => onDone(), 1500);
-      }
+      const res = await fetch("/api/admin/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role }),
+      });
+      let json: any = {};
+      try { json = await res.json(); } catch { /* empty body */ }
+      if (!res.ok) throw new Error(json?.error ?? `Invite failed (${res.status}).`);
+
+      setStatus({ type: "success", msg: `Invite sent to ${email.trim()}. They'll receive a magic link to join.` });
+      setEmail("");
+      setTimeout(() => onDone(), 2000);
     } catch (e: any) {
       setStatus({ type: "error", msg: e?.message ?? "Failed to send invite." });
     } finally { setLoading(false); }

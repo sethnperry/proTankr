@@ -10,73 +10,99 @@ export default function JoinClient() {
   const sp = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
-  const [code, setCode] = useState<string>(sp.get("code") ?? "");
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [msg, setMsg] = useState("Joining company…");
 
   useEffect(() => {
-    const q = sp.get("code");
-    if (q) setCode(q);
-  }, [sp]);
+    async function join() {
+      try {
+        // Wait a moment for Supabase to process the magic link token from the URL hash
+        await new Promise(r => setTimeout(r, 800));
 
-  async function redeem(inviteCode: string) {
-    setLoading(true);
-    setMsg(null);
-    try {
-      const { data: userRes } = await supabase.auth.getUser();
-      if (!userRes.user) {
-        router.push("/login");
-        return;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          // Not authenticated — send to login
+          router.replace("/login");
+          return;
+        }
+
+        const companyId = sp.get("company");
+        const role      = sp.get("role") ?? "driver";
+
+        if (!companyId) {
+          // No company param — already logged in, just go to app
+          router.replace("/calculator");
+          return;
+        }
+
+        // Add user to company using the invite RPC
+        const { error } = await supabase.rpc("invite_user_to_company", {
+          p_email:      user.email!,
+          p_company_id: companyId,
+          p_role:       role,
+        });
+
+        if (error) throw error;
+
+        setStatus("success");
+        setMsg("You're in! Redirecting…");
+        setTimeout(() => router.replace("/calculator"), 1200);
+
+      } catch (e: any) {
+        setStatus("error");
+        setMsg(e?.message ?? "Could not join company. Please contact your admin.");
       }
-
-      const { error } = await supabase.rpc("redeem_invite", {
-        p_code: inviteCode.trim(),
-      });
-
-      if (error) throw error;
-
-      router.replace("/calculator");
-    } catch (e: any) {
-      setMsg(e?.message ?? "Could not redeem invite.");
-    } finally {
-      setLoading(false);
     }
-  }
+
+    join();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const color = status === "error" ? "#f87171" : status === "success" ? "#4ade80" : "rgba(255,255,255,0.7)";
+  const icon  = status === "error" ? "✕" : status === "success" ? "✓" : "…";
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1 style={{ margin: 0, marginBottom: 12 }}>Join</h1>
+    <div style={{
+      minHeight: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0a0a0a",
+      fontFamily: "system-ui, sans-serif",
+    }}>
+      <div style={{
+        textAlign: "center",
+        padding: "40px 32px",
+        borderRadius: 20,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        maxWidth: 360,
+        width: "100%",
+        margin: "0 16px",
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16, color }}>{icon}</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.9)", marginBottom: 8 }}>
+          {status === "loading" ? "Setting up your account" : status === "success" ? "Welcome aboard!" : "Something went wrong"}
+        </div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>{msg}</div>
 
-      {msg ? <div style={{ color: "#f88", marginBottom: 12 }}>{msg}</div> : null}
-
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Invite code"
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            background: "#000",
-            color: "#fff",
-            border: "1px solid #333",
-            width: 260,
-          }}
-        />
-        <button
-          onClick={() => redeem(code)}
-          disabled={loading || !code.trim()}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 10,
-            background: "#111",
-            color: "#fff",
-            border: "1px solid #333",
-            cursor: loading ? "default" : "pointer",
-          }}
-        >
-          {loading ? "Joining…" : "Join"}
-        </button>
+        {status === "error" && (
+          <button
+            onClick={() => router.replace("/calculator")}
+            style={{
+              marginTop: 20,
+              padding: "10px 20px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.8)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              cursor: "pointer",
+              fontSize: 14,
+            }}
+          >
+            Go to app anyway
+          </button>
+        )}
       </div>
     </div>
   );
