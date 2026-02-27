@@ -267,7 +267,6 @@ function ExpandableCard({ title, color, summary, children, empty }: {
 function TerminalGroups({ terminals }: { terminals: any[] }) {
   const [openGroups, setOpenGroups] = React.useState<Set<string>>(new Set());
 
-  // Group by "City, ST"
   const groups = React.useMemo(() => {
     const map = new Map<string, any[]>();
     for (const t of terminals) {
@@ -275,11 +274,11 @@ function TerminalGroups({ terminals }: { terminals: any[] }) {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
-    // Sort each group by days_until_expiry ascending
+    // Within each group: expired first (soonest expired), then active soonest-expiring first
     for (const [, rows] of map) {
       rows.sort((a: any, b: any) => (a.days_until_expiry ?? 9999) - (b.days_until_expiry ?? 9999));
     }
-    // Sort groups: groups with expired/soonest first
+    // Groups with most-expired/soonest first
     return Array.from(map.entries()).sort(([, a], [, b]) => {
       const aMin = a[0]?.days_until_expiry ?? 9999;
       const bMin = b[0]?.days_until_expiry ?? 9999;
@@ -301,40 +300,39 @@ function TerminalGroups({ terminals }: { terminals: any[] }) {
     <div style={{ marginTop: 2 }}>
       {groups.map(([cityState, rows]) => {
         const open = openGroups.has(cityState);
-        const activeCount = rows.filter((t: any) => !t.is_expired).length;
+        const activeCount  = rows.filter((t: any) => !t.is_expired).length;
         const expiredCount = rows.length - activeCount;
+        // Color header by worst terminal in group
         const worstDays = rows[0]?.days_until_expiry ?? null;
         const groupColor = expiryColor(worstDays);
+        const countLabel = expiredCount > 0
+          ? `${activeCount} active, ${expiredCount} expired`
+          : `${activeCount} active`;
 
         return (
           <div key={cityState} style={{ marginBottom: 6 }}>
-            {/* Group header row */}
+            {/* Group header — city/state left, count right */}
             <div
               onClick={() => toggleGroup(cityState)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: "5px 0", userSelect: "none" as const }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: "pointer", padding: "5px 0", userSelect: "none" as const }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
                 <span style={{ color: groupColor, fontSize: 10, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block", flexShrink: 0 }}>›</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{cityState}</span>
-                <span style={{ fontSize: 10, color: T.muted, flexShrink: 0 }}>
-                  {activeCount} active{expiredCount > 0 ? `, ${expiredCount} expired` : ""}
-                </span>
               </div>
-              {!open && (
-                <span style={{ fontSize: 11, color: groupColor, fontWeight: 600, flexShrink: 0 }}>
-                  {worstDays != null && worstDays < 0 ? `${Math.abs(worstDays)}d ago` : worstDays != null ? `+${worstDays}d` : "—"}
-                </span>
-              )}
+              <span style={{ fontSize: 11, color: expiredCount > 0 ? T.warning : T.muted, flexShrink: 0, textAlign: "right" as const }}>
+                {countLabel}
+              </span>
             </div>
 
-            {/* Expanded terminal rows */}
+            {/* Expanded terminal rows — name left, expiry date right */}
             {open && (
               <div style={{ paddingLeft: 16, borderLeft: `2px solid ${T.border}`, marginLeft: 4 }}>
                 {rows.map((t: any) => (
                   <ExpiryRow
                     key={t.terminal_id}
                     label={t.terminal_name || cityState}
-                    date={t.is_expired ? t.expires_on || "Expired" : t.expires_on || "—"}
+                    date={t.expires_on || ""}
                     days={t.days_until_expiry}
                   />
                 ))}
