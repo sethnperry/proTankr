@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 import NavMenu from "@/lib/ui/NavMenu";
 import { T, css } from "@/lib/ui/driver/tokens";
 import { MemberCard } from "@/lib/ui/driver/MemberCard";
@@ -9,7 +9,6 @@ import { DriverProfileModal } from "@/lib/ui/driver/DriverProfileModal";
 import type { Member } from "@/lib/ui/driver/types";
 
 export default function ProfilePage() {
-  const supabase  = useMemo(() => createSupabaseBrowser(), []);
   const [member,     setMember]     = useState<Member | null>(null);
   const [companyId,  setCompanyId]  = useState<string | null>(null);
   const [editing,    setEditing]    = useState(false);
@@ -86,7 +85,7 @@ export default function ProfilePage() {
           <MemberCard
             member={member}
             companyId={companyId}
-            supabase={supabase}
+           
             onRefresh={load}
             onEditProfile={(m, onSaved) => { setOnSavedCb(() => onSaved); setEditing(true); }}
             hideRoleDropdown
@@ -98,7 +97,7 @@ export default function ProfilePage() {
             <DriverProfileModal
               member={member}
               companyId={companyId}
-              supabase={supabase}
+             
               onClose={() => setEditing(false)}
               onDone={(updated) => { setEditing(false); load(); onSavedCb?.(updated); }}
             />

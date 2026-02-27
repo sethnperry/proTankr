@@ -2,16 +2,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { supabase } from "@/lib/supabase/client";
 import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "./tokens";
 import { DataRow } from "./primitives";
 import { AttachmentManager, PaperclipBadge, useAttachmentCounts } from "./AttachmentManager";
 import type { Member, DriverProfile } from "./types";
 
-export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile, hideRoleDropdown, hideRemove, currentUserId }: {
+export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRoleDropdown, hideRemove, currentUserId }: {
   member: Member;
   companyId: string;
-  supabase: ReturnType<typeof createSupabaseBrowser>;
   onRefresh: () => void;
   onEditProfile: (m: Member, onSaved: () => void) => void;
   hideRoleDropdown?: boolean;
@@ -24,15 +23,13 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   const [saving,   setSaving]   = useState(false);
   const [local,    setLocal]    = useState<Member>(member);
 
-  // Sync local header when parent re-fetches member list
   useEffect(() => {
     setLocal(member);
   }, [member.display_name, member.hire_date, member.division, member.region, member.employee_number]);
 
-  // Attachment counts for paperclip badge
-  const licCounts  = useAttachmentCounts(supabase, companyId, "license", [member.user_id]);
-  const medCounts  = useAttachmentCounts(supabase, companyId, "medical", [member.user_id]);
-  const twicCounts = useAttachmentCounts(supabase, companyId, "twic",    [member.user_id]);
+  const licCounts  = useAttachmentCounts(companyId, "license", [member.user_id]);
+  const medCounts  = useAttachmentCounts(companyId, "medical", [member.user_id]);
+  const twicCounts = useAttachmentCounts(companyId, "twic",    [member.user_id]);
   const totalAttachments = (licCounts[member.user_id]  ?? 0)
                          + (medCounts[member.user_id]  ?? 0)
                          + (twicCounts[member.user_id] ?? 0);
@@ -83,7 +80,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     onRefresh();
   }
 
-  const name    = local.display_name || local.email || `User …${local.user_id.slice(-8)}`;
+  const name     = local.display_name || local.email || `User …${local.user_id.slice(-8)}`;
   const subEmail = local.display_name ? local.email : null;
   const hasName  = !!local.display_name;
 
@@ -179,7 +176,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                 </>}
                 <AttachmentManager
                   entityType="license" entityId={member.user_id}
-                  companyId={companyId} supabase={supabase} currentUserId={currentUserId}
+                  companyId={companyId} currentUserId={currentUserId}
                   slots={[{ key: "front", label: "Front" }, { key: "back", label: "Back" }]}
                 />
               </ExpandableCard>
@@ -193,7 +190,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                 </>}
                 <AttachmentManager
                   entityType="medical" entityId={member.user_id}
-                  companyId={companyId} supabase={supabase} currentUserId={currentUserId}
+                  companyId={companyId} currentUserId={currentUserId}
                   slots={[{ key: "card", label: "Card" }]}
                 />
               </ExpandableCard>
@@ -207,7 +204,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
                 </>}
                 <AttachmentManager
                   entityType="twic" entityId={member.user_id}
-                  companyId={companyId} supabase={supabase} currentUserId={currentUserId}
+                  companyId={companyId} currentUserId={currentUserId}
                   slots={[{ key: "front", label: "Front" }, { key: "back", label: "Back" }]}
                 />
               </ExpandableCard>

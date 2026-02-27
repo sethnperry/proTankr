@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 import NavMenu from "@/lib/ui/NavMenu";
 
 // ── Shared driver components ──────────────────────────────────
@@ -90,7 +90,7 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
 
 function InviteModal({ companyId, supabase, onClose, onDone }: {
   companyId: string;
-  supabase: ReturnType<typeof createSupabaseBrowser>;
+  supabase: typeof supabase;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -154,7 +154,7 @@ function InviteModal({ companyId, supabase, onClose, onDone }: {
 
 function TruckModal({ truck, companyId, supabase, onClose, onDone }: {
   truck: Truck | null; companyId: string;
-  supabase: ReturnType<typeof createSupabaseBrowser>;
+  supabase: typeof supabase;
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !truck;
@@ -208,7 +208,7 @@ function TruckModal({ truck, companyId, supabase, onClose, onDone }: {
 
 function TrailerModal({ trailer, companyId, supabase, onClose, onDone }: {
   trailer: Trailer | null; companyId: string;
-  supabase: ReturnType<typeof createSupabaseBrowser>;
+  supabase: typeof supabase;
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !trailer;
@@ -282,7 +282,7 @@ function TrailerModal({ trailer, companyId, supabase, onClose, onDone }: {
 
 function ComboModal({ combo, companyId, trucks, trailers, supabase, onClose, onDone }: {
   combo: Combo | null; companyId: string; trucks: Truck[]; trailers: Trailer[];
-  supabase: ReturnType<typeof createSupabaseBrowser>;
+  supabase: typeof supabase;
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !combo;
@@ -356,7 +356,6 @@ function ComboModal({ combo, companyId, trucks, trailers, supabase, onClose, onD
 // ─────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [companyId,   setCompanyId]   = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>("");
@@ -532,7 +531,7 @@ export default function AdminPage() {
             </div>
             {filteredMembers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>}
             {filteredMembers.map(m => (
-              <MemberCard key={m.user_id} member={m} companyId={companyId!} supabase={supabase}
+              <MemberCard key={m.user_id} member={m} companyId={companyId!}
                 onRefresh={loadAll} onEditProfile={(member, onSaved) => setProfileModal({ member, onSaved })}
                 currentUserId={currentUserId} />
             ))}
@@ -633,11 +632,11 @@ export default function AdminPage() {
       </section>
 
       {/* ── Modals ── */}
-      {inviteModal  && <InviteModal companyId={companyId!} supabase={supabase} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
-      {profileModal && <DriverProfileModal member={profileModal.member} companyId={companyId!} supabase={supabase} onClose={() => setProfileModal(null)} onDone={(updated) => { profileModal.onSaved(updated); setProfileModal(null); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
-      {truckModal   && <TruckModal   truck={truckModal === "new" ? null : truckModal} companyId={companyId!} supabase={supabase} onClose={() => setTruckModal(null)} onDone={() => { setTruckModal(null); loadAll(); }} />}
-      {trailerModal && <TrailerModal trailer={trailerModal === "new" ? null : trailerModal} companyId={companyId!} supabase={supabase} onClose={() => setTrailerModal(null)} onDone={() => { setTrailerModal(null); loadAll(); }} />}
-      {comboModal   && <ComboModal   combo={comboModal === "new" ? null : comboModal} companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} supabase={supabase} onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }} />}
+      {inviteModal  && <InviteModal companyId={companyId!} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
+      {profileModal && <DriverProfileModal member={profileModal.member} companyId={companyId!} onClose={() => setProfileModal(null)} onDone={(updated) => { profileModal.onSaved(updated); setProfileModal(null); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
+      {truckModal   && <TruckModal   truck={truckModal === "new" ? null : truckModal} companyId={companyId!} onClose={() => setTruckModal(null)} onDone={() => { setTruckModal(null); loadAll(); }} />}
+      {trailerModal && <TrailerModal trailer={trailerModal === "new" ? null : trailerModal} companyId={companyId!} onClose={() => setTrailerModal(null)} onDone={() => { setTrailerModal(null); loadAll(); }} />}
+      {comboModal   && <ComboModal   combo={comboModal === "new" ? null : comboModal} companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }} />}
     </div>
   );
 }

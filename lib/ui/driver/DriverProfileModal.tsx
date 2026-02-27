@@ -2,16 +2,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { supabase } from "@/lib/supabase/client";
 import { T, css, fmtDate } from "./tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "./primitives";
 import { PortIdEditor, TerminalAccessEditor } from "./editors";
 import type { Member, DriverProfile } from "./types";
 
-export function DriverProfileModal({ member, companyId, supabase, onClose, onDone, onRemove }: {
+export function DriverProfileModal({ member, companyId, onClose, onDone, onRemove }: {
   member: Member;
   companyId: string;
-  supabase: ReturnType<typeof createSupabaseBrowser>;
   onClose: () => void;
   onDone: (updated: Partial<Member>) => void;
   onRemove?: () => void; // optional — omit on ProfilePage to hide Remove User button
@@ -104,7 +103,7 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
       }
     }
     load();
-  }, [member.user_id, companyId, supabase]);
+  }, [member.user_id, companyId]);
 
   async function save() {
     setSaving(true); setErr(null); setSuccess(false);
@@ -289,7 +288,6 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
           <TerminalAccessEditor
             userId={member.user_id}
             companyId={companyId}
-            supabase={supabase}
             existing={terminals}
             onReload={reloadProfile}
           />

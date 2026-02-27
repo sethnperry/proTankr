@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { supabase } from "@/lib/supabase/client";
 import { T, css, fmtDate, expiryColor, expiryLabel } from "./tokens";
 import { Banner, SubSectionTitle } from "./primitives";
 import type { PortId, TerminalAccess } from "./types";
@@ -59,10 +59,9 @@ export function PortIdEditor({ portIds, onChange }: {
 
 type AllTerminal = { terminal_id: string; terminal_name: string; city: string | null; state: string | null };
 
-export function TerminalAccessEditor({ userId, companyId, supabase, existing, onReload }: {
+export function TerminalAccessEditor({ userId, companyId, existing, onReload }: {
   userId: string;
   companyId: string;
-  supabase: ReturnType<typeof createSupabaseBrowser>;
   existing: TerminalAccess[];
   onReload: () => void;
 }) {
@@ -80,7 +79,7 @@ export function TerminalAccessEditor({ userId, companyId, supabase, existing, on
         const first = (data ?? [])[0] as any;
         if (first && !addTerminalId) setAddTerminalId(first.terminal_id);
       });
-  }, [supabase]);
+  }, []);
 
   const existingIds = new Set(existing.map(t => t.terminal_id));
   const available   = allTerminals.filter(t => !existingIds.has(t.terminal_id));
