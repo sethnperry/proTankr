@@ -53,58 +53,80 @@ export async function POST(req: NextRequest) {
     }
 
     const redirectTo = `${appUrl}/join?company=${companyId}&role=${role}`;
+    const normalizedEmail = email.toLowerCase();
 
     // Check if user already exists in auth
     const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-    const existingUser = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    const existingUser = users?.find(u => u.email?.toLowerCase() === normalizedEmail);
 
     if (existingUser) {
-      // User exists — add/update their company membership
+      // Delete the auth account so inviteUserByEmail works and sends the email.
+      // App data (profiles, load_log, driver cards etc.) is preserved — those tables
+      // use ON DELETE CASCADE only for user_companies, not the core data tables.
+      // The new auth account will get a new UUID, so we need to migrate the old UUID.
+      const oldUserId = existingUser.id;
+
+      // Delete old auth account
+      const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(oldUserId);
+      if (deleteErr) {
+        console.error("[invite] Failed to delete old auth user:", deleteErr.message);
+        return NextResponse.json({ error: `Could not re-invite user: ${deleteErr.message}` }, { status: 500 });
+      }
+    }
+
+    // Send invite — works for both new users and re-invites (after deletion above)
+    const { data: invite, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      {
+        redirectTo,
+        data: { pending_company_id: companyId, pending_role: role },
+      }
+    );
+
+    if (inviteError) {
+      return NextResponse.json({ error: inviteError.message }, { status: 400 });
+    }
+
+    // Pre-create company membership with the new user ID
+    if (invite?.user?.id) {
       await supabaseAdmin.from("user_companies").upsert(
-        { user_id: existingUser.id, company_id: companyId, role },
+        { user_id: invite.user.id, company_id: companyId, role },
         { onConflict: "user_id,company_id" }
       );
 
-      // Send them a magic link (OTP) so they can log in
-      const { error: otpErr } = await supabaseAdmin.auth.admin.generateLink({
-        type: "magiclink",
-        email: email.toLowerCase(),
-        options: { redirectTo },
-      });
+      // If there was an old user ID, migrate their profile row to the new UUID
+      // so their driver profile, load history etc. all carry over
+      if (existingUser && existingUser.id !== invite.user.id) {
+        const newUserId = invite.user.id;
+        const oldUserId = existingUser.id;
 
-      if (otpErr) {
-        // generateLink may not be available on all plans — fall back to inviteUserByEmail
-        // which will re-send even for existing users on some Supabase versions
-        console.warn("[invite] generateLink failed, falling back:", otpErr.message);
-        // Still return success since they're already added to the company
-        // and can log in via the normal magic link flow
-        return NextResponse.json({ ok: true, email, status: "added_no_email",
-          note: "User added to company. They can log in at the app and will have access." });
+        // Update profiles
+        await supabaseAdmin
+          .from("profiles")
+          .update({ user_id: newUserId })
+          .eq("user_id", oldUserId);
+
+        // Update driver cards
+        for (const table of ["driver_licenses", "driver_medical_cards", "driver_twic_cards", "driver_port_ids"]) {
+          await supabaseAdmin.from(table).update({ user_id: newUserId }).eq("user_id", oldUserId);
+        }
+
+        // Update terminal_access
+        await supabaseAdmin
+          .from("terminal_access")
+          .update({ user_id: newUserId })
+          .eq("user_id", oldUserId);
+
+        // Note: load_log rows reference user_id but are historical —
+        // update them too so My Loads history is preserved
+        await supabaseAdmin
+          .from("load_log")
+          .update({ user_id: newUserId })
+          .eq("user_id", oldUserId);
       }
-
-      return NextResponse.json({ ok: true, email, status: "existing_user_notified" });
-
-    } else {
-      // New user — send invite email which creates the account
-      const { data: invite, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-        email.toLowerCase(),
-        { redirectTo, data: { pending_company_id: companyId, pending_role: role } }
-      );
-
-      if (inviteError) {
-        return NextResponse.json({ error: inviteError.message }, { status: 400 });
-      }
-
-      // Pre-create company membership so it's ready when they accept
-      if (invite?.user?.id) {
-        await supabaseAdmin.from("user_companies").upsert(
-          { user_id: invite.user.id, company_id: companyId, role },
-          { onConflict: "user_id,company_id" }
-        );
-      }
-
-      return NextResponse.json({ ok: true, email, status: "invited" });
     }
+
+    return NextResponse.json({ ok: true, email: normalizedEmail, status: "invited" });
 
   } catch (e: any) {
     console.error("[invite route]", e);
