@@ -13,8 +13,8 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
   supabase: ReturnType<typeof createSupabaseBrowser>;
   onRefresh: () => void;
   onEditProfile: (m: Member) => void;
-  hideRoleDropdown?: boolean; // true on ProfilePage — user can't reassign their own role
-  hideRemove?: boolean;       // true on ProfilePage — user can't remove themselves
+  hideRoleDropdown?: boolean;
+  hideRemove?: boolean;
 }) {
   const [expanded,          setExpanded]          = useState(false);
   const [preview,           setPreview]           = useState<DriverProfile | null>(null);
@@ -27,13 +27,10 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     setLoading(true);
     try {
       const { data } = await supabase.rpc("get_driver_profile", {
-        p_user_id:    member.user_id,
-        p_company_id: companyId,
+        p_user_id: member.user_id, p_company_id: companyId,
       });
       setPreview(data as DriverProfile);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   function toggle() {
@@ -53,9 +50,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
     if (!confirm(`Remove ${member.email} from the company?`)) return;
     setSaving(true);
     await supabase.rpc("admin_remove_member", {
-      p_user_id:    member.user_id,
-      p_email:      member.email || null,
-      p_company_id: companyId,
+      p_user_id: member.user_id, p_email: member.email || null, p_company_id: companyId,
     });
     setSaving(false);
     onRefresh();
@@ -63,6 +58,14 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
 
   const name     = member.display_name || member.email || `User …${member.user_id.slice(-8)}`;
   const subEmail = member.display_name ? member.email : null;
+
+  // Build the meta line: Emp. #xxx · Hired date · Division · Region
+  const metaParts: string[] = [];
+  if (member.employee_number) metaParts.push(`Emp. #${member.employee_number}`);
+  if (member.hire_date)       metaParts.push(`Hired ${fmtDate(member.hire_date)}`);
+  if (member.division)        metaParts.push(member.division);
+  if (member.region)          metaParts.push(member.region);
+  const metaLine = metaParts.join(" · ");
 
   const lic       = preview?.license;
   const med       = preview?.medical;
@@ -88,11 +91,7 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
             {expiringSoon && <span style={css.tag(T.warning)}>⚠ Expiring</span>}
           </div>
           {subEmail && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{subEmail}</div>}
-          {member.hire_date && (
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>
-              Hired {fmtDate(member.hire_date)}{member.division ? ` · ${member.division}` : ""}{member.region ? ` · ${member.region}` : ""}
-            </div>
-          )}
+          {metaLine && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{metaLine}</div>}
         </div>
 
         <button onClick={e => { e.stopPropagation(); onEditProfile(member); }}
@@ -105,30 +104,25 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
       {expanded && (
         <div style={{ borderTop: `1px solid ${T.border}`, background: T.surface2 }}>
 
-          {/* Meta row: employee # + role + remove */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: `1px solid ${T.border}`, flexWrap: "wrap" as const }}>
-            {member.employee_number && (
-              <div style={{ fontSize: 12, color: T.muted }}>
-                <span style={{ fontWeight: 700, color: T.text }}>#{member.employee_number}</span>
-              </div>
-            )}
-            <div style={{ flex: 1 }} />
-
-            {!hideRoleDropdown && (
-              <select value={member.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
-                style={{ ...css.select, fontSize: 12, padding: "5px 8px" }}>
-                <option value="driver">Driver</option>
-                <option value="admin">Admin</option>
-              </select>
-            )}
-
-            {!hideRemove && (
-              <button onClick={e => { e.stopPropagation(); remove(); }} disabled={saving}
-                style={{ ...css.btn("ghost"), padding: "5px 10px", color: T.danger, borderColor: `${T.danger}44`, fontSize: 12 }}>
-                Remove
-              </button>
-            )}
-          </div>
+          {/* Meta row: role + remove (only when relevant) */}
+          {(!hideRoleDropdown || !hideRemove) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: `1px solid ${T.border}`, flexWrap: "wrap" as const }}>
+              <div style={{ flex: 1 }} />
+              {!hideRoleDropdown && (
+                <select value={member.role} onChange={e => { e.stopPropagation(); changeRole(e.target.value); }} disabled={saving}
+                  style={{ ...css.select, fontSize: 12, padding: "5px 8px" }}>
+                  <option value="driver">Driver</option>
+                  <option value="admin">Admin</option>
+                </select>
+              )}
+              {!hideRemove && (
+                <button onClick={e => { e.stopPropagation(); remove(); }} disabled={saving}
+                  style={{ ...css.btn("ghost"), padding: "5px 10px", color: T.danger, borderColor: `${T.danger}44`, fontSize: 12 }}>
+                  Remove
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Compliance cards */}
           {loading ? (
@@ -136,77 +130,63 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8, padding: "12px 14px" }}>
 
-              <ComplianceCard title="Driver's License" color={lic ? expiryColor(licDays) : T.border}>
-                {lic ? (
-                  <>
-                    {lic.license_class && <DataRow label="Class" value={`Class ${lic.license_class}`} />}
-                    {lic.license_number && <DataRow label="License #" value={lic.license_number} />}
-                    {(lic.endorsements?.length ?? 0) > 0 && <DataRow label="Endorsements" value={lic.endorsements.join(", ")} />}
-                    <DataRow label="Expires" value={fmtDate(lic.expiration_date)} highlight={expiryColor(licDays)} />
-                    <div><span style={css.tag(expiryColor(licDays))}>{expiryLabel(licDays)}</span></div>
-                  </>
-                ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
-              </ComplianceCard>
+              <ExpandableCard title="Driver's License" color={lic ? expiryColor(licDays) : T.border}
+                summary={lic ? <ExpiryRow date={fmtDate(lic.expiration_date)} days={licDays} /> : null}
+                empty={!lic}>
+                {lic && <>
+                  {lic.license_class  && <DataRow label="Class"        value={`Class ${lic.license_class}`} />}
+                  {lic.license_number && <DataRow label="License #"    value={lic.license_number} />}
+                  {lic.state_code     && <DataRow label="State"        value={lic.state_code} />}
+                  {(lic.endorsements?.length ?? 0) > 0 && <DataRow label="Endorsements" value={lic.endorsements.join(", ")} />}
+                  {(lic.restrictions?.length ?? 0) > 0 && <DataRow label="Restrictions" value={lic.restrictions.join(", ")} />}
+                  <ExpiryRow date={fmtDate(lic.expiration_date)} days={licDays} />
+                </>}
+              </ExpandableCard>
 
-              <ComplianceCard title="Medical Card" color={med ? expiryColor(medDays) : T.border}>
-                {med ? (
-                  <>
-                    <DataRow label="Expires" value={fmtDate(med.expiration_date)} highlight={expiryColor(medDays)} />
-                    <div><span style={css.tag(expiryColor(medDays))}>{expiryLabel(medDays)}</span></div>
-                  </>
-                ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
-              </ComplianceCard>
+              <ExpandableCard title="Medical Card" color={med ? expiryColor(medDays) : T.border}
+                summary={med ? <ExpiryRow date={fmtDate(med.expiration_date)} days={medDays} /> : null}
+                empty={!med}>
+                {med && <>
+                  {med.examiner_name && <DataRow label="Examiner" value={med.examiner_name} />}
+                  <ExpiryRow date={fmtDate(med.expiration_date)} days={medDays} />
+                </>}
+              </ExpandableCard>
 
-              <ComplianceCard title="TWIC Card" color={twic ? expiryColor(twicDays) : T.border}>
-                {twic ? (
-                  <>
-                    {twic.card_number && <DataRow label="Card #" value={twic.card_number} />}
-                    <DataRow label="Expires" value={fmtDate(twic.expiration_date)} highlight={expiryColor(twicDays)} />
-                    <div><span style={css.tag(expiryColor(twicDays))}>{expiryLabel(twicDays)}</span></div>
-                  </>
-                ) : <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
-              </ComplianceCard>
+              <ExpandableCard title="TWIC Card" color={twic ? expiryColor(twicDays) : T.border}
+                summary={twic ? <ExpiryRow date={fmtDate(twic.expiration_date)} days={twicDays} /> : null}
+                empty={!twic}>
+                {twic && <>
+                  {twic.card_number && <DataRow label="Card #" value={twic.card_number} />}
+                  <ExpiryRow date={fmtDate(twic.expiration_date)} days={twicDays} />
+                </>}
+              </ExpandableCard>
 
-              <ComplianceCard title={`Port IDs (${ports.length})`} color={ports.length > 0 ? T.info : T.border}>
-                {ports.length > 0
-                  ? ports.map((p: any, i: number) => {
-                      const d = daysUntil(p.expiration_date);
-                      return <DataRow key={i} label={p.port_name || "—"} value={<span style={css.tag(expiryColor(d))}>{expiryLabel(d)}</span>} />;
-                    })
-                  : <div style={{ fontSize: 12, color: T.muted }}>None on file</div>}
-              </ComplianceCard>
+              <ExpandableCard title={`Port IDs (${ports.length})`} color={ports.length > 0 ? T.info : T.border}
+                summary={ports.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{ports.length} port{ports.length !== 1 ? "s" : ""} on file</div> : null}
+                empty={ports.length === 0}>
+                {ports.map((p: any, i: number) => {
+                  const d = daysUntil(p.expiration_date);
+                  return <ExpiryRow key={i} label={p.port_name || "—"} date={fmtDate(p.expiration_date)} days={d} />;
+                })}
+              </ExpandableCard>
 
-              {/* Terminals — expandable, expired first */}
+              {/* Terminals */}
               {(() => {
-                const sorted    = [...terminals].sort((a, b) => a.days_until_expiry - b.days_until_expiry);
-                const preview3  = sorted.slice(0, 3);
-                const rest      = sorted.slice(3);
+                const sorted   = [...terminals].sort((a, b) => a.days_until_expiry - b.days_until_expiry);
+                const preview3 = sorted.slice(0, 3);
+                const rest     = sorted.slice(3);
                 return (
-                  <ComplianceCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}>
-                    {terminals.length === 0
-                      ? <div style={{ fontSize: 12, color: T.muted }}>No terminals</div>
-                      : <>
-                          {preview3.map(t => (
-                            <DataRow key={t.terminal_id}
-                              label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
-                              value={<span style={css.tag(expiryColor(t.days_until_expiry))}>{expiryLabel(t.days_until_expiry)}</span>}
-                            />
-                          ))}
-                          {terminalsExpanded && rest.map(t => (
-                            <DataRow key={t.terminal_id}
-                              label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
-                              value={<span style={css.tag(expiryColor(t.days_until_expiry))}>{expiryLabel(t.days_until_expiry)}</span>}
-                            />
-                          ))}
-                          {rest.length > 0 && (
-                            <button onClick={() => setTerminalsExpanded(v => !v)}
-                              style={{ background: "none", border: "none", cursor: "pointer", color: T.accent, fontSize: 11, padding: "4px 0 0", fontWeight: 600 }}>
-                              {terminalsExpanded ? "▲ Show less" : `▼ +${rest.length} more`}
-                            </button>
-                          )}
-                        </>
-                    }
-                  </ComplianceCard>
+                  <ExpandableCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}
+                    summary={terminals.length > 0 ? <div style={{ fontSize: 11, color: T.muted }}>{terminals.length} terminal{terminals.length !== 1 ? "s" : ""} — tap to expand</div> : null}
+                    empty={terminals.length === 0}>
+                    {sorted.map(t => (
+                      <ExpiryRow key={t.terminal_id}
+                        label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
+                        date={t.is_expired ? "Expired" : fmtDate(t.expires_on)}
+                        days={t.days_until_expiry}
+                      />
+                    ))}
+                  </ExpandableCard>
                 );
               })()}
 
@@ -214,6 +194,64 @@ export function MemberCard({ member, companyId, supabase, onRefresh, onEditProfi
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Expandable compliance card — tap to show details ──────────
+
+function ExpandableCard({ title, color, summary, children, empty }: {
+  title: string;
+  color: string;
+  summary?: React.ReactNode;
+  children?: React.ReactNode;
+  empty?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      onClick={() => { if (!empty) setOpen(v => !v); }}
+      style={{
+        background: T.surface2,
+        border: `1px solid ${T.border}`,
+        borderRadius: T.radiusSm,
+        padding: "10px 12px",
+        marginBottom: 8,
+        borderLeft: `3px solid ${color}`,
+        cursor: empty ? "default" : "pointer",
+        userSelect: "none" as const,
+      }}
+    >
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (open || empty) ? 8 : 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color }}>{title}</div>
+        {!empty && <span style={{ fontSize: 11, color: T.muted, transition: "transform 150ms", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>}
+      </div>
+
+      {/* Collapsed: show summary */}
+      {!open && !empty && summary && (
+        <div>{summary}</div>
+      )}
+
+      {/* Empty state */}
+      {empty && <div style={{ fontSize: 12, color: T.muted }}>Not on file</div>}
+
+      {/* Expanded: show children */}
+      {open && !empty && <div>{children}</div>}
+    </div>
+  );
+}
+
+// ── Expiry row: label · date · days-badge on same line ────────
+
+function ExpiryRow({ label, date, days }: { label?: string; date: string; days: number | null }) {
+  const color = expiryColor(days);
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 4, fontSize: 12 }}>
+      {label && <span style={{ color: T.muted, flexShrink: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: "45%" }}>{label}</span>}
+      <span style={{ color: T.text, flexShrink: 0 }}>{date}</span>
+      <span style={{ ...css.tag(color), flexShrink: 0 }}>{expiryLabel(days)}</span>
     </div>
   );
 }

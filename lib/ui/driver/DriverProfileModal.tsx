@@ -88,7 +88,9 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
           setMedIssue(d.medical.issue_date ?? "");
           setMedExpiry(d.medical.expiration_date ?? "");
           setMedExaminer(d.medical.examiner_name ?? "");
+          setMedAttachedToLic(!!(d.medical as any).attached_to_license);
         }
+        setHazmatLinked(!!(d as any).hazmat_linked_to_license);
         if (d.twic) {
           setTwicNumber(d.twic.card_number ?? "");
           setTwicIssue(d.twic.issue_date ?? "");
@@ -129,11 +131,14 @@ export function DriverProfileModal({ member, companyId, supabase, onClose, onDon
     }
     if (medExpiry || medIssue) {
       payload.medical = {
-        issue_date:      medIssue || null,
-        expiration_date: medExpiry || null,
-        examiner_name:   medExaminer || null,
+        issue_date:          medIssue || null,
+        expiration_date:     medExpiry || null,
+        examiner_name:       medExaminer || null,
+        attached_to_license: medAttachedToLic,
       };
     }
+    // Always save hazmat flag even if no other hazmat data
+    payload.hazmat_linked_to_license = hazmatLinked;
     if (twicNumber || twicExpiry) {
       payload.twic = {
         card_number:     twicNumber || null,

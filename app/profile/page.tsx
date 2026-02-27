@@ -63,11 +63,13 @@ export default function ProfilePage() {
 
   return (
     <div style={css.page}>
-      <NavMenu />
 
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={css.heading}>Profile</h1>
-        <p style={css.subheading}>Your compliance cards and personal details.</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 12 }}>
+        <div>
+          <h1 style={css.heading}>Profile</h1>
+          <p style={css.subheading}>Your compliance cards and personal details.</p>
+        </div>
+        <NavMenu />
       </div>
 
       {loading && (
