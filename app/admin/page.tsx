@@ -26,7 +26,6 @@ type Truck = {
   phmsa_expiration_date: string | null; alliance_expiration_date: string | null;
   fleet_ins_expiration_date: string | null; hazmat_lic_expiration_date: string | null;
   inner_bridge_expiration_date: string | null;
-  other_permit_label: string | null; other_permit_expiration_date: string | null;
   notes: string | null;
 };
 
@@ -57,13 +56,17 @@ type Combo = {
   in_use_by_name?: string | null;
 };
 
-type SortField = "name" | "role" | "division" | "region" | "hire_date";
-type SortDir   = "asc"  | "desc";
+type OtherPermit = { permit_id?: string; label: string; expiration_date: string; };
+type SortField   = "name" | "role" | "division" | "region" | "hire_date";
+type SortDir     = "asc" | "desc";
 type ActiveFilter = "" | "active" | "inactive";
 
 // ─────────────────────────────────────────────────────────────
-// Helpers
+// Shared style constants
 // ─────────────────────────────────────────────────────────────
+
+// Condensed input — used throughout modals
+const sm: React.CSSProperties = { padding: "4px 8px", fontSize: 12, height: 26 };
 
 function fmtExpiryInline(dateStr: string | null | undefined, days: number | null): string {
   if (!dateStr) return "—";
@@ -81,66 +84,103 @@ function fmtExpiryInline(dateStr: string | null | undefined, days: number | null
   } catch { return dateStr; }
 }
 
-function ExpiryField({ label, date, enforcement }: { label: string; date: string | null; enforcement?: string | null }) {
-  const days = daysUntil(date);
-  const color = expiryColor(days);
-  const enfDays = enforcement ? daysUntil(enforcement) : null;
-  const enfColor = expiryColor(enfDays);
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase" as const, marginBottom: 2 }}>{label}</div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const }}>
-        <span style={{ fontSize: 12, color, fontWeight: days != null && days < 30 ? 600 : 400 }}>
-          Exp: {fmtExpiryInline(date, days)}
-        </span>
-        {enforcement !== undefined && (
-          <span style={{ fontSize: 12, color: enfColor, fontWeight: enfDays != null && enfDays < 30 ? 600 : 400 }}>
-            Enf: {fmtExpiryInline(enforcement, enfDays)}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────
-// PermitRow — single permit line with attachment + notes toggle
+// PermitRow — read-only card view: label | date | 📎 ☑ ▼
 // ─────────────────────────────────────────────────────────────
 
 function PermitRow({ label, date, enforcement, extra }: {
   label: string; date: string | null; enforcement?: string | null; extra?: React.ReactNode;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
-  const days = daysUntil(date);
-  const color = expiryColor(days);
-  const enfDays = enforcement != null ? daysUntil(enforcement) : null;
+  const [checked,   setChecked]   = useState(false);
+  const [attached,  setAttached]  = useState(false);
+  const days     = daysUntil(date);
+  const color    = expiryColor(days);
+  const enfDays  = enforcement != null ? daysUntil(enforcement) : null;
   const enfColor = expiryColor(enfDays);
 
+  const iconBtn: React.CSSProperties = {
+    background: "none", border: "none", cursor: "pointer",
+    padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center",
+  };
+
   return (
-    <div style={{ borderBottom: `1px solid ${T.border}`, paddingBottom: 8, marginBottom: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: T.text, flex: 1 }}>{label}</span>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
-          {date && <span style={{ fontSize: 12, color, fontWeight: days != null && days < 30 ? 600 : 400 }}>
-            Exp: {fmtExpiryInline(date, days)}
-          </span>}
-          {enforcement != null && enforcement && <span style={{ fontSize: 12, color: enfColor }}>
-            Enf: {fmtExpiryInline(enforcement, enfDays)}
-          </span>}
-          {!date && <span style={{ fontSize: 12, color: T.muted }}>—</span>}
-          {/* 📎 attachment placeholder */}
-          <button type="button" title="Attach file" style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 14, padding: "2px 4px" }}>📎</button>
-          {/* ▼ notes toggle */}
-          <button type="button" title="Notes" onClick={() => setNotesOpen(v => !v)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 11, padding: "2px 4px", transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>▼</button>
-          {/* ☑ driver task checkbox */}
-          <input type="checkbox" title="Driver task" style={{ width: 13, height: 13, accentColor: T.accent }} />
+    <div style={{ borderBottom: `1px solid ${T.border}22`, paddingBottom: 4, marginBottom: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 24 }}>
+        <span style={{ fontSize: 11, color: T.muted, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{label}</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          {date
+            ? <span style={{ fontSize: 11, color, fontWeight: days != null && days < 30 ? 600 : 400, whiteSpace: "nowrap" as const }}>{fmtExpiryInline(date, days)}</span>
+            : <span style={{ fontSize: 11, color: T.muted }}>—</span>
+          }
+          {enforcement != null && enforcement &&
+            <span style={{ fontSize: 11, color: enfColor, whiteSpace: "nowrap" as const }}>/ {fmtExpiryInline(enforcement, enfDays)}</span>
+          }
+        </div>
+        {/* 📎 paperclip / + add · ☑ checkbox · ▼ notes */}
+        <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+          <button type="button" title={attached ? "Attached" : "Add attachment"} style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 12 }}
+            onClick={() => setAttached(v => !v)}>{attached ? "📎" : "＋"}</button>
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
+            style={{ width: 11, height: 11, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
+          <button type="button" title="Notes" style={{ ...iconBtn, color: T.muted, fontSize: 8,
+            transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+            onClick={() => setNotesOpen(v => !v)}>▼</button>
         </div>
       </div>
       {extra}
       {notesOpen && (
         <textarea placeholder="Notes…" rows={2}
-          style={{ ...css.input, width: "100%", marginTop: 6, fontSize: 11, resize: "vertical" as const }} />
+          style={{ ...css.input, width: "100%", marginTop: 3, fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// PermitEditRow — edit-modal view: label | exp input [| enf input] | 📎 ☑ ▼
+// ─────────────────────────────────────────────────────────────
+
+function PermitEditRow({ label, expVal, onExpChange, enfVal, onEnfChange, extra }: {
+  label: string;
+  expVal: string; onExpChange: (v: string) => void;
+  enfVal?: string; onEnfChange?: (v: string) => void;
+  extra?: React.ReactNode;
+}) {
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [checked,   setChecked]   = useState(false);
+  const [attached,  setAttached]  = useState(false);
+
+  const iconBtn: React.CSSProperties = {
+    background: "none", border: "none", cursor: "pointer",
+    padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center",
+  };
+
+  return (
+    <div style={{ borderBottom: `1px solid ${T.border}22`, padding: "3px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 11, color: T.muted, width: 148, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{label}</span>
+        <input type="date" value={expVal} onChange={e => onExpChange(e.target.value)}
+          style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
+        {onEnfChange !== undefined && (
+          <input type="date" value={enfVal ?? ""} onChange={e => onEnfChange(e.target.value)}
+            style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
+        )}
+        {/* 📎 ☑ ▼ */}
+        <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+          <button type="button" title={attached ? "Attached" : "Add attachment"} style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 12 }}
+            onClick={() => setAttached(v => !v)}>{attached ? "📎" : "＋"}</button>
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
+            style={{ width: 11, height: 11, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
+          <button type="button" title="Notes" style={{ ...iconBtn, color: T.muted, fontSize: 8,
+            transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+            onClick={() => setNotesOpen(v => !v)}>▼</button>
+        </div>
+      </div>
+      {extra}
+      {notesOpen && (
+        <textarea placeholder="Notes…" rows={2}
+          style={{ ...css.input, width: "100%", marginTop: 3, fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
       )}
     </div>
   );
@@ -158,17 +198,17 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
   function remove(i: number) { onChange(comps.filter((_, idx) => idx !== i).map((c, idx) => ({ ...c, comp_number: idx + 1, position: idx }))); }
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>COMPARTMENTS ({comps.length})</span>
-        <button type="button" onClick={add} style={css.btn("subtle")}>+ Add</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: 0.4 }}>COMPARTMENTS ({comps.length})</span>
+        <button type="button" onClick={add} style={{ ...css.btn("subtle"), padding: "2px 10px", fontSize: 11 }}>+ Add</button>
       </div>
-      {comps.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0" }}>No compartments added yet.</div>}
+      {comps.length === 0 && <div style={{ fontSize: 11, color: T.muted, padding: "4px 0" }}>No compartments yet.</div>}
       {comps.map((c, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-          <div style={{ width: 28, fontSize: 12, color: T.muted, textAlign: "center" as const, fontWeight: 700 }}>{c.comp_number}</div>
-          <input type="number" placeholder="Max gal" value={c.max_gallons || ""} onChange={e => update(i, "max_gallons", e.target.value)} style={{ ...css.input, width: 100 }} />
-          <input type="number" placeholder="Position" value={c.position || ""} onChange={e => update(i, "position", e.target.value)} style={{ ...css.input, width: 90 }} />
-          <button type="button" onClick={() => remove(i)} style={{ ...css.btn("ghost"), padding: "6px 10px", color: T.danger, borderColor: `${T.danger}44`, flexShrink: 0 }}>✕</button>
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
+          <div style={{ width: 18, fontSize: 11, color: T.muted, textAlign: "center" as const, fontWeight: 700 }}>{c.comp_number}</div>
+          <input type="number" placeholder="Gal" value={c.max_gallons || ""} onChange={e => update(i, "max_gallons", e.target.value)} style={{ ...css.input, ...sm, width: 76 }} />
+          <input type="number" placeholder="Pos" value={c.position || ""} onChange={e => update(i, "position", e.target.value)} style={{ ...css.input, ...sm, width: 66 }} />
+          <button type="button" onClick={() => remove(i)} style={{ background: "none", border: "none", cursor: "pointer", color: T.danger, fontSize: 13, padding: "0 4px", flexShrink: 0 }}>✕</button>
         </div>
       ))}
     </div>
@@ -176,32 +216,25 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
 }
 
 // ─────────────────────────────────────────────────────────────
-// TruckCard — collapsed + expanded
+// TruckCard — collapsed + expanded permit view
 // ─────────────────────────────────────────────────────────────
 
-function TruckCard({ truck, onEdit }: { truck: Truck; onEdit: () => void }) {
+function TruckCard({ truck, onEdit, otherPermits }: { truck: Truck; onEdit: () => void; otherPermits?: OtherPermit[] }) {
   const [open, setOpen] = useState(false);
-
-  const statusColor = truck.status_code === "active" ? T.success
-    : truck.status_code === "inactive" ? T.muted : T.warning;
+  const statusColor = truck.status_code === "active" ? T.success : truck.status_code === "inactive" ? T.muted : T.warning;
 
   return (
     <div style={{ ...css.card, padding: 0, marginBottom: 8, overflow: "hidden" }}>
-      {/* Collapsed header */}
       <div onClick={() => setOpen(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", cursor: "pointer", userSelect: "none" as const }}>
-        {/* Left: unit number + region/area */}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{truck.truck_name}</span>
             {(truck.region || truck.local_area) && (
-              <span style={{ fontSize: 11, color: T.muted }}>
-                {[truck.region, truck.local_area].filter(Boolean).join(" · ")}
-              </span>
+              <span style={{ fontSize: 11, color: T.muted }}>{[truck.region, truck.local_area].filter(Boolean).join(" · ")}</span>
             )}
           </div>
           {truck.vin_number && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{truck.vin_number}</div>}
         </div>
-        {/* Right: Edit + in use / not in use */}
         <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
           <button type="button" style={{ ...css.btn("subtle"), padding: "3px 10px", fontSize: 11 }} onClick={e => { e.stopPropagation(); onEdit(); }}>Edit</button>
           <span style={{ fontSize: 11, color: truck.in_use_by_name ? T.accent : T.muted }}>
@@ -209,25 +242,21 @@ function TruckCard({ truck, onEdit }: { truck: Truck; onEdit: () => void }) {
           </span>
         </div>
       </div>
-      {/* Bottom status bar */}
-      <div style={{ padding: "4px 12px 8px", display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ padding: "3px 12px 7px", display: "flex", justifyContent: "flex-end" }}>
         <span style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>
           {[truck.status_code, truck.status_location].filter(Boolean).join(" · ") || "—"}
         </span>
       </div>
-      {/* Expanded permit book */}
       {open && (
-        <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 12px 4px" }} onClick={e => e.stopPropagation()}>
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: "10px 12px 4px" }} onClick={e => e.stopPropagation()}>
           {(truck.make || truck.model || truck.year) && (
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>
-              {[truck.year, truck.make, truck.model].filter(Boolean).join(" ")}
-            </div>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 8 }}>{[truck.year, truck.make, truck.model].filter(Boolean).join(" ")}</div>
           )}
           <SubSectionTitle>Permit Book</SubSectionTitle>
           <PermitRow label="Registration" date={truck.reg_expiration_date} enforcement={truck.reg_enforcement_date} />
           <PermitRow label="Annual Inspection" date={truck.inspection_expiration_date} extra={
             (truck.inspection_shop || truck.inspection_issue_date) ? (
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: T.muted, marginTop: 1 }}>
                 {[truck.inspection_shop, truck.inspection_issue_date && `Issued ${fmtDate(truck.inspection_issue_date)}`].filter(Boolean).join(" · ")}
               </div>
             ) : null
@@ -238,9 +267,9 @@ function TruckCard({ truck, onEdit }: { truck: Truck; onEdit: () => void }) {
           <PermitRow label="Fleet Insurance Cab Card" date={truck.fleet_ins_expiration_date} />
           <PermitRow label="HazMat Transportation License" date={truck.hazmat_lic_expiration_date} />
           <PermitRow label="Inner Bridge Permit" date={truck.inner_bridge_expiration_date} />
-          {(truck.other_permit_label || truck.other_permit_expiration_date) && (
-            <PermitRow label={truck.other_permit_label || "Other Permit"} date={truck.other_permit_expiration_date} />
-          )}
+          {(otherPermits ?? []).map((p, i) => (
+            <PermitRow key={i} label={p.label || "Other Permit"} date={p.expiration_date || null} />
+          ))}
         </div>
       )}
     </div>
@@ -279,23 +308,23 @@ function TrailerCard({ trailer, onEdit }: { trailer: Trailer; onEdit: () => void
           </span>
         </div>
       </div>
-      <div style={{ padding: "4px 12px 8px", display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ padding: "3px 12px 7px", display: "flex", justifyContent: "flex-end" }}>
         <span style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>
           {[trailer.status_code, trailer.status_location].filter(Boolean).join(" · ") || "—"}
         </span>
       </div>
       {open && (
-        <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 12px 4px" }} onClick={e => e.stopPropagation()}>
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: "10px 12px 4px" }} onClick={e => e.stopPropagation()}>
           {(trailer.make || trailer.model || trailer.year) && (
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 6 }}>{[trailer.year, trailer.make, trailer.model].filter(Boolean).join(" ")}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 5 }}>{[trailer.year, trailer.make, trailer.model].filter(Boolean).join(" ")}</div>
           )}
-          {compSummary && <div style={{ fontSize: 12, color: T.muted, marginBottom: 6 }}>{compSummary}</div>}
-          {trailer.last_load_config && <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>Residue Last Contained — {trailer.last_load_config}</div>}
+          {compSummary && <div style={{ fontSize: 11, color: T.muted, marginBottom: 5 }}>{compSummary}</div>}
+          {trailer.last_load_config && <div style={{ fontSize: 11, color: T.muted, marginBottom: 8 }}>Residue Last Contained — {trailer.last_load_config}</div>}
           <SubSectionTitle>Permit Book</SubSectionTitle>
           <PermitRow label="Trailer Registration" date={trailer.trailer_reg_expiration_date} enforcement={trailer.trailer_reg_enforcement_date} />
           <PermitRow label="Annual Inspection" date={trailer.trailer_inspection_expiration_date} extra={
             (trailer.trailer_inspection_shop || trailer.trailer_inspection_issue_date) ? (
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: T.muted, marginTop: 1 }}>
                 {[trailer.trailer_inspection_shop, trailer.trailer_inspection_issue_date && `Issued ${fmtDate(trailer.trailer_inspection_issue_date)}`].filter(Boolean).join(" · ")}
               </div>
             ) : null
@@ -315,20 +344,17 @@ function TrailerCard({ trailer, onEdit }: { trailer: Trailer; onEdit: () => void
 }
 
 // ─────────────────────────────────────────────────────────────
-// ComboCard — collapsed + expanded (load log tap)
+// ComboCard
 // ─────────────────────────────────────────────────────────────
 
 function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
   const truckName   = Array.isArray(combo.truck)   ? combo.truck[0]?.truck_name   : combo.truck?.truck_name;
   const trailerName = Array.isArray(combo.trailer) ? combo.trailer[0]?.trailer_name : combo.trailer?.trailer_name;
-
   return (
     <div style={{ ...css.card, padding: 0, marginBottom: 8, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: T.text }}>
-            {truckName || "—"} / {trailerName || "—"}
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{truckName || "—"} / {trailerName || "—"}</div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
             Tare {combo.tare_lbs?.toLocaleString() ?? "—"} lbs
             {combo.target_weight ? ` · Target ${combo.target_weight.toLocaleString()} lbs` : ""}
@@ -378,22 +404,24 @@ function InviteModal({ companyId, onClose, onDone }: { companyId: string; onClos
 }
 
 // ─────────────────────────────────────────────────────────────
-// Truck Modal (edit / add)
+// Truck Modal
 // ─────────────────────────────────────────────────────────────
 
-function TruckModal({ truck, companyId, onClose, onDone }: { truck: Truck | null; companyId: string; onClose: () => void; onDone: () => void }) {
+function TruckModal({ truck, companyId, onClose, onDone }: {
+  truck: Truck | null; companyId: string; onClose: () => void; onDone: () => void;
+}) {
   const isNew = !truck;
-  const [name,   setName]   = useState(truck?.truck_name ?? "");
-  const [vin,    setVin]    = useState(truck?.vin_number ?? "");
-  const [make,   setMake]   = useState(truck?.make ?? "");
-  const [model,  setModel]  = useState(truck?.model ?? "");
-  const [year,   setYear]   = useState(String(truck?.year ?? ""));
-  const [region, setRegion] = useState(truck?.region ?? "");
-  const [local,  setLocal]  = useState(truck?.local_area ?? "");
-  const [status, setStatus] = useState(truck?.status_code ?? "");
+  const [name,      setName]      = useState(truck?.truck_name ?? "");
+  const [vin,       setVin]       = useState(truck?.vin_number ?? "");
+  const [make,      setMake]      = useState(truck?.make ?? "");
+  const [model,     setModel]     = useState(truck?.model ?? "");
+  const [year,      setYear]      = useState(String(truck?.year ?? ""));
+  const [region,    setRegion]    = useState(truck?.region ?? "");
+  const [local,     setLocal]     = useState(truck?.local_area ?? "");
+  const [status,    setStatus]    = useState(truck?.status_code ?? "");
   const [statusLoc, setStatusLoc] = useState(truck?.status_location ?? "");
-  const [active, setActive] = useState(truck?.active ?? true);
-  // Permit book
+  const [active,    setActive]    = useState(truck?.active ?? true);
+  // Permit dates
   const [regExp,    setRegExp]    = useState(truck?.reg_expiration_date ?? "");
   const [regEnf,    setRegEnf]    = useState(truck?.reg_enforcement_date ?? "");
   const [insShop,   setInsShop]   = useState(truck?.inspection_shop ?? "");
@@ -406,10 +434,22 @@ function TruckModal({ truck, companyId, onClose, onDone }: { truck: Truck | null
   const [fleetExp,  setFleetExp]  = useState(truck?.fleet_ins_expiration_date ?? "");
   const [hazLicExp, setHazLicExp] = useState(truck?.hazmat_lic_expiration_date ?? "");
   const [ibExp,     setIbExp]     = useState(truck?.inner_bridge_expiration_date ?? "");
-  const [otherLabel,setOtherLabel]= useState(truck?.other_permit_label ?? "");
-  const [otherExp,  setOtherExp]  = useState(truck?.other_permit_expiration_date ?? "");
   const [notes,     setNotes]     = useState(truck?.notes ?? "");
-  const [err, setErr] = useState<string | null>(null); const [saving, setSaving] = useState(false);
+  // Multiple other permits
+  const [otherPermits, setOtherPermits] = useState<OtherPermit[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!truck?.truck_id) return;
+    supabase.from("truck_other_permits")
+      .select("permit_id, label, expiration_date")
+      .eq("truck_id", truck.truck_id)
+      .order("created_at")
+      .then(({ data }) => {
+        if (data) setOtherPermits(data.map((r: any) => ({ permit_id: r.permit_id, label: r.label, expiration_date: r.expiration_date ?? "" })));
+      });
+  }, [truck?.truck_id]);
 
   async function save() {
     if (!name.trim()) { setErr("Truck name is required."); return; }
@@ -423,63 +463,134 @@ function TruckModal({ truck, companyId, onClose, onDone }: { truck: Truck | null
       ifta_expiration_date: iftaExp || null, ifta_enforcement_date: iftaEnf || null,
       phmsa_expiration_date: phmsaExp || null, alliance_expiration_date: alliExp || null,
       fleet_ins_expiration_date: fleetExp || null, hazmat_lic_expiration_date: hazLicExp || null,
-      inner_bridge_expiration_date: ibExp || null,
-      other_permit_label: otherLabel || null, other_permit_expiration_date: otherExp || null, notes: notes || null,
+      inner_bridge_expiration_date: ibExp || null, notes: notes || null,
     };
-    const { error } = isNew
-      ? await supabase.from("trucks").insert(payload)
-      : await supabase.from("trucks").update(payload).eq("truck_id", truck!.truck_id);
-    if (error) { setErr(error.message); setSaving(false); return; }
+    let truckId = truck?.truck_id;
+    if (isNew) {
+      const { data, error } = await supabase.from("trucks").insert(payload).select("truck_id").single();
+      if (error) { setErr(error.message); setSaving(false); return; }
+      truckId = data.truck_id;
+    } else {
+      const { error } = await supabase.from("trucks").update(payload).eq("truck_id", truckId!);
+      if (error) { setErr(error.message); setSaving(false); return; }
+      await supabase.from("truck_other_permits").delete().eq("truck_id", truckId!);
+    }
+    const validOther = otherPermits.filter(p => p.label.trim());
+    if (validOther.length > 0) {
+      await supabase.from("truck_other_permits").insert(
+        validOther.map(p => ({ truck_id: truckId, company_id: companyId, label: p.label.trim(), expiration_date: p.expiration_date || null }))
+      );
+    }
     onDone();
   }
 
   async function deleteTruck() {
     if (!confirm("Delete this truck?")) return; setSaving(true);
-    await supabase.from("trucks").delete().eq("truck_id", truck!.truck_id); onDone();
+    await supabase.from("truck_other_permits").delete().eq("truck_id", truck!.truck_id);
+    await supabase.from("trucks").delete().eq("truck_id", truck!.truck_id);
+    onDone();
   }
 
-  const d = (label: string, val: string, set: (v: string) => void, type = "text", ph = "") => (
-    <Field label={label} half><input type={type} value={val} onChange={e => set(e.target.value)} style={css.input} placeholder={ph} /></Field>
+  function addOtherPermit()    { setOtherPermits(p => [...p, { label: "", expiration_date: "" }]); }
+  function removeOtherPermit(i: number) { setOtherPermits(p => p.filter((_, idx) => idx !== i)); }
+  function updateOtherPermit(i: number, field: keyof OtherPermit, val: string) {
+    setOtherPermits(p => p.map((x, idx) => idx === i ? { ...x, [field]: val } : x));
+  }
+
+  // Shared condensed text input helper
+  const ti = (val: string, set: (v: string) => void, ph = "", type = "text") => (
+    <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={ph} style={{ ...css.input, ...sm }} />
   );
 
   return (
     <Modal title={isNew ? "Add Truck" : "Edit Truck"} onClose={onClose} wide>
       {err && <Banner msg={err} type="error" />}
+
+      {/* ── Identification ── */}
       <SubSectionTitle>Identification</SubSectionTitle>
-      <FieldRow>
-        {d("Unit Number", name, setName, "text", "e.g. T-101")}
-        {d("VIN", vin, setVin, "text", "VIN number")}
-        {d("Make", make, setMake, "text", "e.g. Kenworth")}
-        {d("Model", model, setModel, "text", "e.g. T680")}
-        {d("Year", year, setYear, "number", "e.g. 2022")}
-        {d("Region", region, setRegion, "text", "e.g. Southeast")}
-        {d("Local Area", local, setLocal, "text", "e.g. Tampa Bay")}
-        <Field label="Status" half>
-          <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...css.select, width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px 10px", marginBottom: 10 }}>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Unit #</label>{ti(name, setName, "e.g. T-101")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>VIN</label>{ti(vin, setVin, "VIN")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Make</label>{ti(make, setMake, "e.g. Kenworth")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Model</label>{ti(model, setModel, "e.g. T680")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Year</label>{ti(year, setYear, "2022", "number")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Region</label>{ti(region, setRegion, "Southeast")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Local Area</label>{ti(local, setLocal, "Tampa Bay")}</div>
+        <div>
+          <label style={{ ...css.label, fontSize: 10 }}>Status</label>
+          <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...css.select, ...sm, width: "100%" }}>
             <option value="">— Select —</option>
             <option value="active">Active</option>
             <option value="parked">Parked</option>
             <option value="maintenance">Maintenance</option>
             <option value="inactive">Inactive</option>
           </select>
-        </Field>
-        {d("Status Location", statusLoc, setStatusLoc, "text", "e.g. Yard 1")}
-      </FieldRow>
+        </div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Status Location</label>{ti(statusLoc, setStatusLoc, "e.g. Yard 1")}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <input type="checkbox" id="truck-active" checked={active} onChange={e => setActive(e.target.checked)} />
+        <label htmlFor="truck-active" style={{ fontSize: 12, cursor: "pointer" }}>Active</label>
+      </div>
+
       <hr style={css.divider} />
+
+      {/* ── Permit Book ── */}
       <SubSectionTitle>Permit Book</SubSectionTitle>
-      <FieldRow>
-        {d("Reg Expiration", regExp, setRegExp, "date")} {d("Reg Enforcement", regEnf, setRegEnf, "date")}
-        {d("Inspection Shop", insShop, setInsShop, "text", "Shop name")} {d("Inspection Issue", insIssue, setInsIssue, "date")} {d("Inspection Expiration", insExp, setInsExp, "date")}
-        {d("IFTA Expiration", iftaExp, setIftaExp, "date")} {d("IFTA Enforcement", iftaEnf, setIftaEnf, "date")}
-        {d("PHMSA HazMat Exp", phmsaExp, setPhmsaExp, "date")}
-        {d("Alliance HazMat Exp", alliExp, setAlliExp, "date")}
-        {d("Fleet Insurance Exp", fleetExp, setFleetExp, "date")}
-        {d("HazMat Lic Exp", hazLicExp, setHazLicExp, "date")}
-        {d("Inner Bridge Exp", ibExp, setIbExp, "date")}
-        {d("Other Permit Label", otherLabel, setOtherLabel, "text", "e.g. State Permit")} {d("Other Permit Exp", otherExp, setOtherExp, "date")}
-      </FieldRow>
-      <Field label="Notes"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...css.input, width: "100%", resize: "vertical" as const }} /></Field>
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+      {/* column headers */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, paddingBottom: 3, borderBottom: `1px solid ${T.border}33` }}>
+        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>PERMIT</span>
+        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>EXPIRATION</span>
+        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>ENFORCEMENT</span>
+        <span style={{ width: 62, flexShrink: 0 }} />
+      </div>
+      <PermitEditRow label="Registration"              expVal={regExp}   onExpChange={setRegExp}   enfVal={regEnf}   onEnfChange={setRegEnf} />
+      <PermitEditRow label="Annual Inspection"          expVal={insExp}   onExpChange={setInsExp} />
+      <PermitEditRow label="IFTA Permits + Decals"     expVal={iftaExp}  onExpChange={setIftaExp}  enfVal={iftaEnf}  onEnfChange={setIftaEnf} />
+      <PermitEditRow label="PHMSA HazMat Permit"       expVal={phmsaExp} onExpChange={setPhmsaExp} />
+      <PermitEditRow label="Alliance HazMat Permit"    expVal={alliExp}  onExpChange={setAlliExp} />
+      <PermitEditRow label="Fleet Insurance Cab Card"  expVal={fleetExp} onExpChange={setFleetExp} />
+      <PermitEditRow label="HazMat Transportation Lic" expVal={hazLicExp} onExpChange={setHazLicExp} />
+      <PermitEditRow label="Inner Bridge Permit"       expVal={ibExp}    onExpChange={setIbExp} />
+      {/* Inspection shop sub-row */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 0", borderBottom: `1px solid ${T.border}22` }}>
+        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>↳ Shop / Issue Date</span>
+        <input value={insShop} onChange={e => setInsShop(e.target.value)} placeholder="Shop name"
+          style={{ ...css.input, ...sm, flex: 1 }} />
+        <input type="date" value={insIssue} onChange={e => setInsIssue(e.target.value)}
+          style={{ ...css.input, ...sm, flex: 1 }} />
+        <span style={{ width: 62, flexShrink: 0 }} />
+      </div>
+
+      <hr style={css.divider} />
+
+      {/* ── Other Permits ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <SubSectionTitle>Other Permits</SubSectionTitle>
+        <button type="button" onClick={addOtherPermit} style={{ ...css.btn("subtle"), fontSize: 11, padding: "2px 10px" }}>+ Add</button>
+      </div>
+      {otherPermits.length === 0 && (
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 6 }}>None — click + Add for state permits, etc.</div>
+      )}
+      {otherPermits.map((p, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
+          <input value={p.label} onChange={e => updateOtherPermit(i, "label", e.target.value)}
+            placeholder="e.g. FL State Permit" style={{ ...css.input, ...sm, flex: 1 }} />
+          <input type="date" value={p.expiration_date} onChange={e => updateOtherPermit(i, "expiration_date", e.target.value)}
+            style={{ ...css.input, ...sm, width: 130, flexShrink: 0 }} />
+          <button type="button" onClick={() => removeOtherPermit(i)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: T.danger, fontSize: 13, padding: "0 4px" }}>✕</button>
+        </div>
+      ))}
+
+      <hr style={css.divider} />
+
+      <Field label="Notes">
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+          style={{ ...css.input, width: "100%", fontSize: 12, resize: "vertical" as const }} />
+      </Field>
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         {!isNew ? <button style={{ ...css.btn("danger"), fontSize: 12 }} onClick={deleteTruck} disabled={saving}>Delete</button> : <span />}
         <div style={{ display: "flex", gap: 8 }}>
           <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
@@ -491,29 +602,30 @@ function TruckModal({ truck, companyId, onClose, onDone }: { truck: Truck | null
 }
 
 // ─────────────────────────────────────────────────────────────
-// Trailer Modal
+// Trailer Modal — CG Max removed (always 1), condensed permits
 // ─────────────────────────────────────────────────────────────
 
-function TrailerModal({ trailer, companyId, onClose, onDone }: { trailer: Trailer | null; companyId: string; onClose: () => void; onDone: () => void }) {
+function TrailerModal({ trailer, companyId, onClose, onDone }: {
+  trailer: Trailer | null; companyId: string; onClose: () => void; onDone: () => void;
+}) {
   const isNew = !trailer;
-  const [name,    setName]    = useState(trailer?.trailer_name ?? "");
-  const [vin,     setVin]     = useState(trailer?.vin_number ?? "");
-  const [make,    setMake]    = useState(trailer?.make ?? "");
-  const [model,   setModel]   = useState(trailer?.model ?? "");
-  const [year,    setYear]    = useState(String(trailer?.year ?? ""));
-  const [region,  setRegion]  = useState(trailer?.region ?? "");
-  const [local,   setLocal]   = useState(trailer?.local_area ?? "");
-  const [cgMax,   setCgMax]   = useState(String(trailer?.cg_max ?? 1.0));
-  const [status,  setStatus]  = useState(trailer?.status_code ?? "");
+  const [name,      setName]      = useState(trailer?.trailer_name ?? "");
+  const [vin,       setVin]       = useState(trailer?.vin_number ?? "");
+  const [make,      setMake]      = useState(trailer?.make ?? "");
+  const [model,     setModel]     = useState(trailer?.model ?? "");
+  const [year,      setYear]      = useState(String(trailer?.year ?? ""));
+  const [region,    setRegion]    = useState(trailer?.region ?? "");
+  const [local,     setLocal]     = useState(trailer?.local_area ?? "");
+  const [status,    setStatus]    = useState(trailer?.status_code ?? "");
   const [statusLoc, setStatusLoc] = useState(trailer?.status_location ?? "");
-  const [active,  setActive]  = useState(trailer?.active ?? true);
-  const [comps,   setComps]   = useState<Compartment[]>(trailer?.compartments ?? []);
-  // Trailer permit book
-  const [trRegExp,  setTrRegExp]  = useState(trailer?.trailer_reg_expiration_date ?? "");
-  const [trRegEnf,  setTrRegEnf]  = useState(trailer?.trailer_reg_enforcement_date ?? "");
-  const [trInsShop, setTrInsShop] = useState(trailer?.trailer_inspection_shop ?? "");
-  const [trInsIssue,setTrInsIssue]= useState(trailer?.trailer_inspection_issue_date ?? "");
-  const [trInsExp,  setTrInsExp]  = useState(trailer?.trailer_inspection_expiration_date ?? "");
+  const [active,    setActive]    = useState(trailer?.active ?? true);
+  const [comps,     setComps]     = useState<Compartment[]>(trailer?.compartments ?? []);
+  // Permit dates
+  const [trRegExp,   setTrRegExp]   = useState(trailer?.trailer_reg_expiration_date ?? "");
+  const [trRegEnf,   setTrRegEnf]   = useState(trailer?.trailer_reg_enforcement_date ?? "");
+  const [trInsShop,  setTrInsShop]  = useState(trailer?.trailer_inspection_shop ?? "");
+  const [trInsIssue, setTrInsIssue] = useState(trailer?.trailer_inspection_issue_date ?? "");
+  const [trInsExp,   setTrInsExp]   = useState(trailer?.trailer_inspection_expiration_date ?? "");
   // Tank inspections
   const [tankV,  setTankV]  = useState(trailer?.tank_v_expiration_date ?? "");
   const [tankK,  setTankK]  = useState(trailer?.tank_k_expiration_date ?? "");
@@ -523,7 +635,8 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: { trailer: Traile
   const [tankP,  setTankP]  = useState(trailer?.tank_p_expiration_date ?? "");
   const [tankUC, setTankUC] = useState(trailer?.tank_uc_expiration_date ?? "");
   const [notes,  setNotes]  = useState(trailer?.notes ?? "");
-  const [err, setErr] = useState<string | null>(null); const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function save() {
     if (!name.trim()) { setErr("Trailer name is required."); return; }
@@ -532,8 +645,8 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: { trailer: Traile
     const payload: any = {
       trailer_name: name.trim(), vin_number: vin || null, make: make || null, model: model || null,
       year: year ? parseInt(year) : null, region: region || null, local_area: local || null,
-      cg_max: parseFloat(cgMax) || 1.0, status_code: status || null, status_location: statusLoc || null,
-      active, company_id: companyId,
+      cg_max: 1.0, // always 1 per spec
+      status_code: status || null, status_location: statusLoc || null, active, company_id: companyId,
       trailer_reg_expiration_date: trRegExp || null, trailer_reg_enforcement_date: trRegEnf || null,
       trailer_inspection_shop: trInsShop || null, trailer_inspection_issue_date: trInsIssue || null,
       trailer_inspection_expiration_date: trInsExp || null,
@@ -564,57 +677,98 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: { trailer: Traile
   async function deleteTrailer() {
     if (!confirm("Delete this trailer?")) return; setSaving(true);
     await supabase.from("trailer_compartments").delete().eq("trailer_id", trailer!.trailer_id);
-    await supabase.from("trailers").delete().eq("trailer_id", trailer!.trailer_id); onDone();
+    await supabase.from("trailers").delete().eq("trailer_id", trailer!.trailer_id);
+    onDone();
   }
 
-  const d = (label: string, val: string, set: (v: string) => void, type = "text", ph = "") => (
-    <Field label={label} half><input type={type} value={val} onChange={e => set(e.target.value)} style={css.input} placeholder={ph} /></Field>
+  const ti = (val: string, set: (v: string) => void, ph = "", type = "text") => (
+    <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={ph} style={{ ...css.input, ...sm }} />
   );
 
   return (
     <Modal title={isNew ? "Add Trailer" : "Edit Trailer"} onClose={onClose} wide>
       {err && <Banner msg={err} type="error" />}
+
+      {/* ── Identification ── */}
       <SubSectionTitle>Identification</SubSectionTitle>
-      <FieldRow>
-        {d("Unit Number", name, setName, "text", "e.g. 3151")}
-        {d("VIN", vin, setVin, "text", "VIN number")}
-        {d("Make", make, setMake, "text", "e.g. Polar")}
-        {d("Model", model, setModel, "text", "e.g. Tank")}
-        {d("Year", year, setYear, "number", "e.g. 2020")}
-        {d("Region", region, setRegion, "text", "e.g. Southeast")}
-        {d("Local Area", local, setLocal, "text", "e.g. Tampa Bay")}
-        <Field label="CG Max" half><input type="number" step="0.01" value={cgMax} onChange={e => setCgMax(e.target.value)} style={css.input} /></Field>
-        <Field label="Status" half>
-          <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...css.select, width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px 10px", marginBottom: 10 }}>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Unit #</label>{ti(name, setName, "e.g. 3151")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>VIN</label>{ti(vin, setVin, "VIN")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Make</label>{ti(make, setMake, "e.g. Polar")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Model</label>{ti(model, setModel, "e.g. Tank")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Year</label>{ti(year, setYear, "2020", "number")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Region</label>{ti(region, setRegion, "Southeast")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Local Area</label>{ti(local, setLocal, "Tampa Bay")}</div>
+        <div>
+          <label style={{ ...css.label, fontSize: 10 }}>Status</label>
+          <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...css.select, ...sm, width: "100%" }}>
             <option value="">— Select —</option>
             <option value="active">Active</option>
             <option value="parked">Parked</option>
             <option value="maintenance">Maintenance</option>
             <option value="inactive">Inactive</option>
           </select>
-        </Field>
-        {d("Status Location", statusLoc, setStatusLoc, "text", "e.g. Yard 1")}
-      </FieldRow>
+        </div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Status Location</label>{ti(statusLoc, setStatusLoc, "e.g. Yard 1")}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <input type="checkbox" id="trailer-active" checked={active} onChange={e => setActive(e.target.checked)} />
+        <label htmlFor="trailer-active" style={{ fontSize: 12, cursor: "pointer" }}>Active</label>
+      </div>
+
       <hr style={css.divider} />
-      <div style={{ ...css.card, background: T.surface2, marginBottom: 14 }}><CompartmentEditor comps={comps} onChange={setComps} /></div>
+
+      {/* ── Compartments ── */}
+      <div style={{ background: T.surface2, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+        <CompartmentEditor comps={comps} onChange={setComps} />
+      </div>
+
       <hr style={css.divider} />
+
+      {/* ── Permit Book ── */}
       <SubSectionTitle>Permit Book</SubSectionTitle>
-      <FieldRow>
-        {d("Reg Expiration", trRegExp, setTrRegExp, "date")} {d("Reg Enforcement", trRegEnf, setTrRegEnf, "date")}
-        {d("Inspection Shop", trInsShop, setTrInsShop, "text", "Shop name")} {d("Inspection Issue", trInsIssue, setTrInsIssue, "date")} {d("Inspection Expiration", trInsExp, setTrInsExp, "date")}
-      </FieldRow>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, paddingBottom: 3, borderBottom: `1px solid ${T.border}33` }}>
+        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>PERMIT</span>
+        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>EXPIRATION</span>
+        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>ENFORCEMENT</span>
+        <span style={{ width: 62, flexShrink: 0 }} />
+      </div>
+      <PermitEditRow label="Trailer Registration" expVal={trRegExp} onExpChange={setTrRegExp} enfVal={trRegEnf} onEnfChange={setTrRegEnf} />
+      <PermitEditRow label="Annual Inspection"    expVal={trInsExp} onExpChange={setTrInsExp} />
+      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 0", borderBottom: `1px solid ${T.border}22` }}>
+        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>↳ Shop / Issue Date</span>
+        <input value={trInsShop} onChange={e => setTrInsShop(e.target.value)} placeholder="Shop name"
+          style={{ ...css.input, ...sm, flex: 1 }} />
+        <input type="date" value={trInsIssue} onChange={e => setTrInsIssue(e.target.value)}
+          style={{ ...css.input, ...sm, flex: 1 }} />
+        <span style={{ width: 62, flexShrink: 0 }} />
+      </div>
+
+      <hr style={css.divider} />
+
+      {/* ── Tank Inspections ── */}
       <SubSectionTitle>Tank Inspections</SubSectionTitle>
-      <FieldRow>
-        {d("V — External Visual", tankV, setTankV, "date")}
-        {d("K — Leakage Test", tankK, setTankK, "date")}
-        {d("L — Lining Inspection", tankL, setTankL, "date")}
-        {d("T — Thickness Test (2yr)", tankT, setTankT, "date")}
-        {d("I — Internal Visual (5yr)", tankI, setTankI, "date")}
-        {d("P — Pressure Test (5yr)", tankP, setTankP, "date")}
-        {d("UC — Upper Coupler (5yr)", tankUC, setTankUC, "date")}
-      </FieldRow>
-      <Field label="Notes"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...css.input, width: "100%", resize: "vertical" as const }} /></Field>
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, paddingBottom: 3, borderBottom: `1px solid ${T.border}33` }}>
+        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>TEST</span>
+        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>EXPIRATION</span>
+        <span style={{ width: 62, flexShrink: 0 }} />
+      </div>
+      <PermitEditRow label="V — External Visual"       expVal={tankV}  onExpChange={setTankV} />
+      <PermitEditRow label="K — Leakage Test"          expVal={tankK}  onExpChange={setTankK} />
+      <PermitEditRow label="L — Lining Inspection"     expVal={tankL}  onExpChange={setTankL} />
+      <PermitEditRow label="T — Thickness Test (2yr)"  expVal={tankT}  onExpChange={setTankT} />
+      <PermitEditRow label="I — Internal Visual (5yr)" expVal={tankI}  onExpChange={setTankI} />
+      <PermitEditRow label="P — Pressure Test (5yr)"   expVal={tankP}  onExpChange={setTankP} />
+      <PermitEditRow label="UC — Upper Coupler (5yr)"  expVal={tankUC} onExpChange={setTankUC} />
+
+      <hr style={css.divider} />
+
+      <Field label="Notes">
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+          style={{ ...css.input, width: "100%", fontSize: 12, resize: "vertical" as const }} />
+      </Field>
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         {!isNew ? <button style={{ ...css.btn("danger"), fontSize: 12 }} onClick={deleteTrailer} disabled={saving}>Delete</button> : <span />}
         <div style={{ display: "flex", gap: 8 }}>
           <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
@@ -626,7 +780,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: { trailer: Traile
 }
 
 // ─────────────────────────────────────────────────────────────
-// Combo Modal  (edit only — creation via Couple flow)
+// Combo Modal — equal-width buttons, even spacing
 // ─────────────────────────────────────────────────────────────
 
 function ComboModal({ combo, companyId, trucks, trailers, onClose, onDone, onDecouple }: {
@@ -660,8 +814,6 @@ function ComboModal({ combo, companyId, trucks, trailers, onClose, onDone, onDec
     await supabase.from("equipment_combos").delete().eq("combo_id", combo!.combo_id); onDone();
   }
 
-  const btnSz = { ...css.btn("ghost"), fontSize: 13, padding: "8px 14px" };
-
   return (
     <Modal title={isNew ? "New Combo" : "Edit Combo"} onClose={onClose}>
       {err && <Banner msg={err} type="error" />}
@@ -677,26 +829,38 @@ function ComboModal({ combo, companyId, trucks, trailers, onClose, onDone, onDec
           {trailers.map(t => <option key={t.trailer_id} value={t.trailer_id}>{t.trailer_name}</option>)}
         </select>
       </Field>
-      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-        <div style={{ flex: 1 }}><label style={css.label}>Tare Weight (lbs)</label><input type="number" value={tareLbs} onChange={e => setTareLbs(e.target.value)} placeholder="e.g. 34000" style={css.input} /></div>
-        <div style={{ flex: 1 }}><label style={css.label}>Target Gross (lbs)</label><input type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="e.g. 80000" style={css.input} /></div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <div style={{ flex: 1 }}>
+          <label style={css.label}>Tare Weight (lbs)</label>
+          <input type="number" value={tareLbs} onChange={e => setTareLbs(e.target.value)} placeholder="e.g. 34000" style={css.input} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={css.label}>Target Gross (lbs)</label>
+          <input type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="e.g. 80000" style={css.input} />
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          {!isNew && <button style={{ ...btnSz, color: T.danger, borderColor: `${T.danger}44` }} onClick={deleteCombo} disabled={saving}>Delete</button>}
-          {!isNew && onDecouple && <button style={{ ...btnSz, color: T.warning, borderColor: `${T.warning}44` }} onClick={onDecouple} disabled={saving}>Decouple</button>}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={btnSz} onClick={onClose}>Cancel</button>
-          <button style={{ ...css.btn("primary"), fontSize: 13, padding: "8px 14px" }} onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Couple" : "Save"}</button>
-        </div>
+
+      {/* Equal-width buttons, full-width row, evenly spaced */}
+      <div style={{ display: "flex", gap: 8 }}>
+        {!isNew && (
+          <button style={{ ...css.btn("ghost"), flex: 1, color: T.danger, borderColor: `${T.danger}55`, justifyContent: "center" as const }}
+            onClick={deleteCombo} disabled={saving}>Delete</button>
+        )}
+        {!isNew && onDecouple && (
+          <button style={{ ...css.btn("ghost"), flex: 1, color: T.warning, borderColor: `${T.warning}55`, justifyContent: "center" as const }}
+            onClick={onDecouple} disabled={saving}>Decouple</button>
+        )}
+        <button style={{ ...css.btn("ghost"), flex: 1, justifyContent: "center" as const }}
+          onClick={onClose}>Cancel</button>
+        <button style={{ ...css.btn("primary"), flex: 1, justifyContent: "center" as const }}
+          onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Couple" : "Save"}</button>
       </div>
     </Modal>
   );
 }
 
 // ─────────────────────────────────────────────────────────────
-// CoupleModal — search trucks + trailers, couple them
+// CoupleModal — search trucks + trailers to couple
 // ─────────────────────────────────────────────────────────────
 
 function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
@@ -713,7 +877,7 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
   const [err,       setErr]       = useState<string | null>(null);
   const [saving,    setSaving]    = useState(false);
 
-  const filteredTrucks   = trucks.filter(t =>
+  const filteredTrucks = trucks.filter(t =>
     !truckSearch || [t.truck_name, t.vin_number, t.region, t.local_area, t.status_code, t.status_location].some(v => v?.toLowerCase().includes(truckSearch.toLowerCase()))
   );
   const filteredTrailers = trailers.filter(t =>
@@ -736,8 +900,9 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
     onDone();
   }
 
-  const selStyle = (selected: boolean) => ({
+  const selStyle = (selected: boolean): React.CSSProperties => ({
     ...css.card, cursor: "pointer", marginBottom: 4, fontSize: 12,
+    padding: "6px 10px",
     borderColor: selected ? T.accent : T.border,
     background: selected ? `${T.accent}18` : T.surface,
   });
@@ -748,31 +913,31 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
           <SubSectionTitle>Truck</SubSectionTitle>
-          <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search number, make, model, region…" style={{ ...css.input, marginBottom: 8, fontSize: 12 }} />
-          <div style={{ maxHeight: 220, overflowY: "auto" as const }}>
+          <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search…" style={{ ...css.input, marginBottom: 6, fontSize: 12 }} />
+          <div style={{ maxHeight: 200, overflowY: "auto" as const }}>
             {filteredTrucks.map(t => (
               <div key={t.truck_id} style={selStyle(truckId === t.truck_id)} onClick={() => setTruckId(t.truck_id)}>
                 <div style={{ fontWeight: 700 }}>{t.truck_name}</div>
-                <div style={{ color: T.muted }}>{[t.region, t.local_area, t.status_code, t.status_location].filter(Boolean).join(" · ")}</div>
+                <div style={{ color: T.muted, fontSize: 11 }}>{[t.region, t.local_area, t.status_code, t.status_location].filter(Boolean).join(" · ")}</div>
               </div>
             ))}
           </div>
         </div>
         <div>
           <SubSectionTitle>Trailer</SubSectionTitle>
-          <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search number, make, model, region…" style={{ ...css.input, marginBottom: 8, fontSize: 12 }} />
-          <div style={{ maxHeight: 220, overflowY: "auto" as const }}>
+          <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search…" style={{ ...css.input, marginBottom: 6, fontSize: 12 }} />
+          <div style={{ maxHeight: 200, overflowY: "auto" as const }}>
             {filteredTrailers.map(t => (
               <div key={t.trailer_id} style={selStyle(trailerId === t.trailer_id)} onClick={() => setTrailerId(t.trailer_id)}>
                 <div style={{ fontWeight: 700 }}>{t.trailer_name}</div>
-                <div style={{ color: T.muted }}>{[t.region, t.local_area, t.status_code, t.status_location].filter(Boolean).join(" · ")}</div>
+                <div style={{ color: T.muted, fontSize: 11 }}>{[t.region, t.local_area, t.status_code, t.status_location].filter(Boolean).join(" · ")}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-        <div style={{ flex: 1 }}><label style={css.label}>Tare Weight (lbs)</label><input type="number" value={tareLbs} onChange={e => setTareLbs(e.target.value)} placeholder="e.g. 34000" style={css.input} /></div>
+        <div style={{ flex: 1 }}><label style={css.label}>Tare (lbs)</label><input type="number" value={tareLbs} onChange={e => setTareLbs(e.target.value)} placeholder="34000" style={css.input} /></div>
         <div style={{ flex: 1 }}><label style={css.label}>Target Gross (lbs)</label><input type="number" value={target} onChange={e => setTarget(e.target.value)} style={css.input} /></div>
         <div style={{ flex: 1 }}><label style={css.label}>Location (optional)</label><input value={statusLoc} onChange={e => setStatusLoc(e.target.value)} placeholder="e.g. Yard 1" style={css.input} /></div>
       </div>
@@ -796,6 +961,8 @@ export default function AdminPage() {
   const [trucks,        setTrucks]        = useState<Truck[]>([]);
   const [trailers,      setTrailers]      = useState<Trailer[]>([]);
   const [combos,        setCombos]        = useState<Combo[]>([]);
+  // Other permits per truck — loaded once for card display
+  const [truckOtherPermits, setTruckOtherPermits] = useState<Record<string, OtherPermit[]>>({});
   const [loading,       setLoading]       = useState(true);
   const [err,           setErr]           = useState<string | null>(null);
 
@@ -804,13 +971,11 @@ export default function AdminPage() {
   const [trailersOpen, setTrailersOpen] = useState(false);
   const [combosOpen,   setCombosOpen]   = useState(false);
 
-  // Users filters
   const [search,     setSearch]     = useState("");
   const [sortField,  setSortField]  = useState<SortField>("name");
   const [sortDir,    setSortDir]    = useState<SortDir>("asc");
   const [filterRole, setFilterRole] = useState<"" | "admin" | "driver">("");
 
-  // Equipment filters
   const [truckFilter,   setTruckFilter]   = useState<ActiveFilter>("");
   const [truckSearch,   setTruckSearch]   = useState("");
   const [truckSort,     setTruckSort]     = useState("name:asc");
@@ -819,7 +984,6 @@ export default function AdminPage() {
   const [trailerSort,   setTrailerSort]   = useState("name:asc");
   const [comboSearch,   setComboSearch]   = useState("");
 
-  // Modals
   const [inviteModal,  setInviteModal]  = useState(false);
   const [profileModal, setProfileModal] = useState<{ member: Member; onSaved: (u: Partial<Member>) => void } | null>(null);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
@@ -850,42 +1014,56 @@ export default function AdminPage() {
       const emailMap   = Object.fromEntries(((emailRows ?? []) as any[]).map(r => [r.user_id, r.email]));
       setMembers(((memberRows ?? []) as any[]).map(m => ({
         user_id: m.user_id, role: m.role, email: emailMap[m.user_id] ?? "",
-        display_name: profileMap[m.user_id]?.display_name ?? null, hire_date: profileMap[m.user_id]?.hire_date ?? null,
-        division: profileMap[m.user_id]?.division ?? null, region: profileMap[m.user_id]?.region ?? null,
-        local_area: profileMap[m.user_id]?.local_area ?? null, employee_number: profileMap[m.user_id]?.employee_number ?? null,
+        display_name: profileMap[m.user_id]?.display_name ?? null,
+        hire_date: profileMap[m.user_id]?.hire_date ?? null,
+        division: profileMap[m.user_id]?.division ?? null,
+        region: profileMap[m.user_id]?.region ?? null,
+        local_area: profileMap[m.user_id]?.local_area ?? null,
+        employee_number: profileMap[m.user_id]?.employee_number ?? null,
       })));
 
-      // Trucks + trailers via roster RPC (joins active combo → claimed_by → profile display name)
+      // Trucks + trailers via roster RPC
       const { data: rosterData, error: rosterErr } = await supabase.rpc("get_equipment_roster", { p_company_id: cid });
       if (rosterErr) throw rosterErr;
       const roster = rosterData as { trucks: any[]; trailers: any[] };
-      const truckRows    = roster?.trucks   ?? [];
-      const trailerRows  = roster?.trailers ?? [];
+      const truckRows   = roster?.trucks   ?? [];
+      const trailerRows = roster?.trailers ?? [];
 
       // Compartments
       const tIds = trailerRows.map((t: any) => t.trailer_id);
       let compMap: Record<string, Compartment[]> = {};
       if (tIds.length > 0) {
         const { data: compRows } = await supabase.from("trailer_compartments")
-          .select("trailer_id, comp_number, max_gallons, position")
-          .in("trailer_id", tIds).order("comp_number");
+          .select("trailer_id, comp_number, max_gallons, position").in("trailer_id", tIds).order("comp_number");
         for (const c of (compRows ?? []) as any[]) {
           if (!compMap[c.trailer_id]) compMap[c.trailer_id] = [];
           compMap[c.trailer_id].push({ comp_number: c.comp_number, max_gallons: c.max_gallons, position: c.position });
         }
       }
 
-      // Active combos — include claimed_by for display
+      // Other permits for truck cards
+      const truckIds = truckRows.map((t: any) => t.truck_id);
+      if (truckIds.length > 0) {
+        const { data: opRows } = await supabase.from("truck_other_permits")
+          .select("truck_id, permit_id, label, expiration_date").in("truck_id", truckIds).order("created_at");
+        const opMap: Record<string, OtherPermit[]> = {};
+        for (const r of (opRows ?? []) as any[]) {
+          if (!opMap[r.truck_id]) opMap[r.truck_id] = [];
+          opMap[r.truck_id].push({ permit_id: r.permit_id, label: r.label, expiration_date: r.expiration_date ?? "" });
+        }
+        setTruckOtherPermits(opMap);
+      }
+
+      // Active combos
       const { data: comboRows } = await supabase.from("equipment_combos")
         .select("combo_id, combo_name, truck_id, trailer_id, tare_lbs, target_weight, active, claimed_by, truck:trucks(truck_name), trailer:trailers(trailer_name)")
         .eq("company_id", cid).eq("active", true).order("combo_name");
 
-      // Resolve combo claimed_by to display names
       const claimedIds = [...new Set((comboRows ?? []).map((c: any) => c.claimed_by).filter(Boolean))];
       let claimedNameMap: Record<string, string> = {};
       if (claimedIds.length > 0) {
-        const { data: claimedNames } = await supabase.from("profiles").select("user_id, display_name").in("user_id", claimedIds);
-        claimedNameMap = Object.fromEntries((claimedNames ?? []).map((r: any) => [r.user_id, r.display_name ?? ""]));
+        const { data: cn } = await supabase.from("profiles").select("user_id, display_name").in("user_id", claimedIds);
+        claimedNameMap = Object.fromEntries((cn ?? []).map((r: any) => [r.user_id, r.display_name ?? ""]));
       }
 
       setTrucks(truckRows as Truck[]);
@@ -897,7 +1075,6 @@ export default function AdminPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Filtered/sorted members
   const filteredMembers = useMemo(() => {
     let ms = [...members];
     if (filterRole) ms = ms.filter(m => m.role === filterRole);
@@ -913,10 +1090,9 @@ export default function AdminPage() {
     return ms;
   }, [members, search, sortField, sortDir, filterRole]);
 
-  // Filtered/sorted trucks
   const filteredTrucks = useMemo(() => {
     let ts = [...trucks];
-    if (truckFilter === "active") ts = ts.filter(t => t.active);
+    if (truckFilter === "active")   ts = ts.filter(t => t.active);
     if (truckFilter === "inactive") ts = ts.filter(t => !t.active);
     if (truckSearch.trim()) {
       const q = truckSearch.toLowerCase();
@@ -931,10 +1107,9 @@ export default function AdminPage() {
     return ts;
   }, [trucks, truckFilter, truckSearch, truckSort]);
 
-  // Filtered/sorted trailers
   const filteredTrailers = useMemo(() => {
     let ts = [...trailers];
-    if (trailerFilter === "active") ts = ts.filter(t => t.active);
+    if (trailerFilter === "active")   ts = ts.filter(t => t.active);
     if (trailerFilter === "inactive") ts = ts.filter(t => !t.active);
     if (trailerSearch.trim()) {
       const q = trailerSearch.toLowerCase();
@@ -949,7 +1124,6 @@ export default function AdminPage() {
     return ts;
   }, [trailers, trailerFilter, trailerSearch, trailerSort]);
 
-  // Filtered combos (active only by default) + optional search by driver
   const filteredCombos = useMemo(() => {
     let cs = combos.filter(c => c.active);
     if (comboSearch.trim()) {
@@ -966,8 +1140,11 @@ export default function AdminPage() {
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err)     return <div style={css.page}><Banner msg={err} type="error" /></div>;
 
-  const plusBtn = { ...css.btn("primary"), width: 36, height: 36, padding: 0, fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } as const;
-  const filterRow = { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" as const };
+  const plusBtn: React.CSSProperties = {
+    ...css.btn("primary"), width: 36, height: 36, padding: 0, fontSize: 20, lineHeight: "1",
+    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+  };
+  const filterRow: React.CSSProperties = { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" };
 
   return (
     <div style={css.page}>
@@ -979,7 +1156,7 @@ export default function AdminPage() {
       {/* ── USERS ── */}
       <section style={{ marginBottom: 32 }}>
         <div style={css.sectionHead}>
-          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" as const, flex: 1 }} onClick={() => setUsersOpen(v => !v)}>
+          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", flex: 1 }} onClick={() => setUsersOpen(v => !v)}>
             <span style={{ transition: "transform 150ms", transform: usersOpen ? "rotate(90deg)" : "none", display: "inline-block", fontSize: 14 }}>›</span>
             Users ({members.length})
           </h2>
@@ -995,7 +1172,7 @@ export default function AdminPage() {
               <select value={`${sortField}:${sortDir}`} onChange={e => { const [f, d] = e.target.value.split(":"); setSortField(f as SortField); setSortDir(d as SortDir); }} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                 <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
                 <option value="role:asc">Role A→Z</option><option value="division:asc">Division A→Z</option>
-                <option value="region:asc">Region A→Z</option><option value="hire_date:asc">Hire Date ↑</option><option value="hire_date:desc">Hire Date ↓</option>
+                <option value="region:asc">Region A→Z</option><option value="hire_date:asc">Hire ↑</option><option value="hire_date:desc">Hire ↓</option>
               </select>
             </div>
             {filteredMembers.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>}
@@ -1008,7 +1185,7 @@ export default function AdminPage() {
 
       {/* ── TRUCKS ── */}
       <section style={{ marginBottom: 32, marginTop: 28 }}>
-        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" as const }} onClick={() => setTrucksOpen(v => !v)}>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setTrucksOpen(v => !v)}>
           <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ transition: "transform 150ms", transform: trucksOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Trucks ({trucks.filter(t => t.active).length} active)
@@ -1018,7 +1195,7 @@ export default function AdminPage() {
         {trucksOpen && (
           <>
             <div style={filterRow}>
-              <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region, area, status, location…" style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} />
+              <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region, area, status…" style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} />
               <select value={truckFilter} onChange={e => setTruckFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                 <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
               </select>
@@ -1028,7 +1205,7 @@ export default function AdminPage() {
               </select>
             </div>
             {filteredTrucks.length === 0 && <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trucks match your filter.</div>}
-            {filteredTrucks.map(t => <TruckCard key={t.truck_id} truck={t} onEdit={() => setTruckModal(t)} />)}
+            {filteredTrucks.map(t => <TruckCard key={t.truck_id} truck={t} onEdit={() => setTruckModal(t)} otherPermits={truckOtherPermits[t.truck_id]} />)}
           </>
         )}
       </section>
@@ -1037,7 +1214,7 @@ export default function AdminPage() {
 
       {/* ── TRAILERS ── */}
       <section style={{ marginBottom: 32, marginTop: 28 }}>
-        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" as const }} onClick={() => setTrailersOpen(v => !v)}>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setTrailersOpen(v => !v)}>
           <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ transition: "transform 150ms", transform: trailersOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Trailers ({trailers.filter(t => t.active).length} active)
@@ -1047,7 +1224,7 @@ export default function AdminPage() {
         {trailersOpen && (
           <>
             <div style={filterRow}>
-              <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region, area, status, location…" style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} />
+              <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region, area, status…" style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} />
               <select value={trailerFilter} onChange={e => setTrailerFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                 <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
               </select>
@@ -1066,7 +1243,7 @@ export default function AdminPage() {
 
       {/* ── COMBOS ── */}
       <section style={{ marginTop: 28 }}>
-        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" as const }} onClick={() => setCombosOpen(v => !v)}>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setCombosOpen(v => !v)}>
           <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ transition: "transform 150ms", transform: combosOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Equipment Combos ({combos.filter(c => c.active).length} active)
@@ -1093,11 +1270,11 @@ export default function AdminPage() {
         <ComboModal combo={comboModal} companyId={companyId!} trucks={trucks} trailers={trailers}
           onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }}
           onDecouple={async () => {
-          if (!confirm(`Decouple this combo?`)) return;
-          await supabase.rpc("decouple_combo", { p_combo_id: (comboModal as Combo).combo_id });
-          setComboModal(null);
-          loadAll();
-        }}
+            if (!confirm("Decouple this combo?")) return;
+            await supabase.rpc("decouple_combo", { p_combo_id: (comboModal as Combo).combo_id });
+            setComboModal(null);
+            loadAll();
+          }}
         />
       )}
       {coupleModal && <CoupleModal companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} onClose={() => setCoupleModal(false)} onDone={() => { setCoupleModal(false); loadAll(); }} />}
