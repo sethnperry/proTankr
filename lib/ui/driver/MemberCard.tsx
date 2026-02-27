@@ -328,14 +328,18 @@ function TerminalGroups({ terminals }: { terminals: any[] }) {
             {/* Expanded terminal rows — name left, expiry date right */}
             {open && (
               <div style={{ paddingLeft: 16, borderLeft: `2px solid ${T.border}`, marginLeft: 4 }}>
-                {rows.map((t: any) => (
-                  <ExpiryRow
-                    key={t.terminal_id}
-                    label={t.terminal_name || cityState}
-                    date={t.expires_on || ""}
-                    days={t.days_until_expiry}
-                  />
-                ))}
+                {rows.map((t: any) => {
+                  // days_until_expiry from RPC may be null; fall back to computing from expires_on
+                  const days = t.days_until_expiry ?? daysUntil(t.expires_on);
+                  return (
+                    <ExpiryRow
+                      key={t.terminal_id}
+                      label={t.terminal_name || cityState}
+                      date={t.expires_on || ""}
+                      days={days}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
