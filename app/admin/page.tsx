@@ -603,13 +603,17 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
 
   // Medical
   const [medIssue,    setMedIssue]    = useState("");
-  const [medExpiry,   setMedExpiry]   = useState("");
-  const [medExaminer, setMedExaminer] = useState("");
+  const [medExpiry,         setMedExpiry]         = useState("");
+  const [medExaminer,       setMedExaminer]       = useState("");
+  const [medAttachedToLic,  setMedAttachedToLic]  = useState(false);
 
   // TWIC
   const [twicNumber,  setTwicNumber]  = useState("");
   const [twicIssue,   setTwicIssue]   = useState("");
   const [twicExpiry,  setTwicExpiry]  = useState("");
+
+  // HazMat endorsement linked to license renewal
+  const [hazmatLinked, setHazmatLinked] = useState(false);
 
   // Port IDs
   const [portIds, setPortIds] = useState<{ port_name: string; expiration_date: string }[]>([]);
@@ -743,8 +747,8 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
             <Field label="Display Name" half><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={css.input} placeholder="Full name" /></Field>
             <Field label="Hire Date" half><input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} style={css.input} /></Field>
             <Field label="Employee #" half><input value={employeeNumber} onChange={e => setEmployeeNumber(e.target.value)} style={css.input} placeholder="e.g. EMP-001" /></Field>
-            <Field label="Division" half><input value={division} onChange={e => setDivision(e.target.value)} style={css.input} placeholder="e.g. Southeast" /></Field>
-            <Field label="Region" half><input value={region} onChange={e => setRegion(e.target.value)} style={css.input} placeholder="e.g. Region 3" /></Field>
+            <Field label="Division" half><input value={division} onChange={e => setDivision(e.target.value)} style={css.input} placeholder="e.g. Refined" /></Field>
+            <Field label="Region" half><input value={region} onChange={e => setRegion(e.target.value)} style={css.input} placeholder="e.g. Southeast" /></Field>
             <Field label="Local Area" half><input value={localArea} onChange={e => setLocalArea(e.target.value)} style={css.input} placeholder="e.g. Tampa Bay" /></Field>
           </FieldRow>
 
@@ -777,11 +781,49 @@ function DriverProfileModal({ member, companyId, supabase, onClose, onDone }: {
 
           {/* ── Medical Card ── */}
           <SubSectionTitle>Medical Card</SubSectionTitle>
+          {/* Attach to license toggle */}
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, marginBottom: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={medAttachedToLic} onChange={e => {
+              setMedAttachedToLic(e.target.checked);
+              if (e.target.checked && licIssue) setMedIssue(licIssue);
+              if (e.target.checked && licExpiry) setMedExpiry(licExpiry);
+            }} style={{ width: 14, height: 14, accentColor: T.accent }} />
+            <span>Attached to driver's license <span style={{ color: T.muted, fontSize: 11 }}>(copies license dates)</span></span>
+          </label>
           <FieldRow>
-            <Field label="Issue Date" half><input type="date" value={medIssue} onChange={e => setMedIssue(e.target.value)} style={css.input} /></Field>
-            <Field label="Expiration Date" half><input type="date" value={medExpiry} onChange={e => setMedExpiry(e.target.value)} style={css.input} /></Field>
+            <Field label="Issue Date" half>
+              <input type="date" value={medIssue}
+                onChange={e => { if (!medAttachedToLic) setMedIssue(e.target.value); }}
+                style={{ ...css.input, opacity: medAttachedToLic ? 0.5 : 1 }} readOnly={medAttachedToLic} />
+            </Field>
+            <Field label="Expiration Date" half>
+              <input type="date" value={medAttachedToLic ? licExpiry : medExpiry}
+                onChange={e => { if (!medAttachedToLic) setMedExpiry(e.target.value); }}
+                style={{ ...css.input, opacity: medAttachedToLic ? 0.5 : 1 }} readOnly={medAttachedToLic} />
+            </Field>
             <Field label="Examiner Name"><input value={medExaminer} onChange={e => setMedExaminer(e.target.value)} style={css.input} placeholder="Dr. Name" /></Field>
           </FieldRow>
+
+          <hr style={css.divider} />
+
+          {/* ── HazMat ── */}
+          <SubSectionTitle>HazMat Endorsement</SubSectionTitle>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, marginBottom: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={hazmatLinked} onChange={e => setHazmatLinked(e.target.checked)}
+              style={{ width: 14, height: 14, accentColor: T.accent }} />
+            <span>HazMat renewal tied to driver's license <span style={{ color: T.muted, fontSize: 11 }}>(renews with CDL)</span></span>
+          </label>
+          {!hazmatLinked && (
+            <FieldRow>
+              <Field label="Issue Date" half><input type="date" value={licIssue} readOnly style={{ ...css.input, opacity: 0.4 }} /></Field>
+              <Field label="Expiration Date" half><input type="date" value={licExpiry} readOnly style={{ ...css.input, opacity: 0.4 }} /></Field>
+            </FieldRow>
+          )}
+          {hazmatLinked && (
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>
+              HazMat will renew on <strong style={{ color: T.text }}>{fmtDate(licExpiry) || "—"}</strong> with the CDL.
+            </div>
+          )}
 
           <hr style={css.divider} />
 
@@ -837,11 +879,11 @@ function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
   onRefresh: () => void;
   onEditProfile: (m: Member) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [preview,  setPreview]  = useState<DriverProfile | null>(null);
-  const [loading,  setLoading]  = useState(false);
-  const [saving,   setSaving]   = useState(false);
-
+  const [expanded,          setExpanded]          = useState(false);
+  const [preview,           setPreview]           = useState<DriverProfile | null>(null);
+  const [loading,           setLoading]           = useState(false);
+  const [saving,            setSaving]            = useState(false);
+  const [terminalsExpanded, setTerminalsExpanded] = useState(false);
   async function loadPreview() {
     if (preview || loading) return;
     setLoading(true);
@@ -902,13 +944,18 @@ function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
         {/* Chevron */}
         <span style={{ color: T.muted, fontSize: 14, transition: "transform 150ms", transform: expanded ? "rotate(90deg)" : "none", flexShrink: 0, userSelect: "none" as const }}>›</span>
 
-        {/* Name + email */}
+        {/* Name + email + hire date */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
             <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{name}</span>
             {expiringSoon && <span style={css.tag(T.warning)}>⚠ Expiring</span>}
           </div>
           {subEmail && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{subEmail}</div>}
+          {member.hire_date && (
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>
+              Hired {fmtDate(member.hire_date)}{member.division ? ` · ${member.division}` : ""}{member.region ? ` · ${member.region}` : ""}
+            </div>
+          )}
         </div>
 
         {/* Edit button — far right in collapsed view */}
@@ -998,16 +1045,39 @@ function MemberCard({ member, companyId, supabase, onRefresh, onEditProfile }: {
                 );
               })()}
 
-              {/* Terminals — count only in collapsed card */}
-              <ComplianceCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}>
-                {terminals.length > 0 ? terminals.slice(0, 4).map(t => (
-                  <DataRow key={t.terminal_id}
-                    label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
-                    value={<span style={css.tag(expiryColor(t.days_until_expiry))}>{expiryLabel(t.days_until_expiry)}</span>}
-                  />
-                )) : <div style={{ fontSize: 12, color: T.muted }}>No terminals</div>}
-                {terminals.length > 4 && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>+{terminals.length - 4} more — click Edit to manage</div>}
-              </ComplianceCard>
+              {/* Terminals — expandable, expired first */}
+              {(() => {
+                const sorted = [...terminals].sort((a, b) => a.days_until_expiry - b.days_until_expiry);
+                const preview3 = sorted.slice(0, 3);
+                const rest = sorted.slice(3);
+                return (
+                  <ComplianceCard title={`Terminals (${terminals.length})`} color={terminals.length > 0 ? T.accent : T.border}>
+                    {terminals.length === 0
+                      ? <div style={{ fontSize: 12, color: T.muted }}>No terminals</div>
+                      : <>
+                          {preview3.map(t => (
+                            <DataRow key={t.terminal_id}
+                              label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
+                              value={<span style={css.tag(expiryColor(t.days_until_expiry))}>{expiryLabel(t.days_until_expiry)}</span>}
+                            />
+                          ))}
+                          {terminalsExpanded && rest.map(t => (
+                            <DataRow key={t.terminal_id}
+                              label={[t.city, t.state].filter(Boolean).join(", ") || t.terminal_name}
+                              value={<span style={css.tag(expiryColor(t.days_until_expiry))}>{expiryLabel(t.days_until_expiry)}</span>}
+                            />
+                          ))}
+                          {rest.length > 0 && (
+                            <button onClick={() => setTerminalsExpanded(v => !v)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: T.accent, fontSize: 11, padding: "4px 0 0", fontWeight: 600 }}>
+                              {terminalsExpanded ? "▲ Show less" : `▼ +${rest.length} more`}
+                            </button>
+                          )}
+                        </>
+                    }
+                  </ComplianceCard>
+                );
+              })()}
 
             </div>
           )}
@@ -1043,16 +1113,17 @@ function InviteModal({ companyId, supabase, onClose, onDone }: {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role }),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Invite failed.");
+        let json: any = {};
+        try { json = await res.json(); } catch { /* empty body */ }
+        if (!res.ok) throw new Error(json?.error ?? `Invite failed (${res.status}).`);
         setStatus({ type: "success", msg: `Invite email sent to ${email.trim()}. They'll receive a magic link to join.` });
+        setEmail("");
       } else {
         // Existing user — already re-added to company, no email needed
         setStatus({ type: "success", msg: `${email.trim()} already has an account and has been added to the company. They can log in now.` });
         setEmail("");
-        setTimeout(() => onDone(), 1500); // close & refresh list
+        setTimeout(() => onDone(), 1500);
       }
-      setEmail("");
     } catch (e: any) {
       setStatus({ type: "error", msg: e?.message ?? "Failed to send invite." });
     } finally { setLoading(false); }
@@ -1288,10 +1359,10 @@ export default function AdminPage() {
   const [err,         setErr]         = useState<string | null>(null);
 
   // Section collapse state
-  const [usersOpen,    setUsersOpen]    = useState(true);
-  const [trucksOpen,   setTrucksOpen]   = useState(true);
-  const [trailersOpen, setTrailersOpen] = useState(true);
-  const [combosOpen,   setCombosOpen]   = useState(true);
+  const [usersOpen,    setUsersOpen]    = useState(false);
+  const [trucksOpen,   setTrucksOpen]   = useState(false);
+  const [trailersOpen, setTrailersOpen] = useState(false);
+  const [combosOpen,   setCombosOpen]   = useState(false);
 
   // Sort + filter for members
   const [search,    setSearch]    = useState("");
@@ -1402,20 +1473,6 @@ export default function AdminPage() {
     return ms;
   }, [members, search, sortField, sortDir, filterRole]);
 
-  function toggleSort(field: SortField) {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("asc"); }
-  }
-
-  function SortBtn({ field, label }: { field: SortField; label: string }) {
-    const active = sortField === field;
-    return (
-      <button onClick={() => toggleSort(field)} style={{ ...css.btn("subtle"), fontSize: 11, padding: "4px 8px", background: active ? "rgba(245,166,35,0.12)" : "rgba(255,255,255,0.05)", color: active ? T.accent : T.muted }}>
-        {label} {active ? (sortDir === "asc" ? "↑" : "↓") : ""}
-      </button>
-    );
-  }
-
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err) return <div style={css.page}><Banner msg={err} type="error" /></div>;
 
@@ -1441,33 +1498,40 @@ export default function AdminPage() {
             <span style={{ transition: "transform 150ms", transform: usersOpen ? "rotate(90deg)" : "none", display: "inline-block", fontSize: 14 }}>›</span>
             Users ({members.length})
           </h2>
-          <button style={css.btn("primary")} onClick={() => setInviteModal(true)}>+ Invite</button>
+          <button style={{ ...css.btn("primary"), width: 36, height: 36, padding: 0, fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} onClick={() => setInviteModal(true)}>+</button>
         </div>
 
         {usersOpen && (
           <>
-            {/* Row 1: Search + role filter */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" as const }}>
+            {/* Single row: Search + Role filter + Sort dropdown */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" as const }}>
               <input
                 value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search name, email, employee #, division, region…"
-                style={{ ...css.input, flex: 1, minWidth: 200, padding: "7px 10px" }}
+                placeholder="Search name, email, employee #…"
+                style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }}
               />
               <select value={filterRole} onChange={e => setFilterRole(e.target.value as any)}
-                style={{ ...css.select, fontSize: 12, padding: "7px 10px" }}>
+                style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                 <option value="">All roles</option>
                 <option value="admin">Admin</option>
                 <option value="driver">Driver</option>
               </select>
-            </div>
-
-            {/* Row 2: Sort buttons */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" as const }}>
-              <SortBtn field="name" label="Name" />
-              <SortBtn field="role" label="Role" />
-              <SortBtn field="division" label="Division" />
-              <SortBtn field="region" label="Region" />
-              <SortBtn field="hire_date" label="Hire Date" />
+              <select
+                value={`${sortField}:${sortDir}`}
+                onChange={e => {
+                  const [f, d] = e.target.value.split(":");
+                  setSortField(f as SortField);
+                  setSortDir(d as "asc" | "desc");
+                }}
+                style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+                <option value="name:asc">Name A→Z</option>
+                <option value="name:desc">Name Z→A</option>
+                <option value="role:asc">Role A→Z</option>
+                <option value="division:asc">Division A→Z</option>
+                <option value="region:asc">Region A→Z</option>
+                <option value="hire_date:asc">Hire Date ↑</option>
+                <option value="hire_date:desc">Hire Date ↓</option>
+              </select>
             </div>
 
             {filteredMembers.length === 0 && (
@@ -1496,7 +1560,7 @@ export default function AdminPage() {
             <span style={{ transition: "transform 150ms", transform: trucksOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Trucks ({trucks.filter(t => t.active).length} active)
           </h2>
-          <button style={css.btn("primary")} onClick={e => { e.stopPropagation(); setTruckModal("new"); }}>+ Add Truck</button>
+          <button style={{ ...css.btn("primary"), width: 36, height: 36, padding: 0, fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} onClick={e => { e.stopPropagation(); setTruckModal("new"); }}>+</button>
         </div>
         {trucksOpen && (
           <>
@@ -1526,7 +1590,7 @@ export default function AdminPage() {
             <span style={{ transition: "transform 150ms", transform: trailersOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Trailers ({trailers.filter(t => t.active).length} active)
           </h2>
-          <button style={css.btn("primary")} onClick={e => { e.stopPropagation(); setTrailerModal("new"); }}>+ Add Trailer</button>
+          <button style={{ ...css.btn("primary"), width: 36, height: 36, padding: 0, fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} onClick={e => { e.stopPropagation(); setTrailerModal("new"); }}>+</button>
         </div>
         {trailersOpen && (
           <>
@@ -1557,7 +1621,7 @@ export default function AdminPage() {
             <span style={{ transition: "transform 150ms", transform: combosOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Equipment Combos ({combos.filter(c => c.active).length} active)
           </h2>
-          <button style={css.btn("primary")} onClick={e => { e.stopPropagation(); setComboModal("new"); }}>+ Add Combo</button>
+          <button style={{ ...css.btn("primary"), width: 36, height: 36, padding: 0, fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} onClick={e => { e.stopPropagation(); setComboModal("new"); }}>+</button>
         </div>
         {combosOpen && (
           <>
