@@ -214,7 +214,17 @@ export function MemberCard({ member, companyId, onRefresh, onEditProfile, hideRo
                 empty={ports.length === 0}>
                 {ports.map((p: any, i: number) => {
                   const d = daysUntil(p.expiration_date);
-                  return <ExpiryRow key={i} label={p.port_name || "—"} date={fmtDate(p.expiration_date)} days={d} />;
+                  const portKey = (p.port_name || `port_${i}`).toLowerCase().replace(/\s+/g, "_");
+                  return (
+                    <div key={i}>
+                      <ExpiryRow label={p.port_name || "—"} date={fmtDate(p.expiration_date)} days={d} />
+                      <AttachmentManager
+                        entityType="port_id" entityId={`${member.user_id}_${portKey}`}
+                        companyId={companyId} currentUserId={currentUserId}
+                        slots={[{ key: "card", label: p.port_name || "Card" }]}
+                      />
+                    </div>
+                  );
                 })}
               </ExpandableCard>
 

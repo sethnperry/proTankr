@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "proTankr",
-  description: "Fuel load planner",
+  description: "Tank truck dispatch and compliance management",
 };
 
 export default function RootLayout({

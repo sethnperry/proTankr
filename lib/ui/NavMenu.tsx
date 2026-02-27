@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { supabase } from "@/lib/supabase/client";
 
 type Membership = {
   company_id: string;
@@ -11,11 +11,10 @@ type Membership = {
 };
 
 export default function NavMenu() {
-  const supabase  = useMemo(() => createSupabaseBrowser(), []);
-  const router    = useRouter();
-  const pathname  = usePathname();
-  const panelRef  = useRef<HTMLDivElement>(null);
-  const btnRef    = useRef<HTMLButtonElement>(null);
+  const router   = useRouter();
+  const pathname = usePathname();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const btnRef   = useRef<HTMLButtonElement>(null);
 
   const [open,        setOpen]        = useState(false);
   const [email,       setEmail]       = useState("");
@@ -27,6 +26,7 @@ export default function NavMenu() {
 
   const isPlanner = pathname === "/calculator" || pathname === "/";
   const isProfile = pathname === "/profile";
+  const isAdmin_  = pathname === "/admin";
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +55,7 @@ export default function NavMenu() {
     }
     load();
     return () => { cancelled = true; };
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +75,6 @@ export default function NavMenu() {
     setActiveId(id);
     setIsAdmin(memberships.find(m => m.company_id === id)?.role === "admin");
     await supabase.rpc("set_active_company", { p_company_id: id });
-    // Hard reload so all client hooks re-fetch under the new company
     window.location.reload();
   }
 
@@ -135,7 +134,7 @@ export default function NavMenu() {
             </div>
           </div>
 
-          {/* Company */}
+          {/* Company switcher */}
           {memberships.length > 0 && (
             <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>
@@ -150,7 +149,7 @@ export default function NavMenu() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
                   {memberships.map(m => {
-                    const isActive = m.company_id === activeId;
+                    const active = m.company_id === activeId;
                     return (
                       <button key={m.company_id} type="button"
                         onClick={() => switchCompany(m.company_id)}
@@ -158,14 +157,14 @@ export default function NavMenu() {
                         style={{
                           display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
                           borderRadius: 8,
-                          border: isActive ? "1px solid rgba(245,166,35,0.3)" : "1px solid transparent",
-                          background: isActive ? "rgba(245,166,35,0.08)" : "rgba(255,255,255,0.03)",
+                          border: active ? "1px solid rgba(245,166,35,0.3)" : "1px solid transparent",
+                          background: active ? "rgba(245,166,35,0.08)" : "rgba(255,255,255,0.03)",
                           cursor: switching ? "wait" : "pointer", textAlign: "left" as const,
                           transition: "background 120ms", width: "100%",
                         }}
                       >
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: isActive ? "#f5a623" : "rgba(255,255,255,0.2)", transition: "background 120ms" }} />
-                        <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, color: isActive ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.55)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: active ? "#f5a623" : "rgba(255,255,255,0.2)" }} />
+                        <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.55)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                           {m.company?.company_name ?? "Company"}
                         </span>
                         {m.role === "admin" && <AdminBadge />}
@@ -177,7 +176,7 @@ export default function NavMenu() {
             </div>
           )}
 
-          {/* Links */}
+          {/* Nav links */}
           <div style={{ padding: "8px 6px" }}>
             {!isPlanner && (
               <NavLink href="/calculator" icon="⟵" label="Back to Planner" onClick={() => setOpen(false)} />
@@ -185,11 +184,11 @@ export default function NavMenu() {
             {!isProfile && (
               <NavLink href="/profile" icon="◉" label="Profile" onClick={() => setOpen(false)} />
             )}
-            {isAdmin && pathname !== "/admin" && (
+            {isAdmin && !isAdmin_ && (
               <NavLink href="/admin" icon="⚙" label="Company Admin" onClick={() => setOpen(false)} />
             )}
             <NavLink href="#" icon="↩" label="Sign Out"
-              onClick={(e) => { e.preventDefault(); signOut(); }} danger />
+              onClick={e => { e.preventDefault(); signOut(); }} danger />
           </div>
         </div>
       )}
