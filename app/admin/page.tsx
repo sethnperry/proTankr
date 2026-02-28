@@ -1536,21 +1536,23 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
 
       <hr style={css.divider} />
 
-      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" as const }}>
-        {!isNew && (
-          <button style={{ ...css.btn("danger"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }}
-            onClick={deleteTerminal} disabled={saving}>Remove</button>
-        )}
-        {!isNew && (
-          <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const,
-            color: active ? T.warning : T.success, borderColor: active ? T.warning : T.success }}
-            onClick={() => setActive(v => !v)} disabled={saving}>
-            {active ? "Deactivate" : "Reactivate"}
-          </button>
-        )}
-        <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }}
-          onClick={onClose}>Cancel</button>
-        <button style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }}
+      <div style={{ display: "flex", flexDirection: "column" as const, gap: 8, marginTop: 8 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          {!isNew && (
+            <button style={{ ...css.btn("danger"), flex: "1 1 0", textAlign: "center" as const }}
+              onClick={deleteTerminal} disabled={saving}>Remove</button>
+          )}
+          {!isNew && (
+            <button style={{ ...css.btn("ghost"), flex: "1 1 0", textAlign: "center" as const,
+              color: active ? T.warning : T.success, borderColor: active ? T.warning : T.success }}
+              onClick={() => setActive(v => !v)} disabled={saving}>
+              {active ? "Deactivate" : "Reactivate"}
+            </button>
+          )}
+          <button style={{ ...css.btn("ghost"), flex: "1 1 0", textAlign: "center" as const }}
+            onClick={onClose}>Cancel</button>
+        </div>
+        <button style={{ ...css.btn("primary"), width: "100%", textAlign: "center" as const }}
           onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Terminal" : "Save"}</button>
       </div>
     </Modal>
