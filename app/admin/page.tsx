@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import NavMenu from "@/lib/ui/NavMenu";
 
@@ -85,28 +85,133 @@ function fmtExpiryInline(dateStr: string | null | undefined, days: number | null
 }
 
 // ─────────────────────────────────────────────────────────────
-// PermitRow — read-only card view: label | date | 📎 ☑ ▼
+// AttachmentBtn — tap to attach, preview, replace/remove
+// Works on mobile (camera sheet) and desktop (file picker)
 // ─────────────────────────────────────────────────────────────
+
+function AttachmentBtn() {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  function handleFile(f: File | null) {
+    if (!f) return;
+    setFile(f);
+    if (f.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = e => setPreview(e.target?.result as string);
+      reader.readAsDataURL(f);
+    } else {
+      setPreview(null); // PDF/doc — no image preview
+    }
+  }
+
+  function openPicker() {
+    if (file) { setShowPreview(true); return; }
+    inputRef.current?.click();
+  }
+
+  function remove(e: React.MouseEvent) {
+    e.stopPropagation();
+    setFile(null); setPreview(null); setShowPreview(false);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  const hasFile = !!file;
+
+  return (
+    <>
+      {/* Hidden file input — accept=* so iOS shows camera+files sheet */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx"
+        capture={undefined}  // Don't force camera — let browser/OS show the full share sheet
+        style={{ display: "none" }}
+        onChange={e => handleFile(e.target.files?.[0] ?? null)}
+      />
+
+      <button
+        type="button"
+        title={hasFile ? `Attached: ${file!.name}` : "Attach file"}
+        style={{
+          background: "none", border: "none", cursor: "pointer",
+          padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center",
+          color: hasFile ? T.accent : T.muted, fontSize: 13,
+          WebkitTapHighlightColor: "transparent",
+          minWidth: 22, minHeight: 22, justifyContent: "center",
+        }}
+        onClick={openPicker}
+      >
+        📎
+      </button>
+
+      {/* Preview overlay */}
+      {showPreview && file && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
+              padding: 16, maxWidth: 480, width: "100%", maxHeight: "80vh", overflow: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 8,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+              {file.name}
+            </div>
+            {preview
+              ? <img src={preview} alt="attachment" style={{ width: "100%", borderRadius: 8, marginBottom: 12 }} />
+              : <div style={{ color: T.muted, fontSize: 12, marginBottom: 12, padding: "20px 0", textAlign: "center" as const }}>
+                  📄 {file.name}
+                </div>
+            }
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                style={{ ...css.btn("subtle"), flex: 1, textAlign: "center" as const }}
+                onClick={() => { setShowPreview(false); inputRef.current?.click(); }}
+              >Replace</button>
+              <button
+                type="button"
+                style={{ ...css.btn("danger"), flex: 1, textAlign: "center" as const }}
+                onClick={remove}
+              >Remove</button>
+              <button
+                type="button"
+                style={{ ...css.btn("ghost"), flex: 1, textAlign: "center" as const }}
+                onClick={() => setShowPreview(false)}
+              >Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
 
 function PermitRow({ label, date, enforcement, extra }: {
   label: string; date: string | null; enforcement?: string | null; extra?: React.ReactNode;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [checked,   setChecked]   = useState(false);
-  const [attached,  setAttached]  = useState(false);
   const days     = daysUntil(date);
   const color    = expiryColor(days);
   const enfDays  = enforcement != null ? daysUntil(enforcement) : null;
   const enfColor = expiryColor(enfDays);
 
-  const iconBtn: React.CSSProperties = {
-    background: "none", border: "none", cursor: "pointer",
-    padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center",
-  };
-
   return (
     <div style={{ borderBottom: `1px solid ${T.border}22`, paddingBottom: 4, marginBottom: 4 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 24 }}>
+      {/* Entire main row tappable → fat-finger friendly */}
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 34, cursor: "pointer", userSelect: "none" as const }}
+        onClick={() => setNotesOpen(v => !v)}
+      >
         <span style={{ fontSize: 11, color: T.muted, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{label}</span>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
           {date
@@ -114,16 +219,17 @@ function PermitRow({ label, date, enforcement, extra }: {
             : <span style={{ fontSize: 11, color: T.muted }}>—</span>
           }
         </div>
-        {/* 📎 always shown, gray → accent when attached · ☑ checkbox · ▼ dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-          <button type="button" title={attached ? "Attached" : "Add attachment"}
-            style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 13 }}
-            onClick={() => setAttached(v => !v)}>📎</button>
+        {/* Right controls — stop propagation so they don't double-fire expand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+          <AttachmentBtn />
           <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
-            style={{ width: 11, height: 11, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
-          <button type="button" title="Details" style={{ ...iconBtn, color: T.muted, fontSize: 8,
-            transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
-            onClick={() => setNotesOpen(v => !v)}>▼</button>
+            style={{ width: 13, height: 13, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
+          <button type="button" title="Details"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center", color: T.muted, fontSize: 8,
+              minWidth: 20, minHeight: 20, WebkitTapHighlightColor: "transparent",
+              transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+            onClick={e => { e.stopPropagation(); setNotesOpen(v => !v); }}>▼</button>
         </div>
       </div>
       {notesOpen && (
@@ -152,31 +258,31 @@ function PermitEditRow({ label, expVal, onExpChange, enfVal, onEnfChange, extra 
   enfVal?: string; onEnfChange?: (v: string) => void;
   extra?: React.ReactNode;
 }) {
-  const [dropOpen,  setDropOpen]  = useState(false);
-  const [checked,   setChecked]   = useState(false);
-  const [attached,  setAttached]  = useState(false);
-  const [noteText,  setNoteText]  = useState("");
-
-  const iconBtn: React.CSSProperties = {
-    background: "none", border: "none", cursor: "pointer",
-    padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center",
-  };
+  const [dropOpen, setDropOpen] = useState(false);
+  const [checked,  setChecked]  = useState(false);
+  const [noteText, setNoteText] = useState("");
 
   return (
     <div style={{ borderBottom: `1px solid ${T.border}22`, padding: "3px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 11, color: T.muted, width: 148, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{label}</span>
+      {/* Main row — label side is tappable to expand; date input and icon cluster stop propagation */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 32 }}>
+        <span
+          style={{ fontSize: 11, color: T.muted, width: 148, flexShrink: 0, overflow: "hidden",
+            textOverflow: "ellipsis", whiteSpace: "nowrap" as const, cursor: "pointer", userSelect: "none" as const }}
+          onClick={() => setDropOpen(v => !v)}
+        >{label}</span>
         <input type="date" value={expVal} onChange={e => onExpChange(e.target.value)}
           style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
-        {/* 📎 always shown · ☑ · ▼ */}
-        <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-          <button type="button" title={attached ? "Attached" : "Add attachment"}
-            style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 13 }}
-            onClick={() => setAttached(v => !v)}>📎</button>
+        {/* 📎 · ☑ · ▼ */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <AttachmentBtn />
           <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
-            style={{ width: 11, height: 11, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
-          <button type="button" title="Details" style={{ ...iconBtn, color: T.muted, fontSize: 8,
-            transform: dropOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+            style={{ width: 13, height: 13, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
+          <button type="button" title="Details"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center", color: T.muted, fontSize: 8,
+              minWidth: 20, minHeight: 20, WebkitTapHighlightColor: "transparent",
+              transform: dropOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
             onClick={() => setDropOpen(v => !v)}>▼</button>
         </div>
       </div>
@@ -204,11 +310,15 @@ function PermitEditRow({ label, expVal, onExpChange, enfVal, onEnfChange, extra 
 // ─────────────────────────────────────────────────────────────
 
 function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange: (c: Compartment[]) => void }) {
-  function update(i: number, field: keyof Compartment, val: string) {
-    onChange(comps.map((c, idx) => idx === i ? { ...c, [field]: parseFloat(val) || 0 } : c));
+  // Positions are always comp_number - 1 (0-indexed). Never exposed to user.
+  function reIndex(arr: Compartment[]): Compartment[] {
+    return arr.map((c, idx) => ({ ...c, comp_number: idx + 1, position: idx }));
   }
-  function add() { onChange([...comps, { comp_number: comps.length + 1, max_gallons: 0, position: comps.length }]); }
-  function remove(i: number) { onChange(comps.filter((_, idx) => idx !== i).map((c, idx) => ({ ...c, comp_number: idx + 1, position: idx }))); }
+  function update(i: number, val: string) {
+    onChange(reIndex(comps.map((c, idx) => idx === i ? { ...c, max_gallons: parseFloat(val) || 0 } : c)));
+  }
+  function add() { onChange(reIndex([...comps, { comp_number: 0, max_gallons: 0, position: 0 }])); }
+  function remove(i: number) { onChange(reIndex(comps.filter((_, idx) => idx !== i))); }
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -216,12 +326,20 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
         <button type="button" onClick={add} style={{ ...css.btn("subtle"), padding: "2px 10px", fontSize: 11 }}>+ Add</button>
       </div>
       {comps.length === 0 && <div style={{ fontSize: 11, color: T.muted, padding: "4px 0" }}>No compartments yet.</div>}
+      {comps.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 3 }}>
+          <div style={{ width: 18 }} />
+          <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>Max Capacity (gal)</span>
+          <div style={{ width: 24 }} />
+        </div>
+      )}
       {comps.map((c, i) => (
         <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
-          <div style={{ width: 18, fontSize: 11, color: T.muted, textAlign: "center" as const, fontWeight: 700 }}>{c.comp_number}</div>
-          <input type="number" placeholder="Gal" value={c.max_gallons || ""} onChange={e => update(i, "max_gallons", e.target.value)} style={{ ...css.input, ...sm, width: 76 }} />
-          <input type="number" placeholder="Pos" value={c.position || ""} onChange={e => update(i, "position", e.target.value)} style={{ ...css.input, ...sm, width: 66 }} />
-          <button type="button" onClick={() => remove(i)} style={{ background: "none", border: "none", cursor: "pointer", color: T.danger, fontSize: 13, padding: "0 4px", flexShrink: 0 }}>✕</button>
+          <div style={{ width: 18, fontSize: 11, color: T.muted, textAlign: "center" as const, fontWeight: 700, flexShrink: 0 }}>{c.comp_number}</div>
+          <input type="number" placeholder="Gallons" value={c.max_gallons || ""} onChange={e => update(i, e.target.value)}
+            style={{ ...css.input, ...sm, flex: 1 }} />
+          <button type="button" onClick={() => remove(i)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: T.danger, fontSize: 13, padding: "0 4px", flexShrink: 0, minWidth: 24, minHeight: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
       ))}
     </div>
@@ -234,7 +352,8 @@ function CompartmentEditor({ comps, onChange }: { comps: Compartment[]; onChange
 
 function TruckCard({ truck, onEdit, otherPermits }: { truck: Truck; onEdit: () => void; otherPermits?: OtherPermit[] }) {
   const [open, setOpen] = useState(false);
-  const statusColor = truck.status_code === "active" ? T.success : truck.status_code === "inactive" ? T.muted : T.warning;
+  const statusColor = truck.status_code === "OOS" || truck.status_code === "MAINT" ? T.danger
+    : truck.status_code === "AVAIL" ? T.success : T.muted;
 
   return (
     <div style={{ ...css.card, padding: 0, marginBottom: 8, overflow: "hidden" }}>
@@ -300,7 +419,8 @@ function TrailerCard({ trailer, onEdit }: { trailer: Trailer; onEdit: () => void
   const compSummary = comps.length > 0
     ? `${comps.length} Comps ${comps.map(c => c.max_gallons.toLocaleString()).join("/")} = ${totalGal.toLocaleString()} max`
     : null;
-  const statusColor = trailer.status_code === "active" ? T.success : trailer.status_code === "inactive" ? T.muted : T.warning;
+  const statusColor = trailer.status_code === "OOS" || trailer.status_code === "MAINT" ? T.danger
+    : trailer.status_code === "AVAIL" ? T.success : T.muted;
 
   return (
     <div style={{ ...css.card, padding: 0, marginBottom: 8, overflow: "hidden" }}>
@@ -542,18 +662,21 @@ function TruckModal({ truck, companyId, onClose, onDone }: {
           <label style={{ ...css.label, fontSize: 10 }}>Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...css.select, ...sm, width: "100%" }}>
             <option value="">— Select —</option>
-            <option value="active">Active</option>
-            <option value="parked">Parked</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="inactive">Inactive</option>
+            <option value="AVAIL">AVAIL — Available</option>
+            <option value="PARK">PARK — Parked</option>
+            <option value="BOBTAIL">BOBTAIL — Bobtailing</option>
+            <option value="MAINT">MAINT — Maintenance ⚠</option>
+            <option value="INSP">INSP — Inspection</option>
+            <option value="OOS">OOS — Out of Service ⚠</option>
           </select>
         </div>
         <div><label style={{ ...css.label, fontSize: 10 }}>Status Location</label>{ti(statusLoc, setStatusLoc, "e.g. Yard 1")}</div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <input type="checkbox" id="truck-active" checked={active} onChange={e => setActive(e.target.checked)} />
-        <label htmlFor="truck-active" style={{ fontSize: 12, cursor: "pointer" }}>Active</label>
-        <span style={{ fontSize: 11, color: T.muted }}>— visible in fleet lists. Status below = physical location. A truck can be Active but Parked.</span>
+      {/* Active note — inline with label, no checkbox in identification grid */}
+      <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>
+        <strong style={{ color: T.text }}>Active</strong> = unit appears in fleet lists and can be coupled.{" "}
+        <strong style={{ color: T.text }}>Status</strong> = physical/operational state. A unit can be Active but Parked.
+        The <em>Deactivate</em> button below hides this unit from the fleet without deleting it.
       </div>
 
       <hr style={css.divider} />
@@ -606,12 +729,19 @@ function TruckModal({ truck, companyId, onClose, onDone }: {
           style={{ ...css.input, width: "100%", fontSize: 12, resize: "vertical" as const }} />
       </Field>
 
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-        {!isNew ? <button style={{ ...css.btn("danger"), fontSize: 12 }} onClick={deleteTruck} disabled={saving}>Delete</button> : <span />}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
-          <button style={css.btn("primary")} onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Truck" : "Save"}</button>
-        </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" as const }}>
+        {!isNew && (
+          <button style={{ ...css.btn("danger"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={deleteTruck} disabled={saving}>Delete</button>
+        )}
+        {!isNew && (
+          <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const,
+            color: active ? T.warning : T.success, borderColor: active ? T.warning : T.success }}
+            onClick={() => setActive(v => !v)} disabled={saving}>
+            {active ? "Deactivate" : "Reactivate"}
+          </button>
+        )}
+        <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={onClose}>Cancel</button>
+        <button style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Truck" : "Save"}</button>
       </div>
     </Modal>
   );
@@ -620,6 +750,57 @@ function TruckModal({ truck, companyId, onClose, onDone }: {
 // ─────────────────────────────────────────────────────────────
 // Trailer Modal — CG Max removed (always 1), condensed permits
 // ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// TankEditRow — tank inspection row with − on left, 📎 ☑ ▼ on right
+// ─────────────────────────────────────────────────────────────
+
+function TankEditRow({ label, dateVal, onDateChange, onRemove }: {
+  label: string; dateVal: string; onDateChange: (v: string) => void; onRemove: () => void;
+}) {
+  const [dropOpen, setDropOpen] = useState(false);
+  const [checked,  setChecked]  = useState(false);
+  const [noteText, setNoteText] = useState("");
+
+  return (
+    <div style={{ borderBottom: `1px solid ${T.border}22`, padding: "3px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 32 }}>
+        {/* − delete button on LEFT */}
+        <button type="button" onClick={onRemove}
+          style={{ background: "none", border: "none", cursor: "pointer", color: T.danger,
+            fontSize: 16, padding: "0 2px", flexShrink: 0, lineHeight: 1,
+            minWidth: 20, minHeight: 20, display: "flex", alignItems: "center", justifyContent: "center",
+            WebkitTapHighlightColor: "transparent" }}>−</button>
+        {/* Label — tappable to expand notes */}
+        <span
+          style={{ fontSize: 11, color: T.muted, flex: 1, overflow: "hidden",
+            textOverflow: "ellipsis", whiteSpace: "nowrap" as const, cursor: "pointer", userSelect: "none" as const }}
+          onClick={() => setDropOpen(v => !v)}
+        >{label}</span>
+        <input type="date" value={dateVal} onChange={e => onDateChange(e.target.value)}
+          style={{ ...css.input, ...sm, width: 130, flexShrink: 0 }} />
+        {/* 📎 · ☑ · ▼ on RIGHT */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <AttachmentBtn />
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
+            style={{ width: 13, height: 13, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
+          <button type="button"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center", color: T.muted, fontSize: 8,
+              minWidth: 20, minHeight: 20, WebkitTapHighlightColor: "transparent",
+              transform: dropOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+            onClick={() => setDropOpen(v => !v)}>▼</button>
+        </div>
+      </div>
+      {dropOpen && (
+        <div style={{ paddingLeft: 26, paddingTop: 4 }}>
+          <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Notes…" rows={2}
+            style={{ ...css.input, width: "100%", fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TrailerModal({ trailer, companyId, onClose, onDone }: {
   trailer: Trailer | null; companyId: string; onClose: () => void; onDone: () => void;
@@ -731,18 +912,21 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
           <label style={{ ...css.label, fontSize: 10 }}>Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...css.select, ...sm, width: "100%" }}>
             <option value="">— Select —</option>
-            <option value="active">Active</option>
-            <option value="parked">Parked</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="inactive">Inactive</option>
+            <option value="AVAIL">AVAIL — Available</option>
+            <option value="PARK">PARK — Parked / Stored</option>
+            <option value="LOAD">LOAD — Loaded / Staged</option>
+            <option value="CLEAN">CLEAN — Cleaning / Purge</option>
+            <option value="MAINT">MAINT — Maintenance ⚠</option>
+            <option value="INSP">INSP — Inspection</option>
+            <option value="OOS">OOS — Out of Service ⚠</option>
           </select>
         </div>
         <div><label style={{ ...css.label, fontSize: 10 }}>Status Location</label>{ti(statusLoc, setStatusLoc, "e.g. Yard 1")}</div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <input type="checkbox" id="trailer-active" checked={active} onChange={e => setActive(e.target.checked)} />
-        <label htmlFor="trailer-active" style={{ fontSize: 12, cursor: "pointer" }}>Active</label>
-        <span style={{ fontSize: 11, color: T.muted }}>— visible in fleet lists. Status below = physical location. A trailer can be Active but Parked.</span>
+      <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>
+        <strong style={{ color: T.text }}>Active</strong> = unit appears in fleet lists and can be coupled.{" "}
+        <strong style={{ color: T.text }}>Status</strong> = physical/operational state. A unit can be Active but Parked.
+        The <em>Deactivate</em> button below hides this unit from the fleet without deleting it.
       </div>
 
       <hr style={css.divider} />
@@ -802,17 +986,13 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
       {tanks.map((tank) => {
         const def = TANK_DEFS.find(d => d.key === tank.key)!;
         return (
-          <div key={tank.key} style={{ display: "flex", alignItems: "center", gap: 6, borderBottom: `1px solid ${T.border}22`, padding: "3px 0" }}>
-            <span style={{ fontSize: 11, color: T.muted, width: 148, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-              {def.label}
-            </span>
-            <input type="date" value={tank.date}
-              onChange={e => setTanks(prev => prev.map(t => t.key === tank.key ? { ...t, date: e.target.value } : t))}
-              style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
-            <button type="button"
-              onClick={() => setTanks(prev => prev.filter(t => t.key !== tank.key))}
-              style={{ background: "none", border: "none", cursor: "pointer", color: T.danger, fontSize: 14, padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>−</button>
-          </div>
+          <TankEditRow
+            key={tank.key}
+            label={def.label}
+            dateVal={tank.date}
+            onDateChange={v => setTanks(prev => prev.map(t => t.key === tank.key ? { ...t, date: v } : t))}
+            onRemove={() => setTanks(prev => prev.filter(t => t.key !== tank.key))}
+          />
         );
       })}
 
@@ -823,12 +1003,19 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
           style={{ ...css.input, width: "100%", fontSize: 12, resize: "vertical" as const }} />
       </Field>
 
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-        {!isNew ? <button style={{ ...css.btn("danger"), fontSize: 12 }} onClick={deleteTrailer} disabled={saving}>Delete</button> : <span />}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
-          <button style={css.btn("primary")} onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Trailer" : "Save"}</button>
-        </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" as const }}>
+        {!isNew && (
+          <button style={{ ...css.btn("danger"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={deleteTrailer} disabled={saving}>Delete</button>
+        )}
+        {!isNew && (
+          <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const,
+            color: active ? T.warning : T.success, borderColor: active ? T.warning : T.success }}
+            onClick={() => setActive(v => !v)} disabled={saving}>
+            {active ? "Deactivate" : "Reactivate"}
+          </button>
+        )}
+        <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={onClose}>Cancel</button>
+        <button style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Trailer" : "Save"}</button>
       </div>
     </Modal>
   );
@@ -949,8 +1136,8 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
     });
     if (error) { setErr(error.message); setSaving(false); return; }
     if (statusLoc) {
-      await supabase.from("trucks").update({ status_location: statusLoc, status_code: "active" }).eq("truck_id", truckId);
-      await supabase.from("trailers").update({ status_location: statusLoc, status_code: "active" }).eq("trailer_id", trailerId);
+      await supabase.from("trucks").update({ status_location: statusLoc, status_code: "AVAIL" }).eq("truck_id", truckId);
+      await supabase.from("trailers").update({ status_location: statusLoc, status_code: "AVAIL" }).eq("trailer_id", trailerId);
     }
     onDone();
   }
