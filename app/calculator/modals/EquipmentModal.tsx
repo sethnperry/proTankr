@@ -385,8 +385,25 @@ function FleetModal({
     setLoading(true);
     setError(null);
 
-    if (!companyId) {
-      setError("No active company selected.");
+    // Use passed companyId if available; otherwise resolve it directly here
+    let activeCompanyId = companyId;
+    if (!activeCompanyId) {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) {
+        setError("Not logged in.");
+        setLoading(false);
+        return;
+      }
+      const { data: s } = await supabase
+        .from("user_settings")
+        .select("active_company_id")
+        .eq("user_id", u.user.id)
+        .maybeSingle();
+      activeCompanyId = (s?.active_company_id as string | null) ?? null;
+    }
+
+    if (!activeCompanyId) {
+      setError("No active company selected. Ask your admin to assign you to a company.");
       setLoading(false);
       return;
     }
@@ -396,26 +413,24 @@ function FleetModal({
       .from("equipment_combos")
       .select("combo_id, combo_name, truck_id, trailer_id, tare_lbs, claimed_by, claimed_at, active, company_id")
       .eq("active", true)
-      .eq("company_id", companyId)
+      .eq("company_id", activeCompanyId)
       .order("combo_name", { ascending: true });
 
     if (comboErr) { setError(comboErr.message); setLoading(false); return; }
 
     const rows = comboData ?? [];
 
-    // Collect unique truck/trailer IDs for lookup
     const truckIds   = Array.from(new Set(rows.map((r: any) => r.truck_id).filter(Boolean)));
     const trailerIds = Array.from(new Set(rows.map((r: any) => r.trailer_id).filter(Boolean)));
     const claimedIds = Array.from(new Set(rows.map((r: any) => r.claimed_by).filter(Boolean)));
 
-    // Parallel lookups
     const [{ data: truckData }, { data: trailerData }, { data: profileData }] =
       await Promise.all([
         truckIds.length > 0
-          ? supabase.from("trucks").select("truck_id, truck_name, region").eq("company_id", companyId).in("truck_id", truckIds)
+          ? supabase.from("trucks").select("truck_id, truck_name, region").eq("company_id", activeCompanyId).in("truck_id", truckIds)
           : Promise.resolve({ data: [] }),
         trailerIds.length > 0
-          ? supabase.from("trailers").select("trailer_id, trailer_name").eq("company_id", companyId).in("trailer_id", trailerIds)
+          ? supabase.from("trailers").select("trailer_id, trailer_name").eq("company_id", activeCompanyId).in("trailer_id", trailerIds)
           : Promise.resolve({ data: [] }),
         claimedIds.length > 0
           ? supabase.from("profiles").select("user_id, display_name").in("user_id", claimedIds)
