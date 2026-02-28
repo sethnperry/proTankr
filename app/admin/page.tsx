@@ -1309,7 +1309,7 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
                     {p.is_dyed && <span style={{ color: "#ef4444", fontSize: 10, marginLeft: 5 }}>DYED</span>}
                     {p.is_out_of_stock && <span style={{ color: T.warning, fontSize: 10, marginLeft: 5 }}>OUT OF STOCK</span>}
                   </div>
-                  {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
+                  {p.description && <div style={{ fontSize: 10, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.description}</div>}
                 </div>
               </div>
             ))
@@ -1485,7 +1485,6 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
                     {p.description && <div style={{ fontSize: 10, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.description}</div>}
-                    {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
                   </div>
                   <div style={{ fontSize: 10, color: countIn > 0 ? T.accent : T.muted, fontWeight: 700, flexShrink: 0 }}>
                     {countIn > 0 ? `✓ ×${countIn}` : "+ Add"}
@@ -1510,7 +1509,7 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
               <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} isDyed={p.is_dyed} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
-                {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
+                {p.description && <div style={{ fontSize: 10, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.description}</div>}
               </div>
               <button type="button" onClick={() => removeAssigned(i)}
                 style={{ background: "none", border: "none", cursor: "pointer", color: T.danger,
