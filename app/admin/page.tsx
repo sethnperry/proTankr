@@ -96,9 +96,7 @@ type Terminal = {
   renewal_days: number | null;
   lat: number | null;
   lon: number | null;
-  access_expiration_date?: string | null;
   products?: TerminalProduct[];
-  logo_url?: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -1238,18 +1236,19 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
 function ProductSwatch({ buttonCode, hexCode, redDye, size = "sm" }: {
   buttonCode: string | null; hexCode: string | null; redDye?: boolean; size?: "sm" | "md";
 }) {
-  const bg   = hexCode ? `#${hexCode.replace("#", "")}` : "rgba(255,255,255,0.12)";
-  const dim  = size === "md" ? 40 : 28;
-  const fs   = size === "md" ? 13 : 10;
+  const color = hexCode ? `#${hexCode.replace("#", "")}` : "rgba(255,255,255,0.4)";
+  const dim   = size === "md" ? 40 : 28;
+  const fs    = size === "md" ? 13 : 10;
   return (
     <div style={{
       width: dim, height: dim, borderRadius: 8, flexShrink: 0,
-      background: bg, display: "flex", alignItems: "center", justifyContent: "center",
-      border: redDye ? "2px solid #ef4444" : "1px solid rgba(255,255,255,0.15)",
-      boxShadow: redDye ? "0 0 0 1px rgba(239,68,68,0.4)" : "none",
+      background: "#000",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      border: redDye ? "2px solid #ef4444" : `2px solid ${color}`,
+      boxShadow: redDye ? "0 0 0 1px rgba(239,68,68,0.3)" : "none",
     }}>
-      <span style={{ fontSize: fs, fontWeight: 900, color: "#fff",
-        textShadow: "0 1px 3px rgba(0,0,0,0.8)", letterSpacing: 0.3, lineHeight: 1 }}>
+      <span style={{ fontSize: fs, fontWeight: 900, color,
+        letterSpacing: 0.3, lineHeight: 1 }}>
         {buttonCode ?? "?"}
       </span>
     </div>
@@ -1264,38 +1263,29 @@ function ProductSwatch({ buttonCode, hexCode, redDye, size = "sm" }: {
 function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => void }) {
   const [open, setOpen] = useState(false);
   const products = terminal.products ?? [];
-  const days = daysUntil(terminal.access_expiration_date ?? null);
-  const color = expiryColor(days);
-  const dateStr = terminal.access_expiration_date
-    ? fmtDate(terminal.access_expiration_date)
-    : null;
-  const countdown = days != null
-    ? ` (${days >= 0 ? "+" : ""}${days}d)`
-    : "";
 
   return (
     <div style={{ borderLeft: `2px solid ${T.border}`, marginLeft: 8, marginBottom: 2 }}>
-      {/* Main row */}
       <div onClick={() => setOpen(v => !v)}
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "5px 10px", cursor: "pointer", userSelect: "none" as const,
-          borderRadius: 6, transition: "background 120ms" }}>
+          padding: "5px 10px", cursor: "pointer", userSelect: "none" as const, borderRadius: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
           <span style={{ fontSize: 12, color: T.text,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
             {terminal.terminal_name}
           </span>
           {!terminal.active && (
-            <span style={{ fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: 0.5,
+            <span style={{ fontSize: 9, color: T.muted, fontWeight: 700,
               background: "rgba(255,255,255,0.06)", borderRadius: 3, padding: "1px 4px" }}>INACTIVE</span>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          {dateStr && (
-            <span style={{ fontSize: 12, color, fontWeight: 600, whiteSpace: "nowrap" as const }}>
-              {dateStr}{countdown}
-            </span>
+          {terminal.renewal_days != null && (
+            <span style={{ fontSize: 11, color: T.muted }}>{terminal.renewal_days}d</span>
           )}
+          <span style={{ fontSize: 11, color: T.muted }}>
+            {products.length} product{products.length !== 1 ? "s" : ""}
+          </span>
           <button type="button" style={{ background: "none", border: "none", cursor: "pointer",
             color: T.muted, fontSize: 11, padding: "1px 6px", borderRadius: 4 }}
             onClick={e => { e.stopPropagation(); onEdit(); }}>Edit</button>
@@ -1304,7 +1294,6 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
         </div>
       </div>
 
-      {/* Expanded product list */}
       {open && (
         <div style={{ padding: "4px 10px 8px 14px" }}>
           {products.length === 0
@@ -1331,20 +1320,11 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
   );
 }
 
-// Group header: "Tampa, FL  ·  4 active, 3 expired"
 function TerminalGroup({ cityState, terminals, onEdit }: {
   cityState: string; terminals: Terminal[]; onEdit: (t: Terminal) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const activeCount  = terminals.filter(t => t.active).length;
-  const expiredCount = terminals.filter(t => {
-    const d = daysUntil(t.access_expiration_date ?? null);
-    return d != null && d < 0;
-  }).length;
-  const summary = [
-    activeCount > 0 ? `${activeCount} active` : null,
-    expiredCount > 0 ? `${expiredCount} expired` : null,
-  ].filter(Boolean).join(", ");
+  const activeCount = terminals.filter(t => t.active).length;
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -1356,9 +1336,7 @@ function TerminalGroup({ cityState, terminals, onEdit }: {
             transition: "transform 150ms", display: "inline-block" }}>›</span>
           <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cityState}</span>
         </div>
-        {summary && (
-          <span style={{ fontSize: 11, color: expiredCount > 0 ? T.danger : T.muted }}>{summary}</span>
-        )}
+        <span style={{ fontSize: 11, color: T.muted }}>{activeCount} active</span>
       </div>
       {open && terminals.map(t => (
         <TerminalRow key={t.terminal_id} terminal={t} onEdit={() => onEdit(t)} />
@@ -1383,7 +1361,6 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
   const [timezone,    setTimezone]    = useState(terminal?.timezone ?? "");
   const [renewalDays, setRenewalDays] = useState(String(terminal?.renewal_days ?? ""));
   const [active,      setActive]      = useState(terminal?.active ?? true);
-  const [accessExp,   setAccessExp]   = useState(terminal?.access_expiration_date ?? "");
 
   // Products assigned to this terminal — list of { product_id, red_dye, is_out_of_stock }
   const [assigned, setAssigned] = useState<{ product_id: string; red_dye: boolean; is_out_of_stock: boolean }[]>(
@@ -1395,18 +1372,17 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
   const [saving,       setSaving]       = useState(false);
   const [err,          setErr]          = useState<string | null>(null);
 
-  // Products that support red dye — those with "dyed" in description or UN1202/1203 diesel products
-  // We show the dye toggle for any product — admin knows their products
-  function toggleAssign(productId: string) {
-    setAssigned(prev => {
-      const exists = prev.find(a => a.product_id === productId);
-      if (exists) return prev.filter(a => a.product_id !== productId);
-      return [...prev, { product_id: productId, red_dye: false, is_out_of_stock: false }];
-    });
+  function addFromCatalog(productId: string) {
+    // Always add — same product can appear twice (clear + dyed)
+    setAssigned(prev => [...prev, { product_id: productId, red_dye: false, is_out_of_stock: false }]);
   }
 
-  function toggleRedDye(productId: string) {
-    setAssigned(prev => prev.map(a => a.product_id === productId ? { ...a, red_dye: !a.red_dye } : a));
+  function removeAssigned(idx: number) {
+    setAssigned(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function toggleRedDye(idx: number) {
+    setAssigned(prev => prev.map((a, i) => i === idx ? { ...a, red_dye: !a.red_dye } : a));
   }
 
   const filteredCatalog = allProducts.filter(p => {
@@ -1428,11 +1404,6 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
         }).select("terminal_id").single();
         if (tErr) throw tErr;
         tid = newT.terminal_id;
-        // Grant company access with expiry
-        await supabase.from("terminal_access").upsert({
-          terminal_id: tid, company_id: companyId,
-          access_expiration_date: accessExp || null,
-        }, { onConflict: "terminal_id,company_id" });
       } else {
         const { error: tErr } = await supabase.from("terminals").update({
           terminal_name: name.trim(), city: city.trim() || null, state: state.trim() || null,
@@ -1440,10 +1411,6 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
           renewal_days: renewalDays ? parseInt(renewalDays) : null, active,
         }).eq("terminal_id", tid!);
         if (tErr) throw tErr;
-        // Update access expiry for this company
-        await supabase.from("terminal_access").update({
-          access_expiration_date: accessExp || null,
-        }).eq("terminal_id", tid!).eq("company_id", companyId);
       }
 
       // Sync terminal_products — delete all then re-insert
@@ -1464,10 +1431,9 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
   }
 
   async function deleteTerminal() {
-    if (!confirm("Remove this terminal from your company? This removes access but does not delete the global terminal.")) return;
+    if (!confirm("Deactivate this terminal? It will be hidden from drivers but products will be preserved.")) return;
     setSaving(true);
-    await supabase.from("terminal_products").delete().eq("terminal_id", terminal!.terminal_id);
-    await supabase.from("terminal_access").delete().eq("terminal_id", terminal!.terminal_id).eq("company_id", companyId);
+    await supabase.from("terminals").update({ active: false }).eq("terminal_id", terminal!.terminal_id);
     onDone();
   }
 
@@ -1490,9 +1456,6 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
         <div><label style={{ ...css.label, fontSize: 10 }}>State</label>{ti(state, setState, "FL")}</div>
         <div><label style={{ ...css.label, fontSize: 10 }}>Timezone</label>{ti(timezone, setTimezone, "America/New_York")}</div>
         <div><label style={{ ...css.label, fontSize: 10 }}>Renewal Days</label>{ti(renewalDays, setRenewalDays, "90", "number")}</div>
-        <div><label style={{ ...css.label, fontSize: 10 }}>Access Expires</label>
-          <input type="date" value={accessExp} onChange={e => setAccessExp(e.target.value)}
-            style={{ ...css.input, ...sm }} /></div>
       </div>
       <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>
         <strong style={{ color: T.text }}>Active</strong> = terminal appears in the planner.
@@ -1519,20 +1482,20 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
           <div style={{ maxHeight: 260, overflowY: "auto" as const }}>
             {filteredCatalog.length === 0 && <div style={{ fontSize: 11, color: T.muted }}>No products found.</div>}
             {filteredCatalog.map(p => {
-              const alreadyIn = assigned.filter(a => a.product_id === p.product_id).length;
+              const countIn = assigned.filter(a => a.product_id === p.product_id).length;
               return (
                 <div key={p.product_id}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px",
                     borderBottom: `1px solid ${T.border}22`, cursor: "pointer" }}
-                  onClick={() => toggleAssign(p.product_id)}>
+                  onClick={() => addFromCatalog(p.product_id)}>
                   <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
                     {p.description && <div style={{ fontSize: 10, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.description}</div>}
                     {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
                   </div>
-                  <div style={{ fontSize: 10, color: alreadyIn > 0 ? T.accent : T.muted, fontWeight: 700, flexShrink: 0 }}>
-                    {alreadyIn > 0 ? `✓ ×${alreadyIn}` : "+ Add"}
+                  <div style={{ fontSize: 10, color: countIn > 0 ? T.accent : T.muted, fontWeight: 700, flexShrink: 0 }}>
+                    {countIn > 0 ? `✓ ×${countIn}` : "+ Add"}
                   </div>
                 </div>
               );
@@ -1551,19 +1514,18 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
             <div key={`${a.product_id}-${i}`}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
                 borderBottom: `1px solid ${T.border}22` }}>
-              <ProductSwatch buttonCode={p.button_code} hexCode={a.red_dye ? p.hex_code : p.hex_code} redDye={a.red_dye} />
+              <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} redDye={a.red_dye} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
                 {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
               </div>
-              {/* Red dye toggle */}
               <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11,
                 color: a.red_dye ? "#ef4444" : T.muted, flexShrink: 0 }}>
-                <input type="checkbox" checked={a.red_dye} onChange={() => toggleRedDye(a.product_id)}
+                <input type="checkbox" checked={a.red_dye} onChange={() => toggleRedDye(i)}
                   style={{ accentColor: "#ef4444", width: 12, height: 12 }} />
                 Red dye
               </label>
-              <button type="button" onClick={() => toggleAssign(a.product_id)}
+              <button type="button" onClick={() => removeAssigned(i)}
                 style={{ background: "none", border: "none", cursor: "pointer", color: T.danger,
                   fontSize: 14, padding: "0 4px", flexShrink: 0, minWidth: 22, minHeight: 22,
                   display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
@@ -1721,7 +1683,7 @@ export default function AdminPage() {
       setTrailers(trailerRows.map((t: any) => ({ ...t, compartments: compMap[t.trailer_id] ?? [] })) as Trailer[]);
       setCombos(((comboRows ?? []) as any[]).map(c => ({ ...c, in_use_by_name: c.claimed_by ? claimedNameMap[c.claimed_by] ?? null : null })) as unknown as Combo[]);
 
-      // Always load the full product catalog (needed for the catalog picker in TerminalModal)
+      // Always load the full product catalog (needed for TerminalModal picker)
       const { data: prodRows } = await supabase
         .from("products")
         .select("product_id, product_name, button_code, hex_code, display_name, description, un_number, active")
@@ -1732,52 +1694,41 @@ export default function AdminPage() {
         (prodRows ?? []).map((p: any) => [p.product_id, p as Product])
       );
 
-      // Terminals accessible by this company via terminal_access (with expiry date)
-      const { data: accessRows } = await supabase
-        .from("terminal_access")
-        .select("terminal_id, access_expiration_date")
-        .eq("company_id", cid);
-      const accessMap: Record<string, string | null> = Object.fromEntries(
-        (accessRows ?? []).map((r: any) => [r.terminal_id, r.access_expiration_date ?? null])
-      );
-      const accessibleIds = Object.keys(accessMap);
+      // Terminals — no company gating, all active terminals are available
+      // Load all terminals with their products
+      const { data: termRows } = await supabase
+        .from("terminals")
+        .select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon")
+        .order("state").order("city").order("terminal_name");
 
-      if (accessibleIds.length > 0) {
-        const { data: termRows } = await supabase
-          .from("terminals")
-          .select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon")
-          .in("terminal_id", accessibleIds)
-          .order("state").order("city").order("terminal_name");
-        const { data: tpRows } = await supabase
-          .from("terminal_products")
-          .select("terminal_id, product_id, active, is_out_of_stock, red_dye")
-          .in("terminal_id", accessibleIds)
-          .eq("active", true);
-        const tpMap: Record<string, TerminalProduct[]> = {};
-        for (const tp of (tpRows ?? []) as any[]) {
-          const p = prodMap[tp.product_id];
-          if (!p) continue;
-          if (!tpMap[tp.terminal_id]) tpMap[tp.terminal_id] = [];
-          tpMap[tp.terminal_id].push({
-            product_id: tp.product_id,
-            button_code: p.button_code,
-            product_name: p.product_name,
-            hex_code: p.hex_code,
-            description: p.description,
-            un_number: p.un_number,
-            red_dye: tp.red_dye ?? false,
-            is_out_of_stock: tp.is_out_of_stock ?? false,
-            active: tp.active ?? true,
-          });
-        }
-        setTerminals((termRows ?? []).map((t: any) => ({
-          ...t,
-          access_expiration_date: accessMap[t.terminal_id] ?? null,
-          products: tpMap[t.terminal_id] ?? [],
-        })) as Terminal[]);
-      } else {
-        setTerminals([]);
+      const termIds = (termRows ?? []).map((t: any) => t.terminal_id);
+
+      const { data: tpRows } = termIds.length > 0
+        ? await supabase
+            .from("terminal_products")
+            .select("terminal_id, product_id, active, is_out_of_stock, red_dye")
+            .in("terminal_id", termIds)
+            .eq("active", true)
+        : { data: [] };
+
+      const tpMap: Record<string, TerminalProduct[]> = {};
+      for (const tp of (tpRows ?? []) as any[]) {
+        const p = prodMap[tp.product_id];
+        if (!p) continue;
+        if (!tpMap[tp.terminal_id]) tpMap[tp.terminal_id] = [];
+        tpMap[tp.terminal_id].push({
+          product_id: tp.product_id, button_code: p.button_code,
+          product_name: p.product_name, hex_code: p.hex_code,
+          description: p.description, un_number: p.un_number,
+          red_dye: tp.red_dye ?? false, is_out_of_stock: tp.is_out_of_stock ?? false,
+          active: tp.active ?? true,
+        });
       }
+
+      setTerminals((termRows ?? []).map((t: any) => ({
+        ...t,
+        products: tpMap[t.terminal_id] ?? [],
+      })) as Terminal[]);
     } catch (e: any) { setErr(e?.message ?? "Load failed."); }
     finally { setLoading(false); }
   }, []);
