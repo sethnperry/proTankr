@@ -96,6 +96,7 @@ type Terminal = {
   renewal_days: number | null;
   lat: number | null;
   lon: number | null;
+  access_expiration_date?: string | null;
   products?: TerminalProduct[];
   logo_url?: string | null;
 };
@@ -1256,71 +1257,112 @@ function ProductSwatch({ buttonCode, hexCode, redDye, size = "sm" }: {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TerminalCard — collapsed header + expanded product list
+// TerminalCard — matches user profile collapsed view
+// Groups are rendered by the parent; this is the per-terminal row
 // ─────────────────────────────────────────────────────────────
 
-function TerminalCard({ terminal, onEdit }: { terminal: Terminal; onEdit: () => void }) {
+function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => void }) {
   const [open, setOpen] = useState(false);
   const products = terminal.products ?? [];
-  const cityState = [terminal.city, terminal.state].filter(Boolean).join(", ");
+  const days = daysUntil(terminal.access_expiration_date ?? null);
+  const color = expiryColor(days);
+  const dateStr = terminal.access_expiration_date
+    ? fmtDate(terminal.access_expiration_date)
+    : null;
+  const countdown = days != null
+    ? ` (${days >= 0 ? "+" : ""}${days}d)`
+    : "";
 
   return (
-    <div style={{ ...css.card, padding: 0, marginBottom: 8, overflow: "hidden" }}>
-      {/* Header row — tap to expand */}
+    <div style={{ borderLeft: `2px solid ${T.border}`, marginLeft: 8, marginBottom: 2 }}>
+      {/* Main row */}
       <div onClick={() => setOpen(v => !v)}
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "10px 12px", cursor: "pointer", userSelect: "none" as const }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{terminal.terminal_name}</span>
-            {!terminal.active && (
-              <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: 0.5 }}>INACTIVE</span>
-            )}
-          </div>
-          {cityState && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{cityState}</div>}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          {terminal.renewal_days != null && (
-            <span style={{ fontSize: 11, color: T.muted }}>{terminal.renewal_days}d renewal</span>
+          padding: "5px 10px", cursor: "pointer", userSelect: "none" as const,
+          borderRadius: 6, transition: "background 120ms" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: 12, color: T.text,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+            {terminal.terminal_name}
+          </span>
+          {!terminal.active && (
+            <span style={{ fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: 0.5,
+              background: "rgba(255,255,255,0.06)", borderRadius: 3, padding: "1px 4px" }}>INACTIVE</span>
           )}
-          {/* Attachment for logo */}
-          <AttachmentBtn />
-          <button type="button" style={{ ...css.btn("subtle"), padding: "3px 10px", fontSize: 11 }}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {dateStr && (
+            <span style={{ fontSize: 12, color, fontWeight: 600, whiteSpace: "nowrap" as const }}>
+              {dateStr}{countdown}
+            </span>
+          )}
+          <button type="button" style={{ background: "none", border: "none", cursor: "pointer",
+            color: T.muted, fontSize: 11, padding: "1px 6px", borderRadius: 4 }}
             onClick={e => { e.stopPropagation(); onEdit(); }}>Edit</button>
-          <span style={{ fontSize: 10, color: T.muted,
-            transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms", display: "inline-block" }}>›</span>
+          <span style={{ fontSize: 10, color: T.muted, transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 150ms", display: "inline-block" }}>›</span>
         </div>
       </div>
 
       {/* Expanded product list */}
       {open && (
-        <div style={{ borderTop: `1px solid ${T.border}`, padding: "8px 12px 10px" }}
-          onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "4px 10px 8px 14px" }}>
           {products.length === 0
-            ? <div style={{ fontSize: 11, color: T.muted }}>No products assigned to this terminal.</div>
-            : (
-              <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
-                {products.map((p, i) => (
-                  <div key={`${p.product_id}-${i}`}
-                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
-                      borderBottom: i < products.length - 1 ? `1px solid ${T.border}22` : "none" }}>
-                    <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} redDye={p.red_dye} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                        {p.product_name}
-                        {p.red_dye && <span style={{ color: "#ef4444", fontSize: 10, marginLeft: 5 }}>RED DYE</span>}
-                        {p.is_out_of_stock && <span style={{ color: T.warning, fontSize: 10, marginLeft: 5 }}>OUT OF STOCK</span>}
-                      </div>
-                      {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
-                    </div>
+            ? <div style={{ fontSize: 11, color: T.muted }}>No products assigned.</div>
+            : products.map((p, i) => (
+              <div key={`${p.product_id}-${i}`}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0",
+                  borderBottom: i < products.length - 1 ? `1px solid ${T.border}22` : "none" }}>
+                <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} redDye={p.red_dye} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.text }}>
+                    {p.product_name}
+                    {p.red_dye && <span style={{ color: "#ef4444", fontSize: 10, marginLeft: 5 }}>RED DYE</span>}
+                    {p.is_out_of_stock && <span style={{ color: T.warning, fontSize: 10, marginLeft: 5 }}>OUT OF STOCK</span>}
                   </div>
-                ))}
+                  {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
+                </div>
               </div>
-            )
+            ))
           }
         </div>
       )}
+    </div>
+  );
+}
+
+// Group header: "Tampa, FL  ·  4 active, 3 expired"
+function TerminalGroup({ cityState, terminals, onEdit }: {
+  cityState: string; terminals: Terminal[]; onEdit: (t: Terminal) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const activeCount  = terminals.filter(t => t.active).length;
+  const expiredCount = terminals.filter(t => {
+    const d = daysUntil(t.access_expiration_date ?? null);
+    return d != null && d < 0;
+  }).length;
+  const summary = [
+    activeCount > 0 ? `${activeCount} active` : null,
+    expiredCount > 0 ? `${expiredCount} expired` : null,
+  ].filter(Boolean).join(", ");
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div onClick={() => setOpen(v => !v)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", userSelect: "none" as const, padding: "4px 2px 6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: T.muted, transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 150ms", display: "inline-block" }}>›</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cityState}</span>
+        </div>
+        {summary && (
+          <span style={{ fontSize: 11, color: expiredCount > 0 ? T.danger : T.muted }}>{summary}</span>
+        )}
+      </div>
+      {open && terminals.map(t => (
+        <TerminalRow key={t.terminal_id} terminal={t} onEdit={() => onEdit(t)} />
+      ))}
     </div>
   );
 }
@@ -1341,6 +1383,7 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
   const [timezone,    setTimezone]    = useState(terminal?.timezone ?? "");
   const [renewalDays, setRenewalDays] = useState(String(terminal?.renewal_days ?? ""));
   const [active,      setActive]      = useState(terminal?.active ?? true);
+  const [accessExp,   setAccessExp]   = useState(terminal?.access_expiration_date ?? "");
 
   // Products assigned to this terminal — list of { product_id, red_dye, is_out_of_stock }
   const [assigned, setAssigned] = useState<{ product_id: string; red_dye: boolean; is_out_of_stock: boolean }[]>(
@@ -1385,8 +1428,11 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
         }).select("terminal_id").single();
         if (tErr) throw tErr;
         tid = newT.terminal_id;
-        // Grant company access
-        await supabase.from("terminal_access").upsert({ terminal_id: tid, company_id: companyId }, { onConflict: "terminal_id,company_id" });
+        // Grant company access with expiry
+        await supabase.from("terminal_access").upsert({
+          terminal_id: tid, company_id: companyId,
+          access_expiration_date: accessExp || null,
+        }, { onConflict: "terminal_id,company_id" });
       } else {
         const { error: tErr } = await supabase.from("terminals").update({
           terminal_name: name.trim(), city: city.trim() || null, state: state.trim() || null,
@@ -1394,6 +1440,10 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
           renewal_days: renewalDays ? parseInt(renewalDays) : null, active,
         }).eq("terminal_id", tid!);
         if (tErr) throw tErr;
+        // Update access expiry for this company
+        await supabase.from("terminal_access").update({
+          access_expiration_date: accessExp || null,
+        }).eq("terminal_id", tid!).eq("company_id", companyId);
       }
 
       // Sync terminal_products — delete all then re-insert
@@ -1440,6 +1490,9 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
         <div><label style={{ ...css.label, fontSize: 10 }}>State</label>{ti(state, setState, "FL")}</div>
         <div><label style={{ ...css.label, fontSize: 10 }}>Timezone</label>{ti(timezone, setTimezone, "America/New_York")}</div>
         <div><label style={{ ...css.label, fontSize: 10 }}>Renewal Days</label>{ti(renewalDays, setRenewalDays, "90", "number")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Access Expires</label>
+          <input type="date" value={accessExp} onChange={e => setAccessExp(e.target.value)}
+            style={{ ...css.input, ...sm }} /></div>
       </div>
       <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>
         <strong style={{ color: T.text }}>Active</strong> = terminal appears in the planner.
@@ -1668,26 +1721,38 @@ export default function AdminPage() {
       setTrailers(trailerRows.map((t: any) => ({ ...t, compartments: compMap[t.trailer_id] ?? [] })) as Trailer[]);
       setCombos(((comboRows ?? []) as any[]).map(c => ({ ...c, in_use_by_name: c.claimed_by ? claimedNameMap[c.claimed_by] ?? null : null })) as unknown as Combo[]);
 
-      // Terminals accessible by this company via terminal_access
+      // Always load the full product catalog (needed for the catalog picker in TerminalModal)
+      const { data: prodRows } = await supabase
+        .from("products")
+        .select("product_id, product_name, button_code, hex_code, display_name, description, un_number, active")
+        .eq("active", true)
+        .order("product_name");
+      setAllProducts((prodRows ?? []) as Product[]);
+      const prodMap: Record<string, Product> = Object.fromEntries(
+        (prodRows ?? []).map((p: any) => [p.product_id, p as Product])
+      );
+
+      // Terminals accessible by this company via terminal_access (with expiry date)
       const { data: accessRows } = await supabase
-        .from("terminal_access").select("terminal_id").eq("company_id", cid);
-      const accessibleIds = (accessRows ?? []).map((r: any) => r.terminal_id);
+        .from("terminal_access")
+        .select("terminal_id, access_expiration_date")
+        .eq("company_id", cid);
+      const accessMap: Record<string, string | null> = Object.fromEntries(
+        (accessRows ?? []).map((r: any) => [r.terminal_id, r.access_expiration_date ?? null])
+      );
+      const accessibleIds = Object.keys(accessMap);
+
       if (accessibleIds.length > 0) {
         const { data: termRows } = await supabase
-          .from("terminals").select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon")
-          .in("terminal_id", accessibleIds).order("state").order("city").order("terminal_name");
-        // Load terminal_products for all accessible terminals
+          .from("terminals")
+          .select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon")
+          .in("terminal_id", accessibleIds)
+          .order("state").order("city").order("terminal_name");
         const { data: tpRows } = await supabase
           .from("terminal_products")
           .select("terminal_id, product_id, active, is_out_of_stock, red_dye")
-          .in("terminal_id", accessibleIds).eq("active", true);
-        // Load product catalog for name/hex/etc
-        const { data: prodRows } = await supabase
-          .from("products").select("product_id, product_name, button_code, hex_code, display_name, description, un_number, active");
-        const prodMap: Record<string, Product> = Object.fromEntries(
-          (prodRows ?? []).map((p: any) => [p.product_id, p as Product])
-        );
-        // Group terminal_products by terminal
+          .in("terminal_id", accessibleIds)
+          .eq("active", true);
         const tpMap: Record<string, TerminalProduct[]> = {};
         for (const tp of (tpRows ?? []) as any[]) {
           const p = prodMap[tp.product_id];
@@ -1705,8 +1770,11 @@ export default function AdminPage() {
             active: tp.active ?? true,
           });
         }
-        setTerminals((termRows ?? []).map((t: any) => ({ ...t, products: tpMap[t.terminal_id] ?? [] })) as Terminal[]);
-        setAllProducts((prodRows ?? []).filter((p: any) => p.active) as Product[]);
+        setTerminals((termRows ?? []).map((t: any) => ({
+          ...t,
+          access_expiration_date: accessMap[t.terminal_id] ?? null,
+          products: tpMap[t.terminal_id] ?? [],
+        })) as Terminal[]);
       } else {
         setTerminals([]);
       }
@@ -1909,7 +1977,7 @@ export default function AdminPage() {
         <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setTerminalsOpen(v => !v)}>
           <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ transition: "transform 150ms", transform: terminalsOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
-            Terminals ({terminals.filter(t => t.active).length} active)
+            Terminals ({terminals.length}{terminals.filter(t => t.active).length < terminals.length ? `, ${terminals.filter(t=>t.active).length} active` : " active"})
           </h2>
           <button style={plusBtn} onClick={e => { e.stopPropagation(); setTerminalModal("new"); }}>+</button>
         </div>
@@ -1935,11 +2003,7 @@ export default function AdminPage() {
               }
               if (filtered.length === 0) return <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No terminals match your search.</div>;
               return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([group, ts]) => (
-                <div key={group} style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, letterSpacing: 1.5,
-                    textTransform: "uppercase" as const, marginBottom: 6, paddingLeft: 2 }}>{group}</div>
-                  {ts.map(t => <TerminalCard key={t.terminal_id} terminal={t} onEdit={() => setTerminalModal(t)} />)}
-                </div>
+                <TerminalGroup key={group} cityState={group} terminals={ts} onEdit={t => setTerminalModal(t)} />
               ));
             })()}
           </>
