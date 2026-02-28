@@ -108,27 +108,19 @@ function StarBtn({
       disabled={busy}
       title={title ?? (active ? "Remove from my equipment" : "Add to my equipment")}
       style={{
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        border: active
-          ? "1px solid rgba(234,179,8,0.45)"
-          : "1px solid rgba(255,255,255,0.13)",
-        background: active
-          ? "rgba(234,179,8,0.15)"
-          : "rgba(255,255,255,0.05)",
-        color: active ? "rgba(234,179,8,0.95)" : "rgba(255,255,255,0.30)",
-        fontSize: 17,
+        background: "none",
+        border: "none",
+        padding: "2px 4px",
+        color: active ? "rgba(234,179,8,0.95)" : "rgba(255,255,255,0.22)",
+        fontSize: 18,
         cursor: busy ? "not-allowed" : "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         flexShrink: 0,
-        transition: "all 120ms ease",
+        transition: "color 120ms ease",
         opacity: busy ? 0.5 : 1,
+        lineHeight: 1,
       }}
     >
-      ★
+      {active ? "★" : "☆"}
     </button>
   );
 }
@@ -182,8 +174,8 @@ const S = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    padding: "14px 16px",
-    borderRadius: 18,
+    padding: "10px 12px",
+    borderRadius: 12,
     border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.05)",
     boxShadow: "0 6px 16px rgba(0,0,0,0.32)",
@@ -198,7 +190,7 @@ const S = {
     border: "1px solid rgba(180,100,30,0.28)",
   } as React.CSSProperties,
   rowName: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: 900 as const,
     letterSpacing: 0.2,
     lineHeight: 1.2,
@@ -221,10 +213,10 @@ const S = {
     fontWeight: 700 as const,
   },
   btn: {
-    borderRadius: 16,
-    padding: "10px 18px",
+    borderRadius: 10,
+    padding: "8px 14px",
     fontWeight: 900 as const,
-    fontSize: 15,
+    fontSize: 13,
     letterSpacing: 0.5,
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.09)",
@@ -561,11 +553,7 @@ function FleetModal({
           const isBusy   = busyId === cid;
           const isCurrentlySelected = String(selectedComboId) === cid;
 
-          const rowStyle = mine
-            ? { ...S.row, ...S.rowMine }
-            : inUse
-            ? { ...S.row, ...S.rowInUse }
-            : S.row;
+          const rowStyle = { ...(mine ? { ...S.row, ...S.rowMine } : inUse ? { ...S.row, ...S.rowInUse } : S.row), position: 'relative' as const };
 
           return (
             <div key={cid} style={rowStyle}>
@@ -581,8 +569,8 @@ function FleetModal({
                 {inUse && <div style={S.rowInUseBadge}>In use by {c.claimed_by_name}</div>}
               </div>
 
-              {/* Right: star + action button inline */}
-              <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "center", flexShrink: 0 }}>
+              {/* Right: star top + action button below */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                 <StarBtn
                   active={starred}
                   busy={isBusy}
@@ -1249,28 +1237,24 @@ export default function EquipmentModal({
                     {inUse && <div style={S.rowInUseBadge}>In use by {getClaimedByName(c)}</div>}
                   </div>
 
-                  {/* Star inline next to action button */}
-                  <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                    {/* Star — unstarring removes from this list */}
+                  {/* Star pinned top-right; action button below */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                     <StarBtn
                       active={true}
                       busy={primaryBusy}
                       onToggle={() => toggleComboPrimary(c)}
                       title="Remove from my equipment"
                     />
-                    {/* SLIP SEAT — someone else has it */}
                     {inUse && (
                       <button type="button" style={{ ...S.btn, ...S.btnSlipSeat, opacity: busy ? 0.55 : 1 }} onClick={() => handleSlipSeat(cid)} disabled={busy}>
                         {busy ? "…" : "SLIP SEAT"}
                       </button>
                     )}
-                    {/* DECOUPLE — I own it (claimed_by = me) OR it's selected with no claimer (legacy rows) */}
                     {(mine || (sel && !c.claimed_by)) && (
                       <button type="button" style={{ ...S.btn, ...S.btnDecouple, opacity: busy ? 0.55 : 1 }} onClick={() => handleDecouple(cid)} disabled={busy}>
                         {busy ? "…" : "DECOUPLE"}
                       </button>
                     )}
-                    {/* SELECT — not mine, not in use, not already selected */}
                     {!mine && !inUse && !(sel && !c.claimed_by) && (
                       <button type="button" style={{ ...S.btn, ...S.btnPrimary }} onClick={() => handleClaim(cid)} disabled={busy}>SELECT</button>
                     )}
@@ -1283,7 +1267,7 @@ export default function EquipmentModal({
 
         <div style={{ height: 8 }} />
         <button type="button"
-          style={{ ...S.btn, width: "100%", textAlign: "center" as const, padding: "13px 18px", borderRadius: 18, fontSize: 15 }}
+          style={{ ...S.btn, width: "100%", textAlign: "center" as const, padding: "11px 16px", borderRadius: 10, fontSize: 14 }}
           onClick={() => setFleetOpen(true)}>
           Browse fleet & couple equipment →
         </button>

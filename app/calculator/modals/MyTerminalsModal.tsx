@@ -128,27 +128,24 @@ export default function MyTerminalsModal(props: {
                         }
                       }}
                       className={[
-                        "rounded-2xl border transition cursor-pointer select-none px-3 py-3",
+                        "rounded-xl border transition cursor-pointer select-none overflow-hidden",
                         active ? "border-white/30 bg-white/5" : "border-white/10 hover:bg-white/5",
                       ].join(" ")}
                     >
-                      <div className="flex items-start gap-3">
-                        {/* icon well (match top tiles vibe) */}
-                        <div className="shrink-0 p-1">
-                          <div
-                            className={[
-                              "h-14 w-14 rounded-xl border flex items-center justify-center text-xs",
-                              active
-                                ? "border-white/20 bg-black text-orange-400"
-                                : "border-white/10 bg-[#2a2a2a] text-white/50",
-                            ].join(" ")}
-                            aria-hidden="true"
-                          >
-                            Img
-                          </div>
+                      <div className="flex items-center gap-0">
+                        {/* image flush to card edge */}
+                        <div
+                          className={[
+                            "shrink-0 h-16 w-14 flex items-center justify-center text-xs font-semibold rounded-r-none",
+                            active ? "bg-black text-amber-400" : "bg-[#1e1e1e] text-white/40",
+                          ].join(" ")}
+                          aria-hidden="true"
+                          style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}
+                        >
+                          Img
                         </div>
 
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 px-3 py-2">
                           <div className="text-sm font-semibold text-white truncate">
                             {t.terminal_name ?? "(unnamed terminal)"}
                           </div>
@@ -160,17 +157,14 @@ export default function MyTerminalsModal(props: {
                           ) : null}
                         </div>
 
-                        {/* right controls: star + view (side-by-side) */}
-                        <div className="flex items-center gap-2">
+                        {/* bare star top-right + view chevron below */}
+                        <div className="flex flex-col items-end gap-1 pr-2 pt-2">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               const tid = String(t.terminal_id);
-
-                              toggleTerminalStar(tid, true); // TRUE = currently starred => DELETE
-
-                              // optimistic remove from UI
+                              toggleTerminalStar(tid, true);
                               setMyTerminalIds((prev) => {
                                 const s = new Set(prev);
                                 s.delete(tid);
@@ -178,34 +172,30 @@ export default function MyTerminalsModal(props: {
                               });
                               setTerminals((prev: any) => prev.filter((x: any) => String(x.terminal_id) !== tid));
                             }}
-                            className={starBtnClass(myTerminalIds.has(String(t.terminal_id)))}
-                            aria-label={
-                              myTerminalIds.has(String(t.terminal_id)) ? "Remove from My Terminals" : "Add to My Terminals"
-                            }
-                            title={
-                              myTerminalIds.has(String(t.terminal_id)) ? "Remove from My Terminals" : "Add to My Terminals"
-                            }
+                            style={{ background: "none", border: "none", padding: "2px 2px", cursor: "pointer",
+                              color: myTerminalIds.has(String(t.terminal_id)) ? "rgba(234,179,8,0.95)" : "rgba(255,255,255,0.25)",
+                              fontSize: 17, lineHeight: 1 }}
+                            aria-label="Remove from My Terminals"
                           >
                             {myTerminalIds.has(String(t.terminal_id)) ? "★" : "☆"}
                           </button>
-
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setExpandedTerminalId(isExpanded ? null : String(t.terminal_id));
                             }}
-                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/80 hover:bg-white/10"
+                            className="text-white/40 hover:text-white/70 text-xs"
+                            style={{ background: "none", border: "none", cursor: "pointer", padding: "2px" }}
                             aria-label="View terminal details"
-                            title="View"
                           >
-                            View
+                            {isExpanded ? "▲" : "▼"}
                           </button>
                         </div>
                       </div>
 
                       {expired ? (
-                        <div className="mt-3">
+                        <div className="mt-0 px-3 pb-2">
                           <button
                             type="button"
                             disabled={busy}
@@ -214,7 +204,7 @@ export default function MyTerminalsModal(props: {
                               doGetCardedForTerminal(String(t.terminal_id));
                             }}
                             className={[
-                              "w-full rounded-xl border px-3 py-2 text-sm",
+                              "w-full rounded-lg border px-3 py-2 text-xs font-semibold",
                               busy
                                 ? "border-red-400/10 bg-red-400/10 text-red-200/60"
                                 : "border-red-400/20 bg-red-400/10 text-red-200 hover:bg-red-400/15",
@@ -226,7 +216,7 @@ export default function MyTerminalsModal(props: {
                       ) : null}
 
                       {isExpanded ? (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+                        <div className="mt-0 mx-3 mb-2 rounded-lg border border-white/10 bg-white/5 p-2 text-xs text-white/70">
                           <div className="text-white/80 font-semibold">Terminal details</div>
                           <div className="mt-1">Business-card placeholder.</div>
                         </div>
@@ -244,7 +234,7 @@ export default function MyTerminalsModal(props: {
               setCatalogExpandedId(null);
               setCatalogOpen(true);
             }}
-            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white/80 hover:bg-white/10"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-semibold text-white/80 hover:bg-white/10"
           >
             + Get carded
           </button>

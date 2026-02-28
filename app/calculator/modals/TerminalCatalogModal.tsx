@@ -148,16 +148,18 @@ export default function TerminalCatalogModal(props: {
                         setCatalogExpandedId(isExpanded ? null : id);
                       }
                     }}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 hover:bg-white/10 cursor-pointer select-none"
+                    className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 cursor-pointer select-none overflow-hidden"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="shrink-0 p-1">
-                        <div className="h-14 w-14 rounded-xl border border-white/10 bg-[#2a2a2a] flex items-center justify-center text-xs text-white/50">
-                          Img
-                        </div>
+                    <div className="flex items-center gap-0">
+                      <div
+                        className="shrink-0 h-16 w-14 flex items-center justify-center text-xs font-semibold bg-[#1e1e1e] text-white/40"
+                        style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}
+                        aria-hidden="true"
+                      >
+                        Img
                       </div>
 
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 px-3 py-2">
                         <div className="text-sm font-semibold text-white truncate">
                           {t.terminal_name ?? "(unnamed terminal)"}
                         </div>
@@ -191,7 +193,7 @@ export default function TerminalCatalogModal(props: {
 
                               {isEditing ? (
                                 <div
-                                  className="mt-2 rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/70"
+                                  className="mt-1 rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-white/70"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <div className="text-white/80 font-semibold">Set Activation Date</div>
@@ -222,14 +224,13 @@ export default function TerminalCatalogModal(props: {
                         })()}
                       </div>
 
-                      {/* multi-select star (membership) */}
-                      <div className="flex items-center">
+                      {/* bare star pinned top-right */}
+                      <div className="flex items-start pt-2 pr-2">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleTerminalStar(id, isInMy);
-
                             const next = !isInMy;
                             setMyTerminalIds((prev) => {
                               const s = new Set(prev);
@@ -237,15 +238,14 @@ export default function TerminalCatalogModal(props: {
                               else s.delete(id);
                               return s;
                             });
-
                             if (!isInMy && !accessDateByTerminalId[id]) {
-                              // ✅ FIX: use terminal timezone
                               setAccessDateForTerminal_(id, isoToday_(tz));
                             }
                           }}
-                          className={starBtnClass(isInMy)}
+                          style={{ background: "none", border: "none", padding: "2px", cursor: "pointer",
+                            color: isInMy ? "rgba(234,179,8,0.95)" : "rgba(255,255,255,0.25)",
+                            fontSize: 17, lineHeight: 1 }}
                           aria-label={isInMy ? "Remove from My Terminals" : "Add to My Terminals"}
-                          title={isInMy ? "Remove from My Terminals" : "Add to My Terminals"}
                         >
                           {isInMy ? "★" : "☆"}
                         </button>
@@ -253,7 +253,7 @@ export default function TerminalCatalogModal(props: {
                     </div>
 
                     {isExpanded ? (
-                      <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white/70">
+                      <div className="mt-0 mx-3 mb-2 rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-white/70">
                         <div className="text-white/80 font-semibold">Terminal details</div>
                         <div className="mt-1">Business-card placeholder.</div>
                       </div>

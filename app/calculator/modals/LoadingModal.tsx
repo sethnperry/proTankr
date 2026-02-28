@@ -195,10 +195,10 @@ useEffect(() => {
 
   return (
     <FullscreenModal open={open} title="Loading" onClose={onClose} footer={null}>
-      <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: "100%", boxSizing: "border-box" }}>
         {/* A) Compartments */}
-        <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontWeight: 900, letterSpacing: 0.2 }}>Planned compartments</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.2, opacity: 0.7, textTransform: "uppercase" }}>Planned compartments</div>
 
           {plannedLines.length === 0 ? (
             <div style={styles.help}>No filled compartments in the plan.</div>
@@ -210,10 +210,10 @@ useEffect(() => {
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    gap: 10,
+                    gap: 8,
                     alignItems: "baseline",
-                    padding: "10px 12px",
-                    borderRadius: 14,
+                    padding: "7px 10px",
+                    borderRadius: 8,
                     border: "1px solid rgba(255,255,255,0.10)",
                     background: "rgba(255,255,255,0.04)",
                   }}
@@ -233,7 +233,7 @@ useEffect(() => {
 
         {/* B) Product groups */}
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 900, letterSpacing: 0.2 }}>Enter API + Temp (per product)</div>
+          <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.2, opacity: 0.7, textTransform: "uppercase" }}>API + Temperature</div>
 
           {errorMessage ? (
             <div
@@ -280,100 +280,72 @@ useEffect(() => {
                   <div
                     key={g.productId}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 14,
-                      flexWrap: "wrap",
-                      padding: 14,
-                      borderRadius: 18,
+                      padding: "10px 12px",
+                      borderRadius: 10,
                       border: "1px solid rgba(255,255,255,0.10)",
                       background: "rgba(255,255,255,0.04)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
                     }}
                   >
-                    {/* Left: badge + name + previous API line */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
+                    {/* Top row: badge + name/info + gallons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                       <div
                         style={{
-                          width: 54,
-                          height: 54,
-                          borderRadius: 16,
-                          display: "grid",
-                          placeItems: "center",
-                          fontWeight: 950,
-                          fontSize: 20,
-                          letterSpacing: 0.5,
+                          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                          display: "grid", placeItems: "center",
+                          fontWeight: 900, fontSize: 14, letterSpacing: 0.5,
                           color: badgeHex ? badgeHex : "rgba(255,220,92,0.95)",
                           border: badgeHex ? `2px solid ${badgeHex}` : "2px solid rgba(255,220,92,0.75)",
                           background: "rgba(0,0,0,0.22)",
-                          flex: "0 0 auto",
                         }}
                         aria-hidden
                       >
                         {badgeText}
                       </div>
-
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontWeight: 950,
-                            fontSize: 16,
-                            lineHeight: 1.1,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {name}
                         </div>
-
-                        <div style={{ marginTop: 4, color: "rgba(255,255,255,0.70)", fontWeight: 750, fontSize: 13 }}>
-                         
-                         {fmtUpdatedOnLine({
-  updatedAt: lastInfo?.last_api_updated_at,
-  timeZone: terminalTimeZone ?? null,
-}) ?? "No previous API recorded"}
-
+                        <div style={{ marginTop: 2, color: "rgba(255,255,255,0.50)", fontSize: 11 }}>
+                          {fmtUpdatedOnLine({ updatedAt: lastInfo?.last_api_updated_at, timeZone: terminalTimeZone ?? null }) ?? "No previous API recorded"}
                         </div>
                       </div>
+                      <div style={{ color: "rgba(255,255,255,0.60)", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{Math.round(g.gallons)} gal</div>
                     </div>
-
-                    {/* Right: gallons + inputs */}
-                    <div style={{ display: "grid", justifyItems: "end", gap: 10, flex: "0 1 auto", minWidth: 0 }}>
-                      <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900 }}>{Math.round(g.gallons)} gal</div>
-
-                      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <input
-                          value={apiVal}
-                          onChange={(e) => setProductApi(g.productId, e.target.value)}
-                          inputMode="decimal"
-                          placeholder="API"
-                          style={{
-                            ...styles.input,
-                            width: 120,
-                            maxWidth: "38vw",
-                            height: 44,
-                            borderRadius: 16,
-                            fontWeight: 950,
-                            textAlign: "center",
-                          }}
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => onOpenTempDial(g.productId)}
-                          style={{
-                            ...styles.smallBtn,
-                            width: 120,
-                            maxWidth: "38vw",
-                            height: 44,
-                            borderRadius: 16,
-                            fontWeight: 950,
-                          }}
-                        >
-                          {tempVal == null ? "60°F" : `${Math.round(tempVal)}°F`}
-                        </button>
-                      </div>
+                    {/* Bottom row: API input + temp button side by side */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        value={apiVal}
+                        onChange={(e) => setProductApi(g.productId, e.target.value)}
+                        inputMode="decimal"
+                        placeholder="API gravity"
+                        style={{
+                          ...styles.input,
+                          flex: 1,
+                          height: 40,
+                          borderRadius: 8,
+                          fontWeight: 800,
+                          fontSize: 15,
+                          textAlign: "center",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onOpenTempDial(g.productId)}
+                        style={{
+                          ...styles.smallBtn,
+                          width: 80,
+                          height: 40,
+                          borderRadius: 8,
+                          fontWeight: 800,
+                          fontSize: 14,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {tempVal == null ? "60°F" : `${Math.round(tempVal)}°F`}
+                      </button>
                     </div>
                   </div>
                 );
@@ -381,7 +353,7 @@ useEffect(() => {
             </div>
           )}
 
-          <div style={{ display: "flex", width: "100%", marginTop: 10 }}>
+          <div style={{ display: "flex", width: "100%", marginTop: 6 }}>
             <button
               type="button"
               onClick={onLoaded}

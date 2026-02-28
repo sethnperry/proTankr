@@ -38,20 +38,20 @@ const D = {
     marginBottom: 6, display: "block",
   } as React.CSSProperties,
   input: {
-    width: "100%", borderRadius: 12, padding: "12px 14px",
+    width: "100%", borderRadius: 8, padding: "10px 12px",
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(0,0,0,0.35)", color: "rgba(255,255,255,0.92)",
-    fontSize: 15, outline: "none", boxSizing: "border-box",
+    fontSize: 14, outline: "none", boxSizing: "border-box",
   } as React.CSSProperties,
   inputErr: {
     border: "1px solid rgba(248,113,113,0.55)",
     backgroundColor: "rgba(180,30,30,0.15)",
   } as React.CSSProperties,
   select: {
-    width: "100%", borderRadius: 12, padding: "12px 14px",
+    width: "100%", borderRadius: 8, padding: "10px 12px",
     border: "1px solid rgba(255,255,255,0.14)",
     backgroundColor: "rgba(0,0,0,0.40)", color: "rgba(255,255,255,0.92)",
-    fontSize: 15, outline: "none", boxSizing: "border-box",
+    fontSize: 14, outline: "none", boxSizing: "border-box",
     appearance: "none",
     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.4)' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
     backgroundRepeat: "no-repeat",
@@ -66,8 +66,8 @@ const D = {
     resize: "vertical", minHeight: 72,
   } as React.CSSProperties,
   btn: {
-    borderRadius: 14, padding: "12px 20px", fontWeight: 900,
-    fontSize: 14, letterSpacing: 0.5, cursor: "pointer",
+    borderRadius: 8, padding: "10px 16px", fontWeight: 900,
+    fontSize: 13, letterSpacing: 0.5, cursor: "pointer",
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.09)",
     color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap",
@@ -111,12 +111,12 @@ function ScenarioCard({ emoji, title, sub, onClick }: {
 }) {
   return (
     <button type="button" onClick={onClick} style={{
-      padding: "18px 20px", borderRadius: 16, cursor: "pointer",
+      padding: "12px 14px", borderRadius: 10, cursor: "pointer",
       textAlign: "left" as const, border: "1px solid rgba(255,255,255,0.12)",
       background: "rgba(255,255,255,0.05)", transition: "all 120ms ease", width: "100%",
     }}>
-      <div style={{ fontSize: 17, fontWeight: 900, marginBottom: 4 }}>{emoji}{"  "}{title}</div>
-      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", lineHeight: 1.4 }}>{sub}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 3, display: "flex", alignItems: "center", gap: 8 }}><span>{emoji}</span><span>{title}</span></div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.4 }}>{sub}</div>
     </button>
   );
 }
@@ -162,7 +162,15 @@ function useGeoTag(onResult: (location: string, lat: number, lon: number) => voi
         try {
           const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, { headers: { "Accept-Language": "en" } });
           const data = await res.json();
-          onResult(data?.display_name ?? `${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon);
+          // Build a short, human-readable address from components
+          const addr = data?.address ?? {};
+          const parts = [
+            addr.house_number && addr.road ? `${addr.house_number} ${addr.road}` : addr.road,
+            addr.city || addr.town || addr.village || addr.county,
+            addr.state,
+          ].filter(Boolean);
+          const shortAddr = parts.length >= 2 ? parts.join(", ") : data?.display_name ?? `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+          onResult(shortAddr, lat, lon);
         } catch { onResult(`${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon); }
         setGeoLoading(false);
       },
@@ -183,8 +191,8 @@ function StatusPicker<T extends string>({ options, value, onChange }: {
         const sel = value === o.code;
         return (
           <button key={o.code} type="button" onClick={() => onChange(o.code)} style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "9px 12px",
-            borderRadius: 10, cursor: "pointer", textAlign: "left" as const,
+            display: "flex", alignItems: "center", gap: 10, padding: "7px 10px",
+            borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
             border: sel ? (o.warn ? "1px solid rgba(220,80,40,0.55)" : "1px solid rgba(64,180,255,0.45)") : "1px solid rgba(255,255,255,0.10)",
             background: sel ? (o.warn ? "rgba(180,50,20,0.20)" : "rgba(32,100,200,0.18)") : "rgba(255,255,255,0.04)",
             transition: "all 120ms ease",
@@ -212,7 +220,7 @@ function SummaryRow({ label, code, location, notes }: { label: string; code: str
   const def = allStatuses.find((s) => s.code === code);
   const isWarn = def?.warn;
   return (
-    <div style={{ padding: "11px 13px", borderRadius: 12, marginBottom: 8,
+    <div style={{ padding: "9px 11px", borderRadius: 8, marginBottom: 8,
       border: isWarn ? "1px solid rgba(220,80,40,0.35)" : "1px solid rgba(255,255,255,0.10)",
       background: isWarn ? "rgba(180,50,20,0.12)" : "rgba(255,255,255,0.04)" }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>{label}</div>
@@ -434,7 +442,7 @@ export default function DecoupleModal({
       <ScenarioCard emoji="🔁" title="Swap the trailer"
         sub="Switching to a different trailer. Keeping the same power unit to couple with a new trailer at this location."
         onClick={() => pickScenario("swap_trailer")} />
-      <ScenarioCard emoji="🚚" title="Drop the trailer"
+      <ScenarioCard emoji="🔓" title="Drop the trailer"
         sub="I'm bobtailing away. The trailer stays at this location."
         onClick={() => pickScenario("drop_trailer")} />
       <ScenarioCard emoji="🅿️" title="Park both units"
