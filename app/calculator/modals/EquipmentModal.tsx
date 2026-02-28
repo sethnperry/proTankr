@@ -341,7 +341,7 @@ function ModalShell({
 // ─── Fleet Modal ──────────────────────────────────────────────────────────────
 
 function FleetModal({
-  open, onClose, authUserId,
+  open, onClose, authUserId, companyId,
   onSlipSeat, onClaim, selectedComboId,
   primaryTruckIds, primaryTrailerIds,
   onTogglePrimary, onToggleTruck, onToggleTrailer,
@@ -355,6 +355,7 @@ function FleetModal({
   open: boolean;
   onClose: () => void;
   authUserId: string | null;
+  companyId: string | null;
   onSlipSeat: (comboId: string, truckId?: string, trailerId?: string) => Promise<void>;
   onClaim: (comboId: string, truckId?: string, trailerId?: string) => Promise<void>;
   selectedComboId: string;
@@ -385,39 +386,19 @@ function FleetModal({
     setLoading(true);
     setError(null);
 
-const { data: userRes } = await supabase.auth.getUser();
-const user = userRes.user;
-if (!user) {
-  setError("Not logged in.");
-  setLoading(false);
-  return;
-}
+    if (!companyId) {
+      setError("No active company selected.");
+      setLoading(false);
+      return;
+    }
 
-const { data: sRow, error: sErr } = await supabase
-  .from("user_settings")
-  .select("active_company_id")
-  .eq("user_id", user.id)
-  .maybeSingle();
-
-if (sErr) {
-  setError(sErr.message);
-  setLoading(false);
-  return;
-}
-
-const activeCompanyId = sRow?.active_company_id as string | null;
-if (!activeCompanyId) {
-  setError("No active company selected.");
-  setLoading(false);
-  return;
-}
     // Fetch all active combos — manual join (no FK assumption)
     const { data: comboData, error: comboErr } = await supabase
       .from("equipment_combos")
       .select("combo_id, combo_name, truck_id, trailer_id, tare_lbs, claimed_by, claimed_at, active, company_id")
       .eq("active", true)
-.eq("company_id", activeCompanyId)
-.order("combo_name", { ascending: true });
+      .eq("company_id", companyId)
+      .order("combo_name", { ascending: true });
 
     if (comboErr) { setError(comboErr.message); setLoading(false); return; }
 
@@ -432,18 +413,10 @@ if (!activeCompanyId) {
     const [{ data: truckData }, { data: trailerData }, { data: profileData }] =
       await Promise.all([
         truckIds.length > 0
-          ? supabase
-  .from("trucks")
-  .select("truck_id, truck_name, region")
-  .eq("company_id", activeCompanyId)
-  .in("truck_id", truckIds)
+          ? supabase.from("trucks").select("truck_id, truck_name, region").eq("company_id", companyId).in("truck_id", truckIds)
           : Promise.resolve({ data: [] }),
         trailerIds.length > 0
-          ? supabase
-  .from("trailers")
-  .select("trailer_id, trailer_name")
-  .eq("company_id", activeCompanyId)
-  .in("trailer_id", trailerIds)
+          ? supabase.from("trailers").select("trailer_id, trailer_name").eq("company_id", companyId).in("trailer_id", trailerIds)
           : Promise.resolve({ data: [] }),
         claimedIds.length > 0
           ? supabase.from("profiles").select("user_id, display_name").in("user_id", claimedIds)
@@ -452,10 +425,7 @@ if (!activeCompanyId) {
 
     const truckMap: Record<string, { name: string; region: string | null }> = {};
     for (const t of truckData ?? []) {
-      truckMap[String((t as any).truck_id)] = {
-        name:   (t as any).truck_name,
-        region: (t as any).region ?? null,
-      };
+      truckMap[String((t as any).truck_id)] = { name: (t as any).truck_name, region: (t as any).region ?? null };
     }
     const trailerMap: Record<string, string> = {};
     for (const t of trailerData ?? []) {
@@ -484,7 +454,7 @@ if (!activeCompanyId) {
 
     setFleetCombos(fleet);
     setLoading(false);
-  }, []);
+  }, [companyId]);
 
   // Fix #6: fetch all regions directly from trucks table, not derived from combos
   const loadRegions = useCallback(async () => {
@@ -776,6 +746,7 @@ export default function EquipmentModal({
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [fleetOpen, setFleetOpen] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   // Decouple flow
   const [decoupleOpen, setDecoupleOpen]       = useState(false);
@@ -854,6 +825,19 @@ export default function EquipmentModal({
       setPickTruckId("");
       setPickTrailerId("");
       setNewTareLbs("");
+      // Resolve company ID once so FleetModal doesn't re-fetch user_settings independently
+      (async () => {
+        try {
+          const cid = await getActiveCompanyId();
+          if (cid) { setCompanyId(cid); return; }
+        } catch {}
+        // Fallback: query directly
+        const { data: u } = await supabase.auth.getUser();
+        if (u.user) {
+          const { data: s } = await supabase.from("user_settings").select("active_company_id").eq("user_id", u.user.id).maybeSingle();
+          setCompanyId((s?.active_company_id as string | null) ?? null);
+        }
+      })();
       loadEquipment();
       loadPrimaryEquipment();
     }
@@ -1298,6 +1282,7 @@ export default function EquipmentModal({
         open={fleetOpen}
         onClose={() => setFleetOpen(false)}
         authUserId={authUserId}
+        companyId={companyId}
         onSlipSeat={handleSlipSeat}
         onClaim={handleClaim}
         selectedComboId={selectedComboId}
