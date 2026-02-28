@@ -269,110 +269,95 @@ export default function PlannerControls(props: any) {
           const effMax = effectiveMaxGallonsForComp(compNumber, trueMax);
           const sel = compPlan?.[compNumber];
           const isEmpty = !!sel?.empty || !sel?.productId;
+          const planned = plannedGallonsByComp?.[compNumber] ?? 0;
+          const plannedPct = trueMax > 0 ? Math.max(0, Math.min(1, planned / trueMax)) : 0;
+          const capPct = trueMax > 0 ? Math.max(0, Math.min(1, effMax / trueMax)) : 0;
+          const visualTopGap = 0.08;
+          const fillPct = Math.max(0, Math.min(1, Math.min(plannedPct, capPct) * (1 - visualTopGap)));
 
           return (
             <div style={{ display: "grid", gap: 16 }}>
-              <div style={{ ...styles.help }}>
-                Adjust headspace to stay safely below the top probe and set the product for compartment{" "}
-                <strong>{compNumber}</strong>.
-              </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
-                <div style={{ display: "flex", gap: 18, alignItems: "stretch", flexWrap: "wrap" }}>
-                  {/* Comp visual */}
-                  <div
-                    style={{
-                      width: 240,
-                      maxWidth: "100%",
-                      borderRadius: 18,
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.14)",
-                      padding: 14,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div style={{ fontWeight: 700, opacity: 0.9 }}>Max Volume</div>
-                      <div style={{ fontWeight: 800 }}>{Math.round(trueMax)} gal</div>
-                    </div>
+              {/* ── Tank + headspace side by side — always, on all screen sizes ── */}
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
 
-                    <div
-                      style={{
-                        height: 280,
-                        borderRadius: 16,
-                        background: "rgba(255,255,255,0.08)",
-                        position: "relative",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {/* Capped headspace tint */}
-                      {headPct > 0 && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: 0,
-                            right: 0,
-                            top: 0,
-                            height: `${Math.max(0, Math.min(1, headPct)) * 100}%`,
-                            background: "rgba(0,0,0,0.16)",
-                          }}
-                        />
-                      )}
+                {/* Tank visual — compact, fixed width */}
+                <div style={{
+                  flex: "0 0 auto", width: "min(140px, 38vw)",
+                  borderRadius: 16, background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.14)", padding: 10,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7 }}>Max</div>
+                    <div style={{ fontSize: 12, fontWeight: 800 }}>{Math.round(trueMax)} gal</div>
+                  </div>
 
-                      {(() => {
-                        const planned = plannedGallonsByComp?.[compNumber] ?? 0;
-                        const plannedPct = trueMax > 0 ? Math.max(0, Math.min(1, planned / trueMax)) : 0;
-                        const capPct = trueMax > 0 ? Math.max(0, Math.min(1, effMax / trueMax)) : 0;
-                        const visualTopGap = 0.08;
-                        const fillPct = Math.max(0, Math.min(1, Math.min(plannedPct, capPct) * (1 - visualTopGap)));
-
-                        return (
-                          <>
-                            <div
-                              style={{
-                                position: "absolute",
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                height: `${fillPct * 100}%`,
-                                background: "rgba(185,245,250,0.85)",
-                              }}
-                            />
-                            {fillPct > 0 && (
-                              <svg
-                                width="100%"
-                                height="16"
-                                viewBox="0 0 100 16"
-                                preserveAspectRatio="none"
-                                style={{
-                                  position: "absolute",
-                                  left: 0,
-                                  right: 0,
-                                  bottom: `calc(${fillPct * 100}% - 8px)`,
-                                  opacity: 0.9,
-                                }}
-                              >
-                                <path
-                                  d="M0,8 C10,2 20,14 30,8 C40,2 50,14 60,8 C70,2 80,14 90,8 C95,6 98,6 100,8"
-                                  fill="none"
-                                  stroke="rgba(120,210,220,0.95)"
-                                  strokeWidth="2"
-                                />
-                              </svg>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-
-                    <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ fontWeight: 700, opacity: 0.9 }}>Capped at</div>
+                  {/* Tank body */}
+                  <div style={{ height: "min(200px, 46vw)", borderRadius: 12, background: "rgba(255,255,255,0.08)", position: "relative", overflow: "hidden" }}>
+                    {/* Headspace tint */}
+                    {headPct > 0 && (
+                      <div style={{ position: "absolute", left: 0, right: 0, top: 0,
+                        height: `${Math.max(0, Math.min(1, headPct)) * 100}%`,
+                        background: "rgba(255,160,0,0.18)",
+                        borderBottom: "1px dashed rgba(255,160,0,0.4)" }} />
+                    )}
+                    {/* Fill */}
+                    <div style={{ position: "absolute", left: 0, right: 0, bottom: 0,
+                      height: `${fillPct * 100}%`, background: "rgba(185,245,250,0.85)" }} />
+                    {/* Wave */}
+                    {fillPct > 0 && (
+                      <svg width="100%" height="16" viewBox="0 0 100 16" preserveAspectRatio="none"
+                        style={{ position: "absolute", left: 0, right: 0, bottom: `calc(${fillPct * 100}% - 8px)`, opacity: 0.9 }}>
+                        <path d="M0,8 C10,2 20,14 30,8 C40,2 50,14 60,8 C70,2 80,14 90,8 C95,6 98,6 100,8"
+                          fill="none" stroke="rgba(120,210,220,0.95)" strokeWidth="2" />
+                      </svg>
+                    )}
+                    {/* Headspace % label inside tint */}
+                    {headPct > 0.04 && (
+                      <div style={{ position: "absolute", top: "50%", left: 0, right: 0,
+                        transform: `translateY(calc(-50% + ${(headPct * -0.5) * 100}%))`,
+                        textAlign: "center", fontSize: 10, fontWeight: 800,
+                        color: "rgba(255,160,0,0.85)", pointerEvents: "none" }}>
+                        {Math.round(headPct * 100)}%
                       </div>
+                    )}
+                  </div>
 
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={Math.round(effMax)}
+                  {/* Capped at label */}
+                  <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <div style={{ fontSize: 10, opacity: 0.6 }}>Capped</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: headPct > 0 ? "#fbbf24" : "rgba(255,255,255,0.85)" }}>
+                      {Math.round(effMax)} gal
+                    </div>
+                  </div>
+                </div>
+
+                {/* Headspace controls — fill remaining space */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, paddingTop: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>
+                    Headspace
+                  </div>
+
+                  {/* Horizontal slider */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input type="range" min={0} max={30} step={1}
+                      value={Math.round(headPct * 100)}
+                      onChange={(e) => {
+                        const pct = Number(e.target.value) / 100;
+                        setCompHeadspacePct((prev: any) => ({ ...prev, [compNumber]: pct }));
+                      }}
+                      style={{ flex: 1, height: 36, accentColor: "#fbbf24", cursor: "pointer" }}
+                    />
+                    <div style={{ ...styles.badge, minWidth: 38, textAlign: "center", color: headPct > 0 ? "#fbbf24" : undefined }}>
+                      {Math.round(headPct * 100)}%
+                    </div>
+                  </div>
+
+                  {/* Manual gallon input */}
+                  <div>
+                    <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 4 }}>Set cap (gallons)</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input type="number" inputMode="numeric" value={Math.round(effMax)}
                         onChange={(e) => {
                           const v = Number(e.target.value);
                           if (!Number.isFinite(v) || trueMax <= 0) return;
@@ -380,53 +365,26 @@ export default function PlannerControls(props: any) {
                           const pct = Math.max(0, Math.min(0.95, 1 - capped / trueMax));
                           setCompHeadspacePct((prev: any) => ({ ...prev, [compNumber]: pct }));
                         }}
-                        style={{ ...styles.input, width: "100%" }}
+                        style={{ ...styles.input, flex: 1 }}
                       />
-
-                      <button
-                        style={{ ...styles.smallBtn, width: "100%" }}
-                        onClick={() => setCompHeadspacePct((prev: any) => ({ ...prev, [compNumber]: 0 }))}
-                      >
-                        Return to max
+                      <button style={{ ...styles.smallBtn, flexShrink: 0 }}
+                        onClick={() => setCompHeadspacePct((prev: any) => ({ ...prev, [compNumber]: 0 }))}>
+                        Max
                       </button>
                     </div>
                   </div>
 
-                  {/* Vertical slider (headspace %) */}
-                  <div style={{ display: "grid", alignContent: "start", justifyItems: "center", paddingTop: 10, minWidth: 90 }}>
-                    <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>Headspace</div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={30}
-                      step={1}
-                      value={Math.round(headPct * 100)}
-                      onChange={(e) => {
-                        const pct = Number(e.target.value) / 100;
-                        setCompHeadspacePct((prev: any) => ({ ...prev, [compNumber]: pct }));
-                      }}
-                      style={{
-                        height: 280,
-                        width: 28,
-                        WebkitAppearance: "slider-vertical" as any,
-                        writingMode: "bt-lr" as any,
-                      }}
-                    />
-                    <div style={{ ...styles.badge, marginTop: 10 }}>{Math.round(headPct * 100)}%</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", lineHeight: 1.4 }}>
+                    Set headspace to load safely below the top probe. 0% = fill to compartment max.
                   </div>
                 </div>
+              </div>
 
                 {/* Product selection */}
                 <div style={{ display: "grid", gap: 10 }}>
-                  <strong>Product</strong>
+                  <strong style={{ fontSize: 14 }}>Product for Comp {compNumber}</strong>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                      gap: 12,
-                    }}
-                  >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))", gap: 10 }}>
                     {/* MT / Empty */}
                     <button
                       style={{

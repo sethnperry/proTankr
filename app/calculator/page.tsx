@@ -182,13 +182,11 @@ function PlacardDiamond({ anchorRef, svgUri, unNumber, onClick, hidden }: {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    // Diamond is 85% of card height, clamped 80–140px — stays within the left padding zone
-    const size = Math.min(140, Math.max(80, Math.round(r.height * 0.85)));
+    // Diamond is 70% of card height, clamped 64–110px
+    const size = Math.min(110, Math.max(64, Math.round(r.height * 0.70)));
     setLayout({
-      // Center diamond horizontally in the left-padding zone (paddingLeft = clamp(88,30vw,160))
-      // Use half the paddingLeft as the center point so the diamond fits within it
-      x: r.left + size * 0.5 + 4,
-      // Vertically centered on the card
+      // Sit in the left third of the card, centered vertically
+      x: r.left + size * 0.55,
       y: r.top + r.height * 0.5,
       size,
     });
@@ -735,14 +733,54 @@ export default function CalculatorPage() {
         {planSlots.PLAN_SLOTS.map((n) => {
           const has = !!planSlots.slotHas[n];
           const disabled = !location.selectedTerminalId;
+
+          // Press-and-hold to SAVE/overwrite; tap to LOAD
+          let holdTimer: ReturnType<typeof setTimeout> | null = null;
+          const HOLD_MS = 600;
+
+          const onPressStart = () => {
+            if (disabled) return;
+            holdTimer = setTimeout(() => {
+              holdTimer = null;
+              planSlots.saveToSlot(n);
+              navigator.vibrate?.(40);
+            }, HOLD_MS);
+          };
+          const onPressEnd = (didMove = false) => {
+            if (holdTimer != null) {
+              clearTimeout(holdTimer);
+              holdTimer = null;
+              if (!didMove && has) planSlots.loadFromSlot(n);
+              else if (!didMove && !has) planSlots.saveToSlot(n);
+            }
+          };
+
           return (
             <button key={n} type="button" disabled={disabled}
-              onClick={(e) => { if (e.shiftKey || !has) planSlots.saveToSlot(n); else planSlots.loadFromSlot(n); }}
-              style={{ borderRadius: 12, padding: "8px 14px", border: "1px solid rgba(255,255,255,0.12)", background: has ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)", color: "white", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, minWidth: 44, fontSize: 15, fontWeight: 700 }}
-              title={!location.selectedTerminalId ? "Select a terminal first" : has ? "Tap to load. Shift+Tap to overwrite." : "Tap to save current plan"}
-            >{n}</button>
+              onPointerDown={onPressStart}
+              onPointerUp={() => onPressEnd(false)}
+              onPointerLeave={() => onPressEnd(true)}
+              onPointerCancel={() => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }}
+              style={{
+                borderRadius: 12, padding: "8px 14px",
+                border: `1px solid ${has ? "rgba(0,194,216,0.4)" : "rgba(255,255,255,0.12)"}`,
+                background: has ? "rgba(0,194,216,0.12)" : "rgba(255,255,255,0.03)",
+                color: has ? "#67e8f9" : "rgba(255,255,255,0.5)",
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.5 : 1,
+                minWidth: 44, fontSize: 15, fontWeight: 700,
+                WebkitTouchCallout: "none", userSelect: "none",
+                touchAction: "none",
+              }}
+              title={!location.selectedTerminalId ? "Select a terminal first" : has ? "Tap to load · Hold to overwrite" : "Tap or hold to save"}
+            >
+              {n}
+            </button>
           );
         })}
+      </div>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 5, letterSpacing: 0.3 }}>
+        TAP to load · HOLD to save
       </div>
     </div>
   );
@@ -922,7 +960,17 @@ export default function CalculatorPage() {
         const diffText = diff == null ? "—" : `${diff >= 0 ? "+" : ""}${Math.round(diff).toLocaleString()} lbs`;
         const diffColor = diff == null ? "rgba(255,255,255,0.90)" : diff > 0 ? "#ef4444" : "#4ade80";
 
-        const cardBase: CSSProperties = { borderRadius: 20, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", boxShadow: "0 14px 34px rgba(0,0,0,0.40)", padding: "clamp(12px, 3vw, 18px)" as any, display: "flex", flexDirection: "column", justifyContent: "center" };
+        const cardBase: CSSProperties = { 
+          borderRadius: 20, 
+          border: "1px solid rgba(255,255,255,0.10)", 
+          background: "rgba(255,255,255,0.03)", 
+          boxShadow: "0 14px 34px rgba(0,0,0,0.40)", 
+          padding: "clamp(12px, 3vw, 18px)" as any, 
+          display: "flex", 
+          flexDirection: "column", 
+          justifyContent: "center",
+          minHeight: "clamp(100px, 22vw, 160px)",
+        };
         const labelStyle: CSSProperties = { color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: "clamp(11px, 2.8vw, 15px)", whiteSpace: "nowrap" as const };
         const bigNum: CSSProperties = { color: "rgba(255,255,255,0.92)", fontWeight: 1000, fontSize: "clamp(15px, 4.5vw, 44px)", lineHeight: 1.05, paddingBottom: 4, whiteSpace: "nowrap" as const };
         const medNum: CSSProperties = { ...bigNum, fontSize: "clamp(13px, 3.8vw, 40px)" };
@@ -975,7 +1023,7 @@ export default function CalculatorPage() {
               </div>
 
               {/* Placard card — ref used by PlacardDiamond portal for positioning */}
-              <div ref={placardAnchorRef} onClick={() => setErgModalOpen(true)} style={{ cursor: "pointer", ...cardBase, flexDirection: "row", alignItems: "center", paddingLeft: "clamp(76px, 24vw, 130px)", paddingRight: 18, gap: 0 }}>
+              <div ref={placardAnchorRef} onClick={() => setErgModalOpen(true)} style={{ cursor: "pointer", ...cardBase, flexDirection: "row", alignItems: "center", gap: 10, overflow: "hidden" }}>
                 {placardDef ? (() => {
                   const erg = ERG_DATA[placardDef.unNumber.toUpperCase()] ?? null;
                   return (

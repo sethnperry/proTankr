@@ -278,7 +278,6 @@ type AmbientCacheEntry = {
       setAmbientTempLoading(false);
       return;
     }
-
     const ac = new AbortController();
     setAmbientTempLoading(true);
 
@@ -289,17 +288,26 @@ type AmbientCacheEntry = {
           onLatLon: (lat, lon) => {
             setLocationLat(lat);
             setLocationLon(lon);
-            // Store in cache entry so subsequent hits get lat/lon too
+            // Pre-populate cache entry with lat/lon so the subsequent AMBIENT_CACHE.set picks them up
             const existing = AMBIENT_CACHE.get(cacheKey) as AmbientCacheEntry | undefined;
-if (existing) {
-  existing.lat = lat;
-  existing.lon = lon;
-}
+            AMBIENT_CACHE.set(cacheKey, { 
+              ts: existing?.ts ?? 0, 
+              tempF: existing?.tempF ?? 0,
+              lat, 
+              lon 
+            });
           },
         });
         if (typeof temp === "number" && Number.isFinite(temp)) {
           setAmbientTempF(temp);
-          AMBIENT_CACHE.set(cacheKey, { ts: Date.now(), tempF: temp });
+          // lat/lon already set via onLatLon callback above
+          const entry = AMBIENT_CACHE.get(cacheKey) as AmbientCacheEntry | undefined;
+          AMBIENT_CACHE.set(cacheKey, { 
+            ts: Date.now(), 
+            tempF: temp,
+            lat: entry?.lat ?? null,
+            lon: entry?.lon ?? null,
+          });
         } else {
           setAmbientTempF(null);
         }
