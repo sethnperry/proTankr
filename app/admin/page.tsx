@@ -1277,7 +1277,20 @@ export default function AdminPage() {
           }}
         />
       )}
-      {coupleModal && <CoupleModal companyId={companyId!} trucks={trucks.filter(t => t.active)} trailers={trailers.filter(t => t.active)} onClose={() => setCoupleModal(false)} onDone={() => { setCoupleModal(false); loadAll(); }} />}
+      {coupleModal && (() => {
+        // Only offer equipment that is active AND not currently in an active combo
+        const coupledTruckIds   = new Set(combos.filter(c => c.active).map(c => c.truck_id));
+        const coupledTrailerIds = new Set(combos.filter(c => c.active).map(c => c.trailer_id));
+        return (
+          <CoupleModal
+            companyId={companyId!}
+            trucks={trucks.filter(t => t.active && !coupledTruckIds.has(t.truck_id))}
+            trailers={trailers.filter(t => t.active && !coupledTrailerIds.has(t.trailer_id))}
+            onClose={() => setCoupleModal(false)}
+            onDone={() => { setCoupleModal(false); loadAll(); }}
+          />
+        );
+      })()}
     </div>
   );
 }
