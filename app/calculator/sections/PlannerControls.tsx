@@ -105,7 +105,7 @@ export default function PlannerControls(props: any) {
 
                 const code = isEmpty
                   ? "MT"
-                  : String(prod?.button_code ?? prod?.product_code ?? (productName.split(/\s+/)[0] || "PRD"))
+                  : String(prod?.button_code ?? prod?.product_code ?? (productName.split(" ")[0] || "PRD"))
                       .trim()
                       .toUpperCase();
 
