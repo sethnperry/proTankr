@@ -24,7 +24,6 @@
  *   user_primary_trucks:   user_id, truck_id, created_at
  *   user_primary_trailers: user_id, trailer_id, created_at
  */
-import { getActiveCompanyId } from "@/lib/authz";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -827,14 +826,13 @@ export default function EquipmentModal({
       setNewTareLbs("");
       // Resolve company ID once so FleetModal doesn't re-fetch user_settings independently
       (async () => {
-        try {
-          const cid = await getActiveCompanyId();
-          if (cid) { setCompanyId(cid); return; }
-        } catch {}
-        // Fallback: query directly
         const { data: u } = await supabase.auth.getUser();
         if (u.user) {
-          const { data: s } = await supabase.from("user_settings").select("active_company_id").eq("user_id", u.user.id).maybeSingle();
+          const { data: s } = await supabase
+            .from("user_settings")
+            .select("active_company_id")
+            .eq("user_id", u.user.id)
+            .maybeSingle();
           setCompanyId((s?.active_company_id as string | null) ?? null);
         }
       })();
