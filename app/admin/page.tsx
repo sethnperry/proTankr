@@ -113,25 +113,30 @@ function PermitRow({ label, date, enforcement, extra }: {
             ? <span style={{ fontSize: 11, color, fontWeight: days != null && days < 30 ? 600 : 400, whiteSpace: "nowrap" as const }}>{fmtExpiryInline(date, days)}</span>
             : <span style={{ fontSize: 11, color: T.muted }}>—</span>
           }
-          {enforcement != null && enforcement &&
-            <span style={{ fontSize: 11, color: enfColor, whiteSpace: "nowrap" as const }}>/ {fmtExpiryInline(enforcement, enfDays)}</span>
-          }
         </div>
-        {/* 📎 paperclip / + add · ☑ checkbox · ▼ notes */}
+        {/* 📎 always shown, gray → accent when attached · ☑ checkbox · ▼ dropdown */}
         <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-          <button type="button" title={attached ? "Attached" : "Add attachment"} style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 12 }}
-            onClick={() => setAttached(v => !v)}>{attached ? "📎" : "＋"}</button>
+          <button type="button" title={attached ? "Attached" : "Add attachment"}
+            style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 13 }}
+            onClick={() => setAttached(v => !v)}>📎</button>
           <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
             style={{ width: 11, height: 11, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
-          <button type="button" title="Notes" style={{ ...iconBtn, color: T.muted, fontSize: 8,
+          <button type="button" title="Details" style={{ ...iconBtn, color: T.muted, fontSize: 8,
             transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
             onClick={() => setNotesOpen(v => !v)}>▼</button>
         </div>
       </div>
-      {extra}
       {notesOpen && (
-        <textarea placeholder="Notes…" rows={2}
-          style={{ ...css.input, width: "100%", marginTop: 3, fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
+        <div style={{ paddingLeft: 4, paddingTop: 4 }}>
+          {enforcement != null && enforcement && (
+            <div style={{ fontSize: 11, color: enfColor, marginBottom: 3 }}>
+              Enforcement: {fmtExpiryInline(enforcement, enfDays)}
+            </div>
+          )}
+          {extra}
+          <textarea placeholder="Notes…" rows={2}
+            style={{ ...css.input, width: "100%", marginTop: 3, fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
+        </div>
       )}
     </div>
   );
@@ -147,9 +152,10 @@ function PermitEditRow({ label, expVal, onExpChange, enfVal, onEnfChange, extra 
   enfVal?: string; onEnfChange?: (v: string) => void;
   extra?: React.ReactNode;
 }) {
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [dropOpen,  setDropOpen]  = useState(false);
   const [checked,   setChecked]   = useState(false);
   const [attached,  setAttached]  = useState(false);
+  const [noteText,  setNoteText]  = useState("");
 
   const iconBtn: React.CSSProperties = {
     background: "none", border: "none", cursor: "pointer",
@@ -162,25 +168,32 @@ function PermitEditRow({ label, expVal, onExpChange, enfVal, onEnfChange, extra 
         <span style={{ fontSize: 11, color: T.muted, width: 148, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{label}</span>
         <input type="date" value={expVal} onChange={e => onExpChange(e.target.value)}
           style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
-        {onEnfChange !== undefined && (
-          <input type="date" value={enfVal ?? ""} onChange={e => onEnfChange(e.target.value)}
-            style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
-        )}
-        {/* 📎 ☑ ▼ */}
+        {/* 📎 always shown · ☑ · ▼ */}
         <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-          <button type="button" title={attached ? "Attached" : "Add attachment"} style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 12 }}
-            onClick={() => setAttached(v => !v)}>{attached ? "📎" : "＋"}</button>
+          <button type="button" title={attached ? "Attached" : "Add attachment"}
+            style={{ ...iconBtn, color: attached ? T.accent : T.muted, fontSize: 13 }}
+            onClick={() => setAttached(v => !v)}>📎</button>
           <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
             style={{ width: 11, height: 11, accentColor: T.accent, cursor: "pointer", margin: "0 2px" }} />
-          <button type="button" title="Notes" style={{ ...iconBtn, color: T.muted, fontSize: 8,
-            transform: notesOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
-            onClick={() => setNotesOpen(v => !v)}>▼</button>
+          <button type="button" title="Details" style={{ ...iconBtn, color: T.muted, fontSize: 8,
+            transform: dropOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+            onClick={() => setDropOpen(v => !v)}>▼</button>
         </div>
       </div>
-      {extra}
-      {notesOpen && (
-        <textarea placeholder="Notes…" rows={2}
-          style={{ ...css.input, width: "100%", marginTop: 3, fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
+      {dropOpen && (
+        <div style={{ paddingLeft: 4, paddingTop: 5, display: "flex", flexDirection: "column" as const, gap: 5 }}>
+          {onEnfChange !== undefined && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>Enforcement Date</span>
+              <input type="date" value={enfVal ?? ""} onChange={e => onEnfChange(e.target.value)}
+                style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
+              <span style={{ width: 62, flexShrink: 0 }} />
+            </div>
+          )}
+          {extra}
+          <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Notes…" rows={2}
+            style={{ ...css.input, width: "100%", fontSize: 11, padding: "3px 6px", resize: "vertical" as const }} />
+        </div>
       )}
     </div>
   );
@@ -330,13 +343,22 @@ function TrailerCard({ trailer, onEdit }: { trailer: Trailer; onEdit: () => void
             ) : null
           } />
           <SubSectionTitle>Tank Inspections</SubSectionTitle>
-          <PermitRow label="V — Annual External Visual" date={trailer.tank_v_expiration_date} />
-          <PermitRow label="K — Annual Leakage Test" date={trailer.tank_k_expiration_date} />
-          <PermitRow label="L — Annual Lining Inspection" date={trailer.tank_l_expiration_date} />
-          <PermitRow label="T — 2 Year Thickness Test" date={trailer.tank_t_expiration_date} />
-          <PermitRow label="I — 5 Year Internal Visual" date={trailer.tank_i_expiration_date} />
-          <PermitRow label="P — 5 Year Pressure Test" date={trailer.tank_p_expiration_date} />
-          <PermitRow label="UC — 5 Year Upper Coupler" date={trailer.tank_uc_expiration_date} />
+          {[
+            { label: "V — Annual External Visual",  date: trailer.tank_v_expiration_date },
+            { label: "K — Annual Leakage Test",     date: trailer.tank_k_expiration_date },
+            { label: "L — Annual Lining Inspection",date: trailer.tank_l_expiration_date },
+            { label: "T — 2 Year Thickness Test",   date: trailer.tank_t_expiration_date },
+            { label: "I — 5 Year Internal Visual",  date: trailer.tank_i_expiration_date },
+            { label: "P — 5 Year Pressure Test",    date: trailer.tank_p_expiration_date },
+            { label: "UC — 5 Year Upper Coupler",   date: trailer.tank_uc_expiration_date },
+          ].filter(r => !!r.date).map(r => (
+            <PermitRow key={r.label} label={r.label} date={r.date} />
+          ))}
+          {![trailer.tank_v_expiration_date, trailer.tank_k_expiration_date, trailer.tank_l_expiration_date,
+             trailer.tank_t_expiration_date, trailer.tank_i_expiration_date, trailer.tank_p_expiration_date,
+             trailer.tank_uc_expiration_date].some(Boolean) && (
+            <div style={{ fontSize: 11, color: T.muted, padding: "2px 0 6px" }}>No tank inspections on file.</div>
+          )}
         </div>
       )}
     </div>
@@ -531,36 +553,30 @@ function TruckModal({ truck, companyId, onClose, onDone }: {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <input type="checkbox" id="truck-active" checked={active} onChange={e => setActive(e.target.checked)} />
         <label htmlFor="truck-active" style={{ fontSize: 12, cursor: "pointer" }}>Active</label>
+        <span style={{ fontSize: 11, color: T.muted }}>— visible in fleet lists. Status below = physical location. A truck can be Active but Parked.</span>
       </div>
 
       <hr style={css.divider} />
 
       {/* ── Permit Book ── */}
       <SubSectionTitle>Permit Book</SubSectionTitle>
-      {/* column headers */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, paddingBottom: 3, borderBottom: `1px solid ${T.border}33` }}>
-        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>PERMIT</span>
-        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>EXPIRATION</span>
-        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>ENFORCEMENT</span>
-        <span style={{ width: 62, flexShrink: 0 }} />
-      </div>
       <PermitEditRow label="Registration"              expVal={regExp}   onExpChange={setRegExp}   enfVal={regEnf}   onEnfChange={setRegEnf} />
-      <PermitEditRow label="Annual Inspection"          expVal={insExp}   onExpChange={setInsExp} />
+      <PermitEditRow label="Annual Inspection"          expVal={insExp}   onExpChange={setInsExp}
+        extra={
+          <div style={{ display: "flex", gap: 6 }}>
+            <input value={insShop} onChange={e => setInsShop(e.target.value)} placeholder="Inspection shop"
+              style={{ ...css.input, ...sm, flex: 1 }} />
+            <input type="date" value={insIssue} onChange={e => setInsIssue(e.target.value)}
+              style={{ ...css.input, ...sm, width: 130, flexShrink: 0 }} />
+          </div>
+        }
+      />
       <PermitEditRow label="IFTA Permits + Decals"     expVal={iftaExp}  onExpChange={setIftaExp}  enfVal={iftaEnf}  onEnfChange={setIftaEnf} />
       <PermitEditRow label="PHMSA HazMat Permit"       expVal={phmsaExp} onExpChange={setPhmsaExp} />
       <PermitEditRow label="Alliance HazMat Permit"    expVal={alliExp}  onExpChange={setAlliExp} />
       <PermitEditRow label="Fleet Insurance Cab Card"  expVal={fleetExp} onExpChange={setFleetExp} />
       <PermitEditRow label="HazMat Transportation Lic" expVal={hazLicExp} onExpChange={setHazLicExp} />
       <PermitEditRow label="Inner Bridge Permit"       expVal={ibExp}    onExpChange={setIbExp} />
-      {/* Inspection shop sub-row */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 0", borderBottom: `1px solid ${T.border}22` }}>
-        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>↳ Shop / Issue Date</span>
-        <input value={insShop} onChange={e => setInsShop(e.target.value)} placeholder="Shop name"
-          style={{ ...css.input, ...sm, flex: 1 }} />
-        <input type="date" value={insIssue} onChange={e => setInsIssue(e.target.value)}
-          style={{ ...css.input, ...sm, flex: 1 }} />
-        <span style={{ width: 62, flexShrink: 0 }} />
-      </div>
 
       <hr style={css.divider} />
 
@@ -626,14 +642,22 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
   const [trInsShop,  setTrInsShop]  = useState(trailer?.trailer_inspection_shop ?? "");
   const [trInsIssue, setTrInsIssue] = useState(trailer?.trailer_inspection_issue_date ?? "");
   const [trInsExp,   setTrInsExp]   = useState(trailer?.trailer_inspection_expiration_date ?? "");
-  // Tank inspections
-  const [tankV,  setTankV]  = useState(trailer?.tank_v_expiration_date ?? "");
-  const [tankK,  setTankK]  = useState(trailer?.tank_k_expiration_date ?? "");
-  const [tankL,  setTankL]  = useState(trailer?.tank_l_expiration_date ?? "");
-  const [tankT,  setTankT]  = useState(trailer?.tank_t_expiration_date ?? "");
-  const [tankI,  setTankI]  = useState(trailer?.tank_i_expiration_date ?? "");
-  const [tankP,  setTankP]  = useState(trailer?.tank_p_expiration_date ?? "");
-  const [tankUC, setTankUC] = useState(trailer?.tank_uc_expiration_date ?? "");
+  // Tank inspections — dynamic list seeded from saved dates
+  type TankKey = "v" | "k" | "l" | "t" | "i" | "p" | "uc";
+  const TANK_DEFS: { key: TankKey; label: string }[] = [
+    { key: "v",  label: "V — External Visual (Annual)" },
+    { key: "k",  label: "K — Leakage Test (Annual)" },
+    { key: "l",  label: "L — Lining Inspection (Annual)" },
+    { key: "t",  label: "T — Thickness Test (2yr)" },
+    { key: "i",  label: "I — Internal Visual (5yr)" },
+    { key: "p",  label: "P — Pressure Test (5yr)" },
+    { key: "uc", label: "UC — Upper Coupler (5yr)" },
+  ];
+  const [tanks, setTanks] = useState<{ key: TankKey; date: string }[]>(() =>
+    TANK_DEFS.filter(d => !!(trailer as any)?.[`tank_${d.key}_expiration_date`])
+      .map(d => ({ key: d.key, date: (trailer as any)[`tank_${d.key}_expiration_date`] ?? "" }))
+  );
+  const [tankAddOpen, setTankAddOpen] = useState(false);
   const [notes,  setNotes]  = useState(trailer?.notes ?? "");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -650,10 +674,14 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
       trailer_reg_expiration_date: trRegExp || null, trailer_reg_enforcement_date: trRegEnf || null,
       trailer_inspection_shop: trInsShop || null, trailer_inspection_issue_date: trInsIssue || null,
       trailer_inspection_expiration_date: trInsExp || null,
-      tank_v_expiration_date: tankV || null, tank_k_expiration_date: tankK || null,
-      tank_l_expiration_date: tankL || null, tank_t_expiration_date: tankT || null,
-      tank_i_expiration_date: tankI || null, tank_p_expiration_date: tankP || null,
-      tank_uc_expiration_date: tankUC || null, notes: notes || null,
+      tank_v_expiration_date:  tanks.find(t => t.key === "v")?.date  || null,
+      tank_k_expiration_date:  tanks.find(t => t.key === "k")?.date  || null,
+      tank_l_expiration_date:  tanks.find(t => t.key === "l")?.date  || null,
+      tank_t_expiration_date:  tanks.find(t => t.key === "t")?.date  || null,
+      tank_i_expiration_date:  tanks.find(t => t.key === "i")?.date  || null,
+      tank_p_expiration_date:  tanks.find(t => t.key === "p")?.date  || null,
+      tank_uc_expiration_date: tanks.find(t => t.key === "uc")?.date || null,
+      notes: notes || null,
     };
     let trailerId = trailer?.trailer_id;
     if (isNew) {
@@ -714,6 +742,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <input type="checkbox" id="trailer-active" checked={active} onChange={e => setActive(e.target.checked)} />
         <label htmlFor="trailer-active" style={{ fontSize: 12, cursor: "pointer" }}>Active</label>
+        <span style={{ fontSize: 11, color: T.muted }}>— visible in fleet lists. Status below = physical location. A trailer can be Active but Parked.</span>
       </div>
 
       <hr style={css.divider} />
@@ -727,39 +756,65 @@ function TrailerModal({ trailer, companyId, onClose, onDone }: {
 
       {/* ── Permit Book ── */}
       <SubSectionTitle>Permit Book</SubSectionTitle>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, paddingBottom: 3, borderBottom: `1px solid ${T.border}33` }}>
-        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>PERMIT</span>
-        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>EXPIRATION</span>
-        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>ENFORCEMENT</span>
-        <span style={{ width: 62, flexShrink: 0 }} />
-      </div>
       <PermitEditRow label="Trailer Registration" expVal={trRegExp} onExpChange={setTrRegExp} enfVal={trRegEnf} onEnfChange={setTrRegEnf} />
-      <PermitEditRow label="Annual Inspection"    expVal={trInsExp} onExpChange={setTrInsExp} />
-      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 0", borderBottom: `1px solid ${T.border}22` }}>
-        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>↳ Shop / Issue Date</span>
-        <input value={trInsShop} onChange={e => setTrInsShop(e.target.value)} placeholder="Shop name"
-          style={{ ...css.input, ...sm, flex: 1 }} />
-        <input type="date" value={trInsIssue} onChange={e => setTrInsIssue(e.target.value)}
-          style={{ ...css.input, ...sm, flex: 1 }} />
-        <span style={{ width: 62, flexShrink: 0 }} />
-      </div>
+      <PermitEditRow label="Annual Inspection"    expVal={trInsExp} onExpChange={setTrInsExp}
+        extra={
+          <div style={{ display: "flex", gap: 6 }}>
+            <input value={trInsShop} onChange={e => setTrInsShop(e.target.value)} placeholder="Inspection shop"
+              style={{ ...css.input, ...sm, flex: 1 }} />
+            <input type="date" value={trInsIssue} onChange={e => setTrInsIssue(e.target.value)}
+              style={{ ...css.input, ...sm, width: 130, flexShrink: 0 }} />
+          </div>
+        }
+      />
 
       <hr style={css.divider} />
 
-      {/* ── Tank Inspections ── */}
-      <SubSectionTitle>Tank Inspections</SubSectionTitle>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, paddingBottom: 3, borderBottom: `1px solid ${T.border}33` }}>
-        <span style={{ fontSize: 10, color: T.muted, width: 148, flexShrink: 0 }}>TEST</span>
-        <span style={{ fontSize: 10, color: T.muted, flex: 1 }}>EXPIRATION</span>
-        <span style={{ width: 62, flexShrink: 0 }} />
+      {/* ── Tank Inspections — dynamic ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <SubSectionTitle>Tank Inspections</SubSectionTitle>
+        <div style={{ position: "relative" as const }}>
+          <button type="button" onClick={() => setTankAddOpen(v => !v)}
+            style={{ ...css.btn("subtle"), fontSize: 11, padding: "2px 10px" }}>+ Add</button>
+          {tankAddOpen && (() => {
+            const addedKeys = new Set(tanks.map(t => t.key));
+            const available = TANK_DEFS.filter(d => !addedKeys.has(d.key));
+            return available.length === 0 ? null : (
+              <div style={{ position: "absolute" as const, right: 0, top: "110%", zIndex: 50,
+                background: T.surface2, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
+                minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,0.5)", overflow: "hidden" }}>
+                {available.map(d => (
+                  <div key={d.key}
+                    onClick={() => { setTanks(prev => [...prev, { key: d.key, date: "" }]); setTankAddOpen(false); }}
+                    style={{ padding: "8px 14px", fontSize: 12, cursor: "pointer", color: T.text,
+                      borderBottom: `1px solid ${T.border}22` }}
+                    onMouseEnter={e => (e.currentTarget.style.background = T.surface3)}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    {d.label}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
       </div>
-      <PermitEditRow label="V — External Visual"       expVal={tankV}  onExpChange={setTankV} />
-      <PermitEditRow label="K — Leakage Test"          expVal={tankK}  onExpChange={setTankK} />
-      <PermitEditRow label="L — Lining Inspection"     expVal={tankL}  onExpChange={setTankL} />
-      <PermitEditRow label="T — Thickness Test (2yr)"  expVal={tankT}  onExpChange={setTankT} />
-      <PermitEditRow label="I — Internal Visual (5yr)" expVal={tankI}  onExpChange={setTankI} />
-      <PermitEditRow label="P — Pressure Test (5yr)"   expVal={tankP}  onExpChange={setTankP} />
-      <PermitEditRow label="UC — Upper Coupler (5yr)"  expVal={tankUC} onExpChange={setTankUC} />
+      {tanks.length === 0 && <div style={{ fontSize: 11, color: T.muted, marginBottom: 6 }}>No tank inspections added yet.</div>}
+      {tanks.map((tank) => {
+        const def = TANK_DEFS.find(d => d.key === tank.key)!;
+        return (
+          <div key={tank.key} style={{ display: "flex", alignItems: "center", gap: 6, borderBottom: `1px solid ${T.border}22`, padding: "3px 0" }}>
+            <span style={{ fontSize: 11, color: T.muted, width: 148, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+              {def.label}
+            </span>
+            <input type="date" value={tank.date}
+              onChange={e => setTanks(prev => prev.map(t => t.key === tank.key ? { ...t, date: e.target.value } : t))}
+              style={{ ...css.input, ...sm, flex: 1, minWidth: 0 }} />
+            <button type="button"
+              onClick={() => setTanks(prev => prev.filter(t => t.key !== tank.key))}
+              style={{ background: "none", border: "none", cursor: "pointer", color: T.danger, fontSize: 14, padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>−</button>
+          </div>
+        );
+      })}
 
       <hr style={css.divider} />
 
