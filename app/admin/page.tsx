@@ -61,6 +61,45 @@ type SortField   = "name" | "role" | "division" | "region" | "hire_date";
 type SortDir     = "asc" | "desc";
 type ActiveFilter = "" | "active" | "inactive";
 
+type Product = {
+  product_id: string;
+  product_name: string;
+  button_code: string | null;
+  hex_code: string | null;
+  display_name: string | null;
+  description: string | null;
+  un_number: string | null;
+  active: boolean;
+};
+
+type TerminalProduct = {
+  terminal_product_id?: string;
+  product_id: string;
+  button_code: string | null;
+  product_name: string;
+  hex_code: string | null;
+  description: string | null;
+  un_number: string | null;
+  red_dye: boolean;
+  is_out_of_stock: boolean;
+  active: boolean;
+};
+
+type Terminal = {
+  terminal_id: string;
+  terminal_name: string;
+  city: string | null;
+  state: string | null;
+  city_id: string | null;
+  timezone: string | null;
+  active: boolean;
+  renewal_days: number | null;
+  lat: number | null;
+  lon: number | null;
+  products?: TerminalProduct[];
+  logo_url?: string | null;
+};
+
 // ─────────────────────────────────────────────────────────────
 // Shared style constants
 // ─────────────────────────────────────────────────────────────
@@ -1192,6 +1231,318 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ProductSwatch — inline colored button code badge
+// ─────────────────────────────────────────────────────────────
+
+function ProductSwatch({ buttonCode, hexCode, redDye, size = "sm" }: {
+  buttonCode: string | null; hexCode: string | null; redDye?: boolean; size?: "sm" | "md";
+}) {
+  const bg   = hexCode ? `#${hexCode.replace("#", "")}` : "rgba(255,255,255,0.12)";
+  const dim  = size === "md" ? 40 : 28;
+  const fs   = size === "md" ? 13 : 10;
+  return (
+    <div style={{
+      width: dim, height: dim, borderRadius: 8, flexShrink: 0,
+      background: bg, display: "flex", alignItems: "center", justifyContent: "center",
+      border: redDye ? "2px solid #ef4444" : "1px solid rgba(255,255,255,0.15)",
+      boxShadow: redDye ? "0 0 0 1px rgba(239,68,68,0.4)" : "none",
+    }}>
+      <span style={{ fontSize: fs, fontWeight: 900, color: "#fff",
+        textShadow: "0 1px 3px rgba(0,0,0,0.8)", letterSpacing: 0.3, lineHeight: 1 }}>
+        {buttonCode ?? "?"}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// TerminalCard — collapsed header + expanded product list
+// ─────────────────────────────────────────────────────────────
+
+function TerminalCard({ terminal, onEdit }: { terminal: Terminal; onEdit: () => void }) {
+  const [open, setOpen] = useState(false);
+  const products = terminal.products ?? [];
+  const cityState = [terminal.city, terminal.state].filter(Boolean).join(", ");
+
+  return (
+    <div style={{ ...css.card, padding: 0, marginBottom: 8, overflow: "hidden" }}>
+      {/* Header row — tap to expand */}
+      <div onClick={() => setOpen(v => !v)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 12px", cursor: "pointer", userSelect: "none" as const }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{terminal.terminal_name}</span>
+            {!terminal.active && (
+              <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: 0.5 }}>INACTIVE</span>
+            )}
+          </div>
+          {cityState && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{cityState}</div>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {terminal.renewal_days != null && (
+            <span style={{ fontSize: 11, color: T.muted }}>{terminal.renewal_days}d renewal</span>
+          )}
+          {/* Attachment for logo */}
+          <AttachmentBtn />
+          <button type="button" style={{ ...css.btn("subtle"), padding: "3px 10px", fontSize: 11 }}
+            onClick={e => { e.stopPropagation(); onEdit(); }}>Edit</button>
+          <span style={{ fontSize: 10, color: T.muted,
+            transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms", display: "inline-block" }}>›</span>
+        </div>
+      </div>
+
+      {/* Expanded product list */}
+      {open && (
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: "8px 12px 10px" }}
+          onClick={e => e.stopPropagation()}>
+          {products.length === 0
+            ? <div style={{ fontSize: 11, color: T.muted }}>No products assigned to this terminal.</div>
+            : (
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
+                {products.map((p, i) => (
+                  <div key={`${p.product_id}-${i}`}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
+                      borderBottom: i < products.length - 1 ? `1px solid ${T.border}22` : "none" }}>
+                    <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} redDye={p.red_dye} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                        {p.product_name}
+                        {p.red_dye && <span style={{ color: "#ef4444", fontSize: 10, marginLeft: 5 }}>RED DYE</span>}
+                        {p.is_out_of_stock && <span style={{ color: T.warning, fontSize: 10, marginLeft: 5 }}>OUT OF STOCK</span>}
+                      </div>
+                      {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// TerminalModal — add/edit terminal with product assignment
+// ─────────────────────────────────────────────────────────────
+
+function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
+  terminal: Terminal | null; companyId: string; allProducts: Product[];
+  onClose: () => void; onDone: () => void;
+}) {
+  const isNew = !terminal;
+
+  const [name,        setName]        = useState(terminal?.terminal_name ?? "");
+  const [city,        setCity]        = useState(terminal?.city ?? "");
+  const [state,       setState]       = useState(terminal?.state ?? "");
+  const [timezone,    setTimezone]    = useState(terminal?.timezone ?? "");
+  const [renewalDays, setRenewalDays] = useState(String(terminal?.renewal_days ?? ""));
+  const [active,      setActive]      = useState(terminal?.active ?? true);
+
+  // Products assigned to this terminal — list of { product_id, red_dye, is_out_of_stock }
+  const [assigned, setAssigned] = useState<{ product_id: string; red_dye: boolean; is_out_of_stock: boolean }[]>(
+    (terminal?.products ?? []).map(p => ({ product_id: p.product_id, red_dye: p.red_dye, is_out_of_stock: p.is_out_of_stock }))
+  );
+
+  const [catalogOpen,  setCatalogOpen]  = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [saving,       setSaving]       = useState(false);
+  const [err,          setErr]          = useState<string | null>(null);
+
+  // Products that support red dye — those with "dyed" in description or UN1202/1203 diesel products
+  // We show the dye toggle for any product — admin knows their products
+  function toggleAssign(productId: string) {
+    setAssigned(prev => {
+      const exists = prev.find(a => a.product_id === productId);
+      if (exists) return prev.filter(a => a.product_id !== productId);
+      return [...prev, { product_id: productId, red_dye: false, is_out_of_stock: false }];
+    });
+  }
+
+  function toggleRedDye(productId: string) {
+    setAssigned(prev => prev.map(a => a.product_id === productId ? { ...a, red_dye: !a.red_dye } : a));
+  }
+
+  const filteredCatalog = allProducts.filter(p => {
+    if (!catalogSearch.trim()) return true;
+    const q = catalogSearch.toLowerCase();
+    return [p.product_name, p.button_code, p.description, p.un_number].some(v => v?.toLowerCase().includes(q));
+  });
+
+  async function save() {
+    if (!name.trim()) { setErr("Terminal name is required."); return; }
+    setSaving(true); setErr(null);
+    try {
+      let tid = terminal?.terminal_id;
+      if (isNew) {
+        const { data: newT, error: tErr } = await supabase.from("terminals").insert({
+          terminal_name: name.trim(), city: city.trim() || null, state: state.trim() || null,
+          timezone: timezone.trim() || null,
+          renewal_days: renewalDays ? parseInt(renewalDays) : null, active,
+        }).select("terminal_id").single();
+        if (tErr) throw tErr;
+        tid = newT.terminal_id;
+        // Grant company access
+        await supabase.from("terminal_access").upsert({ terminal_id: tid, company_id: companyId }, { onConflict: "terminal_id,company_id" });
+      } else {
+        const { error: tErr } = await supabase.from("terminals").update({
+          terminal_name: name.trim(), city: city.trim() || null, state: state.trim() || null,
+          timezone: timezone.trim() || null,
+          renewal_days: renewalDays ? parseInt(renewalDays) : null, active,
+        }).eq("terminal_id", tid!);
+        if (tErr) throw tErr;
+      }
+
+      // Sync terminal_products — delete all then re-insert
+      await supabase.from("terminal_products").delete().eq("terminal_id", tid!);
+      if (assigned.length > 0) {
+        const { error: pErr } = await supabase.from("terminal_products").insert(
+          assigned.map(a => ({
+            terminal_id: tid!, product_id: a.product_id,
+            active: true, is_out_of_stock: a.is_out_of_stock,
+            red_dye: a.red_dye,
+          }))
+        );
+        if (pErr) throw pErr;
+      }
+      onDone();
+    } catch (e: any) { setErr(e?.message ?? "Save failed."); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteTerminal() {
+    if (!confirm("Remove this terminal from your company? This removes access but does not delete the global terminal.")) return;
+    setSaving(true);
+    await supabase.from("terminal_products").delete().eq("terminal_id", terminal!.terminal_id);
+    await supabase.from("terminal_access").delete().eq("terminal_id", terminal!.terminal_id).eq("company_id", companyId);
+    onDone();
+  }
+
+  const ti = (val: string, set: (v: string) => void, ph = "", type = "text") => (
+    <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={ph}
+      style={{ ...css.input, ...sm }} />
+  );
+
+  return (
+    <Modal title={isNew ? "Add Terminal" : "Edit Terminal"} onClose={onClose} wide>
+      {err && <Banner msg={err} type="error" />}
+
+      <SubSectionTitle>Location</SubSectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px 10px", marginBottom: 10 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={{ ...css.label, fontSize: 10 }}>Terminal Name</label>
+          {ti(name, setName, "e.g. Port Tampa Bay Terminal")}
+        </div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>City</label>{ti(city, setCity, "Tampa")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>State</label>{ti(state, setState, "FL")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Timezone</label>{ti(timezone, setTimezone, "America/New_York")}</div>
+        <div><label style={{ ...css.label, fontSize: 10 }}>Renewal Days</label>{ti(renewalDays, setRenewalDays, "90", "number")}</div>
+      </div>
+      <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>
+        <strong style={{ color: T.text }}>Active</strong> = terminal appears in the planner.
+        The <em>Deactivate</em> button below hides it without revoking access.
+      </div>
+
+      <hr style={css.divider} />
+
+      {/* ── Products ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <SubSectionTitle>Products at This Terminal</SubSectionTitle>
+        <button type="button" style={{ ...css.btn("subtle"), fontSize: 11, padding: "2px 10px" }}
+          onClick={() => { setCatalogOpen(v => !v); setCatalogSearch(""); }}>
+          {catalogOpen ? "Close Catalog" : "+ Add from Catalog"}
+        </button>
+      </div>
+
+      {/* Catalog picker */}
+      {catalogOpen && (
+        <div style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10,
+          padding: "8px 10px", marginBottom: 10 }}>
+          <input value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)}
+            placeholder="Search products…" style={{ ...css.input, width: "100%", marginBottom: 8, fontSize: 12, padding: "5px 8px" }} />
+          <div style={{ maxHeight: 260, overflowY: "auto" as const }}>
+            {filteredCatalog.length === 0 && <div style={{ fontSize: 11, color: T.muted }}>No products found.</div>}
+            {filteredCatalog.map(p => {
+              const alreadyIn = assigned.filter(a => a.product_id === p.product_id).length;
+              return (
+                <div key={p.product_id}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px",
+                    borderBottom: `1px solid ${T.border}22`, cursor: "pointer" }}
+                  onClick={() => toggleAssign(p.product_id)}>
+                  <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
+                    {p.description && <div style={{ fontSize: 10, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.description}</div>}
+                    {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
+                  </div>
+                  <div style={{ fontSize: 10, color: alreadyIn > 0 ? T.accent : T.muted, fontWeight: 700, flexShrink: 0 }}>
+                    {alreadyIn > 0 ? `✓ ×${alreadyIn}` : "+ Add"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Assigned products */}
+      {assigned.length === 0
+        ? <div style={{ fontSize: 11, color: T.muted, marginBottom: 8 }}>No products assigned yet.</div>
+        : assigned.map((a, i) => {
+          const p = allProducts.find(x => x.product_id === a.product_id);
+          if (!p) return null;
+          return (
+            <div key={`${a.product_id}-${i}`}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
+                borderBottom: `1px solid ${T.border}22` }}>
+              <ProductSwatch buttonCode={p.button_code} hexCode={a.red_dye ? p.hex_code : p.hex_code} redDye={a.red_dye} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
+                {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
+              </div>
+              {/* Red dye toggle */}
+              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11,
+                color: a.red_dye ? "#ef4444" : T.muted, flexShrink: 0 }}>
+                <input type="checkbox" checked={a.red_dye} onChange={() => toggleRedDye(a.product_id)}
+                  style={{ accentColor: "#ef4444", width: 12, height: 12 }} />
+                Red dye
+              </label>
+              <button type="button" onClick={() => toggleAssign(a.product_id)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: T.danger,
+                  fontSize: 14, padding: "0 4px", flexShrink: 0, minWidth: 22, minHeight: 22,
+                  display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
+          );
+        })
+      }
+
+      <hr style={css.divider} />
+
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" as const }}>
+        {!isNew && (
+          <button style={{ ...css.btn("danger"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }}
+            onClick={deleteTerminal} disabled={saving}>Remove</button>
+        )}
+        {!isNew && (
+          <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const,
+            color: active ? T.warning : T.success, borderColor: active ? T.warning : T.success }}
+            onClick={() => setActive(v => !v)} disabled={saving}>
+            {active ? "Deactivate" : "Reactivate"}
+          </button>
+        )}
+        <button style={{ ...css.btn("ghost"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }}
+          onClick={onClose}>Cancel</button>
+        <button style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }}
+          onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Terminal" : "Save"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main AdminPage
 // ─────────────────────────────────────────────────────────────
 
@@ -1205,13 +1556,16 @@ export default function AdminPage() {
   const [combos,        setCombos]        = useState<Combo[]>([]);
   // Other permits per truck — loaded once for card display
   const [truckOtherPermits, setTruckOtherPermits] = useState<Record<string, OtherPermit[]>>({});
+  const [terminals,     setTerminals]     = useState<Terminal[]>([]);
+  const [allProducts,   setAllProducts]   = useState<Product[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [err,           setErr]           = useState<string | null>(null);
 
-  const [usersOpen,    setUsersOpen]    = useState(false);
-  const [trucksOpen,   setTrucksOpen]   = useState(false);
-  const [trailersOpen, setTrailersOpen] = useState(false);
-  const [combosOpen,   setCombosOpen]   = useState(false);
+  const [usersOpen,      setUsersOpen]      = useState(false);
+  const [trucksOpen,     setTrucksOpen]     = useState(false);
+  const [trailersOpen,   setTrailersOpen]   = useState(false);
+  const [combosOpen,     setCombosOpen]     = useState(false);
+  const [terminalsOpen,  setTerminalsOpen]  = useState(false);
 
   const [search,     setSearch]     = useState("");
   const [sortField,  setSortField]  = useState<SortField>("name");
@@ -1232,6 +1586,8 @@ export default function AdminPage() {
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
   const [coupleModal,  setCoupleModal]  = useState(false);
+  const [terminalModal, setTerminalModal] = useState<Terminal | null | "new">(null);
+  const [terminalSearch, setTerminalSearch] = useState("");
 
   const loadAll = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -1311,6 +1667,49 @@ export default function AdminPage() {
       setTrucks(truckRows as Truck[]);
       setTrailers(trailerRows.map((t: any) => ({ ...t, compartments: compMap[t.trailer_id] ?? [] })) as Trailer[]);
       setCombos(((comboRows ?? []) as any[]).map(c => ({ ...c, in_use_by_name: c.claimed_by ? claimedNameMap[c.claimed_by] ?? null : null })) as unknown as Combo[]);
+
+      // Terminals accessible by this company via terminal_access
+      const { data: accessRows } = await supabase
+        .from("terminal_access").select("terminal_id").eq("company_id", cid);
+      const accessibleIds = (accessRows ?? []).map((r: any) => r.terminal_id);
+      if (accessibleIds.length > 0) {
+        const { data: termRows } = await supabase
+          .from("terminals").select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon")
+          .in("terminal_id", accessibleIds).order("state").order("city").order("terminal_name");
+        // Load terminal_products for all accessible terminals
+        const { data: tpRows } = await supabase
+          .from("terminal_products")
+          .select("terminal_id, product_id, active, is_out_of_stock, red_dye")
+          .in("terminal_id", accessibleIds).eq("active", true);
+        // Load product catalog for name/hex/etc
+        const { data: prodRows } = await supabase
+          .from("products").select("product_id, product_name, button_code, hex_code, display_name, description, un_number, active");
+        const prodMap: Record<string, Product> = Object.fromEntries(
+          (prodRows ?? []).map((p: any) => [p.product_id, p as Product])
+        );
+        // Group terminal_products by terminal
+        const tpMap: Record<string, TerminalProduct[]> = {};
+        for (const tp of (tpRows ?? []) as any[]) {
+          const p = prodMap[tp.product_id];
+          if (!p) continue;
+          if (!tpMap[tp.terminal_id]) tpMap[tp.terminal_id] = [];
+          tpMap[tp.terminal_id].push({
+            product_id: tp.product_id,
+            button_code: p.button_code,
+            product_name: p.product_name,
+            hex_code: p.hex_code,
+            description: p.description,
+            un_number: p.un_number,
+            red_dye: tp.red_dye ?? false,
+            is_out_of_stock: tp.is_out_of_stock ?? false,
+            active: tp.active ?? true,
+          });
+        }
+        setTerminals((termRows ?? []).map((t: any) => ({ ...t, products: tpMap[t.terminal_id] ?? [] })) as Terminal[]);
+        setAllProducts((prodRows ?? []).filter((p: any) => p.active) as Product[]);
+      } else {
+        setTerminals([]);
+      }
     } catch (e: any) { setErr(e?.message ?? "Load failed."); }
     finally { setLoading(false); }
   }, []);
@@ -1503,11 +1902,64 @@ export default function AdminPage() {
         )}
       </section>
 
+      <hr style={css.divider} />
+
+      {/* ── TERMINALS ── */}
+      <section style={{ marginTop: 28, marginBottom: 32 }}>
+        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setTerminalsOpen(v => !v)}>
+          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ transition: "transform 150ms", transform: terminalsOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
+            Terminals ({terminals.filter(t => t.active).length} active)
+          </h2>
+          <button style={plusBtn} onClick={e => { e.stopPropagation(); setTerminalModal("new"); }}>+</button>
+        </div>
+        {terminalsOpen && (
+          <>
+            <div style={filterRow}>
+              <input value={terminalSearch} onChange={e => setTerminalSearch(e.target.value)}
+                placeholder="Search terminal name, city, state…"
+                style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} />
+            </div>
+            {(() => {
+              const filtered = terminals.filter(t => {
+                if (!terminalSearch.trim()) return true;
+                const q = terminalSearch.toLowerCase();
+                return [t.terminal_name, t.city, t.state].some(v => v?.toLowerCase().includes(q));
+              });
+              // Group by state + city
+              const groups: Record<string, Terminal[]> = {};
+              for (const t of filtered) {
+                const key = [t.state, t.city].filter(Boolean).join(", ") || "Unknown";
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(t);
+              }
+              if (filtered.length === 0) return <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No terminals match your search.</div>;
+              return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([group, ts]) => (
+                <div key={group} style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, letterSpacing: 1.5,
+                    textTransform: "uppercase" as const, marginBottom: 6, paddingLeft: 2 }}>{group}</div>
+                  {ts.map(t => <TerminalCard key={t.terminal_id} terminal={t} onEdit={() => setTerminalModal(t)} />)}
+                </div>
+              ));
+            })()}
+          </>
+        )}
+      </section>
+
       {/* ── Modals ── */}
       {inviteModal  && <InviteModal companyId={companyId!} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
       {profileModal && <DriverProfileModal member={profileModal.member} companyId={companyId!} onClose={() => setProfileModal(null)} onDone={(u) => { profileModal.onSaved(u); setProfileModal(null); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
       {truckModal   && <TruckModal truck={truckModal === "new" ? null : truckModal} companyId={companyId!} onClose={() => setTruckModal(null)} onDone={() => { setTruckModal(null); loadAll(); }} />}
       {trailerModal && <TrailerModal trailer={trailerModal === "new" ? null : trailerModal} companyId={companyId!} onClose={() => setTrailerModal(null)} onDone={() => { setTrailerModal(null); loadAll(); }} />}
+      {terminalModal && (
+        <TerminalModal
+          terminal={terminalModal === "new" ? null : terminalModal}
+          companyId={companyId!}
+          allProducts={allProducts}
+          onClose={() => setTerminalModal(null)}
+          onDone={() => { setTerminalModal(null); loadAll(); }}
+        />
+      )}
       {comboModal && comboModal !== "new" && (
         <ComboModal combo={comboModal} companyId={companyId!} trucks={trucks} trailers={trailers}
           onClose={() => setComboModal(null)} onDone={() => { setComboModal(null); loadAll(); }}
@@ -1520,7 +1972,6 @@ export default function AdminPage() {
         />
       )}
       {coupleModal && (() => {
-        // Only offer equipment that is active AND not currently in an active combo
         const coupledTruckIds   = new Set(combos.filter(c => c.active).map(c => c.truck_id));
         const coupledTrailerIds = new Set(combos.filter(c => c.active).map(c => c.trailer_id));
         return (
