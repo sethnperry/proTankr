@@ -70,17 +70,17 @@ type Product = {
   description: string | null;
   un_number: string | null;
   active: boolean;
+  is_dyed: boolean;
 };
 
 type TerminalProduct = {
-  terminal_product_id?: string;
   product_id: string;
   button_code: string | null;
   product_name: string;
   hex_code: string | null;
   description: string | null;
   un_number: string | null;
-  red_dye: boolean;
+  is_dyed: boolean;
   is_out_of_stock: boolean;
   active: boolean;
 };
@@ -1233,8 +1233,8 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
 // ProductSwatch — inline colored button code badge
 // ─────────────────────────────────────────────────────────────
 
-function ProductSwatch({ buttonCode, hexCode, redDye, size = "sm" }: {
-  buttonCode: string | null; hexCode: string | null; redDye?: boolean; size?: "sm" | "md";
+function ProductSwatch({ buttonCode, hexCode, isDyed, size = "sm" }: {
+  buttonCode: string | null; hexCode: string | null; isDyed?: boolean; size?: "sm" | "md";
 }) {
   const color = hexCode ? `#${hexCode.replace("#", "")}` : "rgba(255,255,255,0.4)";
   const dim   = size === "md" ? 40 : 28;
@@ -1244,8 +1244,8 @@ function ProductSwatch({ buttonCode, hexCode, redDye, size = "sm" }: {
       width: dim, height: dim, borderRadius: 8, flexShrink: 0,
       background: "#000",
       display: "flex", alignItems: "center", justifyContent: "center",
-      border: redDye ? "2px solid #ef4444" : `2px solid ${color}`,
-      boxShadow: redDye ? "0 0 0 1px rgba(239,68,68,0.3)" : "none",
+      border: isDyed ? "2px solid #ef4444" : `2px solid ${color}`,
+      boxShadow: isDyed ? "0 0 0 1px rgba(239,68,68,0.3)" : "none",
     }}>
       <span style={{ fontSize: fs, fontWeight: 900, color,
         letterSpacing: 0.3, lineHeight: 1 }}>
@@ -1302,11 +1302,11 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
               <div key={`${p.product_id}-${i}`}
                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0",
                   borderBottom: i < products.length - 1 ? `1px solid ${T.border}22` : "none" }}>
-                <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} redDye={p.red_dye} />
+                <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} isDyed={p.is_dyed} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.text }}>
                     {p.product_name}
-                    {p.red_dye && <span style={{ color: "#ef4444", fontSize: 10, marginLeft: 5 }}>RED DYE</span>}
+                    {p.is_dyed && <span style={{ color: "#ef4444", fontSize: 10, marginLeft: 5 }}>DYED</span>}
                     {p.is_out_of_stock && <span style={{ color: T.warning, fontSize: 10, marginLeft: 5 }}>OUT OF STOCK</span>}
                   </div>
                   {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
@@ -1362,27 +1362,22 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
   const [renewalDays, setRenewalDays] = useState(String(terminal?.renewal_days ?? ""));
   const [active,      setActive]      = useState(terminal?.active ?? true);
 
-  // Products assigned to this terminal — list of { product_id, red_dye, is_out_of_stock }
-  const [assigned, setAssigned] = useState<{ product_id: string; red_dye: boolean; is_out_of_stock: boolean }[]>(
-    (terminal?.products ?? []).map(p => ({ product_id: p.product_id, red_dye: p.red_dye, is_out_of_stock: p.is_out_of_stock }))
+  // Products assigned — just an ordered list of product_ids (duplicates allowed)
+  const [assigned, setAssigned] = useState<string[]>(
+    (terminal?.products ?? []).map(p => p.product_id)
   );
 
-  const [catalogOpen,  setCatalogOpen]  = useState(false);
+  const [catalogOpen,   setCatalogOpen]   = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
-  const [saving,       setSaving]       = useState(false);
-  const [err,          setErr]          = useState<string | null>(null);
+  const [saving,        setSaving]        = useState(false);
+  const [err,           setErr]           = useState<string | null>(null);
 
   function addFromCatalog(productId: string) {
-    // Always add — same product can appear twice (clear + dyed)
-    setAssigned(prev => [...prev, { product_id: productId, red_dye: false, is_out_of_stock: false }]);
+    setAssigned(prev => [...prev, productId]);
   }
 
   function removeAssigned(idx: number) {
     setAssigned(prev => prev.filter((_, i) => i !== idx));
-  }
-
-  function toggleRedDye(idx: number) {
-    setAssigned(prev => prev.map((a, i) => i === idx ? { ...a, red_dye: !a.red_dye } : a));
   }
 
   const filteredCatalog = allProducts.filter(p => {
@@ -1417,10 +1412,8 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
       await supabase.from("terminal_products").delete().eq("terminal_id", tid!);
       if (assigned.length > 0) {
         const { error: pErr } = await supabase.from("terminal_products").insert(
-          assigned.map(a => ({
-            terminal_id: tid!, product_id: a.product_id,
-            active: true, is_out_of_stock: a.is_out_of_stock,
-            red_dye: a.red_dye,
+          assigned.map(productId => ({
+            terminal_id: tid!, product_id: productId, active: true, is_out_of_stock: false,
           }))
         );
         if (pErr) throw pErr;
@@ -1482,13 +1475,13 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
           <div style={{ maxHeight: 260, overflowY: "auto" as const }}>
             {filteredCatalog.length === 0 && <div style={{ fontSize: 11, color: T.muted }}>No products found.</div>}
             {filteredCatalog.map(p => {
-              const countIn = assigned.filter(a => a.product_id === p.product_id).length;
+              const countIn = assigned.filter(id => id === p.product_id).length;
               return (
                 <div key={p.product_id}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px",
                     borderBottom: `1px solid ${T.border}22`, cursor: "pointer" }}
                   onClick={() => addFromCatalog(p.product_id)}>
-                  <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} />
+                  <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} isDyed={p.is_dyed} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
                     {p.description && <div style={{ fontSize: 10, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.description}</div>}
@@ -1507,24 +1500,18 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
       {/* Assigned products */}
       {assigned.length === 0
         ? <div style={{ fontSize: 11, color: T.muted, marginBottom: 8 }}>No products assigned yet.</div>
-        : assigned.map((a, i) => {
-          const p = allProducts.find(x => x.product_id === a.product_id);
+        : assigned.map((productId, i) => {
+          const p = allProducts.find(x => x.product_id === productId);
           if (!p) return null;
           return (
-            <div key={`${a.product_id}-${i}`}
+            <div key={`${productId}-${i}`}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
                 borderBottom: `1px solid ${T.border}22` }}>
-              <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} redDye={a.red_dye} />
+              <ProductSwatch buttonCode={p.button_code} hexCode={p.hex_code} isDyed={p.is_dyed} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.product_name}</div>
                 {p.un_number && <div style={{ fontSize: 10, color: T.muted }}>UN {p.un_number}</div>}
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11,
-                color: a.red_dye ? "#ef4444" : T.muted, flexShrink: 0 }}>
-                <input type="checkbox" checked={a.red_dye} onChange={() => toggleRedDye(i)}
-                  style={{ accentColor: "#ef4444", width: 12, height: 12 }} />
-                Red dye
-              </label>
               <button type="button" onClick={() => removeAssigned(i)}
                 style={{ background: "none", border: "none", cursor: "pointer", color: T.danger,
                   fontSize: 14, padding: "0 4px", flexShrink: 0, minWidth: 22, minHeight: 22,
@@ -1688,7 +1675,7 @@ export default function AdminPage() {
       // Always load the full product catalog (needed for TerminalModal picker)
       const { data: prodRows } = await supabase
         .from("products")
-        .select("product_id, product_name, button_code, hex_code, display_name, description, un_number, active")
+        .select("product_id, product_name, button_code, hex_code, display_name, description, un_number, active, is_dyed")
         .eq("active", true)
         .order("product_name");
       setAllProducts((prodRows ?? []) as Product[]);
@@ -1708,7 +1695,7 @@ export default function AdminPage() {
       const { data: tpRows } = termIds.length > 0
         ? await supabase
             .from("terminal_products")
-            .select("terminal_id, product_id, active, is_out_of_stock, red_dye")
+            .select("terminal_id, product_id, active, is_out_of_stock")
             .in("terminal_id", termIds)
             .eq("active", true)
         : { data: [] };
@@ -1722,7 +1709,8 @@ export default function AdminPage() {
           product_id: tp.product_id, button_code: p.button_code,
           product_name: p.product_name, hex_code: p.hex_code,
           description: p.description, un_number: p.un_number,
-          red_dye: tp.red_dye ?? false, is_out_of_stock: tp.is_out_of_stock ?? false,
+          is_dyed: p.is_dyed ?? false,
+          is_out_of_stock: tp.is_out_of_stock ?? false,
           active: tp.active ?? true,
         });
       }
