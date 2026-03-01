@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -76,7 +76,7 @@ export default function PlannerControls(props: any) {
             {(() => {
               const n = compartments.length;
               // Each compartment gets an equal share, with a min of 0 and max driven by flex
-              // Height scales with number of compartments — fewer comps = taller
+              // Height scales with number of compartments ΓÇö fewer comps = taller
               const h = n >= 5 ? "min(280px, 40vw)" : n >= 4 ? "min(300px, 50vw)" : "min(320px, 55vw)";
               const ordered = [...compartments]
                 .slice()
@@ -278,10 +278,10 @@ export default function PlannerControls(props: any) {
           return (
             <div style={{ display: "grid", gap: 16 }}>
 
-              {/* ── Tank + headspace side by side — always, on all screen sizes ── */}
+              {/* ΓöÇΓöÇ Tank + headspace side by side ΓÇö always, on all screen sizes ΓöÇΓöÇ */}
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
 
-                {/* Tank visual — compact, fixed width */}
+                {/* Tank visual ΓÇö compact, fixed width */}
                 <div style={{
                   flex: "0 0 auto", width: "min(140px, 38vw)",
                   borderRadius: 16, background: "rgba(255,255,255,0.06)",
@@ -332,7 +332,7 @@ export default function PlannerControls(props: any) {
                   </div>
                 </div>
 
-                {/* Headspace controls — fill remaining space */}
+                {/* Headspace controls ΓÇö fill remaining space */}
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, paddingTop: 4 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>
                     Headspace
