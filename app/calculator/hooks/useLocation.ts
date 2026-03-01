@@ -9,7 +9,7 @@ import type { CityRow, StateRow } from "../types";
 
 // ─── Ambient temp cache (module-scope, per tab session) ───────────────────────
 
-const AMBIENT_CACHE = new Map<string, { ts: number; tempF: number }>();
+const AMBIENT_CACHE = new Map<string, { ts: number; tempF: number; lat?: number | null; lon?: number | null }>();
 const AMBIENT_TTL_MS = 15 * 60 * 1000;
 
 function ambientKey(state: string, city: string) {
