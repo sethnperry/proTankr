@@ -111,7 +111,7 @@ export default function PlannerControls(props: any) {
 
                 const codeColor = isEmpty
                   ? "rgba(180,220,255,0.9)"
-                  : typeof prod?.hex_code === "string" && prod.hex_code.trim()
+                  : (typeof prod?.hex_code === "string" && prod.hex_code.trim())
                   ? prod.hex_code.trim()
                   : "rgba(255,255,255,0.9)";
 
@@ -502,3 +502,4 @@ export default function PlannerControls(props: any) {
 }
 
 // build cache bust
+
