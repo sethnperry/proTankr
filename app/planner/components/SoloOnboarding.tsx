@@ -266,21 +266,33 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
     const trimmed = name.trim();
     if (!trimmed) { setError("Please enter your name."); return; }
     setBusy(true); setError(null);
+    // Name is required — a failure here is a hard stop.
     try {
       const { error: e1 } = await supabase.rpc("upsert_driver_profile", {
         p_user_id: userId, p_company_id: companyId, p_data: { display_name: trimmed },
       });
       if (e1) throw e1;
-      const co = company.trim();
-      if (co) {
+    } catch (e: any) {
+      console.error("[onboarding] name save failed:", e?.code, e?.message ?? e);
+      setError("Couldn't save your name. Check your connection and try again.");
+      setBusy(false);
+      return;
+    }
+    // Company is optional — a rename failure (e.g. this driver doesn't own the
+    // company, or a transient error) must NEVER strand them on this step: the
+    // required name already saved. Best-effort, advance regardless.
+    const co = company.trim();
+    if (co) {
+      try {
         const { error: e2 } = await supabase.rpc("set_solo_company_name", { p_company_id: companyId, p_name: co });
         if (e2) throw e2;
+      } catch (e: any) {
+        console.warn("[onboarding] company rename skipped:", e?.code, e?.message ?? e);
       }
-      builtRef.current = true;
-      setStep("truck");
-    } catch (e: any) {
-      setError("Couldn't save that. Check your connection and try again.");
-    } finally { setBusy(false); }
+    }
+    builtRef.current = true;
+    setStep("truck");
+    setBusy(false);
   }, [name, company, userId, companyId]);
 
   const saveTruck = useCallback(async () => {
