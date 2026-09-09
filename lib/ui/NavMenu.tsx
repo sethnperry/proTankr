@@ -180,8 +180,10 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
             </div>
           </div>
 
-          {/* Company switcher */}
-          {memberships.length > 0 && (
+          {/* Company switcher -- hidden for super admins, who pick/switch
+              companies from the ProTankr Dash dropdown instead of cluttering
+              this menu with every company they can reach. */}
+          {memberships.length > 0 && !isSuperAdmin && (
             <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>
                 Company
@@ -252,7 +254,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
               <NavLink href="/admin" icon="⚙" label="Company Admin" onClick={() => setOpen(false)} />
             )}
             {isSuperAdmin && !isSuperAdmin_ && (
-              <NavLink href="/superadmin" icon="◈" label="Super Admin" onClick={() => setOpen(false)} />
+              <NavLink href="/superadmin" icon="◈" label="ProTankr Dash" onClick={() => setOpen(false)} />
             )}
             <NavLink href="/learn" icon="?" label="Learn" onClick={() => setOpen(false)} />
             {/* Settings used to be its own gear icon in the Planner header's
