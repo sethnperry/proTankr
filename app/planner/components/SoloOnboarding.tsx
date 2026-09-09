@@ -297,7 +297,11 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
       builtRef.current = true;
       setStep("trailer");
     } catch (e: any) {
-      setError("Couldn't save the truck. Check your connection and try again.");
+      // truck_name is globally unique (trucks_truck_name_key); a duplicate is
+      // the most likely real failure, so name it rather than blame the network.
+      setError(e?.code === "23505"
+        ? "That truck number is already in use. Enter a different one."
+        : "Couldn't save the truck. Check your connection and try again.");
     } finally { setBusy(false); }
   }, [truckNumber, companyId]);
 
@@ -364,7 +368,9 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
       clearTrailerDraft(userId);
       setStep("tare");
     } catch (e: any) {
-      setError("Couldn't save the trailer. Check your connection and try again.");
+      setError(e?.code === "23505"
+        ? "That trailer number is already in use. Enter a different one."
+        : "Couldn't save the trailer. Check your connection and try again.");
     } finally { setBusy(false); }
   }, [trailerNumber, caps, compCount, companyId, userId, safetyCapFor]);
 
@@ -428,7 +434,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
   const backTo = (s: Step) => () => { setError(null); setStep(s); };
 
   return createPortal(
-    <div style={S.screen}>
+    <div style={S.screen} data-onboarding="">
       {showDots && (
         <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top,0px) + 18px)", left: 0, right: 0, display: "flex", gap: 5, justifyContent: "center" }}>
           {DOT_STEPS.map((s, i) => (
