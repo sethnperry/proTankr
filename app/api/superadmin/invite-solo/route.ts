@@ -39,7 +39,7 @@ function getCallerClient(token: string) {
   });
 }
 
-async function sendEmail(to: string, confirmUrl: string) {
+async function sendEmail(to: string, confirmUrl: string, code: string, installUrl: string) {
   const apiKey   = process.env.RESEND_API_KEY;
   const fromAddr = process.env.INVITE_FROM_EMAIL ?? "noreply@protankr.com";
   if (!apiKey) throw new Error("RESEND_API_KEY not set.");
@@ -49,8 +49,8 @@ async function sendEmail(to: string, confirmUrl: string) {
     body: JSON.stringify({
       from: `ProTankr <${fromAddr}>`,
       to: [to],
-      subject: "Your ProTankr account is ready",
-      html: buildEmailHtml(confirmUrl),
+      subject: "Your ProTankr sign-in code",
+      html: buildEmailHtml(confirmUrl, code, installUrl),
     }),
   });
   if (!res.ok) throw new Error(`Resend error ${res.status}: ${await res.text()}`);
@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
 
     let userId: string;
     let confirmUrl: string;
+    let code: string; // the 6-digit email_otp the driver types into the app
     if (existing) {
       userId = existing.id;
       const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
       });
       if (linkErr || !linkData?.properties?.hashed_token) throw new Error(linkErr?.message ?? "Failed to generate login link.");
       confirmUrl = `${redirectTo}?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=magiclink`;
+      code = linkData.properties.email_otp ?? "";
     } else {
       const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
         type: "invite", email, options: { redirectTo },
@@ -98,6 +100,7 @@ export async function POST(req: NextRequest) {
       if (linkErr || !linkData?.properties?.hashed_token || !linkData.user?.id) throw new Error(linkErr?.message ?? "Failed to generate invite link.");
       userId = linkData.user.id;
       confirmUrl = `${redirectTo}?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=invite`;
+      code = linkData.properties.email_otp ?? "";
     }
 
     // ── Provision their solo company + entitlement (acting as the caller so
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest) {
     const { error: rpcErr } = await caller_.rpc("admin_invite_solo_user", { p_user_id: userId, p_comped: isComped });
     if (rpcErr) throw new Error(rpcErr.message);
 
-    await sendEmail(email, confirmUrl);
+    await sendEmail(email, confirmUrl, code, `${origin}/install`);
     return NextResponse.json({ ok: true, comped: isComped });
   } catch (e: any) {
     console.error("[invite-solo] error:", e?.message ?? e);
@@ -114,10 +117,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildEmailHtml(confirmUrl: string): string {
+function buildEmailHtml(confirmUrl: string, code: string, installUrl: string): string {
+  // Reliable-everywhere flow: a CODE the driver types into the app (never opens
+  // in the wrong browser / never loses its session like a link can), plus a
+  // one-page install guide. The magic link stays as a secondary fallback.
+  // Group into two halves for readability, whatever the OTP length (Supabase
+  // OTP length is a project setting -- 8 digits here, not the usual 6).
+  const codeDisplay = code ? `${code.slice(0, Math.ceil(code.length / 2))} ${code.slice(Math.ceil(code.length / 2))}`.trim() : "";
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Your ProTankr account is ready</title></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Your ProTankr sign-in code</title></head>
 <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111111;">
 <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;background:#ffffff;"><tr><td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
@@ -127,32 +136,36 @@ function buildEmailHtml(confirmUrl: string): string {
       <td valign="middle" align="right" width="40"><img src="https://protankr.com/icons/icon-email-black.png" width="36" height="36" alt="ProTankr" style="display:block;" /></td>
     </tr></table>
   </td></tr>
-  <tr><td style="padding:28px 0 24px;">
-    <div style="font-size:17px;font-weight:700;color:#111111;margin-bottom:8px;line-height:1.4;">Your ProTankr account is ready.</div>
-    <p style="margin:0 0 24px;font-size:14px;color:#666666;line-height:1.6;">
-      Tap the button below to sign in and set up your truck. The link logs you in automatically &mdash; no password needed.
-    </p>
-    <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:32px;">
+  <tr><td style="padding:28px 0 8px;">
+    <div style="font-size:17px;font-weight:700;color:#111111;margin-bottom:14px;line-height:1.4;">Your ProTankr account is ready.</div>
+    ${codeDisplay ? `
+    <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#aaaaaa;margin-bottom:8px;">Your sign-in code</div>
+    <div style="font-size:36px;font-weight:900;letter-spacing:6px;color:#111111;margin-bottom:6px;">${codeDisplay}</div>
+    <p style="margin:0 0 24px;font-size:12px;color:#999999;">Enter this in the app to sign in. It expires in 1 hour.</p>` : ""}
+  </td></tr>
+  <tr><td style="padding:0 0 24px;">
+    <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#aaaaaa;margin-bottom:12px;">How to get started</div>
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px;"><tr>
+      <td valign="top" width="26" style="font-size:14px;font-weight:900;color:#111;">1</td>
+      <td style="font-size:14px;color:#444;line-height:1.5;">Add ProTankr to your phone's home screen &mdash; tap the button below for step-by-step help for your phone.</td>
+    </tr></table>
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px;"><tr>
+      <td valign="top" width="26" style="font-size:14px;font-weight:900;color:#111;">2</td>
+      <td style="font-size:14px;color:#444;line-height:1.5;">Open <strong>ProTankr</strong> from your home screen.</td>
+    </tr></table>
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;"><tr>
+      <td valign="top" width="26" style="font-size:14px;font-weight:900;color:#111;">3</td>
+      <td style="font-size:14px;color:#444;line-height:1.5;">Enter your email and the code above.</td>
+    </tr></table>
+    <table cellpadding="0" cellspacing="0" width="100%">
       <tr><td style="background:#111111;border-radius:12px;text-align:center;">
-        <a href="${confirmUrl}" style="display:block;padding:15px 24px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;">Open ProTankr &#8594;</a>
+        <a href="${installUrl}" style="display:block;padding:15px 24px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;">Add ProTankr to my phone &#8594;</a>
       </td></tr>
     </table>
-    <div style="border-top:1px solid #e5e5e5;padding-top:20px;">
-      <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#aaaaaa;margin-bottom:16px;">Save it to your home screen</div>
-      <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:14px;">
-        <tr><td style="font-size:12px;font-weight:700;color:#444444;padding-bottom:4px;">Android / Chrome</td></tr>
-        <tr><td style="font-size:12px;color:#888888;line-height:1.8;">Tap the three-dot menu &rsaquo; <span style="color:#333333;font-weight:600;">Add to Home screen</span> &rsaquo; <span style="color:#333333;font-weight:600;">Install app</span>.</td></tr>
-      </table>
-      <table cellpadding="0" cellspacing="0" width="100%">
-        <tr><td style="font-size:12px;font-weight:700;color:#444444;padding-bottom:4px;">iPhone / Safari</td></tr>
-        <tr><td style="font-size:12px;color:#888888;line-height:1.8;">Open in <span style="color:#333333;font-weight:600;">Safari</span>, then tap <span style="color:#333333;font-weight:600;">Share</span> &rsaquo; <span style="color:#333333;font-weight:600;">Add to Home Screen</span>.</td></tr>
-      </table>
-    </div>
   </td></tr>
   <tr><td style="padding:20px 0 0;border-top:1px solid #e5e5e5;">
-    <p style="margin:0 0 6px;font-size:11px;color:#aaaaaa;line-height:1.6;">This link expires in 24 hours and works only once. If you didn't expect this, you can safely ignore it.</p>
-    <p style="margin:0 0 4px;font-size:11px;color:#aaaaaa;">Button not working? Copy and paste into your browser:</p>
-    <a href="${confirmUrl}" style="font-size:11px;color:#888888;word-break:break-all;overflow-wrap:break-word;">${confirmUrl}</a>
+    <p style="margin:0 0 6px;font-size:11px;color:#aaaaaa;line-height:1.6;">In a hurry? You can also <a href="${confirmUrl}" style="color:#888888;">tap here to open ProTankr in your browser</a> &mdash; but adding it to your home screen keeps you signed in.</p>
+    <p style="margin:12px 0 0;font-size:11px;color:#aaaaaa;line-height:1.6;">If you didn't expect this, you can safely ignore it.</p>
   </td></tr>
 </table>
 </td></tr></table>

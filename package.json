@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/capacity/*.test.ts app/planner/utils/*.test.ts"
+    "test": "node --test lib/capacity/*.test.ts lib/pwa/*.test.ts app/planner/utils/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
