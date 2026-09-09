@@ -33,6 +33,13 @@ async function verifyAdmin(
   if (!token) return false;
   const { data: { user } } = await admin.auth.getUser(token);
   if (!user) return false;
+  // A super admin (the operator) can invite to ANY company -- the ProTankr
+  // Dash lets them pick any company and add users to it, and the operator is
+  // not necessarily a member of that company. Checked first so it doesn't
+  // depend on a user_companies row existing for them.
+  const { data: sa } = await admin
+    .from("super_admins").select("user_id").eq("user_id", user.id).maybeSingle();
+  if (sa) return true;
   const { data: uc } = await admin
     .from("user_companies").select("role")
     .eq("user_id", user.id).eq("company_id", companyId).maybeSingle();
