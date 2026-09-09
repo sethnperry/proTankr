@@ -171,10 +171,11 @@ export default function DispatchPage() {
   useEffect(() => {
     if (shell.role == null) return;
     if (!shell.isSuperAdminResolved) return;
-    if (!canReachDestination("dispatch", shell.role, shell.isSuperAdmin)) {
+    if (shell.isSolo === null) return; // a solo admin is NOT a dispatcher -- wait for resolution, then bounce to /planner
+    if (!canReachDestination("dispatch", shell.role, shell.isSuperAdmin, shell.isSolo)) {
       router.replace("/planner");
     }
-  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, router]);
+  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
   // Sourced from the shared cached catalog (lib/queries/useTerminalsCatalog.ts)
   // instead of this page's own .in("terminal_id", terminalIds) network
   // lookup below -- the full catalog is already cached, so this is a

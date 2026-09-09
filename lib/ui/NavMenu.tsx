@@ -10,7 +10,7 @@ import { canReachDestination } from "./driver/navDestinations";
 type Membership = {
   company_id: string;
   role: string;
-  company: { company_id: string; company_name: string } | null;
+  company: { company_id: string; company_name: string; is_solo: boolean | null } | null;
 };
 
 export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode?: boolean; anchor?: "left" | "right"; onOpenSettings?: () => void } = {}) {
@@ -52,6 +52,10 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
   // (drives the hamburger icon's own styling/anchor default) and would
   // incorrectly hide the new Planner link while on, say, /planner/vault.
   const role: Role | null = isRole(myRole) ? myRole : null;
+  // A solo company's member is role 'admin' but navigates like a driver
+  // (Planner/Cards/Vault, never the fleet Dispatch page) -- see
+  // navDestinations.ts. Derived from the active company's own is_solo flag.
+  const isSolo = Boolean(memberships.find(m => m.company_id === activeId)?.company?.is_solo);
   const isPlannerPage = pathname === "/planner";
   const isDispatchPage = Boolean(pathname?.startsWith("/planner/dispatch"));
   const isCardsPage = Boolean(pathname?.startsWith("/planner/cards"));
@@ -67,7 +71,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
       const [{ data: mRows }, { data: sRow }, { data: superAdminData }] = await Promise.all([
         supabase
           .from("user_companies")
-          .select("company_id, role, company:companies(company_id, company_name)")
+          .select("company_id, role, company:companies(company_id, company_name, is_solo)")
           .eq("user_id", user.id),
         supabase
           .from("user_settings")
@@ -226,16 +230,16 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
                 Admin/Super Admin/Learn) even though it now overlaps with
                 the Planner link here while already inside that section --
                 harmless, same destination either way. */}
-            {canReachDestination("planner", role, isSuperAdmin) && !isPlannerPage && (
+            {canReachDestination("planner", role, isSuperAdmin, isSolo) && !isPlannerPage && (
               <NavLink href="/planner" icon="▤" label="Planner" onClick={() => setOpen(false)} />
             )}
-            {canReachDestination("dispatch", role, isSuperAdmin) && !isDispatchPage && (
+            {canReachDestination("dispatch", role, isSuperAdmin, isSolo) && !isDispatchPage && (
               <NavLink href="/planner/dispatch" icon="◫" label="Dispatch" onClick={() => setOpen(false)} />
             )}
-            {canReachDestination("cards", role, isSuperAdmin) && !isCardsPage && (
+            {canReachDestination("cards", role, isSuperAdmin, isSolo) && !isCardsPage && (
               <NavLink href="/planner/cards" icon="▥" label="Cards" onClick={() => setOpen(false)} />
             )}
-            {canReachDestination("vault", role, isSuperAdmin) && !isVaultPage && (
+            {canReachDestination("vault", role, isSuperAdmin, isSolo) && !isVaultPage && (
               <NavLink href="/planner/vault" icon="🔒" label="Vault" onClick={() => setOpen(false)} />
             )}
             {!isPlanner && (

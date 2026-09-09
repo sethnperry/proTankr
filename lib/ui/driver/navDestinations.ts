@@ -27,11 +27,20 @@ import type { Role } from "./role";
 
 export type NavDestination = "planner" | "dispatch" | "cards" | "vault";
 
+// isSolo: a solo company is a single driver who happens to hold role 'admin'
+// (solo users are always provisioned as 'admin' -- see CLAUDE.md). They are
+// drivers in practice, so they navigate the driver-style Planner/Cards/Vault
+// and never the fleet Dispatch page. Without this, a real invited solo driver
+// (role 'admin', not a super admin) would be redirected off /planner to
+// /planner/dispatch and never reach the driver planner or its first-run
+// onboarding. Defaults false so fleet call sites are unchanged.
 export function canReachDestination(
   dest: NavDestination,
   role: Role | null,
-  isSuperAdmin: boolean
+  isSuperAdmin: boolean,
+  isSolo: boolean = false
 ): boolean {
+  if (isSolo) return dest === "planner" || dest === "cards" || dest === "vault";
   switch (dest) {
     case "planner":
       return isSuperAdmin || role === "driver" || role === "lead";
@@ -50,8 +59,9 @@ export function canReachDestination(
 // This reverses a 2026-08-04 decision that admin should never auto-redirect
 // off the driver-style Planner -- that reasoning is superseded now that
 // admin's Planner IS the Dispatch page, not a shared page with both.
-export function defaultLandingPath(role: Role | null, isSuperAdmin: boolean): string | null {
+export function defaultLandingPath(role: Role | null, isSuperAdmin: boolean, isSolo: boolean = false): string | null {
   if (isSuperAdmin) return null;
+  if (isSolo) return null; // solo = driver-style, stays on the driver Planner
   if (role === "admin" || role === "dispatch") return "/planner/dispatch";
   return null;
 }

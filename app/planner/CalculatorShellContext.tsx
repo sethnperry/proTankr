@@ -84,6 +84,12 @@ type ShellValue = {
   // Dispatch-page Planner; driver/lead -> this page).
   role: Role | null;
   companyId: string | null;
+  // is_solo of the active company -- null until resolved. A solo company's
+  // member is role 'admin' but navigates like a driver (Planner/Cards/Vault,
+  // never the fleet Dispatch page); the landing redirect and the Cards/
+  // Dispatch route gates all read this so a real solo driver isn't bounced
+  // off the driver Planner. See lib/ui/driver/navDestinations.ts.
+  isSolo: boolean | null;
   // Super admins (is_super_admin() RPC, same one NavMenu.tsx already uses)
   // get BOTH Planner and Dispatch reachable, regardless of their own company
   // role -- lets one account verify both without reassigning roles.
@@ -342,6 +348,17 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     return () => { cancelled = true; };
   }, [effectiveUserId]);
 
+  // is_solo of the active company (null until resolved) -- see the ShellValue
+  // field comment. Keyed on companyId so it re-resolves on a company switch.
+  const [isSolo, setIsSolo] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!companyId) { setIsSolo(null); return; }
+    let cancelled = false;
+    supabase.from("companies").select("is_solo").eq("company_id", companyId).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setIsSolo(Boolean((data as any)?.is_solo)); });
+    return () => { cancelled = true; };
+  }, [companyId]);
+
   // Super-admin status is about the REAL signed-in account, not whoever
   // they're impersonating -- keyed on authUserId, not effectiveUserId.
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -520,7 +537,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
     cardDataByTerminalId, setCardDataForTerminal_,
     theme,
-    role, companyId, isSuperAdmin, isSuperAdminResolved,
+    role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
     chooseTerminal, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
@@ -536,7 +553,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
     cardDataByTerminalId, setCardDataForTerminal_,
     theme,
-    role, companyId, isSuperAdmin, isSuperAdminResolved,
+    role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
     chooseTerminal, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,

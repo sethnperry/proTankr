@@ -32,10 +32,11 @@ export default function CardsLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (shell.role == null) return;
     if (!shell.isSuperAdminResolved) return;
-    if (!canReachDestination("cards", shell.role, shell.isSuperAdmin)) {
+    if (shell.isSolo === null) return; // a solo admin CAN reach Cards -- wait for resolution before deciding
+    if (!canReachDestination("cards", shell.role, shell.isSuperAdmin, shell.isSolo)) {
       router.replace("/planner/dispatch");
     }
-  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, router]);
+  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
 
   return <>{children}</>;
 }

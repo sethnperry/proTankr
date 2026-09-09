@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { clearSetupSession } from "@/lib/setupSession";
 import { useRouter } from "next/navigation";
 import SetupGate from "./components/SetupGate";
+import SoloOnboarding from "./components/SoloOnboarding";
+import { isOnboardingComplete } from "./utils/onboardingProgress";
 import { useCalculatorShell } from "./CalculatorShellContext";
 
 /**
@@ -300,14 +302,28 @@ export default function CalculatorPage() {
   // flag already exists to guard against, just a second, independent way
   // for that guard's own precondition to be wrong -- worth closing properly
   // rather than leaving a narrower version of the same bug in place.
+  // ── Solo first-run onboarding gate ─────────────────────────────────────────
+  // A brand-new (or partially-set-up) solo driver gets a guided setup flow
+  // instead of the raw SetupGate/equipment-management entry. Active only for a
+  // solo company that hasn't finished onboarding; the flow itself resolves the
+  // exact resume step from real DB state (see SoloOnboarding). While it's
+  // active, SetupGate is suppressed so the two gates never both show. `isSolo`
+  // also feeds the landing redirect below (a solo driver is role 'admin' but
+  // must NOT be bounced to /planner/dispatch like a fleet admin), which is why
+  // this block sits above that effect.
+  const [onboardingDone, setOnboardingDone] = useState(false);
+  useEffect(() => { setOnboardingDone(isOnboardingComplete(effectiveUserId || null)); }, [effectiveUserId]);
+  const onboardingActive = shell.isSolo === true && !onboardingDone && !!effectiveUserId && !!shell.companyId;
+
   useEffect(() => {
     if (hasCheckedDefaultLanding) return;
     if (shell.role == null) return;
     if (!shell.isSuperAdminResolved) return;
+    if (shell.isSolo === null) return; // wait for solo resolution -- a solo admin must not be redirected off the driver Planner
     hasCheckedDefaultLanding = true;
-    const target = defaultLandingPath(shell.role, shell.isSuperAdmin);
+    const target = defaultLandingPath(shell.role, shell.isSuperAdmin, shell.isSolo === true);
     if (target) router.replace(target);
-  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, router]);
+  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
 
   // ── Card data (card number + PIN + private note, per terminal, per user) ──
   // Owned in CalculatorShellContext now -- the new Cards tab route needs the
@@ -2856,17 +2872,32 @@ const lastProductInfoById = useMemo(() => {
         );
       })()}
 
-      <SetupGate
-        comboSelected={!!equipment.selectedComboId}
-        locationSelected={!!(location.selectedState && location.selectedCity)}
-        terminalSelected={!!location.selectedTerminalId}
-        equipmentLabel={equipment.equipmentLabel}
-        locationLabel={location.locationLabel}
-        terminalLabel={terminalLabel}
-        onOpenEquipment={() => setEquipOpen(true)}
-        onOpenLocation={() => setLocOpen(true)}
-        onOpenTerminal={() => setTermOpen(true)}
-      />
+      {onboardingActive ? (
+        <SoloOnboarding
+          userId={effectiveUserId}
+          companyId={shell.companyId!}
+          selectedState={location.selectedState}
+          selectedCity={location.selectedCity}
+          selectedTerminalId={location.selectedTerminalId}
+          onOpenLocation={() => setLocOpen(true)}
+          onOpenTerminal={() => setTermOpen(true)}
+          fetchCombos={equipment.fetchCombos}
+          setSelectedComboId={equipment.setSelectedComboId}
+          onComplete={() => setOnboardingDone(true)}
+        />
+      ) : (
+        <SetupGate
+          comboSelected={!!equipment.selectedComboId}
+          locationSelected={!!(location.selectedState && location.selectedCity)}
+          terminalSelected={!!location.selectedTerminalId}
+          equipmentLabel={equipment.equipmentLabel}
+          locationLabel={location.locationLabel}
+          terminalLabel={terminalLabel}
+          onOpenEquipment={() => setEquipOpen(true)}
+          onOpenLocation={() => setLocOpen(true)}
+          onOpenTerminal={() => setTermOpen(true)}
+        />
+      )}
 
       {/* ── Modals ── */}
       <LoadingModal
