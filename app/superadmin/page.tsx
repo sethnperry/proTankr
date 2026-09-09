@@ -37,6 +37,36 @@ export default function SuperAdminPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
 
+  // ── Invite Solo Driver ──
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePaid, setInvitePaid] = useState(false); // false = Free/comped, true = Paid
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function sendSoloInvite() {
+    const email = inviteEmail.trim();
+    if (!email) { setInviteMsg({ ok: false, text: "Enter an email address." }); return; }
+    setInviteBusy(true);
+    setInviteMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/superadmin/invite-solo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ email, comped: !invitePaid }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status}).`);
+      setInviteMsg({ ok: true, text: `Invite sent to ${email} (${invitePaid ? "Paid — trial" : "Free — comped"}).` });
+      setInviteEmail("");
+      await loadCompanies();
+    } catch (e: any) {
+      setInviteMsg({ ok: false, text: e?.message ?? "Failed to send invite." });
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
   const loadCompanies = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -182,6 +212,78 @@ export default function SuperAdminPage() {
           {error}
         </div>
       )}
+
+      {/* ── Invite Solo Driver ────────────────────────────────────────────
+          Access is invite-only for now. Free = comped (non-expiring access);
+          Paid = flagged for future billing (both reach the app today). */}
+      <div
+        style={{
+          padding: "16px", borderRadius: 14, marginBottom: 20,
+          border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
+        }}
+      >
+        <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 4 }}>Invite Solo Driver</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
+          Creates the driver their own solo account and emails them a sign-in link.
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") sendSoloInvite(); }}
+            placeholder="driver@email.com"
+            autoComplete="email"
+            inputMode="email"
+            style={{
+              flex: "1 1 220px", minWidth: 0, padding: "10px 12px", borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
+              color: "#fff", fontSize: 14, outline: "none",
+            }}
+          />
+          {/* Free / Paid segmented toggle */}
+          <div style={{ display: "flex", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }}>
+            {[{ paid: false, label: "Free" }, { paid: true, label: "Paid" }].map((opt) => {
+              const active = invitePaid === opt.paid;
+              return (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setInvitePaid(opt.paid)}
+                  style={{
+                    padding: "10px 16px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 800,
+                    background: active ? (opt.paid ? "rgba(251,191,36,0.16)" : "rgba(74,222,128,0.16)") : "transparent",
+                    color: active ? (opt.paid ? "#fbbf24" : "#4ade80") : "rgba(255,255,255,0.55)",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={sendSoloInvite}
+            disabled={inviteBusy}
+            style={{
+              padding: "10px 18px", borderRadius: 10, border: "none", cursor: inviteBusy ? "not-allowed" : "pointer",
+              background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, opacity: inviteBusy ? 0.6 : 1,
+            }}
+          >
+            {inviteBusy ? "Sending…" : "Send Invite"}
+          </button>
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 10 }}>
+          {invitePaid
+            ? "Paid — starts a trial flagged for billing when checkout is live. Full access today."
+            : "Free — comped, non-expiring access. For testers and people helping with feedback."}
+        </div>
+        {inviteMsg && (
+          <div style={{ marginTop: 12, fontSize: 13, color: inviteMsg.ok ? "#4ade80" : "#f87171" }}>
+            {inviteMsg.text}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div style={{ color: "rgba(255,255,255,0.45)" }}>Loading…</div>
