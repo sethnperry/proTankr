@@ -9759,6 +9759,164 @@ the per-terminal bias correction and city lat/lon lookup. No error, no log,
 just quieter and less accurate predictions -- the one failure mode here that
 nobody would notice.
 
+## Solo onboarding + invite funnel + dead-easy install + ProTankr Dash + native foundation (2026-09-08/09)
+
+A multi-part launch-readiness push. Everything below is shipped and merged to
+`main` unless noted. Plan preserved at `snug-petting-starlight.md`.
+
+### Solo first-run onboarding (Phase 1)
+
+A brand-new solo driver used to land straight in the raw equipment DB UI. Now a
+full-screen guided gate walks them from magic-link/code signup to a first usable
+load, reusing every existing insert/RPC/picker (does NOT rebuild the planner or
+equipment model). Font is the app's existing Outfit (inherited, never
+overridden).
+
+- `app/planner/components/SoloOnboarding.tsx` (new) -- 12 screens
+  (welcome → name+optional company → truck# → trailer#+comp count → per-comp
+  capacities → safety-cap confirm table → combined tare → planner target →
+  location → terminal → "ready"+tutorial → complete). **Resume is derived from
+  real DB/shell state** (skip name if `profiles.display_name` set, skip truck
+  if an active truck exists, etc.) plus a small localStorage `trailerDraft` for
+  the one sub-state not in the DB until committed (trailer#+comp count+per-comp
+  caps+current index). Cross-device safe: a second device sees everything in the
+  DB and completes immediately.
+- Reused verbatim: `trucks`/`trailers`/`trailer_compartments` inserts,
+  `couple_combo({p_truck_id,p_trailer_id,p_tare_lbs,p_target_weight,p_force:true})`
+  (one call carries tare AND target), `upsert_driver_profile`, and the shell's
+  already-mounted `LocationModal`/`MyTerminalsModal` via
+  `shell.setLocOpen`/`setTermOpen`.
+- **Safety cap = total − 50** (clamped ≥1, never > total); terminology is
+  **Total Capacity / Safety Cap**, never "legal maximum". Products are NOT asked
+  in the questionnaire (done in the planner during the one-time tutorial).
+- **Target step**: pre-filled **79,500**, editable, with the warning ("stay
+  ~500 lbs under 80,000 for API drift until more users verify the data").
+- `app/planner/utils/onboardingProgress.ts` (new) -- per-user localStorage
+  helpers (`proTankr:u:<uid>:...`): onboarding-complete, tutorial-seen,
+  trailer-draft.
+- `supabase/migrations/20260909000000_set_solo_company_name.sql` -- **APPLIED**
+  (confirmed live via P0001 "Access denied" on the negative path). Owner-gated,
+  solo-only, `SECURITY DEFINER`, pinned search_path. The only writer of
+  `companies.company_name`.
+- `app/planner/page.tsx` -- mounts `<SoloOnboarding>` ahead of `SetupGate` when
+  `shell.isSolo === true && !onboardingDone && effectiveUserId && companyId`;
+  suppresses `SetupGate` while onboarding is active.
+- **Real launch-blocker found and fixed**: `navDestinations.ts` treated a solo
+  driver's `role === 'admin'` as fleet and redirected them off `/planner` to
+  `/planner/dispatch` (never reaching the driver planner or onboarding). Added
+  an `isSolo` param to `canReachDestination`/`defaultLandingPath` (solo →
+  planner/cards/vault only; solo → no redirect), threaded a new
+  `isSolo: boolean | null` field through `CalculatorShellContext` (fetches
+  `companies.is_solo` keyed on companyId) into the landing-redirect effect and
+  the `cards`/`dispatch` route gates (all now wait for `isSolo !== null`).
+- Live-verified end-to-end twice (fresh magic-link signup → full flow → usable
+  planner) and resume-verified.
+
+### Phase 2 -- super-admin solo invite + Free/Paid entitlement (invite-only)
+
+Access is **invite-only via the super admin** for now (no payment processor
+wired). Public "Get the App" stays a request/paywall shell.
+
+- `supabase/migrations/20260909010000_solo_invite_entitlement.sql` -- **APPLIED**.
+  Adds `company_subscriptions.comped boolean` and
+  `admin_invite_solo_user(p_user_id, p_comped)` (`SECURITY DEFINER`,
+  `is_super_admin()`-gated, idempotent). Free → status `active`/`comped=true`
+  (non-expiring); Paid → status `trialing`/`comped=false` (future billing flag).
+  Neither hard-gates access yet -- both reach the app; the flag only records
+  intent for when Stripe/RevenueCat exists.
+- `app/api/superadmin/invite-solo/route.ts` (new) -- super-admin-gated (both a
+  `super_admins` lookup and a caller-token RPC whose own `is_super_admin()` gate
+  re-checks). `generateLink` (invite new / magiclink existing), captures
+  `email_otp` as the sign-in code, sends a Resend email with the code + install
+  steps + `${origin}/install`. Verified live (Free→active/comped, Paid→trialing).
+
+### Dead-easy install + code sign-in (cross-device)
+
+The launch's biggest friction point: getting a non-technical driver to install a
+PWA and sign in, across iPhone/Safari, Android/Chrome, and Outlook/Gmail in-app
+browsers that can neither install nor hold a link session.
+
+- `lib/pwa/deviceInstall.ts` (new) -- pure `analyzeUserAgent(ua)` (platform /
+  browser / in-app host incl. Outlook/Gmail/FB/etc.) + `recommendedInstallMethod`
+  + SSR-safe `isStandalone`/`currentUAInfo` (iPadOS-as-Mac detection). 10 unit
+  tests (`deviceInstall.test.ts`).
+- `app/components/InstallGuide.tsx` + `app/install/page.tsx` (new) -- captures
+  `beforeinstallprompt` for Android one-tap; renders the correct steps per
+  method (installed / android-prompt / ios-safari / open-in-browser / manual /
+  desktop).
+- `app/login/page.tsx` -- added a **primary code sign-in** field
+  (`verifyOtp` looping types `["email","magiclink","invite"]` +
+  `provision_solo_company` + redirect `/planner`), kept magic link + "Email me a
+  code" as fallbacks. **OTP is 8 digits in this project** (a Supabase project
+  setting), not the usual 6 -- the input takes up to 10 chars and copy is
+  length-agnostic; codes are grouped in two halves in emails.
+- **Why code-first**: the code path is the only one that works inside Outlook/
+  Gmail in-app browsers (can't open the installed app, can't hold a tapped
+  link's session). Invite emails (solo + fleet) carry the code via Resend using
+  service-role `generateLink().email_otp`; the self-serve `/login` "Email me a
+  code" path depends on the Supabase **Magic Link email template including
+  `{{ .Token }}`** -- a dashboard edit still owed (see Pre-launch cleanup).
+
+### ProTankr Dash (super-admin console rebuild)
+
+`app/superadmin/page.tsx` rebuilt to fit the screen (single column, max-width
+640, flexWrap -- verified no overflow at 390/768) and renamed **"ProTankr Dash"**
+in the nav. Company picker moved OUT of the nav (`NavMenu` switcher now hidden
+for super admins) INTO the dashboard as a `CustomSelect` dropdown. From a
+selected company: rename / Solo↔Fleet toggle, "Open Planner as this" /
+"Company Admin" (`set_active_company` + hard nav), invite-to-selected-company
+(fleet `/api/admin/invite`), plus a standalone **Invite Solo Driver** (Free/Paid).
+Stats tiles + "coming soon" placeholders. `NavMenu.tsx`: "Super Admin" →
+"ProTankr Dash".
+
+### Fleet invite email brought to parity + super-admin invite override (2026-09-09)
+
+- `app/api/admin/invite/route.ts` -- the fleet invite email now **leads with the
+  8-digit sign-in code** (captures `email_otp` in both new-user/invite and
+  existing-user/magiclink branches) + install button to `/install`, magic link
+  demoted to a fallback -- matching the solo invite. Keeps the fleet-specific
+  "you've been added to {company}" context.
+- Same file: `verifyAdmin` now returns true for **any super admin** (checked
+  against `super_admins` before the per-company role lookup), so the Dash's
+  invite-to-any-company works even for a company the operator isn't a member of.
+  Verified live that the sole super admin (`db7b7930…`) is currently an `admin`
+  member of all three companies, so this is a correct forward-looking safeguard
+  (harmless now, needed the moment a non-member company exists) -- "Open Planner
+  as this company" is therefore NOT broken today.
+
+### Native apps -- Capacitor hosted-shell foundation (2026-09-09)
+
+ProTankr can't be statically exported (server components, `/planner` auth gate,
+live API routes), so the native iOS/Android apps wrap the deployed production
+site (`https://www.protankr.com`) in a native WebView via Capacitor's
+`server.url`. One codebase; web changes reach the apps on next launch.
+
+- `capacitor.config.ts` (new) -- appId `com.protankr.app`, hosted-shell
+  `server.url`, https schemes. **Inert for the web deploy** (`next build` never
+  reads it; `@capacitor/*` are devDependencies, not bundled -- adding them grew
+  the lockfile by ~86 transitive packages but changed no existing dep version).
+- npm scripts: `cap:add:ios`/`cap:add:android`/`cap:sync`/`cap:open:*`.
+- `docs/NATIVE-APPS.md` (new) -- full runbook: why hosted-shell, Mac/Xcode/
+  Android SDK/dev-account prerequisites, `cap add`/`sync`/`open` flow, why the
+  8-digit code sign-in is already ideal for native, deep-link/universal-link
+  notes, App Store 4.2 minimum-functionality mitigation via push, and the
+  RevenueCat IAP phase.
+- **`cap add` (generates `ios/` + `android/`) requires macOS/Android SDK and
+  runs on the user's Mac** -- documented, deliberately NOT run here (this is a
+  Linux container: no macOS/Xcode/Android SDK/devices/dev accounts). Everything
+  headlessly verifiable was: `tsc`/`next build` clean (same route set), all unit
+  tests pass.
+
+### Live DB access this session
+
+`.env.local` carries the real anon (208-char) + service-role (219-char) keys
+(the process `env` had a `...` placeholder shadowing them -- load from
+`.env.local` explicitly). Supabase REST is reachable (200) with the service key
+for read-verification. There is no browser tool in this container, so
+click-through verification still isn't possible from here; the demo-login +
+anon-key `curl` recipe (see the Payload Utilization notes above) is the way to
+exercise real RLS without one.
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.
