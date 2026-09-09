@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/capacity/*.test.ts lib/pwa/*.test.ts app/planner/utils/*.test.ts"
+    "test": "node --test lib/capacity/*.test.ts lib/pwa/*.test.ts app/planner/utils/*.test.ts",
+    "cap:add:ios": "cap add ios",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync",
+    "cap:open:ios": "cap open ios",
+    "cap:open:android": "cap open android"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
@@ -19,6 +24,10 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2",
+    "@capacitor/ios": "^6.2.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
