@@ -73,6 +73,11 @@ type Props = {
   /** Passed through to ScaleTicketModal, which gates the target gross weight
    *  field on it. Tare stays open to every role. */
   myRole?: string | null;
+  /** Fleet vs solo. Solo is always admin, so adding/removing equipment is
+   *  unaffected; on a fleet company only staff (admin/dispatch/lead) may add
+   *  or remove — a plain fleet driver gets select/couple/swap only. When
+   *  omitted, treated as solo (the historical single-tier default). */
+  isSolo?: boolean;
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -386,8 +391,16 @@ function computeWashLines(truckWashedAt: string | null, trailerWashedAt: string 
 
 export default function SoloEquipmentModal({
   open, onClose, authUserId, companyId, selectedComboId, onSelectComboId, onRefreshCombos,
-  setupSession, myRole,
+  setupSession, myRole, isSolo,
 }: Props) {
+  // Adding/removing equipment is staff-only on a fleet company. Solo is
+  // always admin (solo-provisioning), and when the prop is omitted we treat
+  // it as solo — so a single-tier caller keeps full add/remove. Everything
+  // else in this modal (couple/decouple/swap/commandeer, filter, report,
+  // Binder edit) is shared by every role in both tiers.
+  const canAddRemove =
+    isSolo !== false ||
+    myRole === "admin" || myRole === "dispatch" || myRole === "lead";
   const [trucks, setTrucks] = useState<TruckRow[]>([]);
   const [trailers, setTrailers] = useState<TrailerRow[]>([]);
   const [combos, setCombos] = useState<ComboRow[]>([]);
@@ -549,6 +562,29 @@ export default function SoloEquipmentModal({
     loadServiceTypes();
   }, [open, loadEquipment, loadServiceTypes]);
 
+  // Default the Region filter to the driver's own region on open — "change
+  // the filter to see MORE, not less." Fleet onboarding makes region a
+  // required field; solo drivers usually have none set, so this no-ops for
+  // them. Only applied when the driver's region actually matches some
+  // equipment, so a stale/typo region can never present an empty grid. Runs
+  // once per open (the parent unmounts this modal when closed, so filter
+  // state resets to {null,null} each time it reopens).
+  const regionDefaultAppliedRef = useRef(false);
+  useEffect(() => { if (!open) regionDefaultAppliedRef.current = false; }, [open]);
+  useEffect(() => {
+    if (!open || loading || regionDefaultAppliedRef.current) return;
+    regionDefaultAppliedRef.current = true;
+    const uid = setupSession?.targetUserId ?? authUserId;
+    if (!uid) return;
+    void (async () => {
+      const { data } = await supabase.from("profiles").select("region").eq("user_id", uid).maybeSingle();
+      const region = String((data as any)?.region ?? "").trim();
+      if (!region) return;
+      const hasMatch = trucks.some((t) => t.region === region) || trailers.some((t) => t.region === region);
+      if (hasMatch) setFilter((f) => ({ ...f, region }));
+    })();
+  }, [open, loading, authUserId, setupSession, trucks, trailers]);
+
   // Initialize local truck/trailer selection from the current combo.
   useEffect(() => {
     if (!open || loading) return;
@@ -579,9 +615,13 @@ export default function SoloEquipmentModal({
   // (no equipment on file), not "new company only."
   useEffect(() => {
     if (!open || loading) return;
+    // A plain fleet driver can't add equipment, so don't nudge them into an
+    // Add flow they can't complete — they select from the company pool
+    // instead (or, with nothing on file yet, see the empty grid).
+    if (!canAddRemove) return;
     if (trucks.length === 0) { setAddTruckOpen(true); return; }
     if (trailers.length === 0 && selectedTruckId) { setAddTrailerOpen(true); }
-  }, [open, loading, trucks.length, trailers.length, selectedTruckId]);
+  }, [open, loading, trucks.length, trailers.length, selectedTruckId, canAddRemove]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   //
@@ -845,19 +885,22 @@ export default function SoloEquipmentModal({
                   {filteredTrucks.map((t) => {
                     const selected = t.truck_id === selectedTruckId;
                     const { didFire, ...lpHandlers } = truckLongPress(t);
+                    // Long-press-to-remove is staff-only; a plain fleet
+                    // driver taps to select/couple and nothing else.
+                    const cardHandlers = canAddRemove ? lpHandlers : {};
                     return (
                       <div
                         key={t.truck_id}
                         ref={selected ? truckCardRef : undefined}
                         style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
-                        onClick={() => { if (!didFire()) toggleTruck(t.truck_id); }}
-                        {...lpHandlers}
+                        onClick={() => { if (!canAddRemove || !didFire()) toggleTruck(t.truck_id); }}
+                        {...cardHandlers}
                       >
                         {t.truck_name}
                       </div>
                     );
                   })}
-                  <div style={S.plusCard} onClick={() => setAddTruckOpen(true)}>+</div>
+                  {canAddRemove && <div style={S.plusCard} onClick={() => setAddTruckOpen(true)}>+</div>}
                 </div>
               </div>
 
@@ -867,19 +910,20 @@ export default function SoloEquipmentModal({
                   {filteredTrailers.map((t) => {
                     const selected = t.trailer_id === selectedTrailerId;
                     const { didFire, ...lpHandlers } = trailerLongPress(t);
+                    const cardHandlers = canAddRemove ? lpHandlers : {};
                     return (
                       <div
                         key={t.trailer_id}
                         ref={selected ? trailerCardRef : undefined}
                         style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
-                        onClick={() => { if (!didFire()) toggleTrailer(t.trailer_id); }}
-                        {...lpHandlers}
+                        onClick={() => { if (!canAddRemove || !didFire()) toggleTrailer(t.trailer_id); }}
+                        {...cardHandlers}
                       >
                         {t.trailer_name}
                       </div>
                     );
                   })}
-                  <div style={S.plusCard} onClick={() => setAddTrailerOpen(true)}>+</div>
+                  {canAddRemove && <div style={S.plusCard} onClick={() => setAddTrailerOpen(true)}>+</div>}
                 </div>
               </div>
             </div>
