@@ -296,20 +296,36 @@ export default function ProTankrDashPage() {
         )}
       </div>
 
-      {/* Invite to selected company */}
+      {/* Invite to selected company — Fleet only. A Solo company is one
+          driver by definition; adding a teammate means converting it to
+          Fleet first (an explicit, operator-gated decision until pricing
+          exists). Solo companies keep their own "Invite Solo Driver" path
+          below, which creates each driver their own separate solo account. */}
       {selected && (
         <div style={card}>
           <div style={cardTitle}>Invite to {selected.company_name}</div>
-          <div style={cardSub}>Adds a user to this company and emails them a sign-in link. (You must be an admin of it.)</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <input type="email" value={fEmail} onChange={(e) => setFEmail(e.target.value)} placeholder="user@email.com" autoComplete="email" inputMode="email" style={input}
-              onKeyDown={(e) => { if (e.key === "Enter") sendFleetInvite(); }} />
-            <div style={{ width: 150 }}>
-              <CustomSelect value={fRole} onChange={setFRole} options={INVITE_ROLES} buttonStyle={selectBtn} />
-            </div>
-            <button style={primaryBtn} disabled={fBusy} onClick={sendFleetInvite}>{fBusy ? "Sending…" : "Send Invite"}</button>
-          </div>
-          {msgLine(fMsg)}
+          {selected.is_solo ? (
+            <>
+              <div style={cardSub}>This is a <b style={{ color: "#fff" }}>Solo</b> company — one driver, no team. To add teammates it has to become a Fleet company first.</div>
+              <button style={primaryBtn} disabled={busy}
+                onClick={() => updateCompany({ is_solo: false })}>
+                {busy ? "…" : "Make Fleet, then invite"}
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={cardSub}>Adds a user to this company and emails them a sign-in link. (You must be an admin of it.)</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <input type="email" value={fEmail} onChange={(e) => setFEmail(e.target.value)} placeholder="user@email.com" autoComplete="email" inputMode="email" style={input}
+                  onKeyDown={(e) => { if (e.key === "Enter") sendFleetInvite(); }} />
+                <div style={{ width: 150 }}>
+                  <CustomSelect value={fRole} onChange={setFRole} options={INVITE_ROLES} buttonStyle={selectBtn} />
+                </div>
+                <button style={primaryBtn} disabled={fBusy} onClick={sendFleetInvite}>{fBusy ? "Sending…" : "Send Invite"}</button>
+              </div>
+              {msgLine(fMsg)}
+            </>
+          )}
         </div>
       )}
 
