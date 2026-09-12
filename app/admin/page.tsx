@@ -1119,6 +1119,7 @@ export default function AdminPage() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [myRole,        setMyRole]        = useState<string>("");
   const [companyName,   setCompanyName]   = useState<string>("");
+  const [isSolo,        setIsSolo]        = useState<boolean>(false);
   const [members,       setMembers]       = useState<Member[]>([]);
   const [trucks,        setTrucks]        = useState<Truck[]>([]);
   const [trailers,      setTrailers]      = useState<Trailer[]>([]);
@@ -1190,8 +1191,9 @@ export default function AdminPage() {
       const cid = settings?.active_company_id as string | null;
       if (!cid) { setErr("No active company selected."); return; }
       setCompanyId(cid);
-      const { data: memRow } = await supabase.from("user_companies").select("role, company:companies(company_name)").eq("user_id", uid).eq("company_id", cid).maybeSingle();
+      const { data: memRow } = await supabase.from("user_companies").select("role, company:companies(company_name, is_solo)").eq("user_id", uid).eq("company_id", cid).maybeSingle();
       setCompanyName((memRow?.company as any)?.company_name ?? "");
+      setIsSolo(Boolean((memRow?.company as any)?.is_solo));
       const role = memRow?.role ?? "";
       setMyRole(role);
       if (role !== "admin" && role !== "lead" && role !== "dispatch") { setErr("Admin access required."); return; }
@@ -1521,8 +1523,11 @@ export default function AdminPage() {
                   {seats.usedAdminSeats + seats.usedOtherSeats} of {seats.paidAdminSeats + seats.paidOtherSeats} seats
                 </span>
               )}
-              {myRole === "admin" && <button style={plusBtn} onClick={() => setInviteModal(true)}>+</button>}
+              {myRole === "admin" && !isSolo && <button style={plusBtn} onClick={() => setInviteModal(true)}>+</button>}
             </div>
+            {myRole === "admin" && isSolo && (
+              <p style={{ ...css.subheading, marginTop: 6 }}>Adding drivers needs a Fleet plan &mdash; contact us.</p>
+            )}
             {usersOpen && (
               <>
                 <div style={filterRow}>
@@ -1732,7 +1737,7 @@ export default function AdminPage() {
       )}
 
       {/* ── Modals ── */}
-      {inviteModal && myRole === "admin" && <InviteModal companyId={companyId!} seats={seats} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
+      {inviteModal && myRole === "admin" && !isSolo && <InviteModal companyId={companyId!} seats={seats} onClose={() => setInviteModal(false)} onDone={() => { setInviteModal(false); loadAll(); }} />}
       {profileModal && <DriverProfileModal member={profileModal.member} companyId={companyId!} onClose={() => setProfileModal(null)} onDone={(u) => { profileModal.onSaved(u); setProfileModal(null); }} onRemove={() => { setProfileModal(null); loadAll(); }} />}
       {truckModal   && <TruckModal truck={truckModal === "new" ? null : truckModal} companyId={companyId!} onClose={() => setTruckModal(null)} onDone={() => { setTruckModal(null); loadAll(); }} myRole={myRole} />}
       {trailerModal && <TrailerModal trailer={trailerModal === "new" ? null : trailerModal} companyId={companyId!} onClose={() => setTrailerModal(null)} onDone={() => { setTrailerModal(null); loadAll(); }} myRole={myRole} />}
