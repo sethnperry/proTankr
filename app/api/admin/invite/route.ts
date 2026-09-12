@@ -75,8 +75,8 @@ async function sendInviteEmail(to: string, confirmUrl: string, companyName: stri
 // ─── POST /api/admin/invite ───────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { email, companyId, role = "driver" } = await req.json() as {
-      email: string; companyId: string; role?: string;
+    const { email, companyId, role = "driver", region } = await req.json() as {
+      email: string; companyId: string; role?: string; region?: string;
     };
     if (!email || !companyId) {
       return NextResponse.json({ error: "email and companyId are required." }, { status: 400 });
@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
     if (!isRole(role)) {
       return NextResponse.json({ error: `Invalid role "${role}".` }, { status: 400 });
     }
+    const regionClean = typeof region === "string" ? region.trim() : "";
 
     const admin = getAdmin();
     if (!await verifyAdmin(req, admin, companyId)) {
@@ -107,6 +108,8 @@ export async function POST(req: NextRequest) {
     let code: string; // the email_otp the driver can type into /login (most
                       // reliable path across Outlook/Gmail in-app browsers that
                       // can't open the app or hold a session)
+    let invitedUserId: string | null = null; // resolved id, for the optional
+                      // region write below
 
     // Both branches build confirmUrl from a token_hash pointing at our own
     // /auth/confirm route -- NOT Supabase's raw action_link, which points
@@ -133,6 +136,7 @@ export async function POST(req: NextRequest) {
       }
       confirmUrl = `${redirectTo}?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=magiclink`;
       code = linkData.properties.email_otp ?? "";
+      invitedUserId = existing.id;
 
       // Ensure they're in the company -- but do NOT silently overwrite the
       // role of someone who is ALREADY a member. An invite is an "add someone"
@@ -173,6 +177,7 @@ export async function POST(req: NextRequest) {
       }
       confirmUrl = `${redirectTo}?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=invite`;
       code = linkData.properties.email_otp ?? "";
+      invitedUserId = linkData.user?.id ?? null;
 
       // Pre-create company membership + active company setting
       if (linkData.user?.id) {
@@ -184,6 +189,25 @@ export async function POST(req: NextRequest) {
           { user_id: linkData.user.id, active_company_id: companyId },
           { onConflict: "user_id" }
         );
+      }
+    }
+
+    // ── Optional: stamp the driver's region at invite time ───────────────────
+    // The equipment modal defaults its Region filter to the driver's own
+    // profiles.region ("change the filter to see more, not less"), so setting
+    // it here means the admin doesn't have to open the driver's profile after
+    // inviting them. profiles.display_name is nullable, so a bare
+    // {user_id, region} upsert is safe for a brand-new invitee whose profile
+    // row doesn't exist yet. Best-effort: a region write must never fail the
+    // invite itself.
+    if (regionClean && invitedUserId) {
+      try {
+        await admin.from("profiles").upsert(
+          { user_id: invitedUserId, region: regionClean },
+          { onConflict: "user_id" },
+        );
+      } catch (e: any) {
+        console.warn("[invite] region write failed:", e?.message ?? e);
       }
     }
 

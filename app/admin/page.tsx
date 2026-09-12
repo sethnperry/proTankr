@@ -423,8 +423,23 @@ function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
 
 function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string; seats: SeatCapacity; onClose: () => void; onDone: () => void }) {
   const [email, setEmail] = useState(""); const [role, setRole] = useState("driver");
+  const [region, setRegion] = useState("");
+  const [regionOptions, setRegionOptions] = useState<string[]>([]);
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  // Region catalog for the datalist — the admin can pick an existing region or
+  // type a new one. Setting it here stamps the invitee's profiles.region so the
+  // equipment modal's Region filter defaults to it, no separate profile edit
+  // needed after inviting.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("equipment_regions")
+        .select("name").eq("company_id", companyId).eq("is_active", true).order("name");
+      if (!cancelled) setRegionOptions((data ?? []).map((r: any) => String(r.name)).filter(Boolean));
+    })();
+    return () => { cancelled = true; };
+  }, [companyId]);
   // Informational only -- there's no live billing integration yet, so this
   // never actually blocks the invite, it just previews what a real one
   // would need to warn about (see lib/billing/useCompanySubscription.ts).
@@ -435,7 +450,7 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/admin/invite", { method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token ?? ""}` },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role }) });
+        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role, region: region.trim() || undefined }) });
       let json: any = {}; try { json = await res.json(); } catch {}
       if (!res.ok) throw new Error(json?.error ?? `Invite failed (${res.status}).`);
       setStatus({ type: "success", msg: `Invite sent to ${email.trim()}.` }); setEmail("");
@@ -448,6 +463,10 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
       {status && <Banner msg={status.msg} type={status.type} />}
       <Field label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} style={css.input} onKeyDown={e => e.key === "Enter" && send()} autoFocus /></Field>
       <Field label="Role"><select value={role} onChange={e => setRole(e.target.value)} style={{ ...css.select, width: "100%" }}><option value="driver">Driver</option><option value="lead">Lead</option><option value="dispatch">Dispatch</option><option value="admin">Admin</option></select></Field>
+      <Field label="Region">
+        <input list="invite-region-options" value={region} onChange={e => setRegion(e.target.value)} style={css.input} placeholder="e.g. Southeast" />
+        <datalist id="invite-region-options">{regionOptions.map(r => <option key={r} value={r} />)}</datalist>
+      </Field>
       {overCapacity && (
         <div style={{
           fontSize: 12, fontWeight: 500, lineHeight: 1.6, color: "#fdba74",

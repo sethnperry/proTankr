@@ -52,6 +52,7 @@ export default function ProTankrDashPage() {
   // Invite to selected company (fleet)
   const [fEmail, setFEmail] = useState("");
   const [fRole, setFRole] = useState("driver");
+  const [fRegion, setFRegion] = useState("");
   const [fBusy, setFBusy] = useState(false);
   const [fMsg, setFMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -168,12 +169,12 @@ export default function ProTankrDashPage() {
       const res = await fetch("/api/admin/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token ?? ""}` },
-        body: JSON.stringify({ email, companyId: selected.company_id, role: fRole }),
+        body: JSON.stringify({ email, companyId: selected.company_id, role: fRole, region: fRegion.trim() || undefined }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error ?? `Failed (${res.status}).`);
       setFMsg({ ok: true, text: `Invited ${email} to ${selected.company_name} as ${fRole}.` });
-      setFEmail("");
+      setFEmail(""); setFRegion("");
     } catch (e: any) {
       setFMsg({ ok: false, text: e?.message ?? "Invite failed." });
     } finally { setFBusy(false); }
@@ -321,6 +322,8 @@ export default function ProTankrDashPage() {
                 <div style={{ width: 150 }}>
                   <CustomSelect value={fRole} onChange={setFRole} options={INVITE_ROLES} buttonStyle={selectBtn} />
                 </div>
+                <input value={fRegion} onChange={(e) => setFRegion(e.target.value)} placeholder="Region (optional)" style={{ ...input, minWidth: 130 }}
+                  onKeyDown={(e) => { if (e.key === "Enter") sendFleetInvite(); }} />
                 <button style={primaryBtn} disabled={fBusy} onClick={sendFleetInvite}>{fBusy ? "Sending…" : "Send Invite"}</button>
               </div>
               {msgLine(fMsg)}
