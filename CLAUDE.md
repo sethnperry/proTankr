@@ -9917,6 +9917,76 @@ click-through verification still isn't possible from here; the demo-login +
 anon-key `curl` recipe (see the Payload Utilization notes above) is the way to
 exercise real RLS without one.
 
+## Equipment modal unified across solo + fleet tiers — Phase 1 (2026-09-12)
+
+The reworked `SoloEquipmentModal` was always meant to be THE equipment modal
+for both tiers; the fleet tier had drifted onto the older `EquipmentModal`
+shell (browse-fleet pool, star-primary "My Equipment", SELECT/DECOUPLE/
+SLIP-SEAT rows). Converged them, per an approved plan
+(`snug-petting-starlight.md`). Confirmed intent from the user: everything is
+shared (grid, couple/decouple, take-over, region filter — solo may filter
+too); ONLY add/remove equipment is gated to staff; take-over friction is
+fleet-only; the region filter should DEFAULT to the driver's own region
+("change it to see MORE, not less").
+
+**Phase 1 shipped (no schema change) — commits `b080fdb`, `dfb9215`:**
+- `EquipmentModal.tsx` reduced from a ~1,900-line fleet shell to a thin
+  entry that resolves the active company + `is_solo` and ALWAYS renders
+  `SoloEquipmentModal`, passing `isSolo` through. The fleet shell
+  (`FleetModal`, `StarBtn`, `EquipmentDetailsModal` wrapper, the `S` style
+  object, confirm/tare/fleet views) is deleted outright. Only
+  `CalculatorLayoutClient.tsx` imported it (default import); `ComboRow` isn't
+  imported elsewhere. The `combos`/`combosLoading`/`combosError` props are
+  still accepted but unused (the shared modal self-loads by `company_id`), so
+  the call site was untouched. The 2026-09-09 retheme commit (`bc2408b`) that
+  restyled the now-deleted shell is thereby moot, harmless in history.
+- `SoloEquipmentModal.tsx` gained an `isSolo?: boolean` prop. `canAddRemove =
+  isSolo !== false || myRole ∈ {admin,dispatch,lead}` (omitted → treated as
+  solo, so a single-tier caller keeps full add/remove). Gates the "+" add
+  cards, the long-press-to-remove handlers, AND the onboarding auto-nudge
+  into Add Truck/Trailer — a plain fleet driver gets select/couple/swap only.
+- **Region-defaulted filter**: on open, the modal fetches the driver's
+  `profiles.region` (the impersonated target's, under setupSession) and sets
+  `filter.region` to it — but ONLY when that region actually matches some
+  loaded truck/trailer, so a stale/typo region can never present an empty
+  grid. Runs once per open (a ref reset on close; the parent unmounts the
+  modal when closed so filter state resets anyway). Solo drivers usually have
+  no region set → no-op.
+- **Region capture at fleet invite** (`/api/admin/invite` + the admin
+  `InviteModal` + the ProTankr Dash fleet-invite form): optional `region`,
+  best-effort upserted to `profiles.region` for the resolved user. Safe for a
+  brand-new invitee (profiles.display_name is nullable, so a bare
+  `{user_id, region}` upsert doesn't violate NOT NULL); a failed region write
+  never fails the invite. Admin modal uses a datalist of the company's
+  `equipment_regions`; the Dash uses a plain text input.
+
+Region editing for EXISTING members already exists via `DriverProfileModal`
+(admin roster's per-member edit + the self-serve profile view), so "the admin
+who adds them or the user themselves" is covered at every fleet touchpoint.
+The literal "required field" enforcement is deliberately deferred — there is
+no fleet first-run onboarding component to enforce it in (only `SoloOnboarding`
+exists), and hard-requiring region would block inviting the first driver of a
+brand-new fleet with no regions defined yet.
+
+`tsc --noEmit`, `next build`, and the 70 unit tests all pass. Not
+live-verified this pass (no browser tool in this container; the invite path
+sends a real Resend email + creates users, so it can't be safely exercised
+here) — the changes are the shared modal already proven in earlier sessions
+plus a best-effort profile write on a nullable column.
+
+**Phase 2 (approved, NOT started — its own planned, live-verified pass):**
+persistent bobtail ("truck selected, no trailer") + true per-unit take-over.
+This is a real schema change — `equipment_combos` can't hold a truck-only row
+(truck_id/trailer_id both NOT NULL, tare per-pair). Recommended architecture
+in the plan: a lightweight per-user current-truck/current-trailer selection
+layer (new `user_settings` columns or a small table), leaving the tare-bearing
+`equipment_combos` untouched; the planner hides compartments when bobtail and
+LOAD redirects to the equipment modal; a revised take-over RPC reassigns only
+the tapped unit (the other driver falls to bobtail, truck intact) instead of
+the current whole-combo `couple_combo(force)` teardown; first-run trailer
+step gets a Skip. Safety-relevant (tare on re-pair) and multi-user — needs a
+throwaway-Postgres RPC check + two-account live verification before shipping.
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.
