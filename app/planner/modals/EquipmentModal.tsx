@@ -406,8 +406,10 @@ function StarBtn({
 
 const S = {
   sectionHeader: {
-    fontSize: 16,
-    fontWeight: 700 as const,
+    // Matches SoloEquipmentModal.tsx's S.sectionHeader typography so the
+    // fleet shell reads as the same app as the reworked solo modal.
+    fontSize: 13,
+    fontWeight: 800 as const,
     color: "rgba(255,255,255,0.35)",
     letterSpacing: 0.8,
     textTransform: "uppercase" as const,
@@ -446,25 +448,29 @@ const S = {
     background: "rgba(255,255,255,0.08)",
     margin: "20px 0",
   },
+  // Flat, monochrome cards to match SoloEquipmentModal's S.card language --
+  // radius 6, subtle white border, no heavy drop shadow, no color tint.
   row: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.10)",
+    padding: "12px 12px",
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.12)",
     background: "rgba(255,255,255,0.05)",
-    boxShadow: "0 6px 16px rgba(0,0,0,0.32)",
     marginBottom: 10,
   } as React.CSSProperties,
+  // "Mine/selected" mirrors solo's S.cardSelected (brighter white), not a
+  // blue tint. "In use by someone else" stays monochrome -- the amber
+  // rowInUseBadge text below carries that meaning instead of a card tint.
   rowMine: {
-    background: "rgba(32,88,170,0.22)",
-    border: "1px solid rgba(64,140,255,0.22)",
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.45)",
   } as React.CSSProperties,
   rowInUse: {
-    background: "rgba(80,40,10,0.22)",
-    border: "1px solid rgba(180,100,30,0.28)",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(180,100,30,0.30)",
   } as React.CSSProperties,
   rowName: {
     fontSize: 16,
@@ -490,7 +496,7 @@ const S = {
     fontWeight: 700 as const,
   },
   btn: {
-    borderRadius: 10,
+    borderRadius: 6,
     padding: "8px 14px",
     fontWeight: 900 as const,
     fontSize: 13,
