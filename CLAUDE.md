@@ -9974,18 +9974,105 @@ sends a real Resend email + creates users, so it can't be safely exercised
 here) — the changes are the shared modal already proven in earlier sessions
 plus a best-effort profile write on a nullable column.
 
-**Phase 2 (approved, NOT started — its own planned, live-verified pass):**
-persistent bobtail ("truck selected, no trailer") + true per-unit take-over.
-This is a real schema change — `equipment_combos` can't hold a truck-only row
-(truck_id/trailer_id both NOT NULL, tare per-pair). Recommended architecture
-in the plan: a lightweight per-user current-truck/current-trailer selection
-layer (new `user_settings` columns or a small table), leaving the tare-bearing
-`equipment_combos` untouched; the planner hides compartments when bobtail and
-LOAD redirects to the equipment modal; a revised take-over RPC reassigns only
-the tapped unit (the other driver falls to bobtail, truck intact) instead of
-the current whole-combo `couple_combo(force)` teardown; first-run trailer
-step gets a Skip. Safety-relevant (tare on re-pair) and multi-user — needs a
-throwaway-Postgres RPC check + two-account live verification before shipping.
+### Phase 2 — persistent bobtail + true per-unit take-over (shipped + merged to main 2026-09-13)
+
+Built as its own pass off the approved plan (`snug-petting-starlight.md`),
+merged to `main` (commit `a1e0323`) as a clean fast-forward. The core
+limitation Phase 1 left in place: there was no way to represent a truck
+without a trailer (or a trailer without a truck) — the driver's selection
+*was* a full `equipment_combos` row (truck_id/trailer_id both NOT NULL, tare
+per-pair), so `SetupGate` hard-blocked the planner until a full combo existed
+and `couple_combo(p_force)` stripped a take-over victim of their whole pair.
+
+**Architecture (as recommended in the plan, built verbatim):** a per-user
+"currently held units" layer on `user_settings` — new nullable
+`current_truck_id` / `current_trailer_id` columns — is the source of truth for
+what a driver holds. Both set → a materialized active `equipment_combos` row
+(with tare) → the full planner, exactly as before. Truck only → **bobtail**;
+trailer only → **trailer-only**; neither → setup gate. The tare-bearing
+`equipment_combos` table and the whole tare/weight/load math
+(`usePlanRows`/`planMath`/`useLoadWorkflow`) and plan storage (`usePlanSlots`,
+keyed on combo_id) are **untouched** — a partial state has no tare and cannot
+load by construction.
+
+**Migration `supabase/migrations/20260912000000_current_equipment_bobtail.sql`
+— APPLIED to the live DB 2026-09-13** (user ran it in the Supabase SQL editor;
+columns + `set_current_equipment` RPC confirmed live via PostgREST — a
+`select current_truck_id,current_trailer_id from user_settings` returns 200,
+and the RPC returns its own `P0001 "Not authenticated"` guard under a
+service-role JWT rather than `PGRST202`). Verified first on a throwaway
+PostgreSQL 16 (18/18 assertions, idempotent). Contents:
+- `user_settings.current_truck_id` / `current_trailer_id` (nullable uuid).
+- `_evict_combo_to_partial(combo, claiming_truck, claiming_trailer)` — private
+  `SECURITY DEFINER` helper (execute revoked from public/anon/authenticated):
+  deactivates one combo being partially taken and sets the victim's
+  `current_*` to whichever unit is NOT being claimed (truck kept → bobtail,
+  trailer kept → trailer-only, both taken → cleared). A NULL claiming_* means
+  "not claiming that kind," so the victim keeps that unit.
+- `set_current_equipment(p_truck_id, p_trailer_id)` (client, granted to
+  authenticated) + a service-role `(…, p_user_id)` overload for impersonation
+  (mirrors `couple_combo`'s own service-role overload). Rejects both-non-null
+  ("use couple_combo for a full pair"); auth + active-company ownership checks;
+  evicts OTHER drivers holding a claimed unit via the helper; dissolves the
+  caller's own active combos; sets the caller's `current_*`.
+- **Both `couple_combo` overloads redefined** (client 6-arg, service-role
+  7-arg) — verbatim copies of the prior versions EXCEPT the blunt `p_force`
+  "deactivate any combo with this truck OR trailer" is replaced with a
+  per-victim loop calling `_evict_combo_to_partial` (victim keeps their other
+  unit), and the acting user's `current_*` is recorded on success. All prior
+  guards (auth, company ownership, historical reuse, tare-required, target
+  default) preserved.
+
+**App code:**
+- `useEquipment.ts`: fetches/exposes `currentTruckId`/`currentTrailerId`
+  (+ resolved names), `isBobtail`/`isTrailerOnly`, a `setCurrentEquipment`
+  writer (service-role proxy under setupSession, via `getCurrentEquipment`/
+  `setCurrentEquipmentProxy` in `lib/adminSetupClient.ts` +
+  `get_current_equipment`/`set_current_equipment` cases in
+  `/api/admin/setup/route.ts`), and a cross-device fallback effect that
+  materializes a full pair (both `current_*` set, no local combo → find the
+  matching active combo). `fetchCombosRef` avoids a TDZ in the writer.
+- `SoloEquipmentModal.tsx` (the shared modal): a one-unit (partial) selection
+  now persists via `setCurrentEquipment` on close (`handleClose`), so bobtail/
+  trailer-only survives closing the modal; a full pair still goes through
+  `couple_combo` (which sets `current_*` itself), so `handleClose` skips it.
+  Commandeer confirm copy is now per-unit ("Take it — they'll keep their
+  {unit}").
+- `EquipmentModal.tsx` + `CalculatorLayoutClient.tsx`: thread
+  `currentTruckId`/`currentTrailerId`/`setCurrentEquipment` through.
+- `page.tsx` + `SetupGate.tsx`: the gate's first step is satisfied by any held
+  unit (`comboSelected = !!selectedComboId || isBobtail || isTrailerOnly`); a
+  partial state hides the compartment strip + CG + recap + LOAD and renders a
+  `partialPanelEl` instead ("Currently holding {unit}" + "Select a {missing
+  unit}" → opens the equipment modal). The header EQ/pin/plan-letter cluster
+  still portals in so the missing unit can be picked.
+- `SoloOnboarding.tsx`: the trailer step gains a **Skip — I'm bobtail** button
+  → `setCurrentEquipment(truckId, null)`, skipping the trailer/cap/tare steps
+  and finishing after location/terminal (no plan-setup tutorial, since a
+  bobtail has no compartments).
+- `dispatch/page.tsx`: when the selected driver has no active claimed combo,
+  falls back to `user_settings.current_*` to show "Truck NNN (bobtail)" /
+  "Trailer NNN (no truck)". Read-only; degrades to the pre-Phase-2 "no
+  equipment" display if RLS denies the cross-user `user_settings` read.
+
+All app code **fails open** if the migration hasn't run (reads/RPCs are
+try/caught and degrade to pre-Phase-2 behavior) — which is why it was safe to
+merge; the migration was applied first regardless.
+
+`tsc --noEmit`, `next build`, and all 70 unit tests clean.
+
+**Not yet live-verified** (needs real logged-in sessions, unavailable from the
+building session — same category of gap this project flags for role/multi-user
+work): the single-user bobtail flow (onboarding Skip → bobtail planner → add a
+trailer → full planner with correct tare → drop the trailer → back to bobtail
+across a reload; drop the truck instead → trailer-only) and the two-account
+per-unit take-over (A holds T_a+R_a; B grabs R_a → A reloads to bobtail with
+T_a, not stripped; B then grabs T_a → A reloads to trailer-only with R_a).
+The multi-user RPC paths themselves were proven on the throwaway Postgres.
+One thing to watch on the dispatch fallback: if a genuinely bobtail driver
+shows blank equipment there rather than "(bobtail)", the live RLS on
+`user_settings` doesn't permit staff cross-user reads — solvable with a
+staff-read policy (or a service-role proxy) if it comes up.
 
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
