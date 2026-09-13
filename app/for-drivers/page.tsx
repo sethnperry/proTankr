@@ -6,22 +6,25 @@
 // white/off-white background, black emphasis cards, Outfit font, pill
 // CTAs -- rather than inventing a second visual language for this page.
 //
-// Load Planning is a genuinely interactive tool (LiveLoadPlanner.tsx),
-// running the real app's own planMath.ts formulas against curated example
-// data -- see that file's header comment for why it never talks to
-// Supabase. The Terminal Access and Equipment illustrations below are
-// hand-built recreations of the real app's own Expirations screen (bell
-// icon) and Equipment picker/report screen, built from screenshots the
-// user supplied -- same title-bar shape, same amber/expiring vs.
-// red/expired color+icon logic, same report-row layout -- not screenshots
-// themselves (so they're easy to keep adjusting), and not invented UI.
-// The Shared Knowledge cards are a separate hand-built illustration, not
-// a specific screen.
+// Load Planning embeds the REAL app (DemoPlannerFrame.tsx) -- a live
+// iframe of /planner logged into a fixed public demo account, not a
+// recreation. An earlier pass hand-rebuilt the compartment math from
+// scratch and it never quite matched the actual planner; rather than
+// keep chasing fidelity, this embeds the actual thing. See
+// DemoPlannerFrame.tsx and /api/demo/start's own header comments for the
+// current scope and its tradeoffs. The Terminal Access and Equipment
+// illustrations below are hand-built recreations of the real app's own
+// Expirations screen (bell icon) and Equipment picker/report screen,
+// built from screenshots the user supplied -- same title-bar shape, same
+// amber/expiring vs. red/expired color+icon logic, same report-row
+// layout -- not screenshots themselves (so they're easy to keep
+// adjusting), and not invented UI. The Shared Knowledge cards are a
+// separate hand-built illustration, not a specific screen.
 
 import Link from "next/link";
 import SiteHeader from "../marketing/SiteHeader";
 import SiteFooter from "../marketing/SiteFooter";
-import LiveLoadPlanner from "./LiveLoadPlanner";
+import DemoPlannerFrame from "./DemoPlannerFrame";
 import { CardIcon, CompartmentsIcon, WrenchIcon, ShareIcon } from "./icons";
 
 const CHECKLIST = [
@@ -246,12 +249,12 @@ export default function ForDriversPage() {
               memorized guess every time.
             </p>
             <p className="feature-try-note">
-              Try it below — pick products, drag caps, slide the CG, and
-              tap Load.
+              Try it below — pick a terminal, choose products per
+              compartment, drag the caps, slide the CG, and Save Plan.
             </p>
           </div>
           <div className="feature-visual">
-            <LiveLoadPlanner />
+            <DemoPlannerFrame />
           </div>
         </div>
       </section>
@@ -437,7 +440,9 @@ export default function ForDriversPage() {
         .feature-row-stack { max-width: 900px; margin: 0 auto; text-align: center; }
         .feature-try-note {
           margin: 18px 0 0;
+          max-width: 480px;
           font: 700 13px var(--font);
+          line-height: 1.5;
           color: #111;
         }
 
