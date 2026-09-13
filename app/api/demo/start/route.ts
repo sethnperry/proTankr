@@ -20,14 +20,35 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-// F-B (audit pass 1): this endpoint mints a real admin session for a demo
-// account with no authentication of the caller. That's fine in dev/preview
-// (throwaway QA data) but must NOT be reachable on production -- anyone on the
-// internet could log in as the demo company admin. Refuse on production
-// (VERCEL_ENV === "production"); dev (VERCEL_ENV unset) and preview stay
-// functional. Escape hatch DEMO_START_ALLOW_PROD="true" if it's ever needed
-// live intentionally, so this is a policy toggle, not a redeploy.
-function demoStartBlockedInProd(): boolean {
+// F-B (audit pass 1): this endpoint mints a real login for a demo account
+// with no authentication of the caller. Originally blocked outright in
+// production for exactly that reason -- anyone on the internet could log
+// in as the demo company admin.
+//
+// Deliberately reopened for ONE persona (2026-09): the marketing site's
+// /for-drivers page embeds a live iframe of the real Planner, logged into
+// the "ProTankr Trucking" solo demo account, so visitors interact with the
+// actual app (real compartment bars/cap handles, real terminal picker,
+// real product picker, real Save Plan) instead of a hand-built
+// recreation -- see that page's own DemoPlannerFrame.tsx for why. This is
+// an accepted, explicit product decision, not an oversight: that persona
+// is a disposable, synthetic demo account built for exactly this. The
+// OTHER persona stays fully blocked in production -- it's the private,
+// internal-QA account, and letting it stay reachable here would put real
+// in-progress QA state at risk of a public visitor's changes.
+//
+// No equipment-switching / real-load-submission restrictions exist yet on
+// this path -- that's a deliberate, separately-scoped follow-up (keyed to
+// the persona itself, not to how someone reached it, so it can't be
+// bypassed by skipping this route). Until then, anything a visitor does
+// via the iframe is a real, visible change to that one demo account.
+// Confirmed live 2026-09: "beta" (demo-beta@protankr.io) is the solo
+// account, renamed "ProTankr Trucking"; "alpha" (demo@protankr.io) is the
+// fleet account, renamed "ProTankr Transport" -- stays blocked in prod.
+const PUBLIC_DEMO_PERSONAS = new Set(["beta"]);
+
+function demoStartBlockedInProd(persona: string): boolean {
+  if (PUBLIC_DEMO_PERSONAS.has(persona)) return false;
   return process.env.VERCEL_ENV === "production" && process.env.DEMO_START_ALLOW_PROD !== "true";
 }
 
@@ -45,13 +66,13 @@ function getAdmin() {
 
 export async function GET(req: NextRequest) {
   const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? new URL(req.url).origin;
+  const persona = (new URL(req.url).searchParams.get("persona") ?? "alpha").toLowerCase();
 
-  if (demoStartBlockedInProd()) {
+  if (demoStartBlockedInProd(persona)) {
     return NextResponse.json({ error: "Demo login is disabled in production." }, { status: 403 });
   }
 
   try {
-    const persona = (new URL(req.url).searchParams.get("persona") ?? "alpha").toLowerCase();
     const email = PERSONA_EMAIL_ENV[persona];
     if (!email) throw new Error(`Unknown or unconfigured demo persona: ${persona}`);
 
