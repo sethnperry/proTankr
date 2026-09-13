@@ -42,7 +42,10 @@ export const runtime = "nodejs";
 // the persona itself, not to how someone reached it, so it can't be
 // bypassed by skipping this route). Until then, anything a visitor does
 // via the iframe is a real, visible change to that one demo account.
-const PUBLIC_DEMO_PERSONAS = new Set(["beta"]); // TODO confirm: must match whichever persona is is_solo=true ("ProTankr Trucking")
+// Confirmed live 2026-09: "beta" (demo-beta@protankr.io) is the solo
+// account, renamed "ProTankr Trucking"; "alpha" (demo@protankr.io) is the
+// fleet account, renamed "ProTankr Transport" -- stays blocked in prod.
+const PUBLIC_DEMO_PERSONAS = new Set(["beta"]);
 
 function demoStartBlockedInProd(persona: string): boolean {
   if (PUBLIC_DEMO_PERSONAS.has(persona)) return false;

@@ -18,7 +18,9 @@
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
-const DEMO_PERSONA = "beta"; // TODO confirm against live DB: must be the is_solo persona ("ProTankr Trucking")
+// Confirmed live 2026-09: "beta" is the solo account, renamed
+// "ProTankr Trucking" specifically for this purpose.
+const DEMO_PERSONA = "beta";
 
 export default function DemoPlannerFrame() {
   return (
