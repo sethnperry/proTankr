@@ -1,14 +1,16 @@
 "use client";
 // app/page.tsx — protankr.com marketing landing page.
 // Unauthenticated and authenticated visitors both see this; CTAs link to
-// /get-the-app (the site's one real lead-capture path today) or /pricing.
+// /get-the-app (the site's one real lead-capture path today), /pricing,
+// or one of the two audience-specific pages (/for-drivers, /for-fleets).
 //
-// Restructured 2026-09 (v3): the calculator moved out of the closing
-// section up to position 2, immediately after the hero, so a visitor can
-// try the tool before reading the pitch. The hero's single CTA scrolls
-// straight to it. The historical benchmark stat moved out of the hero
-// and now appears only AFTER a visitor has produced their own number,
-// as context for something they just did rather than a cold claim.
+// Restructured 2026-09 (v4): reordered to match the site-wide narrative —
+// hero, the cost of the problem, a hands-on calculator that proves it,
+// how the product actually works, then a fork into the two audiences
+// before closing with the "not a TMS" distinction, the shared-knowledge
+// network effect, and the founder trust signal. Nothing content-wise was
+// deleted from the v3 pass; sections were re-sequenced and two new
+// sections (Audience picker, Shared Knowledge) were added.
 //
 // Copy rule, deliberate: nothing on this page may claim ProTankr
 // prevents overweight loads outright. A sudden shift in terminal or
@@ -21,6 +23,7 @@ import Link from "next/link";
 import { useState } from "react";
 import SiteHeader from "./marketing/SiteHeader";
 import SiteFooter from "./marketing/SiteFooter";
+import PhoneScreen from "./marketing/PhoneScreen";
 
 // Seth's own current monthly average gallons/load, measured against his
 // own conservative per-product benchmarks. Real, but genuinely nuanced:
@@ -214,38 +217,6 @@ function OpportunityCalculator() {
   );
 }
 
-// Bump whenever public/app-screens/planner.jpg is re-exported -- the bare
-// path alone lets browsers keep serving a stale cached copy of the old
-// screenshot indefinitely (same URL every time, no cache-buster).
-const PLANNER_SCREEN_VERSION = "20260905c-s25frame";
-
-function PhoneScreen() {
-  return (
-    <div className="phone">
-      <div className="phone-btn phone-btn-power" />
-      <div className="phone-btn phone-btn-vol-up" />
-      <div className="phone-btn phone-btn-vol-down" />
-      <div className="screen">
-        {/* eslint-disable-next-line @next/next/no-img-element -- a real,
-            uncropped screenshot off a Galaxy S25 (1080x2340), status bar
-            and gesture nav included; not a Next/Image candidate since
-            this is a static marketing asset, not content that benefits
-            from remote optimization. The frame itself is shaped to match
-            (thin bezel, small screen-corner radius so the real status-bar
-            text in the corners isn't clipped, a small centered
-            punch-hole camera) instead of an iPhone-style silhouette,
-            so nothing about the real capture has to be altered to fit. */}
-        <img
-          src={`/app-screens/planner.jpg?v=${PLANNER_SCREEN_VERSION}`}
-          alt="ProTankr planner screen, showing a real compartment load plan"
-          className="screen-img"
-        />
-        <div className="screen-camera" />
-      </div>
-    </div>
-  );
-}
-
 const PRODUCT_FEATURES = [
   {
     label: "Equipment aware",
@@ -294,38 +265,7 @@ export default function Home() {
         </p>
       </section>
 
-      {/* 2. CALCULATOR, deliberately second, before any pitch. The old
-          hero CTA button ("See what you could recover") is now this
-          section's plain header instead of a clickable pill, since the
-          calculator sits in view right below the hero either way. */}
-      <section id="calculator" className="calc-section">
-        <div className="calc-inner">
-          <div className="calc-header">
-            <h2 className="calc-h2">See what you could recover.</h2>
-            <p className="calc-intro">
-              Check a real load against your legal limit. Enter what was on
-              the ticket and see where it actually landed.
-            </p>
-          </div>
-          <OpportunityCalculator />
-
-          <div className="calc-stat-wrap">
-            <div className="hero-stat">
-              <span className="hero-stat-num">
-                +{CURRENT_MONTHLY_AVG_GAL_PER_LOAD} GAL / LOAD
-              </span>
-              <span className="hero-stat-sub">
-                A single driver without the network effect typically sees an
-                average recovery like this, blended across products. More
-                drivers using ProTankr will improve the accuracy and shrink
-                the necessary buffer.
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. PROBLEM / MANIFESTO */}
+      {/* 2. PROBLEM / MANIFESTO — the cost of the problem, before the pitch. */}
       <section className="manifesto-section">
         <div className="manifesto-inner">
           <h2 className="manifesto-h2">
@@ -356,30 +296,35 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 4. FOUNDER STORY */}
-      <section className="founder-section">
-        <div className="founder-inner">
-          <blockquote className="founder-quote">
-            <p>
-              &ldquo;I didn&apos;t start ProTankr because I wanted to build
-              trucking software. I started it because I was tired of
-              leaving payload behind.&rdquo;
+      {/* 3. CALCULATOR — see the cost of the problem for yourself. */}
+      <section id="calculator" className="calc-section">
+        <div className="calc-inner">
+          <div className="calc-header">
+            <h2 className="calc-h2">See what you could recover.</h2>
+            <p className="calc-intro">
+              Check a real load against your legal limit. Enter what was on
+              the ticket and see where it actually landed.
             </p>
-            <p>
-              &ldquo;The event that caused it passes. The lower volume never
-              does.&rdquo;
-            </p>
-          </blockquote>
-          <p className="founder-byline">
-            Built by a bulk fuel hauler with hands-on experience.
-          </p>
-          <p className="founder-patent">
-            <span className="patent-badge">Patent Pending</span>
-          </p>
+          </div>
+          <OpportunityCalculator />
+
+          <div className="calc-stat-wrap">
+            <div className="hero-stat">
+              <span className="hero-stat-num">
+                +{CURRENT_MONTHLY_AVG_GAL_PER_LOAD} GAL / LOAD
+              </span>
+              <span className="hero-stat-sub">
+                A single driver without the network effect typically sees an
+                average recovery like this, blended across products. More
+                drivers using ProTankr will improve the accuracy and shrink
+                the necessary buffer.
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* 5. PRODUCT */}
+      {/* 4. PRODUCT — how it actually works. */}
       <section id="product" className="product-section">
         <div className="product-inner">
           <div className="product-copy">
@@ -410,7 +355,61 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 6. NOT ANOTHER TMS */}
+      {/* 5. WORKFLOW */}
+      <section className="workflow-section">
+        <div className="workflow-inner">
+          <h2 className="workflow-h2">Calculate. Load. Capture.</h2>
+          <div className="workflow-steps">
+            {WORKFLOW_STEPS.map((s) => (
+              <div key={s.n} className="workflow-step">
+                <span className="workflow-n">{s.n}</span>
+                <span className="workflow-label">{s.label}.</span>
+                <p className="workflow-body">{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 6. AUDIENCE PICKER — fork into the two ways to use ProTankr. */}
+      <section id="audience" className="audience-section">
+        <div className="audience-inner">
+          <p className="audience-eyebrow">One system, two views</p>
+          <h2 className="audience-h2">
+            Built for the driver. Built for the fleet.
+          </h2>
+          <p className="audience-sub">
+            Same equipment records, same terminal data, same shared
+            knowledge — organized around whoever&apos;s actually looking at
+            it.
+          </p>
+          <div className="audience-cards">
+            <Link href="/for-drivers" className="audience-card">
+              <span className="audience-card-label">For Drivers</span>
+              <p className="audience-card-body">
+                Plan the load, track your terminal cards, and keep your
+                equipment&apos;s history where you can actually use it.
+              </p>
+              <span className="audience-card-cta">
+                See the driver tools &rarr;
+              </span>
+            </Link>
+            <Link href="/for-fleets" className="audience-card audience-card-dark">
+              <span className="audience-card-label">For Fleets</span>
+              <p className="audience-card-body">
+                Recover unused payload, see equipment and card status
+                without asking, and hand off knowledge between drivers
+                automatically.
+              </p>
+              <span className="audience-card-cta">
+                See the fleet tools &rarr;
+              </span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. NOT ANOTHER TMS */}
       <section className="tms-section">
         <div className="tms-inner">
           <h2 className="tms-h2">Not another TMS.</h2>
@@ -431,23 +430,77 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 7. WORKFLOW */}
-      <section className="workflow-section">
-        <div className="workflow-inner">
-          <h2 className="workflow-h2">Calculate. Load. Capture.</h2>
-          <div className="workflow-steps">
-            {WORKFLOW_STEPS.map((s) => (
-              <div key={s.n} className="workflow-step">
-                <span className="workflow-n">{s.n}</span>
-                <span className="workflow-label">{s.label}.</span>
-                <p className="workflow-body">{s.body}</p>
+      {/* 8. SHARED KNOWLEDGE — the network effect, made concrete. */}
+      <section className="network-section">
+        <div className="network-inner">
+          <p className="network-eyebrow">Shared knowledge</p>
+          <h2 className="network-h2">
+            The driver in front of you already learned something.
+          </h2>
+          <p className="network-sub">
+            A terminal that just ran out of a product. A verified API
+            reading that corrects a stale prediction. Once one driver
+            confirms it, the next one starts with better information
+            instead of starting cold.
+          </p>
+          <div className="network-examples">
+            <div className="network-card">
+              <div className="network-card-head">
+                <span className="network-card-tag">Terminal status</span>
+                <span className="network-card-time">12 min ago</span>
               </div>
-            ))}
+              <p className="network-card-title">Out of Premium 93</p>
+              <p className="network-card-body">
+                Buckeye Bayway &middot; Linden, NJ — flagged the moment a
+                driver hit an empty rack. Every driver heading there next
+                sees it before they roll up.
+              </p>
+            </div>
+            <div className="network-card">
+              <div className="network-card-head">
+                <span className="network-card-tag">Temperature reading</span>
+                <span className="network-card-time">Today</span>
+              </div>
+              <p className="network-card-title">API reading verified</p>
+              <p className="network-card-body">
+                Marathon &middot; Tampa, FL — one confirmed load corrects
+                the terminal&apos;s predicted temperature for everyone
+                loading there today, not just the driver who reported it.
+              </p>
+            </div>
           </div>
+          <p className="network-footnote">
+            The model improves with verified load data. Every confirmed
+            result can make the next load more informed — shared knowledge
+            becomes operational infrastructure.
+          </p>
         </div>
       </section>
 
-      {/* 8. FINAL CTA */}
+      {/* 9. FOUNDER STORY */}
+      <section className="founder-section">
+        <div className="founder-inner">
+          <blockquote className="founder-quote">
+            <p>
+              &ldquo;I didn&apos;t start ProTankr because I wanted to build
+              trucking software. I started it because I was tired of
+              leaving payload behind.&rdquo;
+            </p>
+            <p>
+              &ldquo;The event that caused it passes. The lower volume never
+              does.&rdquo;
+            </p>
+          </blockquote>
+          <p className="founder-byline">
+            Built by a bulk fuel hauler with hands-on experience.
+          </p>
+          <p className="founder-patent">
+            <span className="patent-badge">Patent Pending</span>
+          </p>
+        </div>
+      </section>
+
+      {/* 10. FINAL CTA */}
       <section className="closing">
         <div className="closing-inner">
           <div className="closing-header">
@@ -757,48 +810,6 @@ export default function Home() {
         }
         .product-visual { display: flex; justify-content: center; }
 
-        /* Shaped to match a real Galaxy S25 (1080x2340 display, flat-ish
-           sides, thin bezel, a small centered punch-hole camera, buttons
-           on the right edge only, no mute switch) rather than an
-           iPhone-style silhouette -- the screenshot itself is the real,
-           uncropped S25 capture, status bar and gesture nav included. */
-        .phone {
-          position: relative;
-          width: 320px;
-          background: linear-gradient(160deg, #4a4a4d 0%, #232326 40%, #0c0c0d 100%);
-          border-radius: 34px;
-          padding: 7px;
-          box-shadow:
-            0 32px 60px rgba(0,0,0,0.28),
-            0 10px 22px rgba(0,0,0,0.18),
-            inset 0 0 0 1px rgba(255,255,255,0.10),
-            inset 0 1px 1px rgba(255,255,255,0.18);
-        }
-        .phone-btn {
-          position: absolute;
-          right: -3px;
-          background: linear-gradient(90deg, #3d3d40, #1c1c1e);
-          border-radius: 2px;
-          z-index: 0;
-        }
-        .phone-btn-power { top: 15%; width: 3px; height: 6.5%; }
-        .phone-btn-vol-up { top: 23%; width: 3px; height: 5.5%; }
-        .phone-btn-vol-down { top: 29.5%; width: 3px; height: 5.5%; }
-        .screen { position: relative; background: #111111; border-radius: 16px; overflow: hidden; line-height: 0; }
-        .screen-img { display: block; width: 100%; height: auto; }
-        .screen-camera {
-          position: absolute;
-          top: 1.6%;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 11px;
-          height: 11px;
-          border-radius: 50%;
-          background: #000;
-          z-index: 2;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
-        }
-
         /* ---------- Not another TMS ---------- */
         .tms-section { background: #f6f6f5; padding: 96px 48px; }
         .tms-inner { max-width: 780px; margin: 0 auto; text-align: center; }
@@ -859,6 +870,136 @@ export default function Home() {
           font: 400 14.5px var(--font);
           line-height: 1.6;
           color: rgba(0,0,0,0.55);
+        }
+
+        /* ---------- Audience picker ---------- */
+        .audience-section { background: #ffffff; padding: 96px 48px; border-top: 1px solid rgba(0,0,0,0.07); }
+        .audience-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+        .audience-eyebrow {
+          margin: 0;
+          font: 800 12px var(--font);
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: rgba(0,0,0,0.4);
+        }
+        .audience-h2 {
+          margin: 14px 0 0;
+          font: 900 44px var(--font);
+          letter-spacing: -0.02em;
+          color: #111;
+        }
+        .audience-sub {
+          margin: 16px auto 0;
+          max-width: 560px;
+          font: 400 16px var(--font);
+          line-height: 1.55;
+          color: rgba(0,0,0,0.55);
+        }
+        .audience-cards {
+          margin-top: 48px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 24px;
+          text-align: left;
+        }
+        .audience-card {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 36px 32px;
+          border-radius: 20px;
+          background: #f6f6f5;
+          border: 1px solid rgba(0,0,0,0.08);
+          text-decoration: none;
+          color: inherit;
+          transition: border-color 150ms ease, background 150ms ease;
+        }
+        .audience-card:hover { background: #f0f0ee; border-color: rgba(0,0,0,0.16); }
+        .audience-card-dark {
+          background: #111111;
+          border-color: #111111;
+          color: #ffffff;
+        }
+        .audience-card-dark:hover { background: #1c1c1c; border-color: #1c1c1c; }
+        .audience-card-label { font: 800 22px var(--font); letter-spacing: -0.01em; }
+        .audience-card-body {
+          margin: 0;
+          font: 400 15px var(--font);
+          line-height: 1.55;
+          color: rgba(0,0,0,0.6);
+        }
+        .audience-card-dark .audience-card-body { color: rgba(255,255,255,0.68); }
+        .audience-card-cta { margin-top: 4px; font: 700 14px var(--font); color: #111; }
+        .audience-card-dark .audience-card-cta { color: #fff; }
+
+        /* ---------- Shared knowledge / network ---------- */
+        .network-section { background: #f6f6f5; padding: 96px 48px; }
+        .network-inner { max-width: 780px; margin: 0 auto; text-align: center; }
+        .network-eyebrow {
+          margin: 0;
+          font: 800 12px var(--font);
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: rgba(0,0,0,0.4);
+        }
+        .network-h2 {
+          margin: 14px 0 0;
+          font: 900 38px var(--font);
+          letter-spacing: -0.02em;
+          line-height: 1.15;
+          color: #111;
+        }
+        .network-sub {
+          margin: 16px auto 0;
+          max-width: 600px;
+          font: 400 16px var(--font);
+          line-height: 1.6;
+          color: rgba(0,0,0,0.55);
+        }
+        .network-examples {
+          margin-top: 40px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+          text-align: left;
+        }
+        .network-card {
+          padding: 22px 22px 20px;
+          border-radius: 16px;
+          background: #111111;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .network-card-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .network-card-tag {
+          font: 800 10.5px var(--font);
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.4);
+        }
+        .network-card-time { font: 600 11.5px var(--font); color: rgba(255,255,255,0.35); }
+        .network-card-title {
+          margin: 12px 0 0;
+          font: 800 16px var(--font);
+          color: #fff;
+        }
+        .network-card-body {
+          margin: 8px 0 0;
+          font: 400 13.5px var(--font);
+          line-height: 1.55;
+          color: rgba(255,255,255,0.6);
+        }
+        .network-footnote {
+          margin: 32px auto 0;
+          max-width: 560px;
+          font: 500 13px var(--font);
+          line-height: 1.6;
+          color: rgba(0,0,0,0.45);
         }
 
         /* ---------- Closing ---------- */
@@ -935,7 +1076,6 @@ export default function Home() {
           .product-h2 { font-size: 30px; max-width: none; }
           .product-sub, .product-features { max-width: none; }
           .product-visual { order: -1; }
-          .phone { width: min(340px, 84vw); }
 
           .tms-section { padding: 56px 24px; }
           .tms-h2 { font-size: 30px; }
@@ -944,6 +1084,14 @@ export default function Home() {
           .workflow-section { padding: 56px 24px; }
           .workflow-h2 { font-size: 30px; margin-bottom: 32px; }
           .workflow-steps { grid-template-columns: 1fr; gap: 28px; }
+
+          .audience-section { padding: 56px 24px; }
+          .audience-h2 { font-size: 30px; }
+          .audience-cards { grid-template-columns: 1fr; margin-top: 32px; }
+
+          .network-section { padding: 56px 24px; }
+          .network-h2 { font-size: 26px; }
+          .network-examples { grid-template-columns: 1fr; margin-top: 28px; }
 
           .closing { padding: 48px 24px; }
           .closing-h2 { font-size: 30px; }

@@ -18,9 +18,11 @@ export default function SiteFooter() {
         </div>
 
         <nav className="footer-links">
-          <Link href="/about">About</Link>
+          <Link href="/for-drivers">For Drivers</Link>
+          <Link href="/for-fleets">For Fleets</Link>
+          <Link href="/about">Why ProTankr</Link>
           <Link href="/pricing">Pricing</Link>
-          <Link href="/get-the-app">Get the App</Link>
+          <Link href="/get-the-app">Get Early Access</Link>
           <Link href="/login">Login</Link>
         </nav>
       </div>

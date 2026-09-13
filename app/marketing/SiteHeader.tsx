@@ -33,7 +33,13 @@ function MenuIcon() {
   );
 }
 
-export type ActiveNav = "about" | "pricing" | "get-the-app" | undefined;
+export type ActiveNav =
+  | "for-drivers"
+  | "for-fleets"
+  | "about"
+  | "pricing"
+  | "get-the-app"
+  | undefined;
 
 export default function SiteHeader({ active }: { active?: ActiveNav }) {
   // Small screens collapse About/Pricing/Login behind this menu; the
@@ -69,13 +75,15 @@ export default function SiteHeader({ active }: { active?: ActiveNav }) {
         </Link>
 
         <nav className="nav-links">
-          <Link href="/about" className={active === "about" ? "is-active" : undefined}>About</Link>
+          <Link href="/for-drivers" className={active === "for-drivers" ? "is-active" : undefined}>For Drivers</Link>
+          <Link href="/for-fleets" className={active === "for-fleets" ? "is-active" : undefined}>For Fleets</Link>
+          <Link href="/about" className={active === "about" ? "is-active" : undefined}>Why ProTankr</Link>
           <Link href="/pricing" className={active === "pricing" ? "is-active" : undefined}>Pricing</Link>
           <Link href="/login" className="nav-login">Login</Link>
         </nav>
 
         <Link href="/get-the-app" className="nav-cta">
-          Get the App <PhoneIcon />
+          Get Early Access <PhoneIcon />
         </Link>
       </div>
 
@@ -83,7 +91,9 @@ export default function SiteHeader({ active }: { active?: ActiveNav }) {
         <>
           <div className="nav-backdrop" onClick={close} aria-hidden="true" />
           <div className="nav-panel">
-            <Link href="/about" onClick={close} className={active === "about" ? "is-active" : undefined}>About</Link>
+            <Link href="/for-drivers" onClick={close} className={active === "for-drivers" ? "is-active" : undefined}>For Drivers</Link>
+            <Link href="/for-fleets" onClick={close} className={active === "for-fleets" ? "is-active" : undefined}>For Fleets</Link>
+            <Link href="/about" onClick={close} className={active === "about" ? "is-active" : undefined}>Why ProTankr</Link>
             <Link href="/pricing" onClick={close} className={active === "pricing" ? "is-active" : undefined}>Pricing</Link>
             <Link href="/login" onClick={close}>Login</Link>
           </div>
@@ -112,11 +122,12 @@ export default function SiteHeader({ active }: { active?: ActiveNav }) {
         .site-header .nav-menu-btn { display: none; }
         .site-header .brand { display: flex; align-items: flex-start; gap: 14px; flex-shrink: 0; text-decoration: none; }
         .site-header .wordmark { margin-top: 14px; font: 800 24px var(--font-outfit), sans-serif; letter-spacing: 0.02em; color: #111; }
-        .site-header .nav-links { display: flex; align-items: center; gap: 30px; flex-shrink: 0; margin-left: auto; }
+        .site-header .nav-links { display: flex; align-items: center; gap: 22px; flex-shrink: 0; margin-left: auto; }
         .site-header .nav-links a {
-          font: 600 17px var(--font-outfit), sans-serif;
+          font: 600 16px var(--font-outfit), sans-serif;
           color: #111;
           text-decoration: none;
+          white-space: nowrap;
         }
         .site-header .nav-links a:hover { opacity: 0.6; }
         .site-header .nav-links a.is-active { opacity: 0.45; }
