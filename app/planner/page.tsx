@@ -2339,6 +2339,37 @@ const lastProductInfoById = useMemo(() => {
     </div>
   );
 
+  // ── Partial equipment (Phase 2: persistent bobtail / trailer-only) ────────
+  // A driver can hold just a truck (bobtail) or just a trailer (via a
+  // per-unit take-over) with no full combo. The setup gate is satisfied by
+  // that held unit (see comboSelected below), so the planner body renders --
+  // but there's no tare and no compartments, so the whole plan/compartments/
+  // CG/recap/LOAD apparatus is hidden and replaced with a prompt to pick the
+  // missing unit. A partial state literally cannot load, by construction:
+  // there is no full combo for beginLoadToSupabase to snapshot.
+  const isPartialEquipment = equipment.isBobtail || equipment.isTrailerOnly;
+  const heldUnitLabel = equipment.isBobtail
+    ? (equipment.currentTruckName ? `Truck ${equipment.currentTruckName}` : "Truck")
+    : (equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Trailer");
+  const missingUnitWord = equipment.isBobtail ? "trailer" : "truck";
+  const partialPanelEl = (
+    <div style={{ marginTop: 24, textAlign: "center" as const }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.4 }}>
+        Currently holding
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginTop: 4 }}>{heldUnitLabel}</div>
+      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 8, lineHeight: 1.5, maxWidth: 300, marginLeft: "auto", marginRight: "auto" }}>
+        {equipment.isBobtail
+          ? "No trailer coupled — add one to plan a load."
+          : "No truck coupled — add one to plan a load."}
+      </div>
+      <button type="button" onClick={() => setEquipOpen(true)}
+        style={{ marginTop: 18, background: "#ffffff", color: "#000000", border: "none", borderRadius: 6, padding: "12px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+        Select a {missingUnitWord}
+      </button>
+    </div>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────────
   // Landscape: trim the page's own side padding (16px -> 6px each side) so
   // the two-column row below reclaims that width instead of leaving it as
@@ -2458,6 +2489,8 @@ const lastProductInfoById = useMemo(() => {
           are written. */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
       {locationLineEl}
+      {isPartialEquipment ? partialPanelEl : (
+      <>
       {stabilityBannerEl}
       {actionRowEl}
       <PlannerControls
@@ -2535,6 +2568,8 @@ const lastProductInfoById = useMemo(() => {
           <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.3)" }}>Front</span>
         </div>
       </div>
+      </>
+      )}
       </div>
       {/* ── Info cards, Load button, Load summary ── */}
       {(() => {
@@ -2860,6 +2895,14 @@ const lastProductInfoById = useMemo(() => {
             {loadButtonEl}
           </>
         );
+        // Partial (bobtail / trailer-only): no full combo -> no recap, no
+        // utilization, no LOAD. Only the header icon cluster (EQ / pin /
+        // plan-letter) still portals in, so the driver can pick the missing
+        // unit. The partial prompt itself renders up in the compartments
+        // block (partialPanelEl), not here.
+        if (isPartialEquipment) {
+          return <>{headerIconsSlot && createPortal(headerIconsEl, headerIconsSlot)}</>;
+        }
         return (
           <>
             <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto", marginTop: 14, display: "flex", flexDirection: "column", gap: 12 } : { marginTop: 18, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2883,11 +2926,12 @@ const lastProductInfoById = useMemo(() => {
           onOpenTerminal={() => setTermOpen(true)}
           fetchCombos={equipment.fetchCombos}
           setSelectedComboId={equipment.setSelectedComboId}
+          setCurrentEquipment={equipment.setCurrentEquipment}
           onComplete={() => setOnboardingDone(true)}
         />
       ) : (
         <SetupGate
-          comboSelected={!!equipment.selectedComboId}
+          comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}
           locationSelected={!!(location.selectedState && location.selectedCity)}
           terminalSelected={!!location.selectedTerminalId}
           equipmentLabel={equipment.equipmentLabel}

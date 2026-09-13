@@ -16,6 +16,8 @@ import {
   removePrimaryTruck,
   setPrimaryTrailer,
   removePrimaryTrailer,
+  getCurrentEquipment,
+  setCurrentEquipmentProxy,
 } from "@/lib/adminSetupClient";
 
 // ─── Storage helpers (module-level, pure) ─────────────────────────────────────
@@ -69,6 +71,57 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
       if (authUserId) writePersistedEquip(userKey, id);
     }
   }, [isSetup, authUserId, anonKey, userKey]);
+
+  // ── Current held units (bobtail / trailer-only layer) ─────────────────────
+  // Phase 2: a driver can hold a truck with no trailer (bobtail) or a trailer
+  // with no truck. Source of truth is user_settings.current_truck_id /
+  // current_trailer_id (server-side so a take-over victim's device reads it on
+  // next load). A full pair still materializes an equipment_combos row and
+  // drives selectedComboId exactly as before -- this layer only adds the
+  // partial states.
+  const [currentTruckId, setCurrentTruckId] = useState<string | null>(null);
+  const [currentTrailerId, setCurrentTrailerId] = useState<string | null>(null);
+  const [currentTruckName, setCurrentTruckName] = useState<string | null>(null);
+  const [currentTrailerName, setCurrentTrailerName] = useState<string | null>(null);
+  // Ref to fetchCombos (defined below) so the writer can refresh without a
+  // temporal-dead-zone reference in its dependency array.
+  const fetchCombosRef = useRef<(() => Promise<void>) | null>(null);
+
+  const loadCurrentEquipment = useCallback(async () => {
+    if (!effectiveUserId) return;
+    try {
+      if (isSetup) {
+        const { currentTruckId: t, currentTrailerId: tr } = await getCurrentEquipment(effectiveUserId);
+        setCurrentTruckId(t ?? null);
+        setCurrentTrailerId(tr ?? null);
+      } else {
+        const { data } = await supabase
+          .from("user_settings")
+          .select("current_truck_id, current_trailer_id")
+          .eq("user_id", effectiveUserId)
+          .maybeSingle();
+        setCurrentTruckId((data as any)?.current_truck_id ?? null);
+        setCurrentTrailerId((data as any)?.current_trailer_id ?? null);
+      }
+    } catch (e: any) {
+      console.error("loadCurrentEquipment:", e?.message);
+    }
+  }, [effectiveUserId, isSetup]);
+
+  // Writer: "I now hold exactly these units" (partial selection -- one non-null,
+  // or both null to clear). A full pair goes through couple_combo, not this.
+  const setCurrentEquipment = useCallback(async (truckId: string | null, trailerId: string | null) => {
+    if (isSetup) {
+      await setCurrentEquipmentProxy(effectiveUserId, truckId, trailerId);
+    } else {
+      const { error } = await supabase.rpc("set_current_equipment", {
+        p_truck_id: truckId,
+        p_trailer_id: trailerId,
+      });
+      if (error) throw error;
+    }
+    await Promise.all([fetchCombosRef.current?.(), loadCurrentEquipment()]);
+  }, [isSetup, effectiveUserId, loadCurrentEquipment]);
 
   // ── Primary equipment (starred trucks/trailers) ───────────────────────────
 
@@ -163,11 +216,15 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
   }, []);
 
   useEffect(() => { fetchCombos(); }, [fetchCombos]);
+  useEffect(() => { fetchCombosRef.current = fetchCombos; }, [fetchCombos]);
 
-  // Load primary equipment whenever effectiveUserId is ready
+  // Load primary + current equipment whenever effectiveUserId is ready
   useEffect(() => {
-    if (effectiveUserId) loadPrimaryEquipment();
-  }, [effectiveUserId, loadPrimaryEquipment]);
+    if (effectiveUserId) {
+      loadPrimaryEquipment();
+      loadCurrentEquipment();
+    }
+  }, [effectiveUserId, loadPrimaryEquipment, loadCurrentEquipment]);
 
   // ── Selection logic ───────────────────────────────────────────────────────
   // Setup mode: derive from claimed_by on combos — no localStorage involved
@@ -218,7 +275,46 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
     setSelectedComboIdRaw(claimed ? String(claimed.combo_id) : "");
   }, [combos, isSetup, effectiveUserId, combosLoading]);
 
+  // Cross-device / post-take-over fallback: if nothing is selected locally but
+  // the server says this user holds a FULL pair (both current_* set), resolve
+  // it to the matching active combo. Never overrides an existing selection, so
+  // it can't fight the localStorage/claimed_by paths above.
+  useEffect(() => {
+    if (combosLoading) return;
+    if (selectedComboId) return;
+    if (!currentTruckId || !currentTrailerId) return;
+    const match = combos.find(
+      (c) =>
+        String(c.truck_id ?? "") === String(currentTruckId) &&
+        String(c.trailer_id ?? "") === String(currentTrailerId) &&
+        String(c.claimed_by ?? "") === String(effectiveUserId)
+    );
+    if (match) setSelectedComboIdRaw(String(match.combo_id));
+  }, [combosLoading, selectedComboId, currentTruckId, currentTrailerId, combos, effectiveUserId]);
+
+  // Resolve display names for the currently-held units (a bobtail truck has no
+  // active combo, so truckNameById/trailerNameById below won't cover it).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (currentTruckId) {
+        const { data } = await supabase.from("trucks").select("truck_name").eq("truck_id", currentTruckId).maybeSingle();
+        if (!cancelled) setCurrentTruckName((data as any)?.truck_name ?? null);
+      } else if (!cancelled) setCurrentTruckName(null);
+      if (currentTrailerId) {
+        const { data } = await supabase.from("trailers").select("trailer_name").eq("trailer_id", currentTrailerId).maybeSingle();
+        if (!cancelled) setCurrentTrailerName((data as any)?.trailer_name ?? null);
+      } else if (!cancelled) setCurrentTrailerName(null);
+    })();
+    return () => { cancelled = true; };
+  }, [currentTruckId, currentTrailerId]);
+
   // ── Derived ───────────────────────────────────────────────────────────────
+
+  // Partial (no materialized combo) states. When a full combo is selected these
+  // are both false -- the current_* columns are subsumed by the combo.
+  const isBobtail     = !selectedComboId && !!currentTruckId  && !currentTrailerId;
+  const isTrailerOnly = !selectedComboId && !!currentTrailerId && !currentTruckId;
 
   const selectedCombo = useMemo(
     () => combos.find((c) => String(c.combo_id) === String(selectedComboId)) ?? null,
@@ -283,9 +379,20 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
     loadPrimaryEquipment,
     togglePrimaryTruck,
     togglePrimaryTrailer,
+    // Phase 2 bobtail / current-units layer
+    currentTruckId,
+    currentTrailerId,
+    currentTruckName,
+    currentTrailerName,
+    isBobtail,
+    isTrailerOnly,
+    setCurrentEquipment,
+    loadCurrentEquipment,
   }), [
     combos, combosLoading, combosError, selectedComboId, setSelectedComboId,
     selectedCombo, truckNameById, trailerNameById, equipmentLabel, fetchCombos,
     primaryTruckIds, primaryTrailerIds, loadPrimaryEquipment, togglePrimaryTruck, togglePrimaryTrailer,
+    currentTruckId, currentTrailerId, currentTruckName, currentTrailerName,
+    isBobtail, isTrailerOnly, setCurrentEquipment, loadCurrentEquipment,
   ]);
 }

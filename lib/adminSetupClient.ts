@@ -123,6 +123,20 @@ export async function coupleCombo(
   );
 }
 
+export async function getCurrentEquipment(targetUserId: string) {
+  return setupFetch<{ currentTruckId: string | null; currentTrailerId: string | null }>(
+    "get_current_equipment", targetUserId
+  );
+}
+
+export async function setCurrentEquipmentProxy(
+  targetUserId: string,
+  truckId: string | null,
+  trailerId: string | null
+) {
+  return setupFetch("set_current_equipment", targetUserId, { truckId, trailerId });
+}
+
 export async function slipSeatCombo(targetUserId: string, comboId: string) {
   return setupFetch("slip_seat_combo", targetUserId, { comboId });
 }

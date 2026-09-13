@@ -78,6 +78,12 @@ type Props = {
    *  or remove — a plain fleet driver gets select/couple/swap only. When
    *  omitted, treated as solo (the historical single-tier default). */
   isSolo?: boolean;
+  /** Phase 2 bobtail layer. The driver's currently-held units (from
+   *  user_settings.current_*), so a partial (one-unit) selection can be
+   *  seeded on open and persisted on close via setCurrentEquipment. */
+  currentTruckId?: string | null;
+  currentTrailerId?: string | null;
+  setCurrentEquipment?: (truckId: string | null, trailerId: string | null) => Promise<void>;
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -392,6 +398,7 @@ function computeWashLines(truckWashedAt: string | null, trailerWashedAt: string 
 export default function SoloEquipmentModal({
   open, onClose, authUserId, companyId, selectedComboId, onSelectComboId, onRefreshCombos,
   setupSession, myRole, isSolo,
+  currentTruckId, currentTrailerId, setCurrentEquipment,
 }: Props) {
   // Adding/removing equipment is staff-only on a fleet company. Solo is
   // always admin (solo-provisioning), and when the prop is omitted we treat
@@ -585,13 +592,20 @@ export default function SoloEquipmentModal({
     })();
   }, [open, loading, authUserId, setupSession, trucks, trailers]);
 
-  // Initialize local truck/trailer selection from the current combo.
+  // Initialize local truck/trailer selection from the current combo, or -- when
+  // there's no full combo -- from the bobtail/trailer-only current_* units, so
+  // a partial selection shows as selected on reopen.
   useEffect(() => {
     if (!open || loading) return;
     const current = combos.find((c) => String(c.combo_id) === String(selectedComboId));
-    setSelectedTruckId(current?.truck_id ?? null);
-    setSelectedTrailerId(current?.trailer_id ?? null);
-  }, [open, loading, selectedComboId, combos]);
+    if (current) {
+      setSelectedTruckId(current.truck_id ?? null);
+      setSelectedTrailerId(current.trailer_id ?? null);
+    } else {
+      setSelectedTruckId(currentTruckId ?? null);
+      setSelectedTrailerId(currentTrailerId ?? null);
+    }
+  }, [open, loading, selectedComboId, combos, currentTruckId, currentTrailerId]);
 
   useEffect(() => {
     if (!open) return;
@@ -823,6 +837,27 @@ export default function SoloEquipmentModal({
     await resolvePair(truckId, trailerId, tare);
   }
 
+  // Persist a partial (one-unit) or fully-cleared selection as the driver's
+  // current held units before closing, so bobtail / trailer-only survives the
+  // modal closing. A full pair is already a materialized combo (couple_combo
+  // set current_* itself), so it's skipped. No-ops when nothing changed.
+  async function handleClose() {
+    try {
+      if (setCurrentEquipment && !selectedComboId) {
+        const t = selectedTruckId ?? null;
+        const r = selectedTrailerId ?? null;
+        const partialOrEmpty = !(t && r); // both set would be a full pair (couple path)
+        const changed = t !== (currentTruckId ?? null) || r !== (currentTrailerId ?? null);
+        if (partialOrEmpty && changed) {
+          await setCurrentEquipment(t, r);
+        }
+      }
+    } catch (e: any) {
+      console.error("persist current equipment on close:", e?.message);
+    }
+    onClose();
+  }
+
   const selectedCombo = useMemo(
     () => combos.find((c) => String(c.combo_id) === String(selectedComboId)) ?? null,
     [combos, selectedComboId]
@@ -853,7 +888,7 @@ export default function SoloEquipmentModal({
   return (
     <>
       <FullscreenModal
-        open={open} onClose={onClose} title="Equipment" footer={null}
+        open={open} onClose={handleClose} title="Equipment" footer={null}
         headerRight={
           <button
             type="button"
@@ -1006,7 +1041,7 @@ export default function SoloEquipmentModal({
                 button (footer={null}, see header comment -- everything here
                 autosaves, no Save/Decouple step) but still needs an
                 explicit, deliberate way to close. */}
-            <button type="button" onClick={onClose} style={{ ...saveBtnStyle, marginTop: 10 }}>
+            <button type="button" onClick={handleClose} style={{ ...saveBtnStyle, marginTop: 10 }}>
               Done
             </button>
           </div>
@@ -1155,9 +1190,9 @@ export default function SoloEquipmentModal({
       {commandeerTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
-            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Commandeer this unit?</div>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Take this {commandeerTarget.kind}?</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
-              Do you want to commandeer this unit from {commandeerTarget.ownerName}?
+              This {commandeerTarget.kind} is currently {commandeerTarget.ownerName}'s. Take it? They'll keep their {commandeerTarget.kind === "truck" ? "trailer" : "truck"}.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setCommandeerTarget(null)} disabled={busy}
@@ -1166,7 +1201,7 @@ export default function SoloEquipmentModal({
               </button>
               <button type="button" onClick={confirmCommandeer} disabled={busy}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(220,160,60,0.5)", background: "rgba(180,120,40,0.25)", color: "#fde68a", fontWeight: 800, cursor: "pointer" }}>
-                Commandeer
+                Take it
               </button>
             </div>
           </div>

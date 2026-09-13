@@ -106,6 +106,10 @@ type EquipmentSummary = {
   trailerName: string | null;
   trailerMake: string | null;
   permitItems: PermitItem[]; // pre-filtered to expiring/expired only, soonest first
+  // Phase 2 — true when the names came from the driver's held units
+  // (user_settings.current_*) rather than a fully-coupled active combo, i.e.
+  // the driver is bobtail (truck only) or trailer-only.
+  partial: boolean;
 };
 
 type BadgeRow = { id: string; port_name: string; category: string | null; expiration_date: string | null };
@@ -187,7 +191,7 @@ export default function DispatchPage() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [cards, setCards] = useState<TerminalCardRow[]>([]);
   const [cardSearch, setCardSearch] = useState("");
-  const [equipment, setEquipment] = useState<EquipmentSummary>({ truckName: null, truckMake: null, trailerName: null, trailerMake: null, permitItems: [] });
+  const [equipment, setEquipment] = useState<EquipmentSummary>({ truckName: null, truckMake: null, trailerName: null, trailerMake: null, permitItems: [], partial: false });
   const [badges, setBadges] = useState<BadgeRow[]>([]);
   const [credentials, setCredentials] = useState<CredentialSummary>({ licenseExp: null, medicalExp: null, twicExp: null });
   const [notes, setNotes] = useState("");
@@ -260,8 +264,28 @@ export default function DispatchPage() {
       setCards(rows);
 
       const claimed = ((claimedCombos ?? [])[0] as any) ?? null;
-      const truckId = claimed?.truck_id ?? null;
-      const trailerId = claimed?.trailer_id ?? null;
+      let truckId = claimed?.truck_id ?? null;
+      let trailerId = claimed?.trailer_id ?? null;
+
+      // Phase 2 bobtail / trailer-only fallback: a driver holding just a
+      // truck (or just a trailer) has no active combo, so the query above
+      // finds nothing. Fall back to their held units in user_settings so the
+      // Equipment section shows "Truck NNN (bobtail)" instead of blank. This
+      // relies on the dispatcher having read access to the driver's
+      // user_settings row; if RLS denies it the read simply returns nothing
+      // and the section falls back to the pre-Phase-2 "no equipment" display
+      // -- no worse than before, never an error.
+      let partial = false;
+      if (!truckId && !trailerId) {
+        const { data: us } = await supabase
+          .from("user_settings")
+          .select("current_truck_id, current_trailer_id")
+          .eq("user_id", selectedDriverId)
+          .maybeSingle();
+        const ct = (us as any)?.current_truck_id ?? null;
+        const cr = (us as any)?.current_trailer_id ?? null;
+        if (ct || cr) { truckId = ct; trailerId = cr; partial = true; }
+      }
       const [truckRes, trailerRes, truckPermitsRes, trailerPermitsRes] = await Promise.all([
         truckId ? supabase.from("trucks").select("truck_name, make").eq("truck_id", truckId).maybeSingle() : Promise.resolve({ data: null }),
         trailerId ? supabase.from("trailers").select("trailer_name, make").eq("trailer_id", trailerId).maybeSingle() : Promise.resolve({ data: null }),
@@ -284,6 +308,7 @@ export default function DispatchPage() {
         trailerName: trailerRow?.trailer_name ?? null,
         trailerMake: trailerRow?.make ?? null,
         permitItems,
+        partial,
       });
 
       setBadges((badgeRows ?? []) as BadgeRow[]);
@@ -453,12 +478,18 @@ export default function DispatchPage() {
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
                 Truck{equipment.truckName ? ` · ${equipment.truckName}` : ""}
+                {equipment.partial && equipment.truckName && !equipment.trailerName && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#fbbf24" }}> (bobtail)</span>
+                )}
               </span>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>{equipment.truckMake ?? ""}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
                 Trailer{equipment.trailerName ? ` · ${equipment.trailerName}` : ""}
+                {equipment.partial && equipment.trailerName && !equipment.truckName && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#fbbf24" }}> (no truck)</span>
+                )}
               </span>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>{equipment.trailerMake ?? ""}</span>
             </div>

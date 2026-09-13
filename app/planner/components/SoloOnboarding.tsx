@@ -62,6 +62,10 @@ export type SoloOnboardingProps = {
   // equipment (shell.equipment)
   fetchCombos: () => Promise<void> | void;
   setSelectedComboId: (id: string) => void;
+  // Phase 2 — persist a truck-only (bobtail) held unit when the driver skips
+  // the trailer step. Optional so a caller that predates Phase 2 still works
+  // (the Skip button simply hides when it isn't provided).
+  setCurrentEquipment?: (truckId: string | null, trailerId: string | null) => Promise<void>;
 
   // called once onboarding is fully complete -- lets the page stop rendering us
   onComplete: () => void;
@@ -141,7 +145,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
     userId, companyId,
     selectedState, selectedCity, selectedTerminalId,
     onOpenLocation, onOpenTerminal,
-    fetchCombos, setSelectedComboId, onComplete,
+    fetchCombos, setSelectedComboId, setCurrentEquipment, onComplete,
   } = props;
 
   const [mounted, setMounted] = useState(false);
@@ -150,6 +154,11 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
   const [step, setStep] = useState<Step>("resolving");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Phase 2 — set when the driver skips the trailer step (bobtail). A bobtail
+  // driver has no compartments, so the plan-setup tutorial doesn't apply:
+  // once location/terminal are set they go straight to complete, skipping
+  // ready/tutorial.
+  const [skippedTrailer, setSkippedTrailer] = useState(false);
 
   // ── Form state ──
   const [name, setName] = useState(props.displayName ?? "");
@@ -257,8 +266,15 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
     if (step === "location" && locationSet) setStep("terminal");
   }, [step, locationSet]);
   useEffect(() => {
-    if (step === "terminal" && terminalSet) setStep("ready");
-  }, [step, terminalSet]);
+    if (step === "terminal" && terminalSet) {
+      // Bobtail driver: no trailer -> no compartments -> the plan-setup
+      // tutorial doesn't apply. Finish straight from terminal. (markComplete
+      // + onComplete inlined here rather than referencing finishAll, which is
+      // declared further down -- avoids a TDZ in this effect's dep array.)
+      if (skippedTrailer) { markOnboardingComplete(userId); onComplete(); }
+      else setStep("ready");
+    }
+  }, [step, terminalSet, skippedTrailer, userId, onComplete]);
 
   // ── Writes ──
 
@@ -330,6 +346,27 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
     builtRef.current = true;
     setStep("caps");
   }, [trailerNumber, compCount, caps, userId]);
+
+  // Phase 2 — skip the trailer entirely and run bobtail. Persists the truck
+  // as the driver's current held unit (truck-only), then advances to
+  // location/terminal if unset, or completes. The truck was already created
+  // on the truck step, so truckIdRef.current is populated here.
+  const skipTrailerBobtail = useCallback(async () => {
+    const truckId = truckIdRef.current;
+    if (!truckId) { setError("Add your truck first."); return; }
+    if (!setCurrentEquipment) { setError("Can't skip right now — please add a trailer."); return; }
+    setBusy(true); setError(null);
+    try {
+      await setCurrentEquipment(truckId, null);
+      clearTrailerDraft(userId);
+      setSkippedTrailer(true);
+      if (!locationSet) { setStep("location"); }
+      else if (!terminalSet) { setStep("terminal"); }
+      else { markOnboardingComplete(userId); onComplete(); }
+    } catch (e: any) {
+      setError("Couldn't skip the trailer. Check your connection and try again.");
+    } finally { setBusy(false); }
+  }, [setCurrentEquipment, userId, locationSet, terminalSet, onComplete]);
 
   const saveCap = useCallback(() => {
     const val = Number(capInput);
@@ -522,6 +559,11 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
           </div>
           {error && <div style={S.err}>{error}</div>}
           <button style={disabledPrimary(!trailerNumber.trim())} disabled={!trailerNumber.trim()} onClick={startTrailer}>Next</button>
+          {setCurrentEquipment && (
+            <button style={S.secondary} disabled={busy} onClick={skipTrailerBobtail}>
+              {busy ? "Skipping…" : "Skip — I'm bobtail (no trailer yet)"}
+            </button>
+          )}
         </div>
       )}
 

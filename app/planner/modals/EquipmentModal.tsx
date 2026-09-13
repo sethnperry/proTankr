@@ -53,12 +53,17 @@ type Props = {
   onSelectComboId: (id: string) => void;
   onRefreshCombos: () => void;
   myRole?: string | null;
+  // Phase 2 — persistent bobtail / trailer-only held units.
+  currentTruckId?: string | null;
+  currentTrailerId?: string | null;
+  setCurrentEquipment?: (truckId: string | null, trailerId: string | null) => Promise<void>;
 };
 
 export default function EquipmentModal({
   open, onClose, authUserId, setupSession,
   selectedComboId, onSelectComboId, onRefreshCombos,
   myRole,
+  currentTruckId, currentTrailerId, setCurrentEquipment,
 }: Props) {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isSolo, setIsSolo] = useState<boolean | null>(null);
@@ -119,6 +124,9 @@ export default function EquipmentModal({
       setupSession={setupSession}
       myRole={myRole}
       isSolo={isSolo}
+      currentTruckId={currentTruckId}
+      currentTrailerId={currentTrailerId}
+      setCurrentEquipment={setCurrentEquipment}
     />
   );
 }

@@ -295,6 +295,9 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         onSelectComboId={(id: string) => shell.equipment.setSelectedComboId(id)}
         onRefreshCombos={shell.equipment.fetchCombos}
         myRole={shell.role}
+        currentTruckId={shell.equipment.currentTruckId}
+        currentTrailerId={shell.equipment.currentTrailerId}
+        setCurrentEquipment={shell.equipment.setCurrentEquipment}
       />
 
       <ExpirationModal

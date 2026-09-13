@@ -273,7 +273,31 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ companyId: (data as any)?.active_company_id ?? null });
       }
 
+      case "get_current_equipment": {
+        const { data, error } = await serviceSupabase
+          .from("user_settings")
+          .select("current_truck_id, current_trailer_id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+        if (error) throw error;
+        return NextResponse.json({
+          currentTruckId:   (data as any)?.current_truck_id ?? null,
+          currentTrailerId: (data as any)?.current_trailer_id ?? null,
+        });
+      }
+
       // ── RPC proxies ──────────────────────────────────────────────────────────
+
+      case "set_current_equipment": {
+        const { truckId, trailerId } = body;
+        const { error } = await serviceSupabase.rpc("set_current_equipment", {
+          p_truck_id:   truckId ?? null,
+          p_trailer_id: trailerId ?? null,
+          p_user_id:    targetUserId,
+        });
+        if (error) throw error;
+        return NextResponse.json({ ok: true });
+      }
 
       case "claim_combo": {
         const { comboId } = body;
