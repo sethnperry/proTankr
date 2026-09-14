@@ -1,12 +1,13 @@
 // app/planner/utils/apiBasis.test.ts
 //
 // Confidence-tier resolution for the API a planned load's density stands on.
-// Tiers: high (<=12h old, or the driver's own tuned entry), medium (12-24h,
-// a blended safer guess), low (>24h old, or never observed here at all).
-// Safety property: whenever a reading isn't fresh enough to trust outright,
-// density must fall back toward the HEAVIEST value available (lower API), so
-// a stale/unknown reading can only make the plan more conservative, never
-// lighter.
+// Tiers: tuned (the driver's own gauge/BOL entry, white -- not a system
+// confidence rating), high (<=12h old network reading, green), medium
+// (12-24h, a blended safer guess, amber), low (>24h old, or never observed
+// here at all, red). Safety property: whenever a reading isn't fresh enough
+// to trust outright, density must fall back toward the HEAVIEST value
+// available (lower API), so a stale/unknown reading can only make the plan
+// more conservative, never lighter.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,9 +26,9 @@ const BASE = {
   nowMs: Date.parse("2026-09-08T12:00:00Z"),
 };
 
-test("tuned reading wins outright and is tier 'high'", () => {
+test("tuned reading wins outright and is its own tier 'tuned' (not 'high')", () => {
   const b = resolveApiBasis({ ...BASE, tuned: { api: 36.7, tempF: 92.6 } });
-  assert.equal(b.tier, "high");
+  assert.equal(b.tier, "tuned");
   assert.equal(b.displayApi, 36.7);
 });
 
@@ -101,7 +102,8 @@ test("falls back to api_60 when the product's published minimum is missing", () 
   assert.equal(b.displayApi, 40);
 });
 
-test("tier colors match the temp confidence palette (green/amber/red)", () => {
+test("tier colors: white for the driver's own tuned entry, then the temp confidence palette", () => {
+  assert.equal(apiTierColor("tuned"), "#ffffff");
   assert.equal(apiTierColor("high"), "#4ade80");
   assert.equal(apiTierColor("medium"), "#fbbf24");
   assert.equal(apiTierColor("low"), "#f87171");

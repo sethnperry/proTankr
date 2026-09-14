@@ -8,8 +8,13 @@
 // Confidence tiers (per explicit driver direction, matching the temp
 // prediction's own high/medium/low palette so the whole Tune line reads as
 // one confidence signal):
-//   high   -- the driver's own gauge/BOL entry, OR a real reading updated
-//             within the last 12 hours -- trust the network API as-is.  [green]
+//   tuned  -- the driver's own gauge/BOL entry. Always wins outright -- this
+//             IS the density calc's basis -- but colored separately from
+//             "high" (white, not green): it's the driver's own word, not a
+//             system-verified network reading, so it shouldn't look like the
+//             same kind of confidence as one.                             [white]
+//   high   -- a real network reading updated within the last 12 hours --
+//             trust the network API as-is.                                [green]
 //   medium -- a real reading updated 12-24 hours ago -- a half-day-old
 //             number isn't wrong, but it isn't current either, so split the
 //             difference between it and the terminal's own observed floor.
@@ -32,7 +37,7 @@ function backCorrectApiTo60(observedApi: number, observedTempF: number, alphaPer
   return observedApi + alphaPerF * (observedTempF - 60);
 }
 
-export type ApiTier = "high" | "medium" | "low";
+export type ApiTier = "tuned" | "high" | "medium" | "low";
 
 export type ApiBasisInput = {
   alphaPerF: number;
@@ -69,12 +74,15 @@ export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
     : apiMinFallback;
 
   // 1. Driver's own gauge/BOL entry always wins outright -- highest
-  //    confidence, no staleness question to ask.
+  //    confidence, no staleness question to ask. Its own tier/color ("tuned",
+  //    white) rather than sharing "high"/green with an automatic network
+  //    reading -- a manual entry is trustworthy but isn't the same kind of
+  //    signal as a system-verified fresh reading.
   if (inp.tuned && Number.isFinite(inp.tuned.api) && Number.isFinite(inp.tuned.tempF)) {
     return {
       api60: backCorrectApiTo60(Number(inp.tuned.api), Number(inp.tuned.tempF), alpha),
       displayApi: Number(inp.tuned.api),
-      tier: "high",
+      tier: "tuned",
     };
   }
 
@@ -114,6 +122,7 @@ export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
 // palette exactly so the whole Tune line reads as one confidence signal.
 export function apiTierColor(tier: ApiTier): string {
   switch (tier) {
+    case "tuned": return "#ffffff";  // white -- the driver's own entry, not a system confidence rating
     case "high": return "#4ade80";   // green
     case "medium": return "#fbbf24"; // amber
     case "low": return "#f87171";    // red

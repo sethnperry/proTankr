@@ -1949,10 +1949,10 @@ const lastProductInfoById = useMemo(() => {
 
       // Which API the planner is standing on + its confidence tier -- the SAME
       // resolver the density uses, so the shown API/lb-gal and the planned
-      // gallons can never disagree. Matches the temp prediction's own
-      // high/medium/low palette: green (<=12h old, or the driver's own
-      // tuned reading), amber (12-24h old, a blended safer guess), red
-      // (>24h old, or nothing ever observed here).
+      // gallons can never disagree. White (the driver's own tuned reading --
+      // not a system confidence rating), green (<=12h old network reading),
+      // amber (12-24h old, a blended safer guess), red (>24h old, or nothing
+      // ever observed here).
       let displayApi: number | null = tuned ? tuned.api : null;
       let apiColor = "#ffffff";
       if (p && p.alpha_per_f != null && p.api_60 != null) {
