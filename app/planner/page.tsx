@@ -982,11 +982,12 @@ export default function CalculatorPage() {
       return lbsPerGallonAtTemp(Number(overrideApi60), Number(p.alpha_per_f), t);
     }
     // Otherwise resolve the API basis by confidence (see apiBasis.ts): a fresh
-    // observed reading if there is one, else the terminal's observed minimum,
-    // else the product's published minimum -- the same resolver the Tune panel
-    // displays, so the shown basis and the planned gallons can never disagree.
-    // A stale/unknown reading always falls back to the HEAVIEST minimum, so it
-    // can only ever make the plan more conservative, never lighter.
+    // (<=12h) observed reading if there is one, else the terminal's observed
+    // minimum, else the product's published minimum -- the same resolver the
+    // Tune panel displays, so the shown basis and the planned gallons can
+    // never disagree. A stale/unknown reading always falls back toward the
+    // HEAVIEST minimum, so it can only ever make the plan more conservative,
+    // never lighter.
     const basis = resolveApiBasis({
       alphaPerF: Number(p.alpha_per_f),
       api60Ref: Number(p.api_60),
@@ -997,7 +998,6 @@ export default function CalculatorPage() {
       lastApiUpdatedAt: (p as any).last_api_updated_at ?? null,
       tuned: tunedApiTempByProduct[productId] ?? null,
       nowMs: Date.now(),
-      staleDays: DEFAULT_STALE_API_DAYS,
     });
     const t = productTempF[productId] ?? tempF;
     return lbsPerGallonAtTemp(basis.api60, Number(p.alpha_per_f), t);
@@ -1949,9 +1949,10 @@ const lastProductInfoById = useMemo(() => {
 
       // Which API the planner is standing on + its confidence tier -- the SAME
       // resolver the density uses, so the shown API/lb-gal and the planned
-      // gallons can never disagree. Colored like the temp: green (fresh/tuned),
-      // white (within the stale window), amber (terminal minimum), red (product
-      // minimum -- nothing observed here).
+      // gallons can never disagree. Matches the temp prediction's own
+      // high/medium/low palette: green (<=12h old, or the driver's own
+      // tuned reading), amber (12-24h old, a blended safer guess), red
+      // (>24h old, or nothing ever observed here).
       let displayApi: number | null = tuned ? tuned.api : null;
       let apiColor = "#ffffff";
       if (p && p.alpha_per_f != null && p.api_60 != null) {
@@ -1965,7 +1966,6 @@ const lastProductInfoById = useMemo(() => {
           lastApiUpdatedAt: (p as any).last_api_updated_at ?? null,
           tuned,
           nowMs: now,
-          staleDays: DEFAULT_STALE_API_DAYS,
         });
         displayApi = basis.displayApi;
         apiColor = apiTierColor(basis.tier);

@@ -5,18 +5,25 @@
 // the number the driver sees and the number the gallons are computed from can
 // never disagree.
 //
-// Confidence tiers (per explicit driver direction):
-//   tuned        -- the driver's own gauge/BOL entry (highest trust)   [green]
-//   fresh6h      -- a real reading updated within the last 6 hours       [green]
-//   fresh7d      -- a real reading updated within the stale window       [white]
-//   terminalMin  -- no fresh reading; using the terminal's observed
-//                   minimum (heaviest seen here) -- a safe fallback       [amber]
-//   productMin   -- nothing observed here; the product's published
-//                   minimum (heaviest spec) -- least confidence           [red]
+// Confidence tiers (per explicit driver direction, matching the temp
+// prediction's own high/medium/low palette so the whole Tune line reads as
+// one confidence signal):
+//   high   -- the driver's own gauge/BOL entry, OR a real reading updated
+//             within the last 12 hours -- trust the network API as-is.  [green]
+//   medium -- a real reading updated 12-24 hours ago -- a half-day-old
+//             number isn't wrong, but it isn't current either, so split the
+//             difference between it and the terminal's own observed floor.
+//                                                                         [amber]
+//   low    -- either a reading older than 24 hours, or nothing has ever
+//             been observed for this product at this terminal at all --
+//             fall back to the terminal's own floor (its lowest/heaviest
+//             observed reading, or the product's published minimum when
+//             there's no observation history yet).                        [red]
 //
-// Safety: whenever a fresh reading isn't available, density falls back to the
-// HEAVIEST minimum available (lower API = denser), so a stale or unknown
-// reading can only ever make the plan more conservative, never lighter.
+// Safety: whenever a reading isn't fresh enough to trust outright, density
+// falls back toward the HEAVIEST value available (lower API = denser), so a
+// stale or unknown reading can only ever make the plan more conservative,
+// never lighter.
 
 // Back-correct an observed API at temp to API_60 (same formula as
 // planMath.backCorrectApiTo60 -- inlined here to keep this module dependency-
@@ -25,7 +32,7 @@ function backCorrectApiTo60(observedApi: number, observedTempF: number, alphaPer
   return observedApi + alphaPerF * (observedTempF - 60);
 }
 
-export type ApiTier = "tuned" | "fresh6h" | "fresh7d" | "terminalMin" | "productMin";
+export type ApiTier = "high" | "medium" | "low";
 
 export type ApiBasisInput = {
   alphaPerF: number;
@@ -37,7 +44,6 @@ export type ApiBasisInput = {
   lastApiUpdatedAt: string | null;
   tuned: { api: number; tempF: number } | null;
   nowMs: number;
-  staleDays: number;              // freshness threshold (tunable later)
 };
 
 export type ApiBasis = {
@@ -46,54 +52,70 @@ export type ApiBasis = {
   tier: ApiTier;
 };
 
-const SIX_HOURS_MS = 6 * 3600 * 1000;
+const TWELVE_HOURS_MS = 12 * 3600 * 1000;
+const TWENTY_FOUR_HOURS_MS = 24 * 3600 * 1000;
 
 export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
   const alpha = Number(inp.alphaPerF);
 
-  // 1. Driver's own tuned reading wins outright.
+  // The terminal's own floor: its lowest (heaviest) ever-observed reading,
+  // never lighter than the product's own published minimum. With no
+  // observation history at all, this collapses to the product minimum --
+  // which is exactly the "never updated before at a terminal -> product
+  // min" case, so it needs no separate branch.
+  const apiMinFallback = inp.apiMin != null && Number.isFinite(inp.apiMin) ? Number(inp.apiMin) : Number(inp.api60Ref);
+  const terminalFloor = inp.minApiObserved != null && Number.isFinite(inp.minApiObserved)
+    ? Math.min(Number(inp.minApiObserved), apiMinFallback)
+    : apiMinFallback;
+
+  // 1. Driver's own gauge/BOL entry always wins outright -- highest
+  //    confidence, no staleness question to ask.
   if (inp.tuned && Number.isFinite(inp.tuned.api) && Number.isFinite(inp.tuned.tempF)) {
     return {
       api60: backCorrectApiTo60(Number(inp.tuned.api), Number(inp.tuned.tempF), alpha),
       displayApi: Number(inp.tuned.api),
-      tier: "tuned",
+      tier: "high",
     };
   }
 
-  // 2. A real observed reading, if it's still fresh (within the stale window).
-  if (inp.lastApi != null && Number.isFinite(inp.lastApi) && inp.lastApiUpdatedAt) {
-    const t = new Date(inp.lastApiUpdatedAt).getTime();
-    if (!Number.isNaN(t)) {
-      const ageMs = inp.nowMs - t;
-      if (ageMs <= inp.staleDays * 86400000) {
-        const observedTemp = inp.lastTempF != null && Number.isFinite(inp.lastTempF) ? Number(inp.lastTempF) : 60;
-        return {
-          api60: backCorrectApiTo60(Number(inp.lastApi), observedTemp, alpha),
-          displayApi: Number(inp.lastApi),
-          tier: ageMs <= SIX_HOURS_MS ? "fresh6h" : "fresh7d",
-        };
-      }
-    }
+  // 2. Nothing has ever been observed here for this product -- there's no
+  //    "age" to judge, just a lack of history. Low confidence, terminal
+  //    floor (== the product's published minimum with no history to beat it).
+  if (inp.lastApi == null || !Number.isFinite(inp.lastApi) || !inp.lastApiUpdatedAt) {
+    return { api60: terminalFloor, displayApi: terminalFloor, tier: "low" };
   }
 
-  // 3. Stale or no reading -> heaviest available minimum (lower API = heavier),
-  //    preferring the terminal's own observed minimum when it exists.
-  const apiMin = inp.apiMin != null && Number.isFinite(inp.apiMin) ? Number(inp.apiMin) : Number(inp.api60Ref);
-  if (inp.minApiObserved != null && Number.isFinite(inp.minApiObserved)) {
-    const heaviest = Math.min(Number(inp.minApiObserved), apiMin);
-    return { api60: heaviest, displayApi: heaviest, tier: "terminalMin" };
+  const observedTemp = inp.lastTempF != null && Number.isFinite(inp.lastTempF) ? Number(inp.lastTempF) : 60;
+  const lastApi60 = backCorrectApiTo60(Number(inp.lastApi), observedTemp, alpha);
+  const t = new Date(inp.lastApiUpdatedAt).getTime();
+  const ageMs = Number.isNaN(t) ? Infinity : inp.nowMs - t;
+
+  // 3. Updated within the last 12 hours -> high confidence, trust the
+  //    network reading as-is.
+  if (ageMs <= TWELVE_HOURS_MS) {
+    return { api60: lastApi60, displayApi: Number(inp.lastApi), tier: "high" };
   }
-  return { api60: apiMin, displayApi: apiMin, tier: "productMin" };
+
+  // 4. Updated 12-24 hours ago -> medium confidence. Predict a safer number
+  //    by splitting the difference between the last network reading and the
+  //    terminal's own observed floor, rather than either trusting a
+  //    half-day-old reading outright or jumping straight to the worst case.
+  if (ageMs <= TWENTY_FOUR_HOURS_MS) {
+    const blended = (lastApi60 + terminalFloor) / 2;
+    return { api60: blended, displayApi: blended, tier: "medium" };
+  }
+
+  // 5. Older than 24 hours -> low confidence. Nothing recent enough to
+  //    trust -- fall back to the terminal's own observed floor.
+  return { api60: terminalFloor, displayApi: terminalFloor, tier: "low" };
 }
 
-// Tier -> confidence color, matching the temp prediction's own palette so the
-// whole Tune line reads as one confidence signal.
+// Tier -> confidence color, matching the temp prediction's own high/medium/low
+// palette exactly so the whole Tune line reads as one confidence signal.
 export function apiTierColor(tier: ApiTier): string {
   switch (tier) {
-    case "tuned": return "#4ade80";      // green -- driver's own reading
-    case "fresh6h": return "#4ade80";    // green -- high confidence
-    case "fresh7d": return "#ffffff";    // white -- normal
-    case "terminalMin": return "#fbbf24"; // amber -- medium (terminal minimum)
-    case "productMin": return "#f87171";  // red   -- no confidence (spec minimum)
+    case "high": return "#4ade80";   // green
+    case "medium": return "#fbbf24"; // amber
+    case "low": return "#f87171";    // red
   }
 }
