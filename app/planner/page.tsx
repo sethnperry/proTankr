@@ -343,12 +343,35 @@ export default function CalculatorPage() {
   // Portal target for the plan-letter/Equipment/Location/Temperature
   // cluster, rendered by CalculatorLayoutClient.tsx's shared Header --
   // see that file's own comment on the slot div for why this is a portal
-  // rather than lifting this state into the shell context. Grabbed once
-  // on mount (Header is always already mounted above this page's own
-  // content by the time this effect runs, since it lives in the same
-  // layout that renders {children}).
+  // rather than lifting this state into the shell context.
+  //
+  // Real bug, fixed 2026-09-15: this used to grab the slot element ONCE on
+  // mount (empty deps), on the assumption "Header is always already
+  // mounted above this page's own content." True, but Header itself
+  // renders TWO structurally separate branches for portrait vs. landscape
+  // (see CalculatorLayoutClient.tsx's own `if (isLandscape) { ... }`
+  // split), each with its OWN `<div id="planner-header-icons-slot">` --
+  // same id string, but a genuinely different DOM node per branch.
+  // Rotating the device swaps which branch is mounted, so the node this
+  // effect grabbed at mount time gets detached from the tree; the portal
+  // keeps rendering into that now-invisible orphan forever after, which is
+  // exactly the reported symptom (rotate to landscape: icons vanish;
+  // rotate back to portrait: still vanish, since a THIRD new node was
+  // created and this effect never re-ran to notice; only a full refresh,
+  // which reruns this effect fresh, brought them back). Fixed by
+  // re-running the lookup whenever isLandscape itself flips -- the actual
+  // signal that the branch (and therefore the slot node) just changed --
+  // plus one rAF-deferred re-check as a defensive fallback for the rare
+  // case this component's own isLandscape update lands a frame before
+  // Header's sibling instance of the same hook swaps in its new slot.
   const [headerIconsSlot, setHeaderIconsSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => { setHeaderIconsSlot(document.getElementById("planner-header-icons-slot")); }, []);
+  useEffect(() => {
+    setHeaderIconsSlot(document.getElementById("planner-header-icons-slot"));
+    const raf = requestAnimationFrame(() => {
+      setHeaderIconsSlot(document.getElementById("planner-header-icons-slot"));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [isLandscape]);
 
   // ── Modal open/close flags ─────────────────────────────────────────────────
   // equipOpen/expModalOpen/termOpen live in the shared shell context now --
