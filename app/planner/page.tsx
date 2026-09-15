@@ -2974,8 +2974,6 @@ const lastProductInfoById = useMemo(() => {
         equipmentLabel={equipment.equipmentLabel}
         terminalLabel={terminalLabel}
         onTapTerminal={handleTapTerminalInLoadingModal}
-        setProductApi={setProductApi}
-        setProductTemp={setProductTemp}
         onSetCompartmentCap={(comp, capGallons) => {
           // Tap-to-adjust in Plan Review sets the compartment CAP (feeds the
           // weight-bounded solver -> can't overload), not a raw gallons
@@ -2991,7 +2989,7 @@ const lastProductInfoById = useMemo(() => {
         livePreviewGrossLbs={livePreviewGrossLbs}
         livePreviewDiffLbs={livePreviewDiffLbs}
         targetWeight={targetWeight}
-        onLoaded={() => loadWorkflow.onLoadedFromLoadingModal()}
+        onLoaded={(entries) => loadWorkflow.onLoadedFromLoadingModal(entries)}
         onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}
@@ -3025,7 +3023,7 @@ const lastProductInfoById = useMemo(() => {
         initialMode="reportType"
         onDismiss={() => setCancelLoadConfirmOpen(false)}
         onBackToPlanner={() => { setCancelLoadConfirmOpen(false); handleBackToPlannerNoUpdate(); }}
-        onLogTheLoad={() => { setCancelLoadConfirmOpen(false); loadWorkflow.onLoadedFromLoadingModal(); }}
+        onLogTheLoad={() => { setCancelLoadConfirmOpen(false); loadWorkflow.onLoadedFromLoadingModal({}); }}
         onUpdateCardOnly={() => { setCancelLoadConfirmOpen(false); loadWorkflow.cancelActiveLoad(); }}
         darkMode={shell.theme.darkMode}
         accentColor={shell.theme.accentColor}

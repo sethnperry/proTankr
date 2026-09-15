@@ -113,6 +113,74 @@ export function computeActualLbsForLine(
   return gallons * lpg;
 }
 
+// ─── Per-compartment actual-reading resolution ─────────────────────────────────
+
+export type CompartmentActualReading = {
+  comp: number;
+  productId: string;
+  gallons: number;
+  api: number;
+  tempF: number;
+  alphaPerF: number | null;
+};
+
+export type ResolvedProductReading = {
+  productId: string;
+  api: number;
+  tempF: number;
+  comp: number;
+};
+
+/**
+ * Given one driver-entered {gallons, api, tempF} reading per compartment
+ * (from the per-compartment "Log the Load" sequence), pick the single
+ * reading per product that should feed the shared terminal "last observed"
+ * data for the next driver.
+ *
+ * Rule: "colder and heavier" wins -- i.e. highest density. Scored via
+ * computeActualLbsForLine(1, api, tempF, alphaPerF), which is exactly bare
+ * lbs/gal, so "colder and heavier" collapses into one criterion (density
+ * strictly increases as temp drops and as API drops, for a fixed alpha).
+ * When a product has no alphaPerF configured, density can't be computed --
+ * fall back to "coldest wins," the same manual heuristic drivers already
+ * use today, not a new invented rule.
+ *
+ * A compartment with gallons <= 0 (driver zeroed it out) never competes --
+ * it wasn't really loaded. A product with zero valid candidates is simply
+ * absent from the output; never fabricate a reading for it.
+ */
+export function resolveDensestReadingPerProduct(
+  entries: CompartmentActualReading[]
+): ResolvedProductReading[] {
+  const byProduct = new Map<string, CompartmentActualReading[]>();
+  for (const e of entries) {
+    if (!(e.gallons > 0)) continue;
+    if (!e.productId) continue;
+    if (!Number.isFinite(e.api) || !Number.isFinite(e.tempF)) continue;
+    const list = byProduct.get(e.productId);
+    if (list) list.push(e);
+    else byProduct.set(e.productId, [e]);
+  }
+
+  const out: ResolvedProductReading[] = [];
+  for (const [productId, list] of byProduct) {
+    let best: CompartmentActualReading | null = null;
+    let bestScore = -Infinity;
+    for (const e of list) {
+      const score =
+        e.alphaPerF != null && Number.isFinite(e.alphaPerF)
+          ? computeActualLbsForLine(1, e.api, e.tempF, e.alphaPerF)
+          : -e.tempF;
+      if (score > bestScore) {
+        bestScore = score;
+        best = e;
+      }
+    }
+    if (best) out.push({ productId, api: best.api, tempF: best.tempF, comp: best.comp });
+  }
+  return out;
+}
+
 // ─── CG bias ──────────────────────────────────────────────────────────────────
 
 /**

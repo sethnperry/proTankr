@@ -18,15 +18,16 @@
 /**
  * What the driver-facing metric is CALLED, in one place.
  *
- * "Plan" not "Payload", deliberately: actual gallons are currently copied from
- * the plan (nothing in the app measures what really came out of the rack yet),
- * so a screen reading "GAL LOADED" would be a claim the data does not support.
- * When a real actual arrives -- a driver-entered BOL figure, a rack ticket, a
- * TMS feed -- flip these two constants and the copy follows everywhere.
+ * "Payload" as of the per-compartment Log-the-Load rework: actual_gallons is
+ * now genuinely driver-entered (one real Gallons/API/Temp confirmation per
+ * physical compartment, in order, at completion -- see
+ * useLoadWorkflow.ts's onLoadedFromLoadingModal and
+ * LoadingModal.tsx's compEntries sequence), not a copy of the plan, so
+ * "GAL LOADED" is now a claim the data actually supports.
  * See docs/incentive-redesign-plan.md section 8.
  */
-export const UTILIZATION_METRIC_LABEL = "Plan Utilization";
-export const UTILIZATION_ACTUAL_WORD = "planned";
+export const UTILIZATION_METRIC_LABEL = "Payload Utilization";
+export const UTILIZATION_ACTUAL_WORD = "loaded";
 
 export type UtilizationEligibility =
   | "eligible"
@@ -34,10 +35,12 @@ export type UtilizationEligibility =
   | "excluded_safety"          // over legal gross, or a compartment overfilled
   | "excluded_incomplete_data"; // capacity or actual could not be established
 
-/** Where actual_gallons came from. Phase 1 always writes PLANNER; the enum
- *  exists from day one so moving a company to real measured gallons later is a
- *  source swap, not a migration, and history stays interpretable across the
- *  cutover instead of silently mixing two meanings under one label. */
+/** Where actual_gallons came from. record_load_utilization now writes DRIVER
+ *  (a real per-compartment BOL confirmation, see UTILIZATION_METRIC_LABEL's
+ *  own comment above) for every load going forward; PLANNER remains in the
+ *  enum only to keep pre-rework historical rows interpretable, and the rest
+ *  of the enum exists so a future source (a rack ticket, a TMS feed) is a
+ *  source swap, not a migration. */
 export type ActualGallonsSource =
   | "PLANNER" | "DRIVER" | "RACK_TICKET" | "TMS" | "DISPATCH" | "API" | "OCR" | "IMPORT";
 

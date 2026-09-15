@@ -41,6 +41,10 @@ export type CompleteLoadLine = {
   actual_gallons: number | null;
   actual_lbs: number | null;
   temp_f: number | null;
+  // The driver-entered API for THIS compartment specifically (per-compartment
+  // Log-the-Load sequence) -- distinct from product_updates' single
+  // per-product "last observed" pick below.
+  actual_api: number | null;
 };
 
 export type CompleteLoadPayload = {

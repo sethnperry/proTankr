@@ -157,9 +157,12 @@ export default function LoadingModal(props: {
   // everywhere a product appears, to avoid cross-drops.
   productHexCodeById?: Record<string, string>;
 
+  // Prefill fallback only now -- the per-compartment "Log the Load" sequence
+  // (below) writes real per-compartment entries instead of these shared
+  // per-product values, but a compartment that's the FIRST of its product in
+  // the sequence still seeds its API/Temp fields from here (last-observed /
+  // predicted), exactly as before.
   productInputs: ProductInputs;
-  setProductApi: (productId: string, api: string) => void;
-  setProductTemp: (productId: string, tempF: number) => void;
 
   // Sets the compartment's CAP (max gallons) -- feeds the weight-bounded
   // solver, so it can never plan the load over target (unlike a raw gallons
@@ -178,9 +181,11 @@ export default function LoadingModal(props: {
   targetWeight?: number;
 
   // ── Action buttons (now in the modal itself, not a separate sheet) ──
-  // Log the Load: runs the per-product API/Temp entry sequence internally,
-  // then fires this once every product has values -- page.tsx then submits.
-  onLoaded: () => void;
+  // Log the Load: runs the per-compartment Gallons/API/Temp entry sequence
+  // internally (physical comp order), then fires this once every planned
+  // compartment has a real entry -- page.tsx/useLoadWorkflow then submits
+  // using these driver-entered values directly, not the plan's own numbers.
+  onLoaded: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>) => void;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
   // Report Terminal Issue: hands off to CancelLoadSheet's report flow.
@@ -224,8 +229,6 @@ export default function LoadingModal(props: {
     productNameById,
     productHexCodeById,
     productInputs,
-    setProductApi,
-    setProductTemp,
     onSetCompartmentCap,
     persistedCapForComp,
     livePreviewGrossLbs,
@@ -257,20 +260,14 @@ export default function LoadingModal(props: {
       .filter((x) => Number.isFinite(x.comp) && x.comp > 0 && Number.isFinite(x.gallons) && x.gallons > 0);
   }, [planRows]);
 
-  // Distinct products in the plan, in a stable order -- the Log-the-Load
-  // API/Temp sequence walks these one at a time.
-  const productGroups = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const line of plannedLines) {
-      if (!seen.has(line.productId)) { seen.add(line.productId); out.push(line.productId); }
-    }
-    return out.sort((a, b) => {
-      const an = productNameById.get(a) ?? a;
-      const bn = productNameById.get(b) ?? b;
-      return String(an).localeCompare(String(bn));
-    });
-  }, [plannedLines, productNameById]);
+  // Compartments in physical order -- the Log-the-Load sequence walks these
+  // one at a time (not one per product), so two compartments of the same
+  // product each get their own genuine Gallons/API/Temp entry instead of
+  // sharing one.
+  const orderedCompLines = useMemo(
+    () => [...plannedLines].sort((a, b) => a.comp - b.comp),
+    [plannedLines]
+  );
 
   // ── Phase-1 gallons tap-to-adjust overlay (unchanged) ───────────────────
   const [gallonsTarget, setGallonsTarget] = useState<{ comp: number; productId: string } | null>(null);
@@ -291,75 +288,93 @@ export default function LoadingModal(props: {
     setGallonsTarget(null);
   }
 
-  // ── Log the Load: per-product API/Temp entry sequence ───────────────────
-  const [logSeqIndex, setLogSeqIndex] = useState<number | null>(null);
+  // ── Log the Load: per-compartment Gallons/API/Temp entry sequence ───────
+  // Walked in physical compartment order (not per product). Each step is
+  // fully local, synchronous state -- no async round-trip to wait on -- and
+  // once the last compartment is confirmed, onLoaded fires immediately with
+  // the whole map, built locally so the just-typed final entry is never
+  // missing from what's submitted.
+  const [compSeqIndex, setCompSeqIndex] = useState<number | null>(null);
+  const [seqGallons, setSeqGallons] = useState("");
   const [seqApi, setSeqApi] = useState("");
   const [seqTemp, setSeqTemp] = useState("");
-  const [awaitingComplete, setAwaitingComplete] = useState(false);
+  const [compEntries, setCompEntries] = useState<Record<number, { gallons: number; api: number; tempF: number }>>({});
 
   // Reset all sequence state whenever the modal closes, so a re-open never
   // resumes a half-finished sequence from a previous load.
   useEffect(() => {
     if (!open) {
-      setLogSeqIndex(null);
-      setAwaitingComplete(false);
+      setCompSeqIndex(null);
+      setCompEntries({});
       setGallonsTarget(null);
     }
   }, [open]);
 
-  // Load the current sequence step's prefill (API from last-observed, Temp
-  // from the plan's predicted temp -- both already seeded into productInputs
-  // at begin_load) into the overlay inputs.
+  // Prefill the current step: Gallons always comes from that compartment's
+  // own planned amount (never chained from another compartment). API/Temp
+  // forward-chain from the nearest EARLIER compartment of the SAME product
+  // already confirmed this sequence -- never reversed, never backfilled onto
+  // an earlier step. With no earlier match, fall back to the last-observed/
+  // predicted values already seeded into productInputs, same as before.
   useEffect(() => {
-    if (logSeqIndex == null) return;
-    const pid = productGroups[logSeqIndex];
-    if (!pid) return;
-    const pi = productInputs[pid];
-    setSeqApi(pi?.api ? String(pi.api) : "");
-    setSeqTemp(pi?.tempF != null ? Number(pi.tempF).toFixed(1) : "");
-    // Intentionally keyed on the index only -- re-seeding on every
-    // productInputs change would clobber what the driver is typing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logSeqIndex]);
+    if (compSeqIndex == null) return;
+    const line = orderedCompLines[compSeqIndex];
+    if (!line) return;
+    setSeqGallons(String(Math.round(line.gallons)));
 
-  // Once the last product has been committed, wait until page.tsx's
-  // productInputs prop actually reflects every entry before firing onLoaded
-  // (which reads productInputs) -- avoids submitting with the final edit
-  // still pending in state.
-  useEffect(() => {
-    if (!awaitingComplete) return;
-    const allReady = productGroups.every((pid) => {
-      const pi = productInputs[pid];
-      return pi && String(pi.api ?? "").trim() !== "" && pi.tempF != null && Number.isFinite(Number(pi.tempF));
-    });
-    if (allReady) {
-      setAwaitingComplete(false);
-      onLoaded();
+    let inherited: { api: number; tempF: number } | null = null;
+    for (let i = compSeqIndex - 1; i >= 0; i--) {
+      const prior = orderedCompLines[i];
+      if (prior.productId !== line.productId) continue;
+      const entry = compEntries[prior.comp];
+      if (entry) { inherited = { api: entry.api, tempF: entry.tempF }; break; }
     }
-  }, [awaitingComplete, productInputs, productGroups, onLoaded]);
+    if (inherited) {
+      setSeqApi(String(inherited.api));
+      setSeqTemp(inherited.tempF.toFixed(1));
+    } else {
+      const pi = productInputs[line.productId];
+      setSeqApi(pi?.api ? String(pi.api) : "");
+      setSeqTemp(pi?.tempF != null ? Number(pi.tempF).toFixed(1) : "");
+    }
+    // Intentionally keyed on the index only -- re-seeding on every
+    // compEntries/productInputs change would clobber what the driver is typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compSeqIndex]);
 
   function startLogSequence() {
-    if (productGroups.length === 0) { onLoaded(); return; }
-    setLogSeqIndex(0);
+    if (orderedCompLines.length === 0) { onLoaded({}); return; }
+    setCompEntries({});
+    setCompSeqIndex(0);
   }
   function cancelLogSequence() {
-    setLogSeqIndex(null);
+    setCompSeqIndex(null);
   }
-  function commitLogStep() {
-    if (logSeqIndex == null) return;
-    const pid = productGroups[logSeqIndex];
-    if (!pid) { setLogSeqIndex(null); return; }
-    const apiN = parseFloat(seqApi);
-    if (Number.isFinite(apiN)) setProductApi(pid, apiN.toFixed(1));
-    const tempN = parseFloat(seqTemp);
-    if (Number.isFinite(tempN)) setProductTemp(pid, parseFloat(tempN.toFixed(1)));
+  function commitCompStep() {
+    if (compSeqIndex == null) return;
+    const line = orderedCompLines[compSeqIndex];
+    if (!line) { setCompSeqIndex(null); return; }
 
-    const isLast = logSeqIndex >= productGroups.length - 1;
+    const gallonsN = parseFloat(seqGallons);
+    const apiN = parseFloat(seqApi);
+    const tempN = parseFloat(seqTemp);
+    // Silently keep the step open on invalid input -- no alert(), matching
+    // this modal's own established convention -- rather than advancing (or
+    // completing) with garbage data.
+    if (!Number.isFinite(gallonsN) || !Number.isFinite(apiN) || !Number.isFinite(tempN)) return;
+
+    const cap = persistedCapForComp?.(line.comp) ?? null;
+    const clampedGallons = cap != null ? Math.max(0, Math.min(cap, gallonsN)) : Math.max(0, gallonsN);
+
+    const updated = { ...compEntries, [line.comp]: { gallons: clampedGallons, api: apiN, tempF: tempN } };
+    setCompEntries(updated);
+
+    const isLast = compSeqIndex >= orderedCompLines.length - 1;
     if (isLast) {
-      setLogSeqIndex(null);
-      setAwaitingComplete(true);
+      setCompSeqIndex(null);
+      onLoaded(updated);
     } else {
-      setLogSeqIndex(logSeqIndex + 1);
+      setCompSeqIndex(compSeqIndex + 1);
     }
   }
 
@@ -371,12 +386,12 @@ export default function LoadingModal(props: {
     [plannedLines]
   );
 
-  const seqPid = logSeqIndex != null ? productGroups[logSeqIndex] : null;
-  const seqDot = seqPid ? ((productHexCodeById?.[seqPid] && String(productHexCodeById[seqPid]).trim()) || "rgba(255,255,255,0.5)") : undefined;
-  const seqLabel = seqPid ? (productNameById.get(seqPid) ?? seqPid) : "";
-  const seqSubmitLabel = logSeqIndex != null && logSeqIndex < productGroups.length - 1 ? "Next" : "Log Load";
+  const seqLine = compSeqIndex != null ? orderedCompLines[compSeqIndex] : null;
+  const seqDot = seqLine ? ((productHexCodeById?.[seqLine.productId] && String(productHexCodeById[seqLine.productId]).trim()) || "rgba(255,255,255,0.5)") : undefined;
+  const seqLabel = seqLine ? `C${seqLine.comp} · ${productNameById.get(seqLine.productId) ?? seqLine.productId}` : "";
+  const seqSubmitLabel = compSeqIndex != null && compSeqIndex < orderedCompLines.length - 1 ? "Next" : "Log Load";
 
-  const busy = Boolean(loadedDisabled) || awaitingComplete;
+  const busy = Boolean(loadedDisabled);
 
   return (
     <FullscreenModal open={open} title="Plan Review" onClose={onClose} footer={null} hideCloseButton>
@@ -533,7 +548,7 @@ export default function LoadingModal(props: {
             disabled={busy}
             style={{ ...(styles as any).doneBtn, opacity: busy ? 0.55 : 1, width: "100%" }}
           >
-            {awaitingComplete || loadedDisabled ? (loadedLabel ?? "Saving…") : "Log the Load"}
+            {loadedDisabled ? (loadedLabel ?? "Saving…") : "Log the Load"}
           </button>
 
           <button
@@ -591,18 +606,20 @@ export default function LoadingModal(props: {
         onSubmit={commitGallonsOverlay}
       />
 
-      {/* Log the Load: one product at a time, dot + label at the top. */}
+      {/* Log the Load: one compartment at a time, in physical order, dot +
+          "C{n} · Product" at the top. Gallons/API/Temp all confirmed together. */}
       <ValueEntryOverlay
-        open={logSeqIndex != null}
+        open={compSeqIndex != null}
         title={seqLabel}
         dotColor={seqDot}
         fields={[
+          { key: "gallons", label: "Gallons", value: seqGallons, onChange: setSeqGallons, suffix: "gal" },
           { key: "api", label: "API", value: seqApi, onChange: setSeqApi, decimal: true },
           { key: "temp", label: "Temp", value: seqTemp, onChange: setSeqTemp, suffix: "°F", decimal: true },
         ]}
-        hint={productGroups.length > 1 && logSeqIndex != null ? `Product ${logSeqIndex + 1} of ${productGroups.length}` : undefined}
+        hint={orderedCompLines.length > 1 && compSeqIndex != null ? `Compartment ${compSeqIndex + 1} of ${orderedCompLines.length}` : undefined}
         onCancel={cancelLogSequence}
-        onSubmit={commitLogStep}
+        onSubmit={commitCompStep}
         submitLabel={seqSubmitLabel}
       />
     </FullscreenModal>

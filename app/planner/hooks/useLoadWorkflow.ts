@@ -5,7 +5,8 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { beginLoad, completeLoad, deleteLoad, cancelPlannedLoad } from "@/lib/supabase/load";
-import { computeActualLbsForLine } from "../utils/planMath";
+import { computeActualLbsForLine, resolveDensestReadingPerProduct } from "../utils/planMath";
+import type { CompartmentActualReading } from "../utils/planMath";
 import { resolveEffectiveRackId } from "../utils/rack";
 import { writeActivePlannedLoad, clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import type { LoadReport, PlanRow, ProductRow } from "../types";
@@ -359,41 +360,52 @@ export function useLoadWorkflow({
   }, [activeLoadId, authUserId]);
 
   // ── On loaded (from loading modal) ────────────────────────────────────────
+  // compEntries: one real, driver-entered {gallons, api, tempF} per physical
+  // compartment (see LoadingModal.tsx's per-compartment Log-the-Load
+  // sequence) -- this is what makes actual_gallons genuinely "actual" for
+  // the first time, instead of a copy of the plan.
 
-  const onLoadedFromLoadingModal = useCallback(async () => {
+  const onLoadedFromLoadingModal = useCallback(async (
+    compEntries: Record<number, { gallons: number; api: number; tempF: number }>
+  ) => {
     if (!activeLoadId) return;
 
-    const requiredProductIds = Array.from(new Set(
-      (planRows as any[])
-        .filter((r) => r?.productId && Number(r?.planned_gallons ?? 0) > 0)
-        .map((r) => String(r.productId))
-    ));
+    const plannedLines = (planRows as any[]).filter(
+      (r) => r?.productId && Number(r?.planned_gallons ?? 0) > 0
+    );
 
-    for (const pid of requiredProductIds) {
-      const apiStr = String(productInputs[pid]?.api ?? "").trim();
-      const tempVal = productInputs[pid]?.tempF;
-      if (!apiStr || !Number.isFinite(Number(apiStr))) {
-        alert(`Enter API for ${productNameById.get(pid) ?? pid}`); return;
-      }
-      if (tempVal == null || !Number.isFinite(Number(tempVal))) {
-        alert(`Enter Temp for ${productNameById.get(pid) ?? pid}`); return;
+    for (const r of plannedLines) {
+      const comp = Number(r?.comp_number ?? 0);
+      const entry = compEntries[comp];
+      if (
+        !entry ||
+        !Number.isFinite(entry.gallons) ||
+        !Number.isFinite(entry.api) ||
+        !Number.isFinite(entry.tempF)
+      ) {
+        setCompleteError("Missing a compartment reading — reopen “Log the Load” and confirm every compartment.");
+        return;
       }
     }
 
     const nextActualByComp: Record<number, { actual_gallons: number | null; actual_lbs: number | null; temp_f: number | null }> = {};
+    const readings: CompartmentActualReading[] = [];
     let actualPayloadLbs = 0;
 
-    for (const r of planRows as any[]) {
+    for (const r of plannedLines) {
       const comp = Number(r?.comp_number ?? 0);
-      const gallons = Number(r?.planned_gallons ?? 0);
       const pid = r?.productId ? String(r.productId) : null;
-      if (!Number.isFinite(comp) || comp <= 0 || !pid || !Number.isFinite(gallons) || gallons <= 0) continue;
+      if (!Number.isFinite(comp) || comp <= 0 || !pid) continue;
 
-      const apiNum = Number(String(productInputs[pid]?.api ?? "").trim());
-      const tempVal = Number(productInputs[pid]?.tempF);
+      const entry = compEntries[comp];
+      const gallons = entry.gallons;
+      const apiNum = entry.api;
+      const tempVal = entry.tempF;
       const alpha = alphaPerFForProductId(pid);
 
-      if (!Number.isFinite(apiNum) || !Number.isFinite(tempVal) || alpha == null) {
+      readings.push({ comp, productId: pid, gallons, api: apiNum, tempF: tempVal, alphaPerF: alpha });
+
+      if (alpha == null) {
         const lpgPlanned = Number(r?.lbsPerGal ?? 0);
         const lbsPlanned = gallons * (Number.isFinite(lpgPlanned) ? lpgPlanned : 0);
         nextActualByComp[comp] = { actual_gallons: gallons, actual_lbs: Number.isFinite(lbsPlanned) ? lbsPlanned : null, temp_f: tempVal };
@@ -415,19 +427,23 @@ export function useLoadWorkflow({
       setCompleteBusy(true);
       setCompleteError(null);
 
-      const lines = Object.entries(nextActualByComp).map(([compStr, a]) => ({
-        comp_number: Number(compStr),
-        actual_gallons: a.actual_gallons ?? null,
-        actual_lbs: a.actual_lbs ?? null,
-        temp_f: a.temp_f ?? null,
+      const lines = readings.map((a) => ({
+        comp_number: a.comp,
+        actual_gallons: nextActualByComp[a.comp]?.actual_gallons ?? null,
+        actual_lbs: nextActualByComp[a.comp]?.actual_lbs ?? null,
+        temp_f: nextActualByComp[a.comp]?.temp_f ?? null,
+        actual_api: Number.isFinite(a.api) ? a.api : null,
       }));
 
       // product_updates feeds rack_product_status's shared "last observed"
-      // terminal reading.
-      const product_updates = requiredProductIds.map((pid) => ({
-        product_id: pid,
-        api: Number(String(productInputs[pid]?.api ?? "").trim()),
-        temp_f: (productInputs[pid]?.tempF ?? null) as number | null,
+      // terminal reading -- one entry per product, picking whichever
+      // compartment's reading was colder & denser (see planMath.ts's own
+      // doc comment). A product with zero valid entries (every compartment
+      // for it got zeroed out) is simply absent -- never a fabricated row.
+      const product_updates = resolveDensestReadingPerProduct(readings).map((r) => ({
+        product_id: r.productId,
+        api: r.api,
+        temp_f: r.tempF as number | null,
       }));
 
       const res = await completeLoad({
@@ -679,7 +695,7 @@ try {
     } finally {
       setCompleteBusy(false);
     }
-  }, [activeLoadId, planRows, productInputs, productNameById, tare, plannedGallonsTotal, terminalProducts,
+  }, [activeLoadId, planRows, tare, plannedGallonsTotal, terminalProducts,
       selectedTerminalId, selectedRackId, tempF, onRefreshTerminalProducts, onRefreshTerminalAccess,
       onPostLoadComplete, activeSlotLetter, capacityResult, authUserId]);
 

@@ -20,6 +20,7 @@ import {
   allocateWithCaps,
   planForGallons,
   solveMaxGallons,
+  resolveDensestReadingPerProduct,
   PLOW_BIAS_MAX,
 } from "./planMath.ts";
 
@@ -220,4 +221,47 @@ test("tune density: round-trips a fresh reading back to its own weight", () => {
   // Same observed API at a HOTTER temp is lighter (thermal expansion).
   const hotter = tunedLbsPerGal(36.7, 100, alpha);
   assert.ok(hotter < direct, `hotter product should be lighter: ${hotter} vs ${direct}`);
+});
+
+// ── resolveDensestReadingPerProduct: per-compartment "Log the Load" resolver ──
+test("resolveDensestReadingPerProduct: colder & denser compartment wins for a shared product", () => {
+  const entries = [
+    { comp: 1, productId: "diesel", gallons: 4000, api: 36.0, tempF: 85, alphaPerF: 0.0006 },
+    { comp: 3, productId: "diesel", gallons: 3600, api: 34.0, tempF: 80, alphaPerF: 0.0006 }, // colder + lower API = denser
+  ];
+  const out = resolveDensestReadingPerProduct(entries);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].comp, 3);
+  assert.equal(out[0].api, 34.0);
+  assert.equal(out[0].tempF, 80);
+});
+
+test("resolveDensestReadingPerProduct: null alpha falls back to coldest-wins", () => {
+  const entries = [
+    { comp: 1, productId: "unknown-product", gallons: 4000, api: 36.0, tempF: 90, alphaPerF: null },
+    { comp: 2, productId: "unknown-product", gallons: 3600, api: 36.0, tempF: 82, alphaPerF: null },
+  ];
+  const out = resolveDensestReadingPerProduct(entries);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].comp, 2); // 82 < 90 -> coldest wins
+});
+
+test("resolveDensestReadingPerProduct: a zeroed-out compartment never competes", () => {
+  const entries = [
+    { comp: 1, productId: "diesel", gallons: 0, api: 20.0, tempF: 40, alphaPerF: 0.0006 }, // would "win" on density but gallons=0
+    { comp: 2, productId: "diesel", gallons: 3600, api: 36.0, tempF: 82, alphaPerF: 0.0006 },
+  ];
+  const out = resolveDensestReadingPerProduct(entries);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].comp, 2);
+});
+
+test("resolveDensestReadingPerProduct: a product with zero valid candidates produces no row", () => {
+  const entries = [
+    { comp: 1, productId: "diesel", gallons: 0, api: 36.0, tempF: 82, alphaPerF: 0.0006 },
+    { comp: 2, productId: "regular", gallons: 3000, api: 55.0, tempF: 80, alphaPerF: 0.0009 },
+  ];
+  const out = resolveDensestReadingPerProduct(entries);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].productId, "regular");
 });
