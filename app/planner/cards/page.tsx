@@ -436,8 +436,17 @@ export default function CardsPage() {
     handleFlipClose();
     router.push("/planner");
   };
-  const handleDeactivate = (tid: string) => {
-    activeTerminals.setAccessDateForTerminal(tid, "");
+  const handleDeactivate = async (tid: string) => {
+    // Was activeTerminals.setAccessDateForTerminal(tid, "") -- a real,
+    // silent no-op: that function's own first check
+    // (`if (!isoDate || ...) return;`) treats an empty string exactly like
+    // "nothing passed" and bails before writing anything, so this button
+    // never actually did what its own confirm copy ("Remove last visit
+    // date and mark as not carded?") promised. deleteAccessDateForTerminal
+    // is the real "not carded" reset -- deletes the terminal_access row
+    // outright, same call the Expirations modal's own terminal-card
+    // deactivate and the Loading modal's "Back to Planner" exit both use.
+    await activeTerminals.deleteAccessDateForTerminal(tid);
     setConfirmAction(null);
     setFlippedId(null);
   };
