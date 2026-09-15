@@ -12,24 +12,29 @@
 // established, per explicit direction that every window in this flow
 // needs the app's own themed look, not a generic grey.
 //
-// Three choices, matching the literal spec:
-// - "Switch to {new} (No Card Update)" -- the new terminal sticks (it's
-//   already live-applied by the picker itself), the active load's own
-//   terminal_id/rack_id get retagged to match, but the new terminal's
-//   access card is deliberately left untouched (page.tsx's
-//   onSwitchWithoutUpdating).
-// - "Stay at {previous} (Update Card)" -- the opposite: the terminal pick
-//   is discarded, the load stays at the terminal it was already at, and
-//   THAT terminal's access card gets refreshed (page.tsx's
-//   onUpdateCardAtPrevious reverts location back to the snapshot taken
-//   before the picker opened, then re-cards there). Relabeled 2026-09-15
-//   from "Update Card at {previous}" -- a real driver read that as "yes,
-//   confirm my card update" (i.e. an affirmative answer to a card-renewal
-//   question) without registering that it also silently reverts the
-//   terminal pick, and reported "it wouldn't let me switch" after tapping
-//   it while actually intending to switch. Leading with the effect that
-//   actually differs between the two buttons -- Switch vs. Stay -- makes
-//   them read as the mutually exclusive pair they are.
+// Redesigned 2026-09-15, per explicit direction: "the only reason to stay
+// at a terminal is to load the truck. If we can't get loaded, we tap the
+// terminal name to switch to a different terminal. We are leaving the
+// terminal. The only question is whether or not the card gets updated. No
+// button in here should say stay." This reverses the previous version's
+// whole framing (a "Switch to {new}" vs. "Stay at {prev}" choice, where
+// picking the "update card" option silently reverted the terminal pick
+// back to the old one) -- a real driver read that as answering an
+// affirmative "yes, my card updated" question and reported "it wouldn't
+// let me switch," which is exactly what it did. There is no "stay"
+// outcome anymore: the driver is ALWAYS leaving for {newTerminalName} (the
+// picker already applied that live) -- the only real decision is whether
+// {prevTerminalName}'s access card gets renewed on the way out.
+//
+// Two choices, both leaving for {newTerminalName}:
+// - "Yes, Update My Card at {previous}" -- the driver did get carded in
+//   there before this switch, so renew that terminal's access date, then
+//   leave (page.tsx's onUpdateCardAtPrevious -- same function name, but no
+//   longer reverts location; it now shares the exact same "apply the
+//   switch" step onSwitchWithoutUpdating already does, via
+//   applyTerminalSwitch, plus one extra write first).
+// - "No, Don't Update" -- leave without touching {previous}'s card at all
+//   (page.tsx's onSwitchWithoutUpdating).
 // - "Report Terminal Issue" -- reuses the exact same Out of Product/Out of
 //   Allocation product-picker submission CancelLoadSheet's own report flow
 //   already built (onSubmitOutageReport, unchanged), but does NOT end the
@@ -143,8 +148,8 @@ export default function TerminalSwitchDuringLoadSheet({
     }
     // The whole point of this being a different flow from CancelLoadSheet's
     // own report path: nothing here cancels the load or asks a follow-up
-    // question -- just go back to the real decision (stay at the previous
-    // terminal / switch to the new one / report another issue).
+    // question -- just go back to the real decision (update the previous
+    // terminal's card or not / report another issue).
     setMode("menu");
   }
 
@@ -189,16 +194,16 @@ export default function TerminalSwitchDuringLoadSheet({
         {mode === "menu" && (
           <>
             <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginBottom: 4 }}>
-              Switch terminals?
+              Update your card at {prevTerminalName}?
             </div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
-              You were loading at {prevTerminalName} and just picked {newTerminalName}.
+              You're leaving for {newTerminalName}. Did you get carded in at {prevTerminalName} first?
             </div>
-            <button type="button" style={primaryRowStyle} onClick={onSwitchWithoutUpdating}>
-              Switch to {newTerminalName} (No Card Update)
+            <button type="button" style={primaryRowStyle} onClick={onUpdateCardAtPrevious}>
+              Yes, Update My Card at {prevTerminalName}
             </button>
-            <button type="button" style={secondaryRowStyle} onClick={onUpdateCardAtPrevious}>
-              Stay at {prevTerminalName} (Update Card)
+            <button type="button" style={secondaryRowStyle} onClick={onSwitchWithoutUpdating}>
+              No, Don't Update
             </button>
             <button type="button" style={secondaryRowStyle} onClick={() => setMode("reportType")}>
               Report Terminal Issue

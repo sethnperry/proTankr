@@ -1749,63 +1749,30 @@ export default function CalculatorPage() {
     [effectivePlanRows]
   );
 
-  // Option 1: discard the terminal pick entirely -- revert location back to
-  // exactly what it was before the picker opened (state/city/terminal/rack
-  // together, via location.skipResetRef -- see useLocation.ts's own
-  // "Reset city/terminal/rack on state/city change" effects; setting these
-  // one at a time without it would have each successive setter's own reset
-  // effect immediately clobber the one before it, same technique that
-  // file's own persisted-location restore already uses internally), then
-  // refresh/renew today's access date at the terminal being stayed at.
-  const handleUpdateCardAtPrevious = useCallback(() => {
-    if (!terminalSwitchConfirm) return;
-    const { prev } = terminalSwitchConfirm;
-    setTerminalSwitchConfirm(null);
-    if (prev.terminalId !== String(location.selectedTerminalId || "")) {
-      location.skipResetRef.current = true;
-      location.setSelectedState(prev.state);
-      location.setSelectedCity(prev.city);
-      location.setSelectedTerminalId(prev.terminalId);
-      location.setSelectedRackId(prev.rackId);
-      setTimeout(() => { location.skipResetRef.current = false; }, 50);
-    }
-    (async () => {
-      try {
-        await terminals.setAccessDateForTerminal(prev.terminalId, new Date().toISOString());
-        await terminals.refreshTerminalAccessForUser();
-      } catch (err) {
-        console.warn("handleUpdateCardAtPrevious: access-date refresh failed (non-fatal):", err);
-      }
-    })();
-  }, [terminalSwitchConfirm, location, terminals]);
-
-  // Option 2: keep the new terminal (already live-applied by the picker
-  // itself -- nothing to re-apply here), retag the active load's own DB row
-  // so its terminal_id/rack_id reflect reality (plain non-blocking UPDATE,
-  // same pattern beginLoadToSupabase already uses for rack_id/plan_slot),
-  // and deliberately do NOT touch terminal_access for the new terminal --
-  // that's the whole point of "No Card Update." Then re-seed API for every
-  // planned product from the new terminal (clearing lets LoadingModal's own
-  // prefill-if-empty effect re-populate once terminalProducts resolves for
-  // it, same mechanism a fresh LOAD tap already relies on) and refresh temp:
-  // silently, in the background, if the city didn't change (same city just
-  // means a different terminal-specific bias correction, not a real reason
-  // to interrupt the driver again); by reopening Confirm Temp for a real
-  // review if it did (see the two effects below).
-  const handleSwitchWithoutUpdating = useCallback(() => {
-    if (!terminalSwitchConfirm) return;
-    const { prev, next } = terminalSwitchConfirm;
-    setTerminalSwitchConfirm(null);
-
+  // Applies the terminal switch that's ALREADY live in `location` (the
+  // picker wrote it directly, before this sheet ever opened) -- shared by
+  // both outcomes below, since leaving the previous terminal is never in
+  // question here. Per explicit direction: "the only reason to stay at a
+  // terminal is to load the truck. If we can't get loaded, we tap the
+  // terminal name to switch... We are leaving the terminal. The only
+  // question is whether or not the card gets updated." Retags the active
+  // load's own terminal_id/rack_id (plain non-blocking UPDATE, same
+  // pattern beginLoadToSupabase already uses for rack_id/plan_slot), keeps
+  // the in-progress-load marker in sync so a close-and-reopen resumes at
+  // the NEW terminal, re-seeds API for every planned product (clearing lets
+  // LoadingModal's own prefill-if-empty effect re-populate once
+  // terminalProducts resolves for the new terminal, same mechanism a fresh
+  // LOAD tap already relies on), drops any Tune-panel overrides (they were
+  // for the OLD terminal's reading), and refreshes temp -- silently in the
+  // background if the city didn't change, or by reopening Confirm Temp for
+  // a real review if it did (see the two effects below).
+  const applyTerminalSwitch = useCallback((prev: TerminalSnapshot, next: TerminalSnapshot) => {
     if (loadWorkflow.activeLoadId) {
       supabase.from("load_log")
         .update({ terminal_id: next.terminalId, rack_id: next.rackId || null })
         .eq("load_id", loadWorkflow.activeLoadId)
         .then(({ error }) => { if (error) console.error("[terminal-switch] failed to retag load_log terminal:", error.message); });
 
-      // Keep the in-progress-load marker in sync with the new terminal so a
-      // close-and-reopen after a mid-review switch resumes HERE, not at the
-      // terminal where begin_load originally ran (see activePlannedLoad).
       writeActivePlannedLoad(effectiveUserId || null, {
         loadId: loadWorkflow.activeLoadId,
         comboId: String(equipment.selectedComboId || ""),
@@ -1817,12 +1784,10 @@ export default function CalculatorPage() {
     }
 
     for (const pid of plannedProductIdsForSwitch) setProductApi(pid, "");
-    // Drop any Tune-panel overrides too -- a tuned reading was for the OLD
-    // terminal; the new terminal's own reading (or a fresh tune) should apply.
-    setTunedApiTempByProduct((prev) => {
-      const next = { ...prev };
-      for (const pid of plannedProductIdsForSwitch) delete next[pid];
-      return next;
+    setTunedApiTempByProduct((prevMap) => {
+      const nextMap = { ...prevMap };
+      for (const pid of plannedProductIdsForSwitch) delete nextMap[pid];
+      return nextMap;
     });
 
     const cityChanged = prev.city !== next.city || prev.state !== next.state;
@@ -1833,7 +1798,39 @@ export default function CalculatorPage() {
     } else {
       setPendingSameCityTempApply({ armed: true, sawLoadingStart: false, productIds: plannedProductIdsForSwitch });
     }
-  }, [terminalSwitchConfirm, loadWorkflow.activeLoadId, plannedProductIdsForSwitch, setProductApi, effectiveUserId, equipment.selectedComboId]);
+  }, [loadWorkflow.activeLoadId, plannedProductIdsForSwitch, setProductApi, effectiveUserId, equipment.selectedComboId]);
+
+  // "Yes, Update My Card at {prev}" -- the driver did get carded in at the
+  // terminal they're leaving, so renew that terminal's access date, then
+  // apply the exact same switch-to-{next} steps the "No" option below does.
+  // Never reverts location back to the previous terminal -- see this file's
+  // own comment above (and TerminalSwitchDuringLoadSheet's header comment)
+  // for why that was wrong: a driver answering this "yes" was reasonably
+  // confirming a card update, not asking to cancel the switch, and
+  // reverting it read as the app refusing to let them leave.
+  const handleUpdateCardAtPrevious = useCallback(() => {
+    if (!terminalSwitchConfirm) return;
+    const { prev, next } = terminalSwitchConfirm;
+    setTerminalSwitchConfirm(null);
+    (async () => {
+      try {
+        await terminals.setAccessDateForTerminal(prev.terminalId, new Date().toISOString());
+        await terminals.refreshTerminalAccessForUser();
+      } catch (err) {
+        console.warn("handleUpdateCardAtPrevious: access-date refresh failed (non-fatal):", err);
+      }
+    })();
+    applyTerminalSwitch(prev, next);
+  }, [terminalSwitchConfirm, terminals, applyTerminalSwitch]);
+
+  // "No, Don't Update" -- leave for {next} without touching {prev}'s access
+  // card at all. That's the whole point of "No Card Update."
+  const handleSwitchWithoutUpdating = useCallback(() => {
+    if (!terminalSwitchConfirm) return;
+    const { prev, next } = terminalSwitchConfirm;
+    setTerminalSwitchConfirm(null);
+    applyTerminalSwitch(prev, next);
+  }, [terminalSwitchConfirm, applyTerminalSwitch]);
 
   // Same-city silent refresh: waits for useFuelTempPrediction's own refetch
   // (already triggered automatically -- its signature includes terminalId,
