@@ -305,11 +305,10 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         onClose={() => shell.setExpModalOpen(false)}
         items={shell.expirations.items}
         activeItems={shell.expirations.activeItems}
-        deferredItems={shell.expirations.deferredItems}
-        toggleDefer={shell.expirations.toggleDefer}
         onOpenEquipment={() => shell.setEquipOpen(true)}
         onOpenTerminals={() => shell.setTermOpen(true)}
         formatMDYWithCountdown_={formatMDYWithCountdown_}
+        onDeactivateTerminal={shell.terminals.deleteAccessDateForTerminal}
       />
 
       <SettingsModal
