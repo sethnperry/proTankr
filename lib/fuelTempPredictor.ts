@@ -178,11 +178,26 @@ export function predictFuelTempNow(
 
   const rawPrediction = Tf + solarBump;
 
-  // Learned bias correction -- unchanged from before, ramps continuously
-  // from sample 1 rather than gating to zero below some threshold.
+  // Learned bias correction -- ramps continuously from sample 1 rather than
+  // gating to zero below some threshold. BIAS_RAMP_SAMPLES controls how fast:
+  // lowered from 4 to 1.5 on 2026-09-15 after a real report of the symptom
+  // this produces -- a terminal that only sees a handful of loads per
+  // (hour-of-day bucket, month) combo per month could go months before a
+  // driver's correction ever meaningfully moved the next prediction (at /4,
+  // one sample is only tanh(1/4)=~25% trusted; a terminal_temp_bias row with
+  // sample_count=1 and mean_error=+3 only nudged the very next same-bucket
+  // prediction by +0.7F, nowhere near the full +3F the driver had actually
+  // corrected). At /1.5, one sample is ~58% trusted, three samples ~96% --
+  // meaningfully responsive after the very first correction, while a single
+  // sample still isn't taken as complete gospel (guards against one
+  // fat-fingered gauge/BOL entry). Note this doesn't decay old samples --
+  // mean_error is a running Welford mean over every completed load ever, so
+  // a single early outlier stays diluted rather than forgotten; that's a
+  // separate, unaddressed question from how fast a GOOD sample gets trusted.
+  const BIAS_RAMP_SAMPLES = 1.5;
   const biasSamples = params.biasSampleCount ?? 0;
   const biasRaw = params.biasCorrectionF ?? 0;
-  const biasWeight = biasSamples > 0 ? Math.tanh(biasSamples / 4) : 0;
+  const biasWeight = biasSamples > 0 ? Math.tanh(biasSamples / BIAS_RAMP_SAMPLES) : 0;
   const biasApplied = biasRaw * biasWeight;
 
   let result = rawPrediction + biasApplied;

@@ -13,16 +13,23 @@
 // needs the app's own themed look, not a generic grey.
 //
 // Three choices, matching the literal spec:
-// - "Update Card at {previous}" -- the terminal pick is discarded, the
-//   load stays at the terminal it was already at, and that terminal's
-//   access card gets refreshed (page.tsx's onUpdateCardAtPrevious reverts
-//   location back to the snapshot taken before the picker opened, then
-//   re-cards there).
-// - "Switch to {new} (No Card Update)" -- the opposite: the new terminal
-//   sticks (it's already live-applied by the picker itself), the active
-//   load's own terminal_id/rack_id get retagged to match, but the new
-//   terminal's access card is deliberately left untouched (page.tsx's
+// - "Switch to {new} (No Card Update)" -- the new terminal sticks (it's
+//   already live-applied by the picker itself), the active load's own
+//   terminal_id/rack_id get retagged to match, but the new terminal's
+//   access card is deliberately left untouched (page.tsx's
 //   onSwitchWithoutUpdating).
+// - "Stay at {previous} (Update Card)" -- the opposite: the terminal pick
+//   is discarded, the load stays at the terminal it was already at, and
+//   THAT terminal's access card gets refreshed (page.tsx's
+//   onUpdateCardAtPrevious reverts location back to the snapshot taken
+//   before the picker opened, then re-cards there). Relabeled 2026-09-15
+//   from "Update Card at {previous}" -- a real driver read that as "yes,
+//   confirm my card update" (i.e. an affirmative answer to a card-renewal
+//   question) without registering that it also silently reverts the
+//   terminal pick, and reported "it wouldn't let me switch" after tapping
+//   it while actually intending to switch. Leading with the effect that
+//   actually differs between the two buttons -- Switch vs. Stay -- makes
+//   them read as the mutually exclusive pair they are.
 // - "Report Terminal Issue" -- reuses the exact same Out of Product/Out of
 //   Allocation product-picker submission CancelLoadSheet's own report flow
 //   already built (onSubmitOutageReport, unchanged), but does NOT end the
@@ -136,8 +143,8 @@ export default function TerminalSwitchDuringLoadSheet({
     }
     // The whole point of this being a different flow from CancelLoadSheet's
     // own report path: nothing here cancels the load or asks a follow-up
-    // question -- just go back to the real decision (update card at
-    // previous / switch without updating / report another issue).
+    // question -- just go back to the real decision (stay at the previous
+    // terminal / switch to the new one / report another issue).
     setMode("menu");
   }
 
@@ -191,7 +198,7 @@ export default function TerminalSwitchDuringLoadSheet({
               Switch to {newTerminalName} (No Card Update)
             </button>
             <button type="button" style={secondaryRowStyle} onClick={onUpdateCardAtPrevious}>
-              Update Card at {prevTerminalName}
+              Stay at {prevTerminalName} (Update Card)
             </button>
             <button type="button" style={secondaryRowStyle} onClick={() => setMode("reportType")}>
               Report Terminal Issue
