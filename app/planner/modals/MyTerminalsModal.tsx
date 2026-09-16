@@ -69,6 +69,16 @@ export default function MyTerminalsModal(props: {
   // requires a company_id on every row, same as page.tsx's own
   // handleSubmitOutageReport already does for the Complete-screen flow.
   companyId: string | null;
+  // useTerminals.ts's own live-terminals refetch (my_terminals_with_status)
+  // -- distinct from terminalsFiltered's own source, the shared
+  // React-Query-cached useTerminalsCatalog(). EditTerminalModal's save
+  // already invalidates that cache (2026-09-16 fix), but useExpirations.ts
+  // prefers this live `terminals` state over the cached catalog whenever a
+  // terminal is already in the driver's carded list -- so a renewal_days
+  // edit needs BOTH refreshed, or the bell/report can go stale even after
+  // the card itself shows the right number. Optional so callers that don't
+  // have this wired (none currently) degrade to the pre-existing behavior.
+  onLoadMyTerminals?: () => void | Promise<void>;
 }) {
   const {
     open, onClose,
@@ -82,6 +92,7 @@ export default function MyTerminalsModal(props: {
     setSelectedTerminalId, setTermOpen,
     onChangeLocation,
     authUserId, myRole, companyId,
+    onLoadMyTerminals,
   } = props;
 
   const isoToday = () => new Date().toISOString().slice(0, 10);
@@ -418,6 +429,14 @@ export default function MyTerminalsModal(props: {
             // selected if it still exists. The rack-products effect above
             // re-fires on its own once expandedRackId resolves.
             if (expandedTerminalId) loadExpandedRacks(expandedTerminalId, { keepRackId: expandedRackId });
+            // Also refresh the live my_terminals_with_status state -- a
+            // renewal_days edit needs this refreshed too, not just the
+            // shared terminals-catalog cache (EditTerminalModal's own save
+            // already invalidates that one), or the Expiration bell/report
+            // (which prefers this live state, see useExpirations.ts) can
+            // keep showing the pre-edit countdown even after the card
+            // itself is correct.
+            onLoadMyTerminals?.();
           }}
         />
       )}

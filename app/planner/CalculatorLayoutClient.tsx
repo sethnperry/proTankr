@@ -368,6 +368,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         authUserId={shell.effectiveUserId}
         myRole={shell.role}
         companyId={shell.companyId}
+        onLoadMyTerminals={shell.terminals.loadMyTerminals}
       />
 
       <RackSelectSheet
