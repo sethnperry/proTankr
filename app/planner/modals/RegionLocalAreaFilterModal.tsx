@@ -22,7 +22,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 
-export type EquipmentFilter = { region: string | null; localArea: string | null };
+export type EquipmentFilter = { region: string | null; localArea: string | null; awayOnly?: boolean };
 
 type CatalogRow = { id: string; name: string };
 type Kind = "region" | "localArea";
@@ -228,6 +228,16 @@ export default function RegionLocalAreaFilterModal({
           <button type="button" onClick={() => setSub("localArea")} style={bigOptionStyle}>
             <span style={{ fontSize: 17, fontWeight: 800 }}>Local Area</span>
             <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{filter.localArea ?? "All Areas"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...filter, awayOnly: !filter.awayOnly })}
+            style={{ ...bigOptionStyle, border: filter.awayOnly ? "1px solid rgba(251,146,60,0.5)" : bigOptionStyle.border }}
+          >
+            <span style={{ fontSize: 17, fontWeight: 800 }}>Borrowed / Away</span>
+            <span style={{ fontSize: 13, color: filter.awayOnly ? "#fb923c" : "rgba(255,255,255,0.5)" }}>
+              {filter.awayOnly ? "On" : "Off"}
+            </span>
           </button>
         </div>
       </FullscreenModal>

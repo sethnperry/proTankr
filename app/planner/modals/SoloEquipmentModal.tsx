@@ -36,8 +36,16 @@ import RegionLocalAreaFilterModal, { type EquipmentFilter } from "./RegionLocalA
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TruckRow = { truck_id: string; truck_name: string; active: boolean | null; region: string | null; local_area: string | null };
-type TrailerRow = { trailer_id: string; trailer_name: string; active: boolean | null; region: string | null; local_area: string | null };
+type TruckRow = {
+  truck_id: string; truck_name: string; active: boolean | null;
+  region: string | null; local_area: string | null;
+  current_region: string | null; current_local_area: string | null;
+};
+type TrailerRow = {
+  trailer_id: string; trailer_name: string; active: boolean | null;
+  region: string | null; local_area: string | null;
+  current_region: string | null; current_local_area: string | null;
+};
 type ComboRow = {
   combo_id: string;
   truck_id: string | null;
@@ -110,6 +118,16 @@ const S = {
   cardSelected: {
     background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.45)",
     color: "#fff",
+  } as React.CSSProperties,
+  // A unit currently coupled outside its own home region -- reuses the same
+  // orange already used for ScaleTicketModal's "cutting it close" warning,
+  // for visual consistency rather than inventing a new color.
+  cardAway: {
+    borderLeft: "3px solid #fb923c",
+  } as React.CSSProperties,
+  cardAwayCaption: {
+    fontSize: 10, fontWeight: 700 as const, color: "#fb923c", marginTop: 4,
+    textTransform: "none" as const, letterSpacing: 0,
   } as React.CSSProperties,
   plusCard: {
     borderRadius: 6, border: "1px dashed rgba(255,255,255,0.18)",
@@ -447,7 +465,7 @@ export default function SoloEquipmentModal({
   const [binderUnit, setBinderUnit] = useState<"truck" | "trailer" | null>(null);
   const [editPickerOpen, setEditPickerOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filter, setFilter] = useState<EquipmentFilter>({ region: null, localArea: null });
+  const [filter, setFilter] = useState<EquipmentFilter>({ region: null, localArea: null, awayOnly: false });
   const [addTruckOpen, setAddTruckOpen] = useState(false);
   const [addTrailerOpen, setAddTrailerOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<
@@ -455,6 +473,14 @@ export default function SoloEquipmentModal({
   >(null);
   const [newTareTarget, setNewTareTarget] = useState<{ truckId: string; trailerId: string } | null>(null);
   const [newTareInput, setNewTareInput] = useState("");
+
+  // The signed-in (or impersonated) driver's own home region -- fetched once
+  // per open alongside the region-autodefault effect below, and reused by
+  // the away-from-home coupling warning (see toggleTruck/toggleTrailer).
+  const [driverHomeRegion, setDriverHomeRegion] = useState<string | null>(null);
+  const [awayConfirmTarget, setAwayConfirmTarget] = useState<
+    { kind: "truck" | "trailer"; id: string; unitRegion: string } | null
+  >(null);
 
   // Display names for whoever currently holds an active combo, keyed by
   // user_id -- only needs entries for OTHER users (never authUserId's own
@@ -476,8 +502,8 @@ export default function SoloEquipmentModal({
     setLoading(true);
     setError(null);
     const [{ data: t, error: tErr }, { data: tr, error: trErr }, { data: c, error: cErr }] = await Promise.all([
-      supabase.from("trucks").select("truck_id, truck_name, active, region, local_area").eq("company_id", companyId).eq("active", true).order("truck_name"),
-      supabase.from("trailers").select("trailer_id, trailer_name, active, region, local_area").eq("company_id", companyId).eq("active", true).order("trailer_name"),
+      supabase.from("trucks").select("truck_id, truck_name, active, region, local_area, current_region, current_local_area").eq("company_id", companyId).eq("active", true).order("truck_name"),
+      supabase.from("trailers").select("trailer_id, trailer_name, active, region, local_area, current_region, current_local_area").eq("company_id", companyId).eq("active", true).order("trailer_name"),
       supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, tare_lbs, target_weight, active, claimed_by").eq("company_id", companyId).eq("active", true),
     ]);
     if (tErr || trErr || cErr) {
@@ -577,7 +603,7 @@ export default function SoloEquipmentModal({
   // once per open (the parent unmounts this modal when closed, so filter
   // state resets to {null,null} each time it reopens).
   const regionDefaultAppliedRef = useRef(false);
-  useEffect(() => { if (!open) regionDefaultAppliedRef.current = false; }, [open]);
+  useEffect(() => { if (!open) { regionDefaultAppliedRef.current = false; setDriverHomeRegion(null); } }, [open]);
   useEffect(() => {
     if (!open || loading || regionDefaultAppliedRef.current) return;
     regionDefaultAppliedRef.current = true;
@@ -587,6 +613,10 @@ export default function SoloEquipmentModal({
       const { data } = await supabase.from("profiles").select("region").eq("user_id", uid).maybeSingle();
       const region = String((data as any)?.region ?? "").trim();
       if (!region) return;
+      // Stored regardless of whether it matches any equipment yet -- the
+      // away-from-home coupling warning (toggleTruck/toggleTrailer) needs
+      // this even when the driver's own filter never got auto-narrowed.
+      setDriverHomeRegion(region);
       const hasMatch = trucks.some((t) => t.region === region) || trailers.some((t) => t.region === region);
       if (hasMatch) setFilter((f) => ({ ...f, region }));
     })();
@@ -734,9 +764,21 @@ export default function SoloEquipmentModal({
     return claimedByNames[combo.claimed_by] ?? "another driver";
   }
 
+  // Checked BEFORE the commandeer check so the two can combine in sequence
+  // (an away, other-driver-claimed unit shows the away confirm first, then
+  // the commandeer confirm once that's dismissed). Region-level mismatch
+  // only, matching isAway's own granularity.
+  function homeRegionMismatch(unit: { region: string | null }): string | null {
+    if (!driverHomeRegion || !unit.region || unit.region === driverHomeRegion) return null;
+    return unit.region;
+  }
+
   function toggleTruck(id: string) {
     const next = selectedTruckId === id ? null : id;
     if (next) {
+      const unit = trucks.find((t) => t.truck_id === next);
+      const unitRegion = unit ? homeRegionMismatch(unit) : null;
+      if (unitRegion) { setAwayConfirmTarget({ kind: "truck", id: next, unitRegion }); return; }
       const ownerName = claimedByOther("truck", next);
       if (ownerName) { setCommandeerTarget({ kind: "truck", id: next, ownerName }); return; }
     }
@@ -746,11 +788,33 @@ export default function SoloEquipmentModal({
   function toggleTrailer(id: string) {
     const next = selectedTrailerId === id ? null : id;
     if (next) {
+      const unit = trailers.find((t) => t.trailer_id === next);
+      const unitRegion = unit ? homeRegionMismatch(unit) : null;
+      if (unitRegion) { setAwayConfirmTarget({ kind: "trailer", id: next, unitRegion }); return; }
       const ownerName = claimedByOther("trailer", next);
       if (ownerName) { setCommandeerTarget({ kind: "trailer", id: next, ownerName }); return; }
     }
     setSelectedTrailerId(next);
     void resolvePair(selectedTruckId, next);
+  }
+
+  // Continues past the away confirm into the SAME logic toggleTruck/
+  // toggleTrailer would have run next (the commandeer check), rather than
+  // coupling directly -- so a unit that's both away AND claimed by another
+  // driver still surfaces both warnings, in sequence.
+  function confirmAway() {
+    if (!awayConfirmTarget) return;
+    const { kind, id } = awayConfirmTarget;
+    setAwayConfirmTarget(null);
+    const ownerName = claimedByOther(kind, id);
+    if (ownerName) { setCommandeerTarget({ kind, id, ownerName }); return; }
+    if (kind === "truck") {
+      setSelectedTruckId(id);
+      void resolvePair(id, selectedTrailerId);
+    } else {
+      setSelectedTrailerId(id);
+      void resolvePair(selectedTruckId, id);
+    }
   }
 
   // Auto-select the just-added truck/trailer when it's this equipment's
@@ -863,21 +927,45 @@ export default function SoloEquipmentModal({
     [combos, selectedComboId]
   );
 
-  // Filter button's result -- narrows the grid to matching Region/Local
-  // Area. A currently-selected truck/trailer that gets filtered out stays
-  // selected (filtering is a display convenience, not a deselect) -- only
-  // the visible list of OTHER options shrinks.
+  // A unit is "away" when it's currently coupled somewhere other than its
+  // own permanent home region -- region-level mismatch only (a same-region,
+  // different-local-area pairing doesn't count as "away" for this purpose).
+  const isAway = (t: { region: string | null; current_region: string | null }) =>
+    !!t.current_region && t.current_region !== t.region;
+
+  // Context-aware caption: which side of the mismatch is worth saying
+  // depends on which region the CURRENT filter is viewing from -- Jacksonville
+  // filtered to their own home region sees "Currently in Tampa," Tampa
+  // filtered to their own sees "Home: Jacksonville." With no region filter
+  // active (viewing All Regions), show both ends so it's unambiguous either way.
+  const awayCaption = (t: { region: string | null; current_region: string | null }, activeFilterRegion: string | null): string => {
+    if (activeFilterRegion === t.region) return `Currently in ${t.current_region}`;
+    if (activeFilterRegion === t.current_region) return `Home: ${t.region}`;
+    return `Home: ${t.region} → ${t.current_region}`;
+  };
+
+  // Filter button's result -- narrows the grid to whatever's CURRENTLY
+  // usable in the selected region/area (home OR current match, independently
+  // per field), not just permanently home there. This is the actual fix for
+  // "the trailer I coupled disappears from my normal view": a unit brought
+  // in from elsewhere and coupled here still shows once the current-region
+  // stamp (set by couple_combo) matches, and a currently-selected truck/
+  // trailer that falls out of the filter anyway stays selected -- filtering
+  // is a display convenience, not a deselect -- only the visible list of
+  // OTHER options shrinks.
   const filteredTrucks = useMemo(
     () => trucks.filter((t) =>
-      (!filter.region || t.region === filter.region) &&
-      (!filter.localArea || t.local_area === filter.localArea)
+      (!filter.region || t.region === filter.region || t.current_region === filter.region) &&
+      (!filter.localArea || t.local_area === filter.localArea || t.current_local_area === filter.localArea) &&
+      (!filter.awayOnly || isAway(t))
     ),
     [trucks, filter]
   );
   const filteredTrailers = useMemo(
     () => trailers.filter((t) =>
-      (!filter.region || t.region === filter.region) &&
-      (!filter.localArea || t.local_area === filter.localArea)
+      (!filter.region || t.region === filter.region || t.current_region === filter.region) &&
+      (!filter.localArea || t.local_area === filter.localArea || t.current_local_area === filter.localArea) &&
+      (!filter.awayOnly || isAway(t))
     ),
     [trailers, filter]
   );
@@ -895,11 +983,11 @@ export default function SoloEquipmentModal({
             onClick={() => setFilterOpen(true)}
             style={{
               background: "none", border: "none", cursor: "pointer",
-              color: (filter.region || filter.localArea) ? "#fff" : "rgba(255,255,255,0.4)",
+              color: (filter.region || filter.localArea || filter.awayOnly) ? "#fff" : "rgba(255,255,255,0.4)",
               fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
             }}
           >
-            Filter{(filter.region || filter.localArea) ? " •" : ""}
+            Filter{(filter.region || filter.localArea || filter.awayOnly) ? " •" : ""}
           </button>
         }
       >
@@ -923,15 +1011,18 @@ export default function SoloEquipmentModal({
                     // Long-press-to-remove is staff-only; a plain fleet
                     // driver taps to select/couple and nothing else.
                     const cardHandlers = canAddRemove ? lpHandlers : {};
+                    const away = isAway(t);
+                    const caption = away ? awayCaption(t, filter.region) : null;
                     return (
                       <div
                         key={t.truck_id}
                         ref={selected ? truckCardRef : undefined}
-                        style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
+                        style={{ ...S.card, ...(selected ? S.cardSelected : {}), ...(away ? S.cardAway : {}) }}
                         onClick={() => { if (!canAddRemove || !didFire()) toggleTruck(t.truck_id); }}
                         {...cardHandlers}
                       >
                         {t.truck_name}
+                        {caption && <div style={S.cardAwayCaption}>{caption}</div>}
                       </div>
                     );
                   })}
@@ -946,15 +1037,18 @@ export default function SoloEquipmentModal({
                     const selected = t.trailer_id === selectedTrailerId;
                     const { didFire, ...lpHandlers } = trailerLongPress(t);
                     const cardHandlers = canAddRemove ? lpHandlers : {};
+                    const away = isAway(t);
+                    const caption = away ? awayCaption(t, filter.region) : null;
                     return (
                       <div
                         key={t.trailer_id}
                         ref={selected ? trailerCardRef : undefined}
-                        style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
+                        style={{ ...S.card, ...(selected ? S.cardSelected : {}), ...(away ? S.cardAway : {}) }}
                         onClick={() => { if (!canAddRemove || !didFire()) toggleTrailer(t.trailer_id); }}
                         {...cardHandlers}
                       >
                         {t.trailer_name}
+                        {caption && <div style={S.cardAwayCaption}>{caption}</div>}
                       </div>
                     );
                   })}
@@ -1182,6 +1276,33 @@ export default function SoloEquipmentModal({
       )}
       {addTrailerOpen && (
         <AdminTrailerModal trailer={null} companyId={companyId} onClose={() => setAddTrailerOpen(false)} onDone={handleTrailerAdded} />
+      )}
+
+      {/* ── Away-from-home confirmation -- selecting a truck/trailer whose
+          home region differs from the driver's own. Checked before the
+          commandeer check (confirmAway continues into that same check), so
+          a unit that's both away and claimed by someone else surfaces both
+          warnings in sequence. ── */}
+      {awayConfirmTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(251,146,60,0.35)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Couple this {awayConfirmTarget.kind}?</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
+              This {awayConfirmTarget.kind} is home to {awayConfirmTarget.unitRegion}, not your {driverHomeRegion} area.
+              Couple it anyway? It'll show as borrowed to both areas until it's returned.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="button" onClick={() => setAwayConfirmTarget(null)} disabled={busy}
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button type="button" onClick={confirmAway} disabled={busy}
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(251,146,60,0.5)", background: "rgba(251,146,60,0.18)", color: "#fdba74", fontWeight: 800, cursor: "pointer" }}>
+                Couple It
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Commandeer confirmation -- selecting a truck/trailer another
