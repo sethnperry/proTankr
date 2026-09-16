@@ -767,9 +767,13 @@ export default function SoloEquipmentModal({
   // Checked BEFORE the commandeer check so the two can combine in sequence
   // (an away, other-driver-claimed unit shows the away confirm first, then
   // the commandeer confirm once that's dismissed). Region-level mismatch
-  // only, matching isAway's own granularity.
+  // only. Trimmed + case-folded before comparing -- same reasoning as
+  // isAway/awayCaption below (region and profiles.region are free text from
+  // two different forms, so whitespace/casing must never read as a real
+  // mismatch).
   function homeRegionMismatch(unit: { region: string | null }): string | null {
-    if (!driverHomeRegion || !unit.region || unit.region === driverHomeRegion) return null;
+    if (!driverHomeRegion || !unit.region) return null;
+    if (unit.region.trim().toLowerCase() === driverHomeRegion.trim().toLowerCase()) return null;
     return unit.region;
   }
 
@@ -927,21 +931,45 @@ export default function SoloEquipmentModal({
     [combos, selectedComboId]
   );
 
-  // A unit is "away" when it's currently coupled somewhere other than its
-  // own permanent home region -- region-level mismatch only (a same-region,
-  // different-local-area pairing doesn't count as "away" for this purpose).
-  const isAway = (t: { region: string | null; current_region: string | null }) =>
-    !!t.current_region && t.current_region !== t.region;
+  // A unit is "away" when its CURRENT region or local area genuinely differs
+  // from its permanent home value -- either dimension counts, not just
+  // region. Comparisons are trimmed + case-folded before comparing: region/
+  // local_area and profiles.region/local_area are both free text entered
+  // through different forms, so "Southeast" (home) and "Southeast " or
+  // "southeast" (current, stamped from a driver's profile) must never read
+  // as a mismatch just because of whitespace/casing -- that showed up live
+  // as an obviously-wrong "Southeast → Southeast" away badge before this
+  // normalization existed.
+  type LocatableUnit = {
+    region: string | null; local_area: string | null;
+    current_region: string | null; current_local_area: string | null;
+  };
+  const normLoc = (s: string | null): string => (s ?? "").trim().toLowerCase();
+  const regionMismatch = (t: LocatableUnit) =>
+    !!t.current_region && normLoc(t.current_region) !== normLoc(t.region);
+  const areaMismatch = (t: LocatableUnit) =>
+    !!t.current_local_area && normLoc(t.current_local_area) !== normLoc(t.local_area);
+  const isAway = (t: LocatableUnit) => regionMismatch(t) || areaMismatch(t);
 
   // Context-aware caption: which side of the mismatch is worth saying
-  // depends on which region the CURRENT filter is viewing from -- Jacksonville
+  // depends on which value the CURRENT filter is viewing from -- Jacksonville
   // filtered to their own home region sees "Currently in Tampa," Tampa
-  // filtered to their own sees "Home: Jacksonville." With no region filter
-  // active (viewing All Regions), show both ends so it's unambiguous either way.
-  const awayCaption = (t: { region: string | null; current_region: string | null }, activeFilterRegion: string | null): string => {
-    if (activeFilterRegion === t.region) return `Currently in ${t.current_region}`;
-    if (activeFilterRegion === t.current_region) return `Home: ${t.region}`;
-    return `Home: ${t.region} → ${t.current_region}`;
+  // filtered to their own sees "Home: Jacksonville." Whichever dimension(s)
+  // actually differ drive the label -- if only local area differs (same
+  // region), the caption names the areas, not the (identical) regions.
+  // With no matching filter active, shows both ends so it's unambiguous.
+  const awayCaption = (t: LocatableUnit, activeFilterRegion: string | null, activeFilterLocalArea: string | null): string => {
+    const rDiff = regionMismatch(t);
+    const aDiff = areaMismatch(t);
+    const homeLabel = rDiff && aDiff ? `${t.region} / ${t.local_area}` : rDiff ? t.region : t.local_area;
+    const currentLabel = rDiff && aDiff ? `${t.current_region} / ${t.current_local_area}` : rDiff ? t.current_region : t.current_local_area;
+    const viewingFromHome =
+      (rDiff && activeFilterRegion === t.region) || (!rDiff && aDiff && activeFilterLocalArea === t.local_area);
+    const viewingFromCurrent =
+      (rDiff && activeFilterRegion === t.current_region) || (!rDiff && aDiff && activeFilterLocalArea === t.current_local_area);
+    if (viewingFromHome) return `Currently in ${currentLabel}`;
+    if (viewingFromCurrent) return `Home: ${homeLabel}`;
+    return `Home: ${homeLabel} → ${currentLabel}`;
   };
 
   // Filter button's result -- narrows the grid to whatever's CURRENTLY
@@ -1012,7 +1040,7 @@ export default function SoloEquipmentModal({
                     // driver taps to select/couple and nothing else.
                     const cardHandlers = canAddRemove ? lpHandlers : {};
                     const away = isAway(t);
-                    const caption = away ? awayCaption(t, filter.region) : null;
+                    const caption = away ? awayCaption(t, filter.region, filter.localArea) : null;
                     return (
                       <div
                         key={t.truck_id}
@@ -1038,7 +1066,7 @@ export default function SoloEquipmentModal({
                     const { didFire, ...lpHandlers } = trailerLongPress(t);
                     const cardHandlers = canAddRemove ? lpHandlers : {};
                     const away = isAway(t);
-                    const caption = away ? awayCaption(t, filter.region) : null;
+                    const caption = away ? awayCaption(t, filter.region, filter.localArea) : null;
                     return (
                       <div
                         key={t.trailer_id}
