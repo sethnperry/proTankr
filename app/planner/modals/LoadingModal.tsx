@@ -310,16 +310,30 @@ export default function LoadingModal(props: {
     }
   }, [open]);
 
-  // Prefill the current step: Gallons always comes from that compartment's
-  // own planned amount (never chained from another compartment). API/Temp
-  // forward-chain from the nearest EARLIER compartment of the SAME product
-  // already confirmed this sequence -- never reversed, never backfilled onto
-  // an earlier step. With no earlier match, fall back to the last-observed/
-  // predicted values already seeded into productInputs, same as before.
+  // Prefill the current step. If this compartment already has a committed
+  // entry (the driver tapped Back to review/re-check it, or stepped forward
+  // again after going back), show exactly what's already stored for it --
+  // never recomputed -- so "Back" is a true review, not a re-guess.
+  // Otherwise (first time reaching this step): Gallons always comes from
+  // that compartment's own planned amount (never chained from another
+  // compartment). API/Temp forward-chain from the nearest EARLIER
+  // compartment of the SAME product already confirmed this sequence --
+  // never reversed, never backfilled onto an earlier step. With no earlier
+  // match, fall back to the last-observed/predicted values already seeded
+  // into productInputs, same as before.
   useEffect(() => {
     if (compSeqIndex == null) return;
     const line = orderedCompLines[compSeqIndex];
     if (!line) return;
+
+    const existing = compEntries[line.comp];
+    if (existing) {
+      setSeqGallons(String(Math.round(existing.gallons)));
+      setSeqApi(String(existing.api));
+      setSeqTemp(existing.tempF.toFixed(1));
+      return;
+    }
+
     setSeqGallons(String(Math.round(line.gallons)));
 
     let inherited: { api: number; tempF: number } | null = null;
@@ -349,6 +363,10 @@ export default function LoadingModal(props: {
   }
   function cancelLogSequence() {
     setCompSeqIndex(null);
+  }
+  function goToPreviousCompStep() {
+    if (compSeqIndex == null || compSeqIndex <= 0) return;
+    setCompSeqIndex(compSeqIndex - 1);
   }
   function commitCompStep() {
     if (compSeqIndex == null) return;
@@ -618,7 +636,8 @@ export default function LoadingModal(props: {
           { key: "temp", label: "Temp", value: seqTemp, onChange: setSeqTemp, suffix: "°F", decimal: true },
         ]}
         hint={orderedCompLines.length > 1 && compSeqIndex != null ? `Compartment ${compSeqIndex + 1} of ${orderedCompLines.length}` : undefined}
-        onCancel={cancelLogSequence}
+        onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}
+        cancelLabel={compSeqIndex != null && compSeqIndex > 0 ? "‹ Back" : "Cancel"}
         onSubmit={commitCompStep}
         submitLabel={seqSubmitLabel}
       />

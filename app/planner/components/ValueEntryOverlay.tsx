@@ -35,6 +35,11 @@ type Props = {
    *  direction, drivers need the same colored-dot visual next to the product
    *  everywhere it appears, to avoid mix-ups / cross-drops. */
   dotColor?: string;
+  /** Relabels the left (onCancel) button -- e.g. a multi-step sequence (the
+   *  per-compartment Log-the-Load walk) repurposes this same button as
+   *  "‹ Back" (stepping to the previous entry) on every step but the first,
+   *  rather than adding a second control. Defaults to "Cancel". */
+  cancelLabel?: string;
 };
 
 function sanitize(raw: string, decimal: boolean): string {
@@ -45,7 +50,7 @@ function sanitize(raw: string, decimal: boolean): string {
   return v;
 }
 
-export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor }: Props) {
+export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel" }: Props) {
   if (!open) return null;
 
   return (
@@ -127,7 +132,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
               color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer",
             }}
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"
