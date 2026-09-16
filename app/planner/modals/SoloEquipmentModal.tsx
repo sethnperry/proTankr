@@ -20,7 +20,7 @@
 //    EquipmentDetailsModal isn't clean since it's unexported and tightly
 //    coupled to fleet claim state -- §7 is its own pass.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { SetupSession } from "@/lib/setupSession";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -192,8 +192,20 @@ function ComboConnector({
     );
   }, [active, containerRef, fromRef, toRef]);
 
-  useEffect(() => {
+  // Recompute after EVERY render (post-DOM-mutation, pre-paint), not just on
+  // scroll/resize -- selecting a different truck/trailer, or the filter
+  // changing which cards are rendered, moves fromRef/toRef to new DOM
+  // positions without the container itself changing size and without any
+  // scroll/resize event ever firing, so the line was going stale (stuck
+  // pointing at wherever the cards used to be) on exactly those two real
+  // actions. This is cheap (two getBoundingClientRect reads, only while
+  // `active`) and the existing no-op guard in recompute() above already
+  // skips the state update entirely when nothing actually moved.
+  useLayoutEffect(() => {
     recompute();
+  });
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
@@ -981,21 +993,27 @@ export default function SoloEquipmentModal({
   // trailer that falls out of the filter anyway stays selected -- filtering
   // is a display convenience, not a deselect -- only the visible list of
   // OTHER options shrinks.
+  //
+  // The selected (coupled) unit is floated to the top of its own column --
+  // per explicit direction, so the two selected cards land in the same row
+  // and the connector line runs straight across, with every other ("loose")
+  // unit listed underneath. Array.prototype.sort is stable, so ties (i.e.
+  // every non-selected row) keep their existing alphabetical order.
   const filteredTrucks = useMemo(
     () => trucks.filter((t) =>
       (!filter.region || t.region === filter.region || t.current_region === filter.region) &&
       (!filter.localArea || t.local_area === filter.localArea || t.current_local_area === filter.localArea) &&
       (!filter.awayOnly || isAway(t))
-    ),
-    [trucks, filter]
+    ).sort((a, b) => (a.truck_id === selectedTruckId ? -1 : 0) - (b.truck_id === selectedTruckId ? -1 : 0)),
+    [trucks, filter, selectedTruckId]
   );
   const filteredTrailers = useMemo(
     () => trailers.filter((t) =>
       (!filter.region || t.region === filter.region || t.current_region === filter.region) &&
       (!filter.localArea || t.local_area === filter.localArea || t.current_local_area === filter.localArea) &&
       (!filter.awayOnly || isAway(t))
-    ),
-    [trailers, filter]
+    ).sort((a, b) => (a.trailer_id === selectedTrailerId ? -1 : 0) - (b.trailer_id === selectedTrailerId ? -1 : 0)),
+    [trailers, filter, selectedTrailerId]
   );
 
   const truckLongPress = (t: TruckRow) => createLongPress(() => setRemoveTarget({ kind: "truck", id: t.truck_id, name: t.truck_name }));
