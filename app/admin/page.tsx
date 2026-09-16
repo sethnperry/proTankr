@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { startSetupSession } from "@/lib/setupSession";
 import { supabase } from "@/lib/supabase/client";
 import { fetchProductsCatalogCached } from "@/lib/queries/useProductsCatalog";
-import { fetchTerminalsCatalogCached } from "@/lib/queries/useTerminalsCatalog";
+import { fetchTerminalsCatalogCached, TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
 import ComboEditModal from "@/lib/ui/driver/ComboEditModal";
 import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/driver/EquipmentDetails";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
@@ -809,6 +809,16 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
   onClose: () => void; onDone: () => void;
 }) {
   const isNew = !terminal;
+  // This is a second, independent write path for terminals.renewal_days
+  // (and every other column here) alongside EditTerminalModal.tsx's own
+  // saveRenewalDays -- a save through THIS screen never invalidated the
+  // shared terminals-catalog cache (lib/queries/useTerminalsCatalog.ts,
+  // 10-minute staleTime), so any consumer reading it (e.g.
+  // MyTerminalsModal.tsx's own card countdown) could keep showing the
+  // pre-edit value for up to 10 minutes after an admin edit here, even
+  // though loadAll()'s own fetchTerminalsCatalogCached call looked like a
+  // refresh -- fetchQuery only refetches when the cache is actually stale.
+  const queryClient = useQueryClient();
 
   const [name,        setName]        = useState(terminal?.terminal_name ?? "");
   const [city,        setCity]        = useState(terminal?.city ?? "");
@@ -969,6 +979,7 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
           }
         }
       }
+      await queryClient.invalidateQueries({ queryKey: TERMINALS_CATALOG_QUERY_KEY });
       onDone();
     } catch (e: any) { setErr(e?.message ?? "Save failed."); }
     finally { setSaving(false); }
@@ -978,6 +989,7 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
     if (!confirm("Deactivate this terminal? It will be hidden from drivers but products will be preserved.")) return;
     setSaving(true);
     await supabase.from("terminals").update({ active: false }).eq("terminal_id", terminal!.terminal_id);
+    await queryClient.invalidateQueries({ queryKey: TERMINALS_CATALOG_QUERY_KEY });
     onDone();
   }
 
