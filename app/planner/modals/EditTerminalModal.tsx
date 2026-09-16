@@ -30,9 +30,11 @@
 // back later if ever wanted, nothing destructive here.
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
 import type { TerminalRack, ProductLite } from "./rackProductTypes";
 
 type View = "racks" | "products";
@@ -77,6 +79,7 @@ export default function EditTerminalModal({
   // the old /admin terminal editor; this is the same column, surfaced here
   // too since fleet staff manage terminals from here now.
   const [renewalDays, setRenewalDays] = useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   async function loadRacks() {
     setLoading(true);
@@ -105,6 +108,17 @@ export default function EditTerminalModal({
     const { error: err } = await supabase.from("terminals").update({ renewal_days: days }).eq("terminal_id", terminalId);
     if (err) { setError(err.message); return; }
     setRenewalDays(days);
+    // Real bug found live: this terminal's renewal_days also feeds the
+    // shared, 10-minute-cached terminals catalog (useTerminalsCatalog.ts) --
+    // useTerminalFilters.ts's terminalsFiltered (what MyTerminalsModal's own
+    // card list actually reads) is built from THAT cache, not a fresh
+    // per-terminal query. Without invalidating it here, a just-edited
+    // renewal period kept showing its OLD value on the card face for up to
+    // 10 minutes (or until an unrelated remount), while the Expiration
+    // Report -- which prefers the live my_terminals_with_status row for any
+    // terminal the driver has already carded -- picked up the new value
+    // immediately. Same edit, two screens disagreeing.
+    await queryClient.invalidateQueries({ queryKey: TERMINALS_CATALOG_QUERY_KEY });
     onChanged();
   }
 
