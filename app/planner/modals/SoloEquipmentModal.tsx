@@ -124,6 +124,15 @@ const S = {
     background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 900, fontSize: 14,
     letterSpacing: 0.3, padding: "14px 10px", textAlign: "center" as const, cursor: "pointer",
   } as React.CSSProperties,
+  // Shown on a picker card ONLY while the Borrowed/Away filter is on --
+  // every card in that filtered list is already away by construction, so
+  // this is the one place a plain card still needs to say WHERE it
+  // currently is; the default (unfiltered) grid stays plain, per explicit
+  // direction not to clutter it normally.
+  cardCurrentCaption: {
+    fontSize: 10, fontWeight: 700 as const, color: "#fb923c", marginTop: 4,
+    textTransform: "none" as const, letterSpacing: 0,
+  } as React.CSSProperties,
   // ── Status report (replaces the old per-card away badge/caption) ──
   statusEmpty: {
     textAlign: "center" as const, color: "rgba(255,255,255,0.4)", fontSize: 13,
@@ -1229,6 +1238,14 @@ export default function SoloEquipmentModal({
                       {...cardHandlers}
                     >
                       {t.truck_name}
+                      {/* Every card in this list is already away by
+                          construction once this filter is on -- see
+                          filteredTrucks' own awayOnly predicate above. */}
+                      {filter.awayOnly && (
+                        <div style={S.cardCurrentCaption}>
+                          Currently in {t.current_region ?? t.region ?? "—"} · {t.current_local_area ?? t.local_area ?? "—"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1252,6 +1269,11 @@ export default function SoloEquipmentModal({
                       {...cardHandlers}
                     >
                       {t.trailer_name}
+                      {filter.awayOnly && (
+                        <div style={S.cardCurrentCaption}>
+                          Currently in {t.current_region ?? t.region ?? "—"} · {t.current_local_area ?? t.local_area ?? "—"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
