@@ -1266,8 +1266,14 @@ export default function SoloEquipmentModal({
               <div style={S.actionBtn()} onClick={() => setServiceOpen(true)}>Service</div>
               <div style={S.actionBtn()} onClick={() => setWashOpen(true)}>Wash</div>
               <div style={S.actionBtn()} onClick={openEdit}>Edit</div>
-              <div style={S.actionBtn()} onClick={openStatus}>Stud</div>
             </div>
+
+            {/* Stud -- pulled out of the small action-button row into its
+                own full-width button, same size/shape as Done, directly
+                above it -- per explicit direction. */}
+            <button type="button" onClick={openStatus} style={{ ...saveBtnStyle, marginTop: 14 }}>
+              Stud
+            </button>
 
             {/* This modal opts out of FullscreenModal's own default Done
                 button (footer={null}, see header comment -- everything here
@@ -1387,6 +1393,17 @@ export default function SoloEquipmentModal({
             toRef={trailerCardRef}
             active={!!(selectedTruckId && selectedTrailerId)}
           />
+
+          {/* Stud + Done -- same full-width size/shape as the main
+              screen's own pair, Stud directly above Done, per explicit
+              direction. Operates on whatever's currently selected here,
+              same as the main screen's Stud button. */}
+          <button type="button" onClick={openStatus} style={{ ...saveBtnStyle, marginTop: 20 }}>
+            Stud
+          </button>
+          <button type="button" onClick={() => setPickerOpen(false)} style={{ ...saveBtnStyle, marginTop: 10 }}>
+            Done
+          </button>
         </div>
       </FullscreenModal>
 
@@ -1598,18 +1615,21 @@ export default function SoloEquipmentModal({
           into the away/commandeer chain, same as any other selection). ── */}
       {deadlineConfirmTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 8, padding: 20, width: "100%", maxWidth: 400, boxSizing: "border-box" as const }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>This {deadlineConfirmTarget.kind} is Deadlined</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
               {deadlineConfirmTarget.notes || "No notes on file."} Couple it anyway?
             </div>
+            {/* Same flex:1 basis + explicit nowrap so "Couple It" can never
+                wrap onto a second line and grow taller than "Cancel" --
+                both buttons stay identical width AND height. */}
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setDeadlineConfirmTarget(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14, fontWeight: 700 }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmDeadline} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(180,40,40,0.2)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 8px", borderRadius: 6, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(180,40,40,0.2)", color: "#fca5a5", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14 }}>
                 Couple It
               </button>
             </div>

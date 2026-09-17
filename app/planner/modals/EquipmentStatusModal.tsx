@@ -129,7 +129,15 @@ export default function EquipmentStatusModal({
                 <button
                   key={o.value}
                   type="button"
-                  onClick={() => setStatus(o.value)}
+                  onClick={() => {
+                    // Sub-status's valid list is scoped by which top status
+                    // is picked (Deadline vs Readyline) -- a value valid
+                    // under the old status can be meaningless under the new
+                    // one (e.g. "Available" under Deadline), so clear it,
+                    // same reasoning as Region clearing Local Area above.
+                    if (o.value !== status) setSubStatus("");
+                    setStatus(o.value);
+                  }}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
                     borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
@@ -166,11 +174,21 @@ export default function EquipmentStatusModal({
           </div>
         )}
 
-        <CatalogPicker
-          label="Sub-Status (optional)" placeholder="Select sub-status"
-          value={subStatus} onChange={setSubStatus}
-          table="equipment_sub_statuses" idCol="sub_status_id" companyId={companyId} editable
-        />
+        {/* Sub-status only means anything once the unit is actually
+            Deadline or Readyline (it describes WHY it's off-duty or WHY
+            it's ready) -- same gate as Region/Local Area above. Scoped to
+            this unit's kind (truck/trailer) and to whichever of
+            Deadline/Readyline is currently picked, so "Available" can
+            never show up under Deadline and vice versa. */}
+        {needsLocation && (
+          <CatalogPicker
+            label="Sub-Status (optional)" placeholder="Select sub-status"
+            value={subStatus} onChange={setSubStatus}
+            table="equipment_sub_statuses" idCol="sub_status_id" companyId={companyId} editable
+            matchColumns={{ unit_kind: [unitKind, "both"], status_scope: [status, "both"] }}
+            insertColumns={{ unit_kind: unitKind, status_scope: status }}
+          />
+        )}
 
         <div>
           <label style={fieldLabel}>Notes (optional)</label>

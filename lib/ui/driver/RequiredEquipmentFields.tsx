@@ -50,6 +50,7 @@ export type CatalogRow = { id: string; name: string };
 
 export function CatalogPicker({
   label, placeholder, value, onChange, table, idCol, companyId, editable, filterByRegionName,
+  matchColumns, insertColumns,
 }: {
   label: string;
   placeholder: string;
@@ -64,6 +65,19 @@ export function CatalogPicker({
    *  regions now, so a region must be picked first; a falsy value here
    *  means "nothing chosen yet," not "show everything." */
   filterByRegionName?: string;
+  /** Additional membership filters, e.g. { unit_kind: ["truck", "both"],
+   *  status_scope: ["deadline", "both"] } -- each becomes a `.in(column,
+   *  values)` clause. Used by the sub-status catalog to scope its list by
+   *  unit kind and by which top-level status it applies under. Compared
+   *  by content (JSON.stringify) in the reload effect, not by reference,
+   *  so callers can pass a fresh object literal every render without
+   *  needing to memoize it themselves. */
+  matchColumns?: Record<string, string[]>;
+  /** Column values stamped on a newly-created entry (e.g. { unit_kind:
+   *  "truck", status_scope: "deadline" }) -- so "+ Add new" while a
+   *  specific context is active tags the new entry with that same
+   *  context instead of defaulting to "both". */
+  insertColumns?: Record<string, string>;
 }) {
   const scoped = idCol === "local_area_id";
   const [rows, setRows] = useState<CatalogRow[]>([]);
@@ -76,6 +90,16 @@ export function CatalogPicker({
   // freshly-added local area is tagged with the same region_id the list
   // was just scoped to.
   const [regionId, setRegionId] = useState<string | null>(null);
+  const matchColumnsKey = JSON.stringify(matchColumns ?? null);
+
+  function applyMatchColumns(query: any) {
+    if (!matchColumns) return query;
+    let q = query;
+    for (const [col, vals] of Object.entries(matchColumns)) {
+      q = q.in(col, vals);
+    }
+    return q;
+  }
 
   async function load() {
     if (!companyId) return;
@@ -91,32 +115,34 @@ export function CatalogPicker({
       const rid = (regionRow as any)?.region_id ? String((regionRow as any).region_id) : null;
       setRegionId(rid);
       if (!rid) { setRows([]); return; }
-      const { data } = await supabase
+      const { data } = await applyMatchColumns(
+        supabase
+          .from(table)
+          .select(`${idCol}, name`)
+          .eq("company_id", companyId)
+          .eq("is_active", true)
+          .eq("region_id", rid)
+      ).order("name");
+      setRows(((data ?? []) as any[]).map((r) => ({ id: String(r[idCol]), name: r.name as string })));
+      return;
+    }
+    const { data } = await applyMatchColumns(
+      supabase
         .from(table)
         .select(`${idCol}, name`)
         .eq("company_id", companyId)
         .eq("is_active", true)
-        .eq("region_id", rid)
-        .order("name");
-      setRows(((data ?? []) as any[]).map((r) => ({ id: String(r[idCol]), name: r.name as string })));
-      return;
-    }
-    const { data } = await supabase
-      .from(table)
-      .select(`${idCol}, name`)
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name");
+    ).order("name");
     setRows(((data ?? []) as any[]).map((r) => ({ id: String(r[idCol]), name: r.name as string })));
   }
-  useEffect(() => { void load(); }, [companyId, filterByRegionName]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [companyId, filterByRegionName, matchColumnsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function createNew() {
     if (!newName.trim()) return;
     setBusy(true);
     setErr(null);
     try {
-      const payload: Record<string, unknown> = { company_id: companyId, name: newName.trim() };
+      const payload: Record<string, unknown> = { company_id: companyId, name: newName.trim(), ...insertColumns };
       if (scoped) payload.region_id = regionId;
       const { error } = await supabase
         .from(table)
