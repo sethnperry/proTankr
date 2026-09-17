@@ -632,8 +632,8 @@ export default function LoadingModal(props: {
         dotColor={seqDot}
         fields={[
           { key: "gallons", label: "Gallons", value: seqGallons, onChange: setSeqGallons, suffix: "gal" },
-          { key: "api", label: "API", value: seqApi, onChange: setSeqApi, decimal: true },
           { key: "temp", label: "Temp", value: seqTemp, onChange: setSeqTemp, suffix: "°F", decimal: true },
+          { key: "api", label: "API", value: seqApi, onChange: setSeqApi, decimal: true },
         ]}
         hint={orderedCompLines.length > 1 && compSeqIndex != null ? `Compartment ${compSeqIndex + 1} of ${orderedCompLines.length}` : undefined}
         onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}

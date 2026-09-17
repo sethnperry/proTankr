@@ -11,7 +11,7 @@
 // phase (compartment gallons; product API+Temp), and its new Verify
 // Against BOL phase (per-compartment Gallons+Temp+API together).
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 export type ValueEntryField = {
   key: string;
@@ -51,6 +51,25 @@ function sanitize(raw: string, decimal: boolean): string {
 }
 
 export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel" }: Props) {
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Re-focus (and re-select) the first field whenever the step changes.
+  // `autoFocus` on the input below only fires when that DOM node is newly
+  // mounted -- true for a fresh open, but NOT true for a multi-step
+  // sequence that keeps this same overlay instance open across steps
+  // (LoadingModal's per-compartment Log-the-Load walk swaps `title`/fields
+  // without ever setting `open` back to false) -- so the inputs are reused
+  // in place and whichever field the driver last tapped stayed focused/
+  // highlighted into the next compartment instead of resetting to the
+  // first field. Keyed on `title`, which is unique per step for every
+  // current caller (LoadingModal's own seqLabel always includes the
+  // compartment number).
+  useEffect(() => {
+    if (!open) return;
+    firstInputRef.current?.focus();
+    firstInputRef.current?.select();
+  }, [open, title]);
+
   if (!open) return null;
 
   return (
@@ -92,6 +111,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
               )}
               <div style={{ position: "relative" }}>
                 <input
+                  ref={i === 0 ? firstInputRef : undefined}
                   type="text"
                   inputMode={f.decimal ? "decimal" : "numeric"}
                   pattern={f.decimal ? undefined : "[0-9]*"}
