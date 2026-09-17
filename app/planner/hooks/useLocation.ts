@@ -200,24 +200,29 @@ export function useLocation(authUserId: string) {
     }, 50);
   }, [authUserId, effectiveLocKey, userLocKey]);
 
-  // ── Snap fresh mount/reload to the most recent REAL load's terminal ──────
-  // Per explicit follow-up: the restore above just replays whatever the
-  // terminal picker was last casually left on (including browsing/testing a
-  // terminal without ever actually loading there), which isn't the same
-  // thing as "where I actually am." A refresh or app reopen should reflect
-  // real activity -- wherever the driver's most recent completed load
-  // happened -- not merely the last thing they tapped in the picker.
+  // ── Snap fresh mount/reload to the most recent REAL load's terminal --
+  // ONLY when there's no ordinary persisted location to fall back on ────
+  // Originally (2026-08-28) this unconditionally overrode the plain
+  // persisted-location restore above, on the reasoning that "casually
+  // browsing a terminal" shouldn't get stuck as next launch's starting
+  // point. In real day-to-day use this turned out to be the far more
+  // disruptive failure mode, reported directly: a driver sets up their
+  // NEXT load (location, terminal, plan) but hasn't tapped LOAD yet, the
+  // app refreshes for any reason (backgrounding, a network blip, mobile
+  // memory pressure), and that in-progress setup gets silently discarded
+  // back to wherever their last COMPLETED load happened -- forcing them
+  // to redo location + plan every time. Reversed: a normal persisted
+  // location (the restore effect above already found one) is now trusted
+  // as-is, exactly "reload to the last condition it was in right before
+  // refresh or closing." The completed-load fallback only fires for a
+  // genuinely fresh device/session with NOTHING persisted yet -- still
+  // better than a blank picker on a driver's very first launch.
   //
   // Runs once per hydration (loadLocationSyncRef), same shape as the
-  // persisted-location restore above, and deliberately OVERRIDES whatever
-  // that restore just set once it resolves -- a driver with no load
-  // history at all (brand new, or simply never completed one) keeps
-  // whatever the persisted-location restore already set (or the blank
-  // default), since there's nothing real to override it with. Combo-
-  // independent on purpose ("wherever my most recent load was," not
-  // scoped to whichever equipment happens to be selected right now) -- this
-  // hook doesn't know about equipment at all, and the ask itself wasn't
-  // equipment-scoped.
+  // persisted-location restore above. Combo-independent on purpose
+  // ("wherever my most recent load was," not scoped to whichever
+  // equipment happens to be selected right now) -- this hook doesn't know
+  // about equipment at all, and the ask itself wasn't equipment-scoped.
   const loadLocationSyncRef = useRef("");
   useEffect(() => {
     if (!authUserId) return;
@@ -229,7 +234,10 @@ export function useLocation(authUserId: string) {
     // terminal, not snap to their most recent COMPLETED load's terminal. The
     // in-progress plan is resumed alongside (usePlanSlots' matching skip-
     // discard), and keeping the terminal consistent with it means the plan's
-    // products stay available rather than reading as "not sold here."
+    // products stay available rather than reading as "not sold here." This
+    // is a stronger, more specific signal than "last thing the picker
+    // showed," so it still takes priority even over an ordinary persisted
+    // location below.
     const active = readActivePlannedLoad(authUserId);
     if (active?.state) {
       hydratingRef.current = true;
@@ -244,6 +252,17 @@ export function useLocation(authUserId: string) {
       }, 50);
       return;
     }
+
+    // An ordinary persisted location already exists (whatever the driver
+    // last had set, right before this refresh/reopen) -- trust it as-is,
+    // don't second-guess it against load history. Read directly from
+    // localStorage rather than the selectedState/selectedCity React state
+    // here: the restore effect above updates that state via setState in
+    // the same tick, which isn't guaranteed to be visible yet from this
+    // effect's own closure.
+    const fromUser = authUserId ? readPersistedLocation(userLocKey) : null;
+    const fromAnon = readPersistedLocation(ANON_LOC_KEY);
+    if (fromUser?.state || fromAnon?.state) return;
 
     (async () => {
       const { data: rows } = await supabase
@@ -277,7 +296,7 @@ export function useLocation(authUserId: string) {
         hydratingRef.current = false;
       }, 50);
     })();
-  }, [authUserId, effectiveLocKey]);
+  }, [authUserId, effectiveLocKey, userLocKey]);
 
   // Mark user-touched after hydration
   useEffect(() => {
