@@ -604,8 +604,13 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
     });
     if (error) { setErr(error.message); setSaving(false); return; }
     if (statusLoc) {
-      await supabase.from("trucks").update({ status_location: statusLoc, status_code: "AVAIL" }).eq("truck_id", truckId);
-      await supabase.from("trailers").update({ status_location: statusLoc, status_code: "AVAIL" }).eq("trailer_id", trailerId);
+      // couple_combo (just called above) already marks both units
+      // status_code='in_use' -- this only records the free-text location,
+      // it doesn't touch status_code (writing the old "AVAIL" value here
+      // would immediately overwrite that with a status that no longer
+      // exists under the current in_use/deadline/readyline vocabulary).
+      await supabase.from("trucks").update({ status_location: statusLoc }).eq("truck_id", truckId);
+      await supabase.from("trailers").update({ status_location: statusLoc }).eq("trailer_id", trailerId);
     }
     onDone();
   }

@@ -316,9 +316,9 @@ function TruckCard({ truck, companyId, onEdit, otherPermits }: {
     prevOpen.current = open;
   }, [open, reload]);
 
-  const statusColor = truck.status_code === "OOS" || truck.status_code === "MAINT" ? T.danger
-    : truck.status_code === "AVAIL" ? T.success
-    : truck.status_code === "COUPLED" ? T.info : T.muted;
+  const statusColor = truck.status_code === "deadline" ? T.danger
+    : truck.status_code === "readyline" ? T.success
+    : truck.status_code === "in_use" ? T.info : T.muted;
 
   const allDates = [
     truck.reg_expiration_date, truck.inspection_expiration_date,
@@ -357,7 +357,7 @@ function TruckCard({ truck, companyId, onEdit, otherPermits }: {
                 background: statusColor === T.danger ? "rgba(220,60,40,0.18)"
                   : statusColor === T.success ? "rgba(40,180,80,0.13)"
                   : statusColor === T.info ? "rgba(91,168,245,0.15)" : "rgba(255,255,255,0.07)",
-                color: statusColor, letterSpacing: 0.5 }}>{truck.status_code}</span>
+                color: statusColor, letterSpacing: 0.5 }}>{truck.status_code.replace("_", " ").toUpperCase()}</span>
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -381,8 +381,8 @@ function TruckCard({ truck, companyId, onEdit, otherPermits }: {
             {[truck.region, truck.local_area].filter(Boolean).join(" · ")}
           </div>
         )}
-        {/* Row 4: status location — hidden when COUPLED (managed via combo) */}
-        {truck.status_location && truck.status_code !== "COUPLED" && (
+        {/* Row 4: status location — hidden when in_use (managed via combo) */}
+        {truck.status_location && truck.status_code !== "in_use" && (
           <div style={{ fontSize: 11, color: T.muted, marginTop: 1,
             whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" }}>
             📍 {truck.status_location}
@@ -490,9 +490,9 @@ function TrailerCard({ trailer, companyId, onEdit }: { trailer: Trailer; company
     ? `${comps.length} comps · ${comps.map(c => c.max_gallons.toLocaleString()).join(" / ")} = ${totalGal.toLocaleString()} gal max`
     : null;
 
-  const statusColor = trailer.status_code === "OOS" || trailer.status_code === "MAINT" ? T.danger
-    : trailer.status_code === "AVAIL" ? T.success
-    : trailer.status_code === "COUPLED" ? T.info : T.muted;
+  const statusColor = trailer.status_code === "deadline" ? T.danger
+    : trailer.status_code === "readyline" ? T.success
+    : trailer.status_code === "in_use" ? T.info : T.muted;
 
   const tankDates = [
     trailer.tank_v_expiration_date, trailer.tank_k_expiration_date,
@@ -530,7 +530,7 @@ function TrailerCard({ trailer, companyId, onEdit }: { trailer: Trailer; company
                 background: statusColor === T.danger ? "rgba(220,60,40,0.18)"
                   : statusColor === T.success ? "rgba(40,180,80,0.13)"
                   : statusColor === T.info ? "rgba(91,168,245,0.15)" : "rgba(255,255,255,0.07)",
-                color: statusColor, letterSpacing: 0.5 }}>{trailer.status_code}</span>
+                color: statusColor, letterSpacing: 0.5 }}>{trailer.status_code.replace("_", " ").toUpperCase()}</span>
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -554,8 +554,8 @@ function TrailerCard({ trailer, companyId, onEdit }: { trailer: Trailer; company
             {[trailer.region, trailer.local_area].filter(Boolean).join(" · ")}
           </div>
         )}
-        {/* Row 4: status location — hidden when COUPLED (managed via combo) */}
-        {trailer.status_location && trailer.status_code !== "COUPLED" && (
+        {/* Row 4: status location — hidden when in_use (managed via combo) */}
+        {trailer.status_location && trailer.status_code !== "in_use" && (
           <div style={{ fontSize: 11, color: T.muted, marginTop: 1,
             whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" }}>
             📍 {trailer.status_location}

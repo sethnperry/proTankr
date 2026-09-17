@@ -33,6 +33,7 @@ import { TruckModal as AdminTruckModal, TrailerModal as AdminTrailerModal } from
 import { type ServiceType, ServiceTypeSelect, ServiceTypeEditorModal, SimpleServiceModal } from "./ServiceTypeManager";
 import UnitPickerSheet from "./UnitPickerSheet";
 import RegionLocalAreaFilterModal, { type EquipmentFilter } from "./RegionLocalAreaFilterModal";
+import EquipmentStatusModal, { fleetStatusColor, fleetStatusLabel } from "./EquipmentStatusModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,11 +41,13 @@ type TruckRow = {
   truck_id: string; truck_name: string; active: boolean | null;
   region: string | null; local_area: string | null;
   current_region: string | null; current_local_area: string | null;
+  status_code: string | null; status_notes: string | null;
 };
 type TrailerRow = {
   trailer_id: string; trailer_name: string; active: boolean | null;
   region: string | null; local_area: string | null;
   current_region: string | null; current_local_area: string | null;
+  status_code: string | null; status_notes: string | null;
 };
 type ComboRow = {
   combo_id: string;
@@ -504,6 +507,14 @@ export default function SoloEquipmentModal({
   const [binderOpen, setBinderOpen] = useState(false);
   const [binderUnit, setBinderUnit] = useState<"truck" | "trailer" | null>(null);
   const [editPickerOpen, setEditPickerOpen] = useState(false);
+  // Update Status (STUD) -- same "pick which unit, then act" shape as Edit
+  // above. statusPickerOpen only shows when both units are selected;
+  // statusTarget carries whichever single unit EquipmentStatusModal is
+  // actually scoped to.
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<
+    { kind: "truck" | "trailer"; id: string; name: string; status: string | null; notes: string | null } | null
+  >(null);
   // Select Equipment sub-screen -- the two-column truck/trailer grid +
   // connector line + its own Filter button live here now, behind a button
   // on the main screen, per explicit direction ("the two column grid...
@@ -526,6 +537,12 @@ export default function SoloEquipmentModal({
   const [awayConfirmTarget, setAwayConfirmTarget] = useState<
     { kind: "truck" | "trailer"; id: string; unitRegion: string } | null
   >(null);
+  // Checked before the away/commandeer chain -- a Deadline flag is a
+  // warning, not a hard block (a stale/wrong flag shouldn't be able to
+  // strand a driver with no override), same shape as the other two.
+  const [deadlineConfirmTarget, setDeadlineConfirmTarget] = useState<
+    { kind: "truck" | "trailer"; id: string; notes: string | null } | null
+  >(null);
 
   // Display names for whoever currently holds an active combo, keyed by
   // user_id -- only needs entries for OTHER users (never authUserId's own
@@ -547,8 +564,8 @@ export default function SoloEquipmentModal({
     setLoading(true);
     setError(null);
     const [{ data: t, error: tErr }, { data: tr, error: trErr }, { data: c, error: cErr }] = await Promise.all([
-      supabase.from("trucks").select("truck_id, truck_name, active, region, local_area, current_region, current_local_area").eq("company_id", companyId).eq("active", true).order("truck_name"),
-      supabase.from("trailers").select("trailer_id, trailer_name, active, region, local_area, current_region, current_local_area").eq("company_id", companyId).eq("active", true).order("trailer_name"),
+      supabase.from("trucks").select("truck_id, truck_name, active, region, local_area, current_region, current_local_area, status_code, status_notes").eq("company_id", companyId).eq("active", true).order("truck_name"),
+      supabase.from("trailers").select("trailer_id, trailer_name, active, region, local_area, current_region, current_local_area, status_code, status_notes").eq("company_id", companyId).eq("active", true).order("trailer_name"),
       supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, tare_lbs, target_weight, active, claimed_by").eq("company_id", companyId).eq("active", true),
     ]);
     if (tErr || trErr || cErr) {
@@ -826,6 +843,7 @@ export default function SoloEquipmentModal({
     const next = selectedTruckId === id ? null : id;
     if (next) {
       const unit = trucks.find((t) => t.truck_id === next);
+      if (unit?.status_code === "deadline") { setDeadlineConfirmTarget({ kind: "truck", id: next, notes: unit.status_notes }); return; }
       const unitRegion = unit ? homeRegionMismatch(unit) : null;
       if (unitRegion) { setAwayConfirmTarget({ kind: "truck", id: next, unitRegion }); return; }
       const ownerName = claimedByOther("truck", next);
@@ -838,6 +856,7 @@ export default function SoloEquipmentModal({
     const next = selectedTrailerId === id ? null : id;
     if (next) {
       const unit = trailers.find((t) => t.trailer_id === next);
+      if (unit?.status_code === "deadline") { setDeadlineConfirmTarget({ kind: "trailer", id: next, notes: unit.status_notes }); return; }
       const unitRegion = unit ? homeRegionMismatch(unit) : null;
       if (unitRegion) { setAwayConfirmTarget({ kind: "trailer", id: next, unitRegion }); return; }
       const ownerName = claimedByOther("trailer", next);
@@ -845,6 +864,28 @@ export default function SoloEquipmentModal({
     }
     setSelectedTrailerId(next);
     void resolvePair(selectedTruckId, next);
+  }
+
+  // Continues past the deadline confirm into the SAME away/commandeer
+  // chain a normal toggle would have run next -- a unit can be deadlined
+  // AND away AND claimed by someone else all at once, and should surface
+  // every applicable warning in sequence, not just the first one hit.
+  function confirmDeadline() {
+    if (!deadlineConfirmTarget) return;
+    const { kind, id } = deadlineConfirmTarget;
+    setDeadlineConfirmTarget(null);
+    const unit = kind === "truck" ? trucks.find((t) => t.truck_id === id) : trailers.find((t) => t.trailer_id === id);
+    const unitRegion = unit ? homeRegionMismatch(unit) : null;
+    if (unitRegion) { setAwayConfirmTarget({ kind, id, unitRegion }); return; }
+    const ownerName = claimedByOther(kind, id);
+    if (ownerName) { setCommandeerTarget({ kind, id, ownerName }); return; }
+    if (kind === "truck") {
+      setSelectedTruckId(id);
+      void resolvePair(id, selectedTrailerId);
+    } else {
+      setSelectedTrailerId(id);
+      void resolvePair(selectedTruckId, id);
+    }
   }
 
   // Continues past the away confirm into the SAME logic toggleTruck/
@@ -899,6 +940,24 @@ export default function SoloEquipmentModal({
     if (selectedTruckId && selectedTrailerId) { setEditPickerOpen(true); return; }
     setBinderUnit(selectedTruckId ? "truck" : selectedTrailerId ? "trailer" : null);
     setBinderOpen(true);
+  }
+
+  // Update Status (STUD) -- same "skip the picker when there's nothing to
+  // choose between" precedent as Edit above.
+  function openStatusForTruck() {
+    const t = trucks.find((x) => x.truck_id === selectedTruckId);
+    if (!t) return;
+    setStatusTarget({ kind: "truck", id: t.truck_id, name: t.truck_name, status: t.status_code, notes: t.status_notes });
+  }
+  function openStatusForTrailer() {
+    const t = trailers.find((x) => x.trailer_id === selectedTrailerId);
+    if (!t) return;
+    setStatusTarget({ kind: "trailer", id: t.trailer_id, name: t.trailer_name, status: t.status_code, notes: t.status_notes });
+  }
+  function openStatus() {
+    if (selectedTruckId && selectedTrailerId) { setStatusPickerOpen(true); return; }
+    if (selectedTruckId) { openStatusForTruck(); return; }
+    if (selectedTrailerId) { openStatusForTrailer(); return; }
   }
 
   function confirmCommandeer() {
@@ -1068,12 +1127,18 @@ export default function SoloEquipmentModal({
     awayNotes.push(`Trailer belongs to ${selectedTrailerRow.region ?? "—"} · ${selectedTrailerRow.local_area ?? "—"}`);
   }
 
+  // Flags a unit's fleet status in the header only when it isn't the plain
+  // "in_use" default -- Deadline/Readyline are worth calling out inline,
+  // "in_use" would just be noise on every normal combo.
+  const fleetFlag = (t: { status_code: string | null } | null): string =>
+    t && t.status_code && t.status_code !== "in_use" ? ` (${fleetStatusLabel(t.status_code)})` : "";
+
   const statusHeaderText = selectedTruckRow && selectedTrailerRow
-    ? `${selectedTruckRow.truck_name} ⇄ ${selectedTrailerRow.trailer_name}`
+    ? `${selectedTruckRow.truck_name}${fleetFlag(selectedTruckRow)} ⇄ ${selectedTrailerRow.trailer_name}${fleetFlag(selectedTrailerRow)}`
     : selectedTruckRow
-      ? `${selectedTruckRow.truck_name} (bobtail)`
+      ? `${selectedTruckRow.truck_name}${fleetFlag(selectedTruckRow)} (bobtail)`
       : selectedTrailerRow
-        ? `${selectedTrailerRow.trailer_name} (no truck)`
+        ? `${selectedTrailerRow.trailer_name}${fleetFlag(selectedTrailerRow)} (no truck)`
         : "";
 
   const statusBlockEl = !selectedTruckRow && !selectedTrailerRow ? (
@@ -1182,6 +1247,7 @@ export default function SoloEquipmentModal({
               <div style={S.actionBtn()} onClick={() => setServiceOpen(true)}>Service</div>
               <div style={S.actionBtn()} onClick={() => setWashOpen(true)}>Wash</div>
               <div style={S.actionBtn()} onClick={openEdit}>Edit</div>
+              <div style={S.actionBtn()} onClick={openStatus}>Status</div>
             </div>
 
             {/* This modal opts out of FullscreenModal's own default Done
@@ -1238,6 +1304,15 @@ export default function SoloEquipmentModal({
                       {...cardHandlers}
                     >
                       {t.truck_name}
+                      {/* Only shown for an abnormal fleet status -- a plain
+                          "in_use" unit stays clean, matching the away-
+                          caption's own "don't clutter the normal case"
+                          precedent. */}
+                      {t.status_code && t.status_code !== "in_use" && (
+                        <div style={{ ...S.cardCurrentCaption, color: fleetStatusColor(t.status_code) }}>
+                          {fleetStatusLabel(t.status_code)}
+                        </div>
+                      )}
                       {/* Every card in this list is already away by
                           construction once this filter is on -- see
                           filteredTrucks' own awayOnly predicate above. */}
@@ -1269,6 +1344,11 @@ export default function SoloEquipmentModal({
                       {...cardHandlers}
                     >
                       {t.trailer_name}
+                      {t.status_code && t.status_code !== "in_use" && (
+                        <div style={{ ...S.cardCurrentCaption, color: fleetStatusColor(t.status_code) }}>
+                          {fleetStatusLabel(t.status_code)}
+                        </div>
+                      )}
                       {filter.awayOnly && (
                         <div style={S.cardCurrentCaption}>
                           Currently in {t.current_region ?? t.region ?? "—"} · {t.current_local_area ?? t.local_area ?? "—"}
@@ -1404,6 +1484,48 @@ export default function SoloEquipmentModal({
         onCancel={() => setEditPickerOpen(false)}
       />
 
+      {/* ── Update Status (STUD): pick which unit (only shown when both are
+          selected -- openStatus() skips straight to EquipmentStatusModal
+          otherwise), then that unit's status modal. ── */}
+      <UnitPickerSheet
+        open={statusPickerOpen}
+        title="Update status for which unit?"
+        subtitle="Flag it In Use, Deadline, or Readyline."
+        truckName={trucks.find((t) => t.truck_id === selectedTruckId)?.truck_name ?? null}
+        trailerName={trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name ?? null}
+        onPickTruck={() => { setStatusPickerOpen(false); openStatusForTruck(); }}
+        onPickTrailer={() => { setStatusPickerOpen(false); openStatusForTrailer(); }}
+        onCancel={() => setStatusPickerOpen(false)}
+      />
+      {statusTarget && (
+        <EquipmentStatusModal
+          open={!!statusTarget}
+          onClose={() => setStatusTarget(null)}
+          companyId={companyId}
+          unitKind={statusTarget.kind}
+          unitId={statusTarget.id}
+          unitName={statusTarget.name}
+          currentStatus={statusTarget.status}
+          currentNotes={statusTarget.notes}
+          onSaved={(newStatus) => {
+            // Deadline/Readyline evict the unit from whoever held it
+            // (set_equipment_status -> _evict_combo_to_partial) -- it's no
+            // longer meaningfully "selected" in an active sense, so drop it
+            // from local selection state. The existing resolve-selection
+            // effect then falls back to currentTruckId/currentTrailerId
+            // (which the RPC already updated) for whatever's left, same as
+            // any other partial-selection case this modal already handles.
+            // Setting it back to "in_use" evicts nothing -- leave the
+            // current selection exactly as it was.
+            if (newStatus !== "in_use") {
+              if (statusTarget.kind === "truck") setSelectedTruckId(null);
+              else setSelectedTrailerId(null);
+            }
+            void Promise.all([loadEquipment(), onRefreshCombos()]);
+          }}
+        />
+      )}
+
       {/* ── Filter (top right of main modal) ── */}
       <RegionLocalAreaFilterModal
         open={filterOpen}
@@ -1426,6 +1548,30 @@ export default function SoloEquipmentModal({
       )}
       {addTrailerOpen && (
         <AdminTrailerModal trailer={null} companyId={companyId} onClose={() => setAddTrailerOpen(false)} onDone={handleTrailerAdded} />
+      )}
+
+      {/* ── Deadline confirmation -- selecting a truck/trailer flagged
+          Deadline. A warning, not a hard block (confirmDeadline continues
+          into the away/commandeer chain, same as any other selection). ── */}
+      {deadlineConfirmTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>This {deadlineConfirmTarget.kind} is flagged Deadline</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
+              {deadlineConfirmTarget.notes || "No notes on file."} Couple it anyway?
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="button" onClick={() => setDeadlineConfirmTarget(null)} disabled={busy}
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button type="button" onClick={confirmDeadline} disabled={busy}
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(180,40,40,0.2)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}>
+                Couple It
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Away-from-home confirmation -- selecting a truck/trailer whose

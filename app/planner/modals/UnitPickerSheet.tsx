@@ -16,6 +16,8 @@ import React from "react";
 
 export default function UnitPickerSheet({
   open, truckName, trailerName, onPickTruck, onPickTrailer, onCancel,
+  title = "Edit which unit?",
+  subtitle = "Opens that unit's file -- documents, permits, and identity fields.",
 }: {
   open: boolean;
   truckName: string | null;
@@ -23,6 +25,11 @@ export default function UnitPickerSheet({
   onPickTruck: () => void;
   onPickTrailer: () => void;
   onCancel: () => void;
+  /** Overridable so other "pick which unit" flows (e.g. the Update Status
+   *  button) can reuse this same sheet with their own copy, defaulting to
+   *  the original Edit-flow text so that call site is unaffected. */
+  title?: string;
+  subtitle?: string;
 }) {
   if (!open) return null;
 
@@ -35,9 +42,9 @@ export default function UnitPickerSheet({
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360, width: "100%" }}>
-        <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 4 }}>Edit which unit?</div>
+        <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 4 }}>{title}</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 16 }}>
-          Opens that unit&apos;s file -- documents, permits, and identity fields.
+          {subtitle}
         </div>
 
         {truckName && (

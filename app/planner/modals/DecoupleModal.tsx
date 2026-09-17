@@ -6,27 +6,27 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 
 // ─── Status codes ─────────────────────────────────────────────────────────────
+// Fleet status is now a single 3-value vocabulary shared with the Equipment
+// modal's own Update Status button (app/planner/modals/EquipmentStatusModal.tsx)
+// and set_equipment_status -- this used to be a separate, richer 8-value
+// scheme (AVAIL/PARK/BOBTAIL/MAINT/INSP/OOS/LOAD/CLEAN); that detail now
+// lives in the Notes field instead of the status code itself (see
+// 20260919000000_equipment_fleet_status.sql's own backfill mapping for the
+// exact old-code -> new-status table).
 
-export type TruckStatus   = "AVAIL" | "PARK" | "BOBTAIL" | "MAINT" | "INSP" | "OOS";
-export type TrailerStatus = "AVAIL" | "PARK" | "MAINT" | "INSP" | "CLEAN" | "LOAD" | "OOS";
+export type TruckStatus   = "in_use" | "deadline" | "readyline";
+export type TrailerStatus = "in_use" | "deadline" | "readyline";
 
 const TRUCK_STATUSES: { code: TruckStatus; label: string; sub: string; warn?: boolean }[] = [
-  { code: "BOBTAIL", label: "Bobtailing",      sub: "Truck is moving without a trailer" },
-  { code: "AVAIL",   label: "Available",       sub: "Ready to couple and run" },
-  { code: "PARK",    label: "Parked",          sub: "Stored, no known issues" },
-  { code: "MAINT",   label: "Maintenance",     sub: "Down for repairs — do not couple", warn: true },
-  { code: "INSP",    label: "Inspection",      sub: "Under DOT or internal inspection" },
-  { code: "OOS",     label: "Out of Service",  sub: "Deadlined — do not operate", warn: true },
+  { code: "in_use",    label: "In Use",    sub: "Actively in service (coupled, bobtailing, or otherwise deployed)" },
+  { code: "readyline", label: "Readyline", sub: "Ready to couple and run" },
+  { code: "deadline",  label: "Deadline",  sub: "Down for repairs or inspection — do not couple", warn: true },
 ];
 
 const TRAILER_STATUSES: { code: TrailerStatus; label: string; sub: string; warn?: boolean }[] = [
-  { code: "AVAIL",  label: "Available",        sub: "Ready to couple and load" },
-  { code: "PARK",   label: "Parked / Stored",  sub: "No issues, available when needed" },
-  { code: "LOAD",   label: "Loaded / Staged",  sub: "Product on board, awaiting driver" },
-  { code: "CLEAN",  label: "Cleaning / Purge", sub: "Being cleaned or purged" },
-  { code: "MAINT",  label: "Maintenance",      sub: "Down for repairs — do not couple", warn: true },
-  { code: "INSP",   label: "Inspection",       sub: "Under DOT or internal inspection" },
-  { code: "OOS",    label: "Out of Service",   sub: "Deadlined — do not use", warn: true },
+  { code: "in_use",    label: "In Use",    sub: "Actively in service (coupled, loaded, or otherwise deployed)" },
+  { code: "readyline", label: "Readyline", sub: "Ready to couple and load" },
+  { code: "deadline",  label: "Deadline",  sub: "Down for repairs, inspection, or cleaning — do not couple", warn: true },
 ];
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -278,14 +278,14 @@ export default function DecoupleModal({
   const [sharedLon,      setSharedLon]      = useState<number | null>(null);
 
   // Truck fields
-  const [truckStatus,   setTruckStatus]   = useState("PARK");
+  const [truckStatus,   setTruckStatus]   = useState("readyline");
   const [truckLocation, setTruckLocation] = useState("");
   const [truckLat,      setTruckLat]      = useState<number | null>(null);
   const [truckLon,      setTruckLon]      = useState<number | null>(null);
   const [truckNotes,    setTruckNotes]    = useState("");
 
   // Trailer fields
-  const [trailerStatus,   setTrailerStatus]   = useState("PARK");
+  const [trailerStatus,   setTrailerStatus]   = useState("readyline");
   const [trailerLocation, setTrailerLocation] = useState("");
   const [trailerLat,      setTrailerLat]      = useState<number | null>(null);
   const [trailerLon,      setTrailerLon]      = useState<number | null>(null);
@@ -300,8 +300,8 @@ export default function DecoupleModal({
     setReviewAttempted(false);
     setNeedsTare(false); setNewTareLbs("");
     setSharedLocation(""); setSharedLat(null); setSharedLon(null);
-    setTruckStatus("PARK"); setTruckLocation(""); setTruckLat(null); setTruckLon(null); setTruckNotes("");
-    setTrailerStatus("PARK"); setTrailerLocation(""); setTrailerLat(null); setTrailerLon(null); setTrailerNotes("");
+    setTruckStatus("readyline"); setTruckLocation(""); setTruckLat(null); setTruckLon(null); setTruckNotes("");
+    setTrailerStatus("readyline"); setTrailerLocation(""); setTrailerLat(null); setTrailerLon(null); setTrailerNotes("");
     setNewTruckId(""); setNewTrailerId("");
   }
 
@@ -310,10 +310,10 @@ export default function DecoupleModal({
   function pickScenario(s: Scenario) {
     setScenario(s);
     setReviewAttempted(false);
-    if (s === "drop_trailer") { setTrailerStatus("PARK"); setTruckStatus("BOBTAIL"); }
-    if (s === "swap_truck")   { setTruckStatus("PARK"); setTrailerStatus("AVAIL"); }
-    if (s === "swap_trailer") { setTrailerStatus("PARK"); setTruckStatus("AVAIL"); }
-    if (s === "park_both")    { setTruckStatus("PARK"); setTrailerStatus("PARK"); }
+    if (s === "drop_trailer") { setTrailerStatus("readyline"); setTruckStatus("in_use"); }
+    if (s === "swap_truck")   { setTruckStatus("readyline"); setTrailerStatus("readyline"); }
+    if (s === "swap_trailer") { setTrailerStatus("readyline"); setTruckStatus("readyline"); }
+    if (s === "park_both")    { setTruckStatus("readyline"); setTrailerStatus("readyline"); }
     setStep("details");
   }
 
@@ -343,7 +343,7 @@ export default function DecoupleModal({
     try {
       // On tare retry, decouple already happened — skip straight to recouple
       if (!needsTare) {
-        const finalTruckStatus   = scenario === "drop_trailer" ? "BOBTAIL" : truckStatus;
+        const finalTruckStatus   = scenario === "drop_trailer" ? "in_use" : truckStatus;
         const finalTrailerStatus = trailerStatus;
         const finalTruckLoc   = scenario === "park_both" ? sharedLocation : truckLocation;
         const finalTruckLat   = scenario === "park_both" ? sharedLat : truckLat;
@@ -504,7 +504,7 @@ export default function DecoupleModal({
         <div style={{ marginBottom: 14 }}>
           <FieldLabel>Truck status</FieldLabel>
           <StatusPicker
-            options={TRUCK_STATUSES.filter(s => s.code !== "BOBTAIL") as any}
+            options={TRUCK_STATUSES as any}
             value={truckStatus as TruckStatus}
             onChange={(v) => setTruckStatus(v)}
           />
@@ -597,7 +597,7 @@ export default function DecoupleModal({
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 16, lineHeight: 1.5 }}>
           Set the status for <strong style={{ color: "rgba(255,255,255,0.75)" }}>{trailerName}</strong> so
           others know where it is and whether it's available.
-          <strong style={{ color: "#67e8f9" }}> {truckName}</strong> will be marked <strong style={{ color: "#67e8f9" }}>BOBTAIL</strong> automatically.
+          <strong style={{ color: "#67e8f9" }}> {truckName}</strong> will be marked <strong style={{ color: "#67e8f9" }}>IN USE</strong> automatically (bobtailing away).
         </div>
 
         <div style={D.sectionTitle}>Trailer status — {trailerName}</div>
@@ -643,7 +643,7 @@ export default function DecoupleModal({
         <div style={{ marginBottom: 14 }}>
           <FieldLabel>Status</FieldLabel>
           <StatusPicker
-            options={TRUCK_STATUSES.filter(s => s.code !== "BOBTAIL") as any}
+            options={TRUCK_STATUSES as any}
             value={truckStatus as TruckStatus}
             onChange={(v) => setTruckStatus(v)}
           />
@@ -730,8 +730,8 @@ export default function DecoupleModal({
   // ── STEP: CONFIRM ─────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────
 
-  const truckWarn   = ["MAINT","OOS"].includes(truckStatus);
-  const trailerWarn = ["MAINT","OOS"].includes(trailerStatus);
+  const truckWarn   = truckStatus === "deadline";
+  const trailerWarn = trailerStatus === "deadline";
 
   const newTruckName   = uncoupledTrucks.find(t => t.id === newTruckId)?.name ?? "";
   const newTrailerName = uncoupledTrailers.find(t => t.id === newTrailerId)?.name ?? "";
@@ -838,7 +838,7 @@ export default function DecoupleModal({
             <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>Truck</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 7px", borderRadius: 5,
-                background: "rgba(103,232,249,0.15)", color: "#67e8f9" }}>BOBTAIL</span>
+                background: "rgba(103,232,249,0.15)", color: "#67e8f9" }}>IN USE</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>{truckName}</span>
             </div>
           </div>

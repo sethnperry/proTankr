@@ -39,11 +39,16 @@ const fieldInput: React.CSSProperties = {
 };
 const lockedInput: React.CSSProperties = { opacity: 0.55, cursor: "not-allowed" as const };
 
-type CatalogRow = { id: string; name: string };
+export type CatalogRow = { id: string; name: string };
 
 // ─── One catalog-backed picker (Region or Local Area) ──────────────────────
+// Exported so other equipment-status surfaces (e.g. EquipmentStatusModal.tsx's
+// "where is it now" fields) can reuse the exact same region-then-scoped-
+// local-area picker instead of a third copy -- same "duplicating this is
+// how the bug creeps back in" precedent this file's own header comment
+// already cites.
 
-function CatalogPicker({
+export function CatalogPicker({
   label, placeholder, value, onChange, table, idCol, companyId, editable, filterByRegionName,
 }: {
   label: string;
