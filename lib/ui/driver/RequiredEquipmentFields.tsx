@@ -55,8 +55,8 @@ export function CatalogPicker({
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
-  table: "equipment_regions" | "equipment_local_areas";
-  idCol: "region_id" | "local_area_id";
+  table: "equipment_regions" | "equipment_local_areas" | "equipment_sub_statuses";
+  idCol: "region_id" | "local_area_id" | "sub_status_id";
   companyId: string;
   editable: boolean;
   /** Local Area only -- scopes the list to this region's local areas

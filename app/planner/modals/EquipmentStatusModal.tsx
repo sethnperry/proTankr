@@ -42,7 +42,8 @@ const fieldLabel: React.CSSProperties = {
 };
 
 export default function EquipmentStatusModal({
-  open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes, onSaved,
+  open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes,
+  currentSubStatus, homeLocalArea, onSaved,
 }: {
   open: boolean;
   onClose: () => void;
@@ -52,11 +53,21 @@ export default function EquipmentStatusModal({
   unitName: string;
   currentStatus: string | null;
   currentNotes: string | null;
+  /** Free-form catalog pick (equipment_sub_statuses) -- e.g. Maintenance,
+   *  Inspection, Available, Parked -- recovers some of the finer-grained
+   *  detail the old 8-value vocabulary carried, without reintroducing a
+   *  second status vocabulary. */
+  currentSubStatus?: string | null;
+  /** The unit's PERMANENT home local_area (trucks/trailers.local_area) --
+   *  distinct from the current/editable Local Area picker below, which
+   *  writes current_local_area instead. Shown for reference only. */
+  homeLocalArea?: string | null;
   onSaved: (newStatus: FleetStatus) => void;
 }) {
   const [status, setStatus] = useState<FleetStatus>("in_use");
   const [region, setRegion] = useState("");
   const [localArea, setLocalArea] = useState("");
+  const [subStatus, setSubStatus] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -66,9 +77,10 @@ export default function EquipmentStatusModal({
     setStatus((currentStatus as FleetStatus) || "in_use");
     setRegion("");
     setLocalArea("");
+    setSubStatus(currentSubStatus ?? "");
     setNotes(currentNotes ?? "");
     setErr(null);
-  }, [open, currentStatus, currentNotes]);
+  }, [open, currentStatus, currentNotes, currentSubStatus]);
 
   const needsLocation = status === "deadline" || status === "readyline";
 
@@ -87,6 +99,7 @@ export default function EquipmentStatusModal({
         p_region: region.trim() || null,
         p_local_area: localArea.trim() || null,
         p_notes: notes.trim() || null,
+        p_sub_status: subStatus.trim() || null,
       });
       if (error) throw error;
       onSaved(status);
@@ -146,6 +159,18 @@ export default function EquipmentStatusModal({
             filterByRegionName={region}
           />
         </div>
+
+        {homeLocalArea && (
+          <div style={{ textAlign: "right" as const, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginTop: -8 }}>
+            Belongs to - {homeLocalArea}
+          </div>
+        )}
+
+        <CatalogPicker
+          label="Sub-Status (optional)" placeholder="Select sub-status"
+          value={subStatus} onChange={setSubStatus}
+          table="equipment_sub_statuses" idCol="sub_status_id" companyId={companyId} editable
+        />
 
         <div>
           <label style={fieldLabel}>Notes (optional)</label>

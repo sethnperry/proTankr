@@ -41,13 +41,13 @@ type TruckRow = {
   truck_id: string; truck_name: string; active: boolean | null;
   region: string | null; local_area: string | null;
   current_region: string | null; current_local_area: string | null;
-  status_code: string | null; status_notes: string | null;
+  status_code: string | null; status_notes: string | null; sub_status: string | null;
 };
 type TrailerRow = {
   trailer_id: string; trailer_name: string; active: boolean | null;
   region: string | null; local_area: string | null;
   current_region: string | null; current_local_area: string | null;
-  status_code: string | null; status_notes: string | null;
+  status_code: string | null; status_notes: string | null; sub_status: string | null;
 };
 type ComboRow = {
   combo_id: string;
@@ -95,6 +95,10 @@ type Props = {
   currentTruckId?: string | null;
   currentTrailerId?: string | null;
   setCurrentEquipment?: (truckId: string | null, trailerId: string | null) => Promise<void>;
+  /** Refreshes currentTruckId/currentTrailerId from the server — must be
+   *  called after a STUD deadline/readyline eviction so the OTHER (kept)
+   *  unit resolves from a fresh value instead of a stale pre-eviction one. */
+  onRefreshCurrentEquipment?: () => Promise<void>;
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -459,7 +463,7 @@ function computeWashLines(truckWashedAt: string | null, trailerWashedAt: string 
 export default function SoloEquipmentModal({
   open, onClose, authUserId, companyId, selectedComboId, onSelectComboId, onRefreshCombos,
   setupSession, myRole, isSolo,
-  currentTruckId, currentTrailerId, setCurrentEquipment,
+  currentTruckId, currentTrailerId, setCurrentEquipment, onRefreshCurrentEquipment,
 }: Props) {
   // Adding/removing equipment is staff-only on a fleet company. Solo is
   // always admin (solo-provisioning), and when the prop is omitted we treat
@@ -513,7 +517,14 @@ export default function SoloEquipmentModal({
   // actually scoped to.
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<
-    { kind: "truck" | "trailer"; id: string; name: string; status: string | null; notes: string | null } | null
+    {
+      kind: "truck" | "trailer"; id: string; name: string;
+      status: string | null; notes: string | null; subStatus: string | null;
+      // Permanent home local_area — never the current/editable one below
+      // it in the modal, so "Belongs to - {home}" can never drift as the
+      // driver edits where the unit currently is.
+      homeLocalArea: string | null;
+    } | null
   >(null);
   // Select Equipment sub-screen -- the two-column truck/trailer grid +
   // connector line + its own Filter button live here now, behind a button
@@ -564,8 +575,8 @@ export default function SoloEquipmentModal({
     setLoading(true);
     setError(null);
     const [{ data: t, error: tErr }, { data: tr, error: trErr }, { data: c, error: cErr }] = await Promise.all([
-      supabase.from("trucks").select("truck_id, truck_name, active, region, local_area, current_region, current_local_area, status_code, status_notes").eq("company_id", companyId).eq("active", true).order("truck_name"),
-      supabase.from("trailers").select("trailer_id, trailer_name, active, region, local_area, current_region, current_local_area, status_code, status_notes").eq("company_id", companyId).eq("active", true).order("trailer_name"),
+      supabase.from("trucks").select("truck_id, truck_name, active, region, local_area, current_region, current_local_area, status_code, status_notes, sub_status").eq("company_id", companyId).eq("active", true).order("truck_name"),
+      supabase.from("trailers").select("trailer_id, trailer_name, active, region, local_area, current_region, current_local_area, status_code, status_notes, sub_status").eq("company_id", companyId).eq("active", true).order("trailer_name"),
       supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, tare_lbs, target_weight, active, claimed_by").eq("company_id", companyId).eq("active", true),
     ]);
     if (tErr || trErr || cErr) {
@@ -947,12 +958,20 @@ export default function SoloEquipmentModal({
   function openStatusForTruck() {
     const t = trucks.find((x) => x.truck_id === selectedTruckId);
     if (!t) return;
-    setStatusTarget({ kind: "truck", id: t.truck_id, name: t.truck_name, status: t.status_code, notes: t.status_notes });
+    setStatusTarget({
+      kind: "truck", id: t.truck_id, name: t.truck_name,
+      status: t.status_code, notes: t.status_notes, subStatus: t.sub_status,
+      homeLocalArea: t.local_area,
+    });
   }
   function openStatusForTrailer() {
     const t = trailers.find((x) => x.trailer_id === selectedTrailerId);
     if (!t) return;
-    setStatusTarget({ kind: "trailer", id: t.trailer_id, name: t.trailer_name, status: t.status_code, notes: t.status_notes });
+    setStatusTarget({
+      kind: "trailer", id: t.trailer_id, name: t.trailer_name,
+      status: t.status_code, notes: t.status_notes, subStatus: t.sub_status,
+      homeLocalArea: t.local_area,
+    });
   }
   function openStatus() {
     if (selectedTruckId && selectedTrailerId) { setStatusPickerOpen(true); return; }
@@ -1127,18 +1146,18 @@ export default function SoloEquipmentModal({
     awayNotes.push(`Trailer belongs to ${selectedTrailerRow.region ?? "—"} · ${selectedTrailerRow.local_area ?? "—"}`);
   }
 
-  // Flags a unit's fleet status in the header only when it isn't the plain
-  // "in_use" default -- Deadline/Readyline are worth calling out inline,
-  // "in_use" would just be noise on every normal combo.
-  const fleetFlag = (t: { status_code: string | null } | null): string =>
-    t && t.status_code && t.status_code !== "in_use" ? ` (${fleetStatusLabel(t.status_code)})` : "";
-
+  // Deadline/Readyline are an abstract of PHYSICAL LOCATION -- a unit
+  // that's linked to this driver is, by definition, In Use, never
+  // Deadline or Readyline at the same time. So nothing shown in this
+  // header ever carries a status flag; a status word here would always
+  // be describing a contradiction (a unit can't be both selected AND
+  // parked-somewhere-else-awaiting-pickup).
   const statusHeaderText = selectedTruckRow && selectedTrailerRow
-    ? `${selectedTruckRow.truck_name}${fleetFlag(selectedTruckRow)} ⇄ ${selectedTrailerRow.trailer_name}${fleetFlag(selectedTrailerRow)}`
+    ? `${selectedTruckRow.truck_name} ⇄ ${selectedTrailerRow.trailer_name}`
     : selectedTruckRow
-      ? `${selectedTruckRow.truck_name}${fleetFlag(selectedTruckRow)} (bobtail)`
+      ? `${selectedTruckRow.truck_name} (bobtail)`
       : selectedTrailerRow
-        ? `${selectedTrailerRow.trailer_name}${fleetFlag(selectedTrailerRow)} (no truck)`
+        ? `${selectedTrailerRow.trailer_name} (no truck)`
         : "";
 
   const statusBlockEl = !selectedTruckRow && !selectedTrailerRow ? (
@@ -1247,7 +1266,7 @@ export default function SoloEquipmentModal({
               <div style={S.actionBtn()} onClick={() => setServiceOpen(true)}>Service</div>
               <div style={S.actionBtn()} onClick={() => setWashOpen(true)}>Wash</div>
               <div style={S.actionBtn()} onClick={openEdit}>Edit</div>
-              <div style={S.actionBtn()} onClick={openStatus}>Status</div>
+              <div style={S.actionBtn()} onClick={openStatus}>Stud</div>
             </div>
 
             {/* This modal opts out of FullscreenModal's own default Done
@@ -1507,21 +1526,45 @@ export default function SoloEquipmentModal({
           unitName={statusTarget.name}
           currentStatus={statusTarget.status}
           currentNotes={statusTarget.notes}
+          currentSubStatus={statusTarget.subStatus}
+          homeLocalArea={statusTarget.homeLocalArea}
           onSaved={(newStatus) => {
             // Deadline/Readyline evict the unit from whoever held it
             // (set_equipment_status -> _evict_combo_to_partial) -- it's no
             // longer meaningfully "selected" in an active sense, so drop it
-            // from local selection state. The existing resolve-selection
-            // effect then falls back to currentTruckId/currentTrailerId
-            // (which the RPC already updated) for whatever's left, same as
-            // any other partial-selection case this modal already handles.
-            // Setting it back to "in_use" evicts nothing -- leave the
-            // current selection exactly as it was.
+            // from local selection state AND the PARENT's own combo
+            // pointer (selectedComboId lives in useEquipment.ts, not here)
+            // -- the now-deactivated combo has already dropped out of
+            // `combos`, so leaving selectedComboId pointing at it would
+            // make the "sync local selection from external state" effect
+            // fall back to currentTruckId/currentTrailerId below instead.
+            // Real bug fixed here: that fallback is only trustworthy once
+            // it's actually refreshed from the server -- couple_combo and
+            // this RPC both write user_settings.current_truck_id/
+            // current_trailer_id server-side, but nothing besides
+            // setCurrentEquipment's own writer ever re-fetches them
+            // client-side, so the currentTruckId/currentTrailerId PROPS
+            // here can be stale from whenever this session last loaded
+            // them (e.g. still naming a trailer from an earlier pairing).
+            // Without the refresh below, deadlining a trailer could show
+            // the truck re-paired with that stale leftover trailer
+            // instead of bobtail. Setting status back to "in_use" evicts
+            // nothing -- leave the current selection exactly as it was.
             if (newStatus !== "in_use") {
               if (statusTarget.kind === "truck") setSelectedTruckId(null);
               else setSelectedTrailerId(null);
+              if (selectedComboId) onSelectComboId("");
             }
-            void Promise.all([loadEquipment(), onRefreshCombos()]);
+            // currentTruckId/currentTrailerId MUST be refreshed before the
+            // combo list refreshes -- once combos drops the now-inactive
+            // combo, the sync effect's fallback reads whatever
+            // currentTruckId/currentTrailerId currently are, so refreshing
+            // them first (not in parallel) avoids a moment where it reads
+            // the still-stale pre-eviction values.
+            void (async () => {
+              if (newStatus !== "in_use") await onRefreshCurrentEquipment?.();
+              await Promise.all([loadEquipment(), onRefreshCombos()]);
+            })();
           }}
         />
       )}
@@ -1556,7 +1599,7 @@ export default function SoloEquipmentModal({
       {deadlineConfirmTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "#151515", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
-            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>This {deadlineConfirmTarget.kind} is flagged Deadline</div>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>This {deadlineConfirmTarget.kind} is Deadlined</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
               {deadlineConfirmTarget.notes || "No notes on file."} Couple it anyway?
             </div>

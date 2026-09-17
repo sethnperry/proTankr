@@ -298,6 +298,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         currentTruckId={shell.equipment.currentTruckId}
         currentTrailerId={shell.equipment.currentTrailerId}
         setCurrentEquipment={shell.equipment.setCurrentEquipment}
+        onRefreshCurrentEquipment={shell.equipment.loadCurrentEquipment}
       />
 
       <ExpirationModal

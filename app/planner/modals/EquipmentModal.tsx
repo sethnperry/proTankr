@@ -57,13 +57,18 @@ type Props = {
   currentTruckId?: string | null;
   currentTrailerId?: string | null;
   setCurrentEquipment?: (truckId: string | null, trailerId: string | null) => Promise<void>;
+  // Refreshes currentTruckId/currentTrailerId from user_settings — needed
+  // after a STUD deadline/readyline eviction (which changes them server-
+  // side via _evict_combo_to_partial, but couple_combo's own success path
+  // is the only other place that keeps this client-side cache in sync).
+  onRefreshCurrentEquipment?: () => Promise<void>;
 };
 
 export default function EquipmentModal({
   open, onClose, authUserId, setupSession,
   selectedComboId, onSelectComboId, onRefreshCombos,
   myRole,
-  currentTruckId, currentTrailerId, setCurrentEquipment,
+  currentTruckId, currentTrailerId, setCurrentEquipment, onRefreshCurrentEquipment,
 }: Props) {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isSolo, setIsSolo] = useState<boolean | null>(null);
@@ -127,6 +132,7 @@ export default function EquipmentModal({
       currentTruckId={currentTruckId}
       currentTrailerId={currentTrailerId}
       setCurrentEquipment={setCurrentEquipment}
+      onRefreshCurrentEquipment={onRefreshCurrentEquipment}
     />
   );
 }
