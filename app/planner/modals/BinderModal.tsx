@@ -339,7 +339,7 @@ function InfoField({ label, value, full, truncate }: { label: string; value: str
 // the new name the next time the caller's own equipment list reloads.
 // Not worth a new callback chain just for this cosmetic case.
 function RequiredFieldsBlock({
-  unitKind, unitId, unitName, companyId, detail, onSaved,
+  unitKind, unitId, unitName, companyId, detail, onSaved, myRole,
 }: {
   unitKind: UnitKind;
   unitId: string;
@@ -347,7 +347,15 @@ function RequiredFieldsBlock({
   companyId: string;
   detail: UnitDetail | null;
   onSaved: () => void;
+  myRole?: string | null;
 }) {
+  // Same gate EquipmentDetails.tsx's TruckModal/TrailerModal already apply
+  // to these identical fields -- Binder is always for an EXISTING unit
+  // (no isNew bypass needed here), and was a real, previously-unguarded
+  // gap: this block hardcoded `editable` to true regardless of role, so
+  // any driver reaching Edit -> Binder could freely rename Unit#/Year/
+  // Make/Model/Region/Local Area.
+  const canEditRestricted = myRole === "admin" || myRole === "dispatch" || myRole === "lead";
   const [name, setName] = useState(unitName);
   const [year, setYear] = useState("");
   const [make, setMake] = useState("");
@@ -375,6 +383,8 @@ function RequiredFieldsBlock({
 
   async function save() {
     if (!name.trim()) { setErr("Unit # is required."); return; }
+    if (!region.trim()) { setErr("Region is required."); return; }
+    if (!localArea.trim()) { setErr("Local area is required."); return; }
     setBusy(true);
     setErr(null);
     try {
@@ -407,7 +417,7 @@ function RequiredFieldsBlock({
       </div>
       {err && <div style={{ color: "#fca5a5", fontSize: 12, marginBottom: 8 }}>{err}</div>}
       <RequiredEquipmentFields
-        kind={unitKind} companyId={companyId} editable
+        kind={unitKind} companyId={companyId} editable={canEditRestricted}
         name={name} onNameChange={markDirty(setName)}
         year={year} onYearChange={markDirty(setYear)}
         make={make} onMakeChange={markDirty(setMake)}
@@ -632,7 +642,7 @@ function CompartmentsSection({
 // equipment picker's own "Service" button -- untouched by this file.
 function UnitSection({
   unitKind, unitId, unitName, companyId, types, records, detail, expandedId, onToggleExpand,
-  onEditType, onAddType, onSaved, onClose,
+  onEditType, onAddType, onSaved, onClose, myRole,
 }: {
   unitKind: UnitKind;
   unitId: string;
@@ -647,6 +657,7 @@ function UnitSection({
   onAddType: () => void;
   onSaved: () => void;
   onClose: () => void;
+  myRole?: string | null;
 }) {
   const { pagesFor, hasDoc, reload: reloadDocs } = usePermitAttachments(unitKind, unitId, companyId);
   const [screen, setScreen] = useState<"front" | "details">("front");
@@ -690,7 +701,7 @@ function UnitSection({
         <>
           <RequiredFieldsBlock
             unitKind={unitKind} unitId={unitId} unitName={unitName} companyId={companyId} detail={detail}
-            onSaved={onSaved}
+            onSaved={onSaved} myRole={myRole}
           />
           <div style={{ marginTop: 16 }}>
             <button type="button" onClick={() => setServiceOpen(true)} style={navBtnStyle}>Service Schedule</button>
@@ -982,7 +993,7 @@ function PermitRow({
 // ─── Main Binder modal ───────────────────────────────────────────────────────
 
 export default function BinderModal({
-  open, onClose, companyId, truckId, trailerId, truckName, trailerName,
+  open, onClose, companyId, truckId, trailerId, truckName, trailerName, myRole,
 }: {
   open: boolean;
   onClose: () => void;
@@ -991,6 +1002,7 @@ export default function BinderModal({
   trailerId: string | null;
   truckName?: string | null;
   trailerName?: string | null;
+  myRole?: string | null;
 }) {
   const [types, setTypes] = useState<PermitType[]>([]);
   const [records, setRecords] = useState<PermitRecord[]>([]);
@@ -1059,6 +1071,7 @@ export default function BinderModal({
             onAddType={() => setAddPicker("truck")}
             onSaved={load}
             onClose={onClose}
+            myRole={myRole}
           />
         )}
         {!loading && trailerId && (
@@ -1069,6 +1082,7 @@ export default function BinderModal({
             onAddType={() => setAddPicker("trailer")}
             onSaved={load}
             onClose={onClose}
+            myRole={myRole}
           />
         )}
       </FullscreenModal>

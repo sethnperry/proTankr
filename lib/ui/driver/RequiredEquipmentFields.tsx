@@ -44,7 +44,7 @@ type CatalogRow = { id: string; name: string };
 // ─── One catalog-backed picker (Region or Local Area) ──────────────────────
 
 function CatalogPicker({
-  label, placeholder, value, onChange, table, idCol, companyId, editable,
+  label, placeholder, value, onChange, table, idCol, companyId, editable, filterByRegionName,
 }: {
   label: string;
   placeholder: string;
@@ -54,16 +54,48 @@ function CatalogPicker({
   idCol: "region_id" | "local_area_id";
   companyId: string;
   editable: boolean;
+  /** Local Area only -- scopes the list to this region's local areas
+   *  (region_id, migration 20260918000000). Local areas belong to
+   *  regions now, so a region must be picked first; a falsy value here
+   *  means "nothing chosen yet," not "show everything." */
+  filterByRegionName?: string;
 }) {
+  const scoped = idCol === "local_area_id";
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Resolved once per region, reused by both load() and createNew() so a
+  // freshly-added local area is tagged with the same region_id the list
+  // was just scoped to.
+  const [regionId, setRegionId] = useState<string | null>(null);
 
   async function load() {
     if (!companyId) return;
+    if (scoped) {
+      if (!filterByRegionName) { setRows([]); setRegionId(null); return; }
+      const { data: regionRow } = await supabase
+        .from("equipment_regions")
+        .select("region_id")
+        .eq("company_id", companyId)
+        .eq("name", filterByRegionName)
+        .eq("is_active", true)
+        .maybeSingle();
+      const rid = (regionRow as any)?.region_id ? String((regionRow as any).region_id) : null;
+      setRegionId(rid);
+      if (!rid) { setRows([]); return; }
+      const { data } = await supabase
+        .from(table)
+        .select(`${idCol}, name`)
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .eq("region_id", rid)
+        .order("name");
+      setRows(((data ?? []) as any[]).map((r) => ({ id: String(r[idCol]), name: r.name as string })));
+      return;
+    }
     const { data } = await supabase
       .from(table)
       .select(`${idCol}, name`)
@@ -72,16 +104,18 @@ function CatalogPicker({
       .order("name");
     setRows(((data ?? []) as any[]).map((r) => ({ id: String(r[idCol]), name: r.name as string })));
   }
-  useEffect(() => { void load(); }, [companyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [companyId, filterByRegionName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function createNew() {
     if (!newName.trim()) return;
     setBusy(true);
     setErr(null);
     try {
-      const { data, error } = await supabase
+      const payload: Record<string, unknown> = { company_id: companyId, name: newName.trim() };
+      if (scoped) payload.region_id = regionId;
+      const { error } = await supabase
         .from(table)
-        .insert({ company_id: companyId, name: newName.trim() })
+        .insert(payload)
         .select(idCol)
         .single();
       if (error) throw error;
@@ -97,27 +131,31 @@ function CatalogPicker({
     }
   }
 
-  const lockedStyle = editable ? {} : lockedInput;
+  // A region must be picked before a local area can be -- local areas
+  // belong to regions now, so there's nothing meaningful to scope to yet.
+  const needsRegionFirst = scoped && !filterByRegionName;
+  const reallyEditable = editable && !needsRegionFirst;
+  const lockedStyle = reallyEditable ? {} : lockedInput;
 
   return (
     <div style={{ position: "relative" as const }}>
       <label style={fieldLabel}>{label}</label>
       <button
         type="button"
-        disabled={!editable}
+        disabled={!reallyEditable}
         onClick={() => setOpen((v) => !v)}
         style={{
-          ...fieldInput, ...lockedStyle, textAlign: "left" as const, cursor: editable ? "pointer" : "not-allowed",
+          ...fieldInput, ...lockedStyle, textAlign: "left" as const, cursor: reallyEditable ? "pointer" : "not-allowed",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, color: value ? "#fff" : "rgba(255,255,255,0.35)" }}>
-          {value || placeholder}
+          {needsRegionFirst ? "Select a region first" : (value || placeholder)}
         </span>
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0, marginLeft: 6 }}>▾</span>
       </button>
 
-      {open && editable && (
+      {open && reallyEditable && (
         <div
           style={{
             position: "absolute" as const, top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
@@ -226,12 +264,19 @@ export function RequiredEquipmentFields({
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <CatalogPicker
-          label="Region" placeholder="Select region" value={region} onChange={onRegionChange}
+          label="Region" placeholder="Select region"
+          value={region}
+          // Local areas belong to regions -- changing the region out from
+          // under an already-picked local area would leave a value on
+          // screen that no longer belongs to it, so clear it here rather
+          // than leaving a stale, now-unscoped selection behind.
+          onChange={(v) => { onRegionChange(v); if (v !== region) onLocalAreaChange(""); }}
           table="equipment_regions" idCol="region_id" companyId={companyId} editable={editable}
         />
         <CatalogPicker
           label="Local Area" placeholder="Select area" value={localArea} onChange={onLocalAreaChange}
           table="equipment_local_areas" idCol="local_area_id" companyId={companyId} editable={editable}
+          filterByRegionName={region}
         />
       </div>
     </div>

@@ -874,6 +874,8 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
 
   async function save() {
     if (!name.trim()) { setErr("Truck name is required."); return; }
+    if (!region.trim()) { setErr("Region is required."); return; }
+    if (!localArea.trim()) { setErr("Local area is required."); return; }
     if (!companyId || !String(companyId).trim()) {
       setErr("Missing company id (cannot save). Close and reopen Equipment Details, or ask your admin to assign you to a company.");
       return;
@@ -1173,6 +1175,8 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
 
   async function save() {
     if (!name.trim()) { setErr("Trailer name is required."); return; }
+    if (!region.trim()) { setErr("Region is required."); return; }
+    if (!localArea.trim()) { setErr("Local area is required."); return; }
     if (!companyId || !String(companyId).trim()) {
       setErr("Missing company id (cannot save). Close and reopen Equipment Details, or ask your admin to assign you to a company.");
       return;

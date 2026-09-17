@@ -119,15 +119,34 @@ const S = {
     background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.45)",
     color: "#fff",
   } as React.CSSProperties,
+  selectEquipmentBtn: {
+    width: "100%", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 900, fontSize: 14,
+    letterSpacing: 0.3, padding: "14px 10px", textAlign: "center" as const, cursor: "pointer",
+  } as React.CSSProperties,
+  // ── Status report (replaces the old per-card away badge/caption) ──
+  statusEmpty: {
+    textAlign: "center" as const, color: "rgba(255,255,255,0.4)", fontSize: 13,
+    padding: "18px 10px", fontWeight: 600,
+  } as React.CSSProperties,
+  statusCard: {
+    borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)", padding: "14px 16px",
+  } as React.CSSProperties,
+  statusHeader: {
+    fontSize: 17, fontWeight: 900 as const, color: "#fff", marginBottom: 8,
+  } as React.CSSProperties,
+  statusLine: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "5px 0",
+  } as React.CSSProperties,
+  statusLabel: { fontSize: 12, fontWeight: 700 as const, color: "rgba(255,255,255,0.45)" },
+  statusValue: { fontSize: 13, fontWeight: 800 as const, color: "rgba(255,255,255,0.9)" },
   // A unit currently coupled outside its own home region -- reuses the same
   // orange already used for ScaleTicketModal's "cutting it close" warning,
   // for visual consistency rather than inventing a new color.
-  cardAway: {
-    borderLeft: "3px solid #fb923c",
-  } as React.CSSProperties,
-  cardAwayCaption: {
-    fontSize: 10, fontWeight: 700 as const, color: "#fb923c", marginTop: 4,
-    textTransform: "none" as const, letterSpacing: 0,
+  statusAwayNote: {
+    fontSize: 11, fontWeight: 700 as const, color: "#fb923c", marginTop: 6,
   } as React.CSSProperties,
   plusCard: {
     borderRadius: 6, border: "1px dashed rgba(255,255,255,0.18)",
@@ -476,6 +495,11 @@ export default function SoloEquipmentModal({
   const [binderOpen, setBinderOpen] = useState(false);
   const [binderUnit, setBinderUnit] = useState<"truck" | "trailer" | null>(null);
   const [editPickerOpen, setEditPickerOpen] = useState(false);
+  // Select Equipment sub-screen -- the two-column truck/trailer grid +
+  // connector line + its own Filter button live here now, behind a button
+  // on the main screen, per explicit direction ("the two column grid...
+  // needs to be in its own window behind a select equipment button").
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState<EquipmentFilter>({ region: null, localArea: null, awayOnly: false });
   const [addTruckOpen, setAddTruckOpen] = useState(false);
@@ -780,7 +804,7 @@ export default function SoloEquipmentModal({
   // (an away, other-driver-claimed unit shows the away confirm first, then
   // the commandeer confirm once that's dismissed). Region-level mismatch
   // only. Trimmed + case-folded before comparing -- same reasoning as
-  // isAway/awayCaption below (region and profiles.region are free text from
+  // isAway below (region and profiles.region are free text from
   // two different forms, so whitespace/casing must never read as a real
   // mismatch).
   function homeRegionMismatch(unit: { region: string | null }): string | null {
@@ -963,27 +987,6 @@ export default function SoloEquipmentModal({
     !!t.current_local_area && normLoc(t.current_local_area) !== normLoc(t.local_area);
   const isAway = (t: LocatableUnit) => regionMismatch(t) || areaMismatch(t);
 
-  // Context-aware caption: which side of the mismatch is worth saying
-  // depends on which value the CURRENT filter is viewing from -- Jacksonville
-  // filtered to their own home region sees "Currently in Tampa," Tampa
-  // filtered to their own sees "Home: Jacksonville." Whichever dimension(s)
-  // actually differ drive the label -- if only local area differs (same
-  // region), the caption names the areas, not the (identical) regions.
-  // With no matching filter active, shows both ends so it's unambiguous.
-  const awayCaption = (t: LocatableUnit, activeFilterRegion: string | null, activeFilterLocalArea: string | null): string => {
-    const rDiff = regionMismatch(t);
-    const aDiff = areaMismatch(t);
-    const homeLabel = rDiff && aDiff ? `${t.region} / ${t.local_area}` : rDiff ? t.region : t.local_area;
-    const currentLabel = rDiff && aDiff ? `${t.current_region} / ${t.current_local_area}` : rDiff ? t.current_region : t.current_local_area;
-    const viewingFromHome =
-      (rDiff && activeFilterRegion === t.region) || (!rDiff && aDiff && activeFilterLocalArea === t.local_area);
-    const viewingFromCurrent =
-      (rDiff && activeFilterRegion === t.current_region) || (!rDiff && aDiff && activeFilterLocalArea === t.current_local_area);
-    if (viewingFromHome) return `Currently in ${currentLabel}`;
-    if (viewingFromCurrent) return `Home: ${homeLabel}`;
-    return `Home: ${homeLabel} → ${currentLabel}`;
-  };
-
   // Filter button's result -- narrows the grid to whatever's CURRENTLY
   // usable in the selected region/area (home OR current match, independently
   // per field), not just permanently home there. This is the actual fix for
@@ -1019,24 +1022,77 @@ export default function SoloEquipmentModal({
   const truckLongPress = (t: TruckRow) => createLongPress(() => setRemoveTarget({ kind: "truck", id: t.truck_id, name: t.truck_name }));
   const trailerLongPress = (t: TrailerRow) => createLongPress(() => setRemoveTarget({ kind: "trailer", id: t.trailer_id, name: t.trailer_name }));
 
+  // ── Status report -- "the information we want to see": who's driving
+  // it, where it currently is, and whether either unit is away from its
+  // own home. Built entirely from state already in this component (no new
+  // fetch) -- claimedByNames already resolves OTHER drivers' names for the
+  // commandeer-warning flow above; "You" is a plain self-check, no fetch
+  // needed for that case. Scoped to whatever's currently selected only --
+  // not a peekable locator for every unit in the picker (a bigger, separate
+  // feature, confirmed out of scope for this pass).
+  const effectiveUserId = setupSession?.targetUserId ?? authUserId;
+  const selectedTruckRow = trucks.find((t) => t.truck_id === selectedTruckId) ?? null;
+  const selectedTrailerRow = trailers.find((t) => t.trailer_id === selectedTrailerId) ?? null;
+
+  // Only a full combo carries a claim (equipment_combos.claimed_by) -- a
+  // lone bobtail/trailer-only unit has no per-unit claim to show under the
+  // current schema, so "In Use by" is simply omitted for that case.
+  const claimantLabel = selectedCombo?.claimed_by
+    ? (selectedCombo.claimed_by === effectiveUserId ? "You" : (claimedByNames[selectedCombo.claimed_by] ?? "another driver"))
+    : null;
+
+  // Current location -- whichever unit is present (both are stamped
+  // together by the same couple_combo call, so they should always agree
+  // for a live combo; falls back to home region/local area for a unit
+  // that's never been coupled under this system yet).
+  const locationSource = selectedTruckRow ?? selectedTrailerRow;
+  const currentRegion = locationSource ? (locationSource.current_region ?? locationSource.region) : null;
+  const currentLocalArea = locationSource ? (locationSource.current_local_area ?? locationSource.local_area) : null;
+
+  // Only named when it actually mismatches -- a normal in-area combo shows
+  // no mismatch noise at all.
+  const awayNotes: string[] = [];
+  if (selectedTruckRow && isAway(selectedTruckRow)) {
+    awayNotes.push(`Truck belongs to ${selectedTruckRow.region ?? "—"} · ${selectedTruckRow.local_area ?? "—"}`);
+  }
+  if (selectedTrailerRow && isAway(selectedTrailerRow)) {
+    awayNotes.push(`Trailer belongs to ${selectedTrailerRow.region ?? "—"} · ${selectedTrailerRow.local_area ?? "—"}`);
+  }
+
+  const statusHeaderText = selectedTruckRow && selectedTrailerRow
+    ? `${selectedTruckRow.truck_name} ⇄ ${selectedTrailerRow.trailer_name}`
+    : selectedTruckRow
+      ? `${selectedTruckRow.truck_name} (bobtail)`
+      : selectedTrailerRow
+        ? `${selectedTrailerRow.trailer_name} (no truck)`
+        : "";
+
+  const statusBlockEl = !selectedTruckRow && !selectedTrailerRow ? (
+    <div style={S.statusEmpty}>No equipment selected — tap Select Equipment to choose your truck and trailer.</div>
+  ) : (
+    <div style={S.statusCard}>
+      <div style={S.statusHeader}>{statusHeaderText}</div>
+      {claimantLabel && (
+        <div style={S.statusLine}>
+          <span style={S.statusLabel}>In Use by</span>
+          <span style={S.statusValue}>{claimantLabel}</span>
+        </div>
+      )}
+      {(currentRegion || currentLocalArea) && (
+        <div style={S.statusLine}>
+          <span style={S.statusLabel}>Currently</span>
+          <span style={S.statusValue}>{currentRegion ?? "—"} · {currentLocalArea ?? "—"}</span>
+        </div>
+      )}
+      {awayNotes.map((note) => (
+        <div key={note} style={S.statusAwayNote}>{note}</div>
+      ))}
+    </div>
+  );
+
   return (
     <>
-      <FullscreenModal
-        open={open} onClose={handleClose} title="Equipment" footer={null}
-        headerRight={
-          <button
-            type="button"
-            onClick={() => setFilterOpen(true)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: (filter.region || filter.localArea || filter.awayOnly) ? "#fff" : "rgba(255,255,255,0.4)",
-              fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
-            }}
-          >
-            Filter{(filter.region || filter.localArea || filter.awayOnly) ? " •" : ""}
-          </button>
-        }
-      >
+      <FullscreenModal open={open} onClose={handleClose} title="Equipment" footer={null}>
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
           {error && (
@@ -1045,71 +1101,13 @@ export default function SoloEquipmentModal({
             </div>
           )}
 
-          {/* ── Scrollable truck/trailer grid ── */}
-          <div ref={scrollRef} style={{ position: "relative", flex: 1, overflowY: "auto", minHeight: 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <div>
-                <div style={S.sectionHeader}>Trucks</div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {filteredTrucks.map((t) => {
-                    const selected = t.truck_id === selectedTruckId;
-                    const { didFire, ...lpHandlers } = truckLongPress(t);
-                    // Long-press-to-remove is staff-only; a plain fleet
-                    // driver taps to select/couple and nothing else.
-                    const cardHandlers = canAddRemove ? lpHandlers : {};
-                    const away = isAway(t);
-                    const caption = away ? awayCaption(t, filter.region, filter.localArea) : null;
-                    return (
-                      <div
-                        key={t.truck_id}
-                        ref={selected ? truckCardRef : undefined}
-                        style={{ ...S.card, ...(selected ? S.cardSelected : {}), ...(away ? S.cardAway : {}) }}
-                        onClick={() => { if (!canAddRemove || !didFire()) toggleTruck(t.truck_id); }}
-                        {...cardHandlers}
-                      >
-                        {t.truck_name}
-                        {caption && <div style={S.cardAwayCaption}>{caption}</div>}
-                      </div>
-                    );
-                  })}
-                  {canAddRemove && <div style={S.plusCard} onClick={() => setAddTruckOpen(true)}>+</div>}
-                </div>
-              </div>
+          <button type="button" style={{ ...S.selectEquipmentBtn, marginBottom: 14 }} onClick={() => setPickerOpen(true)}>
+            Select Equipment
+          </button>
 
-              <div>
-                <div style={S.sectionHeader}>Trailers</div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {filteredTrailers.map((t) => {
-                    const selected = t.trailer_id === selectedTrailerId;
-                    const { didFire, ...lpHandlers } = trailerLongPress(t);
-                    const cardHandlers = canAddRemove ? lpHandlers : {};
-                    const away = isAway(t);
-                    const caption = away ? awayCaption(t, filter.region, filter.localArea) : null;
-                    return (
-                      <div
-                        key={t.trailer_id}
-                        ref={selected ? trailerCardRef : undefined}
-                        style={{ ...S.card, ...(selected ? S.cardSelected : {}), ...(away ? S.cardAway : {}) }}
-                        onClick={() => { if (!canAddRemove || !didFire()) toggleTrailer(t.trailer_id); }}
-                        {...cardHandlers}
-                      >
-                        {t.trailer_name}
-                        {caption && <div style={S.cardAwayCaption}>{caption}</div>}
-                      </div>
-                    );
-                  })}
-                  {canAddRemove && <div style={S.plusCard} onClick={() => setAddTrailerOpen(true)}>+</div>}
-                </div>
-              </div>
-            </div>
-
-            <ComboConnector
-              containerRef={scrollRef}
-              fromRef={truckCardRef}
-              toRef={trailerCardRef}
-              active={!!(selectedTruckId && selectedTrailerId)}
-            />
-          </div>
+          {/* ── Status report -- replaces the old grid + per-card away
+              badge/caption. See the statusBlockEl computation above. ── */}
+          {statusBlockEl}
 
           <div style={S.divider} />
 
@@ -1185,6 +1183,89 @@ export default function SoloEquipmentModal({
               Done
             </button>
           </div>
+        </div>
+      </FullscreenModal>
+
+      {/* ── Select Equipment -- the two-column truck/trailer grid + connector
+          line + Filter, moved behind its own screen (per explicit
+          direction: "the two column grid... needs to be in its own window
+          behind a select equipment button"). Tapping a card here keeps its
+          exact prior behavior (toggle/select/couple, away-confirm,
+          commandeer-confirm, new-tare prompt); the main screen re-renders
+          the status report once this closes. ── */}
+      <FullscreenModal
+        open={pickerOpen} onClose={() => setPickerOpen(false)} title="Select Equipment" footer={null}
+        headerRight={
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: (filter.region || filter.localArea || filter.awayOnly) ? "#fff" : "rgba(255,255,255,0.4)",
+              fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
+            }}
+          >
+            Filter{(filter.region || filter.localArea || filter.awayOnly) ? " •" : ""}
+          </button>
+        }
+      >
+        <div ref={scrollRef} style={{ position: "relative", height: "100%", overflowY: "auto", minHeight: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div>
+              <div style={S.sectionHeader}>Trucks</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {filteredTrucks.map((t) => {
+                  const selected = t.truck_id === selectedTruckId;
+                  const { didFire, ...lpHandlers } = truckLongPress(t);
+                  // Long-press-to-remove is staff-only; a plain fleet
+                  // driver taps to select/couple and nothing else.
+                  const cardHandlers = canAddRemove ? lpHandlers : {};
+                  return (
+                    <div
+                      key={t.truck_id}
+                      ref={selected ? truckCardRef : undefined}
+                      style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
+                      onClick={() => { if (!canAddRemove || !didFire()) toggleTruck(t.truck_id); }}
+                      {...cardHandlers}
+                    >
+                      {t.truck_name}
+                    </div>
+                  );
+                })}
+                {canAddRemove && <div style={S.plusCard} onClick={() => setAddTruckOpen(true)}>+</div>}
+              </div>
+            </div>
+
+            <div>
+              <div style={S.sectionHeader}>Trailers</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {filteredTrailers.map((t) => {
+                  const selected = t.trailer_id === selectedTrailerId;
+                  const { didFire, ...lpHandlers } = trailerLongPress(t);
+                  const cardHandlers = canAddRemove ? lpHandlers : {};
+                  return (
+                    <div
+                      key={t.trailer_id}
+                      ref={selected ? trailerCardRef : undefined}
+                      style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
+                      onClick={() => { if (!canAddRemove || !didFire()) toggleTrailer(t.trailer_id); }}
+                      {...cardHandlers}
+                    >
+                      {t.trailer_name}
+                    </div>
+                  );
+                })}
+                {canAddRemove && <div style={S.plusCard} onClick={() => setAddTrailerOpen(true)}>+</div>}
+              </div>
+            </div>
+          </div>
+
+          <ComboConnector
+            containerRef={scrollRef}
+            fromRef={truckCardRef}
+            toRef={trailerCardRef}
+            active={!!(selectedTruckId && selectedTrailerId)}
+          />
         </div>
       </FullscreenModal>
 
@@ -1287,6 +1368,7 @@ export default function SoloEquipmentModal({
         trailerId={binderUnit === "trailer" ? selectedTrailerId : null}
         truckName={trucks.find((t) => t.truck_id === selectedTruckId)?.truck_name}
         trailerName={trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name}
+        myRole={myRole}
       />
 
       {/* ── Edit: pick which unit (only shown when both are selected --
