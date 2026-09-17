@@ -173,8 +173,22 @@ export function useExpirations(opts: {
 
     for (const [terminalId, lastVisitISO] of Object.entries(accessDateByTerminalId)) {
       if (!lastVisitISO) continue;
-      const terminal = terminals.find((t: any) => String(t.terminal_id) === terminalId)
-        ?? terminalCatalog?.find((t: any) => String(t.terminal_id) === terminalId);
+      // Prefer the shared terminals-catalog (useTerminalsCatalog.ts) over the
+      // live my_terminals_with_status state -- MyTerminalsModal.tsx's own
+      // card countdown (the "sorted" array) reads renewal_days from this
+      // same catalog exclusively, and both terminal-edit write paths
+      // (EditTerminalModal.tsx, app/admin/page.tsx's TerminalModal) now
+      // explicitly invalidate it on save. The live `terminals` state has no
+      // equivalent guarantee -- it only refreshes when loadMyTerminals()
+      // happens to re-run (e.g. a fresh mount of the Planner layout), which
+      // an admin's edit made from elsewhere (or from within the same
+      // long-lived session) doesn't reliably trigger -- so preferring it
+      // here let this bell/report disagree with the card on the very same
+      // terminal's renewal_days after an edit. Both sources read the same
+      // underlying `terminals.renewal_days` column either way; this only
+      // changes which one wins when they haven't both refreshed yet.
+      const terminal = terminalCatalog?.find((t: any) => String(t.terminal_id) === terminalId)
+        ?? terminals.find((t: any) => String(t.terminal_id) === terminalId);
       const renewalDays = Number(terminal?.renewal_days ?? terminal?.renewalDays ?? 90) || 90;
       const expiresISO = addDaysISO_(lastVisitISO, renewalDays);
       const days = daysUntil(expiresISO);
