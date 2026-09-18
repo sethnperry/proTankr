@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { biasToCgSlider } from "../utils/planMath";
-import { readActivePlannedLoad } from "../utils/activePlannedLoad";
 import type { CompPlanInput, PlanSnapshot } from "../types";
 
 const PLAN_SLOTS = [1, 2, 3, 4, 5] as const;
@@ -92,12 +91,6 @@ export function usePlanSlots({
     planned_total_gal: number; planned_gross_lbs: number | null; actual_gross_lbs: number | null; diff_lbs: number | null;
     completed_at: string | null; plan_slot: number | null;
   } | null>(null);
-
-  // True only until the first real (signed-in) scope resolves after a fresh
-  // page mount -- lets the "restore slot 0" effect below tell a genuine
-  // refresh apart from a later same-session terminal switch, so an
-  // unfinalized in-progress plan never survives a reload (see that effect).
-  const isFreshMountRef = useRef(true);
 
   const planRestoreReadyRef = useRef<string | null>(null);
   const planDirtyRef = useRef(false);
@@ -760,11 +753,19 @@ export function usePlanSlots({
   }, [selectedComboId, authUserId]);
 
   // ── Restore the live plan on combo change ─────────────────────────────────
-  // A genuine fresh mount/refresh never resumes an unfinalized in-progress
-  // plan -- any local WIP draft for this real (signed-in) scope gets cleared
-  // exactly once, the first time it's seen after mount, so the combo-claim
-  // effect above sees an empty slot 0 and only the last *completed* load's
-  // slip-seat data (if any) can pre-fill compPlan.
+  // Per explicit follow-up (reversing the original design below): a fresh
+  // mount/refresh used to unconditionally discard any unfinalized WIP plan
+  // for this combo, so the combo-claim effect above would see an empty
+  // slot 0 and re-seed compPlan from the last COMPLETED load instead. In
+  // real day-to-day use this meant setting up the NEXT load (a different
+  // terminal, a different preset) and having a refresh silently snap back
+  // to whatever was actually loaded last time -- the same "trust what was
+  // there a moment ago" fix already applied to useLocation.ts's own
+  // history override now applies here too: a saved local draft (raw) is
+  // restored whenever one exists, refresh or not, mid-load or not. The
+  // combo-claim effect only ever pre-fills from load history when slot 0
+  // is genuinely empty (nothing here to lose), so a real WIP draft can
+  // never get silently swapped out for stale history either way.
   //
   // Runs on COMBO change, not terminal change -- see planScopeKey's own
   // comment above. This used to re-run (and re-apply whatever local draft
@@ -783,22 +784,7 @@ export function usePlanSlots({
     const raw = safeRead(planStoreKey(0)) as PlanSnapshot | null;
     planRestoreReadyRef.current = planScopeKey;
 
-    const consumesFreshFlag = !!authUserId;
-    // Exception to the fresh-mount discard: if the driver has a load in
-    // progress on THIS combo (begin_load ran, not completed -- see
-    // activePlannedLoad), resume its plan instead of throwing it away, so a
-    // close-and-reopen mid-load brings the plan back rather than empty
-    // compartments. A completed load clears the marker, so this never
-    // resurrects finalized work.
-    const resumable = readActivePlannedLoad(authUserId);
-    const hasActiveForThisCombo = !!resumable && resumable.comboId === String(selectedComboId);
-    const skipLocalRestore = isFreshMountRef.current && consumesFreshFlag && !hasActiveForThisCombo;
-    if (consumesFreshFlag) isFreshMountRef.current = false;
-
-    if (skipLocalRestore) {
-      safeDelete(planStoreKey(0));
-      setCompPlan({});
-    } else if (raw && raw.v === 1) {
+    if (raw && raw.v === 1) {
       applySnapshot(raw);
     }
 
