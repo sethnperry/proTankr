@@ -197,6 +197,34 @@ export function usePlanSlots({
     catch {}
   }, []);
 
+  // ── TEMPORARY diagnostic logging ────────────────────────────────────────
+  // Tracking down a reported "toggles between the last two plans on every
+  // refresh" bug -- every place that can WRITE or RESTORE slot 0 logs a
+  // compact one-line summary (which compartment holds which product +
+  // which activeSlot letter) so the real sequence of events on a real
+  // device can be read straight out of the browser console, instead of
+  // guessed at from code alone. Remove once the real cause is confirmed
+  // and fixed.
+  function summarizeCompPlan(cp: any): string {
+    if (!cp || typeof cp !== "object") return "(none)";
+    return Object.keys(cp).sort((a, b) => Number(a) - Number(b))
+      .map((k) => {
+        const v = cp[k];
+        const code = v?.empty || !v?.productId ? "MT" : String(v.productId).slice(0, 8);
+        return `C${k}:${code}`;
+      })
+      .join(",") || "(empty)";
+  }
+  function dbg(label: string, extra: Record<string, any>) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[planSlots] ${label}`,
+        { scope: planScopeKey, combo: selectedComboId, ...extra }
+      );
+    } catch {}
+  }
+
   // Read a preset slot's raw payload, falling back to the pre-equipment-
   // scoping legacy key when this specific combo has never had that slot
   // saved yet. No implicit write-on-read -- once this combo's own key has
@@ -720,7 +748,18 @@ export function usePlanSlots({
           // can't represent meaningful unsynced user work if it has no
           // actual product selections in it.
           const localHasRealContent = lp && hasRealCompPlan(lp);
-          if (!lp || !localHasRealContent || compareSavedAt(sp, lp) > 0) {
+          const willOverwrite = !lp || !localHasRealContent || compareSavedAt(sp, lp) > 0;
+          if (key === planStoreKey(0)) {
+            dbg("serverPull:pullInto:slot0", {
+              key, willOverwrite,
+              localHasRealContent: !!localHasRealContent,
+              localCompPlan: summarizeCompPlan(lp?.compPlan),
+              localActiveSlot: lp?.activeSlot ?? null,
+              serverCompPlan: summarizeCompPlan(sp?.compPlan),
+              serverActiveSlot: sp?.activeSlot ?? null,
+            });
+          }
+          if (willOverwrite) {
             try { localStorage.setItem(key, JSON.stringify(normalize(sp, selectedTerminalId))); setSlotBump((v) => v + 1); } catch {}
           }
         }
@@ -744,6 +783,14 @@ export function usePlanSlots({
             !planDirtyRef.current ||
             Object.keys(compPlan || {}).length === 0 ||
             lastAppliedScopeRef.current !== planScopeKey;
+
+          dbg("serverPull:local0Apply", {
+            safeToApply,
+            planDirty: planDirtyRef.current,
+            local0CompPlan: summarizeCompPlan(local0.compPlan),
+            local0ActiveSlot: local0.activeSlot ?? null,
+            liveCompPlanBefore: summarizeCompPlan(compPlan),
+          });
 
           if (safeToApply) {
             // NOTE: tempF is intentionally NOT restored from snapshot.
@@ -807,6 +854,13 @@ export function usePlanSlots({
       // with no autosaved state. If slot 0 has data the driver is mid-plan; don't clobber it.
       const localRaw = safeRead(planStoreKey(0));
       const slotIsEmpty = !localRaw || !localRaw.savedAt;
+      dbg("comboClaim:lastCompletedLoad", {
+        slotIsEmpty,
+        localRawCompPlan: summarizeCompPlan(localRaw?.compPlan),
+        localRawActiveSlot: localRaw?.activeSlot ?? null,
+        dbPayloadCompPlan: summarizeCompPlan(dbPayload?.compPlan),
+        dbPayloadPlanSlot: dbPayload?.loadReport?.plan_slot ?? null,
+      });
       if (slotIsEmpty) {
         safeWrite(planStoreKey(0), dbPayload);
         // restoreCg: true -- see CLAUDE.md "recap / recall last load": a
@@ -850,6 +904,12 @@ export function usePlanSlots({
     const raw = safeRead(planStoreKey(0)) as PlanSnapshot | null;
     planRestoreReadyRef.current = planScopeKey;
 
+    dbg("restoreLivePlan", {
+      hasRaw: !!raw, rawV: raw?.v ?? null,
+      rawCompPlan: summarizeCompPlan(raw?.compPlan),
+      rawActiveSlot: raw?.activeSlot ?? null,
+    });
+
     if (raw && raw.v === 1) {
       applySnapshot(raw);
       // A genuine local draft exists -- tell page.tsx so it can restore
@@ -884,6 +944,9 @@ export function usePlanSlots({
     autosaveTimerRef.current = setTimeout(() => {
       if (!selectedTerminalId || !planDirtyRef.current) return;
       const snap = buildSnapshot(String(selectedTerminalId));
+      dbg("autosave:debouncedWrite", {
+        compPlan: summarizeCompPlan(snap.compPlan), activeSlot: snap.activeSlot ?? null,
+      });
       safeWrite(planStoreKey(0), snap);
       planDirtyRef.current = false;
       refreshSlotHas();
@@ -906,6 +969,9 @@ export function usePlanSlots({
       if (!selectedTerminalId || !planDirtyRef.current) return;
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
       const snap = buildSnapshot(String(selectedTerminalId));
+      dbg("autosave:hideFlushWrite", {
+        compPlan: summarizeCompPlan(snap.compPlan), activeSlot: snap.activeSlot ?? null,
+      });
       safeWrite(planStoreKey(0), snap);
       planDirtyRef.current = false;
     };

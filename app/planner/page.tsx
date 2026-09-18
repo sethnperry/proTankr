@@ -477,6 +477,8 @@ export default function CalculatorPage() {
   // COMPLETED load happened to use, even when the restored compPlan
   // content itself correctly matched a different, more recent draft.
   const handlePlanRestored = useCallback((slot: number | null) => {
+    // eslint-disable-next-line no-console
+    console.log("[planSlots] page.tsx:handlePlanRestored", { slot });
     presetDialSyncedRef.current = true;
     setLastLoadedSlot(slot);
     if (slot != null) setActiveSlotLetter(slot);
@@ -1609,6 +1611,13 @@ export default function CalculatorPage() {
     // untouched dial always read exactly 1; the historical dial is gone
     // now, but lastLoadedSlot remains the right guard since it only ever
     // changes on a real load action, never a passive restore.
+    // eslint-disable-next-line no-console
+    console.log("[planSlots] page.tsx:lastLoadReportSync", {
+      planSlot: planSlots.lastLoadReport?.plan_slot ?? null,
+      presetDialSynced: presetDialSyncedRef.current,
+      lastLoadedSlot,
+      willApply: !!(planSlots.lastLoadReport?.plan_slot && !presetDialSyncedRef.current && lastLoadedSlot == null),
+    });
     if (planSlots.lastLoadReport?.plan_slot && !presetDialSyncedRef.current && lastLoadedSlot == null) {
       presetDialSyncedRef.current = true;
       setLastLoadedSlot(planSlots.lastLoadReport.plan_slot);
@@ -2219,6 +2228,8 @@ const lastProductInfoById = useMemo(() => {
   // onLoad/onSave props used -- preserved verbatim, just triggered from
   // PresetQuickPick's row taps now instead of the dial's.
   const handlePresetLoad = (n: number) => {
+    // eslint-disable-next-line no-console
+    console.log("[planSlots] page.tsx:handlePresetLoad (user tap)", { slot: n });
     planSlots.loadFromSlot(n);
     setLastLoadedSlot(n);
     setActiveSlotLetter(n);
