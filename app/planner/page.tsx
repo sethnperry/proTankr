@@ -3213,6 +3213,11 @@ const lastProductInfoById = useMemo(() => {
                   readOnly
                   value={debugLog.join("\n")}
                   onFocus={(e) => e.currentTarget.select()}
+                  // Some mobile browsers don't reliably pair focus with a
+                  // tap on a readOnly textarea -- select on click too, so
+                  // a single tap is enough to get everything highlighted
+                  // and ready for the OS's own Copy action.
+                  onClick={(e) => e.currentTarget.select()}
                   style={{
                     width: "100%", minHeight: 120, marginBottom: 8, boxSizing: "border-box" as const,
                     fontSize: 10, fontFamily: "monospace", color: "#ddd",
