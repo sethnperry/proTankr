@@ -3201,11 +3201,30 @@ const lastProductInfoById = useMemo(() => {
             {debugLog.length === 0 ? (
               <div style={{ fontSize: 11, color: "#666" }}>No log entries yet.</div>
             ) : (
-              debugLog.map((line, i) => (
-                <div key={i} style={{ fontSize: 10, fontFamily: "monospace", color: "#ddd", marginBottom: 2, wordBreak: "break-all" }}>
-                  {line}
-                </div>
-              ))
+              <>
+                {/* Real, plain-text <textarea> fallback for the Copy button
+                    above -- navigator.clipboard.writeText() is blocked or
+                    silently no-ops in some mobile browser/PWA contexts
+                    (missing permission, non-secure context quirks), with
+                    no visible error either way. A readOnly textarea always
+                    supports tap-and-hold -> Select All -> Copy as a manual
+                    fallback, regardless of Clipboard API support. */}
+                <textarea
+                  readOnly
+                  value={debugLog.join("\n")}
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{
+                    width: "100%", minHeight: 120, marginBottom: 8, boxSizing: "border-box" as const,
+                    fontSize: 10, fontFamily: "monospace", color: "#ddd",
+                    background: "#0a0a0a", border: "1px solid #333", borderRadius: 4, padding: 6, resize: "vertical" as const,
+                  }}
+                />
+                {debugLog.map((line, i) => (
+                  <div key={i} style={{ fontSize: 10, fontFamily: "monospace", color: "#ddd", marginBottom: 2, wordBreak: "break-all" }}>
+                    {line}
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>
