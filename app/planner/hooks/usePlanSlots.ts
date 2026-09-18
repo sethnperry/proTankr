@@ -50,8 +50,22 @@ function parsePlanPayload(raw: string | null, fallbackTerminalId: string, fallba
 }
 
 function compareSavedAt(a: any, b: any): number {
-  const at = a?.savedAtISO ? Date.parse(String(a.savedAtISO)) : 0;
-  const bt = b?.savedAtISO ? Date.parse(String(b.savedAtISO)) : 0;
+  // Real bug found while chasing the same activeSlot/compPlan desync as
+  // parsePlanPayload's own fix above: this only ever compared the LEGACY
+  // `savedAtISO` field. buildSnapshot (the only thing that writes local
+  // OR uploads to the server today) has never set that field -- it sets
+  // `savedAt`, a real numeric ms timestamp -- so both sides of this
+  // comparison were silently always 0 for every current-format payload,
+  // regardless of which one was actually more recent. That made
+  // pullInto's "is the server's copy actually newer" check pure noise:
+  // it could only ever return 0 (never > 0), so a server-side slot 0 row
+  // could never lose an overwrite decision on its own merits, only via
+  // the separate `!localHasRealContent` escape hatch. `savedAt` (numeric)
+  // is preferred on both sides now, with `savedAtISO` kept only as a
+  // fallback for genuinely old-format data that predates `savedAt`
+  // existing at all.
+  const at = typeof a?.savedAt === "number" ? a.savedAt : (a?.savedAtISO ? Date.parse(String(a.savedAtISO)) : 0);
+  const bt = typeof b?.savedAt === "number" ? b.savedAt : (b?.savedAtISO ? Date.parse(String(b.savedAtISO)) : 0);
   return at - bt;
 }
 
@@ -141,7 +155,13 @@ export function usePlanSlots({
   const planRestoreReadyRef = useRef<string | null>(null);
   const planDirtyRef = useRef(false);
   const autosaveTimerRef = useRef<any>(null);
-  const lastAppliedScopeRef = useRef("");
+  // Tracks the most recent snapshot applySnapshot() has actually applied for
+  // the CURRENT scope -- {scope, savedAt}, not just scope alone (see
+  // applySnapshot's own comment for why savedAt matters here). Used as a
+  // single, central guard against any automatic restore path (server pull
+  // chief among them) silently regressing the live plan to older data than
+  // what's already showing, regardless of which specific effect fired.
+  const lastAppliedScopeRef = useRef<{ scope: string; savedAt: number } | null>(null);
   const serverSyncInFlightRef = useRef(false);
   const serverLastPulledScopeRef = useRef("");
   const serverWriteDebounceRef = useRef<any>(null);
@@ -678,7 +698,37 @@ export function usePlanSlots({
     [tempF, cgSlider, compPlan]
   );
 
-  const applySnapshot = useCallback((snap: PlanSnapshot, opts?: { restoreCg?: boolean }) => {
+  // Single choke point every automatic AND explicit compPlan restore goes
+  // through (restoreLivePlan, comboClaim's history pre-fill, the server
+  // pull's cross-device merge, loadFromSlot, recallLastLoad) -- real bug
+  // found while chasing a "plan toggles between the last two presets on
+  // every refresh" report: several of these paths can independently decide
+  // to restore SOME snapshot on mount, with no shared sense of "which one
+  // actually reflects the most recent state" -- an automatic path (the
+  // server pull's own cross-device merge in particular) could silently win
+  // a race against an already-correct restore and regress the live plan to
+  // older data. `source` is a plain label for the debug log, not logic.
+  // `opts.force` is for the two genuinely explicit, user-initiated actions
+  // (tapping a preset, tapping Recall Last Load) that are SUPPOSED to jump
+  // back to older saved content on purpose -- staleness must never block
+  // those. Returns whether the snapshot was actually applied, so a caller
+  // that also wants to re-sync something else (e.g. the plan-letter
+  // highlight) doesn't do so for a rejected, stale snapshot.
+  const applySnapshot = useCallback((snap: PlanSnapshot, opts?: { restoreCg?: boolean; source?: string; force?: boolean }): boolean => {
+    const incomingSavedAt = typeof snap?.savedAt === "number" ? snap.savedAt : 0;
+    const prev = lastAppliedScopeRef.current;
+    if (!opts?.force && prev && prev.scope === planScopeKey && incomingSavedAt > 0 && incomingSavedAt < prev.savedAt) {
+      dbg("applySnapshot:REJECTED (stale)", {
+        source: opts?.source ?? "?", incomingSavedAt, prevSavedAt: prev.savedAt,
+        rejectedCompPlan: summarizeCompPlan(snap.compPlan),
+      });
+      return false;
+    }
+    dbg("applySnapshot", {
+      source: opts?.source ?? "?", savedAt: incomingSavedAt,
+      compPlan: summarizeCompPlan(snap.compPlan), activeSlot: snap.activeSlot ?? null,
+    });
+    lastAppliedScopeRef.current = { scope: planScopeKey, savedAt: incomingSavedAt || Date.now() };
     // NOTE: tempF is intentionally NOT restored from any snapshot.
     // The fuel temp prediction always owns tempF. Restoring it from saved state
     // would override the prediction every time a slot is switched or the page reloads.
@@ -686,7 +736,8 @@ export function usePlanSlots({
     if (opts?.restoreCg && typeof snap.cgSlider === "number" && Number.isFinite(snap.cgSlider)) {
       setCgSlider(snap.cgSlider);
     }
-  }, [setCompPlan, setCgSlider]);
+    return true;
+  }, [setCompPlan, setCgSlider, planScopeKey]);
 
   // A new combo can't be trusted as "synced" just because a PREVIOUS combo
   // finished syncing -- reset immediately (synchronously) so there's no
@@ -791,16 +842,29 @@ export function usePlanSlots({
           selectedTerminalId, selectedComboId
         );
         if (local0 && compartmentsLoaded) {
-          const safeToApply =
-            !planDirtyRef.current ||
-            Object.keys(compPlan || {}).length === 0 ||
-            lastAppliedScopeRef.current !== planScopeKey;
+          // Real bug this whole block used to cause: the "have we already
+          // applied this scope" check below was a plain useRef("") that
+          // ONLY this block itself ever set -- so on the very first server
+          // pull for any given scope (i.e. every fresh mount), it always
+          // read as "no," regardless of whether the "restore live plan on
+          // combo change" effect had already correctly restored moments
+          // earlier. That made this cross-device merge unconditionally
+          // apply local0 over whatever was already live, every single
+          // time -- exactly matching a real reported "plan toggles between
+          // the last two presets on every refresh" bug. applySnapshot now
+          // owns that "is this actually newer than what's already applied"
+          // decision centrally (see its own comment), so this block no
+          // longer needs its own scope-tracking at all -- only the
+          // driver's own unsaved live edits (planDirtyRef) still gate
+          // whether to even attempt the merge.
+          const safeToApply = !planDirtyRef.current || Object.keys(compPlan || {}).length === 0;
 
           dbg("serverPull:local0Apply", {
             safeToApply,
             planDirty: planDirtyRef.current,
             local0CompPlan: summarizeCompPlan(local0.compPlan),
             local0ActiveSlot: local0.activeSlot ?? null,
+            local0SavedAt: local0.savedAt ?? null,
             liveCompPlanBefore: summarizeCompPlan(compPlan),
           });
 
@@ -809,20 +873,20 @@ export function usePlanSlots({
             // The fuel temp prediction always dominates on load/refresh.
             // tempF is only ever set by the prediction hook or manually by the user.
             // cgSlider is likewise never restored -- see applySnapshot.
-            if (local0.compPlan && typeof local0.compPlan === "object") setCompPlan(local0.compPlan);
-            planDirtyRef.current = false;
-            lastAppliedScopeRef.current = planScopeKey;
-            // Cross-device sync can supersede whatever the "restore live
-            // plan on combo change" effect already applied (e.g. this
-            // device's own local cache was empty/stale, but another
-            // device had pushed a newer plan to the server) -- without
-            // this, the plan-letter highlight could keep showing whatever
-            // an earlier restore/history-fallback step set, even after
-            // THIS compPlan (from the server) became the live content.
-            // Real bug this closes: switching plan/location, refreshing,
-            // and seeing the right compartments but the wrong letter
-            // highlighted in PresetQuickPick.
-            onPlanRestoredRef.current?.(local0.activeSlot ?? null);
+            const applied = applySnapshot(local0, { source: "serverPull:local0Apply" });
+            if (applied) {
+              planDirtyRef.current = false;
+              // Cross-device sync can supersede whatever the "restore live
+              // plan on combo change" effect already applied (e.g. this
+              // device's own local cache was empty/stale, but another
+              // device had pushed a newer plan to the server) -- without
+              // this, the plan-letter highlight could keep showing whatever
+              // an earlier restore/history-fallback step set, even after
+              // THIS compPlan (from the server) became the live content.
+              // Only re-synced when the snapshot actually applied -- never
+              // for one applySnapshot correctly rejected as stale.
+              onPlanRestoredRef.current?.(local0.activeSlot ?? null);
+            }
           }
         }
 
@@ -878,7 +942,7 @@ export function usePlanSlots({
         // restoreCg: true -- see CLAUDE.md "recap / recall last load": a
         // fresh mount/refresh should reproduce the last completed load
         // exactly, CG position included, not just the product selection.
-        applySnapshot(dbPayload, { restoreCg: true });
+        applySnapshot(dbPayload, { restoreCg: true, source: "comboClaim:lastCompletedLoad" });
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -923,13 +987,13 @@ export function usePlanSlots({
     });
 
     if (raw && raw.v === 1) {
-      applySnapshot(raw);
+      const applied = applySnapshot(raw, { source: "restoreLivePlan" });
       // A genuine local draft exists -- tell page.tsx so it can restore
       // the plan-letter highlight from THIS draft's own activeSlot
       // (whatever was actually on screen before the refresh) instead of
       // leaving that decision to the last-completed-load-based fallback
       // sync effect there, which has no idea a real draft just won.
-      onPlanRestoredRef.current?.(raw.activeSlot ?? null);
+      if (applied) onPlanRestoredRef.current?.(raw.activeSlot ?? null);
     }
 
     queueMicrotask(() => {
@@ -1089,7 +1153,11 @@ export function usePlanSlots({
     planRestoreReadyRef.current = planScopeKey;
     // Named presets (1-5) snap the CG slider to whatever was saved with them;
     // slot 0 (autosave/last-load draft) never restores CG -- see applySnapshot.
-    applySnapshot(raw, { restoreCg: slot !== 0 });
+    // force: true -- this is a deliberate, explicit "go back to this saved
+    // plan" tap; it must never be blocked by the staleness guard just
+    // because the preset's own savedAt is (usually) far older than
+    // whatever's live right now.
+    applySnapshot(raw, { restoreCg: slot !== 0, source: `loadFromSlot:${slot}`, force: true });
     queueMicrotask(() => {
       if (planRestoreReadyRef.current === planScopeKey) planRestoreReadyRef.current = null;
     });
@@ -1149,7 +1217,11 @@ export function usePlanSlots({
       safeWrite(llKey, { lastLoadLines: dbPayload.lastLoadLines, lastLoadId: dbPayload.lastLoadId });
       setLastLoadLines(dbPayload.lastLoadLines ?? []);
     }
-    applySnapshot(dbPayload, { restoreCg: true });
+    // force: true -- this is the explicit "Recall Last Load" button, whose
+    // own comment above already says it applies "unconditionally... no
+    // slotIsEmpty gate" -- the staleness guard must not silently defeat
+    // that by rejecting a past load's (usually much older) savedAt.
+    applySnapshot(dbPayload, { restoreCg: true, source: "recallLastLoad", force: true });
     const report = dbPayload.loadReport ?? null;
     setLastLoadReport(report);
     refreshSlotHas();
