@@ -16,6 +16,23 @@ function parsePlanPayload(raw: string | null, fallbackTerminalId: string, fallba
   if (!raw) return null;
   try {
     const obj: any = JSON.parse(raw);
+    // Real bug found while chasing an activeSlot/compPlan desync: this
+    // function's own "is this legacy?" check was `obj.version == null` --
+    // but the CURRENT format (buildSnapshot's own shape) has never had a
+    // `version` field at all, only `v` (a different key). That check was
+    // therefore true for every single current-format payload, silently
+    // routing every one of them through the "legacy" reconstruction below
+    // -- which only ever copies a fixed, old field list (terminalId/
+    // tempF/cgSlider/compPlan) and drops anything else, including `v`,
+    // `savedAt`, `name`, and this session's new `activeSlot`. This is the
+    // ONE function both the local<->server sync pull AND the server
+    // upload path go through, so it silently stripped those fields on
+    // every cross-device round trip, independent of anything else. A
+    // current-format object (`v: 1`) is already well-formed -- pass it
+    // through as-is so every field, known or added later, survives.
+    if (obj && typeof obj === "object" && obj.v === 1) {
+      return obj;
+    }
     if (obj && typeof obj === "object" && obj.version == null) {
       return {
         version: 0, savedAtISO: "",
@@ -663,11 +680,24 @@ export function usePlanSlots({
         function normalize(sp: any, terminalIdFallback: string) {
           return {
             v: 1,
-            savedAt: sp.savedAtISO ? (Date.parse(String(sp.savedAtISO)) || Date.now()) : Date.now(),
+            // sp.savedAt (current-format, a real ms timestamp) now that
+            // parsePlanPayload's upload path preserves it -- sp.savedAtISO
+            // stays as a fallback for anything still uploaded in the old
+            // reconstructed shape.
+            savedAt: typeof sp.savedAt === "number" ? sp.savedAt
+              : sp.savedAtISO ? (Date.parse(String(sp.savedAtISO)) || Date.now()) : Date.now(),
             terminalId: String(sp.terminalId ?? terminalIdFallback),
             tempF: typeof sp.tempF === "number" ? sp.tempF : 60,
             cgSlider: typeof sp.cgSlider === "number" ? sp.cgSlider : undefined,
             compPlan: sp.compPlan ?? {},
+            // Preserved so a cross-device pull can't silently desync
+            // slot 0's plan-letter highlight (activeSlot) or a named
+            // preset's custom label (name) from whatever content this
+            // same normalize() call is about to apply -- both used to
+            // get dropped here even when the uploaded payload carried
+            // them correctly (see parsePlanPayload's own comment).
+            ...(sp.name ? { name: sp.name } : {}),
+            activeSlot: sp.activeSlot ?? null,
           };
         }
 
@@ -723,6 +753,17 @@ export function usePlanSlots({
             if (local0.compPlan && typeof local0.compPlan === "object") setCompPlan(local0.compPlan);
             planDirtyRef.current = false;
             lastAppliedScopeRef.current = planScopeKey;
+            // Cross-device sync can supersede whatever the "restore live
+            // plan on combo change" effect already applied (e.g. this
+            // device's own local cache was empty/stale, but another
+            // device had pushed a newer plan to the server) -- without
+            // this, the plan-letter highlight could keep showing whatever
+            // an earlier restore/history-fallback step set, even after
+            // THIS compPlan (from the server) became the live content.
+            // Real bug this closes: switching plan/location, refreshing,
+            // and seeing the right compartments but the wrong letter
+            // highlighted in PresetQuickPick.
+            onPlanRestoredRef.current?.(local0.activeSlot ?? null);
           }
         }
 
