@@ -467,6 +467,20 @@ export default function CalculatorPage() {
   // change itself) -- the ref's own guard purpose is unchanged, only the
   // now-removed presetDialSyncTo state it used to also set alongside it.
   const presetDialSyncedRef = useRef(false);
+  // Fired by usePlanSlots whenever slot 0 restores from a genuine local
+  // draft (not from the last-completed-load fallback) -- restores the
+  // plan-letter highlight from whatever that draft's own activeSlot says
+  // was on screen right before the refresh, and marks presetDialSyncedRef
+  // so the last-completed-load-based sync effect below never overrides
+  // it. Without this, the highlight (and the letter tagged to the next
+  // real load) always snapped to whichever preset the driver's last
+  // COMPLETED load happened to use, even when the restored compPlan
+  // content itself correctly matched a different, more recent draft.
+  const handlePlanRestored = useCallback((slot: number | null) => {
+    presetDialSyncedRef.current = true;
+    setLastLoadedSlot(slot);
+    if (slot != null) setActiveSlotLetter(slot);
+  }, []);
   // "Recall Last Load" found a completed load at this terminal, but under
   // different equipment than what's currently selected -- per explicit
   // follow-up. See handleRecallLastLoad/handleViewAltLoadInReports below.
@@ -1217,6 +1231,8 @@ export default function CalculatorPage() {
     tempF, compPlan, setCompPlan,
     cgSlider, setCgSlider,
     compartmentsLoaded: compartments.length > 0,
+    activeSlotLetter,
+    onPlanRestored: handlePlanRestored,
   });
 
   // ── Load workflow ──────────────────────────────────────────────────────────

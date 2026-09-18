@@ -62,6 +62,20 @@ type Props = {
   compartmentsLoaded: boolean;
   // Called by useLoadWorkflow after completeLoad — writes slot 0 as equipment-scoped
   onSaveLastLoad?: (payload: any) => Promise<void>;
+  // page.tsx's activeSlotLetter -- read (via a ref, so the debounced
+  // autosave never closes over a stale value) when writing slot 0's own
+  // snapshot, so a refresh can restore the plan-letter highlight from
+  // what was actually on screen instead of always deriving it from the
+  // driver's last COMPLETED load (see the restore effect below).
+  activeSlotLetter?: number | null;
+  // Fired whenever slot 0 is restored from a genuine local draft (raw
+  // exists) -- with that draft's own saved activeSlot (or null, if it was
+  // a manually-edited plan with no preset tied to it). page.tsx uses this
+  // to set activeSlotLetter/lastLoadedSlot AND to mark the one-shot
+  // "already resolved" guard that otherwise lets the last-completed-load
+  // fallback hijack the highlight. Never fired when slot 0 is genuinely
+  // empty, so that fallback still gets to run for a brand-new combo.
+  onPlanRestored?: (activeSlot: number | null) => void;
 };
 
 export function usePlanSlots({
@@ -71,7 +85,14 @@ export function usePlanSlots({
   cgSlider, setCgSlider,
   compartmentsLoaded,
   onSaveLastLoad,
+  activeSlotLetter,
+  onPlanRestored,
 }: Props) {
+  const activeSlotLetterRef = useRef<number | null | undefined>(activeSlotLetter);
+  useEffect(() => { activeSlotLetterRef.current = activeSlotLetter; }, [activeSlotLetter]);
+  const onPlanRestoredRef = useRef<typeof onPlanRestored>(onPlanRestored);
+  useEffect(() => { onPlanRestoredRef.current = onPlanRestored; }, [onPlanRestored]);
+
   const [slotBump, setSlotBump] = useState(0);
   const [slotHas, setSlotHas] = useState<Record<number, boolean>>({});
   // False until the initial server pull has genuinely completed for the
@@ -591,6 +612,10 @@ export function usePlanSlots({
         cgSlider: Number(cgSlider),
         compPlan,
         ...(name ? { name } : {}),
+        // Only meaningful for slot 0 (see PlanSnapshot's own comment) --
+        // harmless on a named preset's own snapshot, which never reads it
+        // back.
+        activeSlot: activeSlotLetterRef.current ?? null,
       };
     },
     [tempF, cgSlider, compPlan]
@@ -786,6 +811,12 @@ export function usePlanSlots({
 
     if (raw && raw.v === 1) {
       applySnapshot(raw);
+      // A genuine local draft exists -- tell page.tsx so it can restore
+      // the plan-letter highlight from THIS draft's own activeSlot
+      // (whatever was actually on screen before the refresh) instead of
+      // leaving that decision to the last-completed-load-based fallback
+      // sync effect there, which has no idea a real draft just won.
+      onPlanRestoredRef.current?.(raw.activeSlot ?? null);
     }
 
     queueMicrotask(() => {
@@ -818,6 +849,33 @@ export function usePlanSlots({
     }, 350);
     return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current); };
   }, [selectedTerminalId, tempF, compPlan, buildSnapshot, planStoreKey, safeWrite, refreshSlotHas]);
+
+  // ── Flush the pending autosave immediately on hide/unload ─────────────────
+  // The 350ms debounce above is what made the "reload to the last
+  // condition" fix intermittent in real use: a refresh landing inside that
+  // window (change a plan, refresh almost immediately to check something)
+  // fires before the setTimeout ever runs, so slot 0's last write is still
+  // the PREVIOUS plan -- which then reads exactly like "sometimes only the
+  // location restores, the plan reverts." visibilitychange (hidden) +
+  // pagehide are the standard pair for "about to go away" on mobile, where
+  // a plain unload/beforeunload listener isn't reliable -- same reasoning
+  // useLocation.ts's own ambient-refresh heartbeat already uses.
+  useEffect(() => {
+    const flush = () => {
+      if (!selectedTerminalId || !planDirtyRef.current) return;
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      const snap = buildSnapshot(String(selectedTerminalId));
+      safeWrite(planStoreKey(0), snap);
+      planDirtyRef.current = false;
+    };
+    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [selectedTerminalId, buildSnapshot, planStoreKey, safeWrite]);
 
   // ── Server sync helpers ───────────────────────────────────────────────────
 

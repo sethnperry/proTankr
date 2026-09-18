@@ -149,6 +149,15 @@ export type PlanSnapshot = {
   // normal save path, which would overwrite the slot's actual saved plan
   // with whatever's currently live on screen.
   name?: string;
+  // Slot 0 only -- which named preset letter (1-5), if any, page.tsx's
+  // activeSlotLetter/lastLoadedSlot was showing at the moment this
+  // autosave fired. Restored on mount so the plan-letter icon/
+  // PresetQuickPick highlight matches whatever was actually on screen
+  // right before a refresh, instead of always snapping to whichever
+  // preset the driver's last COMPLETED load happened to use (see
+  // usePlanSlots.ts's "restore the live plan on combo change" effect).
+  // null/undefined means "no preset was active" (a manually-edited plan).
+  activeSlot?: number | null;
 };
 
 /** One load's payload-utilization result, as stored by
