@@ -693,24 +693,25 @@ export default function CalculatorPage() {
     });
   }, []);
 
-  // compPlan is keyed per combo+terminal so switching equipment restores the right plan
-  const compPlanKey = useMemo(() => {
-    const cid = equipment.selectedComboId ?? "";
-    const tid = location.selectedTerminalId ?? "";
-    return cid && tid ? `protankr_compPlan_v1:${cid}:${tid}` : null;
-  }, [equipment.selectedComboId, location.selectedTerminalId]);
-
-  const [compPlan, setCompPlanRaw] = useState<Record<number, CompPlanInput>>({});
-
-  const setCompPlan = useCallback((updater: any) => {
-    setCompPlanRaw((prev: Record<number, CompPlanInput>) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (compPlanKey) {
-        try { localStorage.setItem(compPlanKey, JSON.stringify(next)); } catch {}
-      }
-      return next;
-    });
-  }, [compPlanKey]);
+  // Real bug found chasing a "plan toggles between the last two setups on
+  // every refresh" report: this used to be a SECOND, fully independent
+  // compPlan cache, keyed per combo+TERMINAL (`protankr_compPlan_v1:{combo}
+  // :{terminal}`) and hydrated by its own effect below -- a leftover from
+  // before usePlanSlots' slot 0 became the combo-scoped, terminal-
+  // independent source of truth for the live plan (see that file's own
+  // 2026-08-27 "one setup persists across all terminals" rework). Nothing
+  // ever removed this parallel system when that landed, so BOTH restores
+  // fired on every mount -- and because this one's own key depends on the
+  // TERMINAL resolving (not just the combo), it frequently finished AFTER
+  // usePlanSlots' own restoreLivePlan effect had already correctly applied
+  // the right plan, silently overwriting it with whatever this terminal's
+  // own stale, terminal-scoped cache happened to hold. That's the literal
+  // "toggles between two plans" symptom: which one won was purely a
+  // function of which terminal you'd last used, and exactly when its
+  // hydration effect happened to resolve relative to usePlanSlots' own.
+  // usePlanSlots already owns save/restore for this entirely now -- no
+  // separate key, no separate hydration effect needed here at all.
+  const [compPlan, setCompPlan] = useState<Record<number, CompPlanInput>>({});
 
   // Shares "what's the driver actually planning to load" up into the shell
   // context -- the terminal outage banner (mounted in the shared header,
@@ -815,62 +816,14 @@ export default function CalculatorPage() {
     } catch {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ref holds the hydrated plan so compartments init doesn't overwrite it
-  const hydratedCompPlanRef = useRef<Record<number, CompPlanInput> | null>(null);
-  // Which combo this effect last (re)hydrated compPlan for. compPlanKey embeds
-  // the TERMINAL, so it also changes on a plain terminal switch -- but the live
-  // plan is combo-scoped (see usePlanSlots' planScopeKey and the 2026-08-27
-  // "one setup persists across all terminals" decision), so a terminal-only
-  // change must NOT touch compPlan. This ref lets the effect tell a real combo
-  // change apart from a terminal switch and skip the latter -- previously it
-  // wiped the plan to {} on every terminal switch (the new terminal has no
-  // saved compPlanKey), which is exactly what emptied a plan when switching
-  // terminals from inside Plan Review.
-  const compPlanHydratedComboRef = useRef<string | null>(null);
-
-  // Hydrate compPlan on a real combo change (or fresh mount); leave it alone
-  // on a terminal-only change. The combo is only marked "hydrated" once we've
-  // actually read a real (non-null) compPlanKey -- crucial because on a fresh
-  // mount the combo usually resolves BEFORE the terminal, so compPlanKey goes
-  // null -> value; marking the combo hydrated on that first null run would
-  // make the terminal ARRIVING look like a terminal switch and skip loading
-  // the saved plan (empty compartments on reload -- the bug this guards
-  // against without over-firing).
+  // Nothing else clears compPlan when equipment is deselected --
+  // usePlanSlots' own restoreLivePlan/comboClaim effects only ever run
+  // while a real combo IS selected (both start with `if (!selectedComboId)
+  // return`), so this is the one remaining job the old hydration effect
+  // above did that still needs doing.
   useEffect(() => {
-    const cid = equipment.selectedComboId ? String(equipment.selectedComboId) : "";
-
-    // No combo -> nothing to scope a plan to.
-    if (!cid) {
-      compPlanHydratedComboRef.current = null;
-      hydratedCompPlanRef.current = null;
-      setCompPlanRaw({});
-      return;
-    }
-
-    // Terminal not resolved yet (compPlanKey needs both combo AND terminal):
-    // wait for the real key rather than clearing the plan in the gap.
-    if (!compPlanKey) return;
-
-    // Already hydrated this combo from a real key -> a later compPlanKey change
-    // is a terminal switch; the live plan is combo-scoped, so leave it alone.
-    if (compPlanHydratedComboRef.current === cid) return;
-
-    // First real hydration for this combo (fresh mount or genuine combo change).
-    compPlanHydratedComboRef.current = cid;
-    try {
-      const raw = localStorage.getItem(compPlanKey);
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (p && typeof p === "object") {
-          hydratedCompPlanRef.current = p;
-          setCompPlanRaw(p);
-          return;
-        }
-      }
-    } catch {}
-    hydratedCompPlanRef.current = null;
-    setCompPlanRaw({});
-  }, [compPlanKey, equipment.selectedComboId]);
+    if (!equipment.selectedComboId) setCompPlan({});
+  }, [equipment.selectedComboId]);
   const [productInputs, setProductInputs] = useState<Record<string, { api?: string; tempF?: number }>>({});
   // Named (not inline) so the mid-load terminal-switch handlers further
   // down can call these imperatively too, not just pass them as JSX props
@@ -956,13 +909,15 @@ export default function CalculatorPage() {
     predAppliedForRef.current = `${location.selectedCity}|${location.selectedState}`;
   }, [predictedFuelTempF, location.selectedCity, location.selectedState, tempF]);
 
-  // Initialize compPlan entries when compartments change
-  // Merges with hydratedCompPlanRef so saved products survive even if
-  // this runs in the same batch as hydration (React may see stale prev = {})
+  // Initialize compPlan entries when compartments change (adds a blank
+  // entry for a real compartment that doesn't have one yet, drops any
+  // entry for a compartment that no longer exists) -- built on top of
+  // whatever compPlan already is, which usePlanSlots' own restore effects
+  // are solely responsible for populating now (see compPlan's own
+  // declaration above).
   useEffect(() => {
-    setCompPlanRaw((prev: Record<number, CompPlanInput>) => {
-      const base = hydratedCompPlanRef.current ?? prev;
-      const next = { ...base };
+    setCompPlan((prev: Record<number, CompPlanInput>) => {
+      const next = { ...prev };
       for (const c of compartments) {
         const n = Number(c.comp_number);
         if (!Number.isFinite(n)) continue;
