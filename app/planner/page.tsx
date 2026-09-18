@@ -3153,15 +3153,18 @@ const lastProductInfoById = useMemo(() => {
       {/* TEMPORARY -- on-screen mirror of the "[planSlots]" diagnostics
           (see pushDebugLog/dbg's own comments) for tracking the reported
           plan A/B toggle-on-refresh bug from a device with no console
-          access. Fixed at the very bottom so it never blocks the load
-          flow; tap to expand/collapse, Copy grabs the full log as text
-          (paste it back in chat), Clear resets it. Remove once the real
-          cause is confirmed and fixed. */}
+          access. Pinned near the TOP (below the header's icon row, not at
+          the bottom) so it can never sit on top of the LOAD button or a
+          bottom sheet's own action buttons (CancelLoadSheet, Plan Review,
+          etc.) -- those are exactly the controls a real reproduction of
+          this bug needs to keep tapping. Tap to expand/collapse, Copy
+          grabs the full log as text (paste it back in chat), Clear resets
+          it. Remove once the real cause is confirmed and fixed. */}
       {debugLogOpen ? (
         <div
           style={{
-            position: "fixed", left: 8, right: 8, bottom: 8, zIndex: 9999,
-            maxHeight: "50vh", display: "flex", flexDirection: "column",
+            position: "fixed", left: 8, right: 8, top: 60, zIndex: 9999,
+            maxHeight: "40vh", display: "flex", flexDirection: "column",
             background: "#111", border: "1px solid #f59e0b", borderRadius: 8,
             boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
           }}
@@ -3210,7 +3213,7 @@ const lastProductInfoById = useMemo(() => {
         <div
           onClick={() => setDebugLogOpen(true)}
           style={{
-            position: "fixed", right: 8, bottom: 8, zIndex: 9999,
+            position: "fixed", right: 8, top: 60, zIndex: 9999,
             background: "#111", border: "1px solid #f59e0b", borderRadius: 20,
             padding: "6px 12px", fontSize: 11, fontWeight: 700, color: "#f59e0b",
             cursor: "pointer",
