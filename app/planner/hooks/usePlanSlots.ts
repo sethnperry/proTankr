@@ -93,6 +93,11 @@ type Props = {
   // fallback hijack the highlight. Never fired when slot 0 is genuinely
   // empty, so that fallback still gets to run for a brand-new combo.
   onPlanRestored?: (activeSlot: number | null) => void;
+  // TEMPORARY (see dbg() below) -- receives the same one-line diagnostic
+  // strings as the console.log calls, so page.tsx can render them
+  // on-screen for a device where the console isn't reachable. Remove
+  // alongside dbg() once the real cause is confirmed and fixed.
+  onDebugLog?: (line: string) => void;
 };
 
 export function usePlanSlots({
@@ -104,11 +109,14 @@ export function usePlanSlots({
   onSaveLastLoad,
   activeSlotLetter,
   onPlanRestored,
+  onDebugLog,
 }: Props) {
   const activeSlotLetterRef = useRef<number | null | undefined>(activeSlotLetter);
   useEffect(() => { activeSlotLetterRef.current = activeSlotLetter; }, [activeSlotLetter]);
   const onPlanRestoredRef = useRef<typeof onPlanRestored>(onPlanRestored);
   useEffect(() => { onPlanRestoredRef.current = onPlanRestored; }, [onPlanRestored]);
+  const onDebugLogRef = useRef<typeof onDebugLog>(onDebugLog);
+  useEffect(() => { onDebugLogRef.current = onDebugLog; }, [onDebugLog]);
 
   const [slotBump, setSlotBump] = useState(0);
   const [slotHas, setSlotHas] = useState<Record<number, boolean>>({});
@@ -222,6 +230,10 @@ export function usePlanSlots({
         `[planSlots] ${label}`,
         { scope: planScopeKey, combo: selectedComboId, ...extra }
       );
+    } catch {}
+    try {
+      const parts = Object.entries(extra).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ");
+      onDebugLogRef.current?.(`${label} ${parts}`);
     } catch {}
   }
 

@@ -467,6 +467,17 @@ export default function CalculatorPage() {
   // change itself) -- the ref's own guard purpose is unchanged, only the
   // now-removed presetDialSyncTo state it used to also set alongside it.
   const presetDialSyncedRef = useRef(false);
+  // TEMPORARY -- on-screen mirror of the "[planSlots]" console diagnostics
+  // for the plan A/B toggle-on-refresh bug, for a device where the
+  // console isn't reachable (no desktop remote-debug setup). Capped so it
+  // can't grow unbounded across a long session. Remove alongside dbg()
+  // in usePlanSlots.ts once the real cause is confirmed and fixed.
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [debugLogOpen, setDebugLogOpen] = useState(false);
+  const pushDebugLog = useCallback((line: string) => {
+    const stamp = new Date().toISOString().slice(11, 23);
+    setDebugLog((prev) => [...prev.slice(-49), `${stamp} ${line}`]);
+  }, []);
   // Fired by usePlanSlots whenever slot 0 restores from a genuine local
   // draft (not from the last-completed-load fallback) -- restores the
   // plan-letter highlight from whatever that draft's own activeSlot says
@@ -479,10 +490,11 @@ export default function CalculatorPage() {
   const handlePlanRestored = useCallback((slot: number | null) => {
     // eslint-disable-next-line no-console
     console.log("[planSlots] page.tsx:handlePlanRestored", { slot });
+    pushDebugLog(`page:handlePlanRestored slot=${slot}`);
     presetDialSyncedRef.current = true;
     setLastLoadedSlot(slot);
     if (slot != null) setActiveSlotLetter(slot);
-  }, []);
+  }, [pushDebugLog]);
   // "Recall Last Load" found a completed load at this terminal, but under
   // different equipment than what's currently selected -- per explicit
   // follow-up. See handleRecallLastLoad/handleViewAltLoadInReports below.
@@ -1235,6 +1247,7 @@ export default function CalculatorPage() {
     compartmentsLoaded: compartments.length > 0,
     activeSlotLetter,
     onPlanRestored: handlePlanRestored,
+    onDebugLog: pushDebugLog,
   });
 
   // ── Load workflow ──────────────────────────────────────────────────────────
@@ -1611,13 +1624,15 @@ export default function CalculatorPage() {
     // untouched dial always read exactly 1; the historical dial is gone
     // now, but lastLoadedSlot remains the right guard since it only ever
     // changes on a real load action, never a passive restore.
-    // eslint-disable-next-line no-console
-    console.log("[planSlots] page.tsx:lastLoadReportSync", {
-      planSlot: planSlots.lastLoadReport?.plan_slot ?? null,
-      presetDialSynced: presetDialSyncedRef.current,
-      lastLoadedSlot,
-      willApply: !!(planSlots.lastLoadReport?.plan_slot && !presetDialSyncedRef.current && lastLoadedSlot == null),
-    });
+    {
+      const planSlot = planSlots.lastLoadReport?.plan_slot ?? null;
+      const willApply = !!(planSlot && !presetDialSyncedRef.current && lastLoadedSlot == null);
+      // eslint-disable-next-line no-console
+      console.log("[planSlots] page.tsx:lastLoadReportSync", {
+        planSlot, presetDialSynced: presetDialSyncedRef.current, lastLoadedSlot, willApply,
+      });
+      pushDebugLog(`page:lastLoadReportSync planSlot=${planSlot} synced=${presetDialSyncedRef.current} lastLoadedSlot=${lastLoadedSlot} willApply=${willApply}`);
+    }
     if (planSlots.lastLoadReport?.plan_slot && !presetDialSyncedRef.current && lastLoadedSlot == null) {
       presetDialSyncedRef.current = true;
       setLastLoadedSlot(planSlots.lastLoadReport.plan_slot);
@@ -2230,6 +2245,7 @@ const lastProductInfoById = useMemo(() => {
   const handlePresetLoad = (n: number) => {
     // eslint-disable-next-line no-console
     console.log("[planSlots] page.tsx:handlePresetLoad (user tap)", { slot: n });
+    pushDebugLog(`page:handlePresetLoad (USER TAP) slot=${n}`);
     planSlots.loadFromSlot(n);
     setLastLoadedSlot(n);
     setActiveSlotLetter(n);
@@ -3133,6 +3149,76 @@ const lastProductInfoById = useMemo(() => {
         setCatalogOpen={setCatalogOpen}
         setTermOpen={setTermOpen}
       />
+
+      {/* TEMPORARY -- on-screen mirror of the "[planSlots]" diagnostics
+          (see pushDebugLog/dbg's own comments) for tracking the reported
+          plan A/B toggle-on-refresh bug from a device with no console
+          access. Fixed at the very bottom so it never blocks the load
+          flow; tap to expand/collapse, Copy grabs the full log as text
+          (paste it back in chat), Clear resets it. Remove once the real
+          cause is confirmed and fixed. */}
+      {debugLogOpen ? (
+        <div
+          style={{
+            position: "fixed", left: 8, right: 8, bottom: 8, zIndex: 9999,
+            maxHeight: "50vh", display: "flex", flexDirection: "column",
+            background: "#111", border: "1px solid #f59e0b", borderRadius: 8,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+          }}
+        >
+          <div
+            onClick={() => setDebugLogOpen(false)}
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "6px 10px", borderBottom: "1px solid #333", cursor: "pointer",
+              fontSize: 11, fontWeight: 700, color: "#f59e0b",
+            }}
+          >
+            <span>DEBUG LOG ({debugLog.length}) -- tap to collapse</span>
+            <span style={{ display: "flex", gap: 10 }}>
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const text = debugLog.join("\n");
+                  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
+                }}
+                style={{ textDecoration: "underline" }}
+              >
+                Copy
+              </span>
+              <span
+                onClick={(e) => { e.stopPropagation(); setDebugLog([]); }}
+                style={{ textDecoration: "underline" }}
+              >
+                Clear
+              </span>
+            </span>
+          </div>
+          <div style={{ overflowY: "auto", padding: "6px 10px" }}>
+            {debugLog.length === 0 ? (
+              <div style={{ fontSize: 11, color: "#666" }}>No log entries yet.</div>
+            ) : (
+              debugLog.map((line, i) => (
+                <div key={i} style={{ fontSize: 10, fontFamily: "monospace", color: "#ddd", marginBottom: 2, wordBreak: "break-all" }}>
+                  {line}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={() => setDebugLogOpen(true)}
+          style={{
+            position: "fixed", right: 8, bottom: 8, zIndex: 9999,
+            background: "#111", border: "1px solid #f59e0b", borderRadius: 20,
+            padding: "6px 12px", fontSize: 11, fontWeight: 700, color: "#f59e0b",
+            cursor: "pointer",
+          }}
+        >
+          DEBUG ({debugLog.length})
+        </div>
+      )}
     </div>
   );
 }
