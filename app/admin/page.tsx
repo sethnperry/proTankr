@@ -66,7 +66,7 @@ type Combo = {
 
 type SortField   = "name" | "role" | "division" | "region" | "hire_date";
 type SortDir     = "asc" | "desc";
-type ActiveFilter = "" | "active" | "inactive" | "flagged";
+type ActiveFilter = "" | "active" | "inactive" | "flagged" | "expiring";
 
 type Product = {
   product_id: string;
@@ -1472,6 +1472,29 @@ export default function AdminPage() {
   const flaggedTruckCount = useMemo(() => trucks.filter(t => t.active && t.status_code === "deadline").length, [trucks]);
   const flaggedTrailerCount = useMemo(() => trailers.filter(t => t.active && t.status_code === "deadline").length, [trailers]);
 
+  // Same 30-day "expiring" threshold and field list as the Needs Attention
+  // panel below, kept as a small duplicated boolean check (not a shared
+  // extraction) rather than deriving from attentionItems' own string keys,
+  // which would couple this to that array's exact key format.
+  const truckIdsExpiring = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of trucks) {
+      if (!t.active) continue;
+      const expiring = TRUCK_PERMIT_FIELDS.some(f => { const d = daysUntil(t[f.key] as string | null); return d != null && d < 30; })
+        || (truckOtherPermits[t.truck_id] ?? []).some(p => { const d = daysUntil(p.expiration_date); return d != null && d < 30; });
+      if (expiring) s.add(t.truck_id);
+    }
+    return s;
+  }, [trucks, truckOtherPermits]);
+  const trailerIdsExpiring = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of trailers) {
+      if (!t.active) continue;
+      if (TRAILER_PERMIT_FIELDS.some(f => { const d = daysUntil(t[f.key] as string | null); return d != null && d < 30; })) s.add(t.trailer_id);
+    }
+    return s;
+  }, [trailers]);
+
   // "Needs Attention" -- a fleet-wide roll-up computed entirely from state
   // this page already fetches (trucks/trailers/combos/truckOtherPermits),
   // zero new queries: flagged (Deadline) equipment, any permit expiring or
@@ -1653,6 +1676,7 @@ export default function AdminPage() {
     if (truckFilter === "active")   ts = ts.filter(t => t.active);
     if (truckFilter === "inactive") ts = ts.filter(t => !t.active);
     if (truckFilter === "flagged")  ts = ts.filter(t => t.active && t.status_code === "deadline");
+    if (truckFilter === "expiring") ts = ts.filter(t => truckIdsExpiring.has(t.truck_id));
     if (truckSearch.trim()) {
       const q = truckSearch.toLowerCase();
       ts = ts.filter(t => [t.truck_name, t.vin_number, t.region, t.local_area, t.status_code, t.status_location].some(v => v?.toLowerCase().includes(q)));
@@ -1664,13 +1688,14 @@ export default function AdminPage() {
       return sd === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return ts;
-  }, [trucks, truckFilter, truckSearch, truckSort]);
+  }, [trucks, truckFilter, truckSearch, truckSort, truckIdsExpiring]);
 
   const filteredTrailers = useMemo(() => {
     let ts = [...trailers];
     if (trailerFilter === "active")   ts = ts.filter(t => t.active);
     if (trailerFilter === "inactive") ts = ts.filter(t => !t.active);
     if (trailerFilter === "flagged")  ts = ts.filter(t => t.active && t.status_code === "deadline");
+    if (trailerFilter === "expiring") ts = ts.filter(t => trailerIdsExpiring.has(t.trailer_id));
     if (trailerSearch.trim()) {
       const q = trailerSearch.toLowerCase();
       ts = ts.filter(t => [t.trailer_name, t.vin_number, t.region, t.local_area, t.status_code, t.status_location].some(v => v?.toLowerCase().includes(q)));
@@ -1682,7 +1707,7 @@ export default function AdminPage() {
       return sd === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return ts;
-  }, [trailers, trailerFilter, trailerSearch, trailerSort]);
+  }, [trailers, trailerFilter, trailerSearch, trailerSort, trailerIdsExpiring]);
 
   const filteredCombos = useMemo(() => {
     let cs = combos.filter(c => c.active);
@@ -2048,26 +2073,46 @@ export default function AdminPage() {
             {/* Trucks tab */}
             {equipTab === "trucks" && (
               <>
-                {flaggedTruckCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6, width: "100%", marginBottom: 10,
-                      padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                      border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
-                      background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
-                      color: "#f87171", fontSize: 12, fontWeight: 700,
-                    }}
-                  >
-                    ⚠ {flaggedTruckCount} truck{flaggedTruckCount !== 1 ? "s" : ""} flagged Deadline
-                    <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "flagged" ? "showing" : "tap to view"}</span>
-                  </button>
+                {(flaggedTruckCount > 0 || truckIdsExpiring.size > 0) && (
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
+                    {flaggedTruckCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6, width: "100%",
+                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                          border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
+                          background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
+                          color: "#f87171", fontSize: 12, fontWeight: 700,
+                        }}
+                      >
+                        ⚠ {flaggedTruckCount} truck{flaggedTruckCount !== 1 ? "s" : ""} flagged Deadline
+                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "flagged" ? "showing" : "tap to view"}</span>
+                      </button>
+                    )}
+                    {truckIdsExpiring.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTruckFilter(f => f === "expiring" ? "" : "expiring")}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6, width: "100%",
+                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                          border: truckFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
+                          background: truckFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
+                          color: "#fdba74", fontSize: 12, fontWeight: 700,
+                        }}
+                      >
+                        {truckIdsExpiring.size} truck{truckIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
+                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "expiring" ? "showing" : "tap to view"}</span>
+                      </button>
+                    )}
+                  </div>
                 )}
                 <div style={{ ...filterRow, alignItems: "center" }}>
                   <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
                   <select value={truckFilter} onChange={e => setTruckFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option>
+                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
                   </select>
                   <select value={truckSort} onChange={e => setTruckSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                     <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
@@ -2088,26 +2133,46 @@ export default function AdminPage() {
             {/* Trailers tab */}
             {equipTab === "trailers" && (
               <>
-                {flaggedTrailerCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6, width: "100%", marginBottom: 10,
-                      padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                      border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
-                      background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
-                      color: "#f87171", fontSize: 12, fontWeight: 700,
-                    }}
-                  >
-                    ⚠ {flaggedTrailerCount} trailer{flaggedTrailerCount !== 1 ? "s" : ""} flagged Deadline
-                    <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "flagged" ? "showing" : "tap to view"}</span>
-                  </button>
+                {(flaggedTrailerCount > 0 || trailerIdsExpiring.size > 0) && (
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
+                    {flaggedTrailerCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6, width: "100%",
+                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                          border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
+                          background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
+                          color: "#f87171", fontSize: 12, fontWeight: 700,
+                        }}
+                      >
+                        ⚠ {flaggedTrailerCount} trailer{flaggedTrailerCount !== 1 ? "s" : ""} flagged Deadline
+                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "flagged" ? "showing" : "tap to view"}</span>
+                      </button>
+                    )}
+                    {trailerIdsExpiring.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTrailerFilter(f => f === "expiring" ? "" : "expiring")}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6, width: "100%",
+                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                          border: trailerFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
+                          background: trailerFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
+                          color: "#fdba74", fontSize: 12, fontWeight: 700,
+                        }}
+                      >
+                        {trailerIdsExpiring.size} trailer{trailerIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
+                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "expiring" ? "showing" : "tap to view"}</span>
+                      </button>
+                    )}
+                  </div>
                 )}
                 <div style={{ ...filterRow, alignItems: "center" }}>
                   <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
                   <select value={trailerFilter} onChange={e => setTrailerFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option>
+                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
                   </select>
                   <select value={trailerSort} onChange={e => setTrailerSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                     <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
