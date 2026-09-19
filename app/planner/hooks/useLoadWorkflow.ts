@@ -15,6 +15,20 @@ import type { CapacityResult } from "@/lib/capacity/computeAvailableCapacity";
 /** What record_load_utilization returns. Nullable percentage on purpose: an
  *  excluded load genuinely has no score, and null says that where a 0 would
  *  read as "this driver loaded nothing." */
+/** One compartment's real, driver-entered line -- what the post-load Report
+ *  view (LoadingModal, "report mode") renders per compartment and sums per
+ *  product. Built fresh every time a report is opened (either right after a
+ *  real completion, or when re-viewing a past completed load at this
+ *  terminal) -- never persisted client-side beyond that. */
+export type ReportLine = {
+  comp: number;
+  productId: string;
+  gallons: number;
+  lbs: number | null;
+  api: number | null;
+  tempF: number | null;
+};
+
 export type LoadUtilizationResult = {
   ok: boolean;
   available_gallons: number;
@@ -110,6 +124,19 @@ export function useLoadWorkflow({
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeBusy, setCompleteBusy] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
+
+  // ── Load report (Plan Review's "report mode") ─────────────────────────────
+  // reportLines/reportLoadId drive LoadingModal's post-load report view --
+  // set either right after a real completion (below) or by openLoadReport
+  // (page.tsx's "view last load at this terminal" button, for a load
+  // completed in an earlier session). activeLoadId is cleared on completion
+  // (existing behavior, so the LOAD button resets) -- reportLoadId is the
+  // one that survives, since Edit Load/Delete Load need a real id to act on
+  // regardless of how the report got opened.
+  const [reportLines, setReportLines] = useState<ReportLine[] | null>(null);
+  const [reportLoadId, setReportLoadId] = useState<string | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const [actualByComp, setActualByComp] = useState<
     Record<number, { actual_gallons: number | null; actual_lbs: number | null; temp_f: number | null }>
@@ -366,9 +393,17 @@ export function useLoadWorkflow({
   // the first time, instead of a copy of the plan.
 
   const onLoadedFromLoadingModal = useCallback(async (
-    compEntries: Record<number, { gallons: number; api: number; tempF: number }>
+    compEntries: Record<number, { gallons: number; api: number; tempF: number }>,
+    opts?: { loadId?: string }
   ) => {
-    if (!activeLoadId) return;
+    // opts.loadId is set only by the "Edit Load" path (page.tsx wraps this
+    // in onEditLoad, passing reportLoadId) -- re-running this exact
+    // function against an ALREADY-loaded load_id is what makes an edit a
+    // real correction (same complete_load RPC, same side effects: rack
+    // last-observed reading, temp bias, payload utilization -- all of
+    // which SHOULD reflect a corrected reading, not just the first one).
+    const targetLoadId = opts?.loadId ?? activeLoadId;
+    if (!targetLoadId) return;
 
     const plannedLines = (planRows as any[]).filter(
       (r) => r?.productId && Number(r?.planned_gallons ?? 0) > 0
@@ -447,7 +482,7 @@ export function useLoadWorkflow({
       }));
 
       const res = await completeLoad({
-        load_id: activeLoadId,
+        load_id: targetLoadId,
         lines,
         completed_at: new Date().toISOString(),
         product_updates,
@@ -514,7 +549,7 @@ if (!capacityResult || !(capacityResult.available_gallons > 0)) {
 } else {
   try {
     const { data: utilRes, error: utilErr } = await supabase.rpc("record_load_utilization", {
-      p_load_id: activeLoadId,
+      p_load_id: targetLoadId,
       p_capacity: {
         calc_version: capacityResult.calc_version,
         available_gallons: capacityResult.available_gallons,
@@ -665,12 +700,27 @@ try {
         } : null,
       });
       setLoadUtilization(utilizationResult);
-      setLoadingOpen(false);
+      // Per explicit direction, the modal no longer closes on a successful
+      // completion -- it repurposes into a Load Report (see reportLines/
+      // reportLoadId below, and LoadingModal's own "report mode"). Closing
+      // is now an explicit driver action ("New Load"), handled by page.tsx.
+      setReportLines(readings.map((r) => ({
+        comp: r.comp,
+        productId: r.productId,
+        gallons: r.gallons,
+        lbs: nextActualByComp[r.comp]?.actual_lbs ?? null,
+        api: Number.isFinite(r.api) ? r.api : null,
+        tempF: Number.isFinite(r.tempF) ? r.tempF : null,
+      })));
+      setReportLoadId(targetLoadId);
+      setReportError(null);
       // activeLoadId was previously only ever cleared in cancelActiveLoad
       // (Update Card/Back to Planner) -- never on a genuine successful
       // completion, so the LOAD button stayed stuck reading "Load started"
       // until a full page reload. Clear it here too so loadLabel correctly
       // falls back to RELOAD/LOAD immediately after a real completed load.
+      // (A no-op when this call came from Edit Load -- activeLoadId is
+      // already null by then.)
       setActiveLoadId(null);
       // Load is finalized -- a reopen should NOT resume it (only a completed
       // load's residue pre-fills, the pre-existing behavior). See activePlannedLoad.
@@ -699,6 +749,61 @@ try {
       selectedTerminalId, selectedRackId, tempF, onRefreshTerminalProducts, onRefreshTerminalAccess,
       onPostLoadComplete, activeSlotLetter, capacityResult, authUserId]);
 
+  // ── View a past completed load's report (no begin/complete involved) ─────
+  // Feeds LoadingModal's "report mode" from a load that finished in an
+  // EARLIER session -- page.tsx's own terminal-scoped load_log/load_lines
+  // fetch builds the ReportLine[]; this just puts it on screen the same way
+  // a fresh completion would. Deliberately reuses the exact same
+  // reportLines/reportLoadId/loadReport state a real completion sets, so
+  // Edit Load/Delete Load work identically regardless of how the report
+  // was reached.
+  const openLoadReport = useCallback((args: {
+    loadId: string; lines: ReportLine[]; completedAt: string | null; planSlot: number | null;
+  }) => {
+    const actualLbsSum = args.lines.reduce((s, l) => s + (l.lbs ?? 0), 0);
+    const actualGross = Number.isFinite(tare) ? tare + actualLbsSum : null;
+    setReportLines(args.lines);
+    setReportLoadId(args.loadId);
+    setReportError(null);
+    setLoadReport({
+      planned_total_gal: args.lines.reduce((s, l) => s + l.gallons, 0),
+      planned_gross_lbs: null,
+      actual_gross_lbs: actualGross,
+      diff_lbs: null,
+      completed_at: args.completedAt,
+      plan_slot: args.planSlot,
+      utilization: null,
+    });
+    setLoadingOpen(true);
+  }, [tare]);
+
+  // "New Load" -- the report is done being looked at; just closes, no DB
+  // action (the load itself was already committed, on completion or on an
+  // earlier session's own openLoadReport view).
+  const closeLoadReport = useCallback(() => {
+    setLoadingOpen(false);
+    setReportLines(null);
+    setReportLoadId(null);
+    setLoadReport(null);
+    setReportError(null);
+  }, []);
+
+  // "Delete Load" -- reuses the same owner-checked delete_load RPC
+  // MyLoadsModal's own Delete action already calls.
+  const deleteReportedLoad = useCallback(async () => {
+    if (!reportLoadId) return;
+    try {
+      setReportBusy(true);
+      setReportError(null);
+      await deleteLoad(reportLoadId);
+      closeLoadReport();
+    } catch (e: any) {
+      setReportError(friendlyLoadError(e, "Could not delete this load."));
+    } finally {
+      setReportBusy(false);
+    }
+  }, [reportLoadId, closeLoadReport]);
+
   return {
     activeLoadId,
     beginLoadBusy,
@@ -710,8 +815,12 @@ try {
     actualByComp,
     loadReport, setLoadReport,
     loadUtilization, setLoadUtilization,
+    reportLines, reportLoadId, reportBusy, reportError,
     beginLoadToSupabase,
     onLoadedFromLoadingModal,
+    openLoadReport,
+    closeLoadReport,
+    deleteReportedLoad,
     cancelActiveLoad,
     cancelBusy,
   };

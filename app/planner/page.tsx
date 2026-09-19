@@ -48,10 +48,8 @@ import {
   DEFAULT_LEGAL_GROSS_LBS,
   type CapacityCompartmentInput,
 } from "@/lib/capacity/computeAvailableCapacity";
-import { UTILIZATION_ACTUAL_WORD } from "@/lib/capacity/computeUtilization";
-import { useDriverPeriodUtilization } from "@/lib/capacity/useUtilization";
-import { useUtilizationPeriod } from "@/lib/capacity/useUtilizationPeriod";
 import { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
+import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "./cards/cardTheme";
 
 // ── Sections ───────────────────────────────────────────────────────────────────
 import PlannerControls from "./sections/PlannerControls";
@@ -456,17 +454,6 @@ export default function CalculatorPage() {
   // "Save plan {letter}" unchanged.
   const [lastLoadedSlot, setLastLoadedSlot] = useState<number | null>(null);
   const [selectedComp, setSelectedComp] = useState<number | null>(null);
-  // presetDialSyncedRef: one-shot guard for the mount-time resync effect
-  // below -- set once the last-completed load's own plan_slot resolves
-  // after mount, so activeSlotLetter agrees with whichever preset's plan
-  // was actually restored into the compartments (previously it always
-  // showed A regardless of which preset the restored plan came from). Name
-  // kept from when this also had to re-center a swipeable dial (now gone,
-  // replaced by PresetQuickPick -- a plain icon showing activeSlotLetter
-  // directly needs no separate "please recenter" signal, just the state
-  // change itself) -- the ref's own guard purpose is unchanged, only the
-  // now-removed presetDialSyncTo state it used to also set alongside it.
-  const presetDialSyncedRef = useRef(false);
   // TEMPORARY -- on-screen mirror of the "[planSlots]" console diagnostics
   // for the plan A/B toggle-on-refresh bug, for a device where the
   // console isn't reachable (no desktop remote-debug setup). Capped so it
@@ -504,19 +491,17 @@ export default function CalculatorPage() {
   // a refresh (or several) shows clearly where each page load started.
   useEffect(() => { pushDebugLog("=== PAGE MOUNT ==="); }, [pushDebugLog]);
   // Fired by usePlanSlots whenever slot 0 restores from a genuine local
-  // draft (not from the last-completed-load fallback) -- restores the
-  // plan-letter highlight from whatever that draft's own activeSlot says
-  // was on screen right before the refresh, and marks presetDialSyncedRef
-  // so the last-completed-load-based sync effect below never overrides
-  // it. Without this, the highlight (and the letter tagged to the next
-  // real load) always snapped to whichever preset the driver's last
-  // COMPLETED load happened to use, even when the restored compPlan
-  // content itself correctly matched a different, more recent draft.
+  // draft -- restores the plan-letter highlight from whatever that draft's
+  // own activeSlot says was on screen right before the refresh. This is
+  // now the ONLY thing that sets lastLoadedSlot/activeSlotLetter on mount
+  // -- the sibling "fall back to the last COMPLETED load's plan_slot"
+  // effect that used to also feed these (and passively surfaced "last
+  // load" info on the Planner page) was removed entirely per explicit
+  // direction: no last-load info anywhere on this page anymore.
   const handlePlanRestored = useCallback((slot: number | null) => {
     // eslint-disable-next-line no-console
     console.log("[planSlots] page.tsx:handlePlanRestored", { slot });
     pushDebugLog(`page:handlePlanRestored slot=${slot}`);
-    presetDialSyncedRef.current = true;
     setLastLoadedSlot(slot);
     if (slot != null) setActiveSlotLetter(slot);
   }, [pushDebugLog]);
@@ -1482,16 +1467,10 @@ export default function CalculatorPage() {
   // to that same period") -- this reverses the same-day decision to add an
   // independent, anchor-less averaging period. Whole card only renders once
   // incentive_settings.enabled is confirmed true for this company.
-  // ── Payload utilization (Phase 2 driver display) ──────────────────────────
-  // The period this driver's running average covers. Reuses the company's own
-  // configured report period when there IS one, and falls back to a rolling
-  // 30 days when there isn't -- measurement has to work for a company that has
-  // configured nothing at all (see docs/incentive-redesign-plan.md, TEST K),
-  // so this deliberately doesn't gate on incentive_settings the way the legacy
-  // points card does.
-  const utilPeriod = useUtilizationPeriod(shell.companyId ?? null);
-
-  const driverUtilization = useDriverPeriodUtilization(effectiveUserId || null, utilPeriod.since);
+  // Payload-utilization driver card (Phase 2) removed from this page
+  // entirely per explicit direction -- utilization reporting still exists
+  // (Reports hub, admin Fleet dashboard), it's just no longer shown here
+  // alongside "what am I planning right now."
 
   // "Back to Planner" -- per explicit follow-up, this must genuinely undo
   // everything: no load logged AND the terminal card reverted to whatever
@@ -1623,6 +1602,66 @@ export default function CalculatorPage() {
     if (match) setAltEquipmentPrompt(match);
   }, [planSlots, applyRecalledReport, location.selectedTerminalId]);
 
+  // "View last load" button (replaces the old always-visible last-load/
+  // utilization cards, per explicit direction). A real, separate concern
+  // from the plan-restore machinery above -- this never touches compPlan
+  // or any slot storage, it's a pure read of load_log/load_lines for
+  // display in Plan Review's own Load Report mode. Scoped to the CURRENT
+  // terminal (per explicit direction: "reopen the last load at that
+  // terminal"), not just this combo's most recent load anywhere.
+  const [viewLastLoadMsg, setViewLastLoadMsg] = useState<string | null>(null);
+  const [viewLastLoadBusy, setViewLastLoadBusy] = useState(false);
+  const openLoadReportAtTerminal = useCallback(async () => {
+    if (!equipment.selectedComboId || !location.selectedTerminalId) return;
+    setViewLastLoadBusy(true);
+    setViewLastLoadMsg(null);
+    try {
+      const { data: loadRow, error: loadErr } = await supabase
+        .from("load_log")
+        .select("load_id, completed_at, plan_slot")
+        .eq("combo_id", equipment.selectedComboId)
+        .eq("terminal_id", location.selectedTerminalId)
+        .eq("status", "loaded")
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (loadErr) throw loadErr;
+      if (!loadRow) { setViewLastLoadMsg("No completed load at this terminal yet."); return; }
+
+      const { data: lineRows, error: lineErr } = await supabase
+        .from("load_lines")
+        .select("comp_number, product_id, actual_gallons, actual_lbs, actual_api, temp_f")
+        .eq("load_id", loadRow.load_id)
+        .order("comp_number", { ascending: true });
+      if (lineErr) throw lineErr;
+
+      const lines = (lineRows ?? [])
+        .filter((l: any) => l.product_id && Number(l.actual_gallons ?? 0) > 0)
+        .map((l: any) => ({
+          comp: Number(l.comp_number),
+          productId: String(l.product_id),
+          gallons: Number(l.actual_gallons ?? 0),
+          lbs: l.actual_lbs != null ? Number(l.actual_lbs) : null,
+          api: l.actual_api != null ? Number(l.actual_api) : null,
+          tempF: l.temp_f != null ? Number(l.temp_f) : null,
+        }));
+
+      if (lines.length === 0) { setViewLastLoadMsg("No completed load at this terminal yet."); return; }
+
+      loadWorkflow.openLoadReport({
+        loadId: String(loadRow.load_id),
+        lines,
+        completedAt: loadRow.completed_at ?? null,
+        planSlot: loadRow.plan_slot ?? null,
+      });
+    } catch (e) {
+      console.error("openLoadReportAtTerminal failed:", e);
+      setViewLastLoadMsg("Could not load that report.");
+    } finally {
+      setViewLastLoadBusy(false);
+    }
+  }, [equipment.selectedComboId, location.selectedTerminalId, loadWorkflow]);
+
   // Deliberately does NOT claim/switch equipment -- per explicit follow-up,
   // someone else could genuinely be running that truck/trailer right now,
   // and force-claiming it out from under them just to satisfy a "let me
@@ -1637,40 +1676,15 @@ export default function CalculatorPage() {
     setAltEquipmentPrompt(null);
   }, [altEquipmentPrompt, router]);
 
-  // Seed the Target/Actual/Diff summary from the last *completed* load for
-  // this combo as soon as it's available (mount, or switching equipment) --
-  // there's no "My Loads" button on this page anymore, so this is the only
-  // way that summary ever gets populated outside of a load just finished in
-  // this same session. Guarded so it never clobbers a fresher report (either
-  // one this session just produced, or one restored via My Loads).
-  useEffect(() => {
-    if (planSlots.lastLoadReport && !loadWorkflow.loadReport) {
-      loadWorkflow.setLoadReport(planSlots.lastLoadReport);
-    }
-    // Sync activeSlotLetter (what the plan-letter icon/PresetQuickPick
-    // shows as "active") to match whichever preset the just-restored plan
-    // actually came from. Guarded to fire once and only while no genuine
-    // load action has happened yet this session (lastLoadedSlot == null) --
-    // previously gated on activeSlotLetter === 1, which assumed an
-    // untouched dial always read exactly 1; the historical dial is gone
-    // now, but lastLoadedSlot remains the right guard since it only ever
-    // changes on a real load action, never a passive restore.
-    {
-      const planSlot = planSlots.lastLoadReport?.plan_slot ?? null;
-      const willApply = !!(planSlot && !presetDialSyncedRef.current && lastLoadedSlot == null);
-      // eslint-disable-next-line no-console
-      console.log("[planSlots] page.tsx:lastLoadReportSync", {
-        planSlot, presetDialSynced: presetDialSyncedRef.current, lastLoadedSlot, willApply,
-      });
-      pushDebugLog(`page:lastLoadReportSync planSlot=${planSlot} synced=${presetDialSyncedRef.current} lastLoadedSlot=${lastLoadedSlot} willApply=${willApply}`);
-    }
-    if (planSlots.lastLoadReport?.plan_slot && !presetDialSyncedRef.current && lastLoadedSlot == null) {
-      presetDialSyncedRef.current = true;
-      setLastLoadedSlot(planSlots.lastLoadReport.plan_slot);
-      setActiveSlotLetter(planSlots.lastLoadReport.plan_slot);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planSlots.lastLoadReport]);
+  // The effect that used to live here seeded loadWorkflow.loadReport (and
+  // the plan-letter highlight) from usePlanSlots' own "last completed
+  // load" fallback on every mount -- removed entirely per explicit
+  // direction: no last-load info anywhere on the Planner page anymore,
+  // passively or otherwise. loadReport is now set only by a real
+  // completion or by explicitly opening a load's report (see
+  // openLoadReportAtTerminal below); the plan-letter highlight is fully
+  // owned by handlePlanRestored (a real local draft) and the explicit
+  // preset-tap/recall handlers.
 
   // recapBaseline/recapValid (the "is the recap card's data still valid"
   // freshness check) removed entirely -- see the recap card's own comment
@@ -2626,8 +2640,6 @@ const lastProductInfoById = useMemo(() => {
       </div>
       {/* ── Info cards, Load button, Load summary ── */}
       {(() => {
-        const { loadReport } = loadWorkflow;
-
         // Real bug found live: this card used to show the LAST COMPLETED
         // load's own numbers (via loadReport), gated on a "recapValid"
         // freshness check -- but that check compared the live plan against
@@ -2796,60 +2808,36 @@ const lastProductInfoById = useMemo(() => {
           </div>
         );
 
-        // ── Payload utilization card (Phase 2) ──────────────────────────
-        // The driver's one performance card. It replaced the legacy
-        // "recovered points" card, which is now deleted outright along with
-        // the rest of the benchmark-driven incentive system -- the spec is
-        // explicit that two incentive systems must not run visibly at once,
-        // and there is no longer a second one to fall back to.
-        //
-        // Reads "PLANNED", never "LOADED" -- actual gallons are currently
-        // copied from the plan, so the stronger word would be a claim the
-        // data doesn't support. See UTILIZATION_ACTUAL_WORD.
-        const util = loadReport?.utilization ?? null;
-        const periodPct = driverUtilization.summary.utilization_pct;
-
-        const utilizationCard = (util || periodPct != null) ? (
-          <div style={{ borderRadius: 16, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.4 }}>This Load</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: util?.utilization_pct != null ? "#4ade80" : "rgba(255,255,255,0.85)" }}>
-                  {util?.utilization_pct != null ? `${util.utilization_pct.toFixed(1)}%` : "—"}
-                </div>
-              </div>
-              <div style={{ textAlign: "right" as const, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.4 }}>
-                  {utilPeriod.shortLabel}
-                </div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>
-                  {periodPct != null ? `${periodPct.toFixed(1)}%` : "—"}
-                </div>
-              </div>
-            </div>
-            {util && (
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 4 }}>
-                {Math.round(util.actual_gallons).toLocaleString()} of{" "}
-                {Math.round(util.effective_available_gallons).toLocaleString()} gal available{" "}
-                {UTILIZATION_ACTUAL_WORD}
-                {util.unused_gallons >= 1 && ` · ${Math.round(util.unused_gallons).toLocaleString()} gal left`}
-              </div>
-            )}
-            {/* Why a load isn't scored, in the driver's own words -- never a
-                bare blank. An externally-capped or safety-excluded load is
-                explained, not silently dropped (spec sections 10, 11, 22). */}
-            {util?.exception_reason && (
-              <div style={{
-                fontSize: 11, marginTop: 4, lineHeight: 1.4,
-                color: util.eligibility === "excluded_safety" ? "#ef4444" : "rgba(255,255,255,0.45)",
-              }}>
-                {util.exception_reason}
-              </div>
+        // ── "View Last Load" (replaces the old Payload utilization /
+        // recap-recall cards) ────────────────────────────────────────────
+        // Per explicit direction: no passive "last load" info on this page
+        // at all -- this is a plain button, in the same layout slot the
+        // utilization card used to occupy, that fetches and opens the most
+        // recent completed load AT THE CURRENT TERMINAL into Plan Review's
+        // own Load Report mode (see openLoadReportAtTerminal above). Never
+        // shows anything on its own until tapped.
+        const viewLastLoadEl = (equipment.selectedComboId && location.selectedTerminalId) ? (
+          <div style={{ borderRadius: 16, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
+            <button
+              type="button"
+              onClick={openLoadReportAtTerminal}
+              disabled={viewLastLoadBusy}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 10,
+                border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
+                color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 700,
+                cursor: viewLastLoadBusy ? "not-allowed" : "pointer", opacity: viewLastLoadBusy ? 0.6 : 1,
+              }}
+            >
+              {viewLastLoadBusy ? "Loading…" : "View Last Load"}
+            </button>
+            {viewLastLoadMsg && (
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center" as const }}>{viewLastLoadMsg}</div>
             )}
           </div>
         ) : null;
 
-        const perfCard = utilizationCard;
+        const perfCard = viewLastLoadEl;
         const hasPerfCard = perfCard != null;
 
         const loadButtonEl = (
@@ -3015,6 +3003,15 @@ const lastProductInfoById = useMemo(() => {
         livePreviewGrossLbs={livePreviewGrossLbs}
         livePreviewDiffLbs={livePreviewDiffLbs}
         targetWeight={targetWeight}
+        report={loadWorkflow.reportLines ? {
+          lines: loadWorkflow.reportLines,
+          actualGrossLbs: loadWorkflow.loadReport?.actual_gross_lbs ?? null,
+        } : null}
+        onNewLoad={loadWorkflow.closeLoadReport}
+        onEditLoad={(entries) => loadWorkflow.onLoadedFromLoadingModal(entries, { loadId: loadWorkflow.reportLoadId ?? undefined })}
+        onDeleteLoad={loadWorkflow.deleteReportedLoad}
+        deleteBusy={loadWorkflow.reportBusy}
+        deleteError={loadWorkflow.reportError}
         onLoaded={(entries) => loadWorkflow.onLoadedFromLoadingModal(entries)}
         onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
