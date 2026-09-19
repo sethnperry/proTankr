@@ -1451,8 +1451,42 @@ export default function AdminPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // ── Region/area view-scoping ──────────────────────────────────────────────
+  // Per explicit direction: "narrow an admin's view to their region and/or
+  // area so they aren't seeing everything in the company." This is a VIEW
+  // narrowing, not a new permission boundary -- everything filtered here is
+  // data the admin's existing RLS access already lets them read; scoping it
+  // down (with an always-visible, one-tap way back to everything) is what
+  // was actually asked for ("narrow... view"), and is safe to ship without
+  // a live session to test against, unlike a real RLS-level restriction
+  // (which would also risk locking an admin with no region set out of
+  // their own company). Whichever field is most specific for THIS admin
+  // wins -- local_area if they have one (an admin scoped to a specific
+  // area within a region), else region (a broader regional admin) -- since
+  // the request itself frames it as "region and/or area," not a fixed
+  // granularity every admin shares.
+  const myProfile = useMemo(() => members.find(m => m.user_id === currentUserId) ?? null, [members, currentUserId]);
+  const myRegion = myProfile?.region ?? null;
+  const myLocalArea = myProfile?.local_area ?? null;
+  const hasOwnScope = Boolean(myRegion || myLocalArea);
+  const [viewScope, setViewScope] = useState<"mine" | "all">("mine");
+  const activeScope = (viewScope === "mine" && hasOwnScope) ? { region: myRegion, localArea: myLocalArea } : null;
+  function matchesScope(regionVal: string | null | undefined, localAreaVal: string | null | undefined): boolean {
+    if (!activeScope) return true;
+    if (activeScope.localArea) return localAreaVal === activeScope.localArea;
+    if (activeScope.region) return regionVal === activeScope.region;
+    return true;
+  }
+  const trucksById = useMemo(() => new Map(trucks.map(t => [t.truck_id, t])), [trucks]);
+  const trailersById = useMemo(() => new Map(trailers.map(t => [t.trailer_id, t])), [trailers]);
+  const scopedActiveComboCount = useMemo(() => combos.filter(c => {
+    if (!c.active) return false;
+    const ct = trucksById.get(c.truck_id); const cr = trailersById.get(c.trailer_id);
+    return matchesScope(ct?.region, ct?.local_area) || matchesScope(cr?.region, cr?.local_area);
+  }).length, [combos, trucksById, trailersById, viewScope, myRegion, myLocalArea]);
+
   const filteredMembers = useMemo(() => {
-    let ms = [...members];
+    let ms = members.filter(m => matchesScope(m.region, m.local_area));
     if (filterRole && filterRole !== "none") ms = ms.filter(m => m.role === filterRole);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -1464,13 +1498,13 @@ export default function AdminPage() {
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return ms;
-  }, [members, search, sortField, sortDir, filterRole]);
+  }, [members, search, sortField, sortDir, filterRole, viewScope, myRegion, myLocalArea]);
 
   // Deadline-flagged equipment (STUD status) -- surfaced without having to
   // search first, since the tabs below otherwise show nothing until the
   // admin types something (see the "search or filter to find" gate).
-  const flaggedTruckCount = useMemo(() => trucks.filter(t => t.active && t.status_code === "deadline").length, [trucks]);
-  const flaggedTrailerCount = useMemo(() => trailers.filter(t => t.active && t.status_code === "deadline").length, [trailers]);
+  const flaggedTruckCount = useMemo(() => trucks.filter(t => t.active && t.status_code === "deadline" && matchesScope(t.region, t.local_area)).length, [trucks, viewScope, myRegion, myLocalArea]);
+  const flaggedTrailerCount = useMemo(() => trailers.filter(t => t.active && t.status_code === "deadline" && matchesScope(t.region, t.local_area)).length, [trailers, viewScope, myRegion, myLocalArea]);
 
   // Same 30-day "expiring" threshold and field list as the Needs Attention
   // panel below, kept as a small duplicated boolean check (not a shared
@@ -1479,21 +1513,21 @@ export default function AdminPage() {
   const truckIdsExpiring = useMemo(() => {
     const s = new Set<string>();
     for (const t of trucks) {
-      if (!t.active) continue;
+      if (!t.active || !matchesScope(t.region, t.local_area)) continue;
       const expiring = TRUCK_PERMIT_FIELDS.some(f => { const d = daysUntil(t[f.key] as string | null); return d != null && d < 30; })
         || (truckOtherPermits[t.truck_id] ?? []).some(p => { const d = daysUntil(p.expiration_date); return d != null && d < 30; });
       if (expiring) s.add(t.truck_id);
     }
     return s;
-  }, [trucks, truckOtherPermits]);
+  }, [trucks, truckOtherPermits, viewScope, myRegion, myLocalArea]);
   const trailerIdsExpiring = useMemo(() => {
     const s = new Set<string>();
     for (const t of trailers) {
-      if (!t.active) continue;
+      if (!t.active || !matchesScope(t.region, t.local_area)) continue;
       if (TRAILER_PERMIT_FIELDS.some(f => { const d = daysUntil(t[f.key] as string | null); return d != null && d < 30; })) s.add(t.trailer_id);
     }
     return s;
-  }, [trailers]);
+  }, [trailers, viewScope, myRegion, myLocalArea]);
 
   // "Needs Attention" -- a fleet-wide roll-up computed entirely from state
   // this page already fetches (trucks/trailers/combos/truckOtherPermits),
@@ -1508,7 +1542,7 @@ export default function AdminPage() {
     const items: AttentionItem[] = [];
 
     for (const t of trucks) {
-      if (!t.active) continue;
+      if (!t.active || !matchesScope(t.region, t.local_area)) continue;
       if (t.status_code === "deadline") {
         items.push({
           key: `flag-truck-${t.truck_id}`, severity: "danger",
@@ -1537,7 +1571,7 @@ export default function AdminPage() {
     }
 
     for (const t of trailers) {
-      if (!t.active) continue;
+      if (!t.active || !matchesScope(t.region, t.local_area)) continue;
       if (t.status_code === "deadline") {
         items.push({
           key: `flag-trailer-${t.trailer_id}`, severity: "danger",
@@ -1558,6 +1592,9 @@ export default function AdminPage() {
 
     for (const c of combos) {
       if (!c.active || c.target_weight != null) continue;
+      const ct = trucksById.get(c.truck_id);
+      const cr = trailersById.get(c.trailer_id);
+      if (!matchesScope(ct?.region, ct?.local_area) && !matchesScope(cr?.region, cr?.local_area)) continue;
       const truckName = Array.isArray(c.truck) ? c.truck[0]?.truck_name : c.truck?.truck_name;
       const trailerName = Array.isArray(c.trailer) ? c.trailer[0]?.trailer_name : c.trailer?.trailer_name;
       items.push({
@@ -1573,6 +1610,7 @@ export default function AdminPage() {
     // this is the one editable surface for these fields on this page (the
     // roster's read-only expanded view has no inputs of its own).
     for (const m of members) {
+      if (!matchesScope(m.region, m.local_area)) continue;
       const profile = memberProfiles[m.user_id];
       if (!profile) continue;
       const openProfile = () => setProfileModal({ member: m, onSaved: () => loadAll() });
@@ -1619,7 +1657,7 @@ export default function AdminPage() {
       return a.days - b.days;
     });
     return items;
-  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles]);
+  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea]);
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
@@ -1635,21 +1673,25 @@ export default function AdminPage() {
     if (q.length < 2) return { members: [], trucks: [], trailers: [], terminals: [] };
     const canUsers = myRole === "admin" || myRole === "dispatch";
     const canEquipment = myRole === "admin" || myRole === "lead";
+    // Terminals aren't scoped -- no region/local_area concept for a shared
+    // cross-company catalog (see matchesScope's own callers elsewhere).
+    // Members/trucks/trailers ARE, so Quick Find can't be used as a
+    // backdoor around the same view-narrowing the sections below apply.
     return {
-      members: canUsers ? members.filter(m =>
+      members: canUsers ? members.filter(m => matchesScope(m.region, m.local_area) &&
         [m.display_name, m.email, m.division, m.region, m.local_area, m.employee_number].some(v => v?.toLowerCase().includes(q))
       ).slice(0, QUICK_FIND_CAP) : [],
-      trucks: canEquipment ? trucks.filter(t => t.active &&
+      trucks: canEquipment ? trucks.filter(t => t.active && matchesScope(t.region, t.local_area) &&
         [t.truck_name, t.vin_number, t.region, t.local_area].some(v => v?.toLowerCase().includes(q))
       ).slice(0, QUICK_FIND_CAP) : [],
-      trailers: canEquipment ? trailers.filter(t => t.active &&
+      trailers: canEquipment ? trailers.filter(t => t.active && matchesScope(t.region, t.local_area) &&
         [t.trailer_name, t.vin_number, t.region, t.local_area].some(v => v?.toLowerCase().includes(q))
       ).slice(0, QUICK_FIND_CAP) : [],
       terminals: canEquipment ? terminals.filter(t => t.active &&
         [t.terminal_name, t.city, t.state].some(v => v?.toLowerCase().includes(q))
       ).slice(0, QUICK_FIND_CAP) : [],
     };
-  }, [quickFind, members, trucks, trailers, terminals, myRole]);
+  }, [quickFind, members, trucks, trailers, terminals, myRole, viewScope, myRegion, myLocalArea]);
   const quickFindHasResults = quickFindResults.members.length > 0 || quickFindResults.trucks.length > 0
     || quickFindResults.trailers.length > 0 || quickFindResults.terminals.length > 0;
   const quickFindVisible = quickFind.trim().length >= 2;
@@ -1672,7 +1714,7 @@ export default function AdminPage() {
   }
 
   const filteredTrucks = useMemo(() => {
-    let ts = [...trucks];
+    let ts = trucks.filter(t => matchesScope(t.region, t.local_area));
     if (truckFilter === "active")   ts = ts.filter(t => t.active);
     if (truckFilter === "inactive") ts = ts.filter(t => !t.active);
     if (truckFilter === "flagged")  ts = ts.filter(t => t.active && t.status_code === "deadline");
@@ -1688,10 +1730,10 @@ export default function AdminPage() {
       return sd === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return ts;
-  }, [trucks, truckFilter, truckSearch, truckSort, truckIdsExpiring]);
+  }, [trucks, truckFilter, truckSearch, truckSort, truckIdsExpiring, viewScope, myRegion, myLocalArea]);
 
   const filteredTrailers = useMemo(() => {
-    let ts = [...trailers];
+    let ts = trailers.filter(t => matchesScope(t.region, t.local_area));
     if (trailerFilter === "active")   ts = ts.filter(t => t.active);
     if (trailerFilter === "inactive") ts = ts.filter(t => !t.active);
     if (trailerFilter === "flagged")  ts = ts.filter(t => t.active && t.status_code === "deadline");
@@ -1707,10 +1749,18 @@ export default function AdminPage() {
       return sd === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return ts;
-  }, [trailers, trailerFilter, trailerSearch, trailerSort, trailerIdsExpiring]);
+  }, [trailers, trailerFilter, trailerSearch, trailerSort, trailerIdsExpiring, viewScope, myRegion, myLocalArea]);
 
   const filteredCombos = useMemo(() => {
-    let cs = combos.filter(c => c.active);
+    // A combo has no region/local_area of its own -- scoped in if either
+    // paired unit is in-scope (an admin's region may show a combo whose
+    // other half belongs to a different one, e.g. a shared trailer pool).
+    let cs = combos.filter(c => {
+      if (!c.active) return false;
+      const ct = trucksById.get(c.truck_id);
+      const cr = trailersById.get(c.trailer_id);
+      return matchesScope(ct?.region, ct?.local_area) || matchesScope(cr?.region, cr?.local_area);
+    });
     if (comboSearch.trim()) {
       const q = comboSearch.toLowerCase();
       cs = cs.filter(c => {
@@ -1720,7 +1770,7 @@ export default function AdminPage() {
       });
     }
     return cs;
-  }, [combos, comboSearch]);
+  }, [combos, comboSearch, trucksById, trailersById, viewScope, myRegion, myLocalArea]);
 
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err)     return <div style={css.page}><Banner msg={err} type="error" /></div>;
@@ -1811,6 +1861,32 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Region/area view-scope pill -- only shown at all when this admin
+          actually has a region/local_area on their own profile (nothing to
+          narrow to otherwise). Always visible whenever it applies, in
+          either state, so scoping is never silent -- "showing my area"
+          reads as a deliberate, reversible view, not a hidden filter. */}
+      {hasOwnScope && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 20,
+          padding: "8px 12px", borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+        }}>
+          <span style={{ fontSize: 12, color: T.muted }}>
+            {viewScope === "mine"
+              ? <>Showing <strong style={{ color: T.text }}>{myLocalArea || myRegion}</strong> only</>
+              : <>Showing <strong style={{ color: T.text }}>all regions</strong></>}
+          </span>
+          <button
+            type="button"
+            onClick={() => setViewScope(v => v === "mine" ? "all" : "mine")}
+            style={{ ...css.btn("subtle"), marginLeft: "auto", padding: "4px 10px", fontSize: 11 }}
+          >
+            {viewScope === "mine" ? "Show All Regions" : `Show ${myLocalArea || myRegion} Only`}
+          </button>
+        </div>
+      )}
 
       {/* Square, large-tap-target tiles in a fixed 3-column grid -- replaces
           the old pill row, which ran off the right edge on mobile with no
@@ -1955,7 +2031,7 @@ export default function AdminPage() {
             <div style={css.sectionHead}>
               <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", flex: 1 }} onClick={() => setUsersOpen(v => !v)}>
                 <span style={{ transition: "transform 150ms", transform: usersOpen ? "rotate(90deg)" : "none", display: "inline-block", fontSize: 14 }}>›</span>
-                Users ({members.length})
+                Users ({members.filter(m => matchesScope(m.region, m.local_area)).length})
               </h2>
               {seats.hasSubscription && (
                 <span
@@ -2047,7 +2123,7 @@ export default function AdminPage() {
             <span style={{ transition: "transform 150ms", transform: equipOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
             Equipment
             <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-              {trucks.filter(t=>t.active).length}T · {trailers.filter(t=>t.active).length}TL · {combos.filter(c=>c.active).length} Combos
+              {trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length}T · {trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length}TL · {scopedActiveComboCount} Combos
             </span>
             {(flaggedTruckCount + flaggedTrailerCount) > 0 && (
               <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 999, padding: "2px 8px" }}>
@@ -2061,7 +2137,7 @@ export default function AdminPage() {
           <>
             {/* Tab bar */}
             <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-              {([["trucks","Trucks",trucks.filter(t=>t.active).length],["trailers","Trailers",trailers.filter(t=>t.active).length],["combos","Combos",combos.filter(c=>c.active).length]] as const).map(([tab, label, count]) => (
+              {([["trucks","Trucks",trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["trailers","Trailers",trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["combos","Combos",scopedActiveComboCount]] as const).map(([tab, label, count]) => (
                 <button key={tab} type="button"
                   onClick={() => setEquipTab(tab)}
                   style={{ flex: 1, background: "none", border: "none", borderBottom: equipTab === tab ? "2px solid rgba(255,255,255,0.70)" : "2px solid transparent", cursor: "pointer", padding: "8px 4px", fontSize: 13, fontWeight: equipTab === tab ? 800 : 500, color: equipTab === tab ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.35)", transition: "all 150ms" }}>
