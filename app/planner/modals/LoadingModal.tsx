@@ -26,8 +26,8 @@ import type { ReportLine } from "../hooks/useLoadWorkflow";
 // all. `report` (null in the normal planning flow) switches this same
 // modal into a read-only Load Report the instant a load actually
 // completes -- no more closing back to the Planner automatically. The
-// three action buttons become New Load / Edit Load / Delete Load in that
-// mode (see the props/JSX below for exactly what each does).
+// three action buttons become Return to Planner / Edit Load / Delete Load
+// in that mode (see the props/JSX below for exactly what each does).
 
 type PlanRowLike = {
   comp_number: number;
@@ -242,7 +242,7 @@ export default function LoadingModal(props: {
   // switches this whole modal from an editable Plan Review into a read-only
   // Load Report. Null the rest of the time (normal planning flow).
   report?: { lines: ReportLine[]; actualGrossLbs: number | null } | null;
-  // "New Load" -- just closes back to the Planner, no DB action (the load's
+  // "Return to Planner" -- just closes back to the Planner, no DB action (the load's
   // already committed).
   onNewLoad?: () => void;
   // "Edit Load" -- reopens the same per-compartment Gallons/API/Temp entry
@@ -280,6 +280,12 @@ export default function LoadingModal(props: {
   // before a driver commits to a load.
   equipmentLabel?: string | null;
   terminalLabel?: string | null;
+  // "City, State" -- rendered next to terminalLabel ("Terminal · City,
+  // State"), same pairing the main Planner page's own location line uses.
+  locationLabel?: string | null;
+  // Rendered across from the terminal/city-state pair (far right, same
+  // row) -- same layout as the main Planner's own location line.
+  rackName?: string | null;
   // Tapping the terminal name opens the shared location/terminal picker
   // without leaving this modal (mid-load switch flow, see page.tsx).
   onTapTerminal?: () => void;
@@ -324,6 +330,8 @@ export default function LoadingModal(props: {
     errorMessage,
     equipmentLabel,
     terminalLabel,
+    locationLabel,
+    rackName,
     onTapTerminal,
     allPlannedUnavailable,
     tuneRows,
@@ -575,31 +583,51 @@ export default function LoadingModal(props: {
   return (
     <FullscreenModal open={open} title={report ? "Load Report" : "Plan Review"} onClose={onClose} footer={null} hideCloseButton>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: "100%", boxSizing: "border-box" }}>
-        {/* Safety-confirmation block -- Terminal left (white/bold, tappable),
-            Equipment right. */}
+        {/* Safety-confirmation block -- Equipment (unit numbers) stacked
+            above Terminal, per explicit direction; Terminal · City/State
+            (white/bold, tappable) then rack across from it on the same
+            row, right-aligned/gray -- same layout the main Planner page's
+            own location line uses. */}
         {(equipmentLabel || terminalLabel) && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "8px 2px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            {terminalLabel && (
-              onTapTerminal && !report ? (
-                <button
-                  type="button"
-                  onClick={onTapTerminal}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", padding: 0,
-                    cursor: "pointer", minWidth: 0, fontSize: 15, fontWeight: 800, color: "#fff",
-                  }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{terminalLabel}</span>
-                  <span style={{ color: "rgba(255,255,255,0.35)", fontWeight: 700, flexShrink: 0 }}>›</span>
-                </button>
-              ) : (
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{terminalLabel}</span>
-              )
-            )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 2px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
             {equipmentLabel && (
-              <span style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.65)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, textAlign: "right" as const, flexShrink: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.65)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                 {equipmentLabel}
-              </span>
+              </div>
+            )}
+            {terminalLabel && (
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                  {onTapTerminal && !report ? (
+                    <button
+                      type="button"
+                      onClick={onTapTerminal}
+                      style={{
+                        display: "flex", alignItems: "baseline", gap: 6, background: "none", border: "none", padding: 0,
+                        cursor: "pointer", minWidth: 0,
+                      }}
+                    >
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{terminalLabel}</span>
+                      {locationLabel && (
+                        <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>· {locationLabel}</span>
+                      )}
+                      <span style={{ color: "rgba(255,255,255,0.35)", fontWeight: 700, flexShrink: 0 }}>›</span>
+                    </button>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{terminalLabel}</span>
+                      {locationLabel && (
+                        <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>· {locationLabel}</span>
+                      )}
+                    </>
+                  )}
+                </div>
+                {rackName && (
+                  <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.45)", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                    {rackName}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -639,7 +667,7 @@ export default function LoadingModal(props: {
                         {label} total
                       </span>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>
-                        {Math.round(p.gallons)} gal · {Math.round(p.lbs).toLocaleString()} lbs
+                        {Math.round(p.gallons)} gal
                       </span>
                     </div>
                   );
@@ -789,7 +817,7 @@ export default function LoadingModal(props: {
               onClick={() => { onClose(); onNewLoad?.(); }}
               style={{ ...(styles as any).doneBtn, width: "100%" }}
             >
-              New Load
+              Return to Planner
             </button>
 
             <button

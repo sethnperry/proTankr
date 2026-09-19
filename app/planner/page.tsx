@@ -2615,13 +2615,8 @@ const lastProductInfoById = useMemo(() => {
         // be tapped by accident.
         const plannedGal = effectivePlanRows.length ? effectivePlannedGallonsTotal : null;
         const plannedGalText = plannedGal == null ? "—" : `${Math.round(plannedGal).toLocaleString()} gal`;
-        const targetLbs = targetWeight > 0 ? targetWeight : null;
-        const targetText = targetLbs == null ? "—" : `${Math.round(targetLbs).toLocaleString()} lbs`;
         const grossLbs = plannedGal != null ? livePreviewGrossLbs : null;
         const grossText = grossLbs == null ? "—" : `${Math.round(grossLbs).toLocaleString()} lbs`;
-        const diff = plannedGal != null ? livePreviewDiffLbs : null;
-        const diffText = diff == null ? "—" : `${diff >= 0 ? "+" : ""}${Math.round(diff).toLocaleString()} lbs`;
-        const diffColor = diff == null ? "rgba(255,255,255,0.85)" : diff > 0 ? "#ef4444" : "#4ade80";
 
         // Live planned gross weight, colored against this combo's own
         // target and the fixed 80,000 lb federal legal limit (same
@@ -2750,11 +2745,6 @@ const lastProductInfoById = useMemo(() => {
               <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{plannedGalText}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: grossColor, textAlign: "right" as const }}>{grossText}</div>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", textAlign: "right" as const }}>
-                Target {targetText} · <span style={{ color: diffColor, fontWeight: 600 }}>Diff {diffText}</span>
-              </div>
-            </div>
             {planUsesReferenceApi && planRows.length > 0 && (
               <div style={{ fontSize: 10, fontWeight: 700, color: "#fb923c", marginTop: 4 }}>⚠ using ref API</div>
             )}
@@ -2764,25 +2754,31 @@ const lastProductInfoById = useMemo(() => {
         // ── "View Last Load" (replaces the old Payload utilization /
         // recap-recall cards) ────────────────────────────────────────────
         // Per explicit direction: no passive "last load" info on this page
-        // at all -- this is a plain button, in the same layout slot the
-        // utilization card used to occupy, that fetches and opens the most
+        // at all -- this is a plain button, that fetches and opens the most
         // recent completed load AT THE CURRENT TERMINAL into Plan Review's
         // own Load Report mode (see openLoadReportAtTerminal above). Never
-        // shows anything on its own until tapped.
+        // shows anything on its own until tapped. Sits directly below the
+        // Load button now (was beside the recap card) -- per explicit
+        // follow-up, styled to the same size/shape as loadButtonEl below
+        // (same border-radius/padding/font, full width of its own
+        // container) rather than the smaller graphite-card look it had
+        // before.
         const viewLastLoadEl = (equipment.selectedComboId && location.selectedTerminalId) ? (
-          <div style={{ borderRadius: 16, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <button
               type="button"
               onClick={openLoadReportAtTerminal}
               disabled={viewLastLoadBusy}
               style={{
-                width: "100%", padding: "10px 12px", borderRadius: 10,
-                border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
-                color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 700,
+                borderRadius: 6, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
+                padding: "10px 14px", width: "100%",
                 cursor: viewLastLoadBusy ? "not-allowed" : "pointer", opacity: viewLastLoadBusy ? 0.6 : 1,
+                display: "flex", alignItems: "center", justifyContent: "center",
               }}
             >
-              {viewLastLoadBusy ? "Loading…" : "View Last Load"}
+              <span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.85)", letterSpacing: 0.3 }}>
+                {viewLastLoadBusy ? "Loading…" : "View Last Load"}
+              </span>
             </button>
             {viewLastLoadMsg && (
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center" as const }}>{viewLastLoadMsg}</div>
@@ -2791,7 +2787,6 @@ const lastProductInfoById = useMemo(() => {
         ) : null;
 
         const perfCard = viewLastLoadEl;
-        const hasPerfCard = perfCard != null;
 
         const loadButtonEl = (
           <button type="button"
@@ -2841,45 +2836,31 @@ const lastProductInfoById = useMemo(() => {
         // "merge everything into one inline stats band" attempt, which
         // looked bad live (confirmed via a real device screenshot: a lot
         // of dead space, no visual separation between the two cards'
-        // figures). Ultra-wide landscape (isUltraWideLandscape) goes one
-        // step further, per explicit direction ("on obnoxiously wide
-        // screens we can shift the load button over to the right of
-        // points, all in one row of equal width and height for each"):
-        // recapCard, pointsCard, and the Load button become three
-        // grid cells of genuinely equal width AND height
+        // figures). "View Last Load" (perfCard) now sits BELOW the Load
+        // button in every orientation, per explicit follow-up ("scoot the
+        // view last load down below the load button") -- portrait and
+        // normal landscape both just stack recapCard/loadButtonEl/perfCard
+        // in a single column now (nothing left to place side by side once
+        // perfCard moved out of the row), picking up the outer container's
+        // own gap for spacing. Ultra-wide landscape keeps recapCard and
+        // loadButtonEl as two equal-width/height grid cells
         // (alignItems:"stretch" is what makes the Load button's own cell
-        // match the taller card cells' height -- paired with the button's
-        // own height:"100%" above -- not a hardcoded number). The same
-        // intermediate "points splits into its own box but Load stays
-        // full-width below" state described in the user's own message
-        // ("until it makes sense to shift the points out and over") is
-        // still deliberately not built -- hedged twice in their own
-        // phrasing ("if possible... if that makes sense"), no mockup for
-        // it, and this pass already has two clear reference points (the
-        // side-by-side mockup, and the plainly-described ultra-wide end
-        // state) to build against; a real width band to add later if
-        // wanted, between isLandscape and isUltraWideLandscape.
+        // match the recap card's height -- paired with the button's own
+        // height:"100%" above -- not a hardcoded number), with perfCard as
+        // its own full-width row underneath.
         const statsAndLoadEl = isUltraWideLandscape ? (
-          <div style={{ display: "grid", gridTemplateColumns: hasPerfCard ? "1fr 1fr 1fr" : "1fr 1fr", gap: 16, alignItems: "stretch" }}>
-            {recapCard}
-            {perfCard}
-            {loadButtonEl}
-          </div>
-        ) : isLandscape ? (
           <>
-            <div style={{ display: "flex", flexDirection: "row", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "stretch" }}>
               {recapCard}
-              {perfCard}
+              {loadButtonEl}
             </div>
-            {loadButtonEl}
+            {perfCard}
           </>
         ) : (
           <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {recapCard}
-              {perfCard}
-            </div>
+            {recapCard}
             {loadButtonEl}
+            {perfCard}
           </>
         );
         // Partial (bobtail / trailer-only): no full combo -> no recap, no
@@ -2940,6 +2921,8 @@ const lastProductInfoById = useMemo(() => {
         productInputs={productInputs}
         equipmentLabel={equipment.equipmentLabel}
         terminalLabel={terminalLabel}
+        locationLabel={location.locationLabel}
+        rackName={selectedRackName}
         onTapTerminal={handleTapTerminalInLoadingModal}
         onSetCompartmentCap={(comp, capGallons) => {
           // Tap-to-adjust in Plan Review sets the compartment CAP (feeds the
