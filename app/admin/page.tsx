@@ -11,7 +11,7 @@ import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/E
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
 import NavMenu from "@/lib/ui/NavMenu";
 
-import { T, css, fmtDate, expiryColor, daysUntil } from "@/lib/ui/driver/tokens";
+import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "@/lib/ui/driver/tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "@/lib/ui/driver/primitives";
 import { MemberCard } from "@/lib/ui/driver/MemberCard";
 import { DriverProfileModal } from "@/lib/ui/driver/DriverProfileModal";
@@ -1144,6 +1144,44 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Needs Attention -- permit field configs (label + column key), mirroring
+// EquipmentDetails.tsx's own PermitRow labels so the same item reads
+// identically wherever it's shown.
+// ─────────────────────────────────────────────────────────────
+
+const TRUCK_PERMIT_FIELDS: { label: string; key: keyof Truck }[] = [
+  { label: "Registration", key: "reg_expiration_date" },
+  { label: "Annual Inspection", key: "inspection_expiration_date" },
+  { label: "IFTA Permit + Decals", key: "ifta_expiration_date" },
+  { label: "PHMSA HazMat Permit", key: "phmsa_expiration_date" },
+  { label: "Alliance HazMat Permit", key: "alliance_expiration_date" },
+  { label: "Fleet Insurance Cab Card", key: "fleet_ins_expiration_date" },
+  { label: "HazMat Transportation Lic", key: "hazmat_lic_expiration_date" },
+  { label: "Inner Bridge Permit", key: "inner_bridge_expiration_date" },
+];
+
+const TRAILER_PERMIT_FIELDS: { label: string; key: keyof Trailer }[] = [
+  { label: "Trailer Registration", key: "trailer_reg_expiration_date" },
+  { label: "Annual Inspection", key: "trailer_inspection_expiration_date" },
+  { label: "Tank V — External Visual", key: "tank_v_expiration_date" },
+  { label: "Tank K — Leakage Test", key: "tank_k_expiration_date" },
+  { label: "Tank L — Lining Inspection", key: "tank_l_expiration_date" },
+  { label: "Tank T — Thickness Test", key: "tank_t_expiration_date" },
+  { label: "Tank I — Internal Visual", key: "tank_i_expiration_date" },
+  { label: "Tank P — Pressure Test", key: "tank_p_expiration_date" },
+  { label: "Tank UC — Upper Coupler", key: "tank_uc_expiration_date" },
+];
+
+type AttentionItem = {
+  key: string;
+  severity: "danger" | "warning";
+  label: string;
+  detail: string;
+  days: number | null;
+  onOpen: () => void;
+};
+
+// ─────────────────────────────────────────────────────────────
 // Main AdminPage
 // ─────────────────────────────────────────────────────────────
 
@@ -1401,6 +1439,92 @@ export default function AdminPage() {
   const flaggedTruckCount = useMemo(() => trucks.filter(t => t.active && t.status_code === "deadline").length, [trucks]);
   const flaggedTrailerCount = useMemo(() => trailers.filter(t => t.active && t.status_code === "deadline").length, [trailers]);
 
+  // "Needs Attention" -- a fleet-wide roll-up computed entirely from state
+  // this page already fetches (trucks/trailers/combos/truckOtherPermits),
+  // zero new queries: flagged (Deadline) equipment, any permit expiring or
+  // already expired within 30 days (same threshold expiryColor's own
+  // "warning" tier uses), and any active combo with no target weight set
+  // (the payload-utilization system has nothing to measure against
+  // without one). Admin/lead only -- matches the Equipment section's own
+  // role gate below, since this is entirely equipment/combo data dispatch
+  // isn't shown elsewhere on this page either.
+  const attentionItems = useMemo<AttentionItem[]>(() => {
+    const items: AttentionItem[] = [];
+
+    for (const t of trucks) {
+      if (!t.active) continue;
+      if (t.status_code === "deadline") {
+        items.push({
+          key: `flag-truck-${t.truck_id}`, severity: "danger",
+          label: t.truck_name, detail: "Flagged Deadline", days: null,
+          onOpen: () => setTruckModal(t),
+        });
+      }
+      for (const f of TRUCK_PERMIT_FIELDS) {
+        const days = daysUntil(t[f.key] as string | null);
+        if (days == null || days >= 30) continue;
+        items.push({
+          key: `permit-truck-${t.truck_id}-${f.key}`, severity: days < 7 ? "danger" : "warning",
+          label: t.truck_name, detail: `${f.label} — ${expiryLabel(days)}`, days,
+          onOpen: () => setTruckModal(t),
+        });
+      }
+      for (const p of truckOtherPermits[t.truck_id] ?? []) {
+        const days = daysUntil(p.expiration_date);
+        if (days == null || days >= 30) continue;
+        items.push({
+          key: `permit-truck-${t.truck_id}-other-${p.permit_id ?? p.label}`, severity: days < 7 ? "danger" : "warning",
+          label: t.truck_name, detail: `${p.label} — ${expiryLabel(days)}`, days,
+          onOpen: () => setTruckModal(t),
+        });
+      }
+    }
+
+    for (const t of trailers) {
+      if (!t.active) continue;
+      if (t.status_code === "deadline") {
+        items.push({
+          key: `flag-trailer-${t.trailer_id}`, severity: "danger",
+          label: t.trailer_name, detail: "Flagged Deadline", days: null,
+          onOpen: () => setTrailerModal(t),
+        });
+      }
+      for (const f of TRAILER_PERMIT_FIELDS) {
+        const days = daysUntil(t[f.key] as string | null);
+        if (days == null || days >= 30) continue;
+        items.push({
+          key: `permit-trailer-${t.trailer_id}-${f.key}`, severity: days < 7 ? "danger" : "warning",
+          label: t.trailer_name, detail: `${f.label} — ${expiryLabel(days)}`, days,
+          onOpen: () => setTrailerModal(t),
+        });
+      }
+    }
+
+    for (const c of combos) {
+      if (!c.active || c.target_weight != null) continue;
+      const truckName = Array.isArray(c.truck) ? c.truck[0]?.truck_name : c.truck?.truck_name;
+      const trailerName = Array.isArray(c.trailer) ? c.trailer[0]?.trailer_name : c.trailer?.trailer_name;
+      items.push({
+        key: `target-${c.combo_id}`, severity: "warning",
+        label: `${truckName || "—"} / ${trailerName || "—"}`, detail: "No target weight set", days: null,
+        onOpen: () => setComboEditModal(c),
+      });
+    }
+
+    // Soonest/most-overdue first -- a real deadline is more time-sensitive
+    // than a standing flag or a missing setting, so items with no `days`
+    // (flagged equipment, missing target weight) sort after every permit.
+    items.sort((a, b) => {
+      if (a.days == null && b.days == null) return 0;
+      if (a.days == null) return 1;
+      if (b.days == null) return -1;
+      return a.days - b.days;
+    });
+    return items;
+  }, [trucks, trailers, combos, truckOtherPermits]);
+  const [attentionExpanded, setAttentionExpanded] = useState(false);
+  const ATTENTION_COLLAPSED_COUNT = 5;
+
   const filteredTrucks = useMemo(() => {
     let ts = [...trucks];
     if (truckFilter === "active")   ts = ts.filter(t => t.active);
@@ -1535,6 +1659,61 @@ export default function AdminPage() {
           }
         }
       `}</style>
+
+      {/* ── NEEDS ATTENTION (admin/lead only -- same equipment/combo data
+           Equipment gates below, dispatch never sees equipment on this
+           page either) -- renders nothing at all when the fleet is clean,
+           matching this page's own established practice of only showing
+           UI that has something to say. */}
+      {(myRole === "admin" || myRole === "lead") && attentionItems.length > 0 && (() => {
+        const visible = attentionExpanded ? attentionItems : attentionItems.slice(0, ATTENTION_COLLAPSED_COUNT);
+        const hiddenCount = attentionItems.length - visible.length;
+        return (
+          <section style={{ marginBottom: 28 }}>
+            <div style={{ ...css.sectionHead, marginBottom: 8 }}>
+              <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+                ⚠ Needs Attention
+                <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{attentionItems.length}</span>
+              </h2>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+              {visible.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={item.onOpen}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "9px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                    border: item.severity === "danger" ? "1px solid rgba(239,68,68,0.25)" : "1px solid rgba(251,146,60,0.22)",
+                    background: item.severity === "danger" ? "rgba(239,68,68,0.06)" : "rgba(251,146,60,0.06)",
+                  }}
+                >
+                  <span style={{
+                    width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                    background: item.severity === "danger" ? "#f87171" : "#fdba74",
+                  }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flexShrink: 0 }}>{item.label}</span>
+                  <span style={{ fontSize: 12, color: T.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{item.detail}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: T.muted, flexShrink: 0 }}>›</span>
+                </button>
+              ))}
+            </div>
+            {hiddenCount > 0 && (
+              <button type="button" onClick={() => setAttentionExpanded(true)}
+                style={{ ...css.btn("subtle"), width: "100%", marginTop: 8, fontSize: 12, justifyContent: "center" as const }}>
+                Show {hiddenCount} more
+              </button>
+            )}
+            {attentionExpanded && attentionItems.length > ATTENTION_COLLAPSED_COUNT && (
+              <button type="button" onClick={() => setAttentionExpanded(false)}
+                style={{ ...css.btn("ghost"), width: "100%", marginTop: 8, fontSize: 12, justifyContent: "center" as const }}>
+                Show less
+              </button>
+            )}
+          </section>
+        );
+      })()}
 
       {/* ── USERS (admin sees + manages; dispatch sees roster + Loads only, no invite/reassign/remove) ── */}
       {(myRole === "admin" || myRole === "dispatch") && (
