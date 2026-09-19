@@ -796,6 +796,19 @@ function SensitiveInfoSection({ unitKind, unitId, companyId }: { unitKind: "truc
   );
 }
 
+// A duplicate unit name/number is scoped per-company (trucks_company_
+// truck_name_key / trailers_company_trailer_name_key -- see
+// 20260925000000_scope_unit_names_per_company.sql), so a Postgres 23505
+// here always means "this name is already used elsewhere in YOUR
+// company," never a collision with an unrelated company -- name that
+// plainly instead of surfacing the raw constraint-violation message.
+function friendlyUnitSaveError(error: { code?: string; message?: string } | null, kind: "truck" | "trailer"): string {
+  if (error?.code === "23505") {
+    return `That ${kind} number is already in use in this company. Enter a different one.`;
+  }
+  return error?.message ?? `Couldn't save the ${kind}.`;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Truck Modal
 // ─────────────────────────────────────────────────────────────
@@ -899,11 +912,11 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
     let truckId = truck?.truck_id;
     if (isNew) {
       const { data, error } = await supabase.from("trucks").insert(payload).select("truck_id").single();
-      if (error) { setErr(error.message); setSaving(false); return; }
+      if (error) { setErr(friendlyUnitSaveError(error, "truck")); setSaving(false); return; }
       truckId = data.truck_id;
     } else {
       const { error } = await supabase.from("trucks").update(payload).eq("truck_id", truckId!);
-      if (error) { setErr(error.message); setSaving(false); return; }
+      if (error) { setErr(friendlyUnitSaveError(error, "truck")); setSaving(false); return; }
       await supabase.from("truck_other_permits").delete().eq("truck_id", truckId!);
     }
     const validOther = otherPermits.filter(p => p.label.trim());
@@ -1220,11 +1233,11 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
     let trailerId = trailer?.trailer_id;
     if (isNew) {
       const { data, error } = await supabase.from("trailers").insert(payload).select("trailer_id").single();
-      if (error) { setErr(error.message); setSaving(false); return; }
+      if (error) { setErr(friendlyUnitSaveError(error, "trailer")); setSaving(false); return; }
       trailerId = data.trailer_id;
     } else {
       const { error } = await supabase.from("trailers").update(payload).eq("trailer_id", trailerId!);
-      if (error) { setErr(error.message); setSaving(false); return; }
+      if (error) { setErr(friendlyUnitSaveError(error, "trailer")); setSaving(false); return; }
       await supabase.from("trailer_compartments").delete().eq("trailer_id", trailerId!);
     }
     if (comps.length > 0) {

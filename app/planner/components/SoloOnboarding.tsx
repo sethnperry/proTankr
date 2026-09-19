@@ -325,10 +325,13 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
       builtRef.current = true;
       setStep("trailer");
     } catch (e: any) {
-      // truck_name is globally unique (trucks_truck_name_key); a duplicate is
-      // the most likely real failure, so name it rather than blame the network.
+      // truck_name is unique per company (trucks_company_truck_name_key,
+      // see 20260925000000_scope_unit_names_per_company.sql -- it used to
+      // be globally unique across every company in the app, a real bug
+      // fixed there); a duplicate here means this exact number is already
+      // used elsewhere in THIS company.
       setError(e?.code === "23505"
-        ? "That truck number is already in use. Enter a different one."
+        ? "That truck number is already in use in this company. Enter a different one."
         : "Couldn't save the truck. Check your connection and try again.");
     } finally { setBusy(false); }
   }, [truckNumber, companyId]);
@@ -417,8 +420,11 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
       clearTrailerDraft(userId);
       setStep("tare");
     } catch (e: any) {
+      // trailer_name is unique per company, not globally -- see the
+      // saveTruck() comment above / 20260925000000_scope_unit_names_per_
+      // company.sql.
       setError(e?.code === "23505"
-        ? "That trailer number is already in use. Enter a different one."
+        ? "That trailer number is already in use in this company. Enter a different one."
         : "Couldn't save the trailer. Check your connection and try again.");
     } finally { setBusy(false); }
   }, [trailerNumber, caps, compCount, companyId, userId, safetyCapFor]);
