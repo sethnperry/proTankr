@@ -52,6 +52,12 @@ type Props = {
   onSaveEmpty: (slot: number) => void;
   onOpenActions: (slot: number) => void;
   onRename: (slot: number, name: string) => void;
+  // Optional -- omitted, this row doesn't render. A deliberate, separate
+  // home for the "Recall Last Load" action (per explicit direction) after
+  // it was removed from the recap card's own label, which used to double
+  // as a tap target for exactly this and made it too easy to silently
+  // overwrite the live plan with a past load's content.
+  onRecallLastLoad?: () => void;
 };
 
 const LONG_PRESS_MS = 600;
@@ -68,6 +74,7 @@ const ROW_BORDER_ACTIVE = "1px solid rgba(255,255,255,0.25)";
 export default function PresetQuickPick({
   open, onClose, slots, slotHas, activeSlot, disabled, disabledReason,
   getSummary, getName, getColors, onLoad, onSaveEmpty, onOpenActions, onRename,
+  onRecallLastLoad,
 }: Props) {
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -209,7 +216,23 @@ export default function PresetQuickPick({
           })}
         </div>
 
-        <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 14, padding: "12px 16px", borderRadius: 10, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+        {onRecallLastLoad && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => { onClose(); onRecallLastLoad(); }}
+            style={{
+              width: "100%", marginTop: 14, padding: "12px 16px", borderRadius: 10,
+              border: ROW_BORDER, background: ROW_BG, color: "rgba(255,255,255,0.75)",
+              fontSize: 14, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+          >
+            ↺ Recall Last Load
+          </button>
+        )}
+
+        <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           Close
         </button>
       </div>
