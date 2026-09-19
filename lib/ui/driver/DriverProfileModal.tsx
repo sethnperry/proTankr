@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { T, css, fmtDate } from "./tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "./primitives";
 import { PortIdEditor, TerminalAccessEditor } from "./editors";
+import { CatalogPicker } from "./RequiredEquipmentFields";
 import type { Member, DriverProfile } from "./types";
 
 export function DriverProfileModal({ member, companyId, onClose, onDone, onRemove, hideComplianceFields }: {
@@ -208,8 +209,31 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
             <Field label="Hire Date" half><input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} style={css.input} /></Field>
             <Field label="Employee #" half><input value={employeeNumber} onChange={e => setEmployeeNumber(e.target.value)} style={css.input} placeholder="e.g. EMP-001" /></Field>
             <Field label="Division" half><input value={division} onChange={e => setDivision(e.target.value)} style={css.input} placeholder="e.g. Refined" /></Field>
-            <Field label="Region" half><input value={region} onChange={e => setRegion(e.target.value)} style={css.input} placeholder="e.g. Southeast" /></Field>
-            <Field label="Local Area" half><input value={localArea} onChange={e => setLocalArea(e.target.value)} style={css.input} placeholder="e.g. Tampa Bay" /></Field>
+            {/* Same managed Region/Local Area catalog the equipment modals
+                already pick from (RequiredEquipmentFields.tsx's
+                CatalogPicker, used unwrapped there too -- it renders its
+                own label) -- was a bare free-text input here, the other
+                real source (besides equipment) of the region/local_area
+                drift the 20260923000000 migration cleaned up. Region
+                clears Local Area on change, same reasoning as that file's
+                own equipment usage: a local area belongs to a region now,
+                so a stale one left over from the old region doesn't make
+                sense. Plain divs replicate Field's own half-width/spacing
+                so this lines up with the other fields in the same row. */}
+            <div style={{ marginBottom: 12, width: "calc(50% - 5px)" }}>
+              <CatalogPicker
+                label="Region" placeholder="e.g. Southeast" value={region}
+                onChange={(v) => { setRegion(v); if (v !== region) setLocalArea(""); }}
+                table="equipment_regions" idCol="region_id" companyId={companyId} editable
+              />
+            </div>
+            <div style={{ marginBottom: 12, width: "calc(50% - 5px)" }}>
+              <CatalogPicker
+                label="Local Area" placeholder="e.g. Tampa Bay" value={localArea} onChange={setLocalArea}
+                table="equipment_local_areas" idCol="local_area_id" companyId={companyId} editable
+                filterByRegionName={region}
+              />
+            </div>
           </FieldRow>
 
           {!hideComplianceFields && (

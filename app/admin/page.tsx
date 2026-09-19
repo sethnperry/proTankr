@@ -1462,11 +1462,11 @@ export default function AdminPage() {
   // was actually asked for ("narrow... view"), and is safe to ship without
   // a live session to test against, unlike a real RLS-level restriction
   // (which would also risk locking an admin with no region set out of
-  // their own company). Whichever field is most specific for THIS admin
-  // wins -- local_area if they have one (an admin scoped to a specific
-  // area within a region), else region (a broader regional admin) -- since
-  // the request itself frames it as "region and/or area," not a fixed
-  // granularity every admin shares.
+  // their own company). Region wins over local_area when this admin has
+  // both -- explicit follow-up ("I would rather the toggle be Region than
+  // local area") reversed the original "most specific wins" precedence;
+  // local_area is now only the fallback for an admin who has no region set
+  // at all.
   const myProfile = useMemo(() => members.find(m => m.user_id === currentUserId) ?? null, [members, currentUserId]);
   const myRegion = myProfile?.region ?? null;
   const myLocalArea = myProfile?.local_area ?? null;
@@ -1475,8 +1475,8 @@ export default function AdminPage() {
   const activeScope = (viewScope === "mine" && hasOwnScope) ? { region: myRegion, localArea: myLocalArea } : null;
   function matchesScope(regionVal: string | null | undefined, localAreaVal: string | null | undefined): boolean {
     if (!activeScope) return true;
-    if (activeScope.localArea) return localAreaVal === activeScope.localArea;
     if (activeScope.region) return regionVal === activeScope.region;
+    if (activeScope.localArea) return localAreaVal === activeScope.localArea;
     return true;
   }
   const trucksById = useMemo(() => new Map(trucks.map(t => [t.truck_id, t])), [trucks]);
@@ -1877,7 +1877,7 @@ export default function AdminPage() {
         }}>
           <span style={{ fontSize: 12, color: T.muted }}>
             {viewScope === "mine"
-              ? <>Showing <strong style={{ color: T.text }}>{myLocalArea || myRegion}</strong> only</>
+              ? <>Showing <strong style={{ color: T.text }}>{myRegion || myLocalArea}</strong> only</>
               : <>Showing <strong style={{ color: T.text }}>all regions</strong></>}
           </span>
           <button
@@ -1885,7 +1885,7 @@ export default function AdminPage() {
             onClick={() => setViewScope(v => v === "mine" ? "all" : "mine")}
             style={{ ...css.btn("subtle"), marginLeft: "auto", padding: "4px 10px", fontSize: 11 }}
           >
-            {viewScope === "mine" ? "Show All Regions" : `Show ${myLocalArea || myRegion} Only`}
+            {viewScope === "mine" ? "Show All Regions" : `Show ${myRegion || myLocalArea} Only`}
           </button>
         </div>
       )}

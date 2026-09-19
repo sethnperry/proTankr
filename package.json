@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/capacity/*.test.ts lib/pwa/*.test.ts app/planner/utils/*.test.ts",
+    "test": "node --test lib/capacity/*.test.ts lib/pwa/*.test.ts lib/ui/driver/*.test.ts app/planner/utils/*.test.ts",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",

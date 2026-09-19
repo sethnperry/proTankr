@@ -27,6 +27,9 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { normalizePlaceName } from "./normalizePlaceName";
+
+export { normalizePlaceName };
 
 const fieldLabel: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)",
@@ -138,11 +141,26 @@ export function CatalogPicker({
   useEffect(() => { void load(); }, [companyId, filterByRegionName, matchColumnsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function createNew() {
-    if (!newName.trim()) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
     setBusy(true);
     setErr(null);
     try {
-      const payload: Record<string, unknown> = { company_id: companyId, name: newName.trim(), ...insertColumns };
+      // Reuse an existing entry that's the same place under a different
+      // spelling/casing/abbreviation (see 20260923000000_dedupe_regions_local_areas.sql,
+      // which enforces this same rule at the DB level) instead of creating
+      // a duplicate catalog row -- "Ft. Myers" typed while "Ft.Myers"
+      // already exists just picks the existing one.
+      const normalized = normalizePlaceName(trimmed);
+      const existing = rows.find((r) => normalizePlaceName(r.name) === normalized);
+      if (existing) {
+        onChange(existing.name);
+        setNewName("");
+        setAdding(false);
+        setOpen(false);
+        return;
+      }
+      const payload: Record<string, unknown> = { company_id: companyId, name: trimmed, ...insertColumns };
       if (scoped) payload.region_id = regionId;
       const { error } = await supabase
         .from(table)
@@ -150,7 +168,7 @@ export function CatalogPicker({
         .select(idCol)
         .single();
       if (error) throw error;
-      onChange(newName.trim());
+      onChange(trimmed);
       setNewName("");
       setAdding(false);
       setOpen(false);
