@@ -472,12 +472,37 @@ export default function CalculatorPage() {
   // console isn't reachable (no desktop remote-debug setup). Capped so it
   // can't grow unbounded across a long session. Remove alongside dbg()
   // in usePlanSlots.ts once the real cause is confirmed and fixed.
-  const [debugLog, setDebugLog] = useState<string[]>([]);
+  // Persisted to localStorage (not just React state) -- a plain in-memory
+  // log resets on every refresh, which meant every capture during this
+  // debugging thread could only ever show what happened AFTER a refresh,
+  // never the edits/actions immediately before it that actually explain
+  // what got saved. Surviving a refresh lets one capture show the whole
+  // sequence: set up a plan, wait, refresh, and the panel still has both
+  // halves. Capped at the same 50 lines as before, just backed by storage.
+  const DEBUG_LOG_KEY = "protankr_debugLog_v1";
+  const [debugLog, setDebugLog] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(DEBUG_LOG_KEY) : null;
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
   const [debugLogOpen, setDebugLogOpen] = useState(false);
   const pushDebugLog = useCallback((line: string) => {
     const stamp = new Date().toISOString().slice(11, 23);
-    setDebugLog((prev) => [...prev.slice(-49), `${stamp} ${line}`]);
+    setDebugLog((prev) => {
+      const next = [...prev.slice(-49), `${stamp} ${line}`];
+      try { localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   }, []);
+  const clearDebugLog = useCallback(() => {
+    setDebugLog([]);
+    try { localStorage.removeItem(DEBUG_LOG_KEY); } catch {}
+  }, []);
+  // Marks every mount boundary in the persisted log, so a capture spanning
+  // a refresh (or several) shows clearly where each page load started.
+  useEffect(() => { pushDebugLog("=== PAGE MOUNT ==="); }, [pushDebugLog]);
   // Fired by usePlanSlots whenever slot 0 restores from a genuine local
   // draft (not from the last-completed-load fallback) -- restores the
   // plan-letter highlight from whatever that draft's own activeSlot says
@@ -3148,7 +3173,7 @@ const lastProductInfoById = useMemo(() => {
                 Copy
               </span>
               <span
-                onClick={(e) => { e.stopPropagation(); setDebugLog([]); }}
+                onClick={(e) => { e.stopPropagation(); clearDebugLog(); }}
                 style={{ textDecoration: "underline" }}
               >
                 Clear
