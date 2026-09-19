@@ -1232,6 +1232,7 @@ export default function AdminPage() {
   const [payrollReportOpen, setPayrollReportOpen] = useState(false);
   const [fleetUtilOpen, setFleetUtilOpen] = useState(false);
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
+  const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -1602,15 +1603,10 @@ export default function AdminPage() {
           wide" is a fixed layout choice regardless of viewport, not a
           responsive fallback, and it already scales cleanly to more
           buttons than the 4 here today (extra ones just start a new row). */}
-      <div className="admin-header-btns" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 28 }}>
+      <div className="admin-header-btns" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: reportsMenuOpen ? 10 : 28 }}>
         {(myRole === "admin" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setFleetCardsOpen(true)}>
             Fleet Cards
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setPayrollReportOpen(true)}>
-            Period Report
           </button>
         )}
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
@@ -1618,12 +1614,31 @@ export default function AdminPage() {
             Utilization
           </button>
         )}
-        {myRole === "admin" && !isSolo && (
-          <button type="button" className="admin-header-tile" onClick={() => setTargetWeightPolicyOpen(true)}>
-            Target Weight
+        {/* Period Report and Target Weight are both admin-only, rarer
+            actions than Fleet Cards/Utilization -- collapsed into one
+            "Reports" tile with a small inline menu instead of each getting
+            its own permanent grid slot. */}
+        {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setReportsMenuOpen(v => !v)}>
+            Reports
           </button>
         )}
       </div>
+
+      {myRole === "admin" && reportsMenuOpen && (
+        <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 28 }}>
+          <button type="button" onClick={() => { setPayrollReportOpen(true); setReportsMenuOpen(false); }}
+            style={{ ...css.btn("subtle"), width: "100%", justifyContent: "flex-start" as const }}>
+            Period Report
+          </button>
+          {!isSolo && (
+            <button type="button" onClick={() => { setTargetWeightPolicyOpen(true); setReportsMenuOpen(false); }}
+              style={{ ...css.btn("subtle"), width: "100%", justifyContent: "flex-start" as const }}>
+              Target Weight
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Every input/select/textarea on this page bumped to 16px on mobile:
           several inline styles set them as small as 11-12px, and iOS
