@@ -22,6 +22,7 @@ import FleetCardsModal from "./FleetCardsModal";
 import PayrollReportModal from "./PayrollReportModal";
 import FleetUtilizationModal from "./FleetUtilizationModal";
 import TargetWeightPolicyModal from "./TargetWeightPolicyModal";
+import CompanySettingsModal from "./CompanySettingsModal";
 import { useCompanySubscription, computeSeatCapacity, wouldExceedCapacity, type SeatCapacity } from "@/lib/billing/useCompanySubscription";
 
 // Paginated fetch -- PostgREST/Supabase caps every response at a
@@ -1242,6 +1243,7 @@ export default function AdminPage() {
   const [fleetUtilOpen, setFleetUtilOpen] = useState(false);
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
   const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
+  const [companySettingsOpen, setCompanySettingsOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -1917,6 +1919,11 @@ export default function AdminPage() {
             Reports
           </button>
         )}
+        {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setCompanySettingsOpen(true)}>
+            Company
+          </button>
+        )}
       </div>
 
       {myRole === "admin" && reportsMenuOpen && (
@@ -2415,6 +2422,16 @@ export default function AdminPage() {
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />
       <FleetUtilizationModal open={fleetUtilOpen} onClose={() => setFleetUtilOpen(false)} companyId={companyId!} />
       <TargetWeightPolicyModal open={targetWeightPolicyOpen} onClose={() => setTargetWeightPolicyOpen(false)} companyId={companyId!} />
+      {companySettingsOpen && (
+        <CompanySettingsModal
+          companyId={companyId!}
+          companyName={companyName}
+          isSolo={isSolo}
+          seats={seats}
+          onClose={() => setCompanySettingsOpen(false)}
+          onRenamed={(name) => setCompanyName(name)}
+        />
+      )}
     </div>
   );
 }

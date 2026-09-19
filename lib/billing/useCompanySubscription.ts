@@ -20,6 +20,16 @@ export type CompanySubscriptionRow = {
   status: "trialing" | "active" | "past_due" | "canceled" | "incomplete";
   paid_admin_seats: number;
   paid_other_seats: number;
+  // Extra fields beyond what computeSeatCapacity itself reads -- carried
+  // through for CompanySettingsModal's own plan/billing display. Additive:
+  // existing consumers (computeSeatCapacity, the admin seat pill) only ever
+  // destructure the four fields above, so this widened select/type can't
+  // affect them.
+  comped: boolean;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
 };
 
 export type SeatCapacity = {
@@ -91,7 +101,7 @@ export function useCompanySubscription(companyId: string | null) {
       try {
         const { data, error } = await supabase
           .from("company_subscriptions")
-          .select("tier, status, paid_admin_seats, paid_other_seats")
+          .select("tier, status, paid_admin_seats, paid_other_seats, comped, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id")
           .eq("company_id", companyId)
           .maybeSingle();
         if (cancelled) return;
