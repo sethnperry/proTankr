@@ -1173,7 +1173,25 @@ export function usePlanSlots({
     // No terminal-match check -- every slot (0 through 5) is
     // terminal-independent by design (see planScopeKey's own comment), so
     // it loads regardless of which terminal is currently selected.
-    planRestoreReadyRef.current = planScopeKey;
+    //
+    // Real, confirmed data-loss bug found via a live debug capture:
+    // planRestoreReadyRef used to be set here too, exactly like
+    // restoreLivePlan's own passive mount-time restore -- but that ref's
+    // ENTIRE purpose (see the "Mark dirty on plan changes" and "Debounced
+    // autosave" effects, its only two readers) is "this compPlan change is
+    // just a restore of what's already saved, don't mark it dirty or
+    // schedule a write." That's correct for restoreLivePlan (re-saving
+    // identical data would be redundant) but wrong here: tapping a preset
+    // is a deliberate action that's SUPPOSED to make this preset's content
+    // the new live/autosave plan (slot 0) -- suppressing dirty-tracking
+    // meant the tap visually applied the preset (compPlan updated
+    // correctly on screen) but NEVER got written to slot 0 at all. The
+    // next refresh then restored whatever slot 0 was last ACTUALLY saved
+    // as -- which could be an entirely different, much older preset,
+    // reproducing exactly as "refresh always returns to plan X no matter
+    // what I'm working on" for however long ago X was last a dirty-
+    // tracked write. Removed entirely -- this call now marks dirty and
+    // autosaves like any other real compPlan change.
     // Named presets (1-5) snap the CG slider to whatever was saved with them;
     // slot 0 (autosave/last-load draft) never restores CG -- see applySnapshot.
     // force: true -- this is a deliberate, explicit "go back to this saved
@@ -1181,10 +1199,7 @@ export function usePlanSlots({
     // because the preset's own savedAt is (usually) far older than
     // whatever's live right now.
     applySnapshot(raw, { restoreCg: slot !== 0, source: `loadFromSlot:${slot}`, force: true });
-    queueMicrotask(() => {
-      if (planRestoreReadyRef.current === planScopeKey) planRestoreReadyRef.current = null;
-    });
-  }, [selectedComboId, readSlot, applySnapshot, planScopeKey]);
+  }, [selectedComboId, readSlot, applySnapshot]);
 
   // Read-only peek at a slot's saved compPlan, for showing a real summary
   // (e.g. "Load Diesel, Regular") in the action sheet before committing to
