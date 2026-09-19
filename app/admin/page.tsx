@@ -1663,6 +1663,39 @@ export default function AdminPage() {
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
+  // At-a-glance dashboard stats -- same style/pattern as ProTankr Dash's
+  // own stat row (app/superadmin/page.tsx), just scoped to this one
+  // company (and, per the view-scope toggle above, optionally this admin's
+  // own region/area). Reuses every value already computed above for the
+  // section counts/badges -- no new fetch, no new state. Each stat is
+  // gated to the same role that can already see the section it summarizes,
+  // so a role never sees a number for data it can't actually open.
+  const dashboardStats = useMemo(() => {
+    const stats: { key: string; label: string; value: number | string; accent?: string }[] = [];
+    if (myRole === "admin" || myRole === "dispatch") {
+      stats.push({ key: "users", label: "Users", value: members.filter(m => matchesScope(m.region, m.local_area)).length });
+    }
+    if (myRole === "admin" || myRole === "lead") {
+      stats.push({ key: "trucks", label: "Trucks", value: trucks.filter(t => t.active && matchesScope(t.region, t.local_area)).length });
+      stats.push({ key: "trailers", label: "Trailers", value: trailers.filter(t => t.active && matchesScope(t.region, t.local_area)).length });
+      stats.push({ key: "combos", label: "Combos", value: scopedActiveComboCount });
+      stats.push({ key: "terminals", label: "Terminals", value: terminals.filter(t => t.active).length });
+      stats.push({
+        key: "attention", label: "Needs Attention", value: attentionItems.length,
+        accent: attentionItems.length > 0 ? "#fdba74" : undefined,
+      });
+    }
+    if (myRole === "admin" && seats.hasSubscription) {
+      const used = seats.usedAdminSeats + seats.usedOtherSeats;
+      const paid = seats.paidAdminSeats + seats.paidOtherSeats;
+      stats.push({
+        key: "seats", label: "Seats", value: `${used}/${paid}`,
+        accent: seats.otherSeatsFull || seats.adminSeatsFull ? "#fb923c" : undefined,
+      });
+    }
+    return stats;
+  }, [myRole, members, trucks, trailers, terminals, scopedActiveComboCount, attentionItems, seats, viewScope, myRegion, myLocalArea]);
+
   // Quick Find matches -- respects the same per-section role gates as the
   // sections themselves (Users: admin/dispatch; Equipment/Terminals:
   // admin/lead), so a role never sees a result for a section it can't
@@ -1793,6 +1826,83 @@ export default function AdminPage() {
         <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Company Admin</p></div>
       </div>
 
+      {/* Dashboard -- at-a-glance stats, same simple tile pattern as
+          ProTankr Dash's own stat row. Sits above everything else on the
+          page (Needs Attention included) since it's meant to be the first
+          thing an admin sees, not one more section among the others. */}
+      {dashboardStats.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+          {dashboardStats.map(s => (
+            <div key={s.key} style={{
+              flex: "1 1 90px", minWidth: 90, borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
+              padding: "12px 14px",
+            }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: s.accent ?? T.text }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" as const }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── NEEDS ATTENTION (admin/lead only -- same equipment/combo data
+           Equipment gates below, dispatch never sees equipment on this
+           page either) -- renders nothing at all when the fleet is clean,
+           matching this page's own established practice of only showing
+           UI that has something to say. Sits directly under the dashboard
+           stats above, ahead of Quick Find and the button grid. ── */}
+      {(myRole === "admin" || myRole === "lead") && attentionItems.length > 0 && (() => {
+        const visible = attentionExpanded ? attentionItems : attentionItems.slice(0, ATTENTION_COLLAPSED_COUNT);
+        const hiddenCount = attentionItems.length - visible.length;
+        return (
+          <section style={{ marginBottom: 28 }}>
+            <div style={{ ...css.sectionHead, marginBottom: 8 }}>
+              <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+                ⚠ Needs Attention
+                <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{attentionItems.length}</span>
+              </h2>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+              {visible.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={item.onOpen}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "9px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                    border: item.severity === "danger" ? "1px solid rgba(239,68,68,0.25)" : "1px solid rgba(251,146,60,0.22)",
+                    background: item.severity === "danger" ? "rgba(239,68,68,0.06)" : "rgba(251,146,60,0.06)",
+                  }}
+                >
+                  <span style={{
+                    width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                    background: item.severity === "danger" ? "#f87171" : "#fdba74",
+                  }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flexShrink: 0 }}>{item.label}</span>
+                  <span style={{ fontSize: 12, color: T.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{item.detail}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: T.muted, flexShrink: 0 }}>›</span>
+                </button>
+              ))}
+            </div>
+            {hiddenCount > 0 && (
+              <button type="button" onClick={() => setAttentionExpanded(true)}
+                style={{ ...css.btn("subtle"), width: "100%", marginTop: 8, fontSize: 12, justifyContent: "center" as const }}>
+                Show {hiddenCount} more
+              </button>
+            )}
+            {attentionExpanded && attentionItems.length > ATTENTION_COLLAPSED_COUNT && (
+              <button type="button" onClick={() => setAttentionExpanded(false)}
+                style={{ ...css.btn("ghost"), width: "100%", marginTop: 8, fontSize: 12, justifyContent: "center" as const }}>
+                Show less
+              </button>
+            )}
+          </section>
+        );
+      })()}
+
       {/* Quick Find -- one box across Users/Equipment/Terminals instead of
           three independent per-section search boxes (see quickFindResults
           above). Most admin tasks start with "find X," not "pick a
@@ -1900,6 +2010,25 @@ export default function AdminPage() {
           responsive fallback, and it already scales cleanly to more
           buttons than the 4 here today (extra ones just start a new row). */}
       <div className="admin-header-btns" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: reportsMenuOpen ? 10 : 28 }}>
+        {/* Users/Equipment/Terminals -- previously inline collapsible
+            accordions directly on the page; now the same content, opened
+            as a modal from its own tile here, matching the pattern every
+            other tile (Fleet Cards, Utilization, etc.) already uses. */}
+        {(myRole === "admin" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setUsersOpen(true)}>
+            Users
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead") && (
+          <button type="button" className="admin-header-tile" onClick={() => setEquipOpen(true)}>
+            Equipment
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead") && (
+          <button type="button" className="admin-header-tile" onClick={() => setTerminalsOpen(true)}>
+            Terminals
+          </button>
+        )}
         {(myRole === "admin" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setFleetCardsOpen(true)}>
             Fleet Cards
@@ -1976,366 +2105,282 @@ export default function AdminPage() {
         }
       `}</style>
 
-      {/* ── NEEDS ATTENTION (admin/lead only -- same equipment/combo data
-           Equipment gates below, dispatch never sees equipment on this
-           page either) -- renders nothing at all when the fleet is clean,
-           matching this page's own established practice of only showing
-           UI that has something to say. */}
-      {(myRole === "admin" || myRole === "lead") && attentionItems.length > 0 && (() => {
-        const visible = attentionExpanded ? attentionItems : attentionItems.slice(0, ATTENTION_COLLAPSED_COUNT);
-        const hiddenCount = attentionItems.length - visible.length;
-        return (
-          <section style={{ marginBottom: 28 }}>
-            <div style={{ ...css.sectionHead, marginBottom: 8 }}>
-              <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
-                ⚠ Needs Attention
-                <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{attentionItems.length}</span>
-              </h2>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
-              {visible.map(item => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={item.onOpen}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, width: "100%",
-                    padding: "9px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                    border: item.severity === "danger" ? "1px solid rgba(239,68,68,0.25)" : "1px solid rgba(251,146,60,0.22)",
-                    background: item.severity === "danger" ? "rgba(239,68,68,0.06)" : "rgba(251,146,60,0.06)",
-                  }}
-                >
-                  <span style={{
-                    width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                    background: item.severity === "danger" ? "#f87171" : "#fdba74",
-                  }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flexShrink: 0 }}>{item.label}</span>
-                  <span style={{ fontSize: 12, color: T.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{item.detail}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: T.muted, flexShrink: 0 }}>›</span>
-                </button>
-              ))}
-            </div>
-            {hiddenCount > 0 && (
-              <button type="button" onClick={() => setAttentionExpanded(true)}
-                style={{ ...css.btn("subtle"), width: "100%", marginTop: 8, fontSize: 12, justifyContent: "center" as const }}>
-                Show {hiddenCount} more
-              </button>
+      {/* ── USERS (admin sees + manages; dispatch sees roster + Loads only,
+           no invite/reassign/remove) -- a modal opened via its own "Users"
+           tile in the button grid below, not an inline accordion. Content
+           unchanged from the old inline section, just relocated. ── */}
+      {usersOpen && (myRole === "admin" || myRole === "dispatch") && (
+        <Modal
+          title={`Users (${members.filter(m => matchesScope(m.region, m.local_area)).length})`}
+          onClose={() => setUsersOpen(false)}
+          wide
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            {seats.hasSubscription && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "3px 9px",
+                  borderRadius: 999,
+                  color: seats.otherSeatsFull || seats.adminSeatsFull ? "#fb923c" : T.muted,
+                  background: seats.otherSeatsFull || seats.adminSeatsFull ? "rgba(251,146,60,0.10)" : "rgba(255,255,255,0.05)",
+                  whiteSpace: "nowrap" as const,
+                }}
+                title={`${seats.usedAdminSeats} of ${seats.paidAdminSeats} admin seats · ${seats.usedOtherSeats} of ${seats.paidOtherSeats} team seats`}
+              >
+                {seats.usedAdminSeats + seats.usedOtherSeats} of {seats.paidAdminSeats + seats.paidOtherSeats} seats
+              </span>
             )}
-            {attentionExpanded && attentionItems.length > ATTENTION_COLLAPSED_COUNT && (
-              <button type="button" onClick={() => setAttentionExpanded(false)}
-                style={{ ...css.btn("ghost"), width: "100%", marginTop: 8, fontSize: 12, justifyContent: "center" as const }}>
-                Show less
-              </button>
-            )}
-          </section>
-        );
-      })()}
-
-      {/* ── USERS (admin sees + manages; dispatch sees roster + Loads only, no invite/reassign/remove) ── */}
-      {(myRole === "admin" || myRole === "dispatch") && (
-        <>
-          <section style={{ marginBottom: 32 }}>
-            <div style={css.sectionHead}>
-              <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", flex: 1 }} onClick={() => setUsersOpen(v => !v)}>
-                <span style={{ transition: "transform 150ms", transform: usersOpen ? "rotate(90deg)" : "none", display: "inline-block", fontSize: 14 }}>›</span>
-                Users ({members.filter(m => matchesScope(m.region, m.local_area)).length})
-              </h2>
-              {seats.hasSubscription && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: "3px 9px",
-                    borderRadius: 999,
-                    marginRight: 8,
-                    color: seats.otherSeatsFull || seats.adminSeatsFull ? "#fb923c" : T.muted,
-                    background: seats.otherSeatsFull || seats.adminSeatsFull ? "rgba(251,146,60,0.10)" : "rgba(255,255,255,0.05)",
-                    whiteSpace: "nowrap" as const,
-                  }}
-                  title={`${seats.usedAdminSeats} of ${seats.paidAdminSeats} admin seats · ${seats.usedOtherSeats} of ${seats.paidOtherSeats} team seats`}
-                >
-                  {seats.usedAdminSeats + seats.usedOtherSeats} of {seats.paidAdminSeats + seats.paidOtherSeats} seats
-                </span>
-              )}
-              {myRole === "admin" && !isSolo && <button style={plusBtn} onClick={() => setInviteModal(true)}>+</button>}
-            </div>
-            {myRole === "admin" && isSolo && (
-              <p style={{ ...css.subheading, marginTop: 6 }}>Adding drivers needs a Fleet plan &mdash; contact us.</p>
-            )}
-            {usersOpen && (
-              <>
-                <div style={filterRow}>
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, employee #…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                  <select value={filterRole} onChange={e => setFilterRole(e.target.value as "" | "none" | Role)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="none">— Role —</option>
-                    <option value="">All roles</option>
-                    <option value="admin">Admin</option>
-                    <option value="lead">Lead</option>
-                    <option value="dispatch">Dispatch</option>
-                    <option value="driver">Driver</option>
-                  </select>
-                  <select value={`${sortField}:${sortDir}`} onChange={e => { const [f, d] = e.target.value.split(":"); setSortField(f as SortField); setSortDir(d as SortDir); }} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
-                    <option value="role:asc">Role A→Z</option><option value="division:asc">Division A→Z</option>
-                    <option value="region:asc">Region A→Z</option><option value="hire_date:asc">Hire ↑</option><option value="hire_date:desc">Hire ↓</option>
-                  </select>
-                </div>
-                {filterRole === "none" && !search.trim() ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or select a role to find users.</div>
-                ) : filteredMembers.length === 0 ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>
-                ) : (
-                  filteredMembers.map(m => (
-                    <div key={m.user_id} style={{ position: "relative" }}>
-                      <MemberCard
-                        member={m} companyId={companyId!} onRefresh={loadAll}
-                        onEditProfile={(member, onSaved) => setProfileModal({ member, onSaved })}
-                        currentUserId={currentUserId}
-                        hideRoleDropdown={myRole !== "admin"}
-                        hideRemove={myRole !== "admin"}
-                      />
-                      {(myRole === "admin" || myRole === "dispatch") && m.user_id !== currentUserId && (
-                        <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", gap: 6 }}>
-                          <button
-                            type="button"
-                            onClick={() => setLoadsModal({ userId: m.user_id, displayName: m.display_name ?? m.email ?? m.user_id })}
-                            style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", cursor: "pointer", whiteSpace: "nowrap" as const }}
-                          >
-                            {(() => {
-                              // No last load info at this level — just show "Loads"
-                              return "Loads";
-                            })()}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))
+            {myRole === "admin" && !isSolo && <button style={{ ...plusBtn, marginLeft: "auto" }} onClick={() => setInviteModal(true)}>+</button>}
+          </div>
+          {myRole === "admin" && isSolo && (
+            <p style={{ ...css.subheading, marginBottom: 12 }}>Adding drivers needs a Fleet plan &mdash; contact us.</p>
+          )}
+          <div style={filterRow}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, employee #…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
+            <select value={filterRole} onChange={e => setFilterRole(e.target.value as "" | "none" | Role)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+              <option value="none">— Role —</option>
+              <option value="">All roles</option>
+              <option value="admin">Admin</option>
+              <option value="lead">Lead</option>
+              <option value="dispatch">Dispatch</option>
+              <option value="driver">Driver</option>
+            </select>
+            <select value={`${sortField}:${sortDir}`} onChange={e => { const [f, d] = e.target.value.split(":"); setSortField(f as SortField); setSortDir(d as SortDir); }} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+              <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
+              <option value="role:asc">Role A→Z</option><option value="division:asc">Division A→Z</option>
+              <option value="region:asc">Region A→Z</option><option value="hire_date:asc">Hire ↑</option><option value="hire_date:desc">Hire ↓</option>
+            </select>
+          </div>
+          {filterRole === "none" && !search.trim() ? (
+            <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or select a role to find users.</div>
+          ) : filteredMembers.length === 0 ? (
+            <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No members match your search.</div>
+          ) : (
+            filteredMembers.map(m => (
+              <div key={m.user_id} style={{ position: "relative" }}>
+                <MemberCard
+                  member={m} companyId={companyId!} onRefresh={loadAll}
+                  onEditProfile={(member, onSaved) => setProfileModal({ member, onSaved })}
+                  currentUserId={currentUserId}
+                  hideRoleDropdown={myRole !== "admin"}
+                  hideRemove={myRole !== "admin"}
+                />
+                {(myRole === "admin" || myRole === "dispatch") && m.user_id !== currentUserId && (
+                  <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setLoadsModal({ userId: m.user_id, displayName: m.display_name ?? m.email ?? m.user_id })}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", cursor: "pointer", whiteSpace: "nowrap" as const }}
+                    >
+                      Loads
+                    </button>
+                  </div>
                 )}
-              </>
-            )}
-          </section>
-          <hr style={css.divider} />
-        </>
+              </div>
+            ))
+          )}
+        </Modal>
       )}
 
-      {/* ── EQUIPMENT + TERMINALS (admin/lead only -- dispatch gets Users/Loads
-           above but no equipment or terminal-catalog view/edit, per the
-           permission matrix) ── */}
-      {(myRole === "admin" || myRole === "lead") && (
-      <>
-      {/* ── EQUIPMENT (Trucks, Trailers, Combos) ── */}
-      <section style={{ marginBottom: 32, marginTop: 28 }}>
-        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setEquipOpen(v => !v)}>
-          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ transition: "transform 150ms", transform: equipOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
-            Equipment
-            <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-              {trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length}T · {trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length}TL · {scopedActiveComboCount} Combos
-            </span>
-            {(flaggedTruckCount + flaggedTrailerCount) > 0 && (
+      {/* ── EQUIPMENT (Trucks, Trailers, Combos) -- modal opened via its own
+           "Equipment" tile below. Admin/lead only, same as before. Content
+           unchanged from the old inline section, just relocated. ── */}
+      {equipOpen && (myRole === "admin" || myRole === "lead") && (
+        <Modal title="Equipment" onClose={() => setEquipOpen(false)} wide>
+          {(flaggedTruckCount + flaggedTrailerCount) > 0 && (
+            <div style={{ marginBottom: 10 }}>
               <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 999, padding: "2px 8px" }}>
                 ⚠ {flaggedTruckCount + flaggedTrailerCount} flagged
               </span>
-            )}
-          </h2>
-        </div>
-
-        {equipOpen && (
-          <>
-            {/* Tab bar */}
-            <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-              {([["trucks","Trucks",trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["trailers","Trailers",trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["combos","Combos",scopedActiveComboCount]] as const).map(([tab, label, count]) => (
-                <button key={tab} type="button"
-                  onClick={() => setEquipTab(tab)}
-                  style={{ flex: 1, background: "none", border: "none", borderBottom: equipTab === tab ? "2px solid rgba(255,255,255,0.70)" : "2px solid transparent", cursor: "pointer", padding: "8px 4px", fontSize: 13, fontWeight: equipTab === tab ? 800 : 500, color: equipTab === tab ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.35)", transition: "all 150ms" }}>
-                  {label} <span style={{ fontSize: 11, opacity: 0.6 }}>({count})</span>
-                </button>
-              ))}
             </div>
+          )}
+          {/* Tab bar */}
+          <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            {([["trucks","Trucks",trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["trailers","Trailers",trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["combos","Combos",scopedActiveComboCount]] as const).map(([tab, label, count]) => (
+              <button key={tab} type="button"
+                onClick={() => setEquipTab(tab)}
+                style={{ flex: 1, background: "none", border: "none", borderBottom: equipTab === tab ? "2px solid rgba(255,255,255,0.70)" : "2px solid transparent", cursor: "pointer", padding: "8px 4px", fontSize: 13, fontWeight: equipTab === tab ? 800 : 500, color: equipTab === tab ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.35)", transition: "all 150ms" }}>
+                {label} <span style={{ fontSize: 11, opacity: 0.6 }}>({count})</span>
+              </button>
+            ))}
+          </div>
 
-            {/* Trucks tab */}
-            {equipTab === "trucks" && (
-              <>
-                {(flaggedTruckCount > 0 || truckIdsExpiring.size > 0) && (
-                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
-                    {flaggedTruckCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 6, width: "100%",
-                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                          border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
-                          background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
-                          color: "#f87171", fontSize: 12, fontWeight: 700,
-                        }}
-                      >
-                        ⚠ {flaggedTruckCount} truck{flaggedTruckCount !== 1 ? "s" : ""} flagged Deadline
-                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "flagged" ? "showing" : "tap to view"}</span>
-                      </button>
-                    )}
-                    {truckIdsExpiring.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTruckFilter(f => f === "expiring" ? "" : "expiring")}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 6, width: "100%",
-                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                          border: truckFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
-                          background: truckFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
-                          color: "#fdba74", fontSize: 12, fontWeight: 700,
-                        }}
-                      >
-                        {truckIdsExpiring.size} truck{truckIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
-                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "expiring" ? "showing" : "tap to view"}</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-                <div style={{ ...filterRow, alignItems: "center" }}>
-                  <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                  <select value={truckFilter} onChange={e => setTruckFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
-                  </select>
-                  <select value={truckSort} onChange={e => setTruckSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
-                    <option value="region:asc">Region A→Z</option><option value="status:asc">Status A→Z</option>
-                  </select>
-                  <button style={plusBtn} onClick={() => setTruckModal("new")} title="Add truck">+</button>
+          {/* Trucks tab */}
+          {equipTab === "trucks" && (
+            <>
+              {(flaggedTruckCount > 0 || truckIdsExpiring.size > 0) && (
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
+                  {flaggedTruckCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, width: "100%",
+                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
+                        background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
+                        color: "#f87171", fontSize: 12, fontWeight: 700,
+                      }}
+                    >
+                      ⚠ {flaggedTruckCount} truck{flaggedTruckCount !== 1 ? "s" : ""} flagged Deadline
+                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "flagged" ? "showing" : "tap to view"}</span>
+                    </button>
+                  )}
+                  {truckIdsExpiring.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTruckFilter(f => f === "expiring" ? "" : "expiring")}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, width: "100%",
+                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        border: truckFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
+                        background: truckFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
+                        color: "#fdba74", fontSize: 12, fontWeight: 700,
+                      }}
+                    >
+                      {truckIdsExpiring.size} truck{truckIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
+                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "expiring" ? "showing" : "tap to view"}</span>
+                    </button>
+                  )}
                 </div>
-                {!truckSearch && truckFilter === "" ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or filter to find trucks.</div>
-                ) : filteredTrucks.length === 0 ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trucks match your filter.</div>
-                ) : (
-                  filteredTrucks.map(t => <TruckCard key={t.truck_id} truck={t} companyId={companyId!} onEdit={() => setTruckModal(t)} otherPermits={truckOtherPermits[t.truck_id]} />)
-                )}
-              </>
-            )}
+              )}
+              <div style={{ ...filterRow, alignItems: "center" }}>
+                <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
+                <select value={truckFilter} onChange={e => setTruckFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+                  <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
+                </select>
+                <select value={truckSort} onChange={e => setTruckSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+                  <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
+                  <option value="region:asc">Region A→Z</option><option value="status:asc">Status A→Z</option>
+                </select>
+                <button style={plusBtn} onClick={() => setTruckModal("new")} title="Add truck">+</button>
+              </div>
+              {!truckSearch && truckFilter === "" ? (
+                <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or filter to find trucks.</div>
+              ) : filteredTrucks.length === 0 ? (
+                <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trucks match your filter.</div>
+              ) : (
+                filteredTrucks.map(t => <TruckCard key={t.truck_id} truck={t} companyId={companyId!} onEdit={() => setTruckModal(t)} otherPermits={truckOtherPermits[t.truck_id]} />)
+              )}
+            </>
+          )}
 
-            {/* Trailers tab */}
-            {equipTab === "trailers" && (
-              <>
-                {(flaggedTrailerCount > 0 || trailerIdsExpiring.size > 0) && (
-                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
-                    {flaggedTrailerCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 6, width: "100%",
-                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                          border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
-                          background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
-                          color: "#f87171", fontSize: 12, fontWeight: 700,
-                        }}
-                      >
-                        ⚠ {flaggedTrailerCount} trailer{flaggedTrailerCount !== 1 ? "s" : ""} flagged Deadline
-                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "flagged" ? "showing" : "tap to view"}</span>
-                      </button>
-                    )}
-                    {trailerIdsExpiring.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTrailerFilter(f => f === "expiring" ? "" : "expiring")}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 6, width: "100%",
-                          padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
-                          border: trailerFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
-                          background: trailerFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
-                          color: "#fdba74", fontSize: 12, fontWeight: 700,
-                        }}
-                      >
-                        {trailerIdsExpiring.size} trailer{trailerIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
-                        <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "expiring" ? "showing" : "tap to view"}</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-                <div style={{ ...filterRow, alignItems: "center" }}>
-                  <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                  <select value={trailerFilter} onChange={e => setTrailerFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
-                  </select>
-                  <select value={trailerSort} onChange={e => setTrailerSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
-                    <option value="region:asc">Region A→Z</option>
-                  </select>
-                  <button style={plusBtn} onClick={() => setTrailerModal("new")} title="Add trailer">+</button>
+          {/* Trailers tab */}
+          {equipTab === "trailers" && (
+            <>
+              {(flaggedTrailerCount > 0 || trailerIdsExpiring.size > 0) && (
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
+                  {flaggedTrailerCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, width: "100%",
+                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
+                        background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
+                        color: "#f87171", fontSize: 12, fontWeight: 700,
+                      }}
+                    >
+                      ⚠ {flaggedTrailerCount} trailer{flaggedTrailerCount !== 1 ? "s" : ""} flagged Deadline
+                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "flagged" ? "showing" : "tap to view"}</span>
+                    </button>
+                  )}
+                  {trailerIdsExpiring.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTrailerFilter(f => f === "expiring" ? "" : "expiring")}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, width: "100%",
+                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        border: trailerFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
+                        background: trailerFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
+                        color: "#fdba74", fontSize: 12, fontWeight: 700,
+                      }}
+                    >
+                      {trailerIdsExpiring.size} trailer{trailerIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
+                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "expiring" ? "showing" : "tap to view"}</span>
+                    </button>
+                  )}
                 </div>
-                {!trailerSearch && trailerFilter === "" ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or filter to find trailers.</div>
-                ) : filteredTrailers.length === 0 ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trailers match your filter.</div>
-                ) : (
-                  filteredTrailers.map(t => <TrailerCard key={t.trailer_id} trailer={t} companyId={companyId!} onEdit={() => setTrailerModal(t)} />)
-                )}
-              </>
-            )}
+              )}
+              <div style={{ ...filterRow, alignItems: "center" }}>
+                <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
+                <select value={trailerFilter} onChange={e => setTrailerFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+                  <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
+                </select>
+                <select value={trailerSort} onChange={e => setTrailerSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
+                  <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
+                  <option value="region:asc">Region A→Z</option>
+                </select>
+                <button style={plusBtn} onClick={() => setTrailerModal("new")} title="Add trailer">+</button>
+              </div>
+              {!trailerSearch && trailerFilter === "" ? (
+                <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or filter to find trailers.</div>
+              ) : filteredTrailers.length === 0 ? (
+                <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trailers match your filter.</div>
+              ) : (
+                filteredTrailers.map(t => <TrailerCard key={t.trailer_id} trailer={t} companyId={companyId!} onEdit={() => setTrailerModal(t)} />)
+              )}
+            </>
+          )}
 
-            {/* Combos tab */}
-            {equipTab === "combos" && (
-              <>
-                <div style={{ ...filterRow, alignItems: "center" }}>
-                  <input value={comboSearch} onChange={e => setComboSearch(e.target.value)} placeholder="Search truck, trailer, driver…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                  <button style={plusBtn} onClick={() => setCoupleModal(true)} title="New combo">+</button>
-                </div>
-                {!comboSearch ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search to find combos, or tap + to create one.</div>
-                ) : filteredCombos.length === 0 ? (
-                  <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No combos match your search.</div>
-                ) : (
-                  filteredCombos.map(c => <ComboCard key={c.combo_id} combo={c} onEdit={() => setComboEditModal(c)} />)
-                )}
-              </>
-            )}
-          </>
-        )}
-      </section>
+          {/* Combos tab */}
+          {equipTab === "combos" && (
+            <>
+              <div style={{ ...filterRow, alignItems: "center" }}>
+                <input value={comboSearch} onChange={e => setComboSearch(e.target.value)} placeholder="Search truck, trailer, driver…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
+                <button style={plusBtn} onClick={() => setCoupleModal(true)} title="New combo">+</button>
+              </div>
+              {!comboSearch ? (
+                <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search to find combos, or tap + to create one.</div>
+              ) : filteredCombos.length === 0 ? (
+                <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No combos match your search.</div>
+              ) : (
+                filteredCombos.map(c => <ComboCard key={c.combo_id} combo={c} onEdit={() => setComboEditModal(c)} />)
+              )}
+            </>
+          )}
+        </Modal>
+      )}
 
-      <hr style={css.divider} />
-
-      {/* ── TERMINALS ── */}
-      <section style={{ marginTop: 28, marginBottom: 32 }}>
-        <div style={{ ...css.sectionHead, cursor: "pointer", userSelect: "none" }} onClick={() => setTerminalsOpen(v => !v)}>
-          <h2 style={{ ...css.sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ transition: "transform 150ms", transform: terminalsOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
-            Terminals
-            <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-              {terminals.filter(t=>t.active).length} active
-            </span>
-          </h2>
-          <button style={plusBtn} onClick={e => { e.stopPropagation(); setTerminalModal("new"); }} title="Add terminal">+</button>
-        </div>
-        {terminalsOpen && (
-          <>
-            <div style={filterRow}>
-              <input value={terminalSearch} onChange={e => setTerminalSearch(e.target.value)}
-                placeholder="Search terminal name, city, state…"
-                style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} autoFocus />
-            </div>
-            {!terminalSearch.trim() ? (
-              <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Type to search terminals.</div>
-            ) : (() => {
-              const filtered = terminals.filter(t => {
-                const q = terminalSearch.toLowerCase();
-                return [t.terminal_name, t.city, t.state].some(v => v?.toLowerCase().includes(q));
-              });
-              const groups: Record<string, Terminal[]> = {};
-              for (const t of filtered) {
-                const key = [t.state, t.city].filter(Boolean).join(", ") || "Unknown";
-                if (!groups[key]) groups[key] = [];
-                groups[key].push(t);
-              }
-              if (filtered.length === 0) return <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No terminals match your search.</div>;
-              return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([group, ts]) => (
-                <TerminalGroup key={group} cityState={group} terminals={ts} onEdit={t => setTerminalModal(t)} />
-              ));
-            })()}
-          </>
-        )}
-      </section>
-      </>
+      {/* ── TERMINALS -- modal opened via its own "Terminals" tile below.
+           Content unchanged from the old inline section, just relocated. ── */}
+      {terminalsOpen && (myRole === "admin" || myRole === "lead") && (
+        <Modal
+          title={`Terminals (${terminals.filter(t=>t.active).length} active)`}
+          onClose={() => setTerminalsOpen(false)}
+          wide
+        >
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button style={plusBtn} onClick={() => setTerminalModal("new")} title="Add terminal">+</button>
+          </div>
+          <div style={filterRow}>
+            <input value={terminalSearch} onChange={e => setTerminalSearch(e.target.value)}
+              placeholder="Search terminal name, city, state…"
+              style={{ ...css.input, flex: 1, minWidth: 160, padding: "7px 10px" }} autoFocus />
+          </div>
+          {!terminalSearch.trim() ? (
+            <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Type to search terminals.</div>
+          ) : (() => {
+            const filtered = terminals.filter(t => {
+              const q = terminalSearch.toLowerCase();
+              return [t.terminal_name, t.city, t.state].some(v => v?.toLowerCase().includes(q));
+            });
+            const groups: Record<string, Terminal[]> = {};
+            for (const t of filtered) {
+              const key = [t.state, t.city].filter(Boolean).join(", ") || "Unknown";
+              if (!groups[key]) groups[key] = [];
+              groups[key].push(t);
+            }
+            if (filtered.length === 0) return <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No terminals match your search.</div>;
+            return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([group, ts]) => (
+              <TerminalGroup key={group} cityState={group} terminals={ts} onEdit={t => setTerminalModal(t)} />
+            ));
+          })()}
+        </Modal>
       )}
 
       {/* ── Modals ── */}
