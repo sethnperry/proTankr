@@ -625,7 +625,9 @@ export default function LoadingModal(props: {
               );
             })}
 
-            {reportByProduct.length > 0 && (
+            {/* Only meaningful with 2+ distinct products -- with just one,
+                this line would just repeat the Total line below it. */}
+            {reportByProduct.length > 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                 {reportByProduct.map((p) => {
                   const dotColor = (productHexCodeById?.[p.productId] && String(productHexCodeById[p.productId]).trim()) || "rgba(255,255,255,0.5)";

@@ -454,42 +454,6 @@ export default function CalculatorPage() {
   // "Save plan {letter}" unchanged.
   const [lastLoadedSlot, setLastLoadedSlot] = useState<number | null>(null);
   const [selectedComp, setSelectedComp] = useState<number | null>(null);
-  // TEMPORARY -- on-screen mirror of the "[planSlots]" console diagnostics
-  // for the plan A/B toggle-on-refresh bug, for a device where the
-  // console isn't reachable (no desktop remote-debug setup). Capped so it
-  // can't grow unbounded across a long session. Remove alongside dbg()
-  // in usePlanSlots.ts once the real cause is confirmed and fixed.
-  // Persisted to localStorage (not just React state) -- a plain in-memory
-  // log resets on every refresh, which meant every capture during this
-  // debugging thread could only ever show what happened AFTER a refresh,
-  // never the edits/actions immediately before it that actually explain
-  // what got saved. Surviving a refresh lets one capture show the whole
-  // sequence: set up a plan, wait, refresh, and the panel still has both
-  // halves. Capped at the same 50 lines as before, just backed by storage.
-  const DEBUG_LOG_KEY = "protankr_debugLog_v1";
-  const [debugLog, setDebugLog] = useState<string[]>(() => {
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(DEBUG_LOG_KEY) : null;
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  });
-  const [debugLogOpen, setDebugLogOpen] = useState(false);
-  const pushDebugLog = useCallback((line: string) => {
-    const stamp = new Date().toISOString().slice(11, 23);
-    setDebugLog((prev) => {
-      const next = [...prev.slice(-49), `${stamp} ${line}`];
-      try { localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, []);
-  const clearDebugLog = useCallback(() => {
-    setDebugLog([]);
-    try { localStorage.removeItem(DEBUG_LOG_KEY); } catch {}
-  }, []);
-  // Marks every mount boundary in the persisted log, so a capture spanning
-  // a refresh (or several) shows clearly where each page load started.
-  useEffect(() => { pushDebugLog("=== PAGE MOUNT ==="); }, [pushDebugLog]);
   // Fired by usePlanSlots whenever slot 0 restores from a genuine local
   // draft -- restores the plan-letter highlight from whatever that draft's
   // own activeSlot says was on screen right before the refresh. This is
@@ -499,12 +463,9 @@ export default function CalculatorPage() {
   // load" info on the Planner page) was removed entirely per explicit
   // direction: no last-load info anywhere on this page anymore.
   const handlePlanRestored = useCallback((slot: number | null) => {
-    // eslint-disable-next-line no-console
-    console.log("[planSlots] page.tsx:handlePlanRestored", { slot });
-    pushDebugLog(`page:handlePlanRestored slot=${slot}`);
     setLastLoadedSlot(slot);
     if (slot != null) setActiveSlotLetter(slot);
-  }, [pushDebugLog]);
+  }, []);
   // Real bug found via a live debug capture: the "initialize compPlan
   // entries when compartments change" effect below fills in a blank entry
   // for any real compartment that doesn't have one yet -- fine for a
@@ -951,10 +912,7 @@ export default function CalculatorPage() {
   // debounced autosave would then persist -- before usePlanSlots has had
   // its own chance to restore the real saved plan for this combo.
   useEffect(() => {
-    if (!planRestoreAttempted) {
-      pushDebugLog(`page:compartmentsInit SKIPPED (restore not attempted yet) compartments=${compartments.length}`);
-      return;
-    }
+    if (!planRestoreAttempted) return;
     setCompPlan((prev: Record<number, CompPlanInput>) => {
       const next = { ...prev };
       for (const c of compartments) {
@@ -986,7 +944,6 @@ export default function CalculatorPage() {
           if (!compartments.some((c) => Number(c.comp_number) === n)) delete next[n];
         }
       }
-      pushDebugLog(`page:compartmentsInit applied compartments=${compartments.length} prevKeys=${Object.keys(prev).length} nextKeys=${Object.keys(next).length}`);
       return next;
     });
   }, [compartments, planRestoreAttempted]);
@@ -1263,7 +1220,6 @@ export default function CalculatorPage() {
     activeSlotLetter,
     onPlanRestored: handlePlanRestored,
     onRestoreAttempted: handleRestoreAttempted,
-    onDebugLog: pushDebugLog,
   });
 
   // ── Load workflow ──────────────────────────────────────────────────────────
@@ -2246,9 +2202,6 @@ const lastProductInfoById = useMemo(() => {
   // onLoad/onSave props used -- preserved verbatim, just triggered from
   // PresetQuickPick's row taps now instead of the dial's.
   const handlePresetLoad = (n: number) => {
-    // eslint-disable-next-line no-console
-    console.log("[planSlots] page.tsx:handlePresetLoad (user tap)", { slot: n });
-    pushDebugLog(`page:handlePresetLoad (USER TAP) slot=${n}`);
     planSlots.loadFromSlot(n);
     setLastLoadedSlot(n);
     setActiveSlotLetter(n);
@@ -3130,102 +3083,6 @@ const lastProductInfoById = useMemo(() => {
         setTermOpen={setTermOpen}
       />
 
-      {/* TEMPORARY -- on-screen mirror of the "[planSlots]" diagnostics
-          (see pushDebugLog/dbg's own comments) for tracking the reported
-          plan A/B toggle-on-refresh bug from a device with no console
-          access. Pinned near the TOP (below the header's icon row, not at
-          the bottom) so it can never sit on top of the LOAD button or a
-          bottom sheet's own action buttons (CancelLoadSheet, Plan Review,
-          etc.) -- those are exactly the controls a real reproduction of
-          this bug needs to keep tapping. Tap to expand/collapse, Copy
-          grabs the full log as text (paste it back in chat), Clear resets
-          it. Remove once the real cause is confirmed and fixed. */}
-      {debugLogOpen ? (
-        <div
-          style={{
-            position: "fixed", left: 8, right: 8, top: 60, zIndex: 9999,
-            maxHeight: "40vh", display: "flex", flexDirection: "column",
-            background: "#111", border: "1px solid #f59e0b", borderRadius: 8,
-            boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
-          }}
-        >
-          <div
-            onClick={() => setDebugLogOpen(false)}
-            style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "6px 10px", borderBottom: "1px solid #333", cursor: "pointer",
-              fontSize: 11, fontWeight: 700, color: "#f59e0b",
-            }}
-          >
-            <span>DEBUG LOG ({debugLog.length}) -- tap to collapse</span>
-            <span style={{ display: "flex", gap: 10 }}>
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const text = debugLog.join("\n");
-                  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
-                }}
-                style={{ textDecoration: "underline" }}
-              >
-                Copy
-              </span>
-              <span
-                onClick={(e) => { e.stopPropagation(); clearDebugLog(); }}
-                style={{ textDecoration: "underline" }}
-              >
-                Clear
-              </span>
-            </span>
-          </div>
-          <div style={{ overflowY: "auto", padding: "6px 10px" }}>
-            {debugLog.length === 0 ? (
-              <div style={{ fontSize: 11, color: "#666" }}>No log entries yet.</div>
-            ) : (
-              <>
-                {/* Real, plain-text <textarea> fallback for the Copy button
-                    above -- navigator.clipboard.writeText() is blocked or
-                    silently no-ops in some mobile browser/PWA contexts
-                    (missing permission, non-secure context quirks), with
-                    no visible error either way. A readOnly textarea always
-                    supports tap-and-hold -> Select All -> Copy as a manual
-                    fallback, regardless of Clipboard API support. */}
-                <textarea
-                  readOnly
-                  value={debugLog.join("\n")}
-                  onFocus={(e) => e.currentTarget.select()}
-                  // Some mobile browsers don't reliably pair focus with a
-                  // tap on a readOnly textarea -- select on click too, so
-                  // a single tap is enough to get everything highlighted
-                  // and ready for the OS's own Copy action.
-                  onClick={(e) => e.currentTarget.select()}
-                  style={{
-                    width: "100%", minHeight: 120, marginBottom: 8, boxSizing: "border-box" as const,
-                    fontSize: 10, fontFamily: "monospace", color: "#ddd",
-                    background: "#0a0a0a", border: "1px solid #333", borderRadius: 4, padding: 6, resize: "vertical" as const,
-                  }}
-                />
-                {debugLog.map((line, i) => (
-                  <div key={i} style={{ fontSize: 10, fontFamily: "monospace", color: "#ddd", marginBottom: 2, wordBreak: "break-all" }}>
-                    {line}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div
-          onClick={() => setDebugLogOpen(true)}
-          style={{
-            position: "fixed", right: 8, top: 60, zIndex: 9999,
-            background: "#111", border: "1px solid #f59e0b", borderRadius: 20,
-            padding: "6px 12px", fontSize: 11, fontWeight: 700, color: "#f59e0b",
-            cursor: "pointer",
-          }}
-        >
-          DEBUG ({debugLog.length})
-        </div>
-      )}
     </div>
   );
 }

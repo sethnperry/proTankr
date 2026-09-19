@@ -122,11 +122,6 @@ type Props = {
   // it up and can persist it, permanently overwriting a real saved plan
   // with an all-empty one the next time this combo loads.
   onRestoreAttempted?: () => void;
-  // TEMPORARY (see dbg() below) -- receives the same one-line diagnostic
-  // strings as the console.log calls, so page.tsx can render them
-  // on-screen for a device where the console isn't reachable. Remove
-  // alongside dbg() once the real cause is confirmed and fixed.
-  onDebugLog?: (line: string) => void;
 };
 
 export function usePlanSlots({
@@ -139,7 +134,6 @@ export function usePlanSlots({
   activeSlotLetter,
   onPlanRestored,
   onRestoreAttempted,
-  onDebugLog,
 }: Props) {
   const activeSlotLetterRef = useRef<number | null | undefined>(activeSlotLetter);
   useEffect(() => { activeSlotLetterRef.current = activeSlotLetter; }, [activeSlotLetter]);
@@ -147,8 +141,6 @@ export function usePlanSlots({
   useEffect(() => { onPlanRestoredRef.current = onPlanRestored; }, [onPlanRestored]);
   const onRestoreAttemptedRef = useRef<typeof onRestoreAttempted>(onRestoreAttempted);
   useEffect(() => { onRestoreAttemptedRef.current = onRestoreAttempted; }, [onRestoreAttempted]);
-  const onDebugLogRef = useRef<typeof onDebugLog>(onDebugLog);
-  useEffect(() => { onDebugLogRef.current = onDebugLog; }, [onDebugLog]);
 
   const [slotBump, setSlotBump] = useState(0);
   const [slotHas, setSlotHas] = useState<Record<number, boolean>>({});
@@ -242,38 +234,6 @@ export function usePlanSlots({
     try { if (typeof window !== "undefined") window.localStorage.removeItem(key); }
     catch {}
   }, []);
-
-  // ── TEMPORARY diagnostic logging ────────────────────────────────────────
-  // Tracking down a reported "toggles between the last two plans on every
-  // refresh" bug -- every place that can WRITE or RESTORE slot 0 logs a
-  // compact one-line summary (which compartment holds which product +
-  // which activeSlot letter) so the real sequence of events on a real
-  // device can be read straight out of the browser console, instead of
-  // guessed at from code alone. Remove once the real cause is confirmed
-  // and fixed.
-  function summarizeCompPlan(cp: any): string {
-    if (!cp || typeof cp !== "object") return "(none)";
-    return Object.keys(cp).sort((a, b) => Number(a) - Number(b))
-      .map((k) => {
-        const v = cp[k];
-        const code = v?.empty || !v?.productId ? "MT" : String(v.productId).slice(0, 8);
-        return `C${k}:${code}`;
-      })
-      .join(",") || "(empty)";
-  }
-  function dbg(label: string, extra: Record<string, any>) {
-    try {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[planSlots] ${label}`,
-        { scope: planScopeKey, combo: selectedComboId, ...extra }
-      );
-    } catch {}
-    try {
-      const parts = Object.entries(extra).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ");
-      onDebugLogRef.current?.(`${label} ${parts}`);
-    } catch {}
-  }
 
   // Read a preset slot's raw payload, falling back to the pre-equipment-
   // scoping legacy key when this specific combo has never had that slot
@@ -725,27 +685,19 @@ export function usePlanSlots({
   // actually reflects the most recent state" -- an automatic path (the
   // server pull's own cross-device merge in particular) could silently win
   // a race against an already-correct restore and regress the live plan to
-  // older data. `source` is a plain label for the debug log, not logic.
+  // older data.
   // `opts.force` is for the two genuinely explicit, user-initiated actions
   // (tapping a preset, tapping Recall Last Load) that are SUPPOSED to jump
   // back to older saved content on purpose -- staleness must never block
   // those. Returns whether the snapshot was actually applied, so a caller
   // that also wants to re-sync something else (e.g. the plan-letter
   // highlight) doesn't do so for a rejected, stale snapshot.
-  const applySnapshot = useCallback((snap: PlanSnapshot, opts?: { restoreCg?: boolean; source?: string; force?: boolean }): boolean => {
+  const applySnapshot = useCallback((snap: PlanSnapshot, opts?: { restoreCg?: boolean; force?: boolean }): boolean => {
     const incomingSavedAt = typeof snap?.savedAt === "number" ? snap.savedAt : 0;
     const prev = lastAppliedScopeRef.current;
     if (!opts?.force && prev && prev.scope === planScopeKey && incomingSavedAt > 0 && incomingSavedAt < prev.savedAt) {
-      dbg("applySnapshot:REJECTED (stale)", {
-        source: opts?.source ?? "?", incomingSavedAt, prevSavedAt: prev.savedAt,
-        rejectedCompPlan: summarizeCompPlan(snap.compPlan),
-      });
       return false;
     }
-    dbg("applySnapshot", {
-      source: opts?.source ?? "?", savedAt: incomingSavedAt,
-      compPlan: summarizeCompPlan(snap.compPlan), activeSlot: snap.activeSlot ?? null,
-    });
     lastAppliedScopeRef.current = { scope: planScopeKey, savedAt: incomingSavedAt || Date.now() };
     // NOTE: tempF is intentionally NOT restored from any snapshot.
     // The fuel temp prediction always owns tempF. Restoring it from saved state
@@ -830,16 +782,6 @@ export function usePlanSlots({
           // actual product selections in it.
           const localHasRealContent = lp && hasRealCompPlan(lp);
           const willOverwrite = !lp || !localHasRealContent || compareSavedAt(sp, lp) > 0;
-          if (key === planStoreKey(0)) {
-            dbg("serverPull:pullInto:slot0", {
-              key, willOverwrite,
-              localHasRealContent: !!localHasRealContent,
-              localCompPlan: summarizeCompPlan(lp?.compPlan),
-              localActiveSlot: lp?.activeSlot ?? null,
-              serverCompPlan: summarizeCompPlan(sp?.compPlan),
-              serverActiveSlot: sp?.activeSlot ?? null,
-            });
-          }
           if (willOverwrite) {
             try { localStorage.setItem(key, JSON.stringify(normalize(sp, selectedTerminalId))); setSlotBump((v) => v + 1); } catch {}
           }
@@ -877,21 +819,12 @@ export function usePlanSlots({
           // whether to even attempt the merge.
           const safeToApply = !planDirtyRef.current || Object.keys(compPlan || {}).length === 0;
 
-          dbg("serverPull:local0Apply", {
-            safeToApply,
-            planDirty: planDirtyRef.current,
-            local0CompPlan: summarizeCompPlan(local0.compPlan),
-            local0ActiveSlot: local0.activeSlot ?? null,
-            local0SavedAt: local0.savedAt ?? null,
-            liveCompPlanBefore: summarizeCompPlan(compPlan),
-          });
-
           if (safeToApply) {
             // NOTE: tempF is intentionally NOT restored from snapshot.
             // The fuel temp prediction always dominates on load/refresh.
             // tempF is only ever set by the prediction hook or manually by the user.
             // cgSlider is likewise never restored -- see applySnapshot.
-            const applied = applySnapshot(local0, { source: "serverPull:local0Apply" });
+            const applied = applySnapshot(local0);
             if (applied) {
               planDirtyRef.current = false;
               // Cross-device sync can supersede whatever the "restore live
@@ -948,19 +881,12 @@ export function usePlanSlots({
       // with no autosaved state. If slot 0 has data the driver is mid-plan; don't clobber it.
       const localRaw = safeRead(planStoreKey(0));
       const slotIsEmpty = !localRaw || !localRaw.savedAt;
-      dbg("comboClaim:lastCompletedLoad", {
-        slotIsEmpty,
-        localRawCompPlan: summarizeCompPlan(localRaw?.compPlan),
-        localRawActiveSlot: localRaw?.activeSlot ?? null,
-        dbPayloadCompPlan: summarizeCompPlan(dbPayload?.compPlan),
-        dbPayloadPlanSlot: dbPayload?.loadReport?.plan_slot ?? null,
-      });
       if (slotIsEmpty) {
         safeWrite(planStoreKey(0), dbPayload);
         // restoreCg: true -- see CLAUDE.md "recap / recall last load": a
         // fresh mount/refresh should reproduce the last completed load
         // exactly, CG position included, not just the product selection.
-        applySnapshot(dbPayload, { restoreCg: true, source: "comboClaim:lastCompletedLoad" });
+        applySnapshot(dbPayload, { restoreCg: true });
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -998,14 +924,8 @@ export function usePlanSlots({
     const raw = safeRead(planStoreKey(0)) as PlanSnapshot | null;
     planRestoreReadyRef.current = planScopeKey;
 
-    dbg("restoreLivePlan", {
-      hasRaw: !!raw, rawV: raw?.v ?? null,
-      rawCompPlan: summarizeCompPlan(raw?.compPlan),
-      rawActiveSlot: raw?.activeSlot ?? null,
-    });
-
     if (raw && raw.v === 1) {
-      const applied = applySnapshot(raw, { source: "restoreLivePlan" });
+      const applied = applySnapshot(raw);
       // A genuine local draft exists -- tell page.tsx so it can restore
       // the plan-letter highlight from THIS draft's own activeSlot
       // (whatever was actually on screen before the refresh) instead of
@@ -1043,9 +963,6 @@ export function usePlanSlots({
     autosaveTimerRef.current = setTimeout(() => {
       if (!selectedTerminalId || !planDirtyRef.current) return;
       const snap = buildSnapshot(String(selectedTerminalId));
-      dbg("autosave:debouncedWrite", {
-        compPlan: summarizeCompPlan(snap.compPlan), activeSlot: snap.activeSlot ?? null,
-      });
       safeWrite(planStoreKey(0), snap);
       planDirtyRef.current = false;
       refreshSlotHas();
@@ -1068,9 +985,6 @@ export function usePlanSlots({
       if (!selectedTerminalId || !planDirtyRef.current) return;
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
       const snap = buildSnapshot(String(selectedTerminalId));
-      dbg("autosave:hideFlushWrite", {
-        compPlan: summarizeCompPlan(snap.compPlan), activeSlot: snap.activeSlot ?? null,
-      });
       safeWrite(planStoreKey(0), snap);
       planDirtyRef.current = false;
     };
@@ -1198,7 +1112,7 @@ export function usePlanSlots({
     // plan" tap; it must never be blocked by the staleness guard just
     // because the preset's own savedAt is (usually) far older than
     // whatever's live right now.
-    applySnapshot(raw, { restoreCg: slot !== 0, source: `loadFromSlot:${slot}`, force: true });
+    applySnapshot(raw, { restoreCg: slot !== 0, force: true });
   }, [selectedComboId, readSlot, applySnapshot]);
 
   // Read-only peek at a slot's saved compPlan, for showing a real summary
@@ -1259,7 +1173,7 @@ export function usePlanSlots({
     // own comment above already says it applies "unconditionally... no
     // slotIsEmpty gate" -- the staleness guard must not silently defeat
     // that by rejecting a past load's (usually much older) savedAt.
-    applySnapshot(dbPayload, { restoreCg: true, source: "recallLastLoad", force: true });
+    applySnapshot(dbPayload, { restoreCg: true, force: true });
     const report = dbPayload.loadReport ?? null;
     setLastLoadReport(report);
     refreshSlotHas();
