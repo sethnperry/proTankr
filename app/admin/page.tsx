@@ -1212,6 +1212,14 @@ export default function AdminPage() {
   const trailersOpen = equipOpen && equipTab === "trailers";
   const combosOpen   = equipOpen && equipTab === "combos";
 
+  // Quick Find -- one box searching across Users/Equipment/Terminals at
+  // once, jumping into whichever section actually has the match rather
+  // than replacing that section's own search/filter state (see quickFindResults
+  // below) -- zero risk of regressing any of the three sections' existing
+  // filtering, since selecting a result just calls the same setters their
+  // own search boxes already call.
+  const [quickFind, setQuickFind] = useState("");
+
   const [search,     setSearch]     = useState("");
   const [sortField,  setSortField]  = useState<SortField>("name");
   const [sortDir,    setSortDir]    = useState<SortDir>("asc");
@@ -1526,6 +1534,54 @@ export default function AdminPage() {
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
+  // Quick Find matches -- respects the same per-section role gates as the
+  // sections themselves (Users: admin/dispatch; Equipment/Terminals:
+  // admin/lead), so a role never sees a result for a section it can't
+  // actually open. Capped per category so a broad query doesn't produce an
+  // overwhelming dropdown; each section's own search box is still there
+  // for a real, unbounded search once you've jumped in.
+  const QUICK_FIND_CAP = 5;
+  const quickFindResults = useMemo(() => {
+    const q = quickFind.trim().toLowerCase();
+    if (q.length < 2) return { members: [], trucks: [], trailers: [], terminals: [] };
+    const canUsers = myRole === "admin" || myRole === "dispatch";
+    const canEquipment = myRole === "admin" || myRole === "lead";
+    return {
+      members: canUsers ? members.filter(m =>
+        [m.display_name, m.email, m.division, m.region, m.local_area, m.employee_number].some(v => v?.toLowerCase().includes(q))
+      ).slice(0, QUICK_FIND_CAP) : [],
+      trucks: canEquipment ? trucks.filter(t => t.active &&
+        [t.truck_name, t.vin_number, t.region, t.local_area].some(v => v?.toLowerCase().includes(q))
+      ).slice(0, QUICK_FIND_CAP) : [],
+      trailers: canEquipment ? trailers.filter(t => t.active &&
+        [t.trailer_name, t.vin_number, t.region, t.local_area].some(v => v?.toLowerCase().includes(q))
+      ).slice(0, QUICK_FIND_CAP) : [],
+      terminals: canEquipment ? terminals.filter(t => t.active &&
+        [t.terminal_name, t.city, t.state].some(v => v?.toLowerCase().includes(q))
+      ).slice(0, QUICK_FIND_CAP) : [],
+    };
+  }, [quickFind, members, trucks, trailers, terminals, myRole]);
+  const quickFindHasResults = quickFindResults.members.length > 0 || quickFindResults.trucks.length > 0
+    || quickFindResults.trailers.length > 0 || quickFindResults.terminals.length > 0;
+  const quickFindVisible = quickFind.trim().length >= 2;
+
+  function jumpToMember(m: Member) {
+    setUsersOpen(true); setFilterRole(""); setSearch(m.display_name ?? m.email ?? "");
+    setQuickFind("");
+  }
+  function jumpToTruck(t: Truck) {
+    setEquipOpen(true); setEquipTab("trucks"); setTruckFilter(""); setTruckSearch(t.truck_name);
+    setQuickFind("");
+  }
+  function jumpToTrailer(t: Trailer) {
+    setEquipOpen(true); setEquipTab("trailers"); setTrailerFilter(""); setTrailerSearch(t.trailer_name);
+    setQuickFind("");
+  }
+  function jumpToTerminal(t: Terminal) {
+    setTerminalsOpen(true); setTerminalSearch(t.terminal_name);
+    setQuickFind("");
+  }
+
   const filteredTrucks = useMemo(() => {
     let ts = [...trucks];
     if (truckFilter === "active")   ts = ts.filter(t => t.active);
@@ -1592,6 +1648,77 @@ export default function AdminPage() {
       <div className="admin-header-row" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
         <NavMenu anchor="left" />
         <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Company Admin</p></div>
+      </div>
+
+      {/* Quick Find -- one box across Users/Equipment/Terminals instead of
+          three independent per-section search boxes (see quickFindResults
+          above). Most admin tasks start with "find X," not "pick a
+          category first." */}
+      <div style={{ position: "relative", marginBottom: 20 }}>
+        <input
+          value={quickFind}
+          onChange={e => setQuickFind(e.target.value)}
+          placeholder="Find a driver, truck, trailer, or terminal…"
+          style={{ ...css.input, width: "100%", padding: "10px 12px", fontSize: 14 }}
+        />
+        {quickFindVisible && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
+            background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
+            boxShadow: "0 10px 24px rgba(0,0,0,0.45)", padding: "6px 0", maxHeight: 360, overflowY: "auto" as const,
+          }}>
+            {!quickFindHasResults ? (
+              <div style={{ padding: "10px 14px", fontSize: 13, color: T.muted }}>No matches for "{quickFind.trim()}".</div>
+            ) : (
+              <>
+                {quickFindResults.members.length > 0 && (
+                  <div style={{ padding: "4px 14px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, letterSpacing: 0.5, textTransform: "uppercase" as const, margin: "4px 0" }}>Users</div>
+                    {quickFindResults.members.map(m => (
+                      <div key={m.user_id} onClick={() => jumpToMember(m)}
+                        style={{ padding: "6px 0", cursor: "pointer", fontSize: 13, color: T.text }}>
+                        {m.display_name ?? m.email} <span style={{ color: T.muted, fontSize: 11 }}>· {m.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {quickFindResults.trucks.length > 0 && (
+                  <div style={{ padding: "4px 14px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, letterSpacing: 0.5, textTransform: "uppercase" as const, margin: "4px 0" }}>Trucks</div>
+                    {quickFindResults.trucks.map(t => (
+                      <div key={t.truck_id} onClick={() => jumpToTruck(t)}
+                        style={{ padding: "6px 0", cursor: "pointer", fontSize: 13, color: T.text }}>
+                        {t.truck_name} {t.region && <span style={{ color: T.muted, fontSize: 11 }}>· {t.region}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {quickFindResults.trailers.length > 0 && (
+                  <div style={{ padding: "4px 14px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, letterSpacing: 0.5, textTransform: "uppercase" as const, margin: "4px 0" }}>Trailers</div>
+                    {quickFindResults.trailers.map(t => (
+                      <div key={t.trailer_id} onClick={() => jumpToTrailer(t)}
+                        style={{ padding: "6px 0", cursor: "pointer", fontSize: 13, color: T.text }}>
+                        {t.trailer_name} {t.region && <span style={{ color: T.muted, fontSize: 11 }}>· {t.region}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {quickFindResults.terminals.length > 0 && (
+                  <div style={{ padding: "4px 14px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, letterSpacing: 0.5, textTransform: "uppercase" as const, margin: "4px 0" }}>Terminals</div>
+                    {quickFindResults.terminals.map(t => (
+                      <div key={t.terminal_id} onClick={() => jumpToTerminal(t)}
+                        style={{ padding: "6px 0", cursor: "pointer", fontSize: 13, color: T.text }}>
+                        {t.terminal_name} <span style={{ color: T.muted, fontSize: 11 }}>· {[t.city, t.state].filter(Boolean).join(", ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Square, large-tap-target tiles in a fixed 3-column grid -- replaces
