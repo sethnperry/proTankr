@@ -952,9 +952,29 @@ export default function CalculatorPage() {
         if (!Number.isFinite(n)) continue;
         if (!next[n]) next[n] = { empty: false, productId: "" };
       }
-      for (const key of Object.keys(next)) {
-        const n = Number(key);
-        if (!compartments.some((c) => Number(c.comp_number) === n)) delete next[n];
+      // Real bug found via a live debug capture: `compartments` itself
+      // starts as [] every time the trailer changes and only gets its real
+      // rows once its OWN separate fetch effect resolves (see the
+      // "Compartments" fetch above) -- a async gap that has nothing to do
+      // with planRestoreAttempted. This effect can genuinely run with
+      // compartments still empty even AFTER a real restore has landed (the
+      // restore's own setCompPlan flips planRestoreAttempted true, which
+      // re-triggers this effect immediately, often before the compartments
+      // fetch has finished). Deleting "stale" entries against a transiently
+      // empty compartments array wiped out a plan that had JUST been
+      // restored, in the exact sequence a real capture showed: this ran
+      // once with compartments=0 (deleting all 3 just-restored entries),
+      // then again moments later once compartments genuinely loaded --
+      // rebuilding them as blank instead of recovering what had just been
+      // deleted. Only prune once there's a REAL, loaded compartment list to
+      // compare against; an empty compartments array means "don't know
+      // yet," not "this trailer has none" -- leaves compPlan untouched
+      // rather than guessing.
+      if (compartments.length > 0) {
+        for (const key of Object.keys(next)) {
+          const n = Number(key);
+          if (!compartments.some((c) => Number(c.comp_number) === n)) delete next[n];
+        }
       }
       pushDebugLog(`page:compartmentsInit applied compartments=${compartments.length} prevKeys=${Object.keys(prev).length} nextKeys=${Object.keys(next).length}`);
       return next;
