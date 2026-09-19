@@ -653,33 +653,45 @@ export default function LoadingModal(props: {
               );
             })}
 
-            {/* Only meaningful with 2+ distinct products -- with just one,
-                this line would just repeat the Total line below it. */}
-            {reportByProduct.length > 1 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                {reportByProduct.map((p) => {
-                  const dotColor = (productHexCodeById?.[p.productId] && String(productHexCodeById[p.productId]).trim()) || "rgba(255,255,255,0.5)";
-                  const label = productNameById.get(p.productId) ?? p.productId;
-                  return (
-                    <div key={p.productId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 2px" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                        {label} total
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>
-                        {Math.round(p.gallons)} gal
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            {/* Totals -- per-product sums (2+ distinct products only, see
+                below) plus the whole-load Total, grouped inside one bordered
+                box so they read as their own distinct "totals" section
+                instead of blending into the raw compartment list above --
+                per explicit follow-up, same bordered-box treatment already
+                used for the Actual Weight card further down. */}
+            <div style={{
+              display: "flex", flexDirection: "column", gap: 2,
+              marginTop: 6, padding: "6px 10px", borderRadius: 6,
+              border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+            }}>
+              {/* Only meaningful with 2+ distinct products -- with just one,
+                  this line would just repeat the Total line below it. */}
+              {reportByProduct.length > 1 && reportByProduct.map((p) => {
+                const dotColor = (productHexCodeById?.[p.productId] && String(productHexCodeById[p.productId]).trim()) || "rgba(255,255,255,0.5)";
+                const label = productNameById.get(p.productId) ?? p.productId;
+                return (
+                  <div key={p.productId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 2px" }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                      {label} total
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>
+                      {Math.round(p.gallons)} gal
+                    </span>
+                  </div>
+                );
+              })}
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 2px", marginTop: 4, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Total</span>
-              <span style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>
-                {Math.round(reportTotalGallons)} gal · {Math.round(reportTotalLbs).toLocaleString()} lbs
-              </span>
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 2px 2px",
+                marginTop: reportByProduct.length > 1 ? 2 : 0,
+                borderTop: reportByProduct.length > 1 ? "1px solid rgba(255,255,255,0.10)" : "none",
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Total</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>
+                  {Math.round(reportTotalGallons)} gal · {Math.round(reportTotalLbs).toLocaleString()} lbs
+                </span>
+              </div>
             </div>
           </div>
         ) : (
@@ -738,8 +750,14 @@ export default function LoadingModal(props: {
                   );
                 })}
 
-                {/* Total -- plain summary line, not another compartment. */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px" }}>
+                {/* Total -- boxed the same way as Load Report's own totals
+                    section, so it reads as a distinct summary rather than
+                    another compartment in the list above. */}
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  marginTop: 2, padding: "8px 10px", borderRadius: 6,
+                  border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+                }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Total</span>
                   <span style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>{Math.round(totalPlannedGallons)} gal</span>
                 </div>
