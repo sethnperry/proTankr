@@ -495,6 +495,22 @@ export default function CalculatorPage() {
     setLastLoadedSlot(slot);
     if (slot != null) setActiveSlotLetter(slot);
   }, [pushDebugLog]);
+  // Real bug found via a live debug capture: the "initialize compPlan
+  // entries when compartments change" effect below fills in a blank entry
+  // for any real compartment that doesn't have one yet -- fine for a
+  // genuinely fresh combo, but if it runs BEFORE usePlanSlots' own
+  // mount-time restore has had a chance to apply the real saved plan
+  // (e.g. compartments happen to resolve before the combo does), it seeds
+  // an all-blank compPlan, which the debounced autosave can then persist,
+  // permanently clobbering a real saved plan with an empty one the next
+  // time this combo loads. Gates that effect until usePlanSlots signals
+  // its own restore attempt (successful or not) has already happened for
+  // the current combo -- reset on every combo change so it re-gates for
+  // the next one, not left permanently true from a previous combo.
+  const [planRestoreAttempted, setPlanRestoreAttempted] = useState(false);
+  const handleRestoreAttempted = useCallback(() => {
+    setPlanRestoreAttempted(true);
+  }, []);
   // "Recall Last Load" found a completed load at this terminal, but under
   // different equipment than what's currently selected -- per explicit
   // follow-up. See handleRecallLastLoad/handleViewAltLoadInReports below.
@@ -824,6 +840,12 @@ export default function CalculatorPage() {
   useEffect(() => {
     if (!equipment.selectedComboId) setCompPlan({});
   }, [equipment.selectedComboId]);
+  // Re-gate the compartments-init effect below for every new combo -- see
+  // planRestoreAttempted's own declaration for why it must wait for
+  // usePlanSlots' restore attempt before seeding blank comp entries.
+  useEffect(() => {
+    setPlanRestoreAttempted(false);
+  }, [equipment.selectedComboId]);
   const [productInputs, setProductInputs] = useState<Record<string, { api?: string; tempF?: number }>>({});
   // Named (not inline) so the mid-load terminal-switch handlers further
   // down can call these imperatively too, not just pass them as JSX props
@@ -914,8 +936,15 @@ export default function CalculatorPage() {
   // entry for a compartment that no longer exists) -- built on top of
   // whatever compPlan already is, which usePlanSlots' own restore effects
   // are solely responsible for populating now (see compPlan's own
-  // declaration above).
+  // declaration above). Gated on planRestoreAttempted (see its own
+  // declaration) so this can never seed blank entries -- which the
+  // debounced autosave would then persist -- before usePlanSlots has had
+  // its own chance to restore the real saved plan for this combo.
   useEffect(() => {
+    if (!planRestoreAttempted) {
+      pushDebugLog(`page:compartmentsInit SKIPPED (restore not attempted yet) compartments=${compartments.length}`);
+      return;
+    }
     setCompPlan((prev: Record<number, CompPlanInput>) => {
       const next = { ...prev };
       for (const c of compartments) {
@@ -927,9 +956,10 @@ export default function CalculatorPage() {
         const n = Number(key);
         if (!compartments.some((c) => Number(c.comp_number) === n)) delete next[n];
       }
+      pushDebugLog(`page:compartmentsInit applied compartments=${compartments.length} prevKeys=${Object.keys(prev).length} nextKeys=${Object.keys(next).length}`);
       return next;
     });
-  }, [compartments]);
+  }, [compartments, planRestoreAttempted]);
 
   // ── CG bias ────────────────────────────────────────────────────────────────
   const cgBias = useMemo(() => cgSliderToBias(cgSlider), [cgSlider]);
@@ -1202,6 +1232,7 @@ export default function CalculatorPage() {
     compartmentsLoaded: compartments.length > 0,
     activeSlotLetter,
     onPlanRestored: handlePlanRestored,
+    onRestoreAttempted: handleRestoreAttempted,
     onDebugLog: pushDebugLog,
   });
 

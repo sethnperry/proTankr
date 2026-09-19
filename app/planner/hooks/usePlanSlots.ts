@@ -107,6 +107,21 @@ type Props = {
   // fallback hijack the highlight. Never fired when slot 0 is genuinely
   // empty, so that fallback still gets to run for a brand-new combo.
   onPlanRestored?: (activeSlot: number | null) => void;
+  // Fired once, unconditionally, at the end of the mount-time "restore the
+  // live plan on combo change" effect -- regardless of whether a real local
+  // draft was actually found. Unlike onPlanRestored (which only fires for a
+  // genuine hit), page.tsx needs SOME signal that the synchronous restore
+  // attempt for the current combo has already happened at all, so its own
+  // "seed a blank entry per real compartment" effect can wait for it --
+  // real bug found via a live debug capture: that effect reads compPlan via
+  // a functional updater (always sees the latest state), but if it runs
+  // before this restore attempt has had a chance to apply anything (e.g.
+  // compartments happen to resolve before the combo does), it fills in
+  // fully blank per-compartment entries against a still-empty compPlan --
+  // and since that's a real compPlan change, the debounced autosave picks
+  // it up and can persist it, permanently overwriting a real saved plan
+  // with an all-empty one the next time this combo loads.
+  onRestoreAttempted?: () => void;
   // TEMPORARY (see dbg() below) -- receives the same one-line diagnostic
   // strings as the console.log calls, so page.tsx can render them
   // on-screen for a device where the console isn't reachable. Remove
@@ -123,12 +138,15 @@ export function usePlanSlots({
   onSaveLastLoad,
   activeSlotLetter,
   onPlanRestored,
+  onRestoreAttempted,
   onDebugLog,
 }: Props) {
   const activeSlotLetterRef = useRef<number | null | undefined>(activeSlotLetter);
   useEffect(() => { activeSlotLetterRef.current = activeSlotLetter; }, [activeSlotLetter]);
   const onPlanRestoredRef = useRef<typeof onPlanRestored>(onPlanRestored);
   useEffect(() => { onPlanRestoredRef.current = onPlanRestored; }, [onPlanRestored]);
+  const onRestoreAttemptedRef = useRef<typeof onRestoreAttempted>(onRestoreAttempted);
+  useEffect(() => { onRestoreAttemptedRef.current = onRestoreAttempted; }, [onRestoreAttempted]);
   const onDebugLogRef = useRef<typeof onDebugLog>(onDebugLog);
   useEffect(() => { onDebugLogRef.current = onDebugLog; }, [onDebugLog]);
 
@@ -995,6 +1013,11 @@ export function usePlanSlots({
       // sync effect there, which has no idea a real draft just won.
       if (applied) onPlanRestoredRef.current?.(raw.activeSlot ?? null);
     }
+
+    // Fires regardless of whether a real draft was found -- see this prop's
+    // own comment on why page.tsx needs to know the attempt happened at
+    // all, not just whether it succeeded.
+    onRestoreAttemptedRef.current?.();
 
     queueMicrotask(() => {
       if (planRestoreReadyRef.current === planScopeKey) planRestoreReadyRef.current = null;
