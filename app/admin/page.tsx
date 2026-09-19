@@ -15,7 +15,7 @@ import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "@/lib/ui/d
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "@/lib/ui/driver/primitives";
 import { MemberCard } from "@/lib/ui/driver/MemberCard";
 import { DriverProfileModal } from "@/lib/ui/driver/DriverProfileModal";
-import type { Member } from "@/lib/ui/driver/types";
+import type { Member, DriverProfile } from "@/lib/ui/driver/types";
 import type { Role } from "@/lib/ui/driver/role";
 import AdminLoadsModal from "./AdminLoadsModal";
 import FleetCardsModal from "./FleetCardsModal";
@@ -1193,6 +1193,7 @@ export default function AdminPage() {
   const [companyName,   setCompanyName]   = useState<string>("");
   const [isSolo,        setIsSolo]        = useState<boolean>(false);
   const [members,       setMembers]       = useState<Member[]>([]);
+  const [memberProfiles, setMemberProfiles] = useState<Record<string, DriverProfile>>({});
   const [trucks,        setTrucks]        = useState<Truck[]>([]);
   const [trailers,      setTrailers]      = useState<Trailer[]>([]);
   const [combos,        setCombos]        = useState<Combo[]>([]);
@@ -1298,6 +1299,29 @@ export default function AdminPage() {
         local_area: profileMap[m.user_id]?.local_area ?? null,
         employee_number: profileMap[m.user_id]?.employee_number ?? null,
       })));
+
+      // Per-member license/medical/TWIC/terminal-card data, for the Needs
+      // Attention panel's fleet-wide credential rollup -- reuses the exact
+      // same get_driver_profile RPC MemberCard.tsx already calls per-member
+      // when an admin viewer expands a roster row (proven to work against
+      // another member's data), just batched here across the whole roster
+      // up front instead of one row at a time. Admin-only -- the Needs
+      // Attention panel itself is gated admin/lead, and lead never sees
+      // Users on this page, so admin is the only role that would ever see
+      // this data; fetching it for dispatch too (who also CAN call this
+      // RPC per MemberCard, but never sees the panel) would just be N
+      // wasted concurrent calls on every load.
+      if (role === "admin") {
+        const profileEntries = await Promise.all(
+          memberIds.map(async (uid: string) => {
+            const { data } = await supabase.rpc("get_driver_profile", { p_user_id: uid, p_company_id: cid });
+            return [uid, data] as const;
+          })
+        );
+        setMemberProfiles(Object.fromEntries(profileEntries));
+      } else {
+        setMemberProfiles({});
+      }
 
       // Trucks + trailers via roster RPC
       const { data: rosterData, error: rosterErr } = await supabase.rpc("get_equipment_roster", { p_company_id: cid });
@@ -1520,6 +1544,48 @@ export default function AdminPage() {
       });
     }
 
+    // Driver credentials -- license/medical/TWIC/terminal cards, from the
+    // per-member get_driver_profile fetch above. onOpen reopens the exact
+    // same DriverProfileModal each roster row's own "Edit" already uses --
+    // this is the one editable surface for these fields on this page (the
+    // roster's read-only expanded view has no inputs of its own).
+    for (const m of members) {
+      const profile = memberProfiles[m.user_id];
+      if (!profile) continue;
+      const openProfile = () => setProfileModal({ member: m, onSaved: () => loadAll() });
+      const name = m.display_name ?? m.email ?? m.user_id;
+
+      const licDays = daysUntil(profile.license?.expiration_date);
+      if (licDays != null && licDays < 30) {
+        items.push({
+          key: `cred-lic-${m.user_id}`, severity: licDays < 7 ? "danger" : "warning",
+          label: name, detail: `Driver's License — ${expiryLabel(licDays)}`, days: licDays, onOpen: openProfile,
+        });
+      }
+      const medDays = daysUntil(profile.medical?.expiration_date);
+      if (medDays != null && medDays < 30) {
+        items.push({
+          key: `cred-med-${m.user_id}`, severity: medDays < 7 ? "danger" : "warning",
+          label: name, detail: `Medical Card — ${expiryLabel(medDays)}`, days: medDays, onOpen: openProfile,
+        });
+      }
+      const twicDays = daysUntil(profile.twic?.expiration_date);
+      if (twicDays != null && twicDays < 30) {
+        items.push({
+          key: `cred-twic-${m.user_id}`, severity: twicDays < 7 ? "danger" : "warning",
+          label: name, detail: `TWIC — ${expiryLabel(twicDays)}`, days: twicDays, onOpen: openProfile,
+        });
+      }
+      for (const term of profile.terminals ?? []) {
+        if (term.days_until_expiry == null || term.days_until_expiry >= 30) continue;
+        items.push({
+          key: `cred-terminal-${m.user_id}-${term.terminal_id}`, severity: term.days_until_expiry < 7 ? "danger" : "warning",
+          label: name, detail: `${term.terminal_name} card — ${expiryLabel(term.days_until_expiry)}`,
+          days: term.days_until_expiry, onOpen: openProfile,
+        });
+      }
+    }
+
     // Soonest/most-overdue first -- a real deadline is more time-sensitive
     // than a standing flag or a missing setting, so items with no `days`
     // (flagged equipment, missing target weight) sort after every permit.
@@ -1530,7 +1596,7 @@ export default function AdminPage() {
       return a.days - b.days;
     });
     return items;
-  }, [trucks, trailers, combos, truckOtherPermits]);
+  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles]);
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
