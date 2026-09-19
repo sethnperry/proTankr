@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { startSetupSession } from "@/lib/setupSession";
 import { supabase } from "@/lib/supabase/client";
 import { fetchProductsCatalogCached } from "@/lib/queries/useProductsCatalog";
 import { fetchTerminalsCatalogCached, TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
@@ -68,7 +66,7 @@ type Combo = {
 
 type SortField   = "name" | "role" | "division" | "region" | "hire_date";
 type SortDir     = "asc" | "desc";
-type ActiveFilter = "" | "active" | "inactive";
+type ActiveFilter = "" | "active" | "inactive" | "flagged";
 
 type Product = {
   product_id: string;
@@ -1151,7 +1149,6 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
 
 export default function AdminPage() {
   const [companyId,     setCompanyId]     = useState<string | null>(null);
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [myRole,        setMyRole]        = useState<string>("");
@@ -1398,10 +1395,17 @@ export default function AdminPage() {
     return ms;
   }, [members, search, sortField, sortDir, filterRole]);
 
+  // Deadline-flagged equipment (STUD status) -- surfaced without having to
+  // search first, since the tabs below otherwise show nothing until the
+  // admin types something (see the "search or filter to find" gate).
+  const flaggedTruckCount = useMemo(() => trucks.filter(t => t.active && t.status_code === "deadline").length, [trucks]);
+  const flaggedTrailerCount = useMemo(() => trailers.filter(t => t.active && t.status_code === "deadline").length, [trailers]);
+
   const filteredTrucks = useMemo(() => {
     let ts = [...trucks];
     if (truckFilter === "active")   ts = ts.filter(t => t.active);
     if (truckFilter === "inactive") ts = ts.filter(t => !t.active);
+    if (truckFilter === "flagged")  ts = ts.filter(t => t.active && t.status_code === "deadline");
     if (truckSearch.trim()) {
       const q = truckSearch.toLowerCase();
       ts = ts.filter(t => [t.truck_name, t.vin_number, t.region, t.local_area, t.status_code, t.status_location].some(v => v?.toLowerCase().includes(q)));
@@ -1419,6 +1423,7 @@ export default function AdminPage() {
     let ts = [...trailers];
     if (trailerFilter === "active")   ts = ts.filter(t => t.active);
     if (trailerFilter === "inactive") ts = ts.filter(t => !t.active);
+    if (trailerFilter === "flagged")  ts = ts.filter(t => t.active && t.status_code === "deadline");
     if (trailerSearch.trim()) {
       const q = trailerSearch.toLowerCase();
       ts = ts.filter(t => [t.trailer_name, t.vin_number, t.region, t.local_area, t.status_code, t.status_location].some(v => v?.toLowerCase().includes(q)));
@@ -1444,15 +1449,6 @@ export default function AdminPage() {
     }
     return cs;
   }, [combos, comboSearch]);
-
-  function setupForUser(member: Member) {
-    startSetupSession({
-      targetUserId: member.user_id,
-      targetDisplayName: member.display_name ?? member.email ?? member.user_id,
-      adminUserId: currentUserId,
-    });
-    router.push("/planner");
-  }
 
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err)     return <div style={css.page}><Banner msg={err} type="error" /></div>;
@@ -1615,15 +1611,6 @@ export default function AdminPage() {
                               return "Loads";
                             })()}
                           </button>
-                          {myRole === "admin" && (
-                            <button
-                              type="button"
-                              onClick={() => setupForUser(m)}
-                              style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.60)", cursor: "pointer", whiteSpace: "nowrap" as const }}
-                            >
-                              Set up planner →
-                            </button>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1650,6 +1637,11 @@ export default function AdminPage() {
             <span style={{ fontWeight: 400, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
               {trucks.filter(t=>t.active).length}T · {trailers.filter(t=>t.active).length}TL · {combos.filter(c=>c.active).length} Combos
             </span>
+            {(flaggedTruckCount + flaggedTrailerCount) > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 999, padding: "2px 8px" }}>
+                ⚠ {flaggedTruckCount + flaggedTrailerCount} flagged
+              </span>
+            )}
           </h2>
         </div>
 
@@ -1669,10 +1661,26 @@ export default function AdminPage() {
             {/* Trucks tab */}
             {equipTab === "trucks" && (
               <>
+                {flaggedTruckCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6, width: "100%", marginBottom: 10,
+                      padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                      border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
+                      background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
+                      color: "#f87171", fontSize: 12, fontWeight: 700,
+                    }}
+                  >
+                    ⚠ {flaggedTruckCount} truck{flaggedTruckCount !== 1 ? "s" : ""} flagged Deadline
+                    <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "flagged" ? "showing" : "tap to view"}</span>
+                  </button>
+                )}
                 <div style={{ ...filterRow, alignItems: "center" }}>
                   <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
                   <select value={truckFilter} onChange={e => setTruckFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
+                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option>
                   </select>
                   <select value={truckSort} onChange={e => setTruckSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                     <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
@@ -1693,10 +1701,26 @@ export default function AdminPage() {
             {/* Trailers tab */}
             {equipTab === "trailers" && (
               <>
+                {flaggedTrailerCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6, width: "100%", marginBottom: 10,
+                      padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                      border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
+                      background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
+                      color: "#f87171", fontSize: 12, fontWeight: 700,
+                    }}
+                  >
+                    ⚠ {flaggedTrailerCount} trailer{flaggedTrailerCount !== 1 ? "s" : ""} flagged Deadline
+                    <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "flagged" ? "showing" : "tap to view"}</span>
+                  </button>
+                )}
                 <div style={{ ...filterRow, alignItems: "center" }}>
                   <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
                   <select value={trailerFilter} onChange={e => setTrailerFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
+                    <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option>
                   </select>
                   <select value={trailerSort} onChange={e => setTrailerSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
                     <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
