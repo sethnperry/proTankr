@@ -17,16 +17,21 @@
 --
 -- NOT applied automatically -- run in the Supabase SQL editor.
 --
--- Uses REAL (not temporary) scratch tables for the dedup maps below,
--- deliberately -- a real `create temporary table` was tried first and
--- confirmed live to fail with `relation "..." does not exist` on the very
--- next statement: the Supabase SQL editor evidently runs a pasted
--- multi-statement script as separate round trips against a transaction-
--- pooled connection, so a session-scoped temp table from one statement is
--- gone by the next. A plain table in `public`, dropped at both start and
--- end, is a real catalog object and survives that split -- reproduced and
--- confirmed against a real throwaway Postgres before switching to this
--- approach.
+-- Every statement below is fully self-contained (a `with` CTE recomputes
+-- the dedup mapping fresh, inline, every time it's needed) -- deliberately,
+-- after two live failures ruled out anything that needs to survive between
+-- statements: a `create temporary table` version failed with "relation ...
+-- does not exist" on the very next statement, and switching to a real,
+-- schema-qualified `public.` table hit the exact same error. Reproduced
+-- the temp-table failure against a real throwaway Postgres by running
+-- statements on separate connections (matching how the SQL editor
+-- apparently executes a pasted multi-statement script) -- but a real
+-- table survived that same test, and still failed for the user live,
+-- meaning whatever the SQL editor is actually doing is stricter than that
+-- reproduction captured. Rather than keep guessing at its execution model,
+-- this version needs no object -- temp or permanent -- to exist beyond a
+-- single statement, so it cannot be affected by however statements get
+-- split, pooled, or routed.
 
 -- ── 1) normalize_place_name ──────────────────────────────────────────────
 -- The one normalization rule used everywhere below AND by the app going
@@ -60,29 +65,29 @@ $function$;
 
 -- ── 2) equipment_regions dedup ───────────────────────────────────────────
 -- Canonical = oldest row (by created_at) in each (company_id,
--- normalized-name) group. A singleton group (no real duplicate) still gets
--- a row here with canonical_id = itself -- which is what lets the same
--- text-normalization updates below also catch drifted free-text values
--- against a catalog entry that was never actually duplicated, not just
--- genuine duplicate-merge cases.
-drop table if exists public._region_dedup_map;
-create table public._region_dedup_map as
-select
-  region_id, company_id, name,
-  first_value(region_id) over w as canonical_id,
-  first_value(name) over w as canonical_name
-from public.equipment_regions
-where is_active
-window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc);
+-- normalized-name) group. A singleton group (no real duplicate) still maps
+-- to itself as canonical -- which is what lets the same text-normalization
+-- updates below also catch drifted free-text values against a catalog
+-- entry that was never actually duplicated, not just genuine duplicate-
+-- merge cases.
 
 -- Coalesce a target_weight_override onto the canonical row when it has
 -- none but a duplicate in its group does.
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.equipment_regions er
    set target_weight_override = sub.override
   from (
     select m.canonical_id,
            (array_agg(er2.target_weight_override order by er2.created_at) filter (where er2.target_weight_override is not null))[1] as override
-      from public._region_dedup_map m
+      from region_dedup_map m
       join public.equipment_regions er2 on er2.region_id = m.region_id
      group by m.canonical_id
   ) sub
@@ -92,9 +97,18 @@ update public.equipment_regions er
 
 -- Re-point any local area whose region_id pointed at a duplicate onto the
 -- surviving canonical region instead, before that duplicate is deactivated.
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.equipment_local_areas la
    set region_id = m.canonical_id
-  from public._region_dedup_map m
+  from region_dedup_map m
  where la.region_id = m.region_id
    and m.region_id <> m.canonical_id;
 
@@ -102,34 +116,79 @@ update public.equipment_local_areas la
 -- this app) onto the canonical spelling. `is distinct from` skips rows
 -- that already match exactly, so this is a no-op write for anything not
 -- actually affected.
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.trucks t set region = m.canonical_name
-  from public._region_dedup_map m
+  from region_dedup_map m
  where t.company_id = m.company_id and t.region is not null and t.region <> ''
    and public.normalize_place_name(t.region) = public.normalize_place_name(m.name)
    and t.region is distinct from m.canonical_name;
 
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.trucks t set current_region = m.canonical_name
-  from public._region_dedup_map m
+  from region_dedup_map m
  where t.company_id = m.company_id and t.current_region is not null and t.current_region <> ''
    and public.normalize_place_name(t.current_region) = public.normalize_place_name(m.name)
    and t.current_region is distinct from m.canonical_name;
 
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.trailers t set region = m.canonical_name
-  from public._region_dedup_map m
+  from region_dedup_map m
  where t.company_id = m.company_id and t.region is not null and t.region <> ''
    and public.normalize_place_name(t.region) = public.normalize_place_name(m.name)
    and t.region is distinct from m.canonical_name;
 
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.trailers t set current_region = m.canonical_name
-  from public._region_dedup_map m
+  from region_dedup_map m
  where t.company_id = m.company_id and t.current_region is not null and t.current_region <> ''
    and public.normalize_place_name(t.current_region) = public.normalize_place_name(m.name)
    and t.current_region is distinct from m.canonical_name;
 
 -- profiles has no company_id of its own -- scoped via user_companies.
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.profiles p
    set region = m.canonical_name
-  from public._region_dedup_map m
+  from region_dedup_map m
   join public.user_companies uc on uc.company_id = m.company_id
  where p.user_id = uc.user_id
    and p.region is not null and p.region <> ''
@@ -138,35 +197,44 @@ update public.profiles p
 
 -- Deactivate the now-redundant duplicates (soft-delete only, matching this
 -- catalog's own established "never a hard delete" precedent).
+with region_dedup_map as (
+  select
+    region_id, company_id, name,
+    first_value(region_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_regions
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, region_id asc)
+)
 update public.equipment_regions er
    set is_active = false
-  from public._region_dedup_map m
+  from region_dedup_map m
  where er.region_id = m.region_id
    and m.region_id <> m.canonical_id;
-
-drop table if exists public._region_dedup_map;
 
 -- ── 3) equipment_local_areas dedup ───────────────────────────────────────
 -- Same shape as regions above, plus coalescing region_id itself (prefer
 -- the canonical row's own region_id; take one from a duplicate only if
 -- the canonical has none -- most pre-hierarchy rows have region_id null
--- per 20260918000000's own comment, so this matters in practice).
-drop table if exists public._local_area_dedup_map;
-create table public._local_area_dedup_map as
-select
-  local_area_id, company_id, name, region_id,
-  first_value(local_area_id) over w as canonical_id,
-  first_value(name) over w as canonical_name
-from public.equipment_local_areas
-where is_active
-window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc);
+-- per 20260918000000's own comment, so this matters in practice). Computed
+-- AFTER step 2 above, so region_id values here already reflect the
+-- canonical regions, not the deactivated duplicates.
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.equipment_local_areas la
    set target_weight_override = sub.override
   from (
     select m.canonical_id,
            (array_agg(la2.target_weight_override order by la2.created_at) filter (where la2.target_weight_override is not null))[1] as override
-      from public._local_area_dedup_map m
+      from local_area_dedup_map m
       join public.equipment_local_areas la2 on la2.local_area_id = m.local_area_id
      group by m.canonical_id
   ) sub
@@ -174,12 +242,21 @@ update public.equipment_local_areas la
    and la.target_weight_override is null
    and sub.override is not null;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.equipment_local_areas la
    set region_id = sub.region_id
   from (
     select m.canonical_id,
            (array_agg(la2.region_id order by la2.created_at) filter (where la2.region_id is not null))[1] as region_id
-      from public._local_area_dedup_map m
+      from local_area_dedup_map m
       join public.equipment_local_areas la2 on la2.local_area_id = m.local_area_id
      group by m.canonical_id
   ) sub
@@ -187,46 +264,98 @@ update public.equipment_local_areas la
    and la.region_id is null
    and sub.region_id is not null;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.trucks t set local_area = m.canonical_name
-  from public._local_area_dedup_map m
+  from local_area_dedup_map m
  where t.company_id = m.company_id and t.local_area is not null and t.local_area <> ''
    and public.normalize_place_name(t.local_area) = public.normalize_place_name(m.name)
    and t.local_area is distinct from m.canonical_name;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.trucks t set current_local_area = m.canonical_name
-  from public._local_area_dedup_map m
+  from local_area_dedup_map m
  where t.company_id = m.company_id and t.current_local_area is not null and t.current_local_area <> ''
    and public.normalize_place_name(t.current_local_area) = public.normalize_place_name(m.name)
    and t.current_local_area is distinct from m.canonical_name;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.trailers t set local_area = m.canonical_name
-  from public._local_area_dedup_map m
+  from local_area_dedup_map m
  where t.company_id = m.company_id and t.local_area is not null and t.local_area <> ''
    and public.normalize_place_name(t.local_area) = public.normalize_place_name(m.name)
    and t.local_area is distinct from m.canonical_name;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.trailers t set current_local_area = m.canonical_name
-  from public._local_area_dedup_map m
+  from local_area_dedup_map m
  where t.company_id = m.company_id and t.current_local_area is not null and t.current_local_area <> ''
    and public.normalize_place_name(t.current_local_area) = public.normalize_place_name(m.name)
    and t.current_local_area is distinct from m.canonical_name;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.profiles p
    set local_area = m.canonical_name
-  from public._local_area_dedup_map m
+  from local_area_dedup_map m
   join public.user_companies uc on uc.company_id = m.company_id
  where p.user_id = uc.user_id
    and p.local_area is not null and p.local_area <> ''
    and public.normalize_place_name(p.local_area) = public.normalize_place_name(m.name)
    and p.local_area is distinct from m.canonical_name;
 
+with local_area_dedup_map as (
+  select
+    local_area_id, company_id, name, region_id,
+    first_value(local_area_id) over w as canonical_id,
+    first_value(name) over w as canonical_name
+  from public.equipment_local_areas
+  where is_active
+  window w as (partition by company_id, public.normalize_place_name(name) order by created_at asc, local_area_id asc)
+)
 update public.equipment_local_areas la
    set is_active = false
-  from public._local_area_dedup_map m
+  from local_area_dedup_map m
  where la.local_area_id = m.local_area_id
    and m.local_area_id <> m.canonical_id;
-
-drop table if exists public._local_area_dedup_map;
 
 -- ── 4) Prevent regression ────────────────────────────────────────────────
 -- A partial unique index on the same normalized key -- can only be created
