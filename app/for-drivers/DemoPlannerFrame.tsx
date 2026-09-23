@@ -34,12 +34,36 @@ export default function DemoPlannerFrame() {
 
   return (
     <div className="demo-frame-wrap">
-      <div className="demo-phone">
+      <div className="demo-phone" style={{ width: `min(${PHONE_WIDTH + 18}px, 100%)` }}>
         <div className="demo-phone-notch" />
         <div className="demo-phone-btn demo-phone-btn-power" />
         <div className="demo-phone-btn demo-phone-btn-vol-up" />
         <div className="demo-phone-btn demo-phone-btn-vol-down" />
-        <div className="demo-phone-screen">
+        {/*
+          The classic pre-`aspect-ratio` responsive-box trick, used
+          deliberately instead of the CSS `aspect-ratio` property: this
+          component's own styling lives in a `<style jsx global>` block,
+          which for a client component is injected via JS *after*
+          hydration -- confirmed by grepping the built HTML/CSS output,
+          neither contains these rules at all, only the JS chunk does.
+          Before hydration finishes, a class-based `aspect-ratio` rule
+          hasn't been applied yet, and when the screen's only children
+          are absolutely-positioned (the intro screen, or the sheen), the
+          box has nothing in normal flow to size itself from -- it
+          collapses to 0 height, which is what actually happened live: the
+          phone shrank to just its own padding. A percentage `paddingBottom`
+          set inline, by contrast, is part of the server-rendered HTML
+          itself (React renders `style` props directly into the initial
+          markup) -- guaranteed present at first paint, no JS/hydration
+          timing dependency at all. Percentage padding resolves against
+          the containing block's WIDTH regardless of axis, which is
+          exactly the mechanism this depends on.
+        */}
+        <div
+          className="demo-phone-ratio"
+          style={{ position: "relative", width: "100%", paddingBottom: `${(PHONE_HEIGHT / PHONE_WIDTH) * 100}%` }}
+        >
+        <div className="demo-phone-screen" style={{ position: "absolute", inset: 0 }}>
           <div className="demo-phone-sheen" />
           {started ? (
             <iframe
@@ -75,6 +99,7 @@ export default function DemoPlannerFrame() {
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
       {started && (
@@ -124,20 +149,14 @@ export default function DemoPlannerFrame() {
         .demo-phone-btn-vol-up { left: -2px; top: 20%; width: 3px; height: 5.5%; }
         .demo-phone-btn-vol-down { left: -2px; top: 27%; width: 3px; height: 5.5%; }
         .demo-phone-screen {
-          position: relative;
+          /* position:absolute + inset:0 set inline (see the JSX/comment
+             above) -- fills .demo-phone-ratio, whose own inline
+             paddingBottom is what actually establishes the phone's
+             correct height at any width, at first paint. */
           background: #000;
           border-radius: 14px;
           overflow: hidden;
           line-height: 0;
-          /* The screen's WIDTH is responsive (100% of .demo-phone, itself
-             capped at min(${PHONE_WIDTH + 18}px, 100vw)) but the iframe
-             below used to have a fixed pixel HEIGHT regardless -- on any
-             viewport narrower than the phone's own design width, the
-             width shrank while the height didn't, visibly squishing/
-             stretching the mockup out of proportion. aspect-ratio locks
-             height to width using the phone's real design ratio, so the
-             mockup scales as one proportional unit at any screen size. */
-          aspect-ratio: ${PHONE_WIDTH} / ${PHONE_HEIGHT};
         }
         /* A thin curved-glass highlight along the top/left edge -- purely
            decorative, pointer-events:none so it never blocks a real tap
