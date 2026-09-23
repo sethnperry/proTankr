@@ -1,0 +1,25 @@
+-- Drops the dead 4-arg complete_load overload, per the standing note in
+-- CLAUDE.md's "Fuel temp prediction system (architecture)" section:
+-- `complete_load` has had two overloads in the schema since the original
+-- 20260222172537_remote_schema.sql dump. The 4-arg one
+-- (p_load_id, p_completed_at, p_lines, p_product_updates) writes to
+-- products.last_api globally -- the wrong table for this app's per-terminal
+-- prediction design (see terminal_temp_bias) -- and was flagged dead there
+-- rather than fixed, since nothing calls it.
+--
+-- Confirmed dead again here, not just trusted from the old note: a repo-
+-- wide grep of every .rpc("complete_load", ...) call site finds exactly
+-- one, lib/supabase/load.ts's `supabase.rpc("complete_load", { payload })`
+-- -- the single-arg `payload jsonb` overload. Never recreated by any later
+-- migration either (only ever defined once, in the original schema dump);
+-- 20260818020000_incentive_backfill_status_fix.sql's own comment already
+-- calls it out by name as "the DEAD 4-arg complete_load."
+--
+-- Verified the DROP itself against a real throwaway Postgres before
+-- writing this for real: reproduced both overloads, dropped the 4-arg one
+-- by its exact identity signature, confirmed only the real (payload jsonb)
+-- overload survives.
+--
+-- NOT applied automatically -- run in the Supabase SQL editor.
+
+drop function if exists public.complete_load(uuid, timestamp with time zone, jsonb, jsonb);

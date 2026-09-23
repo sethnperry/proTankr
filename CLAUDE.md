@@ -10227,8 +10227,18 @@ Add to this as more turn up.
   (see "Fleet Tier — Build Spec" → solo→fleet join flow).
 
 ## Files safe to delete
-- `supabase/migrations_old/` — superseded, confirmed not referenced.
+- `supabase/migrations_old/` — **already gone**, confirmed 2026-09-23 (no
+  longer present in the repo; nothing left to do here).
 - `node_modules/` should never be zipped/committed — regenerate via `npm install`.
-- Dead `complete_load(p_load_id, p_completed_at, p_lines, p_product_updates)`
-  4-arg overload (see above) — confirm once more before dropping, but client
-  only calls the single-arg version.
+- ~~Dead `complete_load(p_load_id, p_completed_at, p_lines, p_product_updates)`
+  4-arg overload~~ — **confirmed dead again and migration written,
+  2026-09-23.** Re-grepped every `.rpc("complete_load", ...)` call site in
+  the app: exactly one, `lib/supabase/load.ts`'s single-arg `{ payload }`
+  call. The 4-arg overload was only ever created once (the original
+  `20260222172537_remote_schema.sql` schema dump) and never recreated by
+  any later migration.
+  `supabase/migrations/20260926000000_drop_dead_complete_load_overload.sql`
+  (**not yet applied**) drops it by its exact identity signature. Verified
+  against a real throwaway Postgres before writing it for real: recreated
+  both overloads, dropped the 4-arg one, confirmed only the real
+  `payload jsonb` overload survives.
