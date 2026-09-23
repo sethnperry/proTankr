@@ -48,32 +48,42 @@ const MAX_PHONE_W = PHONE_WIDTH + 18;
 // "ProTankr Trucking" specifically for this purpose.
 const DEMO_PERSONA = "beta";
 
-function dimsForWidth(vw: number) {
+function dimsForViewport(vw: number, vh: number) {
   // Reserve some margin for this page's own side gutters (24-48px
   // depending on breakpoint) -- approximate on purpose, a few px of
   // slack either side is cosmetic, not a functional problem the way the
-  // last two approaches' failures were.
-  const w = Math.max(200, Math.min(MAX_PHONE_W, vw - 40));
+  // earlier approaches' failures were.
+  const wByWidth = Math.min(MAX_PHONE_W, vw - 40);
+  // A real 390:844 phone is taller than it is wide by more than 2:1 --
+  // sized purely off width, it can end up taller than the visible
+  // viewport itself (confirmed live: it rendered correctly proportioned,
+  // but tall enough to run off the bottom of the screen). Also cap it so
+  // its HEIGHT never exceeds a comfortable fraction of the viewport's own
+  // height, then re-derive width from whichever cap is more restrictive --
+  // still the exact same 390:844 ratio either way, just not allowed to
+  // dominate a short viewport.
+  const wByHeight = (vh * 0.85 * PHONE_WIDTH) / PHONE_HEIGHT;
+  const w = Math.max(180, Math.min(wByWidth, wByHeight));
   const h = Math.round((w * PHONE_HEIGHT) / PHONE_WIDTH);
-  return { w, h };
+  return { w: Math.round(w), h };
 }
 
 // A fixed, SSR-safe default -- identical on the server and the client's
 // very first render, so there's nothing for React to reconcile a mismatch
-// on. The real size is resolved from window.innerWidth only inside the
+// on. The real size is resolved from the real viewport only inside the
 // client-only effect below, same pattern this codebase already
 // established for "the real value needs the browser, but must match on
 // first paint" (see useNow()/useTheme.ts's own history: start neutral,
 // resolve for real post-mount, accept a brief flash of the default rather
 // than risk a hydration mismatch).
-const SSR_SAFE_DIMS = dimsForWidth(360);
+const SSR_SAFE_DIMS = dimsForViewport(360, 720);
 
 export default function DemoPlannerFrame() {
   const [started, setStarted] = useState(false);
   const [dims, setDims] = useState(SSR_SAFE_DIMS);
 
   useEffect(() => {
-    const onResize = () => setDims(dimsForWidth(window.innerWidth));
+    const onResize = () => setDims(dimsForViewport(window.innerWidth, window.innerHeight));
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
