@@ -21,72 +21,72 @@
 // /api/demo/start magic-link token for every page view, most of which
 // never actually interact with the phone at all.
 //
-// The phone's height is measured and set from real pixels via JS
-// (getBoundingClientRect on the screen div itself), not a CSS percentage/
-// aspect-ratio trick. Two CSS-only approaches were tried and both failed
-// live on a real device (collapsed to ~0 height) despite looking correct
-// in every static build/HTML check from this session -- most likely a
-// circular/indeterminate-width interaction somewhere in this page's own
-// flex/grid ancestor chain that never got fully root-caused. This mirrors
-// a pattern this exact codebase has already hit and fixed the same way
-// elsewhere (the Planner's own landscape-layout work needed real
-// ResizeObserver-based pixel measurement for the exact same class of
-// "responsive box needs a computed dimension" problem after CSS-only
-// attempts proved unreliable) -- see useElementWidth.ts's history in
-// CLAUDE.md (that file itself was later deleted once its one consumer was
-// removed, but the technique is reused here rather than rediscovered).
+// The phone's width AND height are both computed in JS from
+// window.innerWidth alone -- not CSS percentages, not aspect-ratio, and
+// not a measurement of this component's OWN rendered elements. Three
+// earlier approaches were tried and each failed live on a real device in
+// a different way (collapsed to ~0 height; then, once height was instead
+// measured via getBoundingClientRect + ResizeObserver on the screen div
+// itself, ballooned to an extremely tall, narrow bar) despite each
+// looking correct in every static build/HTML check from this session.
+// The getBoundingClientRect approach's own likely failure mode, in
+// hindsight: it observed the SAME element it was resizing (ResizeObserver
+// on screenEl, whose own height it then set from that observation) --
+// a self-referential measure-then-resize-the-same-node loop, which is
+// exactly the anti-pattern ResizeObserver's own spec warns can misbehave.
+// Deriving both dimensions from window.innerWidth (a global the component
+// never writes to) instead removes any possibility of that kind of
+// feedback loop, or of depending on how this page's own flex/grid
+// ancestors resolve a percentage width.
 
 import { useEffect, useState } from "react";
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
-// A reasonable static guess (matches a common ~375-390px phone width) so
-// the phone isn't 0-height for the brief window before the effect below
-// gets its first real measurement -- refined immediately after mount.
-const FALLBACK_HEIGHT = Math.round((360 * PHONE_HEIGHT) / PHONE_WIDTH);
+const MAX_PHONE_W = PHONE_WIDTH + 18;
 // Confirmed live 2026-09: "beta" is the solo account, renamed
 // "ProTankr Trucking" specifically for this purpose.
 const DEMO_PERSONA = "beta";
 
+function dimsForWidth(vw: number) {
+  // Reserve some margin for this page's own side gutters (24-48px
+  // depending on breakpoint) -- approximate on purpose, a few px of
+  // slack either side is cosmetic, not a functional problem the way the
+  // last two approaches' failures were.
+  const w = Math.max(200, Math.min(MAX_PHONE_W, vw - 40));
+  const h = Math.round((w * PHONE_HEIGHT) / PHONE_WIDTH);
+  return { w, h };
+}
+
+// A fixed, SSR-safe default -- identical on the server and the client's
+// very first render, so there's nothing for React to reconcile a mismatch
+// on. The real size is resolved from window.innerWidth only inside the
+// client-only effect below, same pattern this codebase already
+// established for "the real value needs the browser, but must match on
+// first paint" (see useNow()/useTheme.ts's own history: start neutral,
+// resolve for real post-mount, accept a brief flash of the default rather
+// than risk a hydration mismatch).
+const SSR_SAFE_DIMS = dimsForWidth(360);
+
 export default function DemoPlannerFrame() {
   const [started, setStarted] = useState(false);
-  const [screenEl, setScreenEl] = useState<HTMLDivElement | null>(null);
-  const [screenHeight, setScreenHeight] = useState<number | null>(null);
+  const [dims, setDims] = useState(SSR_SAFE_DIMS);
 
   useEffect(() => {
-    if (!screenEl) return;
-    const measure = () => {
-      const w = screenEl.getBoundingClientRect().width;
-      if (w > 0) setScreenHeight(Math.round((w * PHONE_HEIGHT) / PHONE_WIDTH));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(screenEl);
-    window.addEventListener("resize", measure);
-    // A short settle-timer burst in case the very first measurement races
-    // layout that hasn't settled yet (web fonts swapping in, hydration
-    // still finishing) -- same defensive pattern this codebase already
-    // established for this exact class of problem.
-    const timers = [0, 50, 150, 400, 1000].map((ms) => setTimeout(measure, ms));
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-      timers.forEach(clearTimeout);
-    };
-  }, [screenEl]);
+    const onResize = () => setDims(dimsForWidth(window.innerWidth));
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   return (
     <div className="demo-frame-wrap">
-      <div className="demo-phone" style={{ width: `min(${PHONE_WIDTH + 18}px, 100%)` }}>
+      <div className="demo-phone" style={{ width: dims.w }}>
         <div className="demo-phone-notch" />
         <div className="demo-phone-btn demo-phone-btn-power" />
         <div className="demo-phone-btn demo-phone-btn-vol-up" />
         <div className="demo-phone-btn demo-phone-btn-vol-down" />
-        <div
-          ref={setScreenEl}
-          className="demo-phone-screen"
-          style={{ height: screenHeight ?? FALLBACK_HEIGHT }}
-        >
+        <div className="demo-phone-screen" style={{ height: dims.h }}>
           <div className="demo-phone-sheen" />
           {started ? (
             <iframe
