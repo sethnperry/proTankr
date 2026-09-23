@@ -20,17 +20,60 @@
 // before it silently signs them into one; (2) it avoids spending a fresh
 // /api/demo/start magic-link token for every page view, most of which
 // never actually interact with the phone at all.
+//
+// The phone's height is measured and set from real pixels via JS
+// (getBoundingClientRect on the screen div itself), not a CSS percentage/
+// aspect-ratio trick. Two CSS-only approaches were tried and both failed
+// live on a real device (collapsed to ~0 height) despite looking correct
+// in every static build/HTML check from this session -- most likely a
+// circular/indeterminate-width interaction somewhere in this page's own
+// flex/grid ancestor chain that never got fully root-caused. This mirrors
+// a pattern this exact codebase has already hit and fixed the same way
+// elsewhere (the Planner's own landscape-layout work needed real
+// ResizeObserver-based pixel measurement for the exact same class of
+// "responsive box needs a computed dimension" problem after CSS-only
+// attempts proved unreliable) -- see useElementWidth.ts's history in
+// CLAUDE.md (that file itself was later deleted once its one consumer was
+// removed, but the technique is reused here rather than rediscovered).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
+// A reasonable static guess (matches a common ~375-390px phone width) so
+// the phone isn't 0-height for the brief window before the effect below
+// gets its first real measurement -- refined immediately after mount.
+const FALLBACK_HEIGHT = Math.round((360 * PHONE_HEIGHT) / PHONE_WIDTH);
 // Confirmed live 2026-09: "beta" is the solo account, renamed
 // "ProTankr Trucking" specifically for this purpose.
 const DEMO_PERSONA = "beta";
 
 export default function DemoPlannerFrame() {
   const [started, setStarted] = useState(false);
+  const [screenEl, setScreenEl] = useState<HTMLDivElement | null>(null);
+  const [screenHeight, setScreenHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!screenEl) return;
+    const measure = () => {
+      const w = screenEl.getBoundingClientRect().width;
+      if (w > 0) setScreenHeight(Math.round((w * PHONE_HEIGHT) / PHONE_WIDTH));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(screenEl);
+    window.addEventListener("resize", measure);
+    // A short settle-timer burst in case the very first measurement races
+    // layout that hasn't settled yet (web fonts swapping in, hydration
+    // still finishing) -- same defensive pattern this codebase already
+    // established for this exact class of problem.
+    const timers = [0, 50, 150, 400, 1000].map((ms) => setTimeout(measure, ms));
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      timers.forEach(clearTimeout);
+    };
+  }, [screenEl]);
 
   return (
     <div className="demo-frame-wrap">
@@ -39,31 +82,11 @@ export default function DemoPlannerFrame() {
         <div className="demo-phone-btn demo-phone-btn-power" />
         <div className="demo-phone-btn demo-phone-btn-vol-up" />
         <div className="demo-phone-btn demo-phone-btn-vol-down" />
-        {/*
-          The classic pre-`aspect-ratio` responsive-box trick, used
-          deliberately instead of the CSS `aspect-ratio` property: this
-          component's own styling lives in a `<style jsx global>` block,
-          which for a client component is injected via JS *after*
-          hydration -- confirmed by grepping the built HTML/CSS output,
-          neither contains these rules at all, only the JS chunk does.
-          Before hydration finishes, a class-based `aspect-ratio` rule
-          hasn't been applied yet, and when the screen's only children
-          are absolutely-positioned (the intro screen, or the sheen), the
-          box has nothing in normal flow to size itself from -- it
-          collapses to 0 height, which is what actually happened live: the
-          phone shrank to just its own padding. A percentage `paddingBottom`
-          set inline, by contrast, is part of the server-rendered HTML
-          itself (React renders `style` props directly into the initial
-          markup) -- guaranteed present at first paint, no JS/hydration
-          timing dependency at all. Percentage padding resolves against
-          the containing block's WIDTH regardless of axis, which is
-          exactly the mechanism this depends on.
-        */}
         <div
-          className="demo-phone-ratio"
-          style={{ position: "relative", width: "100%", paddingBottom: `${(PHONE_HEIGHT / PHONE_WIDTH) * 100}%` }}
+          ref={setScreenEl}
+          className="demo-phone-screen"
+          style={{ height: screenHeight ?? FALLBACK_HEIGHT }}
         >
-        <div className="demo-phone-screen" style={{ position: "absolute", inset: 0 }}>
           <div className="demo-phone-sheen" />
           {started ? (
             <iframe
@@ -100,7 +123,6 @@ export default function DemoPlannerFrame() {
             </div>
           )}
         </div>
-        </div>
       </div>
       {started && (
         <p className="demo-frame-caption">
@@ -115,7 +137,6 @@ export default function DemoPlannerFrame() {
         .demo-frame-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
         .demo-phone {
           position: relative;
-          width: min(${PHONE_WIDTH + 18}px, 100%);
           box-sizing: border-box;
           background: linear-gradient(160deg, #3a3a3d 0%, #1c1c1e 45%, #0a0a0b 100%);
           border-radius: 22px;
@@ -149,10 +170,8 @@ export default function DemoPlannerFrame() {
         .demo-phone-btn-vol-up { left: -2px; top: 20%; width: 3px; height: 5.5%; }
         .demo-phone-btn-vol-down { left: -2px; top: 27%; width: 3px; height: 5.5%; }
         .demo-phone-screen {
-          /* position:absolute + inset:0 set inline (see the JSX/comment
-             above) -- fills .demo-phone-ratio, whose own inline
-             paddingBottom is what actually establishes the phone's
-             correct height at any width, at first paint. */
+          position: relative;
+          width: 100%;
           background: #000;
           border-radius: 14px;
           overflow: hidden;
