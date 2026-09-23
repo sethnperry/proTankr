@@ -10079,7 +10079,8 @@ Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.
 
 - ~~**The `/login` magic link is still a consuming link — burned by Outlook.**~~
-  — **code side done 2026-09-06; one dashboard change left, see below.**
+  — **fully resolved 2026-09-23** (code done 2026-09-06, dashboard templates
+  confirmed correct 2026-09-23 — see below).
 
   **Original diagnosis, confirmed live:**
   Confirmed live 2026-09-06: signing in to a fresh address through Outlook
@@ -10167,6 +10168,19 @@ Add to this as more turn up.
   Bypassing `/auth/callback` costs nothing: `/auth/confirm` calls
   `provision_solo_company` in both of its branches, exactly as the callback
   does, so a brand-new signup still gets its company.
+
+  **Dashboard templates confirmed correct, 2026-09-23.** User supplied
+  screenshots of all three Supabase Auth Email Templates
+  (Magic Link / Confirm signup / Change Email Address) after editing them —
+  each one now builds its link from `{{ .SiteURL }}/auth/confirm?token_hash=
+  {{ .TokenHash }}&type=<T>` with the correct `<T>` per template (`magiclink`
+  / `signup` / `email_change`), matching the spec above exactly, no
+  `{{ .ConfirmationURL }}` remaining anywhere. This was the one piece of this
+  fix that couldn't be done from code — with it confirmed, the whole
+  consuming-link bug class (Outlook Safe Links or any other link-scanner
+  burning a one-time token on a bare GET) is closed on every Supabase-sent
+  auth email this app can trigger, not just the one that was originally
+  reported.
 
 - **Vercel Preview environment is missing `SUPABASE_SERVICE_ROLE_KEY`.**
   Found 2026-08-31 when pushing `perf/memoize-shell-context` triggered
