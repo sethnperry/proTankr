@@ -89,6 +89,15 @@ export default function DemoPlannerFrame() {
           border-radius: 14px;
           overflow: hidden;
           line-height: 0;
+          /* The screen's WIDTH is responsive (100% of .demo-phone, itself
+             capped at min(${PHONE_WIDTH + 18}px, 100vw)) but the iframe
+             below used to have a fixed pixel HEIGHT regardless -- on any
+             viewport narrower than the phone's own design width, the
+             width shrank while the height didn't, visibly squishing/
+             stretching the mockup out of proportion. aspect-ratio locks
+             height to width using the phone's real design ratio, so the
+             mockup scales as one proportional unit at any screen size. */
+          aspect-ratio: ${PHONE_WIDTH} / ${PHONE_HEIGHT};
         }
         /* A thin curved-glass highlight along the top/left edge -- purely
            decorative, pointer-events:none so it never blocks a real tap
@@ -105,7 +114,7 @@ export default function DemoPlannerFrame() {
         .demo-phone-iframe {
           display: block;
           width: 100%;
-          height: ${PHONE_HEIGHT}px;
+          height: 100%;
           border: none;
         }
         .demo-frame-caption {
