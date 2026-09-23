@@ -160,6 +160,43 @@ export function CatalogPicker({
         setOpen(false);
         return;
       }
+
+      // For local areas, `rows` above is scoped to the CURRENTLY PICKED
+      // region -- but the DB's uniqueness rule (20260923000000_dedupe_
+      // regions_local_areas.sql) is keyed on (company_id, normalized name)
+      // alone, with no region in it at all. A local area created before
+      // the region hierarchy existed (region_id null), or one filed under
+      // a different region than the one being edited right now, won't show
+      // in `rows` and so won't be caught by the check above -- but it still
+      // collides with that DB constraint the instant this tries to insert
+      // a "new" row with the same name. Check across the WHOLE company
+      // before inserting, and adopt a real hit into the region being
+      // edited now (region_id is a classification tag on a single row,
+      // never a second key -- there is only ever one "Tampa" per company)
+      // instead of surfacing that constraint's raw, unreadable error.
+      if (scoped) {
+        const { data: allRows } = await supabase
+          .from(table)
+          .select(`${idCol}, name, region_id`)
+          .eq("company_id", companyId)
+          .eq("is_active", true);
+        const dup = ((allRows ?? []) as any[]).find(
+          (r) => normalizePlaceName(r.name as string) === normalized
+        );
+        if (dup) {
+          const dupId = String(dup[idCol]);
+          if (dup.region_id !== regionId) {
+            await supabase.from(table).update({ region_id: regionId }).eq(idCol, dupId);
+          }
+          onChange(dup.name as string);
+          setNewName("");
+          setAdding(false);
+          setOpen(false);
+          void load();
+          return;
+        }
+      }
+
       const payload: Record<string, unknown> = { company_id: companyId, name: trimmed, ...insertColumns };
       if (scoped) payload.region_id = regionId;
       const { error } = await supabase
@@ -174,7 +211,15 @@ export function CatalogPicker({
       setOpen(false);
       void load();
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to add.");
+      // A residual race (e.g. two devices adding the same name at once)
+      // could still slip past the DB-wide check above and hit the unique
+      // index directly -- surface a plain explanation instead of the raw
+      // Postgres constraint-violation text.
+      setErr(
+        e?.code === "23505"
+          ? "That name is already in use for this company — reload and pick it from the list."
+          : (e?.message ?? "Failed to add.")
+      );
     } finally {
       setBusy(false);
     }
