@@ -124,16 +124,15 @@ export default function DemoPlannerFrame() {
                 <br />
                 ProTankr Planner
               </h3>
+              {/* Restored to the original, single caption line this page
+                  always showed under the phone before today's changes --
+                  a follow-up pass had split it into two paragraphs plus a
+                  separate "pick a terminal..." line already duplicating
+                  the feature copy above the phone, which read as worse. */}
               <p className="demo-intro-body">
-                Pick a terminal, choose a product per compartment, drag the
-                caps, slide the CG, and Save Plan — the same tool drivers
-                use every day.
-              </p>
-              <p className="demo-intro-body demo-intro-body-muted">
-                It&apos;s logged into a shared public demo account, so
-                what you do here is visible to other visitors. A good
-                place to experiment, not to store anything you need to
-                keep.
+                Anything you do here is real and shared with other
+                visitors — a good place to experiment, not to store
+                anything you need to keep.
               </p>
               <button
                 type="button"
@@ -252,7 +251,6 @@ export default function DemoPlannerFrame() {
           line-height: 1.55;
           color: rgba(255,255,255,0.7);
         }
-        .demo-intro-body-muted { color: rgba(255,255,255,0.45); font-size: 12px; }
         .demo-intro-btn {
           margin-top: 26px;
           padding: 13px 22px;
