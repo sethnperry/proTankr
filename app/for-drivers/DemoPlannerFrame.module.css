@@ -141,16 +141,6 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-.demoIntroWarning {
-  margin: 14px 0 0;
-  max-width: 280px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  font: 600 11.5px var(--font);
-  line-height: 1.5;
-  color: #f5b942;
-}
-
 .demoIntroBtn {
   margin-top: 22px;
   padding: 13px 22px;

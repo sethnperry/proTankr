@@ -22,12 +22,12 @@
 // /api/demo/start magic-link token for every page view, most of which
 // never actually interact with the phone at all.
 //
-// Real, confirmed gap the gate alone does NOT fix (found live 2026-09, by
-// the operator's own installed app getting signed out): starting the demo
-// is a genuine Supabase auth session change -- cookies are shared by
-// every tab/window/installed-PWA instance in the same browser profile, so
-// tapping the button used to sign the whole browser (including an
-// installed ProTankr app on the same device) into the demo account.
+// Real gap found live 2026-09 (the operator's own installed app getting
+// signed out): starting the demo is a genuine Supabase auth session
+// change -- cookies are shared by every tab/window/installed-PWA instance
+// in the same browser profile, so tapping the button used to sign the
+// whole browser (including an installed ProTankr app on the same device)
+// into the demo account.
 //
 // Fixed by isolating the login to its own domain: demoIframeSrc() below
 // points the iframe at https://demo.protankr.com (a second domain on this
@@ -41,11 +41,12 @@
 // since only internal testing ever happens on those hosts, never a real
 // visitor's own account.
 //
-// The on-page warning below is left in place (not yet softened to "this
-// is isolated, don't worry") until the domain + Supabase redirect-URL
-// config are confirmed live -- see /api/demo/start's own header comment
-// for the other half of this fix and exactly what needs configuring
-// before this is actually true in production.
+// Confirmed live end-to-end 2026-09-24 (real click-through, by the
+// operator, on production): starting the demo signs into the isolated
+// account and the operator's own installed app stayed logged into their
+// real company throughout. The on-page warning that used to describe the
+// collision has been removed accordingly -- see git history on this file
+// if that warning copy is ever needed again.
 //
 // Styling: a real CSS Module (DemoPlannerFrame.module.css), not
 // <style jsx global>. Confirmed live (fetched the deployed page's raw
@@ -130,13 +131,6 @@ export default function DemoPlannerFrame() {
                 Anything you do here is real and shared with other
                 visitors — a good place to experiment, not to store
                 anything you need to keep.
-              </p>
-              <p className={styles.demoIntroWarning}>
-                On a phone or computer where you&apos;re already signed
-                into your own ProTankr account (including the installed
-                app) — starting this will sign that out too, since it's
-                the same site. Sign back in afterward with a fresh link
-                from the login page.
               </p>
               <button
                 type="button"
