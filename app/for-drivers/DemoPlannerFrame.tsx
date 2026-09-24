@@ -16,99 +16,64 @@
 //
 // Gated behind an explicit "Start Demo Session" tap rather than loading
 // the iframe (and its auto-login) immediately on page view: (1) it means
-// a visitor reads what they're about to open -- a shared, live account --
-// before it silently signs them into one; (2) it avoids spending a fresh
+// a visitor reads what they're about to open -- a shared, live account,
+// on a REAL session that shares this browser's cookies -- before it
+// silently signs them into one; (2) it avoids spending a fresh
 // /api/demo/start magic-link token for every page view, most of which
 // never actually interact with the phone at all.
 //
-// The phone's width AND height are both computed in JS -- not CSS
-// percentages, not aspect-ratio, and not a measurement of this
-// component's OWN rendered elements. Three earlier approaches were tried
-// and each failed live on a real device in a different way (collapsed to
-// ~0 height; then, once height was instead measured via
-// getBoundingClientRect + ResizeObserver on the screen div itself,
-// ballooned to an extremely tall, narrow bar) despite each looking
-// correct in every static build/HTML check from this session. The
-// getBoundingClientRect approach's own likely failure mode, in
-// hindsight: it observed the SAME element it was resizing (ResizeObserver
-// on screenEl, whose own height it then set from that observation) --
-// a self-referential measure-then-resize-the-same-node loop, which is
-// exactly the anti-pattern ResizeObserver's own spec warns can misbehave.
+// Real, confirmed gap the gate does NOT fix (found live 2026-09, by the
+// operator's own installed app getting signed out): starting the demo is
+// a genuine Supabase auth session change on this same origin
+// (protankr.com) -- cookies are shared by every tab/window/installed-PWA
+// instance in the same browser profile, so tapping the button here really
+// does sign the whole browser (including an installed ProTankr app on the
+// same device) into the demo account. The gate gets informed consent; it
+// cannot prevent the collision -- only a separate origin (e.g. a
+// dedicated demo.protankr.com subdomain) or a non-cookie auth mechanism
+// for this flow can do that, neither of which exists yet. The warning
+// line on the intro screen below says this plainly instead of implying a
+// safety this doesn't have.
 //
-// Explicit design direction after seeing it live (not guessed at):
-// in portrait, the phone should be close to full device width/natural
-// height -- even if that's taller than one screen, scrolling to see the
-// rest is fine and expected, not a bug to fix. And rotating the device
-// to landscape should NOT shrink the mockup at all -- it should render
-// at the exact same size it would in portrait, so a wide-but-short
-// landscape view scrolls to see it too, rather than the whole thing
-// awkwardly shrinking to fit the now-short viewport height. This is why
-// sizing is driven by Math.min(innerWidth, innerHeight) -- a phone's own
-// short (portrait-width) axis -- rather than raw innerWidth, which would
-// grow (and so re-inflate the mockup) the moment the device rotates.
+// Sizing: a plain, INLINE aspectRatio (390:844, the phone's real design
+// ratio) on .demo-phone-screen -- no JS measurement, no resize listener.
+// Deliberately NOT a class-based `aspect-ratio` rule in the `<style jsx
+// global>` block below: confirmed live that for a "use client" component,
+// those styles are injected via JS *after* hydration (grepped the built
+// HTML/CSS output directly -- neither contained the rule, only the JS
+// chunk did). With the intro screen's only children absolutely positioned
+// (nothing in normal flow to size the box before that JS-injected rule
+// arrives), a class-based aspect-ratio here collapsed the phone to 0
+// height on first paint. An inline style prop renders directly into the
+// server-rendered HTML, so it's present at first paint with zero
+// hydration-timing dependency -- same reasoning behind the other inline
+// `aspectRatio` usages already in this app (app/planner/page.tsx's CG
+// dial, app/planner/cards/badges/page.tsx). If a future edit ever moves
+// this back into the styled-jsx block, the "phone briefly vanishes on
+// load" bug WILL come back.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
-const MAX_PHONE_W = PHONE_WIDTH + 18;
 // Confirmed live 2026-09: "beta" is the solo account, renamed
 // "ProTankr Trucking" specifically for this purpose.
 const DEMO_PERSONA = "beta";
 
-// .demo-phone's own CSS padding (the chassis bezel around the screen) --
-// a fixed 9px on every side, added on top of the inner screen's own
-// PHONE_WIDTH x PHONE_HEIGHT, regardless of what size the phone renders
-// at. MAX_PHONE_W bakes this in already (PHONE_WIDTH + 18) for the
-// "as big as it can be" case; BEZEL pulls it back out so a smaller
-// rendered size still keeps the INNER screen at exactly the 390:844
-// ratio, rather than (incorrectly) applying that ratio to the OUTER
-// chassis width, which would skew proportions slightly at any size below
-// the max (the fixed bezel becomes proportionally larger the smaller the
-// phone renders).
-const BEZEL = MAX_PHONE_W - PHONE_WIDTH;
-
-function dimsForPortraitWidth(portraitVw: number) {
-  // Reserve some margin for this page's own side gutters (24-48px
-  // depending on breakpoint) -- approximate on purpose, a few px of
-  // slack either side is cosmetic, not a functional problem the way the
-  // earlier approaches' failures were.
-  const outerW = Math.max(180, Math.min(MAX_PHONE_W, portraitVw - 32));
-  const innerW = outerW - BEZEL;
-  const innerH = Math.round((innerW * PHONE_HEIGHT) / PHONE_WIDTH);
-  return { w: outerW, h: innerH + BEZEL };
-}
-
-// A fixed, SSR-safe default -- identical on the server and the client's
-// very first render, so there's nothing for React to reconcile a mismatch
-// on. The real size is resolved from the real viewport only inside the
-// client-only effect below, same pattern this codebase already
-// established for "the real value needs the browser, but must match on
-// first paint" (see useNow()/useTheme.ts's own history: start neutral,
-// resolve for real post-mount, accept a brief flash of the default rather
-// than risk a hydration mismatch).
-const SSR_SAFE_DIMS = dimsForPortraitWidth(360);
-
 export default function DemoPlannerFrame() {
   const [started, setStarted] = useState(false);
-  const [dims, setDims] = useState(SSR_SAFE_DIMS);
-
-  useEffect(() => {
-    const onResize = () =>
-      setDims(dimsForPortraitWidth(Math.min(window.innerWidth, window.innerHeight)));
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
 
   return (
     <div className="demo-frame-wrap">
-      <div className="demo-phone" style={{ width: dims.w }}>
+      <div className="demo-phone" style={{ width: `min(${PHONE_WIDTH + 18}px, 100%)` }}>
         <div className="demo-phone-notch" />
         <div className="demo-phone-btn demo-phone-btn-power" />
         <div className="demo-phone-btn demo-phone-btn-vol-up" />
         <div className="demo-phone-btn demo-phone-btn-vol-down" />
-        <div className="demo-phone-screen" style={{ height: dims.h }}>
+        <div
+          className="demo-phone-screen"
+          style={{ width: "100%", aspectRatio: `${PHONE_WIDTH} / ${PHONE_HEIGHT}` }}
+        >
           <div className="demo-phone-sheen" />
           {started ? (
             <iframe
@@ -124,15 +89,17 @@ export default function DemoPlannerFrame() {
                 <br />
                 ProTankr Planner
               </h3>
-              {/* Restored to the original, single caption line this page
-                  always showed under the phone before today's changes --
-                  a follow-up pass had split it into two paragraphs plus a
-                  separate "pick a terminal..." line already duplicating
-                  the feature copy above the phone, which read as worse. */}
               <p className="demo-intro-body">
                 Anything you do here is real and shared with other
                 visitors — a good place to experiment, not to store
                 anything you need to keep.
+              </p>
+              <p className="demo-intro-warning">
+                On a phone or computer where you&apos;re already signed
+                into your own ProTankr account (including the installed
+                app) — starting this will sign that out too, since it's
+                the same site. Sign back in afterward with a fresh link
+                from the login page.
               </p>
               <button
                 type="button"
@@ -192,7 +159,6 @@ export default function DemoPlannerFrame() {
         .demo-phone-btn-vol-down { left: -2px; top: 27%; width: 3px; height: 5.5%; }
         .demo-phone-screen {
           position: relative;
-          width: 100%;
           background: #000;
           border-radius: 14px;
           overflow: hidden;
@@ -251,8 +217,17 @@ export default function DemoPlannerFrame() {
           line-height: 1.55;
           color: rgba(255,255,255,0.7);
         }
+        .demo-intro-warning {
+          margin: 14px 0 0;
+          max-width: 280px;
+          padding-top: 12px;
+          border-top: 1px solid rgba(255,255,255,0.1);
+          font: 600 11.5px var(--font);
+          line-height: 1.5;
+          color: #f5b942;
+        }
         .demo-intro-btn {
-          margin-top: 26px;
+          margin-top: 22px;
           padding: 13px 22px;
           border: none;
           border-radius: 999px;
