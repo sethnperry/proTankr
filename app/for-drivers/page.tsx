@@ -119,18 +119,23 @@ function EquipmentDriftMock() {
       </div>
       <div className="mock-app-body">
         <div className="eq-grid">
-          <div className="eq-col">
-            <span className="eq-col-label">Trucks</span>
-            <span className="eq-unit">25169</span>
-            <span className="eq-unit eq-unit-active">25184</span>
-            <span className="eq-unit">25512</span>
-          </div>
-          <div className="eq-col">
-            <span className="eq-col-label">Trailers</span>
-            <span className="eq-unit">3151</span>
-            <span className="eq-unit eq-unit-active">370</span>
-            <span className="eq-unit">582</span>
-          </div>
+          <span className="eq-col-label">Trucks</span>
+          <span />
+          <span className="eq-col-label">Trailers</span>
+
+          <span className="eq-unit">25169</span>
+          <span />
+          <span className="eq-unit">3151</span>
+
+          <span className="eq-unit eq-unit-active">25184</span>
+          <span className="eq-connector">
+            <span className="eq-connector-line" />
+          </span>
+          <span className="eq-unit eq-unit-active">370</span>
+
+          <span className="eq-unit">25512</span>
+          <span />
+          <span className="eq-unit">582</span>
         </div>
         <div className="eq-report">
           <div className="eq-report-row">
@@ -161,6 +166,13 @@ function EquipmentDriftMock() {
   );
 }
 
+// Real ProTankr terminals run on two report types, not a generic activity
+// feed: "Out of Product" (a rack is genuinely out of a product — visible
+// to any driver at any company heading there, no truck/driver identity
+// shown) and "Out of Allocation" (a terminal capped a driver below their
+// planned load — company-internal only). Both clear automatically on the
+// same schedule (6a/12p/6p/12a terminal-local), which is what "Clears"
+// below refers to.
 function SharedKnowledgeMock() {
   return (
     <div className="mock-panel-pair">
@@ -168,23 +180,26 @@ function SharedKnowledgeMock() {
         <div className="mock-panel-head">
           <span className="mock-panel-title">
             <span className="mock-dot mock-dot-red" />
-            Premium 93 (V-Power)
+            Premium 93
           </span>
-          <span className="mock-panel-sub">8 min ago</span>
+          <span className="mock-panel-sub">Clears 12:00</span>
         </div>
         <p className="mock-panel-text">
-          Buckeye Bayway (Linden, NJ) — rack 2 arm pump maintenance. Out of
-          premium until 14:00.
+          Marathon — Tampa, FL. Terminal Out of Premium 93, marked out at
+          08:14 hrs. Visible to every driver headed there, any company.
         </p>
       </div>
       <div className="mock-panel mock-panel-compact mock-panel-slate">
         <div className="mock-panel-head">
-          <span className="mock-panel-title">All Products (Queue)</span>
-          <span className="mock-panel-sub">22 min ago</span>
+          <span className="mock-panel-title">
+            <span className="mock-dot mock-dot-yellow" />
+            ULSD Diesel #2
+          </span>
+          <span className="mock-panel-sub">Clears 12:00</span>
         </div>
         <p className="mock-panel-text">
-          Kinder Morgan Carteret (Carteret, NJ) — 7 trucks backed up at the
-          terminal gate. Expect a 45 minute wait.
+          Global South — Fort Lauderdale, FL. OOA ULSD Diesel #2, marked
+          out at 09:40 hrs. Shared with your dispatch and teammates.
         </p>
       </div>
     </div>
@@ -267,7 +282,7 @@ export default function ForDriversPage() {
             <h2 className="feature-h2">Know where you&apos;re ready to work.</h2>
             <p className="feature-body">
               Track every terminal card you carry, its current status, and
-              when it renews. ProTankr flags what&apos;s expiring before it
+              when it expires. ProTankr flags what&apos;s expiring before it
               becomes a problem at the gate, and your card status can be
               shared with dispatch or your company the moment it matters.
             </p>
@@ -496,6 +511,7 @@ export default function ForDriversPage() {
         .mock-panel-title { display: flex; align-items: center; gap: 8px; font: 800 15px var(--font); color: #fff; }
         .mock-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
         .mock-dot-red { background: #ef4444; }
+        .mock-dot-yellow { background: #eab308; }
         .mock-panel-sub { font: 600 11.5px var(--font); color: rgba(255,255,255,0.4); white-space: nowrap; }
         .mock-panel-text {
           margin: 12px 0 0;
@@ -556,11 +572,15 @@ export default function ForDriversPage() {
         .exp-row-date { font: 800 12.5px var(--font); white-space: nowrap; }
         .exp-row-days { font-weight: 700; opacity: 0.85; }
 
-        .eq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .eq-col { display: flex; flex-direction: column; gap: 8px; }
+        .eq-grid {
+          display: grid;
+          grid-template-columns: 1fr 20px 1fr;
+          column-gap: 6px;
+          row-gap: 8px;
+          align-items: center;
+        }
         .eq-col-label {
           text-align: center;
-          margin-bottom: 2px;
           font: 800 10px var(--font);
           letter-spacing: 0.08em;
           text-transform: uppercase;
@@ -576,6 +596,12 @@ export default function ForDriversPage() {
           text-align: center;
         }
         .eq-unit-active { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.12); color: #fff; }
+        /* Connects the active/paired truck+trailer -- illustrative only
+           (the real Equipment picker doesn't draw this line itself), added
+           so the mock reads as "these two are coupled together" at a
+           glance instead of relying on the active-border color alone. */
+        .eq-connector { display: flex; align-items: center; justify-content: center; }
+        .eq-connector-line { width: 100%; height: 2px; border-radius: 1px; background: rgba(255,255,255,0.4); }
         .eq-report {
           margin-top: 18px;
           padding-top: 14px;
