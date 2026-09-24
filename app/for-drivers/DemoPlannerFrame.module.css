@@ -19,6 +19,22 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  /* Required, not cosmetic: .demoPhone's own width is
+     `min(408px, 100%)` (inline style) -- that 100% needs a genuinely
+     DEFINITE width on this parent to resolve against. Without an
+     explicit width here, this flex item's width is "auto" (shrink-to-
+     fit, based on its own child's size) -- a circular dependency with
+     .demoPhone's percentage width, which real Chromium testing (headless,
+     against the live deployed page) confirmed resolves to a collapsed
+     ~18px box (exactly .demoPhone's own 9px+9px padding, i.e. zero
+     content width) instead of the intended ~408px. Setting width:100%
+     here gives the percentage chain something real to bottom out on --
+     100% of whatever .feature-visual's own definite width is (480px on
+     desktop via the grid column, the full row width on mobile). Centering
+     still works: .demoFrameWrap's own align-items:center centers
+     .demoPhone within this now full-width wrapper, so nothing about the
+     visual layout changes -- only the collapse is fixed. */
+  width: 100%;
 }
 
 .demoPhone {
