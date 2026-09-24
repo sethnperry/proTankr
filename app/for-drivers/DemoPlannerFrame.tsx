@@ -22,18 +22,30 @@
 // /api/demo/start magic-link token for every page view, most of which
 // never actually interact with the phone at all.
 //
-// Real, confirmed gap the gate does NOT fix (found live 2026-09, by the
-// operator's own installed app getting signed out): starting the demo is
-// a genuine Supabase auth session change on this same origin
-// (protankr.com) -- cookies are shared by every tab/window/installed-PWA
-// instance in the same browser profile, so tapping the button here really
-// does sign the whole browser (including an installed ProTankr app on the
-// same device) into the demo account. The gate gets informed consent; it
-// cannot prevent the collision -- only a separate origin (e.g. a
-// dedicated demo.protankr.com subdomain) or a non-cookie auth mechanism
-// for this flow can do that, neither of which exists yet. The warning
-// line on the intro screen below says this plainly instead of implying a
-// safety this doesn't have.
+// Real, confirmed gap the gate alone does NOT fix (found live 2026-09, by
+// the operator's own installed app getting signed out): starting the demo
+// is a genuine Supabase auth session change -- cookies are shared by
+// every tab/window/installed-PWA instance in the same browser profile, so
+// tapping the button used to sign the whole browser (including an
+// installed ProTankr app on the same device) into the demo account.
+//
+// Fixed by isolating the login to its own domain: demoIframeSrc() below
+// points the iframe at https://demo.protankr.com (a second domain on this
+// same Vercel project, added 2026-09 specifically for this) instead of a
+// same-origin relative path, whenever the page itself is being served
+// from a real protankr.com host. A different domain means a different
+// cookie jar entirely -- the demo login can no longer touch protankr.com's
+// own session at all. Falls back to the old same-origin relative path on
+// any other host (localhost, Vercel preview URLs), where that subdomain
+// doesn't exist -- collision risk still applies there, which is fine
+// since only internal testing ever happens on those hosts, never a real
+// visitor's own account.
+//
+// The on-page warning below is left in place (not yet softened to "this
+// is isolated, don't worry") until the domain + Supabase redirect-URL
+// config are confirmed live -- see /api/demo/start's own header comment
+// for the other half of this fix and exactly what needs configuring
+// before this is actually true in production.
 //
 // Sizing: a plain, INLINE aspectRatio (390:844, the phone's real design
 // ratio) on .demo-phone-screen -- no JS measurement, no resize listener.
@@ -60,6 +72,24 @@ const PHONE_HEIGHT = 844;
 // "ProTankr Trucking" specifically for this purpose.
 const DEMO_PERSONA = "beta";
 
+// demo.protankr.com is a second domain on the SAME Vercel project (added
+// 2026-09), specifically so this login's cookies land on an isolated host
+// instead of protankr.com's own -- see /api/demo/start's header comment
+// for the real collision this fixes (the operator's own installed app
+// getting signed out). Only used on the real production hosts; dev/
+// preview deployments (where that subdomain doesn't exist/resolve) fall
+// back to the same-origin relative path exactly as before.
+const PROD_HOSTS = new Set(["protankr.com", "www.protankr.com"]);
+const DEMO_HOST = "https://demo.protankr.com";
+
+function demoIframeSrc() {
+  const path = `/api/demo/start?persona=${DEMO_PERSONA}`;
+  if (typeof window !== "undefined" && PROD_HOSTS.has(window.location.hostname)) {
+    return `${DEMO_HOST}${path}`;
+  }
+  return path;
+}
+
 export default function DemoPlannerFrame() {
   const [started, setStarted] = useState(false);
 
@@ -77,7 +107,7 @@ export default function DemoPlannerFrame() {
           <div className="demo-phone-sheen" />
           {started ? (
             <iframe
-              src={`/api/demo/start?persona=${DEMO_PERSONA}`}
+              src={demoIframeSrc()}
               title="ProTankr Planner — live interactive demo"
               className="demo-phone-iframe"
             />
