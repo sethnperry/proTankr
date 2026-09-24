@@ -21,23 +21,31 @@
 // /api/demo/start magic-link token for every page view, most of which
 // never actually interact with the phone at all.
 //
-// The phone's width AND height are both computed in JS from
-// window.innerWidth alone -- not CSS percentages, not aspect-ratio, and
-// not a measurement of this component's OWN rendered elements. Three
-// earlier approaches were tried and each failed live on a real device in
-// a different way (collapsed to ~0 height; then, once height was instead
-// measured via getBoundingClientRect + ResizeObserver on the screen div
-// itself, ballooned to an extremely tall, narrow bar) despite each
-// looking correct in every static build/HTML check from this session.
-// The getBoundingClientRect approach's own likely failure mode, in
+// The phone's width AND height are both computed in JS -- not CSS
+// percentages, not aspect-ratio, and not a measurement of this
+// component's OWN rendered elements. Three earlier approaches were tried
+// and each failed live on a real device in a different way (collapsed to
+// ~0 height; then, once height was instead measured via
+// getBoundingClientRect + ResizeObserver on the screen div itself,
+// ballooned to an extremely tall, narrow bar) despite each looking
+// correct in every static build/HTML check from this session. The
+// getBoundingClientRect approach's own likely failure mode, in
 // hindsight: it observed the SAME element it was resizing (ResizeObserver
 // on screenEl, whose own height it then set from that observation) --
 // a self-referential measure-then-resize-the-same-node loop, which is
 // exactly the anti-pattern ResizeObserver's own spec warns can misbehave.
-// Deriving both dimensions from window.innerWidth (a global the component
-// never writes to) instead removes any possibility of that kind of
-// feedback loop, or of depending on how this page's own flex/grid
-// ancestors resolve a percentage width.
+//
+// Explicit design direction after seeing it live (not guessed at):
+// in portrait, the phone should be close to full device width/natural
+// height -- even if that's taller than one screen, scrolling to see the
+// rest is fine and expected, not a bug to fix. And rotating the device
+// to landscape should NOT shrink the mockup at all -- it should render
+// at the exact same size it would in portrait, so a wide-but-short
+// landscape view scrolls to see it too, rather than the whole thing
+// awkwardly shrinking to fit the now-short viewport height. This is why
+// sizing is driven by Math.min(innerWidth, innerHeight) -- a phone's own
+// short (portrait-width) axis -- rather than raw innerWidth, which would
+// grow (and so re-inflate the mockup) the moment the device rotates.
 
 import { useEffect, useState } from "react";
 
@@ -48,24 +56,27 @@ const MAX_PHONE_W = PHONE_WIDTH + 18;
 // "ProTankr Trucking" specifically for this purpose.
 const DEMO_PERSONA = "beta";
 
-function dimsForViewport(vw: number, vh: number) {
+// .demo-phone's own CSS padding (the chassis bezel around the screen) --
+// a fixed 9px on every side, added on top of the inner screen's own
+// PHONE_WIDTH x PHONE_HEIGHT, regardless of what size the phone renders
+// at. MAX_PHONE_W bakes this in already (PHONE_WIDTH + 18) for the
+// "as big as it can be" case; BEZEL pulls it back out so a smaller
+// rendered size still keeps the INNER screen at exactly the 390:844
+// ratio, rather than (incorrectly) applying that ratio to the OUTER
+// chassis width, which would skew proportions slightly at any size below
+// the max (the fixed bezel becomes proportionally larger the smaller the
+// phone renders).
+const BEZEL = MAX_PHONE_W - PHONE_WIDTH;
+
+function dimsForPortraitWidth(portraitVw: number) {
   // Reserve some margin for this page's own side gutters (24-48px
   // depending on breakpoint) -- approximate on purpose, a few px of
   // slack either side is cosmetic, not a functional problem the way the
   // earlier approaches' failures were.
-  const wByWidth = Math.min(MAX_PHONE_W, vw - 40);
-  // A real 390:844 phone is taller than it is wide by more than 2:1 --
-  // sized purely off width, it can end up taller than the visible
-  // viewport itself (confirmed live: it rendered correctly proportioned,
-  // but tall enough to run off the bottom of the screen). Also cap it so
-  // its HEIGHT never exceeds a comfortable fraction of the viewport's own
-  // height, then re-derive width from whichever cap is more restrictive --
-  // still the exact same 390:844 ratio either way, just not allowed to
-  // dominate a short viewport.
-  const wByHeight = (vh * 0.85 * PHONE_WIDTH) / PHONE_HEIGHT;
-  const w = Math.max(180, Math.min(wByWidth, wByHeight));
-  const h = Math.round((w * PHONE_HEIGHT) / PHONE_WIDTH);
-  return { w: Math.round(w), h };
+  const outerW = Math.max(180, Math.min(MAX_PHONE_W, portraitVw - 32));
+  const innerW = outerW - BEZEL;
+  const innerH = Math.round((innerW * PHONE_HEIGHT) / PHONE_WIDTH);
+  return { w: outerW, h: innerH + BEZEL };
 }
 
 // A fixed, SSR-safe default -- identical on the server and the client's
@@ -76,14 +87,15 @@ function dimsForViewport(vw: number, vh: number) {
 // first paint" (see useNow()/useTheme.ts's own history: start neutral,
 // resolve for real post-mount, accept a brief flash of the default rather
 // than risk a hydration mismatch).
-const SSR_SAFE_DIMS = dimsForViewport(360, 720);
+const SSR_SAFE_DIMS = dimsForPortraitWidth(360);
 
 export default function DemoPlannerFrame() {
   const [started, setStarted] = useState(false);
   const [dims, setDims] = useState(SSR_SAFE_DIMS);
 
   useEffect(() => {
-    const onResize = () => setDims(dimsForViewport(window.innerWidth, window.innerHeight));
+    const onResize = () =>
+      setDims(dimsForPortraitWidth(Math.min(window.innerWidth, window.innerHeight)));
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
