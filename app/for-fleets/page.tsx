@@ -28,7 +28,7 @@ const OUTCOMES = [
     // real example (#load-example, inside the Fleet Economics section)
     // rather than sharing the generic explainer the other three link to.
     tag: "Asset optimization",
-    title: "Recover unused legal payload.",
+    title: "Recover more payload.",
     body: "Every load that's planned a little short is a little bit of capacity left at the rack. Small, per-load recovery adds up fast across a fleet.",
     stat: "See the math below ↓",
     href: "#load-example",
@@ -41,26 +41,23 @@ const OUTCOMES = [
     // so the driver never has to radio in mid-route for new sourcing or
     // a card that's about to lapse.
     tag: "Sourcing accuracy",
-    title: "Know before you dispatch, not after.",
-    body: "Card status updates itself through the normal workflow, down to which terminal a no-load happened at. Pull a driver's cards before the first dispatch — not after they've rolled and need new sourcing.",
+    title: "Dispatch smarter with readiness visibility.",
+    body: "Card status updates itself through the normal workflow, down to which terminal a no load happened at. Check it before the first dispatch, not after, so drivers stop asking for new sourcing and dispatchers stop reworking routes mid trip.",
     stat: "See how it works →",
     href: "#how-it-works",
   },
   {
-    // Deliberately the TERMINAL-first lookup (pick a terminal, see every
-    // driver's status there -- staffing/coverage), contrasted against the
-    // Sourcing Accuracy tile's DRIVER-first lookup (pick a driver, see
-    // their own cards -- one dispatch). Same underlying card data, two
-    // real, different directions dispatch actually uses it from -- not
-    // redundant once that's explicit. "Renewals... surface automatically"
-    // was also dropped -- same overreach already caught on /for-drivers'
-    // "when it renews" ("renews" implies the app takes an action; it only
-    // flags what's expiring).
+    // Reframed per explicit direction around the real pain point: a
+    // reactive dispatcher spends the day answering messages instead of
+    // planning, and a driver left waiting on a reply becomes the next
+    // customer call. Links to its own section (#dispatch-planning), not
+    // the shared #how-it-works explainer -- deliberately not a third
+    // card pointing at the same generic destination.
     tag: "Dispatch operations",
-    title: "See who's carded where, terminal by terminal.",
-    body: "Pick a terminal and see every driver's card status there at once — who's covered, who's expiring, who isn't carded yet. The company-wide staffing view, not a single dispatch.",
-    stat: "See how it works →",
-    href: "#how-it-works",
+    title: "Keep drivers rolling, not waiting.",
+    body: "Terminal and card readiness are visible up front, so the plan is right from the start instead of built load by load. Fewer driver messages means fewer idle trucks waiting on a reply, and a lighter workload for dispatch.",
+    stat: "See how dispatch changes →",
+    href: "#dispatch-planning",
   },
   {
     // The point of this metric, stated plainly for whoever edits this
@@ -71,11 +68,16 @@ const OUTCOMES = [
     // loading. The app computes the number only -- it has no payout
     // calculator, by design; a company plugs this into whatever bonus or
     // incentive program it already runs.
+    // Links to the manifesto section (#less-management) rather than the
+    // shared #how-it-works explainer -- that section now carries a real
+    // explanation of how/why the utilization score works, per explicit
+    // direction, rather than sending this card to a generic destination
+    // that never actually mentions it.
     tag: "Driver alignment",
-    title: "Reward precision, not risk.",
+    title: "Properly aligned incentives.",
     body: "A gallon weighted score measures how close each load landed to capacity. Loads over the legal weight limit are excluded, so overloading can never score higher. Feed it into your own bonus program to reward careful loading, not speed.",
-    stat: "See how it works →",
-    href: "#how-it-works",
+    stat: "See how it's calculated →",
+    href: "#less-management",
   },
 ];
 
@@ -389,6 +391,34 @@ export default function ForFleetsPage() {
         </div>
       </section>
 
+      {/* DISPATCH PLANNING -- the Dispatch Operations outcome tile's own
+          destination, not the shared #how-it-works explainer. Built
+          around the real pain point described directly: a driver left
+          waiting on a reply becomes the next customer call, and a
+          dispatcher who's always answering messages never gets ahead of
+          it. Reuses the .quote-section pattern (a second instance, not a
+          new visual language) since it's the same "short narrative"
+          shape as Shared Equipment Knowledge right below it. */}
+      <section id="dispatch-planning" className="quote-section">
+        <div className="quote-inner">
+          <p className="quote-eyebrow">Proactive dispatch</p>
+          <h2 className="quote-h2">Stop reacting. Start planning ahead.</h2>
+          <p className="quote-body">
+            A driver waiting on new instructions can&apos;t stay
+            efficient. That wait becomes the next customer call, then
+            the one behind it, and a dispatcher spends the whole day
+            catching up without ever getting ahead of it.
+          </p>
+          <p className="quote-body">
+            Terminal and card readiness are already visible before the
+            first message goes out, so the best plan gets built up
+            front. Fewer driver messages means fewer trucks sitting
+            idle, and a dispatcher who can finally plan instead of
+            firefight.
+          </p>
+        </div>
+      </section>
+
       {/* SHARED EQUIPMENT KNOWLEDGE */}
       <section className="quote-section">
         <div className="quote-inner">
@@ -405,8 +435,11 @@ export default function ForFleetsPage() {
         </div>
       </section>
 
-      {/* LESS MANAGEMENT, NOT MORE SOFTWARE */}
-      <section className="manifesto-section">
+      {/* LESS MANAGEMENT, NOT MORE SOFTWARE -- also the Driver Alignment
+          outcome tile's destination (#less-management), which is why the
+          utilization score gets its own detail block below the original
+          two paragraphs rather than just the philosophy statement alone. */}
+      <section id="less-management" className="manifesto-section">
         <div className="manifesto-inner">
           <h2 className="manifesto-h2">
             The goal is less management, not more software.
@@ -421,6 +454,20 @@ export default function ForFleetsPage() {
             <p>
               Less chasing. More visibility. More capable drivers, less
               administrative overhead behind them.
+            </p>
+          </div>
+          <div className="manifesto-detail">
+            <p className="manifesto-detail-label">How the utilization score works</p>
+            <p className="manifesto-detail-text">
+              Every completed load is measured against how much it
+              could have carried that day, given the truck, trailer,
+              and terminal conditions. Loads that cross the legal
+              weight limit are excluded entirely, so there is no way to
+              score higher by cutting corners. The result is gallon
+              weighted, never a ranking, and it plugs into whatever
+              bonus or incentive program a company already runs.
+              ProTankr computes the number. What a company does with it
+              is entirely up to them.
             </p>
           </div>
         </div>
@@ -835,6 +882,28 @@ export default function ForFleetsPage() {
           line-height: 1.65;
           color: rgba(255,255,255,0.62);
         }
+        .manifesto-detail {
+          margin: 40px auto 0;
+          max-width: 620px;
+          text-align: left;
+          border-radius: 20px;
+          background: #1a1a1a;
+          border: 1px solid rgba(255,255,255,0.1);
+          padding: 28px 32px;
+        }
+        .manifesto-detail-label {
+          margin: 0;
+          font: 800 11px var(--font);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.4);
+        }
+        .manifesto-detail-text {
+          margin: 14px 0 0;
+          font: 400 15px var(--font);
+          line-height: 1.65;
+          color: rgba(255,255,255,0.65);
+        }
 
         /* ---------- Closing ---------- */
         .closing { background: #ffffff; padding: 88px 48px; border-top: 1px solid rgba(0,0,0,0.07); }
@@ -910,6 +979,7 @@ export default function ForFleetsPage() {
 
           .manifesto-section { padding: 48px 24px; }
           .manifesto-h2 { font-size: 28px; }
+          .manifesto-detail { padding: 20px; }
 
           .closing { padding: 48px 24px; }
           .closing-h2 { font-size: 30px; }
