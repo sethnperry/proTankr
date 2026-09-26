@@ -30,15 +30,30 @@ const OUTCOMES = [
     stat: "See the math below ↓",
   },
   {
-    tag: "Time & deadhead",
-    title: "Fewer wasted trips to the wrong terminal.",
-    body: "Terminal and card readiness are visible before a truck is dispatched, so nobody gets sent somewhere they can't load or aren't carded.",
-    stat: "Fewer blind dispatches",
+    // Deliberately NOT framed as "fewer wasted trips" -- that's the
+    // terminal-issue flagging feature's job (Out of Product/Out of
+    // Allocation reports), not this one. This is about dispatch having
+    // an accurate, per-terminal card picture BEFORE the first dispatch,
+    // so the driver never has to radio in mid-route for new sourcing or
+    // a card that's about to lapse.
+    tag: "Sourcing accuracy",
+    title: "Know before you dispatch, not after.",
+    body: "Card status updates itself through the normal workflow, down to which terminal a no-load happened at. Pull a driver's cards before the first dispatch — not after they've rolled and need new sourcing.",
+    stat: "Right the first dispatch",
   },
   {
+    // Deliberately the TERMINAL-first lookup (pick a terminal, see every
+    // driver's status there -- staffing/coverage), contrasted against the
+    // Sourcing Accuracy tile's DRIVER-first lookup (pick a driver, see
+    // their own cards -- one dispatch). Same underlying card data, two
+    // real, different directions dispatch actually uses it from -- not
+    // redundant once that's explicit. "Renewals... surface automatically"
+    // was also dropped -- same overreach already caught on /for-drivers'
+    // "when it renews" ("renews" implies the app takes an action; it only
+    // flags what's expiring).
     tag: "Dispatch operations",
-    title: "Terminal card readiness, fleet-wide.",
-    body: "See who's carded where without calling around. Renewals and expirations surface automatically instead of getting discovered at the gate.",
+    title: "See who's carded where, terminal by terminal.",
+    body: "Pick a terminal and see every driver's card status there at once — who's covered, who's expiring, who isn't carded yet. The company-wide staffing view, not a single dispatch.",
     stat: "Real-time, company-wide",
   },
   {
