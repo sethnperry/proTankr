@@ -258,17 +258,17 @@ export default function ForFleetsPage() {
       {/* HERO */}
       <section className="fleet-hero">
         <div className="fleet-hero-inner">
-          <p className="fleet-eyebrow">Fleet operations &amp; asset utilization</p>
-          <h1 className="fleet-h1">
-            The goal isn&apos;t more management.
-            <br />
-            It&apos;s less need for it.
-          </h1>
+          <p className="fleet-eyebrow">Driver-driven efficiency</p>
+          <h1 className="fleet-h1">Efficiency from the bottom up.</h1>
+          <p className="fleet-lead">
+            The best loading decisions are made where the work happens.
+            ProTankr gives drivers a smarter way to plan, adapt to
+            changing conditions, and repeat what works.
+          </p>
           <p className="fleet-sub">
-            Move routine operational intelligence to the point of work.
-            Drivers get precise loading tools; dispatch gets instant
-            terminal and equipment readiness — without more headcount
-            watching over either.
+            No new system to manage. No existing workflow to replace.
+            Just a smarter way to turn driver experience into repeatable
+            efficiency.
           </p>
           <a href="#roi" className="fleet-cta">
             Calculate Fleet Carrier ROI &rarr;
@@ -479,12 +479,25 @@ export default function ForFleetsPage() {
           line-height: 1.1;
           color: #111;
         }
+        /* The subheadline tier -- gives the hero its punch, sized well
+           below the h1 but clearly above the closing tier. */
+        .fleet-lead {
+          margin: 24px auto 0;
+          max-width: 640px;
+          font: 700 23px var(--font);
+          letter-spacing: -0.005em;
+          line-height: 1.45;
+          color: #111;
+        }
+        /* The closing "no new system, no workflow to replace" statement --
+           deliberately smaller/quieter than .fleet-lead, third in the
+           hierarchy, not a restatement at the same visual weight. */
         .fleet-sub {
-          margin: 22px auto 0;
-          max-width: 620px;
-          font: 400 16.5px var(--font);
+          margin: 16px auto 0;
+          max-width: 520px;
+          font: 400 14.5px var(--font);
           line-height: 1.6;
-          color: rgba(0,0,0,0.6);
+          color: rgba(0,0,0,0.5);
         }
         .fleet-cta {
           display: inline-block;
@@ -869,6 +882,7 @@ export default function ForFleetsPage() {
         @media (max-width: 980px) {
           .fleet-hero { padding: 28px 24px 44px; }
           .fleet-h1 { font-size: 32px; }
+          .fleet-lead { font-size: 19px; }
 
           .outcomes-section { padding: 48px 24px; }
           .outcomes-h2 { font-size: 28px; }
