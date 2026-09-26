@@ -24,10 +24,14 @@ import SiteFooter from "../marketing/SiteFooter";
 
 const OUTCOMES = [
   {
+    // The main feature of the app -- its button gets its own concrete,
+    // real example (#load-example, inside the Fleet Economics section)
+    // rather than sharing the generic explainer the other three link to.
     tag: "Asset optimization",
     title: "Recover unused legal payload.",
     body: "Every load that's planned a little short is a little bit of capacity left at the rack. Small, per-load recovery adds up fast across a fleet.",
     stat: "See the math below ↓",
+    href: "#load-example",
   },
   {
     // Deliberately NOT framed as "fewer wasted trips" -- that's the
@@ -39,7 +43,8 @@ const OUTCOMES = [
     tag: "Sourcing accuracy",
     title: "Know before you dispatch, not after.",
     body: "Card status updates itself through the normal workflow, down to which terminal a no-load happened at. Pull a driver's cards before the first dispatch — not after they've rolled and need new sourcing.",
-    stat: "Right the first dispatch",
+    stat: "See how it works →",
+    href: "#how-it-works",
   },
   {
     // Deliberately the TERMINAL-first lookup (pick a terminal, see every
@@ -54,7 +59,8 @@ const OUTCOMES = [
     tag: "Dispatch operations",
     title: "See who's carded where, terminal by terminal.",
     body: "Pick a terminal and see every driver's card status there at once — who's covered, who's expiring, who isn't carded yet. The company-wide staffing view, not a single dispatch.",
-    stat: "Real-time, company-wide",
+    stat: "See how it works →",
+    href: "#how-it-works",
   },
   {
     // The point of this metric, stated plainly for whoever edits this
@@ -68,7 +74,8 @@ const OUTCOMES = [
     tag: "Driver alignment",
     title: "Reward precision, not risk.",
     body: "A gallon weighted score measures how close each load landed to capacity. Loads over the legal weight limit are excluded, so overloading can never score higher. Feed it into your own bonus program to reward careful loading, not speed.",
-    stat: "No ranking. Just data.",
+    stat: "See how it works →",
+    href: "#how-it-works",
   },
 ];
 
@@ -173,6 +180,46 @@ function FleetRoiCalculator() {
   );
 }
 
+// A real completed load, pulled from ProTankr's own recorded verification
+// history (not invented for this page) -- available/actual/unused gallons
+// and the utilization percentage are the exact figures a real production
+// load produced. Kept as its own small card rather than folded into the
+// calculator above/below it: the calculator is a projection the visitor
+// controls, this is proof the underlying math runs on a real load.
+function ExampleLoadCard() {
+  return (
+    <div id="load-example" className="example-card">
+      <p className="example-label">One real completed load</p>
+      <div className="example-headline">
+        <span className="example-headline-num">98.5%</span>
+        <span className="example-headline-label">of legal capacity used</span>
+      </div>
+      <div className="example-row">
+        <div className="example-stat">
+          <span className="example-stat-label">Legal capacity that day</span>
+          <span className="example-stat-num">7,941 gal</span>
+        </div>
+        <div className="example-stat">
+          <span className="example-stat-label">Actually loaded</span>
+          <span className="example-stat-num">7,824 gal</span>
+        </div>
+        <div className="example-stat example-stat-gap">
+          <span className="example-stat-label">Left at the rack</span>
+          <span className="example-stat-num">117 gal</span>
+        </div>
+      </div>
+      <p className="example-footnote">
+        ProTankr solved the actual legal weight limit for that specific
+        truck, trailer, and terminal, using that day&apos;s real density.
+        The driver still had 117 gallons of legal room left when they
+        pulled away. Multiply a gap like that across a week, a fleet, a
+        year, and the calculator below is that same math at your own
+        scale.
+      </p>
+    </div>
+  );
+}
+
 function FleetVisibilityMock() {
   const rows = [
     { name: "Truck 4408 / Trailer T-11", note: "Tare drift +570 lbs", warn: true },
@@ -240,9 +287,64 @@ export default function ForFleetsPage() {
                 <span className="outcome-tag">{o.tag}</span>
                 <h3 className="outcome-title">{o.title}</h3>
                 <p className="outcome-body">{o.body}</p>
-                <span className="outcome-stat">{o.stat}</span>
+                <a href={o.href} className="outcome-stat">{o.stat}</a>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS -- the shared destination for the Sourcing Accuracy,
+          Dispatch Operations, and Driver Alignment outcome buttons. All
+          three are really the same story (the workflow captures this
+          automatically) told from three angles, so one explainer section
+          serves all three rather than three separate deep dives. */}
+      <section id="how-it-works" className="howitworks-section">
+        <div className="howitworks-inner">
+          <p className="howitworks-eyebrow">How it actually works</p>
+          <h2 className="howitworks-h2">The workflow is the whole system.</h2>
+          <p className="howitworks-sub">
+            There&apos;s no separate admin tool for drivers to remember to
+            update. Everything above comes from the same few taps a
+            driver already makes to plan and run a load.
+          </p>
+          <div className="howitworks-steps">
+            <div className="howitworks-step">
+              <span className="howitworks-num">1</span>
+              <h3>Pick equipment and a terminal</h3>
+              <p>
+                The driver selects their truck and trailer pairing and
+                where they&apos;re loading. ProTankr already has the tare,
+                the compartments, and what that terminal has on file.
+              </p>
+            </div>
+            <div className="howitworks-step">
+              <span className="howitworks-num">2</span>
+              <h3>Plan the load</h3>
+              <p>
+                Product per compartment, cap handles, CG slider. A few
+                taps, and the legal weight limit for that exact truck,
+                trailer, and terminal is already solved.
+              </p>
+            </div>
+            <div className="howitworks-step">
+              <span className="howitworks-num">3</span>
+              <h3>Load, or flag why not</h3>
+              <p>
+                If the rack is out, or a terminal caps them short, the
+                driver flags it right there. Same tap either way. Nothing
+                extra to remember.
+              </p>
+            </div>
+            <div className="howitworks-step">
+              <span className="howitworks-num">4</span>
+              <h3>Everything else updates itself</h3>
+              <p>
+                Card status, terminal readiness, utilization score,
+                service and tare history. All captured as a byproduct of
+                that same workflow, not entered separately by anyone.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -256,6 +358,7 @@ export default function ForFleetsPage() {
             Adjust the fleet size and volume below to see the scale of
             recoverable payload at your own operation.
           </p>
+          <ExampleLoadCard />
           <FleetRoiCalculator />
         </div>
       </section>
@@ -449,7 +552,72 @@ export default function ForFleetsPage() {
           background: #111;
           color: #fff;
           font: 700 12px var(--font);
+          text-decoration: none;
         }
+        .outcome-stat:hover { opacity: 0.8; }
+
+        /* ---------- How it works ---------- */
+        .howitworks-section { background: #ffffff; padding: 88px 48px; }
+        .howitworks-inner { max-width: 920px; margin: 0 auto; text-align: center; }
+        .howitworks-eyebrow {
+          margin: 0;
+          font: 800 12px var(--font);
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: rgba(0,0,0,0.4);
+        }
+        .howitworks-h2 { margin: 12px 0 0; font: 900 34px var(--font); letter-spacing: -0.02em; color: #111; }
+        .howitworks-sub {
+          margin: 14px auto 0;
+          max-width: 560px;
+          font: 400 15.5px var(--font);
+          line-height: 1.6;
+          color: rgba(0,0,0,0.55);
+        }
+        .howitworks-steps {
+          margin-top: 48px;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 28px;
+          text-align: left;
+        }
+        .howitworks-step { display: flex; flex-direction: column; gap: 8px; }
+        .howitworks-num { font: 900 26px var(--font); color: rgba(0,0,0,0.15); }
+        .howitworks-step h3 { margin: 0; font: 800 16px var(--font); color: #111; }
+        .howitworks-step p { margin: 0; font: 400 13.5px var(--font); line-height: 1.55; color: rgba(0,0,0,0.55); }
+
+        /* ---------- Real-load example (sits inside the ROI section) ---------- */
+        .example-card {
+          margin-top: 28px;
+          text-align: left;
+          border-radius: 20px;
+          background: #1a1a1a;
+          border: 1px solid rgba(255,255,255,0.1);
+          padding: 32px;
+        }
+        .example-label {
+          margin: 0;
+          font: 800 11px var(--font);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.4);
+        }
+        .example-headline { margin-top: 14px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+        .example-headline-num { font: 900 44px var(--font); letter-spacing: -0.01em; color: #fff; }
+        .example-headline-label { font: 700 13px var(--font); color: rgba(255,255,255,0.5); }
+        .example-row {
+          margin-top: 24px;
+          padding-top: 22px;
+          border-top: 1px solid rgba(255,255,255,0.12);
+          display: flex;
+          gap: 28px;
+          flex-wrap: wrap;
+        }
+        .example-stat { display: flex; flex-direction: column; gap: 4px; }
+        .example-stat-label { font: 700 11px var(--font); letter-spacing: 0.03em; color: rgba(255,255,255,0.4); }
+        .example-stat-num { font: 800 18px var(--font); color: #fff; }
+        .example-stat-gap .example-stat-num { color: #4ade80; }
+        .example-footnote { margin: 22px 0 0; font: 400 12px var(--font); line-height: 1.55; color: rgba(255,255,255,0.4); }
 
         /* ---------- ROI calculator ---------- */
         .roi-section { background: #111111; padding: 88px 48px; }
@@ -702,10 +870,17 @@ export default function ForFleetsPage() {
           .outcomes-h2 { font-size: 28px; }
           .outcomes-grid { grid-template-columns: 1fr; }
 
+          .howitworks-section { padding: 48px 24px; }
+          .howitworks-h2 { font-size: 26px; }
+          .howitworks-steps { grid-template-columns: 1fr; gap: 28px; }
+
           .roi-section { padding: 48px 24px; }
           .roi-h2 { font-size: 26px; }
           .roi-card { padding: 22px; }
           .roi-result-num { font-size: 34px; }
+          .example-card { padding: 22px; }
+          .example-headline-num { font-size: 34px; }
+          .example-row { gap: 20px; }
 
           .feature-section { padding: 48px 24px; }
           .feature-row { grid-template-columns: 1fr; gap: 32px; }
