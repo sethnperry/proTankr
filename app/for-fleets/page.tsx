@@ -57,9 +57,17 @@ const OUTCOMES = [
     stat: "Real-time, company-wide",
   },
   {
+    // The point of this metric, stated plainly for whoever edits this
+    // copy next: reward loading closer to capacity without ever rewarding
+    // overloading, cutting corners, or speeding. Loads over the legal
+    // weight limit are excluded from scoring entirely (never counted, not
+    // just capped), so there is no path to a better number through unsafe
+    // loading. The app computes the number only -- it has no payout
+    // calculator, by design; a company plugs this into whatever bonus or
+    // incentive program it already runs.
     tag: "Driver alignment",
-    title: "An honest, shared baseline.",
-    body: "A gallon-weighted utilization score gives every load the same objective measure of how close it landed to capacity — a coaching reference, not a leaderboard.",
+    title: "Reward precision, not risk.",
+    body: "A gallon weighted score measures how close each load landed to capacity. Loads over the legal weight limit are excluded, so overloading can never score higher. Feed it into your own bonus program to reward careful loading, not speed.",
     stat: "No ranking. Just data.",
   },
 ];
