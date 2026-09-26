@@ -311,38 +311,42 @@ export default function ForFleetsPage() {
           <div className="howitworks-steps">
             <div className="howitworks-step">
               <span className="howitworks-num">1</span>
-              <h3>Pick equipment and a terminal</h3>
+              <h3>Already set up</h3>
               <p>
-                The driver selects their truck and trailer pairing and
-                where they&apos;re loading. ProTankr already has the tare,
-                the compartments, and what that terminal has on file.
+                The app opens with equipment already selected and the
+                last terminal already picked. This step only matters if
+                the driver is heading somewhere new or swapping trucks.
               </p>
             </div>
             <div className="howitworks-step">
               <span className="howitworks-num">2</span>
-              <h3>Plan the load</h3>
+              <h3>Pick a plan</h3>
               <p>
-                Product per compartment, cap handles, CG slider. A few
-                taps, and the legal weight limit for that exact truck,
-                trailer, and terminal is already solved.
+                Choose from preconfigured product and compartment
+                layouts in one tap, or skip this too if it&apos;s the same
+                plan as last time.
               </p>
             </div>
             <div className="howitworks-step">
               <span className="howitworks-num">3</span>
-              <h3>Load, or flag why not</h3>
+              <h3>Load, then complete</h3>
               <p>
-                If the rack is out, or a terminal caps them short, the
-                driver flags it right there. Same tap either way. Nothing
-                extra to remember.
+                See exactly what to load in each compartment, then load
+                it. Completing is where the driver checks the BOL
+                against the plan. On target gallons and API/temp mean
+                nothing to change. Only update what&apos;s actually
+                different.
               </p>
             </div>
             <div className="howitworks-step">
               <span className="howitworks-num">4</span>
               <h3>Everything else updates itself</h3>
               <p>
-                Card status, terminal readiness, utilization score,
-                service and tare history. All captured as a byproduct of
-                that same workflow, not entered separately by anyone.
+                API and product temp update for the next driver. The
+                terminal access card renews. Terminal issues, outages,
+                or allocation limits get flagged so other drivers skip a
+                wasted trip. The utilization score gets calculated. All
+                from the same workflow.
               </p>
             </div>
           </div>
