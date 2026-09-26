@@ -91,7 +91,11 @@ function fmtUsd(n: number) {
 function FleetRoiCalculator() {
   const [fleetSize, setFleetSize] = useState(25);
   const [weeklyLoads, setWeeklyLoads] = useState(10);
-  const [recoverableGal, setRecoverableGal] = useState(265);
+  // Matches ExampleLoadCard's own typical-vs-precise gap (350 gal diesel,
+  // 450 gal regular, averaging 400) rather than an arbitrary default --
+  // the calculator's starting position should agree with the real load
+  // example directly above it, not undercut it.
+  const [recoverableGal, setRecoverableGal] = useState(400);
   const [valuePerGal, setValuePerGal] = useState(0.058);
 
   const weeklyGallons = fleetSize * weeklyLoads * recoverableGal;
@@ -182,41 +186,65 @@ function FleetRoiCalculator() {
   );
 }
 
-// A real completed load, pulled from ProTankr's own recorded verification
-// history (not invented for this page) -- available/actual/unused gallons
-// and the utilization percentage are the exact figures a real production
-// load produced. Kept as its own small card rather than folded into the
-// calculator above/below it: the calculator is a projection the visitor
-// controls, this is proof the underlying math runs on a real load.
+// Real-world gap, not a single database-pulled load -- the earlier version
+// of this card used one real completed load (98.5% of legal capacity,
+// 117 gal left at the rack), which was genuinely real but badly understated
+// the actual opportunity: the operator's own conversations with drivers put
+// typical diesel loads at 7,500-7,600 gal and typical gasoline loads at
+// 8,500-8,600 gal, against the operator's own routine 7,900 / 9,000 gal --
+// a 300-500 gal gap per load, not ~100. Framed honestly as "based on driver
+// conversations," not a single verified load, since that's what this
+// actually is -- matches the site's existing "no unsupported guarantees"
+// discipline (see this file's own header comment).
 function ExampleLoadCard() {
   return (
     <div id="load-example" className="example-card">
-      <p className="example-label">One real completed load</p>
+      <p className="example-label">What drivers typically leave on the table</p>
       <div className="example-headline">
-        <span className="example-headline-num">98.5%</span>
-        <span className="example-headline-label">of legal capacity used</span>
+        <span className="example-headline-num">400 gal</span>
+        <span className="example-headline-label">left behind on an average load</span>
       </div>
-      <div className="example-row">
-        <div className="example-stat">
-          <span className="example-stat-label">Legal capacity that day</span>
-          <span className="example-stat-num">7,941 gal</span>
+      <div className="example-products">
+        <div className="example-product">
+          <p className="example-product-name">Diesel</p>
+          <div className="example-row">
+            <div className="example-stat">
+              <span className="example-stat-label">Typical load</span>
+              <span className="example-stat-num">7,550 gal</span>
+            </div>
+            <div className="example-stat">
+              <span className="example-stat-label">Precise load</span>
+              <span className="example-stat-num">7,900 gal</span>
+            </div>
+            <div className="example-stat example-stat-gap">
+              <span className="example-stat-label">Recovered</span>
+              <span className="example-stat-num">350 gal</span>
+            </div>
+          </div>
         </div>
-        <div className="example-stat">
-          <span className="example-stat-label">Actually loaded</span>
-          <span className="example-stat-num">7,824 gal</span>
-        </div>
-        <div className="example-stat example-stat-gap">
-          <span className="example-stat-label">Left at the rack</span>
-          <span className="example-stat-num">117 gal</span>
+        <div className="example-product">
+          <p className="example-product-name">Regular</p>
+          <div className="example-row">
+            <div className="example-stat">
+              <span className="example-stat-label">Typical load</span>
+              <span className="example-stat-num">8,550 gal</span>
+            </div>
+            <div className="example-stat">
+              <span className="example-stat-label">Precise load</span>
+              <span className="example-stat-num">9,000 gal</span>
+            </div>
+            <div className="example-stat example-stat-gap">
+              <span className="example-stat-label">Recovered</span>
+              <span className="example-stat-num">450 gal</span>
+            </div>
+          </div>
         </div>
       </div>
       <p className="example-footnote">
-        ProTankr solved the actual legal weight limit for that specific
-        truck, trailer, and terminal, using that day&apos;s real density.
-        The driver still had 117 gallons of legal room left when they
-        pulled away. Multiply a gap like that across a week, a fleet, a
-        year, and the calculator below is that same math at your own
-        scale.
+        Based on real conversations with drivers about what they
+        typically load versus what the legal limit actually allows that
+        day. Multiply a gap like this across a week, a fleet, a year,
+        and the calculator below is that same math at your own scale.
       </p>
     </div>
   );
@@ -669,19 +697,27 @@ export default function ForFleetsPage() {
         .example-headline { margin-top: 14px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
         .example-headline-num { font: 900 44px var(--font); letter-spacing: -0.01em; color: #fff; }
         .example-headline-label { font: 700 13px var(--font); color: rgba(255,255,255,0.5); }
-        .example-row {
-          margin-top: 24px;
-          padding-top: 22px;
+        .example-products {
+          margin-top: 28px;
+          padding-top: 24px;
           border-top: 1px solid rgba(255,255,255,0.12);
           display: flex;
-          gap: 28px;
-          flex-wrap: wrap;
+          flex-direction: column;
+          gap: 22px;
         }
+        .example-product-name {
+          margin: 0 0 12px;
+          font: 800 12px var(--font);
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.55);
+        }
+        .example-row { display: flex; gap: 28px; flex-wrap: wrap; }
         .example-stat { display: flex; flex-direction: column; gap: 4px; }
         .example-stat-label { font: 700 11px var(--font); letter-spacing: 0.03em; color: rgba(255,255,255,0.4); }
         .example-stat-num { font: 800 18px var(--font); color: #fff; }
         .example-stat-gap .example-stat-num { color: #4ade80; }
-        .example-footnote { margin: 22px 0 0; font: 400 12px var(--font); line-height: 1.55; color: rgba(255,255,255,0.4); }
+        .example-footnote { margin: 26px 0 0; font: 400 12px var(--font); line-height: 1.55; color: rgba(255,255,255,0.4); }
 
         /* ---------- ROI calculator ---------- */
         .roi-section { background: #111111; padding: 88px 48px; }
