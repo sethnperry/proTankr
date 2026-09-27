@@ -295,30 +295,32 @@ export default function Home() {
       {/* 2. PROBLEM / MANIFESTO — the cost of the problem, before the pitch. */}
       <section className="manifesto-section">
         <div className="manifesto-inner">
+          {/* Per explicit direction: "Every load could have carried more"
+              was a real overclaim -- not every load could, and this
+              section's own rewrite deliberately says so (sometimes the
+              right correction is LESS fuel, to avoid a ticket, not more)
+              -- matching this file's own stated copy rule against
+              absolutes at the top of the file even more honestly than
+              the line it replaces. */}
           <h2 className="manifesto-h2">
-            Every load could have carried more. Now it will.
+            The right load changes with the conditions.
           </h2>
           <div className="manifesto-body">
             <p>
-              Across the country, drivers load bulk fuel conservatively on
-              purpose. A safe, memorized number, well under the legal limit,
-              loaded the same way every time. It&apos;s not carelessness. It&apos;s
-              one too many tickets, permanently forcing the safe volume
-              lower. Far less than legal.
+              Drivers learn what works. They find a safe number and stick
+              with it — because being a little light is better than being
+              overweight.
             </p>
             <p>
-              Most conditions drift slowly enough that a small buffer
-              absorbs them. The real damage comes from something bigger, a
-              single shock, like an unexpected fuel import shifting a
-              terminal&apos;s conditions for a few days. The event passes. The
-              drivers have a new, lower memorized volume to load.
+              But conditions change. Temperature, product, equipment, and
+              terminal conditions can all move that number. Sometimes the
+              opportunity is more fuel. Sometimes it&apos;s avoiding a
+              ticket.
             </p>
             <p>
-              Every load teaches ProTankr something, starting with the
-              driver who&apos;s actually there. When conditions shift and
-              catch one off guard, the network adjusts from that one real
-              report. The truck behind them doesn&apos;t repeat it, and
-              nobody has to guess low forever because of one bad day.
+              ProTankr learns from the driver who&apos;s there and carries
+              that experience forward. One real-world report can keep the
+              next driver from having to learn the same lesson.
             </p>
           </div>
         </div>
