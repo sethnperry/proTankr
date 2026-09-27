@@ -109,25 +109,31 @@ export default function LearnPage() {
             are many of these stacked in one page. */}
         <Accordion title="▶ Guided tours">
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 14, padding: "4px 0 8px" }}>
-            {TUTORIAL_VIDEOS.map((v) => (
-              <div key={v.id}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.80)", marginBottom: v.description ? 3 : 8 }}>
-                  {v.title}
-                </div>
-                {v.description && (
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5, marginBottom: 8 }}>
-                    {v.description}
-                  </div>
-                )}
-                <video
-                  src={v.src}
-                  controls
-                  preload="metadata"
-                  playsInline
-                  style={{ width: "100%", borderRadius: 10, background: "#000", display: "block" }}
-                />
+            {TUTORIAL_VIDEOS.length === 0 ? (
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, textAlign: "center" as const, padding: "8px 4px" }}>
+                New walkthroughs are on the way — check back soon.
               </div>
-            ))}
+            ) : (
+              TUTORIAL_VIDEOS.map((v) => (
+                <div key={v.id}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.80)", marginBottom: v.description ? 3 : 8 }}>
+                    {v.title}
+                  </div>
+                  {v.description && (
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5, marginBottom: 8 }}>
+                      {v.description}
+                    </div>
+                  )}
+                  <video
+                    src={v.src}
+                    controls
+                    preload="metadata"
+                    playsInline
+                    style={{ width: "100%", borderRadius: 10, background: "#000", display: "block" }}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </Accordion>
 

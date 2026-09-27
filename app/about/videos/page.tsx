@@ -29,19 +29,25 @@ export default function AboutVideosPage() {
 
       <section className="detail-section">
         <div className="detail-inner">
-          {TUTORIAL_VIDEOS.map((v) => (
-            <div key={v.id} className="video-card">
-              <div className="video-title">{v.title}</div>
-              {v.description && <div className="video-desc">{v.description}</div>}
-              <video
-                src={v.src}
-                controls
-                preload="metadata"
-                playsInline
-                className="video-el"
-              />
-            </div>
-          ))}
+          {TUTORIAL_VIDEOS.length === 0 ? (
+            <p className="empty-note">
+              New walkthroughs are on the way — check back soon.
+            </p>
+          ) : (
+            TUTORIAL_VIDEOS.map((v) => (
+              <div key={v.id} className="video-card">
+                <div className="video-title">{v.title}</div>
+                {v.description && <div className="video-desc">{v.description}</div>}
+                <video
+                  src={v.src}
+                  controls
+                  preload="metadata"
+                  playsInline
+                  className="video-el"
+                />
+              </div>
+            ))
+          )}
 
           <Link href="/get-the-app" className="cta-link">
             Request Early Access <span>&rarr;</span>
@@ -101,6 +107,17 @@ export default function AboutVideosPage() {
           background: #000;
           display: block;
           margin-top: 4px;
+        }
+
+        .empty-note {
+          margin: 0;
+          padding: 28px 24px;
+          border-radius: 14px;
+          background: #f6f6f5;
+          border: 1px solid rgba(0,0,0,0.08);
+          font: 500 14px var(--font);
+          color: rgba(0,0,0,0.5);
+          text-align: center;
         }
 
         .cta-link {

@@ -10,6 +10,7 @@ import Link from "next/link";
 import SiteHeader from "../marketing/SiteHeader";
 import FitHeading from "../marketing/FitHeading";
 import { LEARN_TOPICS, Icon } from "@/lib/content/learnTopics";
+import { TUTORIAL_VIDEOS } from "@/lib/content/tutorialVideos";
 
 export default function AboutPage() {
   return (
@@ -82,7 +83,10 @@ export default function AboutPage() {
               load, picking equipment, working a terminal. No narration
               needed, just watch what actually happens on screen.
             </div>
-            <div className="topic-more">Watch now <span>&rarr;</span></div>
+            <div className="topic-more">
+              {TUTORIAL_VIDEOS.length === 0 ? "Coming soon" : "Watch now"}{" "}
+              <span>&rarr;</span>
+            </div>
           </Link>
         </div>
       </section>

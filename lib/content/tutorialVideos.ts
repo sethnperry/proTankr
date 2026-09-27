@@ -14,17 +14,10 @@ export type TutorialVideo = {
   src: string; // public/videos/*
 };
 
-export const TUTORIAL_VIDEOS: TutorialVideo[] = [
-  {
-    id: "typical-workflow-1",
-    title: "Typical Workflow - 1",
-    description: "The simplest case: nothing's changed since the last load but the weather. Open the app, tap Reload, confirm the updated API and temp, and log it.",
-    src: "/videos/typical-workflow-1.mp4",
-  },
-  {
-    id: "typical-workflow-2",
-    title: "Typical Workflow - 2",
-    description: "The same reload workflow, this time switching to a different preset and picking a different terminal first.",
-    src: "/videos/typical-workflow-2.mp4",
-  },
-];
+// Emptied 2026-09 -- the two "Typical Workflow" clips were pulled pending
+// a better add/edit/remove workflow for this list (recording ad hoc into
+// a hardcoded array doesn't scale). Both consumers (app/learn's Guided
+// tours accordion, app/about/videos) render a "coming soon" empty state
+// when this is empty -- see each file's own handling -- so this can stay
+// at [] safely until new clips are ready to add back.
+export const TUTORIAL_VIDEOS: TutorialVideo[] = [];
