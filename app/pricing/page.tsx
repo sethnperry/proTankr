@@ -47,7 +47,7 @@ const TIERS: Tier[] = [
       "Fleet-wide card & credential visibility",
       "Dispatch board & terminal status tools",
       "Role-based permissions (Driver / Lead / Dispatch / Admin)",
-      "Incentive point tracking",
+      "Payload utilization scoring for your bonus program",
     ],
     cta: "Request Early Access",
     highlight: true,
