@@ -298,7 +298,7 @@ export default function ForDriversPage() {
         <div className="feature-row">
           <div className="feature-copy">
             <p className="feature-eyebrow">Equipment records</p>
-            <h2 className="feature-h2">Every scale ticket makes you smarter.</h2>
+            <h2 className="feature-h2">Your equipment remembers everything.</h2>
             <p className="feature-body">
               Truck and trailer combinations, tare weight, compartment
               configuration, service records, credentials and permits —
