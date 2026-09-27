@@ -232,21 +232,34 @@ const PRODUCT_FEATURES = [
   },
 ];
 
+// Matches the real workflow, not a simplified stand-in -- same 4 steps
+// established on /for-fleets' own "How It Works" section, condensed to
+// this page's shorter body-copy length. Keeping the two in sync matters:
+// this used to be a generic "Calculate. Load. Capture." 3-step gloss that
+// undersold how few taps the real workflow actually needs and what it
+// captures as a byproduct (terminal card renewal, terminal issue
+// flagging, utilization scoring) -- exactly the kind of drift worth
+// fixing once it's been corrected elsewhere on the site.
 const WORKFLOW_STEPS = [
   {
     n: "01",
-    label: "Calculate",
-    body: "Equipment, terminal, product and temperature go in. ProTankr returns your real available payload for this load, right now.",
+    label: "Already set up",
+    body: "Equipment and your last terminal are already picked when you open the app. Change them only when something's actually different.",
   },
   {
     n: "02",
-    label: "Load",
-    body: "Load the plan at the rack. No guessing gallons twice, no falling back to the same conservative number out of habit.",
+    label: "Pick a plan",
+    body: "Choose a saved product and compartment layout in one tap, or skip it entirely if it's the same plan as last time.",
   },
   {
     n: "03",
-    label: "Capture",
-    body: "The actual load gets captured automatically, so you always know what you moved and what got left behind.",
+    label: "Load, then complete",
+    body: "See exactly what to load, then load it. Only update what's actually different from the plan, gallons, API, or temp.",
+  },
+  {
+    n: "04",
+    label: "Everything else updates itself",
+    body: "Temperature data, terminal card status, terminal issues, and your utilization score. All captured as a byproduct, not entered separately.",
   },
 ];
 
@@ -255,13 +268,23 @@ export default function Home() {
     <div className="page">
       <SiteHeader />
 
-      {/* 1. HERO — one job: get the visitor into the calculator below. */}
+      {/* 1. HERO — still one job: get the visitor into the calculator below.
+          Eyebrow reuses the exact "Driver-driven efficiency" thesis now
+          established on /for-fleets and /for-drivers, since the homepage
+          is the umbrella both pages share -- but the h1 itself stays the
+          concrete "stop leaving payload at the rack" hook, deliberately
+          not replaced with the more abstract "Efficiency from the bottom
+          up" framing: this headline's whole job is funneling straight
+          into the interactive calculator directly below it, and the
+          concrete hook does that better than the brand-level thesis
+          does. The thesis lives in the sub line instead. */}
       <section className="hero">
-        <p className="hero-eyebrow">Payload optimization for bulk fuel</p>
+        <p className="hero-eyebrow">Driver-driven efficiency</p>
         <h1 className="hero-h1">Stop leaving payload at the rack.</h1>
         <p className="hero-sub">
-          ProTankr calculates how much you can actually load, based on your
-          equipment, product, temperature, compartments and legal weight.
+          The best loading decisions are made where the work happens.
+          ProTankr turns driver experience into one practical number, no
+          new system to manage and no workflow to replace.
         </p>
       </section>
 
@@ -287,10 +310,11 @@ export default function Home() {
               drivers have a new, lower memorized volume to load.
             </p>
             <p>
-              Every load teaches ProTankr something. When conditions shift
-              and catch a driver off guard, the network adjusts. The truck
-              behind them doesn&apos;t repeat it, and nobody has to guess low
-              forever because of one bad day.
+              Every load teaches ProTankr something, starting with the
+              driver who&apos;s actually there. When conditions shift and
+              catch one off guard, the network adjusts from that one real
+              report. The truck behind them doesn&apos;t repeat it, and
+              nobody has to guess low forever because of one bad day.
             </p>
           </div>
         </div>
@@ -355,10 +379,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 5. WORKFLOW */}
+      {/* 5. WORKFLOW — headline reused verbatim from /for-fleets' own "How
+          It Works" section for site-wide consistency. */}
       <section className="workflow-section">
         <div className="workflow-inner">
-          <h2 className="workflow-h2">Calculate. Load. Capture.</h2>
+          <h2 className="workflow-h2">The workflow is the whole system.</h2>
+          <p className="workflow-sub">
+            There&apos;s no separate admin tool to remember. The same few
+            taps a driver already makes to plan and run a load are the
+            whole system.
+          </p>
           <div className="workflow-steps">
             {WORKFLOW_STEPS.map((s) => (
               <div key={s.n} className="workflow-step">
@@ -397,7 +427,7 @@ export default function Home() {
             <Link href="/for-fleets" className="audience-card audience-card-dark">
               <span className="audience-card-label">For Fleets</span>
               <p className="audience-card-body">
-                Recover unused payload, see equipment and card status
+                Recover more payload, see equipment and card status
                 without asking, and hand off knowledge between drivers
                 automatically.
               </p>
@@ -443,17 +473,26 @@ export default function Home() {
             confirms it, the next one starts with better information
             instead of starting cold.
           </p>
+          {/* Card 1 matches /for-drivers' own Shared Knowledge card content
+              verbatim (Marathon, Tampa FL, real "Out of Product" wording,
+              "Clears" framing) rather than the invented "Buckeye Bayway"
+              placeholder this section used to show -- same real dual
+              terminal-outage system (Out of Product/Out of Allocation),
+              not a generic activity feed. Card 2 keeps its own distinct
+              feature (temp/API bias correction) but moved off Marathon
+              to a different terminal so the two cards don't reference the
+              same place. */}
           <div className="network-examples">
             <div className="network-card">
               <div className="network-card-head">
                 <span className="network-card-tag">Terminal status</span>
-                <span className="network-card-time">12 min ago</span>
+                <span className="network-card-time">Clears 12:00</span>
               </div>
-              <p className="network-card-title">Out of Premium 93</p>
+              <p className="network-card-title">Premium 93</p>
               <p className="network-card-body">
-                Buckeye Bayway &middot; Linden, NJ — flagged the moment a
-                driver hit an empty rack. Every driver heading there next
-                sees it before they roll up.
+                Marathon &middot; Tampa, FL — Terminal Out of Premium 93,
+                marked out at 08:14 hrs. Visible to every driver headed
+                there, any company.
               </p>
             </div>
             <div className="network-card">
@@ -463,9 +502,10 @@ export default function Home() {
               </div>
               <p className="network-card-title">API reading verified</p>
               <p className="network-card-body">
-                Marathon &middot; Tampa, FL — one confirmed load corrects
-                the terminal&apos;s predicted temperature for everyone
-                loading there today, not just the driver who reported it.
+                Chevron &middot; Fort Lauderdale, FL — one confirmed load
+                corrects the terminal&apos;s predicted temperature for
+                everyone loading there today, not just the driver who
+                reported it.
               </p>
             </div>
           </div>
@@ -843,15 +883,23 @@ export default function Home() {
         .workflow-section { background: #ffffff; padding: 96px 48px; }
         .workflow-inner { max-width: 1100px; margin: 0 auto; }
         .workflow-h2 {
-          margin: 0 0 48px;
+          margin: 0;
           font: 900 44px var(--font);
           letter-spacing: -0.02em;
           color: #111;
         }
+        .workflow-sub {
+          margin: 14px 0 0;
+          max-width: 560px;
+          font: 400 16px var(--font);
+          line-height: 1.6;
+          color: rgba(0,0,0,0.55);
+        }
         .workflow-steps {
+          margin-top: 48px;
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 36px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 32px;
         }
         .workflow-step { display: flex; flex-direction: column; }
         .workflow-n {
@@ -1082,8 +1130,8 @@ export default function Home() {
           .tms-line-emphasis { font-size: 22px; }
 
           .workflow-section { padding: 56px 24px; }
-          .workflow-h2 { font-size: 30px; margin-bottom: 32px; }
-          .workflow-steps { grid-template-columns: 1fr; gap: 28px; }
+          .workflow-h2 { font-size: 30px; }
+          .workflow-steps { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }
 
           .audience-section { padding: 56px 24px; }
           .audience-h2 { font-size: 30px; }
