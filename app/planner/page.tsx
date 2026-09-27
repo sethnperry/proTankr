@@ -1994,21 +1994,19 @@ const lastProductInfoById = useMemo(() => {
 
       // #2: short absolute date/time of the last physical update, or "no
       // reading" if never updated. (Tuned rows show "edited · just now".)
-      let dateLabel: string;
-      if (tuned) {
-        dateLabel = "just now";
-      } else if (info?.last_api_updated_at) {
+      let lastApiDateLabel: string | null = null;
+      if (info?.last_api_updated_at) {
         const d = new Date(info.last_api_updated_at);
-        if (Number.isNaN(d.getTime())) {
-          dateLabel = "no reading";
-        } else {
+        if (!Number.isNaN(d.getTime())) {
           let h = d.getHours(); const mm = d.getMinutes();
           const ap = h < 12 ? "AM" : "PM"; h = h % 12; if (h === 0) h = 12;
-          dateLabel = `${d.getMonth() + 1}/${d.getDate()} ${h}:${String(mm).padStart(2, "0")} ${ap}`;
+          lastApiDateLabel = `${d.getMonth() + 1}/${d.getDate()} ${h}:${String(mm).padStart(2, "0")} ${ap}`;
         }
-      } else {
-        dateLabel = "no reading";
       }
+      const dateLabel = tuned ? "just now" : (lastApiDateLabel ?? "no reading");
+      // The last real network reading (independent of any tune), shown as
+      // context inside the Tune overlay.
+      const lastApi = p?.last_api != null && Number.isFinite(Number(p.last_api)) ? Number(p.last_api) : null;
 
       return {
         productId: pid,
@@ -2020,6 +2018,8 @@ const lastProductInfoById = useMemo(() => {
         lbsPerGal: lpg != null && Number.isFinite(lpg) ? lpg : null,
         dateLabel,
         tuned: !!tuned,
+        lastApi,
+        lastApiDateLabel,
       };
     });
     rows.sort((a, b) => a.code.localeCompare(b.code));
@@ -2959,6 +2959,7 @@ const lastProductInfoById = useMemo(() => {
         tuneRows={tuneRows}
         onTuneProduct={onTuneProduct}
         tuneTempColor={tuneTempColor}
+        ambientTempF={fuelTempAmbientF}
       />
 
       <TerminalSwitchDuringLoadSheet

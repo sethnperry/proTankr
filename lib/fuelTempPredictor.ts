@@ -36,6 +36,12 @@ export type PredictorParams = {
   // Historical bias correction from terminal_temp_bias (unchanged from before).
   biasCorrectionF?: number;
   biasSampleCount?: number;
+  // Best estimate of where the tank's product temp sat at the START of the
+  // history window. The caller passes today's daily mean ambient
+  // ((min+max)/2 from the weather provider) -- a large tank with a ~20h
+  // half-life sits near the daily mean, not near whichever single reading
+  // happened to be oldest. Omitted -> time-weighted mean of the history.
+  seedTempF?: number | null;
 };
 
 export type FuelTempResult = {
@@ -119,6 +125,20 @@ function confidenceFromHistory(history: AmbientPoint[], nowTs: number): "high" |
   return "low";
 }
 
+// Trapezoid time-weighted mean of the points (plain mean if they all share
+// one timestamp).
+function timeWeightedMean(points: AmbientPoint[]): number {
+  let area = 0;
+  let span = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dt = Math.max(0, points[i].ts - points[i - 1].ts);
+    area += ((points[i].tempF + points[i - 1].tempF) / 2) * dt;
+    span += dt;
+  }
+  if (span > 0) return area / span;
+  return points.reduce((acc, p) => acc + p.tempF, 0) / points.length;
+}
+
 /**
  * Predict fuel temp "now" from real past ambient readings ending at now.
  * `history` must be real observations (self-collected), ascending by ts,
@@ -158,14 +178,34 @@ export function predictFuelTempNow(
     };
   }
 
-  // Walk the lag forward through real past points, ending at "now" -- this
-  // is the actual fix (see file header): previously this walked forward
-  // through a *forecast*, ending up to 23 hours in the future.
-  let Tf = points[0].tempF;
+  // Seed. Real bug fixed 2026-09-27: this used to seed Tf from the OLDEST
+  // history point. With sparse history (history is only written when some
+  // driver polls this city), that oldest point was often a single overnight
+  // low -- and with a 20h half-life plus a 6h-per-gap cap, the walk could
+  // barely move away from it, so the prediction stayed pinned near the night
+  // low all afternoon (live: Tampa, 6 points / 30h, ambient 83.7F, predicted
+  // 74.3F -- 9F under ambient on a hot afternoon). The tank's real starting
+  // point is its long-run equilibrium, which is the daily mean ambient.
+  const seed = Number.isFinite(params.seedTempF as number)
+    ? (params.seedTempF as number)
+    : timeWeightedMean(points);
+
+  // Walk the lag forward through real past points, ending at "now", with the
+  // ambient linearly interpolated across each gap and an exact exponential
+  // update per <=1h sub-step. The old 6h gap cap is gone: it made a long gap
+  // count as only 6h of convergence, which is what froze Tf at the seed.
+  let Tf = seed;
   for (let i = 1; i < points.length; i++) {
-    // Capped at 6h so one stale/missing sample can't cause a single huge jump.
-    const dtHours = clamp((points[i].ts - points[i - 1].ts) / 3600, 0, 6);
-    Tf = Tf + k * (points[i].tempF - Tf) * dtHours;
+    const a0 = points[i - 1].tempF;
+    const a1 = points[i].tempF;
+    const gapHours = Math.max(0, (points[i].ts - points[i - 1].ts) / 3600);
+    if (gapHours === 0) continue;
+    const steps = Math.max(1, Math.ceil(gapHours));
+    const dt = gapHours / steps;
+    for (let j = 0; j < steps; j++) {
+      const amb = a0 + (a1 - a0) * ((j + 0.5) / steps);
+      Tf = amb + (Tf - amb) * Math.exp(-k * dt);
+    }
   }
 
   // Small, bounded daytime allowance -- a single evaluation at "now", not
@@ -218,7 +258,7 @@ export function predictFuelTempNow(
     biasApplied: round1(biasApplied),
     biasSampleCount: biasSamples,
     debug: {
-      seedFuelTempF: points[0].tempF,
+      seedFuelTempF: round1(seed),
       pointCount: points.length,
       halfLifeHours,
       rawPrediction: round1(rawPrediction),

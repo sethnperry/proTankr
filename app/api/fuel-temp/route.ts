@@ -41,16 +41,16 @@ async function geocodeCityState(args: { city: string; state: string; apiKey: str
   return { lat, lon };
 }
 
-// Only `current` conditions are needed now -- the model walks real past
-// readings from ambient_temp_history, not a forecast, so there's no reason
-// to pull (or cache) OneCall's hourly/daily forecast data anymore.
+// `current` conditions plus today's `daily` min/max (only to seed the lag
+// model). The model itself walks real past readings from
+// ambient_temp_history, not a forecast -- hourly forecast stays excluded.
 async function fetchCurrentConditions(args: { lat: number; lon: number; apiKey: string }) {
   const { lat, lon, apiKey } = args;
   const url =
     `https://api.openweathermap.org/data/3.0/onecall` +
     `?lat=${encodeURIComponent(String(lat))}` +
     `&lon=${encodeURIComponent(String(lon))}` +
-    `&exclude=minutely,hourly,daily,alerts` +
+    `&exclude=minutely,hourly,alerts` +
     `&units=imperial` +
     `&appid=${encodeURIComponent(apiKey)}`;
 
@@ -62,9 +62,15 @@ async function fetchCurrentConditions(args: { lat: number; lon: number; apiKey: 
   const json: any = await res.json();
   const tempF = Number(json?.current?.temp);
   const cloudPct = Number(json?.current?.clouds);
+  // Today's min/max (same call, no extra cost) -- their midpoint is the daily
+  // mean, the tank's equilibrium, used to seed the lag model (see
+  // fuelTempPredictor.ts's seed comment for the bug this fixes).
+  const dMin = Number(json?.daily?.[0]?.temp?.min);
+  const dMax = Number(json?.daily?.[0]?.temp?.max);
   return {
     tempF: Number.isFinite(tempF) ? tempF : null,
     cloudPct: Number.isFinite(cloudPct) ? cloudPct : null,
+    dailyMeanF: Number.isFinite(dMin) && Number.isFinite(dMax) ? (dMin + dMax) / 2 : null,
   };
 }
 
@@ -261,6 +267,7 @@ export async function POST(req: Request) {
       cloudPct,
       biasCorrectionF,
       biasSampleCount,
+      seedTempF: current.dailyMeanF,
     });
 
     return NextResponse.json({
@@ -275,6 +282,9 @@ export async function POST(req: Request) {
       biasApplied: result.biasApplied,
       biasSampleCount: result.biasSampleCount,
       historyPoints: history.length,
+      dailyMeanF: current.dailyMeanF,
+      seedF: result.debug?.seedFuelTempF ?? null,
+      rawPredictionF: result.debug?.rawPrediction ?? null,
     });
   } catch (e: any) {
     console.error("[fuel-temp]", e?.message);

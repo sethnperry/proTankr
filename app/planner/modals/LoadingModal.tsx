@@ -57,6 +57,10 @@ export type TuneRow = {
   lbsPerGal: number | null;
   dateLabel: string;
   tuned: boolean;
+  // Last real network API reading + when (regardless of any tune) -- context
+  // shown inside the Tune overlay.
+  lastApi?: number | null;
+  lastApiDateLabel?: string | null;
 };
 
 const LEGAL_GROSS_LBS = 80000;
@@ -76,15 +80,19 @@ function weightColor(gross: number | null | undefined, target: number | undefine
 // The Tune panel: shows the density basis (code · temp · API · lbs/gal · date)
 // per product and lets the driver correct it with a fresh gauge/BOL reading.
 // Tapping a row opens the same numeric overlay used to update temp/api
-// elsewhere; a correction recomputes the planned gallons live (page.tsx's
+// elsewhere, with current ambient + the last real API reading shown as
+// context (this is a basis adjustment BEFORE loading, not the post-load BOL
+// entry -- hence the caution copy rather than "from your gauge or BOL"); a correction recomputes the planned gallons live (page.tsx's
 // onTuneProduct feeds the density). Temp keeps its confidence color.
 //
 // Review-mode only -- the Load Report's own basis listing (further down)
 // is a deliberately non-interactive sibling, not this component reused.
-function TunePanel({ rows, tempColor, onTune }: {
+function TunePanel({ rows, tempColor, onTune, ambientTempF, cityLabel }: {
   rows: TuneRow[];
   tempColor: string;
   onTune: (productId: string, api: number, tempF: number) => void;
+  ambientTempF?: number | null;
+  cityLabel?: string | null;
 }) {
   const [editing, setEditing] = useState<TuneRow | null>(null);
   const [apiStr, setApiStr] = useState("");
@@ -152,7 +160,22 @@ function TunePanel({ rows, tempColor, onTune }: {
           { key: "temp", label: "Temp °F", value: tempStr, onChange: setTempStr, decimal: true, suffix: "°F" },
           { key: "api", label: "API", value: apiStr, onChange: setApiStr, decimal: true, suffix: "API" },
         ]}
-        hint="From your gauge or BOL"
+        hint={
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center" as const }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+              {ambientTempF != null && Number.isFinite(ambientTempF) && (
+                <span>Ambient <b style={{ color: "#fff" }}>{Math.round(ambientTempF)}°F</b>{cityLabel ? ` · ${cityLabel}` : ""}</span>
+              )}
+              <span>
+                Last API{" "}
+                {editing?.lastApi != null
+                  ? <><b style={{ color: "#fff" }}>{editing.lastApi.toFixed(1)}</b>{editing.lastApiDateLabel ? ` · ${editing.lastApiDateLabel}` : ""}</>
+                  : "— no reading"}
+              </span>
+            </div>
+            <span>Adjust basis for known product condition. Adjust with caution.</span>
+          </div>
+        }
         onCancel={() => setEditing(null)}
         onSubmit={commit}
         submitLabel="Set"
@@ -302,6 +325,9 @@ export default function LoadingModal(props: {
   tuneRows?: TuneRow[];
   onTuneProduct?: (productId: string, api: number, tempF: number) => void;
   tuneTempColor?: string;
+  // Current ambient at the selected city (same value the temp prediction
+  // used) -- context inside the Tune overlay.
+  ambientTempF?: number | null;
 }) {
   const {
     open,
@@ -337,6 +363,7 @@ export default function LoadingModal(props: {
     tuneRows,
     onTuneProduct,
     tuneTempColor,
+    ambientTempF,
   } = props;
 
   const plannedLines = useMemo(() => {
@@ -771,7 +798,7 @@ export default function LoadingModal(props: {
         {report
           ? <ReportBasisRows rows={reportBasisRows} productNameById={productNameById} productHexCodeById={productHexCodeById} />
           : (tuneRows && onTuneProduct && tuneRows.length > 0 && (
-              <TunePanel rows={tuneRows} tempColor={tuneTempColor || "#ffffff"} onTune={onTuneProduct} />
+              <TunePanel rows={tuneRows} tempColor={tuneTempColor || "#ffffff"} onTune={onTuneProduct} ambientTempF={ambientTempF} cityLabel={locationLabel ? locationLabel.split(",")[0] : null} />
             ))}
 
         {/* Weight -- review mode: "Live Weight," label left / value right,

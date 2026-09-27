@@ -10074,6 +10074,28 @@ shows blank equipment there rather than "(bobtail)", the live RLS on
 `user_settings` doesn't permit staff cross-user reads — solvable with a
 staff-read policy (or a service-role proxy) if it comes up.
 
+## Temp prediction seed fix + Tune overlay context (2026-09-27)
+
+Live report from Tampa: predicted 74.3F on a hot afternoon (live
+`/api/fuel-temp` returned ambient 83.7F, 6 history points in 30h, bias 0).
+Root cause in `lib/fuelTempPredictor.ts`: the lag walk was **seeded from the
+oldest history point**, and gaps were capped at 6h of convergence. History is
+only written when someone polls the city, so it's sparse and usually
+early-morning; the prediction stayed pinned near the night low all day.
+Fixed: seed from today's daily mean ambient (`(min+max)/2` from OneCall
+`daily[0]`, same call -- `daily` removed from `exclude`), falling back to the
+time-weighted history mean; gaps are now walked with linearly interpolated
+ambient and exact exponential sub-steps, no 6h cap. Route response gained
+`dailyMeanF`/`seedF`/`rawPredictionF` for diagnosis. 5 predictor tests added
+to `npm test`. Not yet validated against a real loaded temp -- the driver's
+next Tampa load is the check (OpenWeather's 83.7F vs the truck's 93F gauge
+is expected: truck gauges read pavement heat).
+
+Tune overlay (Plan Review → Load basis → tap a product): hint no longer says
+"From your gauge or BOL" (that's the post-load entry). Now shows ambient
+(city), the last real network API + when, and "Adjust basis for known product
+condition. Adjust with caution." `ValueEntryOverlay.hint` is now a ReactNode.
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.

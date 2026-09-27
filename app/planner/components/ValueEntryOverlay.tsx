@@ -27,7 +27,7 @@ type Props = {
   open: boolean;
   title: string;
   fields: ValueEntryField[];
-  hint?: string;
+  hint?: React.ReactNode;
   onCancel: () => void;
   onSubmit: () => void;
   submitLabel?: string;
