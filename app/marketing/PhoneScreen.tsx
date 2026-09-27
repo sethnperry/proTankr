@@ -7,7 +7,7 @@
 // rather than an iPhone-style silhouette, since the screenshot itself is
 // a real, uncropped capture off that device.
 
-const DEFAULT_SRC_VERSION = "20260905c-s25frame";
+const DEFAULT_SRC_VERSION = "20260927-current-ui";
 
 export default function PhoneScreen({
   src = `/app-screens/planner.jpg?v=${DEFAULT_SRC_VERSION}`,
