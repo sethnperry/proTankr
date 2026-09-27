@@ -386,11 +386,12 @@ export default function Home() {
             <p>
               &ldquo;I didn&apos;t start ProTankr because I wanted to build
               trucking software. I started it because I was tired of
-              leaving payload behind.&rdquo;
+              choosing between an overweight ticket and payload left on the
+              table.&rdquo;
             </p>
             <p>
-              &ldquo;The event that caused it passes. The lower volume never
-              does.&rdquo;
+              &ldquo;The event that caused it passes. The lower volume
+              stays.&rdquo;
             </p>
           </blockquote>
           <p className="founder-byline">
