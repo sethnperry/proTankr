@@ -70,25 +70,6 @@ export async function requireSuperAdmin() {
 }
 
 /**
- * Require at least one company membership.
- * If logged in but no memberships, send to /join.
- */
-export async function requireMembershipOrJoin() {
-  const { supabase, user } = await getSessionUserOrRedirect();
-
-  const { data, error } = await supabase
-    .from("user_companies")
-    .select("company_id")
-    .eq("user_id", user.id)
-    .limit(1);
-
-  if (error) throw error;
-  if (!data || data.length === 0) redirect("/join");
-
-  return { supabase, user };
-}
-
-/**
  * Utility: fetch memberships (handy for dropdowns in server components).
  */
 export async function getMyMemberships() {
