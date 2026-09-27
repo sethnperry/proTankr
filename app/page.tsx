@@ -268,22 +268,27 @@ export default function Home() {
     <div className="page">
       <SiteHeader />
 
-      {/* 1. HERO — still one job: get the visitor into the calculator below.
-          H1 is deliberately a joke, per explicit direction: "Go
-          Guessless" rides the familiar "go paperless / go wireless"
-          phrase pattern, so it reads immediately without needing to be
-          explained. The sub line cashes the joke in on the very next
-          line (names what "guessing" means here -- memorized safe
-          numbers, habit) before pivoting into the real value prop, so
-          the headline earns its punchline instead of leaving it
-          floating on its own. */}
+      {/* 1. HERO — per explicit direction, replaced the joke headline with
+          a straighter statement + a 3-tier copy descent (.hero-lead ->
+          .hero-body -> .hero-sub), same pattern as /for-fleets' own hero
+          rework: each tier a step quieter than the last, carrying the
+          idea from WHY (built around the people doing the work) to WHAT
+          (a fast, organized way to load/adapt/reload) to the risk
+          reassurance (works alongside what a hauler already runs). */}
       <section className="hero">
         <p className="hero-eyebrow">Driver-driven efficiency</p>
-        <h1 className="hero-h1">Go Guessless.</h1>
+        <h1 className="hero-h1">A smarter way to load.</h1>
+        <p className="hero-lead">
+          Built around the people doing the work. Designed to make every
+          load more efficient.
+        </p>
+        <p className="hero-body">
+          ProTankr gives fuel haulers a fast, organized way to load,
+          adapt, and reload with accuracy.
+        </p>
         <p className="hero-sub">
-          No more memorized safe numbers, no more guessing low out of
-          habit. ProTankr turns driver experience into one practical
-          number, right at the rack.
+          Built to work alongside the operation you already have, where
+          one driver&apos;s experience becomes fleet-wide efficiency.
         </p>
       </section>
 
@@ -597,12 +602,34 @@ export default function Home() {
           line-height: 0.98;
           color: #111;
         }
-        .hero-sub {
-          margin: 22px 0 0;
+        /* The punchy WHY tier -- gives the hero its weight below the
+           headline, same role .fleet-lead plays on /for-fleets. */
+        .hero-lead {
+          margin: 26px 0 0;
+          max-width: 680px;
+          font: 700 24px var(--font);
+          letter-spacing: -0.005em;
+          line-height: 1.4;
+          color: #111;
+        }
+        /* The WHAT tier -- the literal, functional statement of what the
+           product does. */
+        .hero-body {
+          margin: 16px 0 0;
           max-width: 620px;
-          font: 400 18px var(--font);
-          line-height: 1.55;
+          font: 400 17px var(--font);
+          line-height: 1.6;
           color: rgba(0,0,0,0.62);
+        }
+        /* The closing risk-reassurance tier -- deliberately quieter/
+           smaller than .hero-body, third in the hierarchy, not a
+           same-weight restatement. */
+        .hero-sub {
+          margin: 14px 0 0;
+          max-width: 560px;
+          font: 400 14.5px var(--font);
+          line-height: 1.6;
+          color: rgba(0,0,0,0.5);
         }
         /* ---------- Calculator (light, distinct widget block) ---------- */
         .calc-section {
@@ -1104,7 +1131,9 @@ export default function Home() {
         @media (max-width: 980px) {
           .hero { padding: 24px 24px 44px; }
           .hero-h1 { font-size: 44px; }
-          .hero-sub { font-size: 16px; }
+          .hero-lead { font-size: 19px; }
+          .hero-body { font-size: 15.5px; }
+          .hero-sub { font-size: 13.5px; }
 
           .calc-section { padding: 48px 24px; }
           .calc-h2 { font-size: 30px; }
