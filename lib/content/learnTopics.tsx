@@ -717,8 +717,8 @@ export const LEARN_TOPICS: LearnTopic[] = [
             <Em>The silver lining:</Em> the moment you enter the actual API
             from the BOL at the loading rack, two things happen. You will
             know immediately, before crossing any scale, if the load is
-            overweight, and will have a chance to correct it, virtually
-            eliminating any overweight tickets. The app is updated for that
+            overweight, and will have a chance to correct it before it
+            becomes a ticket. The app is updated for that
             specific product at that terminal for every driver who loads
             there next. The next driver plans with your fresh observation,
             and the community self-corrects in real time.

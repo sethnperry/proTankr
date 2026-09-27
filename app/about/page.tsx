@@ -37,7 +37,7 @@ export default function AboutPage() {
               It works, until it doesn't. A temporary shift causes an
               overweight ticket, and the response is to drop the volume
               again, permanently. The event that caused it passes. The
-              lower volume never does.
+              lower volume stays.
             </p>
             <p>
               This looks complicated. It isn't, not anymore. ProTankr
