@@ -45,7 +45,7 @@ const TIERS: Tier[] = [
       "Everything in Solo, for every driver",
       "Multi-driver equipment sharing & history",
       "Fleet-wide card & credential visibility",
-      "Dispatch board & terminal status tools",
+      "Dispatch board",
       "Role-based permissions (Driver / Lead / Dispatch / Admin)",
       "Payload utilization scoring for your bonus program",
     ],
