@@ -269,22 +269,21 @@ export default function Home() {
       <SiteHeader />
 
       {/* 1. HERO — still one job: get the visitor into the calculator below.
-          Eyebrow reuses the exact "Driver-driven efficiency" thesis now
-          established on /for-fleets and /for-drivers, since the homepage
-          is the umbrella both pages share -- but the h1 itself stays the
-          concrete "stop leaving payload at the rack" hook, deliberately
-          not replaced with the more abstract "Efficiency from the bottom
-          up" framing: this headline's whole job is funneling straight
-          into the interactive calculator directly below it, and the
-          concrete hook does that better than the brand-level thesis
-          does. The thesis lives in the sub line instead. */}
+          H1 is deliberately a joke, per explicit direction: "Go
+          Guessless" rides the familiar "go paperless / go wireless"
+          phrase pattern, so it reads immediately without needing to be
+          explained. The sub line cashes the joke in on the very next
+          line (names what "guessing" means here -- memorized safe
+          numbers, habit) before pivoting into the real value prop, so
+          the headline earns its punchline instead of leaving it
+          floating on its own. */}
       <section className="hero">
         <p className="hero-eyebrow">Driver-driven efficiency</p>
-        <h1 className="hero-h1">Stop leaving payload at the rack.</h1>
+        <h1 className="hero-h1">Go Guessless.</h1>
         <p className="hero-sub">
-          The best loading decisions are made where the work happens.
-          ProTankr turns driver experience into one practical number, no
-          new system to manage and no workflow to replace.
+          No more memorized safe numbers, no more guessing low out of
+          habit. ProTankr turns driver experience into one practical
+          number, right at the rack.
         </p>
       </section>
 
