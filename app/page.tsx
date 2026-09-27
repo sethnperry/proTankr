@@ -395,7 +395,8 @@ export default function Home() {
             </p>
           </blockquote>
           <p className="founder-byline">
-            Built by a bulk fuel hauler.
+            Built by a driver, for drivers. Built for{" "}
+            <span className="founder-byline-strong">bulk</span>.
           </p>
           <p className="founder-patent">
             <span className="patent-badge">Patent Pending</span>
@@ -625,6 +626,11 @@ export default function Home() {
           margin: 22px 0 0;
           font: 500 13px var(--font);
           color: rgba(0,0,0,0.42);
+        }
+        .founder-byline-strong {
+          font-weight: 800;
+          color: rgba(0,0,0,0.78);
+          letter-spacing: 0.02em;
         }
         .founder-patent { margin: 18px 0 0; }
         .patent-badge {
