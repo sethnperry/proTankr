@@ -68,10 +68,33 @@ export default function CompanySettingsModal({
   const [name, setName] = useState(companyName);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
+  const [openingPortal, setOpeningPortal] = useState(false);
 
   // The full subscription row (trial/period dates, comped, tier) -- `seats`
   // (passed in) only carries what computeSeatCapacity itself needs.
   const { subscription } = useCompanySubscription(companyId);
+
+  // Real billing management (app/api/stripe/portal/route.ts) for a genuine
+  // Stripe subscriber; comped/no-subscription companies have no
+  // stripe_customer_id to open a portal session for, so the button stays
+  // disabled for them -- there's nothing on Stripe's side to manage yet.
+  async function openBillingPortal() {
+    setStatus(null);
+    setOpeningPortal(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.url) throw new Error(data?.error ?? "Could not open billing management.");
+      window.location.href = data.url;
+    } catch (e: any) {
+      setStatus({ type: "error", msg: e?.message ?? "Could not open billing management." });
+      setOpeningPortal(false);
+    }
+  }
 
   async function save() {
     const trimmed = name.trim();
@@ -173,31 +196,34 @@ export default function CompanySettingsModal({
         </div>
       )}
 
-      {/* "Manage Billing" -- disabled until a real processor is wired up.
-          company_subscriptions already has stripe_customer_id/
-          stripe_subscription_id columns (schema is ready); what's still
-          missing is the actual integration. To wire this in for real:
-          1. Build /api/stripe/checkout (creates a Checkout session for
-             adding/upgrading seats, using the company's existing
-             stripe_customer_id if set) and, for an existing subscriber,
-             /api/stripe/portal (creates a Billing Portal session so the
-             admin can update payment method / cancel / see invoices
-             without a custom UI for any of that).
-          2. Point this button at whichever of those applies
-             (no subscription yet -> checkout; has one -> portal),
-             window.location.href = the returned session URL.
-          3. /api/stripe/webhook (not built) is the only writer of
-             company_subscriptions -- see that table's own migration
-             comment -- so once it exists, everything above (status,
-             seat counts, trial/period dates) starts reflecting real
-             Stripe state with no further change needed here. */}
+      {/* "Manage Billing" -- opens a real Stripe Billing Portal session
+          (app/api/stripe/portal/route.ts) for a genuine subscriber (real
+          stripe_customer_id on this company's row). Comped access or no
+          subscription at all means nothing exists on Stripe's side to
+          manage yet, so the button stays disabled for those -- there's no
+          authenticated "start paying" checkout path built for an existing
+          company yet (today's self-serve flow is new-signup only, via
+          /pricing -> app/api/stripe/checkout/route.ts); that's a real,
+          separate follow-up if a comped company ever wants to convert. */}
       <button
         type="button"
-        disabled
-        title="Stripe isn't connected yet -- this will open real billing management once it is."
-        style={{ ...css.btn("ghost"), width: "100%", justifyContent: "center" as const, marginTop: 14, opacity: 0.45, cursor: "not-allowed" }}
+        disabled={!subscription?.stripe_customer_id || openingPortal}
+        title={
+          subscription?.stripe_customer_id
+            ? undefined
+            : "No billing account on file for this company yet."
+        }
+        onClick={openBillingPortal}
+        style={{
+          ...css.btn("ghost"),
+          width: "100%",
+          justifyContent: "center" as const,
+          marginTop: 14,
+          opacity: subscription?.stripe_customer_id ? 1 : 0.45,
+          cursor: subscription?.stripe_customer_id ? "pointer" : "not-allowed",
+        }}
       >
-        Manage Billing — Coming Soon
+        {openingPortal ? "Opening…" : "Manage Billing"}
       </button>
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>

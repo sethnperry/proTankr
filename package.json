@@ -21,7 +21,8 @@
     "framer-motion": "^12.42.2",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@capacitor/android": "^6.2.2",
