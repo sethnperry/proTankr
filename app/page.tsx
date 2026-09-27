@@ -20,202 +20,38 @@
 // "eliminates" and similar absolutes anywhere in this file.
 
 import Link from "next/link";
-import { useState } from "react";
 import SiteHeader from "./marketing/SiteHeader";
 import SiteFooter from "./marketing/SiteFooter";
 import PhoneScreen from "./marketing/PhoneScreen";
 
-// Seth's own current monthly average gallons/load, measured against his
-// own conservative per-product benchmarks. Real, but genuinely nuanced:
-// it's one driver (no network effect from other drivers loading at the
-// same racks yet), it's blended across products rather than a clean
-// product-specific comparison, and it moves month to month. Displayed
-// rounded; kept precise here so the source stays accurate as it moves.
-const CURRENT_MONTHLY_AVG_GAL_PER_LOAD = 272;
-
-// ---------------------------------------------------------------------
-// Opportunity calculator — a standalone public estimate tool, not a
-// preview of the real app. Deliberately uses only standard, published
-// petroleum-industry density math (API gravity -> specific gravity at
-// 60F, corrected for temperature with a single representative thermal
-// expansion coefficient) rather than the app's own per-product-tuned
-// calculation -- this is the same class of math published in ASTM
-// D1250 / API MPMS volume-correction tables, not anything proprietary,
-// so there's nothing sensitive about running it client-side. It's
-// intentionally simpler than what the real app does (one coefficient
-// for every product, not a per-product one), which the result copy
-// says outright rather than implying false precision.
-const WATER_LBS_PER_GAL_AT_60F = 8.32828;
-const APPROX_THERMAL_EXPANSION_PER_F = 0.0004;
-
-function estimateLbsPerGallon(api: number, tempF: number) {
-  const specificGravity60F = 141.5 / (131.5 + api);
-  const specificGravityAtTemp =
-    specificGravity60F * (1 - APPROX_THERMAL_EXPANSION_PER_F * (tempF - 60));
-  return specificGravityAtTemp * WATER_LBS_PER_GAL_AT_60F;
-}
-
-function OpportunityCalculator() {
-  const [tareWeight, setTareWeight] = useState("");
-  const [api, setApi] = useState("");
-  const [tempF, setTempF] = useState("");
-  const [actualGallons, setActualGallons] = useState("");
-  const [legalLimit, setLegalLimit] = useState("80000");
-
-  const tare = parseFloat(tareWeight);
-  const apiNum = parseFloat(api);
-  const temp = parseFloat(tempF);
-  const actual = parseFloat(actualGallons);
-  const limit = parseFloat(legalLimit);
-  const allFilled = [tare, apiNum, temp, actual, limit].every(
-    (n) => Number.isFinite(n) && n > 0
-  );
-
-  // A driver checking this before leaving the rack needs three distinct
-  // answers -- over legal weight, genuinely close to it (a real "nice
-  // work"), or meaningfully under. Being over is not a "nice work" case,
-  // even by a little, so the tolerance only softens the boundary on the
-  // UNDER side (rounding noise in the estimate could otherwise flag a
-  // load that's actually fine as "left on the table" by a couple gallons)
-  // -- any real overage, however small, always shows the warning.
-  const TOLERANCE_GAL = 25;
-  let result:
-    | { kind: "over"; lbsOver: number; liveWeightLbs: number }
-    | { kind: "good"; gal: number; liveWeightLbs: number }
-    | { kind: "left"; gal: number; liveWeightLbs: number }
-    | null = null;
-  if (allFilled) {
-    const lbsPerGal = estimateLbsPerGallon(apiNum, temp);
-    const actualTotalLbs = tare + actual * lbsPerGal;
-    const maxLegalPayloadLbs = Math.max(limit - tare, 0);
-    const maxLegalGallons = maxLegalPayloadLbs / lbsPerGal;
-    const gapGallons = maxLegalGallons - actual;
-    const liveWeightLbs = Math.round(actualTotalLbs);
-
-    if (gapGallons < 0) {
-      result = {
-        kind: "over",
-        lbsOver: Math.round(actualTotalLbs - limit),
-        liveWeightLbs,
-      };
-    } else if (gapGallons <= TOLERANCE_GAL) {
-      result = { kind: "good", gal: Math.round(gapGallons), liveWeightLbs };
-    } else {
-      result = { kind: "left", gal: Math.round(gapGallons), liveWeightLbs };
-    }
-  }
-
-  return (
-    <div className="calc-card">
-      <div className="calc-fields">
-        <label className="calc-field">
-          <span>Tare (lbs)</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={tareWeight}
-            onChange={(e) => setTareWeight(e.target.value)}
-            placeholder="25000"
-          />
-        </label>
-        <label className="calc-field">
-          <span>API</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={api}
-            onChange={(e) => setApi(e.target.value)}
-            placeholder="38.5"
-          />
-        </label>
-        <label className="calc-field">
-          <span>Temp (&deg;F)</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={tempF}
-            onChange={(e) => setTempF(e.target.value)}
-            placeholder="78"
-          />
-        </label>
-        <label className="calc-field">
-          <span>Actual gal</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={actualGallons}
-            onChange={(e) => setActualGallons(e.target.value)}
-            placeholder="7200"
-          />
-        </label>
-        <label className="calc-field">
-          <span>Legal limit (lbs)</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={legalLimit}
-            onChange={(e) => setLegalLimit(e.target.value)}
-          />
-        </label>
-      </div>
-      <p className="calc-fields-note">
-        Tare weight, product API gravity, product temperature, actual
-        gallons loaded from the BOL, and your legal weight limit.
-      </p>
-
-      <div className="calc-result-area">
-        {result ? (
-          <>
-            {result.kind === "over" ? (
-              <div className="calc-result calc-result-warn">
-                <span className="calc-result-num">
-                  ~{result.lbsOver.toLocaleString("en-US")} lbs over
-                </span>
-                <span className="calc-result-label">
-                  You may be overweight. Recheck before you leave the rack.
-                </span>
-              </div>
-            ) : result.kind === "good" ? (
-              <div className="calc-result calc-result-good">
-                <span className="calc-result-num">
-                  Within {result.gal.toLocaleString("en-US")} gal
-                </span>
-                <span className="calc-result-label">
-                  of your legal capacity. Nice work.
-                </span>
-              </div>
-            ) : (
-              <div className="calc-result calc-result-loss">
-                <span className="calc-result-num">
-                  {result.gal.toLocaleString("en-US")} gal
-                </span>
-                <span className="calc-result-label">
-                  left on the table, this load.
-                </span>
-              </div>
-            )}
-            <p className="calc-live-weight">
-              Live weight: {result.liveWeightLbs.toLocaleString("en-US")} lbs
-              (limit {limit.toLocaleString("en-US")} lbs)
-            </p>
-          </>
-        ) : (
-          <div className="calc-result calc-result-placeholder">
-            <span className="calc-result-label">
-              Fill in every field above to see what you left on the table.
-            </span>
-          </div>
-        )}
-      </div>
-
-      <p className="calc-footnote">
-        This is an estimate, using standard published density tables, not
-        the automatic tuning ProTankr applies for each specific product in
-        the real app.
-      </p>
-    </div>
-  );
-}
+// Three real, completed loads pulled from the ProTankr Planner's own
+// "Load Report" screens (Buckey North, Tampa, FL) -- not invented example
+// data. Deliberately kept as the exact figures shown on those reports
+// (including the terminal's own on-file spelling) rather than rounded or
+// "cleaned up". The point of the section: three different product
+// combinations, calculated against the same legal limit, landed within
+// 76 lbs of each other -- that's the real precision story, not a
+// hypothetical one.
+const LOAD_EXAMPLES = [
+  {
+    product: "Diesel, Premium & Regular (mixed)",
+    gallons: "8,451 gal",
+    weightLbs: "79,895",
+    terminal: "Buckey North · Tampa, FL",
+  },
+  {
+    product: "Regular Unleaded E10 87",
+    gallons: "9,086 gal",
+    weightLbs: "79,967",
+    terminal: "Buckey North · Tampa, FL",
+  },
+  {
+    product: "ULSD Diesel #2",
+    gallons: "7,905 gal",
+    weightLbs: "79,971",
+    terminal: "Buckey North · Tampa, FL",
+  },
+];
 
 const PRODUCT_FEATURES = [
   {
@@ -326,31 +162,51 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. CALCULATOR — see the cost of the problem for yourself. */}
+      {/* 3. REAL LOADS — three completed loads from the app itself,
+          replacing the old interactive BOL calculator (retired: an
+          estimate built on standard published density tables couldn't
+          match the app's own per-product tuning closely enough to be
+          trustworthy as a public-facing number). Real data instead of a
+          tool that might be wrong. */}
       <section id="calculator" className="calc-section">
         <div className="calc-inner">
           <div className="calc-header">
-            <h2 className="calc-h2">See what you could recover.</h2>
+            <h2 className="calc-h2">
+              Different products. Nearly identical weight.
+            </h2>
             <p className="calc-intro">
-              Check a real load against your legal limit. Enter what was on
-              the ticket and see where it actually landed.
+              Three completed loads at the same terminal, three different
+              product combinations. Each one calculated against the same
+              legal limit, and each one landed within 76 lbs of the
+              others.
             </p>
           </div>
-          <OpportunityCalculator />
 
-          <div className="calc-stat-wrap">
-            <div className="hero-stat">
-              <span className="hero-stat-num">
-                +{CURRENT_MONTHLY_AVG_GAL_PER_LOAD} GAL / LOAD
-              </span>
-              <span className="hero-stat-sub">
-                A single driver without the network effect typically sees an
-                average recovery like this, blended across products. More
-                drivers using ProTankr will improve the accuracy and shrink
-                the necessary buffer.
-              </span>
-            </div>
+          <div className="load-examples">
+            {LOAD_EXAMPLES.map((load, i) => (
+              <div
+                key={load.product}
+                className={`load-card ${
+                  i % 2 === 0 ? "load-card-dark" : "load-card-light"
+                }`}
+              >
+                <span className="load-card-tag">{load.terminal}</span>
+                <span className="load-card-weight">
+                  {load.weightLbs}
+                  <span className="load-card-weight-unit"> lbs</span>
+                </span>
+                <span className="load-card-sub">
+                  {load.gallons} &middot; {load.product}
+                </span>
+              </div>
+            ))}
           </div>
+
+          <p className="calc-footnote">
+            Real completed loads from the ProTankr Planner. Actual weight
+            is calculated from live API and temperature at the time of
+            loading, not looked up after the fact.
+          </p>
         </div>
       </section>
 
@@ -641,7 +497,7 @@ export default function Home() {
           padding: 72px 48px;
           scroll-margin-top: 24px;
         }
-        .calc-inner { max-width: 760px; margin: 0 auto; }
+        .calc-inner { max-width: 900px; margin: 0 auto; }
         .calc-header { text-align: center; margin-bottom: 32px; }
         .calc-h2 {
           margin: 0;
@@ -657,87 +513,25 @@ export default function Home() {
           color: rgba(0,0,0,0.58);
         }
 
-        .calc-card {
-          width: 100%;
-          border-radius: 20px;
-          background: #ffffff;
-          border: 1px solid rgba(0,0,0,0.1);
-          box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-          padding: 32px;
+        /* Three real-load cards, same diagonal-stripe "receipt" motif as
+           the old .hero-stat block -- explicitly kept per direction even
+           as the content underneath it changed. Alternating dark/light
+           treatment (not a uniform color) per explicit direction, so the
+           three cards read as distinct examples rather than one repeated
+           template. */
+        .load-examples {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
         }
-        .calc-fields {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-        .calc-field {
-          flex: 1 1 120px;
+        .load-card {
           display: flex;
           flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          padding: 14px 10px;
-          border-radius: 12px;
-          border: 1px solid rgba(0,0,0,0.09);
-          background: #f4f4f3;
-        }
-        .calc-field span {
-          font: 700 10.5px var(--font);
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          color: rgba(0,0,0,0.45);
-        }
-        .calc-field input {
-          width: 100%;
-          box-sizing: border-box;
-          border: none;
-          background: transparent;
-          color: #111;
-          font: 800 21px var(--font);
-          text-align: center;
-          padding: 0;
-        }
-        .calc-field:focus-within { border-color: rgba(0,0,0,0.4); }
-        .calc-field input:focus { outline: none; }
-        .calc-field input::placeholder { color: rgba(0,0,0,0.25); }
-        .calc-fields-note {
-          margin: 14px 0 0;
-          font: 400 12px var(--font);
-          line-height: 1.5;
-          color: rgba(0,0,0,0.42);
-        }
-
-        .calc-result-area {
-          margin-top: 26px;
-          padding-top: 26px;
-          border-top: 1px solid rgba(0,0,0,0.1);
-          text-align: center;
-        }
-        .calc-result { display: flex; flex-direction: column; gap: 4px; }
-        .calc-result-num { font: 900 36px var(--font); letter-spacing: -0.01em; }
-        .calc-result-warn .calc-result-num { color: #dc2626; }
-        .calc-result-loss .calc-result-num { color: #b45309; }
-        .calc-result-good .calc-result-num { color: #15803d; }
-        .calc-result-label {
-          font: 500 13.5px var(--font);
-          color: rgba(0,0,0,0.6);
-        }
-        .calc-result-placeholder .calc-result-label {
-          font: 500 14px var(--font);
-          color: rgba(0,0,0,0.42);
-        }
-        .calc-live-weight {
-          margin: 12px 0 0;
-          font: 600 12.5px var(--font);
-          color: rgba(0,0,0,0.45);
-        }
-        .calc-stat-wrap { display: flex; justify-content: center; margin-top: 32px; }
-        .hero-stat {
-          display: inline-flex;
-          flex-direction: column;
-          gap: 4px;
-          padding: 18px 22px;
+          gap: 8px;
+          padding: 22px 20px;
           border-radius: 16px;
+        }
+        .load-card-light {
           background: repeating-linear-gradient(
             135deg,
             #f2f2f2,
@@ -747,17 +541,39 @@ export default function Home() {
           );
           border: 1px dashed rgba(0,0,0,0.25);
         }
-        .hero-stat-num {
+        .load-card-dark {
+          background: repeating-linear-gradient(
+            135deg,
+            #1a1a1a,
+            #1a1a1a 10px,
+            #111111 10px,
+            #111111 20px
+          );
+          border: 1px dashed rgba(255,255,255,0.22);
+        }
+        .load-card-tag {
+          font: 700 10.5px var(--font);
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+        .load-card-light .load-card-tag { color: rgba(0,0,0,0.45); }
+        .load-card-dark .load-card-tag { color: rgba(255,255,255,0.45); }
+        .load-card-weight {
           font: 900 30px var(--font);
           letter-spacing: -0.01em;
-          color: #111;
         }
-        .hero-stat-sub {
-          max-width: 440px;
-          font: 500 12.5px var(--font);
-          color: rgba(0,0,0,0.5);
+        .load-card-light .load-card-weight { color: #111; }
+        .load-card-dark .load-card-weight { color: #fff; }
+        .load-card-weight-unit {
+          font: 700 14px var(--font);
+          letter-spacing: 0;
+        }
+        .load-card-sub {
+          font: 500 13px var(--font);
           line-height: 1.5;
         }
+        .load-card-light .load-card-sub { color: rgba(0,0,0,0.55); }
+        .load-card-dark .load-card-sub { color: rgba(255,255,255,0.6); }
 
         .calc-footnote {
           margin: 20px 0 0;
@@ -1139,8 +955,7 @@ export default function Home() {
 
           .calc-section { padding: 48px 24px; }
           .calc-h2 { font-size: 30px; }
-          .calc-card { padding: 22px; }
-          .calc-field { flex-basis: calc(50% - 5px); }
+          .load-examples { grid-template-columns: 1fr; }
 
           .manifesto-section { padding: 56px 24px; }
           .manifesto-h2 { font-size: 30px; }
