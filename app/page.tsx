@@ -395,7 +395,7 @@ export default function Home() {
             </p>
           </blockquote>
           <p className="founder-byline">
-            Built by a bulk fuel hauler with hands-on experience.
+            Built by a bulk fuel hauler, not a software company.
           </p>
           <p className="founder-patent">
             <span className="patent-badge">Patent Pending</span>
