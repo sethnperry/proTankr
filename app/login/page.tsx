@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+
+// Same mark used by /auth/confirm and /auth/callback -- the other dark,
+// unauthenticated pages in this same sign-in flow -- so a driver who
+// lands here directly (bookmark, search engine) sees the same brand
+// identity as everywhere else in that flow, not a bare, unbranded form.
+const LOGO_PATH =
+  "M 41.28,85.61 L40.14,85.38 L39.51,84.29 L39.51,29.70 L39.97,28.44 L41.86,27.35 L75.00,27.35 L76.43,26.38 L76.66,24.20 L74.77,22.76 L21.90,22.65 L19.15,21.62 L16.57,19.50 L9.12,11.24 L8.66,10.21 L8.89,8.72 L10.32,7.51 L75.11,7.40 L79.36,8.08 L82.91,9.58 L87.90,13.65 L91.34,19.72 L92.14,26.38 L91.46,30.05 L90.08,33.37 L85.67,38.70 L82.57,40.77 L79.13,42.14 L75.92,42.72 L55.85,42.72 L54.99,43.35 L54.42,72.36 L52.92,74.89 L41.28,85.61 Z";
 
 /**
  * A throwaway, implicit-flow client used ONLY to fire signInWithOtp below --
@@ -130,6 +138,13 @@ export default function LoginPage() {
 
   return (
     <main style={wrap}>
+      <Link href="/" style={brandLink}>
+        <svg viewBox="0 0 100 92.1" width="36" height="33" aria-hidden="true">
+          <path d={LOGO_PATH} fill="white" />
+        </svg>
+        <span style={brandWordmark}>PROTANKR</span>
+      </Link>
+
       <h1 style={{ margin: "0 0 6px", fontSize: 26, fontWeight: 900 }}>Sign in</h1>
       <p style={{ margin: "0 0 20px", fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>
         Enter your email, then the code from your ProTankr email.
@@ -185,6 +200,12 @@ export default function LoginPage() {
 const wrap: React.CSSProperties = {
   maxWidth: 420, margin: "40px auto", padding: 20,
   fontFamily: "var(--font-outfit), Outfit, Helvetica, Arial, sans-serif", color: "#fff",
+};
+const brandLink: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 28, textDecoration: "none",
+};
+const brandWordmark: React.CSSProperties = {
+  fontSize: 15, fontWeight: 800, letterSpacing: "0.06em", color: "#fff",
 };
 const label: React.CSSProperties = {
   display: "block", marginBottom: 14, fontSize: 12, fontWeight: 700,
