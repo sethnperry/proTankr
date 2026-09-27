@@ -98,6 +98,7 @@ type Props = {
   onRefreshTerminalAccess?: () => Promise<void>;    // re-fetch terminal expiry dates
   onPostLoadComplete?: () => Promise<void>;         // re-read load_log for slot 0 / slip seat
   predictedTempF?: number | null;                  // what the predictor said at plan time
+  unbiasedPredictedTempF?: number | null;          // same, before the learned terminal bias
   activeSlotLetter?: number | null;                 // which named preset (1-5 / A-E) was active when LOAD was tapped, for the recap card's "Plan X" label
 };
 
@@ -113,6 +114,7 @@ export function useLoadWorkflow({
   onRefreshTerminalAccess,
   onPostLoadComplete,
   predictedTempF,
+  unbiasedPredictedTempF,
   activeSlotLetter,
   capacityResult,
 }: Props) {
@@ -489,9 +491,18 @@ export function useLoadWorkflow({
       });
 
 // Update terminal temp bias with the observed error (self-training)
-// error = actual_temp - predicted_temp_at_plan_time
+// error = actual_temp - UNBIASED prediction.
+//
+// Real bug fixed 2026-09-27: this used to measure against the FINAL
+// prediction, which already had the stored bias added. The stored value is
+// meant to be the model's systematic error, so recording residuals of an
+// already-corrected number made the mean drift toward zero once corrections
+// took effect (it learned "how wrong the correction is", then applied that as
+// if it were the whole correction). Measuring against the pre-bias prediction
+// makes mean_error mean exactly what the read side treats it as.
+const basisPredictedTempF = unbiasedPredictedTempF ?? predictedTempF;
 try {
-  if (selectedTerminalId && predictedTempF != null) {
+  if (selectedTerminalId && basisPredictedTempF != null) {
     const now = new Date();
     // Bucketed to a 3-hour window — must match app/api/fuel-temp/route.ts's read side.
     const hourUtc = Math.floor(now.getUTCHours() / 3) * 3;
@@ -504,7 +515,7 @@ try {
 
     if (actualTemps.length > 0) {
       const meanActual = actualTemps.reduce((s, t) => s + t, 0) / actualTemps.length;
-      const observedError = meanActual - predictedTempF;
+      const observedError = meanActual - basisPredictedTempF;
 
       // Only update if error is plausible (not a data entry mistake)
       if (Math.abs(observedError) < 25) {

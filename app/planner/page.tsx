@@ -843,6 +843,7 @@ export default function CalculatorPage() {
   const {
     predictedFuelTempF, confidence: fuelTempConfidence, loading: fuelTempLoading,
     ambientNowF: fuelTempAmbientF,
+    unbiasedPredictionF: fuelTempUnbiasedF,
   } = useFuelTempPrediction({
     city: location.selectedCity || null,
     state: location.selectedState || null,
@@ -1399,6 +1400,7 @@ export default function CalculatorPage() {
     onRefreshTerminalAccess: terminals.refreshTerminalAccessForUser,
     onPostLoadComplete: planSlots.refreshLastLoad,
     predictedTempF: predictedFuelTempF,
+    unbiasedPredictedTempF: fuelTempUnbiasedF,
     // Pass lastLoadedSlot (the preset actually loaded via a real tap), not
     // activeSlotLetter (the dial's cosmetic scroll position) -- see the
     // comment on lastLoadedSlot's declaration above for why. The hook's own

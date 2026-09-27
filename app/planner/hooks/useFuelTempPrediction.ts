@@ -19,6 +19,10 @@ type Output = {
 
   // Resolved from the API response, city-level.
   ambientNowF: number | null;
+  // The model's own prediction BEFORE the learned per-terminal bias is
+  // added. The self-training write (useLoadWorkflow) must measure error
+  // against this, not the final prediction -- see the note there.
+  unbiasedPredictionF: number | null;
 };
 
 function isFiniteNumber(v: any): v is number {
@@ -29,6 +33,7 @@ export function useFuelTempPrediction(input: Input): Output {
   const { city, state, terminalId } = input;
 
   const [predictedFuelTempF, setPredictedFuelTempF] = useState<number | null>(null);
+  const [unbiasedPredictionF, setUnbiasedPredictionF] = useState<number | null>(null);
   const [confidence, setConfidence] = useState<FuelTempConfidence | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,12 +100,22 @@ export function useFuelTempPrediction(input: Input): Output {
         if (cancelled) return;
 
         setPredictedFuelTempF(isFiniteNumber(json?.predictedFuelTempF) ? json.predictedFuelTempF : null);
+        // rawPredictionF is the model before bias (added 2026-09-27); an older
+        // server only sends biasApplied, so back it out of the final value.
+        setUnbiasedPredictionF(
+          isFiniteNumber(json?.rawPredictionF)
+            ? json.rawPredictionF
+            : isFiniteNumber(json?.predictedFuelTempF)
+              ? json.predictedFuelTempF - (isFiniteNumber(json?.biasApplied) ? json.biasApplied : 0)
+              : null
+        );
         setConfidence((json?.confidence as FuelTempConfidence) ?? null);
         setAmbientResolvedF(isFiniteNumber(json?.ambientNowF) ? json.ambientNowF : null);
       } catch (e: any) {
         if (cancelled) return;
         setError(e?.message ?? "Error");
         setPredictedFuelTempF(null);
+        setUnbiasedPredictionF(null);
         setConfidence(null);
         setAmbientResolvedF(null);
       } finally {
@@ -137,5 +152,6 @@ export function useFuelTempPrediction(input: Input): Output {
     loading,
     error,
     ambientNowF: ambientResolvedF,
+    unbiasedPredictionF,
   };
 }

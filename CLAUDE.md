@@ -10096,6 +10096,27 @@ Tune overlay (Plan Review → Load basis → tap a product): hint no longer says
 (city), the last real network API + when, and "Adjust basis for known product
 condition. Adjust with caution." `ValueEntryOverlay.hint` is now a ReactNode.
 
+**Real load result, same day**: product came off at **85.4F** vs the old
+model's 74.3F (-11.1F). That load's self-training write recorded +11.1F
+into `terminal_temp_bias` for that terminal/bucket/September -- an error
+against the *buggy* model, so once the fix deploys it would push the new
+(~83F) prediction warm by ~6F (one sample is 58% trusted). Warm is the
+dangerous direction (lighter density → more gallons planned → overweight
+if the product is actually cooler). Flagged to the user with SQL to inspect
+and clear that one row; not done from here (no service key in this
+container, and it's a delete on real data).
+
+**Second, older bug found while tracing that write**: `useLoadWorkflow.ts`
+measured the bias error against the FINAL prediction, which already had
+the stored bias added -- so `mean_error` learned the residual of an
+already-corrected number and drifted toward zero once corrections kicked
+in, while the read side applies it as the full correction. Now measured
+against the unbiased prediction (`rawPredictionF` from the route, exposed
+as `useFuelTempPrediction().unbiasedPredictionF`; falls back to
+`predicted - biasApplied` for an older server). Existing bias rows were all
+learned the old way against the old model -- worth a reset once the fix has
+been live long enough to relearn.
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.
