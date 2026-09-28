@@ -10166,6 +10166,31 @@ diesel is ~7.0 at 60F / ~6.9 hot). Gauge rounding goes against the driver:
   bypass two earlier migrations dropped). Before it runs: Gallons mode works,
   gauge mode works but can't remember the tank size (shows an error line).
 
+## Demo login signed out the real app + API floor pinned to product min (2026-09-28)
+
+**Demo.** Starting the /for-drivers demo signed the operator's installed app
+out and into the demo account, even though the demo iframe runs on
+demo.protankr.com for exactly this reason. Cause: the auth cookie is scoped
+to `.protankr.com` (so www and the bare apex share a session), and that
+scope includes demo.protankr.com, so the demo login overwrote the real
+cookie. New `lib/supabase/cookieScope.ts` (used by both the browser and
+server clients): demo.protankr.com gets a host-only cookie named
+`sb-demo-auth-token`; the main hosts keep `.protankr.com`. The separate name
+matters because the browser still sends the real `.protankr.com` cookie to
+the demo host. 3 tests. Not click-tested on a device.
+
+**API floor.** Kinder Morgan/Tampa D2 planned at 33.0 (D2's product min) on
+a stale reading instead of the terminal's history. Not confirmed against
+live data (couldn't query from this session), but the code has a clear
+feedback loop that produces exactly this: Log the Load's API field was
+prefilled with `api_min` when a rack had no reading, a tap-through wrote it
+as a real reading, and `min_api_observed` keeps the lowest value ever
+written, so the terminal floor stayed at product min afterward. Fixed in
+`useLoadWorkflow.ts`: the field is prefilled with the last real reading only,
+blank otherwise. Existing bad rows need a data fix:
+`docs/api-floor-contamination.sql` (PART 1 read-only; PART 2's reset is
+commented out until reviewed).
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.

@@ -1,5 +1,6 @@
 // lib/supabase/client.ts
 import { createBrowserClient } from "@supabase/ssr";
+import { authCookieOptionsForHost } from "./cookieScope";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,7 +28,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=${supabaseAnonKey ? "[set]" : "[missing]"}`
  * any *.vercel.app preview deploy, which would otherwise break login there.
  */
 const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-const isProtankrDomain = /(^|\.)protankr\.com$/.test(hostname);
 
 /**
  * @supabase/ssr's createBrowserClient (not plain createClient) -- this is
@@ -38,7 +38,8 @@ const isProtankrDomain = /(^|\.)protankr\.com$/.test(hostname);
  * helpers were dead code.
  */
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
-  cookieOptions: isProtankrDomain ? { domain: ".protankr.com" } : undefined,
+  // demo.protankr.com gets its own host-only cookie -- see cookieScope.ts.
+  cookieOptions: authCookieOptionsForHost(hostname),
 });
 
 /**

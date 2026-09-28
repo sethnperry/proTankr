@@ -311,23 +311,21 @@ export function useLoadWorkflow({
         const pid = r?.productId ? String(r.productId) : null;
         if (!pid || !Number.isFinite(Number(r?.planned_gallons ?? 0))) continue;
         if (!nextInputs[pid]) {
-          // Pre-fill the API the driver sees at Log the Load. Prefer this
-          // terminal's last observed reading; when the product has never been
-          // loaded here, fall back to its published MINIMUM API (api_min =
-          // heaviest) rather than leaving it blank -- this matches the plan's
-          // own density assumption for an unproven product (lbsPerGalForProductId
-          // uses api_min in that case), so the entry field and the plan agree.
-          // Falls back to api_60, then "" only if neither is seeded.
+          // Pre-fill the API the driver sees at Log the Load with this
+          // terminal's last REAL reading only. Blank when there is none.
+          //
+          // Real bug fixed 2026-09-28: this used to fall back to the
+          // product's published minimum (api_min, then api_60). A driver who
+          // tapped through Log the Load without retyping the BOL value then
+          // wrote product min into rack_product_status as if the terminal had
+          // observed it -- and min_api_observed keeps the lowest value ever
+          // written, so one tap-through pinned the terminal's floor to
+          // product min for good. Every later stale plan there fell to
+          // product min (Kinder Morgan/Tampa D2 at 33.0). A blank field makes
+          // the first reading at a terminal a real BOL number.
           const product = terminalProducts.find((p) => p.product_id === pid);
-          const firstFinite = (...vals: Array<number | null | undefined>) => {
-            for (const v of vals) if (v != null && Number.isFinite(Number(v))) return String(v);
-            return "";
-          };
-          const prefilledApi = firstFinite(
-            product?.last_api,
-            (product as any)?.api_min,
-            product?.api_60,
-          );
+          const lastApi = product?.last_api;
+          const prefilledApi = lastApi != null && Number.isFinite(Number(lastApi)) ? String(lastApi) : "";
           nextInputs[pid] = { api: prefilledApi, tempF: Number(tempF) };
         }
       }
