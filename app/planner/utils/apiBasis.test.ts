@@ -56,11 +56,12 @@ test("reading updated 18h ago is tier 'medium', blended between the reading and 
   assert.equal(b.displayApi, 36);
 });
 
-test("medium tier falls back to the reading itself as its own floor when nothing's been observed here", () => {
-  // No minApiObserved -> terminalFloor collapses to apiMin (35), still used as the floor.
+test("medium tier with no recorded min uses the last reading as the terminal's own floor", () => {
+  // No minApiObserved, but a real reading exists -> the terminal HAS history,
+  // so its floor is that reading (42), not the product min (35).
   const b = resolveApiBasis({ ...BASE, lastApi: 42, lastTempF: 60, lastApiUpdatedAt: "2026-09-07T18:00:00Z" });
   assert.equal(b.tier, "medium");
-  assert.equal(b.api60, (42 + 35) / 2);
+  assert.equal(b.api60, 42);
 });
 
 test("reading exactly 24h old is still 'medium' (boundary is inclusive)", () => {
@@ -79,15 +80,28 @@ test("reading older than 24h is tier 'low', falls back to the terminal floor -- 
   assert.notEqual(b.displayApi, 45); // the stale reading is NOT used
 });
 
-test("never observed here at all -> tier 'low' at the terminal floor", () => {
-  // minObserved 33 is heavier (lower) than apiMin 35 -> use 33.
-  const heavy = resolveApiBasis({ ...BASE, minApiObserved: 33 });
-  assert.equal(heavy.tier, "low");
-  assert.equal(heavy.displayApi, 33);
-  // minObserved 38 is LIGHTER than apiMin 35 -> stay at 35 for safety.
-  const safe = resolveApiBasis({ ...BASE, minApiObserved: 38 });
-  assert.equal(safe.tier, "low");
-  assert.equal(safe.displayApi, 35, "must not pick a lighter fallback than the product minimum");
+test("stale reading at a terminal lighter than product min uses the TERMINAL min, not product min", () => {
+  // Real case: Marathon (Fort Lauderdale) 87 -- observed 59.5, product min 55.
+  const b = resolveApiBasis({
+    ...BASE, apiMin: 55, api60Ref: 58,
+    lastApi: 59.5, lastTempF: 60, lastApiUpdatedAt: "2026-09-07T04:52:00Z",
+    minApiObserved: 59.5,
+  });
+  assert.equal(b.tier, "low");
+  assert.equal(b.displayApi, 59.5);
+});
+
+test("terminal min comes from the lowest of recorded min and last reading", () => {
+  const b = resolveApiBasis({
+    ...BASE, lastApi: 36, lastTempF: 60, lastApiUpdatedAt: "2026-08-01T00:00:00Z", minApiObserved: 38,
+  });
+  assert.equal(b.displayApi, 36);
+});
+
+test("stale reading with no recorded min still uses the terminal's reading, not product min", () => {
+  const b = resolveApiBasis({ ...BASE, lastApi: 38, lastTempF: 60, lastApiUpdatedAt: "2026-08-01T00:00:00Z" });
+  assert.equal(b.tier, "low");
+  assert.equal(b.displayApi, 38);
 });
 
 test("never observed + no terminal minimum -> tier 'low' at the product's published minimum", () => {

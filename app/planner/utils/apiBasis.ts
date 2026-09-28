@@ -22,13 +22,13 @@
 //   low    -- either a reading older than 24 hours, or nothing has ever
 //             been observed for this product at this terminal at all --
 //             fall back to the terminal's own floor (its lowest/heaviest
-//             observed reading, or the product's published minimum when
-//             there's no observation history yet).                        [red]
+//             observed reading; the product's published minimum ONLY when
+//             this terminal has no observation history at all).           [red]
 //
 // Safety: whenever a reading isn't fresh enough to trust outright, density
-// falls back toward the HEAVIEST value available (lower API = denser), so a
-// stale or unknown reading can only ever make the plan more conservative,
-// never lighter.
+// falls back to the heaviest value THIS TERMINAL has seen (lower API =
+// denser), so a stale reading can only make the plan more conservative than
+// that terminal's own history, never lighter than it.
 
 // Back-correct an observed API at temp to API_60 (same formula as
 // planMath.backCorrectApiTo60 -- inlined here to keep this module dependency-
@@ -63,15 +63,28 @@ const TWENTY_FOUR_HOURS_MS = 24 * 3600 * 1000;
 export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
   const alpha = Number(inp.alphaPerF);
 
-  // The terminal's own floor: its lowest (heaviest) ever-observed reading,
-  // never lighter than the product's own published minimum. With no
-  // observation history at all, this collapses to the product minimum --
-  // which is exactly the "never updated before at a terminal -> product
-  // min" case, so it needs no separate branch.
-  const apiMinFallback = inp.apiMin != null && Number.isFinite(inp.apiMin) ? Number(inp.apiMin) : Number(inp.api60Ref);
-  const terminalFloor = inp.minApiObserved != null && Number.isFinite(inp.minApiObserved)
-    ? Math.min(Number(inp.minApiObserved), apiMinFallback)
-    : apiMinFallback;
+  // The terminal's own floor: the lowest (heaviest) reading ever observed
+  // for this product at this terminal. The product's published minimum is
+  // used ONLY when the terminal has no history at all -- a genuinely new
+  // terminal/product pair.
+  //
+  // Real bug fixed 2026-09-28: this used to clamp the terminal floor to
+  // min(observed, product min), i.e. "never lighter than published." That
+  // made product min win whenever a terminal had only ever seen lighter
+  // product (Marathon/Fort Lauderdale 87: observed 59.5, product min 55 ->
+  // planned at 55), silently overriding real history -- the opposite of the
+  // stated rule above. Observed history now wins; product min is the
+  // no-history fallback only.
+  //
+  // lastApi counts as history too: rack_product_status.min_api_observed
+  // was only added 2026-09-07 and is null on many racks, while the last
+  // reading itself lives in terminal_products. A terminal with a reading but
+  // no recorded min must still be treated as "has history."
+  const productMin = inp.apiMin != null && Number.isFinite(inp.apiMin) ? Number(inp.apiMin) : Number(inp.api60Ref);
+  const observed = [inp.minApiObserved, inp.lastApi]
+    .filter((v): v is number => v != null && Number.isFinite(v))
+    .map(Number);
+  const terminalFloor = observed.length > 0 ? Math.min(...observed) : productMin;
 
   // 1. Driver's own gauge/BOL entry always wins outright -- highest
   //    confidence, no staleness question to ask. Its own tier/color ("tuned",
@@ -88,7 +101,7 @@ export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
 
   // 2. Nothing has ever been observed here for this product -- there's no
   //    "age" to judge, just a lack of history. Low confidence, terminal
-  //    floor (== the product's published minimum with no history to beat it).
+  //    floor (a recorded min if one somehow exists, else the product min).
   if (inp.lastApi == null || !Number.isFinite(inp.lastApi) || !inp.lastApiUpdatedAt) {
     return { api60: terminalFloor, displayApi: terminalFloor, tier: "low" };
   }

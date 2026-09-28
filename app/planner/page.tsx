@@ -2099,21 +2099,20 @@ const lastProductInfoById = useMemo(() => {
   }, [buildStaleOverride, requestBegin]);
 
   const handleStaleSafe = useCallback(() => {
-    // "Heaviest this terminal has seen" -> min_api_observed, but clamped so it
-    // can NEVER be lighter than the established safe reference (api_min, else
-    // api_60). Lower API = heavier, so the safe value is the MIN (heavier) of
-    // the observed reading and the reference: Safe is always at least as heavy
-    // as Safest, never lighter -- a terminal that has only ever seen a light
-    // reading can't talk the plan into assuming lighter-than-published.
+    // "Heaviest this terminal has seen" -> the lowest of min_api_observed and
+    // the last reading. Product min (api_min, else api_60) only when this
+    // terminal has no history at all -- that's what "Safest" is for. This used
+    // to clamp to min(observed, product min), which made Safe identical to
+    // Safest at any terminal lighter than the published minimum (2026-09-28,
+    // same fix as apiBasis.ts).
     const map = buildStaleOverride((p) => {
-      const ref =
-        p.api_min != null && Number.isFinite(Number(p.api_min)) ? Number(p.api_min)
+      const observed = [p.min_api_observed, p.last_api]
+        .filter((v) => v != null && Number.isFinite(Number(v)))
+        .map(Number);
+      if (observed.length > 0) return Math.min(...observed);
+      return p.api_min != null && Number.isFinite(Number(p.api_min)) ? Number(p.api_min)
         : p.api_60 != null && Number.isFinite(Number(p.api_60)) ? Number(p.api_60)
         : null;
-      const observed =
-        p.min_api_observed != null && Number.isFinite(Number(p.min_api_observed)) ? Number(p.min_api_observed) : null;
-      if (ref == null) return observed;           // no reference -> best effort
-      return observed != null ? Math.min(observed, ref) : ref;
     });
     setStaleApiPrompt(null);
     requestBegin(map);

@@ -10117,6 +10117,22 @@ as `useFuelTempPrediction().unbiasedPredictionF`; falls back to
 learned the old way against the old model -- worth a reset once the fix has
 been live long enough to relearn.
 
+## Stale-API fallback: terminal min, product min only for new terminals (2026-09-28)
+
+Reported from a real Fort Lauderdale load: Marathon 87 planned at **55.0 API**
+(product min) although the terminal's last reading was **59.5**. The rule
+(already written in `apiBasis.ts`'s own header): stale -> the heaviest this
+terminal has seen; product min only when the terminal has no history. The
+code contradicted it with a clamp, `terminalFloor = min(observed, apiMin)`
+("never lighter than published"), so product min won at any terminal whose
+product runs lighter than the published minimum -- plus a test pinning that
+clamp. Fixed in `resolveApiBasis`: floor = lowest of `min_api_observed` and
+`last_api` (the latter counts as history because `min_api_observed` only
+exists since 2026-09-07 and is null on many racks); product min only when
+neither exists. Same clamp removed from the stale overlay's "Safe" choice
+(`handleStaleSafe`), which had made Safe identical to Safest. Tests updated,
+91 passing. The 12-24h amber blend now blends toward the terminal floor too.
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.
