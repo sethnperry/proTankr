@@ -1,5 +1,6 @@
 "use client";
 
+import TruckFuelTankField from "./TruckFuelTankField";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { T, css, fmtDate, expiryColor, daysUntil } from "@/lib/ui/driver/tokens";
@@ -1009,6 +1010,7 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
             <div><label style={{ ...css.label, fontSize: 10 }}>VIN</label>{ti(vin, setVin, "VIN", "text", !canEditRestricted)}</div>
             <div><label style={{ ...css.label, fontSize: 10 }}>Plate</label>{ti(plate, setPlate, "e.g. ABC1234", "text", !canEditRestricted)}</div>
           </div>
+          {!isNew && truck?.truck_id && <TruckFuelTankField truckId={truck.truck_id} />}
 
           <hr style={css.divider} />
 

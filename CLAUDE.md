@@ -10133,6 +10133,39 @@ neither exists. Same clamp removed from the stale overlay's "Safe" choice
 (`handleStaleSafe`), which had made Safe identical to Safest. Tests updated,
 91 passing. The 12-24h amber blend now blends toward the terminal floor too.
 
+## Fuel-burn weight correction on the Load Report (2026-09-28)
+
+Driver's idea after an 80,551 lb load at Marathon/Fort Lauderdale: tare is
+weighed with full saddle tanks, so fuel burned since then is weight the
+calculated gross still counts. Decisions (asked, not guessed): trigger **over
+legal (80,000) only**, credit **fuel already burned** only (never "will burn
+before the scale"), **Load Report only**, diesel at a **flat 6.8 lb/gal**
+(conservative = LIGHT for a credit, the opposite of load planning; real
+diesel is ~7.0 at 60F / ~6.9 hot). Gauge rounding goes against the driver:
+"Between marks? Pick the fuller one."
+
+- `app/planner/utils/fuelBurn.ts` (+ 5 tests) -- pure math, gauge stops in eighths.
+- `app/planner/components/FuelBurnOverlay.tsx` -- same shell as the Tune
+  window. Two modes: **Tank + Gauge** (tank size prefilled from the truck,
+  tap a gauge mark) or **Gallons**. Render-checked via `renderToStaticMarkup`.
+- `LoadingModal.tsx` report mode: over legal shows a red "Likely over the
+  legal limit" row; after applying, an "After Fuel Burn" row with the
+  corrected gross (same target/legal coloring) and "Still about N lbs over
+  legal" if it is. **Display only** -- never written to the load; actual
+  weight, utilization and its safety gate stay as measured.
+- Tank size is remembered on `trucks.fuel_tank_gallons` the first time it's
+  entered in gauge mode (and when changed). Editable in the equipment modal
+  via shared `lib/ui/driver/TruckFuelTankField.tsx` (Binder front page for
+  trucks, and the admin Edit Truck Details screen). The field does its own
+  query so a missing column only hides it. Saves use `.select()` so an
+  RLS-filtered 0-row update reports an error instead of looking saved.
+- Migration `20260928000000_truck_fuel_tank_capacity.sql` (**not yet
+  applied**): adds the column and adds it to
+  `enforce_equipment_status_only_update()`'s allow-list so plain drivers can
+  save it, built on the current 20260924000000 body (keeps the null-auth
+  bypass two earlier migrations dropped). Before it runs: Gallons mode works,
+  gauge mode works but can't remember the tank size (shows an error line).
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.

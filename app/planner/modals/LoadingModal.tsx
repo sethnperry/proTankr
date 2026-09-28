@@ -3,6 +3,8 @@
 import React, { useMemo, useEffect, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import ValueEntryOverlay from "../components/ValueEntryOverlay";
+import FuelBurnOverlay from "../components/FuelBurnOverlay";
+import { correctedGrossLbs, burnCreditLbs, LEGAL_GROSS_LBS as LEGAL_LIMIT_LBS } from "../utils/fuelBurn";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 import type { ReportLine } from "../hooks/useLoadWorkflow";
 
@@ -328,6 +330,11 @@ export default function LoadingModal(props: {
   // Current ambient at the selected city (same value the temp prediction
   // used) -- context inside the Tune overlay.
   ambientTempF?: number | null;
+
+  // Fuel-burn correction (Load Report, over legal only). Saddle-tank size
+  // saved on the selected truck, and a saver for the first time it's entered.
+  fuelTankGallons?: number | null;
+  onSaveFuelTankGallons?: (gallons: number) => Promise<void>;
 }) {
   const {
     open,
@@ -364,7 +371,17 @@ export default function LoadingModal(props: {
     onTuneProduct,
     tuneTempColor,
     ambientTempF,
+    fuelTankGallons,
+    onSaveFuelTankGallons,
   } = props;
+
+  // Fuel-burn correction -- display only, never written to the load. The
+  // recorded actual weight (and everything derived from it) stays exactly as
+  // measured. Cleared whenever a different report is shown.
+  const [burnGallons, setBurnGallons] = useState<number | null>(null);
+  const [burnOpen, setBurnOpen] = useState(false);
+  const [burnSaveError, setBurnSaveError] = useState<string | null>(null);
+  useEffect(() => { setBurnGallons(null); setBurnOpen(false); setBurnSaveError(null); }, [report]);
 
   const plannedLines = useMemo(() => {
     return (planRows ?? [])
@@ -806,7 +823,7 @@ export default function LoadingModal(props: {
             column anymore. Report mode: "Actual Weight," same coloring,
             bigger/bolder -- this is the real number now, not a preview. */}
         {report ? (
-          report.actualGrossLbs != null && (
+          report.actualGrossLbs != null && (<>
             <div style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
               padding: "12px 14px", borderRadius: 6,
@@ -817,7 +834,76 @@ export default function LoadingModal(props: {
                 {Math.round(report.actualGrossLbs).toLocaleString()} lbs
               </div>
             </div>
-          )
+            {report.actualGrossLbs > LEGAL_LIMIT_LBS && (
+              burnGallons != null ? (
+                (() => {
+                  const corrected = correctedGrossLbs(report.actualGrossLbs!, burnGallons);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setBurnOpen(true)}
+                      style={{
+                        display: "flex", flexDirection: "column", gap: 4, width: "100%", textAlign: "left" as const,
+                        padding: "12px 14px", borderRadius: 6, cursor: "pointer",
+                        border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>After Fuel Burn</div>
+                        <div style={{ fontSize: 24, fontWeight: 900, color: weightColor(corrected, targetWeight) }}>
+                          {Math.round(corrected).toLocaleString()} lbs
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+                        <span>{Math.round(burnGallons)} gal burned · −{Math.round(burnCreditLbs(burnGallons)).toLocaleString()} lbs</span>
+                        <span style={{ color: "rgba(255,255,255,0.3)" }}>edit ›</span>
+                      </div>
+                      {corrected > LEGAL_LIMIT_LBS && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#f87171" }}>
+                          Still about {Math.round(corrected - LEGAL_LIMIT_LBS).toLocaleString()} lbs over legal.
+                        </div>
+                      )}
+                    </button>
+                  );
+                })()
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBurnOpen(true)}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%",
+                    padding: "12px 14px", borderRadius: 6, cursor: "pointer", textAlign: "left" as const,
+                    border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "#f87171" }}>Likely over the legal limit</span>
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>Adjust for fuel burned since your tare</span>
+                  </div>
+                  <span style={{ fontSize: 16, color: "rgba(255,255,255,0.4)" }}>›</span>
+                </button>
+              )
+            )}
+            {burnSaveError && (
+              <div style={{ fontSize: 12, color: "rgba(255,210,210,0.9)" }}>{burnSaveError}</div>
+            )}
+            <FuelBurnOverlay
+              open={burnOpen}
+              savedTankGallons={fuelTankGallons ?? null}
+              initialGallons={burnGallons}
+              onCancel={() => setBurnOpen(false)}
+              onApply={(gal, tankToSave) => {
+                setBurnGallons(gal);
+                setBurnOpen(false);
+                setBurnSaveError(null);
+                if (tankToSave != null && onSaveFuelTankGallons) {
+                  onSaveFuelTankGallons(tankToSave).catch((e: any) => {
+                    setBurnSaveError(`Couldn't save the tank size to this truck: ${e?.message ?? "unknown error"}`);
+                  });
+                }
+              }}
+            />
+          </>)
         ) : (
           showLivePreview && (
             <div style={{

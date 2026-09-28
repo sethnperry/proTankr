@@ -15,6 +15,7 @@
 // reading/writing the old columns until a later pass migrates them too,
 // consistent with this app's solo-tier-first rollout.
 
+import TruckFuelTankField from "@/lib/ui/driver/TruckFuelTankField";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -703,6 +704,7 @@ function UnitSection({
             unitKind={unitKind} unitId={unitId} unitName={unitName} companyId={companyId} detail={detail}
             onSaved={onSaved} myRole={myRole}
           />
+          {unitKind === "truck" && <TruckFuelTankField truckId={unitId} />}
           <div style={{ marginTop: 16 }}>
             <button type="button" onClick={() => setServiceOpen(true)} style={navBtnStyle}>Service Schedule</button>
             <button type="button" onClick={() => setScreen("details")} style={navBtnStyle}>Details →</button>

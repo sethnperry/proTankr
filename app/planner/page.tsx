@@ -541,6 +541,35 @@ export default function CalculatorPage() {
     })();
   }, [selectedTruckId, selectedTrailerId]);
 
+  // ── Saddle-tank size for the Load Report's fuel-burn correction ──
+  // Its own query, deliberately NOT added to the equipmentDetails select above:
+  // if the fuel_tank_gallons migration hasn't run, a missing column 400s the
+  // WHOLE query (this repo's stale-column bug class), which would blank the
+  // truck name too. This one just fails to null.
+  const [fuelTankGallons, setFuelTankGallons] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setFuelTankGallons(null);
+    if (!selectedTruckId) return;
+    (async () => {
+      const { data, error } = await supabase.from("trucks").select("fuel_tank_gallons").eq("truck_id", selectedTruckId).maybeSingle();
+      if (cancelled || error) return;
+      const v = Number((data as any)?.fuel_tank_gallons);
+      setFuelTankGallons(Number.isFinite(v) && v > 0 ? v : null);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedTruckId]);
+
+  const saveFuelTankGallons = useCallback(async (gallons: number) => {
+    if (!selectedTruckId) throw new Error("No truck selected");
+    // .select() so an RLS-filtered update (0 rows, no error) is caught instead
+    // of looking like a save.
+    const { data, error } = await supabase.from("trucks").update({ fuel_tank_gallons: gallons }).eq("truck_id", selectedTruckId).select("truck_id");
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error("not allowed to edit this truck");
+    setFuelTankGallons(gallons);
+  }, [selectedTruckId]);
+
   // ── Terminal products ──────────────────────────────────────────────────────
   const [terminalProducts, setTerminalProducts] = useState<ProductRow[]>([]);
 
@@ -2961,6 +2990,8 @@ const lastProductInfoById = useMemo(() => {
         onTuneProduct={onTuneProduct}
         tuneTempColor={tuneTempColor}
         ambientTempF={fuelTempAmbientF}
+        fuelTankGallons={fuelTankGallons}
+        onSaveFuelTankGallons={saveFuelTankGallons}
       />
 
       <TerminalSwitchDuringLoadSheet
