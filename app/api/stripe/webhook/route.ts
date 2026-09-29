@@ -139,29 +139,30 @@ async function sendWelcomeEmail(to: string, confirmUrl: string, code: string, in
 }
 
 /**
- * Idempotent: reuses an existing solo company for this user if one already
- * exists (e.g. a retried webhook, or someone who was previously invited
- * comped and is now genuinely paying), otherwise creates one. Mirrors
- * admin_invite_solo_user's own idempotent shape, done as direct service-role
- * table writes instead of a new RPC -- the service role already bypasses
- * RLS (same pattern app/api/admin/setup/route.ts already uses for direct
- * table access), so no new Postgres function/migration is needed for this.
+ * ALWAYS creates a brand-new solo company -- deliberately does NOT reuse an
+ * existing one, even if this email already belongs to a company. Paying for
+ * Solo means "give me my own company," full stop; reusing whatever company
+ * the email happens to already be a member of (e.g. a real driver's
+ * existing Fleet company) would silently attach a stranger's $39/mo
+ * subscription to that other company's billing record instead -- confirmed
+ * live: testing checkout with an email that already belonged to a real
+ * multi-member company clobbered THAT company's company_subscriptions row
+ * to tier='solo' and dropped the payer into it on sign-in, instead of a new
+ * company of their own. (An earlier version of this function mirrored
+ * admin_invite_solo_user's own "reuse an existing company" idempotency --
+ * that reuse makes sense THERE, where the super admin is inviting someone
+ * presumed accountless; it's wrong here, where checkout is public and the
+ * email could belong to anyone.)
+ *
+ * Idempotency for a genuinely retried webhook event is handled by the
+ * caller instead, keyed on stripe_subscription_id -- see
+ * handleCheckoutCompleted's own check before this is ever called.
  */
-async function findOrCreateSoloCompany(
+async function createSoloCompany(
   admin: ReturnType<typeof getServiceSupabase>,
   userId: string,
   email: string
 ): Promise<string> {
-  const { data: existing, error: existingErr } = await admin
-    .from("user_companies")
-    .select("company_id")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (existingErr) throw existingErr;
-  if (existing?.company_id) return existing.company_id as string;
-
   const { data: profile } = await admin
     .from("profiles")
     .select("display_name")
@@ -182,6 +183,10 @@ async function findOrCreateSoloCompany(
     .insert({ user_id: userId, company_id: companyId, role: "admin" });
   if (memberErr) throw memberErr;
 
+  // The payer just bought THIS subscription -- switch them into the new
+  // company so signing in lands them there, not wherever active_company_id
+  // previously pointed (which could be an unrelated existing company for
+  // this email, same reasoning as not reusing the company itself above).
   const { error: settingsErr } = await admin
     .from("user_settings")
     .upsert({ user_id: userId, active_company_id: companyId }, { onConflict: "user_id" });
@@ -226,8 +231,31 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
   const admin = getServiceSupabase();
+
+  // Idempotency lives HERE now, keyed on the Stripe subscription itself --
+  // not on "does this email already have a company" (see createSoloCompany's
+  // own comment for why that used to be wrong). A genuinely retried
+  // checkout.session.completed for the same subscription just re-syncs the
+  // existing row and stops -- no second company, no second welcome email.
+  const { data: already } = await admin
+    .from("company_subscriptions")
+    .select("company_id")
+    .eq("stripe_subscription_id", subscriptionId)
+    .maybeSingle();
+  if (already?.company_id) {
+    const { error: resyncErr } = await admin
+      .from("company_subscriptions")
+      .update({
+        status: mapStripeStatus(subscription.status),
+        current_period_end: currentPeriodEndOf(subscription),
+      })
+      .eq("company_id", already.company_id);
+    if (resyncErr) throw resyncErr;
+    return;
+  }
+
   const { userId } = await findOrCreateUserByEmail(admin, email);
-  const companyId = await findOrCreateSoloCompany(admin, userId, email);
+  const companyId = await createSoloCompany(admin, userId, email);
 
   const { error: subErr } = await admin.from("company_subscriptions").upsert(
     {
