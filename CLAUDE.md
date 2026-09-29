@@ -10191,6 +10191,34 @@ blank otherwise. Existing bad rows need a data fix:
 `docs/api-floor-contamination.sql` (PART 1 read-only; PART 2's reset is
 commented out until reviewed).
 
+## API basis rules rewritten; Log the Load now matches the plan (2026-09-29)
+
+Reported at Marathon/Fort Lauderdale: Plan Review's Tune line showed 59.5
+(terminal min, because the 60.55 reading from the night before was >24h old)
+while Log the Load prefilled 60.55 (it always used `last_api`). Two different
+rules for one number.
+
+New rules, per driver spec (`apiBasis.ts`), replacing the 12h/24h tiers and
+the 12-24h blend:
+- No history at this terminal → product min.
+- Last reading ≤ 7 days old → that reading, as-is.
+- Older → terminal min (lower of `min_api_observed` and `last_api`). Never
+  product min once history exists.
+- Color is age only and never changes the number: ≤6h green, ≤12h white,
+  ≤24h orange, older red. Tuned is white.
+
+`page.tsx` has one `apiBasisForProduct()` (tune > stale-prompt override >
+rules) feeding density, the Tune line, and Log the Load. Log the Load's API
+box now starts at that same number (`productInputsForModal`); a tune or the
+driver's entry replaces it, and comp 1 still carries to later comps of the
+same product. On a first load at a terminal (`hasHistory === false`) the box
+is blank, so the first saved reading is a real BOL number, not product min.
+`useLoadWorkflow` no longer seeds the API. This also covers a mid-load
+terminal switch, which clears the API and relied on a prefill effect that no
+longer existed. The >7-day stale prompt stays; its "Ignore" now pins the last
+reading explicitly (the default past 7 days is the terminal min). 13 basis
+tests. Not click-tested on a device.
+
 ## Pre-launch cleanup (before app store submission)
 Running list of known rough edges that aren't urgent but shouldn't ship as-is.
 Add to this as more turn up.

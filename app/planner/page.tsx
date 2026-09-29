@@ -1011,36 +1011,13 @@ export default function CalculatorPage() {
     });
   }, [compPlan, terminalProducts]);
 
-  const lbsPerGalForProductId = useCallback((productId: string): number | null => {
+  // The one API basis per product (see apiBasis.ts for the rules). Density,
+  // the Tune line and the Log the Load prefill all read this, so they can't
+  // disagree. Order: the driver's tune, then a stale-API choice made at LOAD
+  // (Safest / Safe / Ignore), then the normal rules.
+  const apiBasisForProduct = useCallback((productId: string) => {
     const p = terminalProducts.find((x) => x.product_id === productId);
     if (!p || p.api_60 == null || p.alpha_per_f == null) return null;
-    // Driver explicitly tuned this product's API/temp in Plan Review's Tune
-    // panel -- their own reading wins over everything (the terminal's last-
-    // observed value, the stale-safety override, and the api_min fallback).
-    // Back-correct the observed API (read at the tuned temp) to API_60, then
-    // density at that same temp -- identical math to bestLbsPerGallon's
-    // observed-reading path, just sourced from the driver's entry.
-    const tuned = tunedApiTempByProduct[productId];
-    if (tuned && Number.isFinite(tuned.api) && Number.isFinite(tuned.tempF)) {
-      const api60 = backCorrectApiTo60(Number(tuned.api), Number(tuned.tempF), Number(p.alpha_per_f));
-      return lbsPerGallonAtTemp(api60, Number(p.alpha_per_f), Number(tuned.tempF));
-    }
-    // Stale-API safety override wins outright: the driver chose to assume a
-    // specific (heavier) API_60 for this product on the LOAD stale-API
-    // prompt, so density is computed from that directly -- never the
-    // last-observed/reference reading, which is exactly what they overrode.
-    const overrideApi60 = apiSafetyOverride[productId];
-    if (overrideApi60 != null && Number.isFinite(overrideApi60)) {
-      const t = productTempF[productId] ?? tempF;
-      return lbsPerGallonAtTemp(Number(overrideApi60), Number(p.alpha_per_f), t);
-    }
-    // Otherwise resolve the API basis by confidence (see apiBasis.ts): a fresh
-    // (<=12h) observed reading if there is one, else the terminal's observed
-    // minimum, else the product's published minimum -- the same resolver the
-    // Tune panel displays, so the shown basis and the planned gallons can
-    // never disagree. A stale/unknown reading always falls back toward the
-    // HEAVIEST minimum, so it can only ever make the plan more conservative,
-    // never lighter.
     const basis = resolveApiBasis({
       alphaPerF: Number(p.alpha_per_f),
       api60Ref: Number(p.api_60),
@@ -1052,9 +1029,23 @@ export default function CalculatorPage() {
       tuned: tunedApiTempByProduct[productId] ?? null,
       nowMs: Date.now(),
     });
-    const t = productTempF[productId] ?? tempF;
+    const overrideApi60 = apiSafetyOverride[productId];
+    if (basis.tier !== "tuned" && overrideApi60 != null && Number.isFinite(overrideApi60)) {
+      return { ...basis, api60: Number(overrideApi60), displayApi: Number(overrideApi60) };
+    }
+    return basis;
+  }, [terminalProducts, apiSafetyOverride, tunedApiTempByProduct]);
+
+  const lbsPerGalForProductId = useCallback((productId: string): number | null => {
+    const p = terminalProducts.find((x) => x.product_id === productId);
+    const basis = apiBasisForProduct(productId);
+    if (!p || !basis) return null;
+    // A tuned reading is density at the temp it was read at; otherwise at
+    // this product's planned temp.
+    const tuned = tunedApiTempByProduct[productId];
+    const t = basis.tier === "tuned" && tuned ? Number(tuned.tempF) : (productTempF[productId] ?? tempF);
     return lbsPerGallonAtTemp(basis.api60, Number(p.alpha_per_f), t);
-  }, [terminalProducts, tempF, productTempF, apiSafetyOverride, tunedApiTempByProduct]);
+  }, [terminalProducts, tempF, productTempF, apiBasisForProduct, tunedApiTempByProduct]);
 
   // ── Active compartments ────────────────────────────────────────────────────
   const activeComps = useMemo<ActiveComp[]>(() => {
@@ -1991,7 +1982,6 @@ const lastProductInfoById = useMemo(() => {
   // the planned gallons can never disagree.
   const tuneRows = useMemo(() => {
     const ids = Array.from(plannedProductIds);
-    const now = Date.now();
     const rows = ids.map((pid) => {
       const tuned = tunedApiTempByProduct[pid] ?? null;
       const p = terminalProducts.find((x) => x.product_id === pid);
@@ -1999,26 +1989,13 @@ const lastProductInfoById = useMemo(() => {
       const lpg = lbsPerGalForProductId(pid);
       const tempVal = tuned ? tuned.tempF : (productTempF[pid] ?? tempF);
 
-      // Which API the planner is standing on + its confidence tier -- the SAME
-      // resolver the density uses, so the shown API/lb-gal and the planned
-      // gallons can never disagree. White (the driver's own tuned reading --
-      // not a system confidence rating), green (<=12h old network reading),
-      // amber (12-24h old, a blended safer guess), red (>24h old, or nothing
-      // ever observed here).
+      // The API the plan stands on (same helper as the density) and a color
+      // for how fresh the reading is: green <=6h, white <=12h, orange <=24h,
+      // red older or no reading. A tuned value is white.
       let displayApi: number | null = tuned ? tuned.api : null;
       let apiColor = "#ffffff";
-      if (p && p.alpha_per_f != null && p.api_60 != null) {
-        const basis = resolveApiBasis({
-          alphaPerF: Number(p.alpha_per_f),
-          api60Ref: Number(p.api_60),
-          apiMin: p.api_min != null ? Number(p.api_min) : null,
-          minApiObserved: (p as any).min_api_observed != null ? Number((p as any).min_api_observed) : null,
-          lastApi: p.last_api != null ? Number(p.last_api) : null,
-          lastTempF: p.last_temp_f != null ? Number(p.last_temp_f) : null,
-          lastApiUpdatedAt: (p as any).last_api_updated_at ?? null,
-          tuned,
-          nowMs: now,
-        });
+      const basis = apiBasisForProduct(pid);
+      if (basis) {
         displayApi = basis.displayApi;
         apiColor = apiTierColor(basis.tier);
       }
@@ -2055,7 +2032,7 @@ const lastProductInfoById = useMemo(() => {
     });
     rows.sort((a, b) => a.code.localeCompare(b.code));
     return rows;
-  }, [plannedProductIds, tunedApiTempByProduct, terminalProducts, lastProductInfoById, productTempF, tempF, lbsPerGalForProductId, productCodeById, productNameById, productHexCodeById]);
+  }, [plannedProductIds, tunedApiTempByProduct, terminalProducts, lastProductInfoById, productTempF, tempF, lbsPerGalForProductId, apiBasisForProduct, productCodeById, productNameById, productHexCodeById]);
 
   // Apply a Tune-panel edit: drives the planning density (tunedApiTempByProduct
   // + productTempF) AND the submission inputs (productInputs) so the logged
@@ -2106,6 +2083,23 @@ const lastProductInfoById = useMemo(() => {
     return out;
   }, [plannedProductIds, lastProductInfoById, productNameById, productHexCodeById]);
 
+  // What Log the Load starts each product's API box at: whatever the driver
+  // entered/tuned, else the same number the plan stands on. Blank on a first
+  // load at a terminal (no history) so the first reading saved is a real BOL
+  // number -- prefilling product min there let a tap-through record product
+  // min as if the terminal had measured it (2026-09-28/29).
+  const productInputsForModal = useMemo(() => {
+    const out: Record<string, { api?: string; tempF?: number }> = { ...productInputs };
+    for (const pid of plannedProductIds) {
+      const cur = out[pid];
+      if (cur?.api) continue;
+      const b = apiBasisForProduct(pid);
+      const api = b && b.hasHistory ? String(Math.round(b.displayApi * 100) / 100) : "";
+      out[pid] = { ...(cur ?? {}), api };
+    }
+    return out;
+  }, [productInputs, plannedProductIds, apiBasisForProduct]);
+
   // Build the per-product API_60 override for a stale-API choice. `pick`
   // returns the chosen API for one product, or null to leave it on its
   // normal density (fresh products are never in the stale list anyway).
@@ -2148,9 +2142,16 @@ const lastProductInfoById = useMemo(() => {
   }, [buildStaleOverride, requestBegin]);
 
   const handleStaleIgnore = useCallback(() => {
+    // Proceed on the last-known reading. Past 7 days the default basis is the
+    // terminal min, so "Ignore" has to pin the reading explicitly.
+    const map = buildStaleOverride((p) => {
+      if (p.last_api == null || !Number.isFinite(Number(p.last_api)) || p.alpha_per_f == null) return null;
+      const t = p.last_temp_f != null && Number.isFinite(Number(p.last_temp_f)) ? Number(p.last_temp_f) : 60;
+      return backCorrectApiTo60(Number(p.last_api), t, Number(p.alpha_per_f));
+    });
     setStaleApiPrompt(null);
-    requestBegin({}); // proceed on the last-known reading
-  }, [requestBegin]);
+    requestBegin(map);
+  }, [buildStaleOverride, requestBegin]);
 
   // ProductTempModal's "Confirm & Continue" for the LOAD flow (step 2, after
   // the driver confirms/adjusts temp). Closes the temp modal, then runs the
@@ -2948,7 +2949,7 @@ const lastProductInfoById = useMemo(() => {
         planRows={effectivePlanRows as any[]}
         productNameById={productNameById}
         productHexCodeById={productHexCodeById}
-        productInputs={productInputs}
+        productInputs={productInputsForModal}
         equipmentLabel={equipment.equipmentLabel}
         terminalLabel={terminalLabel}
         locationLabel={location.locationLabel}

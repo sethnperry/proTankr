@@ -5,30 +5,9 @@
 // the number the driver sees and the number the gallons are computed from can
 // never disagree.
 //
-// Confidence tiers (per explicit driver direction, matching the temp
-// prediction's own high/medium/low palette so the whole Tune line reads as
-// one confidence signal):
-//   tuned  -- the driver's own gauge/BOL entry. Always wins outright -- this
-//             IS the density calc's basis -- but colored separately from
-//             "high" (white, not green): it's the driver's own word, not a
-//             system-verified network reading, so it shouldn't look like the
-//             same kind of confidence as one.                             [white]
-//   high   -- a real network reading updated within the last 12 hours --
-//             trust the network API as-is.                                [green]
-//   medium -- a real reading updated 12-24 hours ago -- a half-day-old
-//             number isn't wrong, but it isn't current either, so split the
-//             difference between it and the terminal's own observed floor.
-//                                                                         [amber]
-//   low    -- either a reading older than 24 hours, or nothing has ever
-//             been observed for this product at this terminal at all --
-//             fall back to the terminal's own floor (its lowest/heaviest
-//             observed reading; the product's published minimum ONLY when
-//             this terminal has no observation history at all).           [red]
-//
-// Safety: whenever a reading isn't fresh enough to trust outright, density
-// falls back to the heaviest value THIS TERMINAL has seen (lower API =
-// denser), so a stale reading can only make the plan more conservative than
-// that terminal's own history, never lighter than it.
+// See resolveApiBasis below for the rules. Density and display share this one
+// resolver so the planned gallons, the Tune line and the Log the Load prefill
+// all stand on the same number.
 
 // Back-correct an observed API at temp to API_60 (same formula as
 // planMath.backCorrectApiTo60 -- inlined here to keep this module dependency-
@@ -37,7 +16,9 @@ function backCorrectApiTo60(observedApi: number, observedTempF: number, alphaPer
   return observedApi + alphaPerF * (observedTempF - 60);
 }
 
-export type ApiTier = "tuned" | "high" | "medium" | "low";
+// Tier drives COLOR only (how fresh the reading is). Which API is used is a
+// separate rule, below. (2026-09-29, per driver spec.)
+export type ApiTier = "tuned" | "high" | "recent" | "medium" | "low";
 
 export type ApiBasisInput = {
   alphaPerF: number;
@@ -53,91 +34,75 @@ export type ApiBasisInput = {
 
 export type ApiBasis = {
   api60: number;      // API_60 the density calc should use
-  displayApi: number; // the API value to SHOW in the Tune line
+  displayApi: number; // the API value to SHOW (and prefill at Log the Load)
   tier: ApiTier;
+  // False only for a genuinely new terminal/product pair: nothing has ever
+  // been recorded here. Log the Load leaves the API box blank in that case so
+  // the first reading saved is a real BOL number, never product min.
+  hasHistory: boolean;
 };
 
-const TWELVE_HOURS_MS = 12 * 3600 * 1000;
-const TWENTY_FOUR_HOURS_MS = 24 * 3600 * 1000;
+const HOUR_MS = 3600 * 1000;
+const LAST_READING_MAX_AGE_MS = 7 * 24 * HOUR_MS;
 
+// Rules (driver spec, 2026-09-29):
+//   tuned            -> the driver's own entry.
+//   no history       -> product min (first load at this terminal).
+//   reading <= 7 days -> that last reading, as-is.
+//   reading >  7 days -> the terminal's min (lowest ever recorded here).
+//                        Never back to product min unless a real reading was it.
+// Color is age only: <=6h green, <=12h white, <=24h orange, older red.
 export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
   const alpha = Number(inp.alphaPerF);
 
-  // The terminal's own floor: the lowest (heaviest) reading ever observed
-  // for this product at this terminal. The product's published minimum is
-  // used ONLY when the terminal has no history at all -- a genuinely new
-  // terminal/product pair.
-  //
-  // Real bug fixed 2026-09-28: this used to clamp the terminal floor to
-  // min(observed, product min), i.e. "never lighter than published." That
-  // made product min win whenever a terminal had only ever seen lighter
-  // product (Marathon/Fort Lauderdale 87: observed 59.5, product min 55 ->
-  // planned at 55), silently overriding real history -- the opposite of the
-  // stated rule above. Observed history now wins; product min is the
-  // no-history fallback only.
-  //
-  // lastApi counts as history too: rack_product_status.min_api_observed
-  // was only added 2026-09-07 and is null on many racks, while the last
-  // reading itself lives in terminal_products. A terminal with a reading but
-  // no recorded min must still be treated as "has history."
   const productMin = inp.apiMin != null && Number.isFinite(inp.apiMin) ? Number(inp.apiMin) : Number(inp.api60Ref);
   const observed = [inp.minApiObserved, inp.lastApi]
     .filter((v): v is number => v != null && Number.isFinite(v))
     .map(Number);
-  const terminalFloor = observed.length > 0 ? Math.min(...observed) : productMin;
+  const hasHistory = observed.length > 0;
+  const terminalFloor = hasHistory ? Math.min(...observed) : productMin;
 
-  // 1. Driver's own gauge/BOL entry always wins outright -- highest
-  //    confidence, no staleness question to ask. Its own tier/color ("tuned",
-  //    white) rather than sharing "high"/green with an automatic network
-  //    reading -- a manual entry is trustworthy but isn't the same kind of
-  //    signal as a system-verified fresh reading.
   if (inp.tuned && Number.isFinite(inp.tuned.api) && Number.isFinite(inp.tuned.tempF)) {
     return {
       api60: backCorrectApiTo60(Number(inp.tuned.api), Number(inp.tuned.tempF), alpha),
       displayApi: Number(inp.tuned.api),
       tier: "tuned",
+      hasHistory,
     };
   }
 
-  // 2. Nothing has ever been observed here for this product -- there's no
-  //    "age" to judge, just a lack of history. Low confidence, terminal
-  //    floor (a recorded min if one somehow exists, else the product min).
+  // No usable last reading (never loaded here, or a reading with no time):
+  // the terminal floor, which is product min when there's no history at all.
   if (inp.lastApi == null || !Number.isFinite(inp.lastApi) || !inp.lastApiUpdatedAt) {
-    return { api60: terminalFloor, displayApi: terminalFloor, tier: "low" };
+    return { api60: terminalFloor, displayApi: terminalFloor, tier: "low", hasHistory };
   }
 
-  const observedTemp = inp.lastTempF != null && Number.isFinite(inp.lastTempF) ? Number(inp.lastTempF) : 60;
-  const lastApi60 = backCorrectApiTo60(Number(inp.lastApi), observedTemp, alpha);
   const t = new Date(inp.lastApiUpdatedAt).getTime();
   const ageMs = Number.isNaN(t) ? Infinity : inp.nowMs - t;
+  const tier: ApiTier =
+    ageMs <= 6 * HOUR_MS ? "high" :
+    ageMs <= 12 * HOUR_MS ? "recent" :
+    ageMs <= 24 * HOUR_MS ? "medium" : "low";
 
-  // 3. Updated within the last 12 hours -> high confidence, trust the
-  //    network reading as-is.
-  if (ageMs <= TWELVE_HOURS_MS) {
-    return { api60: lastApi60, displayApi: Number(inp.lastApi), tier: "high" };
+  if (ageMs <= LAST_READING_MAX_AGE_MS) {
+    const observedTemp = inp.lastTempF != null && Number.isFinite(inp.lastTempF) ? Number(inp.lastTempF) : 60;
+    return {
+      api60: backCorrectApiTo60(Number(inp.lastApi), observedTemp, alpha),
+      displayApi: Number(inp.lastApi),
+      tier,
+      hasHistory,
+    };
   }
 
-  // 4. Updated 12-24 hours ago -> medium confidence. Predict a safer number
-  //    by splitting the difference between the last network reading and the
-  //    terminal's own observed floor, rather than either trusting a
-  //    half-day-old reading outright or jumping straight to the worst case.
-  if (ageMs <= TWENTY_FOUR_HOURS_MS) {
-    const blended = (lastApi60 + terminalFloor) / 2;
-    return { api60: blended, displayApi: blended, tier: "medium" };
-  }
-
-  // 5. Older than 24 hours -> low confidence. Nothing recent enough to
-  //    trust -- fall back to the terminal's own observed floor.
-  return { api60: terminalFloor, displayApi: terminalFloor, tier: "low" };
+  return { api60: terminalFloor, displayApi: terminalFloor, tier: "low", hasHistory };
 }
 
-// Tier -> confidence color, matching the temp prediction's own high/medium/low
-// palette exactly so the whole Tune line reads as one confidence signal.
 export function apiTierColor(tier: ApiTier): string {
   switch (tier) {
-    case "tuned": return "#ffffff";  // white -- the driver's own entry, not a system confidence rating
-    case "high": return "#4ade80";   // green
-    case "medium": return "#fbbf24"; // amber
-    case "low": return "#f87171";    // red
+    case "tuned": return "#ffffff";  // the driver's own entry
+    case "high": return "#4ade80";   // green, <= 6h
+    case "recent": return "#ffffff"; // white, 6-12h
+    case "medium": return "#fb923c"; // orange, 12-24h
+    case "low": return "#f87171";    // red, > 24h or no reading
   }
 }
