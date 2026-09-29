@@ -135,7 +135,12 @@ export default function ReportsPage() {
   // below is deliberately a wider set (admin/dispatch/lead) -- a separate,
   // narrower read-only carve-out for this specific reports view, not a
   // change to the general equipment-edit permission matrix.
-  const canViewOthers = role === "admin" || role === "dispatch";
+  //
+  // !shell.isSolo is required here too -- a solo company's sole member is
+  // always role 'admin' (per navDestinations.ts), so without this a solo
+  // driver would get canViewOthers === true and be offered a driver-picker
+  // that could only ever list themself.
+  const canViewOthers = !shell.isSolo && (role === "admin" || role === "dispatch");
   const canPickEquipment = role === "admin" || role === "dispatch" || role === "lead";
 
   const [viewedUserId, setViewedUserId] = useState(effectiveUserId);

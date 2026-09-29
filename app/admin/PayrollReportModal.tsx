@@ -287,10 +287,18 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
               <option key={`${p.start}|${p.end}`} value={`${p.start}|${p.end}`}>{p.label}</option>
             ))}
           </select>
-          <button type="button" onClick={() => setDriverPickerOpen(true)}
-            style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: driverFilter !== null ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
-            {driverFilter === null ? "All Drivers" : `${driverFilter.size} of ${currentMemberIds.size} Drivers`}
-          </button>
+          {/* Meaningless with one driver on the roster (the company is
+              always effectively "just me") -- hidden rather than shown
+              disabled, same treatment as the Users/Fleet Cards admin tiles
+              for a solo company. Driven by real roster size, not the
+              is_solo flag, which CLAUDE.md documents as an unreliable
+              proxy for actual member count. */}
+          {currentMemberIds.size > 1 && (
+            <button type="button" onClick={() => setDriverPickerOpen(true)}
+              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: driverFilter !== null ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+              {driverFilter === null ? "All Drivers" : `${driverFilter.size} of ${currentMemberIds.size} Drivers`}
+            </button>
+          )}
           <button type="button" onClick={handleExportCsv} disabled={loading || drivers.length === 0}
             style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
             Export CSV

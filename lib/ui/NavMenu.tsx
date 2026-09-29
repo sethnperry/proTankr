@@ -251,7 +251,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
               <NavLink href="/planner/reports" icon="▤" label="Reports" onClick={() => setOpen(false)} />
             )}
             {isAdmin && !isAdmin_ && (
-              <NavLink href="/admin" icon="⚙" label="Company Admin" onClick={() => setOpen(false)} />
+              <NavLink href="/admin" icon="⚙" label="Dashboard" onClick={() => setOpen(false)} />
             )}
             {isSuperAdmin && !isSuperAdmin_ && (
               <NavLink href="/superadmin" icon="◈" label="ProTankr Dash" onClick={() => setOpen(false)} />
@@ -293,7 +293,7 @@ function NavLink({ href, icon, label, onClick, danger }: {
   danger?: boolean;
 }) {
   // A plain <a href> here forces a full page reload on every nav-menu tap
-  // (Reports, Company Admin, Back to Planner, etc.) -- unlike the tab bar,
+  // (Reports, Dashboard, Back to Planner, etc.) -- unlike the tab bar,
   // which already navigates client-side via router.push. A full reload
   // re-renders on the server first, which has no access to localStorage
   // (where dark mode/accent color live), so the shared header briefly (or

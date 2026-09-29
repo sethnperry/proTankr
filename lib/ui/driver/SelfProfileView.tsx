@@ -94,6 +94,7 @@ export function SelfProfileView() {
               member={member}
               companyId={companyId}
               hideComplianceFields
+              showPersonalFields
               onClose={() => setEditing(false)}
               onDone={(updated) => { setEditing(false); load(); onSavedCb?.(updated); }}
             />

@@ -23,7 +23,7 @@ import { usePathname } from "next/navigation";
 import NavMenu from "@/lib/ui/NavMenu";
 import EquipmentModal from "./modals/EquipmentModal";
 import ExpirationModal from "./modals/ExpirationModal";
-import SettingsModal from "./modals/SettingsModal";
+import SettingsModal from "@/lib/ui/driver/SettingsModal";
 import LocationModal from "./modals/LocationModal";
 import MyTerminalsModal from "./modals/MyTerminalsModal";
 import RackSelectSheet from "./components/RackSelectSheet";
@@ -315,6 +315,9 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        companyId={shell.companyId ?? ""}
+        myRole={shell.role ?? "driver"}
+        authUserId={shell.effectiveUserId ?? ""}
       />
 
       {/* Location/Terminal picker -- shared single instance (same reasoning

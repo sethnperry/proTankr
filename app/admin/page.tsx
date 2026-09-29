@@ -22,7 +22,7 @@ import FleetCardsModal from "./FleetCardsModal";
 import PayrollReportModal from "./PayrollReportModal";
 import FleetUtilizationModal from "./FleetUtilizationModal";
 import TargetWeightPolicyModal from "./TargetWeightPolicyModal";
-import CompanySettingsModal from "./CompanySettingsModal";
+import SettingsModal from "@/lib/ui/driver/SettingsModal";
 import { useCompanySubscription, computeSeatCapacity, wouldExceedCapacity, type SeatCapacity } from "@/lib/billing/useCompanySubscription";
 
 // Paginated fetch -- PostgREST/Supabase caps every response at a
@@ -1243,7 +1243,7 @@ export default function AdminPage() {
   const [fleetUtilOpen, setFleetUtilOpen] = useState(false);
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
   const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
-  const [companySettingsOpen, setCompanySettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -1822,8 +1822,8 @@ export default function AdminPage() {
   return (
     <div style={css.page} className="admin-page-root">
       <div className="admin-header-row" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <NavMenu anchor="left" />
-        <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Company Admin</p></div>
+        <NavMenu anchor="left" onOpenSettings={() => setSettingsOpen(true)} />
+        <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Dashboard</p></div>
       </div>
 
       {/* Dashboard -- at-a-glance stats, same simple tile pattern as
@@ -2013,8 +2013,16 @@ export default function AdminPage() {
         {/* Users/Equipment/Terminals -- previously inline collapsible
             accordions directly on the page; now the same content, opened
             as a modal from its own tile here, matching the pattern every
-            other tile (Fleet Cards, Utilization, etc.) already uses. */}
-        {(myRole === "admin" || myRole === "dispatch") && (
+            other tile (Fleet Cards, Utilization, etc.) already uses.
+
+            Users and Fleet Cards are both fundamentally "browse every other
+            company driver" tools -- hidden entirely for a solo company,
+            where that roster is always just yourself. Solo's own profile is
+            still reachable via the Settings tile's Profile row below; a
+            roster browser of one and a fleet-wide card lookup with one
+            possible driver are both pure noise, not a smaller version of
+            something still useful. */}
+        {!isSolo && (myRole === "admin" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setUsersOpen(true)}>
             Users
           </button>
@@ -2029,7 +2037,7 @@ export default function AdminPage() {
             Terminals
           </button>
         )}
-        {(myRole === "admin" || myRole === "dispatch") && (
+        {!isSolo && (myRole === "admin" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setFleetCardsOpen(true)}>
             Fleet Cards
           </button>
@@ -2048,9 +2056,12 @@ export default function AdminPage() {
             Reports
           </button>
         )}
+        {/* Label matches the merged SettingsModal's own title logic exactly
+            (isSolo -> "Settings", fleet admin -> "Company Settings") -- one
+            modal, one entry point, same name wherever it's opened from. */}
         {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setCompanySettingsOpen(true)}>
-            Company
+          <button type="button" className="admin-header-tile" onClick={() => setSettingsOpen(true)}>
+            {isSolo ? "Settings" : "Company Settings"}
           </button>
         )}
       </div>
@@ -2109,7 +2120,7 @@ export default function AdminPage() {
            no invite/reassign/remove) -- a modal opened via its own "Users"
            tile in the button grid below, not an inline accordion. Content
            unchanged from the old inline section, just relocated. ── */}
-      {usersOpen && (myRole === "admin" || myRole === "dispatch") && (
+      {usersOpen && !isSolo && (myRole === "admin" || myRole === "dispatch") && (
         <Modal
           title={`Users (${members.filter(m => matchesScope(m.region, m.local_area)).length})`}
           onClose={() => setUsersOpen(false)}
@@ -2463,20 +2474,18 @@ export default function AdminPage() {
           targetDisplayName={loadsModal.displayName}
         />
       )}
-      <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
+      <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />
       <FleetUtilizationModal open={fleetUtilOpen} onClose={() => setFleetUtilOpen(false)} companyId={companyId!} />
       <TargetWeightPolicyModal open={targetWeightPolicyOpen} onClose={() => setTargetWeightPolicyOpen(false)} companyId={companyId!} />
-      {companySettingsOpen && (
-        <CompanySettingsModal
-          companyId={companyId!}
-          companyName={companyName}
-          isSolo={isSolo}
-          seats={seats}
-          onClose={() => setCompanySettingsOpen(false)}
-          onRenamed={(name) => setCompanyName(name)}
-        />
-      )}
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        companyId={companyId ?? ""}
+        myRole={myRole}
+        authUserId={currentUserId}
+        onCompanyRenamed={(name) => setCompanyName(name)}
+      />
     </div>
   );
 }

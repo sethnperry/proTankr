@@ -110,9 +110,13 @@ export function FleetUtilizationView({
             {r.label}
           </button>
         ))}
-        <button type="button" onClick={onOpenDriverPicker} style={{ ...chipStyle(driverFilterCount !== null), marginLeft: "auto" }}>
-          {driverFilterCount === null ? "All Drivers" : `${driverFilterCount} of ${rosterSize} Drivers`}
-        </button>
+        {/* Meaningless with one driver on the roster -- hidden rather than
+            shown disabled, same as the equivalent chip in PayrollReportModal.tsx. */}
+        {rosterSize > 1 && (
+          <button type="button" onClick={onOpenDriverPicker} style={{ ...chipStyle(driverFilterCount !== null), marginLeft: "auto" }}>
+            {driverFilterCount === null ? "All Drivers" : `${driverFilterCount} of ${rosterSize} Drivers`}
+          </button>
+        )}
       </div>
 
       <div style={{ padding: "18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 22, flexWrap: "wrap" }}>

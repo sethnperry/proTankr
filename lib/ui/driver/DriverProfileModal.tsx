@@ -9,7 +9,7 @@ import { PortIdEditor, TerminalAccessEditor } from "./editors";
 import { CatalogPicker } from "./RequiredEquipmentFields";
 import type { Member, DriverProfile } from "./types";
 
-export function DriverProfileModal({ member, companyId, onClose, onDone, onRemove, hideComplianceFields }: {
+export function DriverProfileModal({ member, companyId, onClose, onDone, onRemove, hideComplianceFields, showPersonalFields }: {
   member: Member;
   companyId: string;
   onClose: () => void;
@@ -20,6 +20,12 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
   // Credentials) is the sole writer for that data now. Admin's edit of a
   // team member (app/admin/page.tsx) omits this prop and keeps full access.
   hideComplianceFields?: boolean;
+  // A separate flag from hideComplianceFields on purpose -- gates the
+  // "Pay & Schedule" section, which is private to the driver (its own
+  // driver_pay_settings table, self-only RLS, never admin-visible) rather
+  // than merely hidden from a shorter admin view. Only SelfProfileView
+  // passes this true.
+  showPersonalFields?: boolean;
 }) {
   const [profile,  setProfile]  = useState<DriverProfile | null>(null);
   const [loading,  setLoading]  = useState(true);
@@ -34,6 +40,15 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
   const [region,         setRegion]         = useState(member.region ?? "");
   const [localArea,      setLocalArea]      = useState(member.local_area ?? "");
   const [employeeNumber, setEmployeeNumber] = useState(member.employee_number ?? "");
+  const [employmentType, setEmploymentType] = useState("");
+
+  // Pay & Schedule -- private, self-only (driver_pay_settings, its own
+  // table+RLS, never part of get_driver_profile's admin-reachable payload).
+  // Only loaded/shown/saved when showPersonalFields is true.
+  const [payPeriodType,     setPayPeriodType]     = useState("");
+  const [paydayDayOfWeek,   setPaydayDayOfWeek]   = useState("");
+  const [payNotes,          setPayNotes]          = useState("");
+  const [leaseDetails,      setLeaseDetails]      = useState("");
 
   // License
   const [licClass,    setLicClass]    = useState("");
@@ -82,6 +97,32 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         setLocalArea(d.profile?.local_area ?? "");
         setEmployeeNumber((d.profile as any)?.employee_number ?? member.employee_number ?? "");
 
+        // employment_type doesn't come back from get_driver_profile (its
+        // RPC body isn't safely re-writable from this session without a
+        // confirmed live copy of its current definition -- it's live-only,
+        // absent from every migration file, per this project's own
+        // documented migrations-lag pattern) -- read directly instead, same
+        // fallback this codebase already uses elsewhere when a shared RPC
+        // doesn't carry a field a caller needs.
+        const { data: profRow } = await supabase
+          .from("profiles")
+          .select("employment_type")
+          .eq("user_id", member.user_id)
+          .maybeSingle();
+        setEmploymentType((profRow as any)?.employment_type ?? "");
+
+        if (showPersonalFields) {
+          const { data: payRow } = await supabase
+            .from("driver_pay_settings")
+            .select("pay_period_type, payday_day_of_week, notes, lease_details")
+            .eq("user_id", member.user_id)
+            .maybeSingle();
+          setPayPeriodType(payRow?.pay_period_type ?? "");
+          setPaydayDayOfWeek(payRow?.payday_day_of_week ?? "");
+          setPayNotes(payRow?.notes ?? "");
+          setLeaseDetails((payRow as any)?.lease_details ?? "");
+        }
+
         if (d.license) {
           setLicClass(d.license.license_class ?? "");
           setLicEndorse((d.license.endorsements ?? []).join(", "));
@@ -127,6 +168,7 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
       region:          region || null,
       local_area:      localArea || null,
       employee_number: employeeNumber || null,
+      employment_type: employmentType || null,
     };
 
     if (!hideComplianceFields) {
@@ -170,6 +212,24 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         p_data:       payload,
       });
       if (error) throw error;
+
+      // Separate table, separate write -- self-only RLS (user_id =
+      // auth.uid()), no RPC needed. Only reachable when showPersonalFields
+      // is true, which is only ever the self-edit case, so member.user_id
+      // here is always the caller's own id and this upsert can't be used to
+      // write someone else's pay settings.
+      if (showPersonalFields) {
+        const { error: payErr } = await supabase.from("driver_pay_settings").upsert({
+          user_id:            member.user_id,
+          pay_period_type:    payPeriodType || null,
+          payday_day_of_week: paydayDayOfWeek || null,
+          notes:              payNotes || null,
+          lease_details:      leaseDetails || null,
+          updated_at:         new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        if (payErr) throw payErr;
+      }
+
       setSuccess(true);
       setTimeout(() => onDone({
         display_name:    displayName || null,
@@ -209,6 +269,15 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
             <Field label="Hire Date" half><input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} style={css.input} /></Field>
             <Field label="Employee #" half><input value={employeeNumber} onChange={e => setEmployeeNumber(e.target.value)} style={css.input} placeholder="e.g. EMP-001" /></Field>
             <Field label="Division" half><input value={division} onChange={e => setDivision(e.target.value)} style={css.input} placeholder="e.g. Refined" /></Field>
+            <Field label="Employment Type" half>
+              <select value={employmentType} onChange={e => setEmploymentType(e.target.value)} style={{ ...css.select, width: "100%" }}>
+                <option value="">—</option>
+                <option value="company_driver">Company Driver</option>
+                <option value="lease_operator">Lease Operator</option>
+                <option value="owner_operator">Owner Operator</option>
+              </select>
+            </Field>
+            <div style={{ width: "calc(50% - 5px)" }} />
             {/* Same managed Region/Local Area catalog the equipment modals
                 already pick from (RequiredEquipmentFields.tsx's
                 CatalogPicker, used unwrapped there too -- it renders its
@@ -235,6 +304,75 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
               />
             </div>
           </FieldRow>
+
+          {/* Pay & Schedule -- private to the driver (driver_pay_settings,
+              self-only RLS), only shown in the self-edit path (Settings ->
+              Profile). Never visible to an admin editing another member --
+              this is a personal reminder tool, not company-visible data.
+              Employment Type drives one extra conditional field: a
+              lease/owner-operator has business/lease details worth
+              tracking that a company driver doesn't. */}
+          {showPersonalFields && (
+            <>
+              <hr style={css.divider} />
+              <SubSectionTitle>Pay &amp; Schedule</SubSectionTitle>
+              <div style={{ fontSize: 11, color: T.muted, marginBottom: 10 }}>
+                Private to you -- never visible to your company or admin.
+              </div>
+              <FieldRow>
+                <Field label="Pay Period" half>
+                  <select value={payPeriodType} onChange={e => setPayPeriodType(e.target.value)} style={{ ...css.select, width: "100%" }}>
+                    <option value="">—</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly</option>
+                    <option value="semi_monthly">Semi-Monthly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </Field>
+                <Field label="Payday" half>
+                  <select value={paydayDayOfWeek} onChange={e => setPaydayDayOfWeek(e.target.value)} style={{ ...css.select, width: "100%" }}>
+                    <option value="">—</option>
+                    <option value="sunday">Sunday</option>
+                    <option value="monday">Monday</option>
+                    <option value="tuesday">Tuesday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="thursday">Thursday</option>
+                    <option value="friday">Friday</option>
+                    <option value="saturday">Saturday</option>
+                  </select>
+                </Field>
+                <Field label="Notes">
+                  <textarea
+                    value={payNotes}
+                    onChange={e => setPayNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Anything good to remember -- pay period boundaries, direct deposit timing, etc."
+                    style={{ ...css.input, width: "100%", resize: "vertical" as const, fontFamily: "inherit" }}
+                  />
+                </Field>
+              </FieldRow>
+
+              {/* Field-set-by-type: the one concrete way "the fields change
+                  to better suit the driver" for this pass -- a lease/owner-
+                  operator has business details worth tracking that a
+                  company driver doesn't; folded into the same private,
+                  personal Notes-shaped area rather than a rigid new schema
+                  guessed at ahead of real usage. */}
+              {(employmentType === "lease_operator" || employmentType === "owner_operator") && (
+                <FieldRow>
+                  <Field label="Lease / Owner-Operator Details">
+                    <textarea
+                      value={leaseDetails}
+                      onChange={e => setLeaseDetails(e.target.value)}
+                      rows={3}
+                      placeholder="Truck lease terms, insurance, anything specific to running your own authority/lease."
+                      style={{ ...css.input, width: "100%", resize: "vertical" as const, fontFamily: "inherit" }}
+                    />
+                  </Field>
+                </FieldRow>
+              )}
+            </>
+          )}
 
           {!hideComplianceFields && (
             <>
