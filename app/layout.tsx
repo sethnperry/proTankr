@@ -33,7 +33,14 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
+// metadataBase is required for the relative og:image/twitter:image URLs
+// Next generates from app/opengraph-image.tsx to resolve to absolute ones --
+// without it, a shared link's preview image silently 404s for anyone whose
+// previewer doesn't happen to fall back to the page's own origin.
+const SITE_URL = "https://www.protankr.com";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "ProTankr",
   description: "Verify your load before you cross the scale.",
   manifest: "/manifest.json",
@@ -45,6 +52,22 @@ export const metadata: Metadata = {
   icons: {
     icon: "/icons/favicon.png",
     apple: "/icons/apple-touch-icon.png",
+  },
+  // Gives every standards-based link-preview generator (iMessage, WhatsApp,
+  // Slack, most RCS clients) a real branded card to show for any shared
+  // protankr.com URL, instead of nothing to go on -- see
+  // app/opengraph-image.tsx's own header comment for why this was added.
+  openGraph: {
+    title: "ProTankr",
+    description: "Verify your load before you cross the scale.",
+    url: SITE_URL,
+    siteName: "ProTankr",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ProTankr",
+    description: "Verify your load before you cross the scale.",
   },
 };
 
