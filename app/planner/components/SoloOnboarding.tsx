@@ -460,7 +460,13 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
       setSelectedComboId(comboId);
       setStep(locationSet ? (terminalSet ? "ready" : "terminal") : "location");
     } catch (e: any) {
-      setError("Couldn't pair your equipment. Check your connection and try again.");
+      // Surface the real reason instead of a one-size-fits-all message --
+      // this step previously swallowed every possible failure (a genuine
+      // network error, an RLS/authorization issue, a stale RPC signature
+      // after an unapplied migration, etc.) behind the same generic text,
+      // which made a real first-production-run failure undiagnosable from
+      // the screen alone.
+      setError(e?.message ? `Couldn't pair your equipment: ${e.message}` : "Couldn't pair your equipment. Check your connection and try again.");
     } finally { setBusy(false); }
   }, [targetInput, tareLbs, fetchCombos, setSelectedComboId, locationSet, terminalSet]);
 
@@ -668,6 +674,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
           {Number(targetInput) > 80000 && <div style={{ ...S.err, color: "#fbbf24" }}>That's above the 80,000 lb federal limit — double-check this is what you want.</div>}
           {error && <div style={S.err}>{error}</div>}
           <button style={disabledPrimary(busy || !targetInput)} disabled={busy || !targetInput} onClick={coupleAndContinue}>{busy ? "Pairing…" : "Next"}</button>
+          <button style={S.secondary} onClick={backTo("tare")}>‹ Back</button>
         </div>
       )}
 
