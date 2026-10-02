@@ -47,6 +47,14 @@ export async function POST(req: NextRequest) {
       subscription_data: { trial_period_days: TRIAL_PERIOD_DAYS },
       customer_email: email,
       allow_promotion_codes: true,
+      // Enabling Stripe Tax in the Dashboard alone doesn't apply to a
+      // Checkout Session created via the API (unlike a Payment Link, where
+      // the Dashboard toggle is sufficient on its own) -- this session
+      // itself has to opt in. Harmless with zero tax registrations: Stripe
+      // calculates $0 tax (and charges nothing extra) until a registration
+      // actually exists for the customer's jurisdiction, at which point
+      // Checkout starts collecting whatever address it needs automatically.
+      automatic_tax: { enabled: true },
       success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       metadata: { source: "self_serve_solo" },
