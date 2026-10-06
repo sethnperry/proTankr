@@ -70,23 +70,6 @@ function productsDiffer(a: PlanSnapshot | null, b: PlanSnapshot | null): boolean
   return false;
 }
 
-// capOverride is only ever set by dragging a compartment's cap handle --
-// null/undefined means "still at the compartment's full configured cap,"
-// per CompPlanInput's own definition. At least one dragged handle is
-// enough to count as "adjusted the cap handles" for this step.
-function capHandleAdjusted(snap: PlanSnapshot | null): boolean {
-  if (!snap?.compPlan) return false;
-  return Object.values(snap.compPlan).some((v) => v.capOverride != null);
-}
-
-// 0.5 is the CG slider's own hardcoded default (page.tsx's
-// useState<number>(0.5)) -- any real drag away from it is enough to count.
-const CG_DEFAULT = 0.5;
-function cgAdjusted(snap: PlanSnapshot | null): boolean {
-  if (!snap || typeof snap.cgSlider !== "number") return false;
-  return Math.abs(snap.cgSlider - CG_DEFAULT) > 0.001;
-}
-
 export type LocationChecklistInput = {
   // Whether a real terminal is currently selected -- by the time a driver
   // reaches the live Planner this is almost always already true (SetupGate
@@ -101,22 +84,21 @@ export type LocationChecklistInput = {
   hasSwitchedCity: boolean;
 };
 
-// Plan A/B's own compartment/product/cap/CG sub-items need to feel
-// responsive while the driver is actively working on THAT plan (checking
-// off as they tap through each compartment, not waiting for a final Save)
-// -- but once they switch away to work on the other plan, continuing to
-// read live state would mean Plan A's own sub-items start reflecting
-// Plan B's in-progress edits instead, which is wrong (Plan A was already
-// saved; it shouldn't un-check itself because the driver is now clearing
-// a compartment for a DIFFERENT preset). The fix: read the live
-// compPlan/cgSlider only while that plan's slot is the currently active
-// one; fall back to the last SAVED snapshot otherwise. activeSlotLetter
-// is state page.tsx already tracks (which preset the plan-letter icon/
-// PresetQuickPick currently has selected), not anything new.
+// Plan A/B's own compartment/product sub-items need to feel responsive
+// while the driver is actively working on THAT plan (checking off as they
+// tap through each compartment, not waiting for a final Save) -- but once
+// they switch away to work on the other plan, continuing to read live
+// state would mean Plan A's own sub-items start reflecting Plan B's
+// in-progress edits instead, which is wrong (Plan A was already saved; it
+// shouldn't un-check itself because the driver is now clearing a
+// compartment for a DIFFERENT preset). The fix: read the live compPlan
+// only while that plan's slot is the currently active one; fall back to
+// the last SAVED snapshot otherwise. activeSlotLetter is state page.tsx
+// already tracks (which preset the plan-letter icon/PresetQuickPick
+// currently has selected), not anything new.
 export type LiveCompartmentPlanInput = {
   activeSlotLetter: number;
   compPlan: Record<number, { empty: boolean; productId: string; capOverride?: number | null }>;
-  cgSlider: number;
 };
 
 function effectiveSnapshot(
@@ -125,7 +107,7 @@ function effectiveSnapshot(
   saved: PlanSnapshot | null
 ): PlanSnapshot | null {
   if (live.activeSlotLetter === slotNumber) {
-    return { v: 1, savedAt: 0, terminalId: "", compPlan: live.compPlan, cgSlider: live.cgSlider };
+    return { v: 1, savedAt: 0, terminalId: "", compPlan: live.compPlan };
   }
   return saved;
 }
@@ -171,9 +153,7 @@ export function computeSetupChecklistSteps(
   const effB = effectiveSnapshot(2, live, planB);
   const planBSaved =
     allCompartmentsResolved(planB, compartments) &&
-    productsDiffer(planA, planB) &&
-    capHandleAdjusted(planB) &&
-    cgAdjusted(planB);
+    productsDiffer(planA, planB);
   const planBStep: ChecklistStep = {
     id: "plan-b",
     title: "Set up Plan B",
@@ -182,8 +162,6 @@ export function computeSetupChecklistSteps(
     subItems: [
       ...compartmentSubItems("plan-b", compartments, effB),
       { id: "plan-b-different-products", title: "Use different products than Plan A", done: productsDiffer(planA, effB) },
-      { id: "plan-b-cap", title: "Adjust a cap handle", done: capHandleAdjusted(effB) },
-      { id: "plan-b-cg", title: "Adjust the CG", done: cgAdjusted(effB) },
       { id: "save-plan-b", title: "Save plan B", done: planBSaved },
     ],
   };

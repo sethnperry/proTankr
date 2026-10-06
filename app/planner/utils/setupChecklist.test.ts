@@ -11,7 +11,7 @@ const comps: CompRow[] = [
 
 const NO_LOCATION: LocationChecklistInput = { hasTerminalSelected: false, hasSwitchedCity: false };
 const FULL_LOCATION: LocationChecklistInput = { hasTerminalSelected: true, hasSwitchedCity: true };
-const NO_LIVE: LiveCompartmentPlanInput = { activeSlotLetter: 0, compPlan: {}, cgSlider: 0.5 };
+const NO_LIVE: LiveCompartmentPlanInput = { activeSlotLetter: 0, compPlan: {} };
 
 function snap(compPlan: PlanSnapshot["compPlan"], extra?: Partial<PlanSnapshot>): PlanSnapshot {
   return { v: 1, savedAt: 0, terminalId: "term1", compPlan, ...extra };
@@ -48,7 +48,6 @@ test("plan A: live editing while A is active checks off comp sub-items before an
   const live: LiveCompartmentPlanInput = {
     activeSlotLetter: 1,
     compPlan: { 1: { empty: false, productId: "diesel" } }, // comp 2 still untouched
-    cgSlider: 0.5,
   };
   const steps = computeSetupChecklistSteps(comps, null, null, NO_LOCATION, live);
   const planA = steps[1];
@@ -65,7 +64,6 @@ test("plan A: not the active slot -- comp sub-items ignore live edits, read the 
   const live: LiveCompartmentPlanInput = {
     activeSlotLetter: 2, // driver has moved on to Plan B
     compPlan: {}, // Plan B's live edits happen to be empty right now
-    cgSlider: 0.5,
   };
   const steps = computeSetupChecklistSteps(comps, planASaved, null, NO_LOCATION, live);
   const planA = steps[1];
@@ -86,73 +84,41 @@ test("plan A fully resolved and saved -- step and save sub-item both done", () =
   assert.equal(byId(steps[1], "save-plan-a").done, true);
 });
 
-test("plan B live sub-items (different products/cap/CG) update while B is active, before saving", () => {
+test("plan B live sub-item (different products) updates while B is active, before saving", () => {
   const planA = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
   const live: LiveCompartmentPlanInput = {
     activeSlotLetter: 2,
-    compPlan: { 1: { empty: false, productId: "regular", capOverride: 2500 }, 2: { empty: false, productId: "gas" } },
-    cgSlider: 0.7,
+    compPlan: { 1: { empty: false, productId: "regular" }, 2: { empty: false, productId: "gas" } },
   };
   const steps = computeSetupChecklistSteps(comps, planA, null, NO_LOCATION, live);
   const planB = steps[2];
   assert.equal(byId(planB, "plan-b-different-products").done, true); // comp 1 differs live
-  assert.equal(byId(planB, "plan-b-cap").done, true);
-  assert.equal(byId(planB, "plan-b-cg").done, true);
   // Still not saved -- the step and its save sub-item stay pending.
   assert.equal(planB.done, false);
   assert.equal(byId(planB, "save-plan-b").done, false);
 });
 
-test("plan B same products as plan A -- step pending even with cap/CG adjusted", () => {
+test("plan B same products as plan A -- step pending", () => {
   const planA = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
-  const planB = snap(
-    { 1: { empty: false, productId: "diesel", capOverride: 2500 }, 2: { empty: false, productId: "gas" } },
-    { cgSlider: 0.7 }
-  );
+  const planB = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
   const steps = computeSetupChecklistSteps(comps, planA, planB, NO_LOCATION, NO_LIVE);
   assert.equal(steps[2].done, false);
 });
 
-test("plan B different products but no cap override -- pending", () => {
+test("plan B not fully resolved -- step pending even though products already differ", () => {
   const planA = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
-  const planB = snap({ 1: { empty: false, productId: "regular" }, 2: { empty: false, productId: "gas" } }, { cgSlider: 0.7 });
+  const planB = snap({ 1: { empty: false, productId: "regular" } }); // comp 2 never touched
   const steps = computeSetupChecklistSteps(comps, planA, planB, NO_LOCATION, NO_LIVE);
   assert.equal(steps[2].done, false);
+  assert.equal(byId(steps[2], "save-plan-b").done, false);
 });
 
-test("plan B different products, cap override, default CG -- pending (CG untouched)", () => {
+test("plan B different products, fully resolved, saved -- step done with no cap/CG requirement", () => {
   const planA = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
-  const planB = snap(
-    { 1: { empty: false, productId: "regular", capOverride: 2500 }, 2: { empty: false, productId: "gas" } },
-    { cgSlider: 0.5 }
-  );
-  const steps = computeSetupChecklistSteps(comps, planA, planB, NO_LOCATION, NO_LIVE);
-  assert.equal(steps[2].done, false);
-});
-
-test("plan B fully meets every requirement and is saved -- step done", () => {
-  const planA = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
-  const planB = snap(
-    { 1: { empty: false, productId: "regular", capOverride: 2500 }, 2: { empty: false, productId: "gas" } },
-    { cgSlider: 0.72 }
-  );
+  const planB = snap({ 1: { empty: false, productId: "regular" }, 2: { empty: false, productId: "gas" } });
   const steps = computeSetupChecklistSteps(comps, planA, planB, NO_LOCATION, NO_LIVE);
   assert.equal(steps[2].done, true);
   assert.equal(byId(steps[2], "save-plan-b").done, true);
-});
-
-test("CG exactly at default is not adjusted, just past the tolerance is", () => {
-  const planA = snap({ 1: { empty: false, productId: "diesel" }, 2: { empty: false, productId: "gas" } });
-  const planBAtDefault = snap(
-    { 1: { empty: false, productId: "regular", capOverride: 2500 }, 2: { empty: false, productId: "gas" } },
-    { cgSlider: 0.5 }
-  );
-  const planBJustOver = snap(
-    { 1: { empty: false, productId: "regular", capOverride: 2500 }, 2: { empty: false, productId: "gas" } },
-    { cgSlider: 0.502 }
-  );
-  assert.equal(computeSetupChecklistSteps(comps, planA, planBAtDefault, NO_LOCATION, NO_LIVE)[2].done, false);
-  assert.equal(computeSetupChecklistSteps(comps, planA, planBJustOver, NO_LOCATION, NO_LIVE)[2].done, true);
 });
 
 test("empty compartments array never reads as complete", () => {
