@@ -66,6 +66,7 @@ import LoadingModal from "./modals/LoadingModal";
 import CancelLoadSheet from "./components/CancelLoadSheet";
 import TerminalSwitchDuringLoadSheet from "./components/TerminalSwitchDuringLoadSheet";
 import RecallDifferentEquipmentSheet from "./components/RecallDifferentEquipmentSheet";
+import SetupChecklist from "./components/SetupChecklist";
 import StaleApiOverlay, { type StaleProduct } from "./components/StaleApiOverlay";
 import { submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
 import ProductTempModal from "./modals/ProductTempModal";
@@ -81,6 +82,7 @@ import { cgSliderToBias, bestLbsPerGallon, lbsPerGallonAtTemp, planForGallons, C
 import { resolveApiBasis, apiTierColor } from "./utils/apiBasis";
 import { writeActivePlannedLoad } from "./utils/activePlannedLoad";
 import { productColorFor } from "./utils/productColor";
+import { computeSetupChecklistSteps } from "./utils/setupChecklist";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -2358,6 +2360,16 @@ const lastProductInfoById = useMemo(() => {
   // everything else will be below it: the stability banner, then the
   // save plan and edit product button") -- unstableLoad itself (computed
   // above from cgSlider) is unchanged, only where the warning renders.
+  // Derived fresh every render from the driver's own saved presets (slot 1 =
+  // Plan A, slot 2 = Plan B -- same numbering actionRowEl's "Save plan
+  // {letter}" already uses) -- see utils/setupChecklist.ts's own header
+  // comment for why this is never a separately-tracked flag.
+  const setupChecklistSteps = computeSetupChecklistSteps(
+    compartments,
+    planSlots.peekSlot(1),
+    planSlots.peekSlot(2)
+  );
+
   const stabilityBannerEl = unstableLoad ? (
     <div style={{ ...styles.error, marginTop: 0, marginBottom: 12, textAlign: "center" as const }}>
       ⚠️ Unstable load (rear of neutral)
@@ -2539,6 +2551,7 @@ const lastProductInfoById = useMemo(() => {
           this one) needed no change to how either block's own internals
           are written. */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
+      {!isPartialEquipment && <SetupChecklist steps={setupChecklistSteps} />}
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
