@@ -83,6 +83,7 @@ import { resolveApiBasis, apiTierColor } from "./utils/apiBasis";
 import { writeActivePlannedLoad } from "./utils/activePlannedLoad";
 import { productColorFor } from "./utils/productColor";
 import { computeSetupChecklistSteps } from "./utils/setupChecklist";
+import { recordLocationForSwitchTracking, hasSwitchedCity } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -915,6 +916,14 @@ export default function CalculatorPage() {
     userAdjustedTempRef.current = false;
     prevTempFRef.current = tempF;
   }, [location.selectedCity, location.selectedState]);
+
+  // Setup Guide checklist's "switch to a terminal in a different city"
+  // sub-task -- see utils/locationSwitchProgress.ts's own header comment
+  // for why this is a write-once flag, not derived fresh from live state
+  // the way the rest of the checklist is.
+  useEffect(() => {
+    recordLocationForSwitchTracking(effectiveUserId, location.selectedState, location.selectedCity);
+  }, [effectiveUserId, location.selectedState, location.selectedCity]);
 
   // Apply prediction to slider when it arrives -- skip if the driver has
   // genuinely adjusted it since. Previously this stopped re-applying the
@@ -2367,7 +2376,8 @@ const lastProductInfoById = useMemo(() => {
   const setupChecklistSteps = computeSetupChecklistSteps(
     compartments,
     planSlots.peekSlot(1),
-    planSlots.peekSlot(2)
+    planSlots.peekSlot(2),
+    { hasTerminalSelected: !!location.selectedTerminalId, hasSwitchedCity: hasSwitchedCity(effectiveUserId) }
   );
 
   const stabilityBannerEl = unstableLoad ? (

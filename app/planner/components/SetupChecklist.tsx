@@ -14,6 +14,26 @@ import type { ChecklistStep } from "../utils/setupChecklist";
 
 const CHECK_COLOR = "#4ade80";
 
+function CheckCircle({ done, size }: { done: boolean; size: number }) {
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        border: done ? "none" : "1px solid rgba(255,255,255,0.3)",
+        background: done ? CHECK_COLOR : "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {done && <span style={{ fontSize: size === 18 ? 11 : 9, fontWeight: 900, color: "#000", lineHeight: 1 }}>✓</span>}
+    </div>
+  );
+}
+
 export default function SetupChecklist({ steps }: { steps: ChecklistStep[] }) {
   const [collapsed, setCollapsed] = useState(false);
   if (steps.length === 0) return null;
@@ -72,25 +92,10 @@ export default function SetupChecklist({ steps }: { steps: ChecklistStep[] }) {
         <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
           {steps.map((step) => (
             <div key={step.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <div
-                style={{
-                  flexShrink: 0,
-                  width: 18,
-                  height: 18,
-                  marginTop: 1,
-                  borderRadius: "50%",
-                  border: step.done ? "none" : "1px solid rgba(255,255,255,0.3)",
-                  background: step.done ? CHECK_COLOR : "transparent",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {step.done && (
-                  <span style={{ fontSize: 11, fontWeight: 900, color: "#000", lineHeight: 1 }}>✓</span>
-                )}
+              <div style={{ marginTop: 1 }}>
+                <CheckCircle done={step.done} size={18} />
               </div>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div
                   style={{
                     fontSize: 13,
@@ -104,6 +109,25 @@ export default function SetupChecklist({ steps }: { steps: ChecklistStep[] }) {
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, lineHeight: 1.45 }}>
                   {step.caption}
                 </div>
+                {step.subItems && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {step.subItems.map((sub) => (
+                      <div key={sub.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <CheckCircle done={sub.done} size={14} />
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: sub.done ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.8)",
+                            textDecoration: sub.done ? "line-through" : "none",
+                          }}
+                        >
+                          {sub.title}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}

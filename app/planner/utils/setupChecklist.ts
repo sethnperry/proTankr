@@ -18,11 +18,24 @@
 import type { CompRow } from "../types";
 import type { PlanSnapshot } from "../types";
 
+export type ChecklistSubItem = {
+  id: string;
+  title: string;
+  done: boolean;
+};
+
 export type ChecklistStep = {
   id: string;
   title: string;
   caption: string;
   done: boolean;
+  // Present only for a step made of distinct sub-tasks (today: the
+  // location step). The step's own `done` is the AND of these -- a step
+  // with sub-items that aren't all done yet still gets its own row (with
+  // its own hollow/pending circle), but reads as "in progress" rather
+  // than fully pending, since its sub-items show their own state
+  // underneath it.
+  subItems?: ChecklistSubItem[];
 };
 
 // "Resolved" = the driver made an explicit choice for this compartment --
@@ -74,11 +87,32 @@ function cgAdjusted(snap: PlanSnapshot | null): boolean {
   return Math.abs(snap.cgSlider - CG_DEFAULT) > 0.001;
 }
 
+export type LocationChecklistInput = {
+  // Whether a real terminal is currently selected -- by the time a driver
+  // reaches the live Planner this is almost always already true (SetupGate
+  // forces a first pick before the Planner renders at all), but it's
+  // computed from real state rather than assumed, same as every other
+  // sub-item here.
+  hasTerminalSelected: boolean;
+  // Sticky "ever switched to a different city" flag -- see
+  // utils/locationSwitchProgress.ts's own header comment for why this is
+  // a one-time-demonstration flag, not derived fresh every render the way
+  // the rest of this file's rules are.
+  hasSwitchedCity: boolean;
+};
+
 export function computeSetupChecklistSteps(
   compartments: CompRow[],
   planA: PlanSnapshot | null,
-  planB: PlanSnapshot | null
+  planB: PlanSnapshot | null,
+  location: LocationChecklistInput
 ): ChecklistStep[] {
+  const locationSubItems: ChecklistSubItem[] = [
+    { id: "pick-location", title: "Pick a starting location", done: location.hasTerminalSelected },
+    { id: "switch-city", title: "Switch to a terminal in a different city", done: location.hasSwitchedCity },
+  ];
+  const step0Done = locationSubItems.every((s) => s.done);
+
   const step1Done = allCompartmentsResolved(planA, compartments);
   const step2Done =
     allCompartmentsResolved(planB, compartments) &&
@@ -87,6 +121,13 @@ export function computeSetupChecklistSteps(
     cgAdjusted(planB);
 
   return [
+    {
+      id: "location",
+      title: "Set up your location",
+      caption: "Tap the map icon up top to star your home city, then switch to a terminal in a different city to see how switching works.",
+      done: step0Done,
+      subItems: locationSubItems,
+    },
     {
       id: "plan-a",
       title: "Set up Plan A",
