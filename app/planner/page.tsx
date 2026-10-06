@@ -2377,7 +2377,8 @@ const lastProductInfoById = useMemo(() => {
     compartments,
     planSlots.peekSlot(1),
     planSlots.peekSlot(2),
-    { hasTerminalSelected: !!location.selectedTerminalId, hasSwitchedCity: hasSwitchedCity(effectiveUserId) }
+    { hasTerminalSelected: !!location.selectedTerminalId, hasSwitchedCity: hasSwitchedCity(effectiveUserId) },
+    { activeSlotLetter, compPlan, cgSlider }
   );
 
   const stabilityBannerEl = unstableLoad ? (

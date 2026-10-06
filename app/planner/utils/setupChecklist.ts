@@ -101,11 +101,49 @@ export type LocationChecklistInput = {
   hasSwitchedCity: boolean;
 };
 
+// Plan A/B's own compartment/product/cap/CG sub-items need to feel
+// responsive while the driver is actively working on THAT plan (checking
+// off as they tap through each compartment, not waiting for a final Save)
+// -- but once they switch away to work on the other plan, continuing to
+// read live state would mean Plan A's own sub-items start reflecting
+// Plan B's in-progress edits instead, which is wrong (Plan A was already
+// saved; it shouldn't un-check itself because the driver is now clearing
+// a compartment for a DIFFERENT preset). The fix: read the live
+// compPlan/cgSlider only while that plan's slot is the currently active
+// one; fall back to the last SAVED snapshot otherwise. activeSlotLetter
+// is state page.tsx already tracks (which preset the plan-letter icon/
+// PresetQuickPick currently has selected), not anything new.
+export type LiveCompartmentPlanInput = {
+  activeSlotLetter: number;
+  compPlan: Record<number, { empty: boolean; productId: string; capOverride?: number | null }>;
+  cgSlider: number;
+};
+
+function effectiveSnapshot(
+  slotNumber: number,
+  live: LiveCompartmentPlanInput,
+  saved: PlanSnapshot | null
+): PlanSnapshot | null {
+  if (live.activeSlotLetter === slotNumber) {
+    return { v: 1, savedAt: 0, terminalId: "", compPlan: live.compPlan, cgSlider: live.cgSlider };
+  }
+  return saved;
+}
+
+function compartmentSubItems(prefix: string, compartments: CompRow[], snap: PlanSnapshot | null): ChecklistSubItem[] {
+  return compartments.map((c) => ({
+    id: `${prefix}-comp-${c.comp_number}`,
+    title: `Comp ${c.comp_number}`,
+    done: compartmentResolved(snap, c.comp_number),
+  }));
+}
+
 export function computeSetupChecklistSteps(
   compartments: CompRow[],
   planA: PlanSnapshot | null,
   planB: PlanSnapshot | null,
-  location: LocationChecklistInput
+  location: LocationChecklistInput,
+  live: LiveCompartmentPlanInput
 ): ChecklistStep[] {
   const locationSubItems: ChecklistSubItem[] = [
     { id: "pick-location", title: "Pick a starting location", done: location.hasTerminalSelected },
@@ -113,12 +151,42 @@ export function computeSetupChecklistSteps(
   ];
   const step0Done = locationSubItems.every((s) => s.done);
 
-  const step1Done = allCompartmentsResolved(planA, compartments);
-  const step2Done =
+  // Plan A -- compartments update live while it's the active slot, but the
+  // step (and its own "Save plan A" sub-item) only ever go green once
+  // actually SAVED -- live progress is feedback, not completion.
+  const effA = effectiveSnapshot(1, live, planA);
+  const planASaved = allCompartmentsResolved(planA, compartments);
+  const planAStep: ChecklistStep = {
+    id: "plan-a",
+    title: "Set up Plan A",
+    caption: "Tap a compartment, then “Edit Comp Product,” and pick a product (or MT for empty) for every compartment.",
+    done: planASaved,
+    subItems: [
+      ...compartmentSubItems("plan-a", compartments, effA),
+      { id: "save-plan-a", title: "Save plan A", done: planASaved },
+    ],
+  };
+
+  // Plan B -- same live-while-active treatment for its own sub-items.
+  const effB = effectiveSnapshot(2, live, planB);
+  const planBSaved =
     allCompartmentsResolved(planB, compartments) &&
     productsDiffer(planA, planB) &&
     capHandleAdjusted(planB) &&
     cgAdjusted(planB);
+  const planBStep: ChecklistStep = {
+    id: "plan-b",
+    title: "Set up Plan B",
+    caption: "Switch to preset B (tap the plan letter up top), then pick different products for a different load.",
+    done: planBSaved,
+    subItems: [
+      ...compartmentSubItems("plan-b", compartments, effB),
+      { id: "plan-b-different-products", title: "Use different products than Plan A", done: productsDiffer(planA, effB) },
+      { id: "plan-b-cap", title: "Adjust a cap handle", done: capHandleAdjusted(effB) },
+      { id: "plan-b-cg", title: "Adjust the CG", done: cgAdjusted(effB) },
+      { id: "save-plan-b", title: "Save plan B", done: planBSaved },
+    ],
+  };
 
   return [
     {
@@ -128,17 +196,7 @@ export function computeSetupChecklistSteps(
       done: step0Done,
       subItems: locationSubItems,
     },
-    {
-      id: "plan-a",
-      title: "Set up Plan A",
-      caption: "Tap a compartment, then “Edit Comp Product”, and pick a product (or MT for empty) for every compartment. Then tap “Save plan A.”",
-      done: step1Done,
-    },
-    {
-      id: "plan-b",
-      title: "Set up Plan B",
-      caption: "Switch to preset B (tap the plan letter up top), pick different products, adjust a cap handle and the CG, then tap “Save plan B.”",
-      done: step2Done,
-    },
+    planAStep,
+    planBStep,
   ];
 }
