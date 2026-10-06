@@ -34,7 +34,17 @@ function CheckCircle({ done, size }: { done: boolean; size: number }) {
   );
 }
 
-export default function SetupChecklist({ steps }: { steps: ChecklistStep[] }) {
+export default function SetupChecklist({
+  steps,
+  onCollapsedChange,
+}: {
+  steps: ChecklistStep[];
+  // Fired whenever the card's own collapse state toggles -- lets a parent
+  // (the Setup Guide spotlight) hide its "look here" highlight while the
+  // driver has explicitly tucked this card away, without this component
+  // needing to know anything about spotlights itself.
+  onCollapsedChange?: (collapsed: boolean) => void;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   if (steps.length === 0) return null;
 
@@ -53,7 +63,7 @@ export default function SetupChecklist({ steps }: { steps: ChecklistStep[] }) {
     >
       <button
         type="button"
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => setCollapsed((c) => { const next = !c; onCollapsedChange?.(next); return next; })}
         style={{
           width: "100%",
           display: "flex",

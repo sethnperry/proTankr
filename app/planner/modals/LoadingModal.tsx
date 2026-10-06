@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useMemo, useEffect, useState, useRef } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import ValueEntryOverlay from "../components/ValueEntryOverlay";
 import FuelBurnOverlay from "../components/FuelBurnOverlay";
+import Spotlight, { useSpotlightRect } from "../components/TourSpotlight";
+import { isPlanReviewTourSeen, markPlanReviewTourSeen } from "../utils/tourProgress";
 import { correctedGrossLbs, burnCreditLbs, LEGAL_GROSS_LBS as LEGAL_LIMIT_LBS } from "../utils/fuelBurn";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 import type { ReportLine } from "../hooks/useLoadWorkflow";
@@ -335,6 +337,12 @@ export default function LoadingModal(props: {
   // saved on the selected truck, and a saver for the first time it's entered.
   fuelTankGallons?: number | null;
   onSaveFuelTankGallons?: (gallons: number) => Promise<void>;
+
+  // Drives the first-open "look here" walkthrough (see the spotlight block
+  // near the bottom of this component) -- a plain id to key its one-time
+  // "seen" localStorage flag by, same per-user convention tourProgress.ts
+  // already uses elsewhere.
+  userId?: string | null;
 }) {
   const {
     open,
@@ -373,6 +381,7 @@ export default function LoadingModal(props: {
     ambientTempF,
     fuelTankGallons,
     onSaveFuelTankGallons,
+    userId,
   } = props;
 
   // Fuel-burn correction -- display only, never written to the load. The
@@ -393,6 +402,33 @@ export default function LoadingModal(props: {
       }))
       .filter((x) => Number.isFinite(x.comp) && x.comp > 0 && Number.isFinite(x.gallons) && x.gallons > 0);
   }, [planRows]);
+
+  // ── First-open walkthrough ("look here" spotlight) ────────────────────
+  // Two fixed steps, shown once ever per driver: step 0 points at the
+  // planned-compartments/Total block ("Load This"), step 1 points at the
+  // "Log the Load" button. Unlike the Setup Guide's own spotlight (which
+  // continuously re-derives its target from live state), this one really
+  // is a small fixed sequence -- Plan Review only has two things worth
+  // calling out on a first visit, not an open-ended checklist. The "seen"
+  // flag is written the instant the tour STARTS, not after both steps are
+  // dismissed -- tapping straight through to a real action (rather than
+  // reading the captions) makes the refs these steps target disappear
+  // from the DOM anyway (the view switches to the Log-the-Load sequence),
+  // which naturally ends the tour either way; marking it seen up front
+  // just guarantees it can never show a second time regardless of how the
+  // driver exits.
+  const plannedBlockRef = useRef<HTMLDivElement | null>(null);
+  const logLoadButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [tourStep, setTourStep] = useState<0 | 1 | null>(null);
+  useEffect(() => {
+    if (open && !report && plannedLines.length > 0 && userId && !isPlanReviewTourSeen(userId)) {
+      markPlanReviewTourSeen(userId);
+      setTourStep(0);
+    }
+    if (!open) setTourStep(null);
+  }, [open, report, plannedLines.length, userId]);
+  const plannedBlockRect = useSpotlightRect(plannedBlockRef, tourStep === 0);
+  const logLoadButtonRect = useSpotlightRect(logLoadButtonRef, tourStep === 1);
 
   // ── Edit Load: the same per-compartment sequence below, sourced from the
   // report's own real values instead of the plan. Set by tapping "Edit
@@ -762,7 +798,7 @@ export default function LoadingModal(props: {
                 <div style={styles.help}>No filled compartments in the plan.</div>
               )
             ) : (
-              <div style={{ display: "grid", gap: 8 }}>
+              <div ref={plannedBlockRef} style={{ display: "grid", gap: 8 }}>
                 {plannedLines.map((x) => {
                   const dotColor = (productHexCodeById?.[x.productId] && String(productHexCodeById[x.productId]).trim()) || "rgba(255,255,255,0.5)";
                   const label = productNameById.get(x.productId) ?? x.productId;
@@ -1014,6 +1050,7 @@ export default function LoadingModal(props: {
              sheet, now directly in the modal. */
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
             <button
+              ref={logLoadButtonRef}
               type="button"
               onClick={startLogSequence}
               disabled={busy}
@@ -1096,6 +1133,25 @@ export default function LoadingModal(props: {
         cancelLabel={compSeqIndex != null && compSeqIndex > 0 ? "‹ Back" : "Cancel"}
         onSubmit={commitCompStep}
         submitLabel={seqSubmitLabel}
+      />
+
+      {/* First-open walkthrough -- see the tourStep effect above. Both
+          Spotlight calls are unconditional; each one's own rect is already
+          null whenever its step isn't active (useSpotlightRect), so it
+          renders nothing on its own. */}
+      <Spotlight
+        rect={plannedBlockRect}
+        title="Load This"
+        body="This is what you're about to load — tap a compartment's gallons to adjust it if you need to."
+        actionLabel="Next →"
+        onAction={() => setTourStep(1)}
+      />
+      <Spotlight
+        rect={logLoadButtonRect}
+        title="Log the Load"
+        body="When you're ready, tap here."
+        actionLabel="Got it"
+        onAction={() => setTourStep(null)}
       />
     </FullscreenModal>
   );

@@ -67,6 +67,7 @@ import CancelLoadSheet from "./components/CancelLoadSheet";
 import TerminalSwitchDuringLoadSheet from "./components/TerminalSwitchDuringLoadSheet";
 import RecallDifferentEquipmentSheet from "./components/RecallDifferentEquipmentSheet";
 import SetupChecklist from "./components/SetupChecklist";
+import Spotlight, { useSpotlightRect } from "./components/TourSpotlight";
 import StaleApiOverlay, { type StaleProduct } from "./components/StaleApiOverlay";
 import { submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
 import ProductTempModal from "./modals/ProductTempModal";
@@ -83,6 +84,8 @@ import { resolveApiBasis, apiTierColor } from "./utils/apiBasis";
 import { writeActivePlannedLoad } from "./utils/activePlannedLoad";
 import { productColorFor } from "./utils/productColor";
 import { computeSetupChecklistSteps } from "./utils/setupChecklist";
+import { computeSpotlightStep, type SpotlightTarget } from "./utils/setupChecklistSpotlight";
+import { isSetupGuideAcknowledged, markSetupGuideAcknowledged } from "./utils/tourProgress";
 import { recordLocationForSwitchTracking, hasSwitchedCity } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 
@@ -2373,6 +2376,22 @@ const lastProductInfoById = useMemo(() => {
   // Plan A, slot 2 = Plan B -- same numbering actionRowEl's "Save plan
   // {letter}" already uses) -- see utils/setupChecklist.ts's own header
   // comment for why this is never a separately-tracked flag.
+  //
+  // Real DOM targets for the Setup Guide's "look here" spotlight -- see
+  // components/TourSpotlight.tsx's own header comment for why these are
+  // plain refs (reliable targeting) rather than a selector/coordinate
+  // guess. Attached below: locationIconRef on the header's pin button,
+  // planLetterIconRef on the header's plan-letter button, savePlanButtonRef
+  // on actionRowEl's "Save plan {letter}" button, compartmentsAreaRef
+  // wrapping <PlannerControls>.
+  const locationIconRef = useRef<HTMLButtonElement | null>(null);
+  const planLetterIconRef = useRef<HTMLButtonElement | null>(null);
+  const savePlanButtonRef = useRef<HTMLButtonElement | null>(null);
+  const compartmentsAreaRef = useRef<HTMLDivElement | null>(null);
+  const [checklistCollapsed, setChecklistCollapsed] = useState(false);
+  const [guideAckDismissedLocal, setGuideAckDismissedLocal] = useState(false);
+  const [dismissedSpotlightTarget, setDismissedSpotlightTarget] = useState<SpotlightTarget | null>(null);
+
   const setupChecklistSteps = computeSetupChecklistSteps(
     compartments,
     planSlots.peekSlot(1),
@@ -2380,6 +2399,41 @@ const lastProductInfoById = useMemo(() => {
     { hasTerminalSelected: !!location.selectedTerminalId, hasSwitchedCity: hasSwitchedCity(effectiveUserId) },
     { activeSlotLetter, compPlan }
   );
+  const allSetupStepsDone = setupChecklistSteps.every((s) => s.done);
+  const setupGuideAcknowledged = guideAckDismissedLocal || isSetupGuideAcknowledged(effectiveUserId);
+
+  // "Look here" spotlight -- continuously follows whichever sub-step is
+  // next-incomplete (see setupChecklistSpotlight.ts's own header comment
+  // for why this needs no separate step-sequencer state: it's just
+  // re-derived from the same ChecklistStep[] the card itself renders
+  // from). Tapping the caption's "Got it" only silences THIS target --
+  // dismissedSpotlightTarget resets the moment the real target changes
+  // (the driver did something), so it never permanently suppresses
+  // guidance for a later, different step.
+  // (isPartialEquipment itself isn't declared until further down in this
+  // function -- same underlying equipment.isBobtail/isTrailerOnly check,
+  // inlined here to avoid a temporal-dead-zone reference.)
+  const rawSpotlightStep = (!(equipment.isBobtail || equipment.isTrailerOnly) && !setupGuideAcknowledged && !checklistCollapsed)
+    ? computeSpotlightStep(setupChecklistSteps, activeSlotLetter)
+    : null;
+  const activeSpotlightStep = rawSpotlightStep && rawSpotlightStep.target !== dismissedSpotlightTarget ? rawSpotlightStep : null;
+  const locationSpotlightRect = useSpotlightRect(locationIconRef, activeSpotlightStep?.target === "location-icon");
+  const compartmentsSpotlightRect = useSpotlightRect(compartmentsAreaRef, activeSpotlightStep?.target === "compartments");
+  const savePlanSpotlightRect = useSpotlightRect(savePlanButtonRef, activeSpotlightStep?.target === "save-plan");
+  const planLetterSpotlightRect = useSpotlightRect(planLetterIconRef, activeSpotlightStep?.target === "switch-to-plan-b");
+  const setupSpotlightEl = activeSpotlightStep ? (
+    <Spotlight
+      rect={
+        activeSpotlightStep.target === "location-icon" ? locationSpotlightRect
+        : activeSpotlightStep.target === "compartments" ? compartmentsSpotlightRect
+        : activeSpotlightStep.target === "save-plan" ? savePlanSpotlightRect
+        : planLetterSpotlightRect
+      }
+      title={activeSpotlightStep.caption}
+      actionLabel="Got it"
+      onAction={() => setDismissedSpotlightTarget(activeSpotlightStep.target)}
+    />
+  ) : null;
 
   const stabilityBannerEl = unstableLoad ? (
     <div style={{ ...styles.error, marginTop: 0, marginBottom: 12, textAlign: "center" as const }}>
@@ -2394,7 +2448,7 @@ const lastProductInfoById = useMemo(() => {
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, minHeight: 18 }}>
       <div>
         {isDirty && (
-          <button type="button"
+          <button ref={savePlanButtonRef} type="button"
             onClick={() => { planSlots.saveToSlot(activeSlotLetter); setBaselineOverrides(currentOverrides); }}
             style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             Save plan {activeLetter}
@@ -2562,12 +2616,41 @@ const lastProductInfoById = useMemo(() => {
           this one) needed no change to how either block's own internals
           are written. */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
-      {!isPartialEquipment && <SetupChecklist steps={setupChecklistSteps} />}
+      {!isPartialEquipment && !setupGuideAcknowledged && (
+        allSetupStepsDone ? (
+          // Closing message -- replaces the checklist card the instant every
+          // step is done, same slot. Stays up until explicitly dismissed
+          // (not auto-hidden the moment allSetupStepsDone flips true) so a
+          // driver who glances away still sees it on their next render; the
+          // Learn page's "Guided tours" recap reads the same acknowledged
+          // flag this Got it button writes.
+          <div style={{
+            marginBottom: 14, borderRadius: 16, padding: "14px 16px",
+            border: "1px solid rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.07)",
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 6 }}>✓ Setup guide complete</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, marginBottom: 10 }}>
+              That's it! You are now ready to match the plan to your dispatch and get loaded. Just pick a terminal and compartment plan then tap LOAD.
+            </div>
+            <button
+              type="button"
+              onClick={() => { markSetupGuideAcknowledged(effectiveUserId); setGuideAckDismissedLocal(true); }}
+              style={{ fontSize: 13, fontWeight: 800, color: "#4ade80", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            >
+              Got it
+            </button>
+          </div>
+        ) : (
+          <SetupChecklist steps={setupChecklistSteps} onCollapsedChange={setChecklistCollapsed} />
+        )
+      )}
+      {setupSpotlightEl}
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
       {stabilityBannerEl}
       {actionRowEl}
+      <div ref={compartmentsAreaRef}>
       <PlannerControls
         styles={styles}
         selectedTrailerId={selectedTrailerId}
@@ -2588,6 +2671,7 @@ const lastProductInfoById = useMemo(() => {
         selectedTerminalId={location.selectedTerminalId ?? ""}
         isLandscape={isLandscape}
       />
+      </div>
 
       <CompartmentModal
         open={compModalOpen}
@@ -2709,6 +2793,7 @@ const lastProductInfoById = useMemo(() => {
               const presetDisabled = !location.selectedTerminalId || !planSlots.presetsReady;
               return (
                 <button
+                  ref={planLetterIconRef}
                   type="button"
                   disabled={presetDisabled}
                   onClick={() => setPresetQuickPickOpen(true)}
@@ -2763,9 +2848,9 @@ const lastProductInfoById = useMemo(() => {
               // location icon can go white instead of red").
               const locTermChildren = <SolidPinIcon color="#ffffff" size={19} />;
               return mounted ? (
-                <motion.button {...locTermBtnProps} layoutId={step === "location" ? "setup-location-btn" : "setup-terminal-btn"}>{locTermChildren}</motion.button>
+                <motion.button {...locTermBtnProps} ref={locationIconRef} layoutId={step === "location" ? "setup-location-btn" : "setup-terminal-btn"}>{locTermChildren}</motion.button>
               ) : (
-                <button {...locTermBtnProps}>{locTermChildren}</button>
+                <button {...locTermBtnProps} ref={locationIconRef}>{locTermChildren}</button>
               );
             })()}
           </>
@@ -2969,6 +3054,7 @@ const lastProductInfoById = useMemo(() => {
       {/* ── Modals ── */}
       <LoadingModal
         open={loadWorkflow.loadingOpen} onClose={() => { /* no accidental dismissal -- exits are the explicit buttons */ }}
+        userId={effectiveUserId}
         styles={styles}
         planRows={effectivePlanRows as any[]}
         productNameById={productNameById}

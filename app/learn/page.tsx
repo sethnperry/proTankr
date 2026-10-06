@@ -1,10 +1,12 @@
 "use client";
 // app/learn/page.tsx
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LEARN_TOPICS, Icon, type LearnBlock } from "@/lib/content/learnTopics";
 import { TUTORIAL_VIDEOS } from "@/lib/content/tutorialVideos";
+import { supabase } from "@/lib/supabase/client";
+import { isSetupGuideAcknowledged } from "@/app/planner/utils/tourProgress";
 
 function Section({ emoji, title, children }: { emoji: string; title: string; children: React.ReactNode }) {
   return (
@@ -69,6 +71,16 @@ function renderBlock(block: LearnBlock, i: number) {
 export default function LearnPage() {
   const router = useRouter();
 
+  // Only needed to key the Setup Guide recap's own one-time "acknowledged"
+  // flag (tourProgress.ts, per-user localStorage) -- same lightweight
+  // client-side lookup pattern this app already uses on other simple
+  // pages, no server-side gate needed here.
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
+  }, []);
+  const setupGuideDone = isSetupGuideAcknowledged(authUserId);
+
   return (
     <div style={{ minHeight: "100dvh", background: "#111111", color: "rgba(255,255,255,0.85)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       {/* Shared content (lib/content/learnTopics.tsx) marks emphasis with a
@@ -94,6 +106,29 @@ export default function LearnPage() {
 
       {/* Content */}
       <div style={{ padding: "20px 18px", display: "flex", flexDirection: "column" as const, gap: 12, maxWidth: 600, margin: "0 auto" }}>
+
+        {/* Setup Guide recap -- only shown once the driver has actually
+            gone through (and acknowledged) the Planner's own in-app
+            checklist (app/planner/components/SetupChecklist.tsx). Static
+            recap text, not derived from live plan/location state the way
+            the checklist itself is -- this page has no access to that
+            state (not inside the Planner's equipment/location context),
+            and a reminder of what the three steps covered doesn't need
+            live data, just the same flag the checklist's own closing
+            message writes on dismissal (tourProgress.ts). */}
+        {setupGuideDone && (
+          <Accordion title="✓ Setup guide">
+            <Section emoji="📍" title="1. Set up your location">
+              Starred your home city and switched to a terminal in a different one, so the star-to-favorite/hide-the-rest system makes sense the next time you need it.
+            </Section>
+            <Section emoji="🅰️" title="2. Set up Plan A">
+              Picked a product (or MT for empty) for every compartment, then saved it as Preset A.
+            </Section>
+            <Section emoji="🅱️" title="3. Set up Plan B">
+              Picked at least one different product than Plan A for every compartment, then saved it as Preset B.
+            </Section>
+          </Accordion>
+        )}
 
         {/* ── Guided Tours ──
             The old interactive in-app tour (pulsing-ring, tap-to-advance,
