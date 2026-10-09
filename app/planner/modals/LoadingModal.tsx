@@ -234,6 +234,10 @@ export default function LoadingModal(props: {
   // begin_load already snapshotted, adjusted live by whatever's been tapped
   // in this session.
   planRows: PlanRowLike[];
+  // comp number -> the driver's cap override, for compartments capped below
+  // their configured safety cap. Plan Review tags a row CAPPED when its
+  // gallons sit at that cap, so a restriction is visible without moving it.
+  capOverrides?: Record<number, number>;
   productNameById: Map<string, string>;
 
   // Product dot color (catalog hex_code) -- the one visual carried through
@@ -349,6 +353,7 @@ export default function LoadingModal(props: {
     onClose,
     styles,
     planRows,
+    capOverrides,
     productNameById,
     productHexCodeById,
     productInputs,
@@ -817,6 +822,15 @@ export default function LoadingModal(props: {
                         <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                           {label}
                         </span>
+                        {capOverrides?.[x.comp] != null && x.gallons >= capOverrides[x.comp] - 1 && (
+                          <span style={{
+                            flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
+                            color: "#fb923c", border: "1px solid rgba(251,146,60,0.5)",
+                            borderRadius: 4, padding: "1px 5px",
+                          }}>
+                            CAPPED
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"

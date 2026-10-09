@@ -1,7 +1,7 @@
 "use client";
 // app/planner/hooks/useFuelTempPrediction.ts
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type FuelTempConfidence = "high" | "medium" | "low";
 
@@ -23,6 +23,9 @@ type Output = {
   // added. The self-training write (useLoadWorkflow) must measure error
   // against this, not the final prediction -- see the note there.
   unbiasedPredictionF: number | null;
+  // Fetch again now, skipping the throttle -- e.g. right after a load is
+  // logged, so the new reading anchors the next plan immediately.
+  refresh: () => void;
 };
 
 function isFiniteNumber(v: any): v is number {
@@ -41,6 +44,12 @@ export function useFuelTempPrediction(input: Input): Output {
 
   const lastCallAtRef = useRef<number>(0);
   const lastSigRef = useRef<string>("");
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const refresh = useCallback(() => {
+    lastSigRef.current = "";
+    lastCallAtRef.current = 0;
+    setRefreshNonce((n) => n + 1);
+  }, []);
 
   const normalized = useMemo(() => {
     const c = String(city ?? "").trim();
@@ -144,7 +153,7 @@ export function useFuelTempPrediction(input: Input): Output {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [normalized, terminalId]);
+  }, [normalized, terminalId, refreshNonce]);
 
   return {
     predictedFuelTempF,
@@ -153,5 +162,6 @@ export function useFuelTempPrediction(input: Input): Output {
     error,
     ambientNowF: ambientResolvedF,
     unbiasedPredictionF,
+    refresh,
   };
 }

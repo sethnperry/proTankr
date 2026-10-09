@@ -872,6 +872,7 @@ export default function CalculatorPage() {
     predictedFuelTempF, confidence: fuelTempConfidence, loading: fuelTempLoading,
     ambientNowF: fuelTempAmbientF,
     unbiasedPredictionF: fuelTempUnbiasedF,
+    refresh: refreshFuelTemp,
   } = useFuelTempPrediction({
     city: location.selectedCity || null,
     state: location.selectedState || null,
@@ -1007,6 +1008,20 @@ export default function CalculatorPage() {
     if (override == null) return Math.max(0, Math.floor(persistedCap));
     return Math.max(0, Math.floor(Math.min(Number(override), persistedCap)));
   }, [compPlan]);
+
+  // Compartments the driver has capped below their configured safety cap
+  // (comp -> cap gallons), for Plan Review's CAPPED tag.
+  const capOverridesForReview = useMemo(() => {
+    const out: Record<number, number> = {};
+    for (const c of compartments) {
+      const n = Number(c.comp_number);
+      const override = compPlan[n]?.capOverride;
+      if (override == null || !Number.isFinite(Number(override))) continue;
+      const persisted = persistedCapForComp(n);
+      if (Number(override) < persisted) out[n] = Math.floor(Number(override));
+    }
+    return out;
+  }, [compartments, compPlan, persistedCapForComp]);
 
   // ── lbs/gal helper ────────────────────────────────────────────────────────
   // True if any planned compartment is using the fallback reference API (no driver-observed last_api)
@@ -1425,7 +1440,14 @@ export default function CalculatorPage() {
     setLoadingGallonsOverride,
     onRefreshTerminalProducts: fetchTerminalProducts,
     onRefreshTerminalAccess: terminals.refreshTerminalAccessForUser,
-    onPostLoadComplete: planSlots.refreshLastLoad,
+    // After a load is logged, the temp just entered becomes the anchor for the
+    // next plan (route.ts). Clear any earlier manual dial nudge so the fresh
+    // anchored prediction is allowed to apply, and refetch it right away.
+    onPostLoadComplete: async () => {
+      userAdjustedTempRef.current = false;
+      refreshFuelTemp();
+      await planSlots.refreshLastLoad();
+    },
     predictedTempF: predictedFuelTempF,
     unbiasedPredictedTempF: fuelTempUnbiasedF,
     activeSlotLetter,
@@ -3040,6 +3062,7 @@ const lastProductInfoById = useMemo(() => {
         userId={effectiveUserId}
         styles={styles}
         planRows={effectivePlanRows as any[]}
+        capOverrides={capOverridesForReview}
         productNameById={productNameById}
         productHexCodeById={productHexCodeById}
         productInputs={productInputsForModal}

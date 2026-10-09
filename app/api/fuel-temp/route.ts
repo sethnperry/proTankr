@@ -136,6 +136,63 @@ async function collectAmbientHistory(
   return history;
 }
 
+// ── Recent-reading anchor ────────────────────────────────────────────────────
+// Half-life of a real reading's pull on the prediction: 8h. A reading taken
+// an hour ago carries ~92%, one from this morning ~50%, yesterday's ~12%.
+// Past ANCHOR_MAX_HOURS the model runs alone.
+const ANCHOR_HALF_LIFE_HOURS = 8;
+const ANCHOR_MAX_HOURS = 48;
+
+// Latest real product temp logged at this terminal (any rack, any product),
+// averaged with any other product logged in the same load (within 15 min).
+async function latestTerminalReading(
+  supabase: any,
+  terminalId: string,
+  nowTs: number
+): Promise<{ tempF: number; ts: number } | null> {
+  try {
+    const { data: racks } = await supabase
+      .from("terminal_racks")
+      .select("rack_id")
+      .eq("terminal_id", terminalId);
+    const rackIds = (racks ?? []).map((r: any) => r.rack_id).filter(Boolean);
+    if (rackIds.length === 0) return null;
+    const { data: rows } = await supabase
+      .from("rack_product_status")
+      .select("last_temp_f, updated_at")
+      .in("rack_id", rackIds)
+      .not("last_temp_f", "is", null)
+      .gte("updated_at", new Date((nowTs - ANCHOR_MAX_HOURS * 3600) * 1000).toISOString())
+      .order("updated_at", { ascending: false })
+      .limit(10);
+    const readings = (rows ?? [])
+      .map((r: any) => ({ tempF: Number(r.last_temp_f), ts: Math.floor(new Date(r.updated_at).getTime() / 1000) }))
+      .filter((r: { tempF: number; ts: number }) => Number.isFinite(r.tempF) && Number.isFinite(r.ts) && r.ts <= nowTs);
+    if (readings.length === 0) return null;
+    const newest = readings[0].ts;
+    const sameLoad = readings.filter((r: { ts: number }) => newest - r.ts <= 15 * 60);
+    const tempF = sameLoad.reduce((a: number, r: { tempF: number }) => a + r.tempF, 0) / sameLoad.length;
+    return { tempF, ts: newest };
+  } catch {
+    return null;
+  }
+}
+
+// Ambient at a past moment, linearly interpolated from the city history.
+// Null when the reading predates every history point (nothing to compare to).
+function ambientAt(history: AmbientPoint[], ts: number): number | null {
+  if (history.length === 0 || ts < history[0].ts) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].ts <= ts) {
+      const a = history[i];
+      const b = history[i + 1];
+      if (!b || b.ts === a.ts) return a.tempF;
+      return a.tempF + (b.tempF - a.tempF) * ((ts - a.ts) / (b.ts - a.ts));
+    }
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -261,14 +318,43 @@ export async function POST(req: Request) {
       } catch { /* non-fatal */ }
     }
 
-    const result = predictFuelTempNow(history, ambientUsed, nowTs, resolvedLat, resolvedLon, {
+    const modelParams = {
       halfLifeHours: 20,
       maxSolarBumpF: 3,
       cloudPct,
       biasCorrectionF,
       biasSampleCount,
       seedTempF: current.dailyMeanF,
-    });
+    };
+    const result = predictFuelTempNow(history, ambientUsed, nowTs, resolvedLat, resolvedLon, modelParams);
+
+    // Anchor to the most recent REAL product temp at this terminal (2026-10-09,
+    // per driver: "use the most recent update and gradually incorporate the
+    // predicted model over time"). A driver loaded D2 at 83.4F and the next
+    // plan still said 92.2F -- the model alone ignores what was just measured.
+    // The reading's error against the model AT THE TIME OF THE READING is kept
+    // as an offset and fades out with ANCHOR_HALF_LIFE_HOURS, so a fresh
+    // reading dominates and the model takes over as it ages. rawPredictionF
+    // below stays the pure model, so bias learning is unaffected.
+    const anchor = supabase && terminalId
+      ? await latestTerminalReading(supabase, terminalId, nowTs)
+      : null;
+    let finalF = result.predictedFuelTempF;
+    let anchorWeight = 0;
+    let anchorOffsetF: number | null = null;
+    let confidence = result.confidence;
+    if (anchor) {
+      const ambientAtObs = ambientAt(history, anchor.ts);
+      if (ambientAtObs != null) {
+        const pastHistory = history.filter((p) => p.ts <= anchor.ts);
+        const atObs = predictFuelTempNow(pastHistory, ambientAtObs, anchor.ts, resolvedLat, resolvedLon, modelParams);
+        const ageHours = (nowTs - anchor.ts) / 3600;
+        anchorOffsetF = anchor.tempF - atObs.predictedFuelTempF;
+        anchorWeight = Math.pow(0.5, ageHours / ANCHOR_HALF_LIFE_HOURS);
+        finalF = Math.round((result.predictedFuelTempF + anchorOffsetF * anchorWeight) * 10) / 10;
+        if (anchorWeight >= 0.5) confidence = "high";
+      }
+    }
 
     return NextResponse.json({
       city,
@@ -277,8 +363,13 @@ export async function POST(req: Request) {
       lat: resolvedLat,
       lon: resolvedLon,
       ambientNowF: ambientUsed,
-      predictedFuelTempF: result.predictedFuelTempF,
-      confidence: result.confidence,
+      predictedFuelTempF: finalF,
+      confidence,
+      modelPredictionF: result.predictedFuelTempF,
+      anchorTempF: anchor?.tempF ?? null,
+      anchorAgeHours: anchor ? Math.round(((nowTs - anchor.ts) / 3600) * 10) / 10 : null,
+      anchorOffsetF: anchorOffsetF != null ? Math.round(anchorOffsetF * 10) / 10 : null,
+      anchorWeight: Math.round(anchorWeight * 100) / 100,
       biasApplied: result.biasApplied,
       biasSampleCount: result.biasSampleCount,
       historyPoints: history.length,

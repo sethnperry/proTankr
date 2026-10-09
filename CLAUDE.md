@@ -10419,3 +10419,29 @@ preset at all while a letter was showing. `plan_slot` came from a separate
 dial), so a load after a refresh or a save-into-empty-slot was tagged null.
 Loads are now tagged with `activeSlotLetter`, the letter on screen (always
 1-5, default A), and `lastLoadedSlot` is gone. Every load carries a preset.
+
+## Temp anchored to the latest real reading; CAPPED tag in Plan Review (2026-10-09)
+
+Buckey North/Tampa: driver logged D2 at 83.4F and the next plan still said
+92.2F. Two causes. (1) Nothing used the logged temp except the per-terminal
+bias, which is bucketed (3h UTC, month) and only partly trusted at one
+sample. (2) The planner was holding an old value: `userAdjustedTempRef`
+latches true on any dial change that doesn't match the prediction and then
+blocks every later prediction until the city changes. Live check at the
+time: the Tampa model alone said ~76F.
+
+`app/api/fuel-temp/route.ts` now anchors on the newest `rack_product_status`
+temp at the terminal (any rack, averaged with products logged within 15 min
+of it, last 48h). It runs the same model at the reading's time, keeps
+`reading - model_then` as an offset, and fades it with an 8h half-life
+(`ANCHOR_HALF_LIFE_HOURS`). Confidence reads high while the anchor weight is
+at least 0.5. `rawPredictionF` is still the pure model, so bias learning is
+unchanged. The response adds `modelPredictionF`, `anchorTempF`,
+`anchorAgeHours`, `anchorOffsetF`, `anchorWeight` for diagnosis. After Log
+the Load, `page.tsx` clears `userAdjustedTempRef` and calls the hook's new
+`refresh()`, so the anchored prediction applies at once.
+
+Plan Review: a compartment row shows an amber CAPPED tag when the driver has
+a cap override below the configured safety cap and the planned gallons sit
+at it (`capOverridesForReview` -> `LoadingModal` `capOverrides`). Display
+only; gallons and caps are not moved. Not verified on a device.
