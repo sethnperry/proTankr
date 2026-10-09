@@ -1530,6 +1530,31 @@ export default function CalculatorPage() {
     if (!loadWorkflow.loadingOpen) { setApiSafetyOverride({}); setTunedApiTempByProduct({}); }
   }, [loadWorkflow.loadingOpen]);
 
+  // A temp override (Tune panel or the Confirm Temp dial) is for that load
+  // only. When the Loading modal closes after being open, drop every
+  // per-product temp back to the system value and let the prediction take
+  // over again. Gated on a real open -> close transition so it never fires
+  // on mount. A page refresh already lands here: productTempF isn't
+  // persisted and userAdjustedTempRef starts false, so auto-apply wins.
+  const wasLoadingOpenRef = useRef(false);
+  useEffect(() => {
+    const was = wasLoadingOpenRef.current;
+    wasLoadingOpenRef.current = loadWorkflow.loadingOpen;
+    if (!was || loadWorkflow.loadingOpen) return;
+    userAdjustedTempRef.current = false;
+    const base = predictedFuelTempF ?? tempFRef.current;
+    if (predictedFuelTempF != null) setTempF(predictedFuelTempF);
+    setProductTempF((prev) => {
+      const keys = Object.keys(prev);
+      if (keys.length === 0) return prev;
+      const out: Record<string, number> = {};
+      for (const k of keys) out[k] = Math.round(base * 10) / 10;
+      return out;
+    });
+    refreshFuelTemp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadWorkflow.loadingOpen]);
+
   // computeStalePlannedProducts / buildStaleOverride / handleStale* live
   // further down, after lastProductInfoById + productHexCodeById are declared
   // (they reference those), so they aren't in this block.

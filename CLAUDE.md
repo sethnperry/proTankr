@@ -10445,3 +10445,15 @@ Plan Review: a compartment row shows an amber CAPPED tag when the driver has
 a cap override below the configured safety cap and the planned gallons sit
 at it (`capOverridesForReview` -> `LoadingModal` `capOverrides`). Display
 only; gallons and caps are not moved. Not verified on a device.
+
+## Tune/dial temp override is per-load only (2026-10-09)
+
+A temp set in the Tune panel or the Confirm Temp dial now applies to that
+load only. When the Loading modal closes after being open (logged, update
+card, cancel, back), `page.tsx` clears `userAdjustedTempRef`, sets `tempF`
+to the current prediction, resets every `productTempF` entry to it, and
+refetches the prediction. Previously the tuned product kept its offset
+(`setTempF` only shifts product temps by deltas) and a dial change latched
+`userAdjustedTempRef` until the city changed. On a page refresh nothing
+needed to change: `productTempF` isn't persisted and the latch starts
+false, so the prediction applies. Not verified on a device.
