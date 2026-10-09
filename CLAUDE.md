@@ -10159,8 +10159,8 @@ diesel is ~7.0 at 60F / ~6.9 hot). Gauge rounding goes against the driver:
   trucks, and the admin Edit Truck Details screen). The field does its own
   query so a missing column only hides it. Saves use `.select()` so an
   RLS-filtered 0-row update reports an error instead of looking saved.
-- Migration `20260928000000_truck_fuel_tank_capacity.sql` (**not yet
-  applied**): adds the column and adds it to
+- Migration `20260928000000_truck_fuel_tank_capacity.sql` (**applied
+  2026-10-09**, column confirmed live): adds the column and adds it to
   `enforce_equipment_status_only_update()`'s allow-list so plain drivers can
   save it, built on the current 20260924000000 body (keeps the null-auth
   bypass two earlier migrations dropped). Before it runs: Gallons mode works,
