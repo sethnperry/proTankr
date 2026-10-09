@@ -490,16 +490,20 @@ export function usePlanSlots({
     // Confirmed live: this is exactly what a second follow-up report
     // caught -- "every compartment has a cap" when Plan B really only
     // capped compartments 1 and 2. See below for the real fix.
+    //
+    // Products only, NO capOverride (2026-10-09). Pinning every compartment
+    // to last load's gallons froze the next plan: a load logged without a
+    // preset tapped writes plan_slot = null, refreshLastLoad then put this
+    // fallback into the live plan, and every compartment stayed at last
+    // load's gallons regardless of temp or API basis -- found live at Buckey
+    // North, 7,767 gal unchanged from 83.4F to 92.2F and 338 lbs under
+    // target. Product selection is the part we can actually know; gallons
+    // must come from the plan math, never from history.
     const fallbackCompPlan: Record<string, { empty: boolean; productId: string; capOverride?: number }> = {};
     for (const line of lines) {
       const n = String(line.comp_number ?? "");
       if (!n || !line.product_id) continue;
-      const loadedGallons = line.actual_gallons ?? line.planned_gallons;
-      fallbackCompPlan[n] = {
-        empty: false,
-        productId: line.product_id,
-        ...(loadedGallons > 0 ? { capOverride: Math.round(loadedGallons) } : {}),
-      };
+      fallbackCompPlan[n] = { empty: false, productId: line.product_id };
     }
 
     // The REAL fix, per explicit follow-up ("the idea is to recall the

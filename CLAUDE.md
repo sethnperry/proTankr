@@ -10401,3 +10401,14 @@ Add to this as more turn up.
   against a real throwaway Postgres before writing it for real: recreated
   both overloads, dropped the 4-arg one, confirmed only the real
   `payload jsonb` overload survives.
+
+## Plan stuck at last load's gallons (2026-10-09)
+
+Buckey North/Tampa: plan stayed at 7,767 gal D2 from 83.4F to 92.2F, live
+weight 338 lbs under target. Cause: `fetchLastLoadFromLog`'s fallback (used
+when the load has no `plan_slot`, i.e. no preset tapped that session) pinned
+every compartment's `capOverride` to last load's gallons, and
+`refreshLastLoad` put that into the live plan after Log the Load, so the next
+plan was frozen. Fallback now restores products only; gallons always come
+from the plan math. A live plan already carrying pinned caps stays pinned
+until a preset is tapped or the caps are dragged off.
