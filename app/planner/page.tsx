@@ -445,31 +445,24 @@ export default function CalculatorPage() {
   // instead of opening the product picker directly -- the picker only opens
   // via the "Edit Comp N Product" action button, per the design handoff).
   const [activeSlotLetter, setActiveSlotLetter] = useState(1);
-  // Separate from activeSlotLetter on purpose. activeSlotLetter mirrors
-  // PresetDial's own scroll-centered position -- it changes on a mere
-  // swipe/preview, with no real load involved (PresetDial's own comment:
-  // scrolling "deliberately does NOT itself trigger any action"). But it
-  // used to ALSO be what got tagged onto load_log.plan_slot at load time,
-  // so a driver who previewed a different letter without tapping it could
-  // get a completed load tagged with the wrong preset -- confirmed live,
-  // this is why refresh sometimes highlighted the wrong letter even though
-  // the restored compPlan content itself was correct. lastLoadedSlot only
-  // ever changes inside a genuine load action (PresetDial's onLoad,
-  // PresetActionSheet's onLoad, or the mount-time resync below) and is
-  // what actually gets tagged to the load -- activeSlotLetter still drives
-  // "Save plan {letter}" unchanged.
-  const [lastLoadedSlot, setLastLoadedSlot] = useState<number | null>(null);
+  // activeSlotLetter is the plan letter on screen, and it's what gets tagged
+  // onto load_log.plan_slot. There is always one (default A), so every load
+  // is tagged with a preset. (A separate "lastLoadedSlot", set only by an
+  // explicit preset tap, used to do the tagging -- left over from the swipe
+  // dial, where scrolling moved the letter. With the dial gone it only meant
+  // a load logged after a refresh or a save-into-empty-slot was tagged null
+  // while a letter was showing, and the next plan came back with every
+  // compartment pinned at last load's gallons. Found live 2026-10-09.)
   const [selectedComp, setSelectedComp] = useState<number | null>(null);
   // Fired by usePlanSlots whenever slot 0 restores from a genuine local
   // draft -- restores the plan-letter highlight from whatever that draft's
   // own activeSlot says was on screen right before the refresh. This is
-  // now the ONLY thing that sets lastLoadedSlot/activeSlotLetter on mount
+  // now the ONLY thing that sets activeSlotLetter on mount
   // -- the sibling "fall back to the last COMPLETED load's plan_slot"
   // effect that used to also feed these (and passively surfaced "last
   // load" info on the Planner page) was removed entirely per explicit
   // direction: no last-load info anywhere on this page anymore.
   const handlePlanRestored = useCallback((slot: number | null) => {
-    setLastLoadedSlot(slot);
     if (slot != null) setActiveSlotLetter(slot);
   }, []);
   // Real bug found via a live debug capture: the "initialize compPlan
@@ -1435,14 +1428,7 @@ export default function CalculatorPage() {
     onPostLoadComplete: planSlots.refreshLastLoad,
     predictedTempF: predictedFuelTempF,
     unbiasedPredictedTempF: fuelTempUnbiasedF,
-    // Pass lastLoadedSlot (the preset actually loaded via a real tap), not
-    // activeSlotLetter (the dial's cosmetic scroll position) -- see the
-    // comment on lastLoadedSlot's declaration above for why. The hook's own
-    // "activeSlotLetter" arg name/doc comment ("which named preset was
-    // active when LOAD was tapped") already describes this value's real
-    // meaning; left as-is inside useLoadWorkflow.ts to keep this a
-    // page.tsx-only fix.
-    activeSlotLetter: lastLoadedSlot,
+    activeSlotLetter,
     capacityResult,
   });
 
@@ -1575,7 +1561,6 @@ export default function CalculatorPage() {
       setCaptureBaselineNext(true);
     }
     if (report?.plan_slot) {
-      setLastLoadedSlot(report.plan_slot);
       setActiveSlotLetter(report.plan_slot);
     }
   }, [loadWorkflow]);
@@ -2248,7 +2233,6 @@ const lastProductInfoById = useMemo(() => {
   // PresetQuickPick's row taps now instead of the dial's.
   const handlePresetLoad = (n: number) => {
     planSlots.loadFromSlot(n);
-    setLastLoadedSlot(n);
     setActiveSlotLetter(n);
     setCaptureBaselineNext(true);
     setCheckAvailabilityNext(true);
@@ -2576,7 +2560,6 @@ const lastProductInfoById = useMemo(() => {
         onLoad={() => {
           if (presetSheetSlot != null) {
             planSlots.loadFromSlot(presetSheetSlot);
-            setLastLoadedSlot(presetSheetSlot);
             setActiveSlotLetter(presetSheetSlot);
             setCaptureBaselineNext(true);
             setCheckAvailabilityNext(true);

@@ -10412,3 +10412,10 @@ every compartment's `capOverride` to last load's gallons, and
 plan was frozen. Fallback now restores products only; gallons always come
 from the plan math. A live plan already carrying pinned caps stays pinned
 until a preset is tapped or the caps are dragged off.
+
+Follow-up, same day: the real gap was that a load could be tagged with no
+preset at all while a letter was showing. `plan_slot` came from a separate
+`lastLoadedSlot` set only by an explicit preset tap (left over from the swipe
+dial), so a load after a refresh or a save-into-empty-slot was tagged null.
+Loads are now tagged with `activeSlotLetter`, the letter on screen (always
+1-5, default A), and `lastLoadedSlot` is gone. Every load carries a preset.
