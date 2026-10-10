@@ -1,0 +1,110 @@
+"use client";
+// app/planner/trips/page.tsx
+//
+// The driver's trips, newest first, each opening its Product Transfer
+// Document (docs/trip-workflow-design.md §13). Local-first: trips on the
+// phone show immediately, then the last 50 from the server are merged in.
+
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import { useCalculatorShell } from "../CalculatorShellContext";
+import { useTripStore } from "@/lib/trips/useTripStore";
+import { ptdCode } from "@/lib/trips/code39";
+import type { TripOrderRow, TripRow } from "@/lib/trips/types";
+import { fmtDateTime } from "./PtdDocument";
+
+const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
+  draft: { label: "Not loaded", color: "rgba(255,255,255,0.5)" },
+  loading: { label: "Loading", color: "#fbbf24" },
+  in_transit: { label: "In transit", color: "#60a5fa" },
+  delivering: { label: "Delivering", color: "#60a5fa" },
+  complete: { label: "Complete", color: "#4ade80" },
+  cancelled: { label: "Cancelled", color: "rgba(255,255,255,0.35)" },
+};
+
+const card: React.CSSProperties = {
+  display: "block", width: "100%", textAlign: "left", borderRadius: 12, border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)", padding: 12, marginBottom: 10, color: "#fff", cursor: "pointer",
+};
+
+export default function TripsPage() {
+  const router = useRouter();
+  const shell = useCalculatorShell();
+  const userId = shell.effectiveUserId || null;
+  const { state, store } = useTripStore(userId);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!store || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const t = await supabase.from("trips").select("*").eq("driver_id", userId).order("created_at", { ascending: false }).limit(50);
+        if (cancelled || t.error) return;
+        const trips = (t.data ?? []) as TripRow[];
+        store.hydrate("trips", trips);
+        const ids = trips.map((x) => x.trip_id);
+        for (let i = 0; i < ids.length; i += 200) {
+          const o = await supabase.from("trip_orders").select("*").in("trip_id", ids.slice(i, i + 200));
+          if (!cancelled) store.hydrate("trip_orders", (o.data ?? []) as TripOrderRow[]);
+        }
+      } catch (e) {
+        console.warn("[trips] list failed:", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store, userId]);
+
+  const rows = useMemo(() => {
+    if (!store || !userId) return [];
+    const trips = store.list("trips", (t) => t.driver_id === userId);
+    const when = (t: TripRow) => t.completed_at ?? t.started_at ?? "";
+    return trips
+      .sort((a, b) => (when(b) || "9999").localeCompare(when(a) || "9999"))
+      .map((t) => {
+        const orders = store.list("trip_orders", (o) => o.trip_id === t.trip_id);
+        const primary = orders.find((o) => o.is_primary);
+        return { trip: t, order: primary?.order_number ?? orders.find((o) => o.order_number)?.order_number ?? null };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, userId, state]);
+
+  return (
+    <div style={{ padding: 16, paddingBottom: 40, maxWidth: 640, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontSize: 20, fontWeight: 900 }}>Trips & PTDs</div>
+        <button type="button" onClick={() => router.push("/planner/trips/blank")}
+          style={{ border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          Blank PTD
+        </button>
+      </div>
+      {rows.length === 0 && (
+        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 15, textAlign: "center", marginTop: 40 }}>
+          {loading ? "Loading…" : "No trips yet. Start one from the Driver Dashboard."}
+        </div>
+      )}
+      {rows.map(({ trip, order }) => {
+        const s = STATUS[trip.status];
+        return (
+          <button key={trip.trip_id} type="button" onClick={() => router.push(`/planner/trips/${trip.trip_id}`)} style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{order ? `Order ${order}` : ptdCode(trip.trip_id)}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.label}</div>
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
+              {[trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+              {fmtDateTime(trip.completed_at ?? trip.started_at) || "Not started"}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

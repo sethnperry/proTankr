@@ -128,6 +128,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       deliveryType: d.delivery_type,
       timeLabel: d.delivery_type === "pump_off" ? "Pump Time" : "Delivery",
       status: d.status,
+      driverId: d.delivering_driver_id,
       driver: d.delivering_driver_id ? names.driver(d.delivering_driver_id) : null,
       driverSignedAt: d.driver_signed_at,
       consigneeName: d.consignee_name,

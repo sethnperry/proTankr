@@ -34,6 +34,7 @@ import { CalculatorShellProvider, useCalculatorShell } from "./CalculatorShellCo
 import { addDaysISO_, isPastISO_, formatMDYWithCountdown_ } from "./utils/dates";
 import { normState } from "./utils/normalize";
 import { themeIconStroke } from "./theme";
+import { useTripStore } from "@/lib/trips/useTripStore";
 
 function BellIcon({ count, onClick, stroke }: { count: number; onClick: () => void; stroke: string }) {
   return (
@@ -222,6 +223,14 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
   );
 }
 
+// Keeps the offline trip store syncing on every planner page, not just the
+// Driver Dashboard: a load begun or logged in the Planner writes trip rows too.
+// Its own component so a store change re-renders only this, not the shell.
+function TripSync({ userId }: { userId: string | null }) {
+  useTripStore(userId);
+  return null;
+}
+
 function ShellChrome({ children }: { children: React.ReactNode }) {
   const shell = useCalculatorShell();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -282,6 +291,8 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </div>
+
+      <TripSync userId={shell.effectiveUserId || null} />
 
       <EquipmentModal
         open={shell.equipOpen}

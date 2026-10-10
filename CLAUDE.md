@@ -10530,3 +10530,36 @@ Driver Dashboard (`/planner/home`, was "Home"), Dispatch Dashboard
 (`/superadmin`, was "ProTankr Dash"). A super admin sees all four. Page
 headings renamed to match; `/planner/home` got a "Driver Dashboard" heading.
 Labels only, no route changes.
+
+## Trip workflow phases 3-7 (2026-10-10, branch `claude/gifted-babbage-r0evrs`)
+
+Built against `docs/trip-workflow-design.md` §14. **No new migration**: everything
+uses the phase 1 tables. Phase 8 is deferred. Not click-tested on a device.
+
+- Phases 3-6 (commit 06055c5): pickup flow and net gallons (`lib/trips/netGallons.ts`,
+  `tripFlow.ts`, `LoadedSheet`), delivery flow (`FinishDeliverySheet`,
+  `LocationPicker`, `lib/trips/deliveryLocations.ts`), deviations and delay
+  reasons, all driven from the Driver Dashboard.
+- `app/planner/locations/page.tsx`: manage delivery locations.
+  `app/api/geocode/route.ts` turns city/state into lat/lon (OpenWeather direct
+  geocoder, signed-in callers only) so Near Me works. City-level only.
+- `app/admin/TripSettingsModal.tsx` (Company Dashboard tile): begin offset,
+  loading/delivery delay thresholds, what Finish Delivery requires, delay
+  reason lists (hide, never delete).
+- Phase 7, PTD (`lib/trips/ptd.ts` + `app/planner/trips/`): `/planner/trips`
+  lists the driver's trips, `/planner/trips/[id]` shows the Product Transfer
+  Document (Code 39 barcode, compartments, billing, deliveries, signatures),
+  `/planner/trips/blank` is a blank form. Print / Save PDF uses
+  `window.print()` with a `PrintPortal` into `document.body`, because the
+  planner shell clips overflow. RLS on `driver_signatures` is own-only, so
+  only the viewer's own drawn signature shows; everyone else's acceptance
+  prints as "Signed electronically {time}".
+- `TripSync` in `CalculatorLayoutClient.tsx` keeps the trip store draining on
+  every planner route. `TripStepBanner` on the Planner shows the trip's next
+  step with a link back to the Driver Dashboard.
+- Also: the interior wash change in `SoloEquipmentModal.tsx`.
+
+Open: late entry (§12) is not built; retained compartments get minimal
+handling; no product counts as validated until a BOL test set exists
+(`VALIDATED_PRODUCT_IDS` is empty). Verified: `tsc`, 173 tests, `next build
+--webpack`, and a static render of the PTD with string-shaped numbers.

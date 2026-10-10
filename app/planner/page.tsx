@@ -89,6 +89,7 @@ import { isSetupGuideAcknowledged, markSetupGuideAcknowledged } from "./utils/to
 import { recordLocationForSwitchTracking, hasSwitchedCity } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 import { getTripStore } from "@/lib/trips/useTripStore";
+import { TripStepBanner } from "./components/trip/TripStepBanner";
 import { retagLoadPickup } from "@/lib/trips/tripLogic";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -2688,6 +2689,7 @@ const lastProductInfoById = useMemo(() => {
         )
       )}
       {setupSpotlightEl}
+      <TripStepBanner userId={effectiveUserId || null} />
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
