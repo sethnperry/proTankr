@@ -10460,14 +10460,14 @@ false, so the prediction applies. Not verified on a device.
 
 ## Trip workflow phase 1: data model + offline store (2026-10-10, branch `claude/gifted-babbage-r0evrs`)
 
-Design: `docs/trip-workflow-design.md`. Phase 1 is code-complete, **migration not
-applied yet**, and nothing in the app uses it yet (phase 2, dashboard + Start
+Design: `docs/trip-workflow-design.md`. Phase 1 is code-complete and the
+migration is **applied** (2026-10-10). Nothing in the app uses it yet (phase 2, dashboard + Start
 Load, is the first consumer).
 
-- `supabase/migrations/20261010000000_trip_workflow_phase1.sql` (**not
-  applied**). Run `docs/trip-workflow-apply-checklist.sql` first; it's
-  read-only, one query, and the top row says "ALL N CHECKS PASSED" or lists
-  what failed.
+- `supabase/migrations/20261010000000_trip_workflow_phase1.sql`, **applied
+  2026-10-10** in the Supabase SQL editor. Pre-flight
+  `docs/trip-workflow-apply-checklist.sql` passed all 34 checks first (one
+  read-only query; the top row says "ALL N CHECKS PASSED" or lists failures).
 - Synced tables use one trigger, `trip_sync_write`: it keeps the newest
   `client_updated_at` per row, leaves a stale write completely untouched
   (including `updated_at`), and counts a missing client time as "now".
