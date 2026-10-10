@@ -220,6 +220,7 @@ export default function HomePage() {
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 40px", color: "#fff" }}>
+      <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.02, marginBottom: 12 }}>Driver Dashboard</div>
       {/* Trip */}
       {openTrip ? (
         <div style={{ ...card, marginBottom: 14 }}>

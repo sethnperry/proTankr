@@ -1823,7 +1823,7 @@ export default function AdminPage() {
     <div style={css.page} className="admin-page-root">
       <div className="admin-header-row" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
         <NavMenu anchor="left" onOpenSettings={() => setSettingsOpen(true)} />
-        <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Dashboard</p></div>
+        <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Company Dashboard</p></div>
       </div>
 
       {/* Dashboard -- at-a-glance stats, same simple tile pattern as

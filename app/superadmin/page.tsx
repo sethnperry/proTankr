@@ -1,5 +1,5 @@
 "use client";
-// app/superadmin/page.tsx  ("ProTankr Dash")
+// app/superadmin/page.tsx  ("ProTankr Dashboard")
 //
 // Internal ProTankr-operator console (super-admin only). One screen to:
 //   - see fleet-wide stats
@@ -236,7 +236,7 @@ export default function ProTankrDashPage() {
     <div style={base}><div style={shell}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-        <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.02 }}>ProTankr Dash</div>
+        <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.02 }}>ProTankr Dashboard</div>
         <NavMenu />
       </div>
 

@@ -10520,3 +10520,13 @@ No migration. Not click-tested (no browser in the building session).
   `next/font/google` (`Can't resolve '@vercel/turbopack-next/internal/font/google/font'`),
   an environment font-loader problem; `next build --webpack` passes and
   lists `/planner/home`.
+
+### Four dashboards, renamed (2026-10-10, same branch)
+
+Nav menu now groups the four dashboards at the top, one per audience:
+Driver Dashboard (`/planner/home`, was "Home"), Dispatch Dashboard
+(`/planner/dispatch`, was "Dispatch"), Company Dashboard (`/admin`, was
+"Dashboard"; now also shown to any super admin), ProTankr Dashboard
+(`/superadmin`, was "ProTankr Dash"). A super admin sees all four. Page
+headings renamed to match; `/planner/home` got a "Driver Dashboard" heading.
+Labels only, no route changes.

@@ -182,7 +182,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
           </div>
 
           {/* Company switcher -- hidden for super admins, who pick/switch
-              companies from the ProTankr Dash dropdown instead of cluttering
+              companies from the ProTankr Dashboard dropdown instead of cluttering
               this menu with every company they can reach. */}
           {memberships.length > 0 && !isSuperAdmin && (
             <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
@@ -233,14 +233,23 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
                 Admin/Super Admin/Learn) even though it now overlaps with
                 the Planner link here while already inside that section --
                 harmless, same destination either way. */}
+            {/* The four dashboards, one per audience, grouped at the top:
+                Driver (trips), Dispatch (selected driver), Company (/admin),
+                ProTankr (/superadmin). A super admin sees all four. */}
             {canReachDestination("home", role, isSuperAdmin, isSolo) && !isHomePage && (
-              <NavLink href="/planner/home" icon="⌂" label="Home" onClick={() => setOpen(false)} />
+              <NavLink href="/planner/home" icon="⌂" label="Driver Dashboard" onClick={() => setOpen(false)} />
+            )}
+            {canReachDestination("dispatch", role, isSuperAdmin, isSolo) && !isDispatchPage && (
+              <NavLink href="/planner/dispatch" icon="◫" label="Dispatch Dashboard" onClick={() => setOpen(false)} />
+            )}
+            {(isAdmin || isSuperAdmin) && !isAdmin_ && (
+              <NavLink href="/admin" icon="⚙" label="Company Dashboard" onClick={() => setOpen(false)} />
+            )}
+            {isSuperAdmin && !isSuperAdmin_ && (
+              <NavLink href="/superadmin" icon="◈" label="ProTankr Dashboard" onClick={() => setOpen(false)} />
             )}
             {canReachDestination("planner", role, isSuperAdmin, isSolo) && !isPlannerPage && (
               <NavLink href="/planner" icon="▤" label="Planner" onClick={() => setOpen(false)} />
-            )}
-            {canReachDestination("dispatch", role, isSuperAdmin, isSolo) && !isDispatchPage && (
-              <NavLink href="/planner/dispatch" icon="◫" label="Dispatch" onClick={() => setOpen(false)} />
             )}
             {canReachDestination("cards", role, isSuperAdmin, isSolo) && !isCardsPage && (
               <NavLink href="/planner/cards" icon="▥" label="Cards" onClick={() => setOpen(false)} />
@@ -253,12 +262,6 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
             )}
             {!isReports_ && (
               <NavLink href="/planner/reports" icon="▤" label="Reports" onClick={() => setOpen(false)} />
-            )}
-            {isAdmin && !isAdmin_ && (
-              <NavLink href="/admin" icon="⚙" label="Dashboard" onClick={() => setOpen(false)} />
-            )}
-            {isSuperAdmin && !isSuperAdmin_ && (
-              <NavLink href="/superadmin" icon="◈" label="ProTankr Dash" onClick={() => setOpen(false)} />
             )}
             <NavLink href="/learn" icon="?" label="Learn" onClick={() => setOpen(false)} />
             {/* Settings used to be its own gear icon in the Planner header's
