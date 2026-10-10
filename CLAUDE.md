@@ -10457,3 +10457,33 @@ refetches the prediction. Previously the tuned product kept its offset
 `userAdjustedTempRef` until the city changed. On a page refresh nothing
 needed to change: `productTempF` isn't persisted and the latch starts
 false, so the prediction applies. Not verified on a device.
+
+## Trip workflow phase 1: data model + offline store (2026-10-10, branch `claude/gifted-babbage-r0evrs`)
+
+Design: `docs/trip-workflow-design.md`. Phase 1 is code-complete, **migration not
+applied yet**, and nothing in the app uses it yet (phase 2, dashboard + Start
+Load, is the first consumer).
+
+- `supabase/migrations/20261010000000_trip_workflow_phase1.sql` (**not
+  applied**). Run `docs/trip-workflow-apply-checklist.sql` first; it's
+  read-only, one query, and the top row says "ALL N CHECKS PASSED" or lists
+  what failed.
+- Synced tables use one trigger, `trip_sync_write`: it keeps the newest
+  `client_updated_at` per row, leaves a stale write completely untouched
+  (including `updated_at`), and counts a missing client time as "now".
+- **Upsert + RLS trap, found and fixed**: Postgres checks the INSERT policy
+  against the proposed row even when `ON CONFLICT DO UPDATE` turns it into an
+  update. `trips_insert` required `created_by = auth.uid()`, so a handoff
+  driver syncing a trip someone else created was rejected. Now also allowed
+  when the trip already exists (`trip_exists()`, SECURITY DEFINER). Proven on
+  a throwaway Postgres 16 with RLS enforced: the handoff works, a non-member
+  is still blocked, and a member still can't create a new trip in someone
+  else's name.
+- `lib/trips/`: `types.ts` (row types, keys, parent-first `SYNC_ORDER`),
+  `tripStore.ts` (pure store: local rows + one queue entry per row, saved to
+  storage on every write, drained parents-first; a no-signal error backs off
+  and holds children back; a rejected row is isolated into `failed`),
+  `supabaseSender.ts` (upsert; `trip_events` is insert-only via
+  `ignoreDuplicates`), `useTripStore.ts` (per-user localStorage key, drains on
+  mount/online/foreground/after writes). 15 tests in `tripStore.test.ts`.
+- Not verified against a real Supabase/PostgREST, only a plain Postgres.

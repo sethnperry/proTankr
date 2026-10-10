@@ -276,14 +276,35 @@ create index if not exists trips_truck_end_miles_idx on public.trips (truck_id, 
 
 alter table public.trips enable row level security;
 
+-- Whether a trip row already exists, regardless of RLS. Used by the insert
+-- policy below; SECURITY DEFINER so it can't recurse into trips' own policies.
+create or replace function public.trip_exists(p_trip_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  select exists (select 1 from public.trips where trip_id = p_trip_id);
+$$;
+
 -- Company-wide so a handoff driver can take over the trip. A trip can only be
 -- created by its own creator, in a company they belong to.
+--
+-- The phone syncs with upsert (INSERT ... ON CONFLICT DO UPDATE), and Postgres
+-- checks the INSERT policy against the proposed row even when it ends up as an
+-- update. Without the trip_exists() branch, a handoff driver's sync of a trip
+-- someone else created (created_by = them) is rejected outright. Proven on a
+-- throwaway Postgres 16 with RLS enforced.
 drop policy if exists trips_read on public.trips;
 create policy trips_read on public.trips
   for select using (public.trip_company_member(company_id));
 drop policy if exists trips_insert on public.trips;
 create policy trips_insert on public.trips
-  for insert with check (public.trip_company_member(company_id) and created_by = auth.uid());
+  for insert with check (
+    public.trip_company_member(company_id)
+    and (created_by = auth.uid() or public.trip_exists(trip_id))
+  );
 drop policy if exists trips_update on public.trips;
 create policy trips_update on public.trips
   for update using (public.trip_company_member(company_id))
