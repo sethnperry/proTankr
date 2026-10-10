@@ -57,6 +57,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
   // navDestinations.ts. Derived from the active company's own is_solo flag.
   const isSolo = Boolean(memberships.find(m => m.company_id === activeId)?.company?.is_solo);
   const isPlannerPage = pathname === "/planner";
+  const isHomePage = Boolean(pathname?.startsWith("/planner/home"));
   const isDispatchPage = Boolean(pathname?.startsWith("/planner/dispatch"));
   const isCardsPage = Boolean(pathname?.startsWith("/planner/cards"));
   const isVaultPage = Boolean(pathname?.startsWith("/planner/vault"));
@@ -232,6 +233,9 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
                 Admin/Super Admin/Learn) even though it now overlaps with
                 the Planner link here while already inside that section --
                 harmless, same destination either way. */}
+            {canReachDestination("home", role, isSuperAdmin, isSolo) && !isHomePage && (
+              <NavLink href="/planner/home" icon="⌂" label="Home" onClick={() => setOpen(false)} />
+            )}
             {canReachDestination("planner", role, isSuperAdmin, isSolo) && !isPlannerPage && (
               <NavLink href="/planner" icon="▤" label="Planner" onClick={() => setOpen(false)} />
             )}

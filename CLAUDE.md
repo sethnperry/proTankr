@@ -10487,3 +10487,36 @@ Load, is the first consumer).
   `ignoreDuplicates`), `useTripStore.ts` (per-user localStorage key, drains on
   mount/online/foreground/after writes). 15 tests in `tripStore.test.ts`.
 - Not verified against a real Supabase/PostgREST, only a plain Postgres.
+
+## Trip workflow phase 2: driver dashboard + Start Load (2026-10-10, branch `claude/gifted-babbage-r0evrs`)
+
+No migration. Not click-tested (no browser in the building session).
+
+- `app/planner/home/page.tsx` (new, `/planner/home`): trip card (status,
+  order #, shipper → customer, pickup, deliveries, Edit, Cancel trip while
+  still a draft), one big next-step button (`nextStep`), info rows
+  (equipment, terminal, expirations, sync status when anything is pending or
+  failed), and tiles (Planner, Equipment, Cards, Reports). Gated like the
+  Planner; "Home" link added to `NavMenu` via a new `home` destination in
+  `navDestinations.ts` (same audience as `planner`, test added). The Planner
+  is still the default landing; making Home the landing is a one-line change
+  once it's been tried.
+- `StartLoadSheet.tsx`: one review card. Order # is the only typed field;
+  shipper/customer prefill from the driver's last trip, pickup is the
+  Planner's current terminal, delivery is the last one used (else the first
+  starred location, else a one-off name), beginning miles are the truck's
+  last ending miles. "+ Order number" / "+ Delivery" add rows.
+- `lib/trips/tripLogic.ts` (pure, 11 tests): open trip, next step, Start
+  Load rows (edit reuses ids; removed rows are cancelled/blanked, never
+  deleted), and Planner wiring. `useTripHydration.ts` pulls open trips,
+  recent trips, the truck's last ending miles, and open-trip children from
+  the server into the store; fails open.
+- Planner wiring (all local, non-fatal): `beginLoadToSupabase` attaches the
+  new load to the open trip's first unloaded pickup and moves the trip to
+  `loading`; `cancelActiveLoad` detaches it and returns the trip to `draft`;
+  the mid-load terminal switch retags the pickup. No open trip → the Planner
+  behaves exactly as before.
+- Build note: `next build` (Turbopack) failed in the building container on
+  `next/font/google` (`Can't resolve '@vercel/turbopack-next/internal/font/google/font'`),
+  an environment font-loader problem; `next build --webpack` passes and
+  lists `/planner/home`.

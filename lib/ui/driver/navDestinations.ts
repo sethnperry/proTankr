@@ -25,7 +25,9 @@
 
 import type { Role } from "./role";
 
-export type NavDestination = "planner" | "dispatch" | "cards" | "vault";
+// - home: the driver dashboard (trip workflow, docs/trip-workflow-design.md
+//   §14). Same audience as the driver Planner.
+export type NavDestination = "home" | "planner" | "dispatch" | "cards" | "vault";
 
 // isSolo: a solo company is a single driver who happens to hold role 'admin'
 // (solo users are always provisioned as 'admin' -- see CLAUDE.md). They are
@@ -40,8 +42,9 @@ export function canReachDestination(
   isSuperAdmin: boolean,
   isSolo: boolean = false
 ): boolean {
-  if (isSolo) return dest === "planner" || dest === "cards" || dest === "vault";
+  if (isSolo) return dest === "home" || dest === "planner" || dest === "cards" || dest === "vault";
   switch (dest) {
+    case "home":
     case "planner":
       return isSuperAdmin || role === "driver" || role === "lead";
     case "dispatch":

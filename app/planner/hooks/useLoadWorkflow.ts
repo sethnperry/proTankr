@@ -11,6 +11,9 @@ import { resolveEffectiveRackId } from "../utils/rack";
 import { writeActivePlannedLoad, clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import type { LoadReport, PlanRow, ProductRow } from "../types";
 import type { CapacityResult } from "@/lib/capacity/computeAvailableCapacity";
+import { getTripStore } from "@/lib/trips/useTripStore";
+import { newId as newTripId } from "@/lib/trips/tripStore";
+import { linkLoadToOpenTrip, unlinkCancelledLoad } from "@/lib/trips/tripLogic";
 
 /** What record_load_utilization returns. Nullable percentage on purpose: an
  *  excluded load genuinely has no score, and null says that where a 0 would
@@ -254,6 +257,23 @@ export function useLoadWorkflow({
 
       setActiveLoadId(result.load_id);
 
+      // Trip workflow (phase 2): attach this load to the driver's open trip,
+      // if they started one from the dashboard. Local write only (the trip
+      // store syncs in the background); no open trip -> nothing happens.
+      if (authUserId && result.load_id) {
+        try {
+          linkLoadToOpenTrip(getTripStore(authUserId), {
+            userId: authUserId,
+            loadId: result.load_id,
+            pickup: { terminalId: selectedTerminalId || null, rackId: selectedRackId || null },
+            now: new Date(),
+            newId: newTripId,
+          });
+        } catch (e) {
+          console.warn("[trips] link load to trip failed (non-fatal):", e);
+        }
+      }
+
       // Mark this as the driver's in-progress load so a reopen resumes its
       // plan + terminal instead of starting fresh (see activePlannedLoad).
       // Cleared on completion (below) and on cancel.
@@ -355,6 +375,14 @@ export function useLoadWorkflow({
     clearActivePlannedLoad(authUserId);
     if (!loadId) return;
     setActiveLoadId(null);
+    // Trip workflow: the trip goes back to "not loaded yet", never deleted.
+    if (authUserId) {
+      try {
+        unlinkCancelledLoad(getTripStore(authUserId), { userId: authUserId, loadId, now: new Date(), newId: newTripId });
+      } catch (e) {
+        console.warn("[trips] unlink cancelled load failed (non-fatal):", e);
+      }
+    }
     setCancelBusy(true);
     try {
       // Server-enforced, atomic: cancel_planned_load deletes the row ONLY

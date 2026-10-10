@@ -88,6 +88,8 @@ import { computeSpotlightStep, type SpotlightTarget } from "./utils/setupCheckli
 import { isSetupGuideAcknowledged, markSetupGuideAcknowledged } from "./utils/tourProgress";
 import { recordLocationForSwitchTracking, hasSwitchedCity } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
+import { getTripStore } from "@/lib/trips/useTripStore";
+import { retagLoadPickup } from "@/lib/trips/tripLogic";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
@@ -1860,6 +1862,17 @@ export default function CalculatorPage() {
   // a real review if it did (see the two effects below).
   const applyTerminalSwitch = useCallback((prev: TerminalSnapshot, next: TerminalSnapshot) => {
     if (loadWorkflow.activeLoadId) {
+      // Trip workflow: the trip's pickup follows the load to the new terminal.
+      if (effectiveUserId) {
+        try {
+          retagLoadPickup(getTripStore(effectiveUserId), loadWorkflow.activeLoadId, {
+            terminalId: next.terminalId || null, rackId: next.rackId || null,
+            name: next.terminalName, city: next.city, state: next.state,
+          });
+        } catch (e) {
+          console.warn("[trips] retag pickup failed (non-fatal):", e);
+        }
+      }
       supabase.from("load_log")
         .update({ terminal_id: next.terminalId, rack_id: next.rackId || null })
         .eq("load_id", loadWorkflow.activeLoadId)
