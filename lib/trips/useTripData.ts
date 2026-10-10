@@ -131,15 +131,17 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
     if (!companyId || !userId || !cacheKey) return;
     setLoading(true);
     try {
-      const [l, s] = await Promise.all([
-        supabase.from("delivery_locations")
-          .select("location_id,company_id,name,location_number,address,city,state,lat,lon,delivery_type,notes,is_active")
-          .eq("company_id", companyId).eq("is_active", true).order("name"),
+      const cols = "location_id,company_id,name,location_number,address,city,state,lat,lon,delivery_type,notes,is_active";
+      const query = (c: string) => supabase.from("delivery_locations").select(c).eq("company_id", companyId).eq("is_active", true).order("name");
+      const [first, s] = await Promise.all([
+        query(`${cols},zip`),
         supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId),
       ]);
+      // Before the 2026-10-11 migration there is no zip column; read without it.
+      const l = first.error ? await query(cols) : first;
       if (l.error) return;
       const starred = new Set(((s.data ?? []) as { location_id: string }[]).map((r) => r.location_id));
-      const locs = ((l.data ?? []) as Omit<DeliveryLocation, "starred">[]).map((r) => ({
+      const locs = ((l.data ?? []) as unknown as Omit<DeliveryLocation, "starred">[]).map((r) => ({
         ...r, lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon), starred: starred.has(r.location_id),
       }));
       let tankRows: LocationTank[] = [];

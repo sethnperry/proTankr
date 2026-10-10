@@ -6,13 +6,14 @@
 // the bottom (+ Order number, + Delivery) only show their rows when tapped.
 //
 // Presentational: the caller supplies the prefills and does the writing.
+// Deliveries are picked from the saved location list (the same picker as the
+// dashboard, with "+ New location"), never typed as free text.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { CustomSelect } from "@/lib/ui/CustomSelect";
-import type { DeliveryType } from "@/lib/trips/types";
 import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
-import { locationLabel, type DeliveryLocationLite } from "@/lib/trips/useTripHydration";
+import { locationPlace, locationTitle, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
+import { LocationPicker } from "./trip/LocationPicker";
 
 export type StartLoadValues = {
   orderNumber: string;
@@ -22,8 +23,6 @@ export type StartLoadValues = {
   deliveries: StartLoadDelivery[];
   beginMiles: string;
 };
-
-const ONE_OFF = "__one_off__";
 
 const label: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)",
@@ -53,6 +52,12 @@ export function StartLoadSheet({
   planLabel,
   equipmentLabel,
   locations,
+  tanks,
+  origin,
+  companyId,
+  userId,
+  onToggleStar,
+  onLocationAdded,
   busy,
   error,
   onClose,
@@ -65,7 +70,13 @@ export function StartLoadSheet({
   onChangePickup: () => void;
   planLabel: string;
   equipmentLabel: string;
-  locations: DeliveryLocationLite[];
+  locations: DeliveryLocation[];
+  tanks: LocationTank[];
+  origin: LatLon | null;
+  companyId: string | null;
+  userId: string | null;
+  onToggleStar: (locationId: string, star: boolean) => void;
+  onLocationAdded: () => void;
   busy?: boolean;
   error?: string | null;
   onClose: () => void;
@@ -79,14 +90,8 @@ export function StartLoadSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const locationOptions = useMemo(
-    () => [
-      ...locations.map((l) => ({ value: l.location_id, label: `${l.starred ? "★ " : ""}${locationLabel(l)}` })),
-      { value: ONE_OFF, label: "One-off (type a name)" },
-    ],
-    [locations],
-  );
-  const typeById = useMemo(() => new Map(locations.map((l) => [l.location_id, l.delivery_type])), [locations]);
+  const byId = useMemo(() => new Map(locations.map((l) => [l.location_id, l])), [locations]);
+  const [picking, setPicking] = useState<number | null>(null);
 
   const setDelivery = (i: number, patch: Partial<StartLoadDelivery>) =>
     setV((s) => ({ ...s, deliveries: s.deliveries.map((d, j) => (j === i ? { ...d, ...patch } : d)) }));
@@ -94,6 +99,7 @@ export function StartLoadSheet({
   const milesOk = v.beginMiles.trim() === "" || Number.isFinite(Number(v.beginMiles));
 
   return (
+    <>
     <FullscreenModal
       open={open}
       title={editing ? "Edit Load" : "Start Load"}
@@ -168,7 +174,9 @@ export function StartLoadSheet({
         </div>
 
         {v.deliveries.map((d, i) => {
-          const selectValue = d.locationId ?? ONE_OFF;
+          const loc = d.locationId ? byId.get(d.locationId) : null;
+          const text = loc ? locationTitle(loc) : d.locationId ? "Saved location" : d.oneOffName?.trim() ? `${d.oneOffName.trim()} (not saved)` : null;
+          const sub = loc ? [locationPlace(loc), loc.delivery_type === "pump_off" ? "Pump off" : "Drop"].filter(Boolean).join(" · ") : null;
           return (
             <div key={`delivery-${i}`} style={row}>
               <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
@@ -178,30 +186,16 @@ export function StartLoadSheet({
                     onClick={() => setV((s) => ({ ...s, deliveries: s.deliveries.filter((_, j) => j !== i) }))}>Remove</button>
                 )}
               </div>
-              {locations.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <CustomSelect
-                    value={selectValue}
-                    options={locationOptions}
-                    onChange={(val) =>
-                      val === ONE_OFF
-                        ? setDelivery(i, { locationId: null })
-                        : setDelivery(i, { locationId: val, oneOffName: null, deliveryType: typeById.get(val) ?? "drop" })
-                    }
-                  />
-                </div>
-              )}
-              {!d.locationId && (
-                <>
-                  <input
-                    style={input}
-                    value={d.oneOffName ?? ""}
-                    onChange={(e) => setDelivery(i, { oneOffName: e.target.value })}
-                    placeholder="Delivery name or store #"
-                  />
-                  <DeliveryTypeToggle value={d.deliveryType} onChange={(t) => setDelivery(i, { deliveryType: t })} />
-                </>
-              )}
+              <button type="button" onClick={() => setPicking(i)}
+                style={{ ...input, textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", color: text ? "#fff" : "rgba(255,255,255,0.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {text ?? "Choose a delivery location"}
+                  </span>
+                  {sub && <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{sub}</span>}
+                </span>
+                <span style={{ color: "rgba(255,255,255,0.4)" }}>›</span>
+              </button>
             </div>
           );
         })}
@@ -230,28 +224,22 @@ export function StartLoadSheet({
         </div>
       </div>
     </FullscreenModal>
-  );
-}
-
-function DeliveryTypeToggle({ value, onChange }: { value: DeliveryType; onChange: (t: DeliveryType) => void }) {
-  const opt = (t: DeliveryType, text: string) => (
-    <button
-      type="button"
-      onClick={() => onChange(t)}
-      style={{
-        flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
-        border: value === t ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.14)",
-        background: value === t ? "rgba(255,255,255,0.12)" : "transparent",
-        color: value === t ? "#fff" : "rgba(255,255,255,0.55)",
+    <LocationPicker
+      open={open && picking != null}
+      title={picking != null && v.deliveries.length > 1 ? `Delivery ${picking + 1}` : "Delivery"}
+      origin={origin}
+      locations={locations}
+      tanks={tanks}
+      companyId={companyId}
+      userId={userId}
+      onToggleStar={onToggleStar}
+      onLocationAdded={onLocationAdded}
+      onPick={(to) => {
+        if (picking != null) setDelivery(picking, { locationId: to.locationId, oneOffName: null, deliveryType: to.deliveryType });
+        setPicking(null);
       }}
-    >
-      {text}
-    </button>
-  );
-  return (
-    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-      {opt("drop", "Drop")}
-      {opt("pump_off", "Pump-off")}
-    </div>
+      onClose={() => setPicking(null)}
+    />
+    </>
   );
 }

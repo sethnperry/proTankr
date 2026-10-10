@@ -93,6 +93,14 @@ export type TripDeliveryTankRow = Synced & {
   receipt_photo_path: string | null;
 };
 
+export type SupplierRow = Synced & {
+  supplier_id: string;
+  company_id: string;
+  name: string;
+  is_active: boolean;
+  created_by: string | null;
+};
+
 export type TripCompartmentLoadRow = Synced & {
   compartment_load_id: string;
   trip_id: string;
@@ -102,6 +110,7 @@ export type TripCompartmentLoadRow = Synced & {
   comp_number: number;
   product_id: string | null;
   supplier: string | null;
+  supplier_id?: string | null;
   bol_number: string | null;
   gross_gallons: number | null;
   net_gallons: number | null;
@@ -139,6 +148,7 @@ export type CompartmentReadinessRow = Synced & {
 };
 
 export type TripTableRows = {
+  suppliers: SupplierRow;
   trips: TripRow;
   trip_orders: TripOrderRow;
   trip_pickups: TripPickupRow;
@@ -153,6 +163,7 @@ export type TripTable = keyof TripTableRows;
 
 // Primary key column(s) per table, also the upsert onConflict target.
 export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & string)[] } = {
+  suppliers: ["supplier_id"],
   trips: ["trip_id"],
   trip_orders: ["order_id"],
   trip_pickups: ["pickup_id"],
@@ -166,6 +177,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
 // Parents before children, so a queue drained in this order never trips a
 // foreign key on a row whose parent is still waiting.
 export const SYNC_ORDER: readonly TripTable[] = [
+  "suppliers",
   "trips",
   "trip_orders",
   "trip_pickups",

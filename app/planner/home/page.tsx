@@ -59,6 +59,8 @@ import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadShe
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { FinishDeliverySheet, type FinishDeliverySubmit } from "../components/trip/FinishDeliverySheet";
 import { LocationPicker } from "../components/trip/LocationPicker";
+import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
+import { serverOrderConflicts } from "@/lib/trips/refCheck";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -207,7 +209,7 @@ export default function HomePage() {
     }
   }, [openTrip, children, snap, trips, userId, truckId, store, locations]);
 
-  const submit = (v: StartLoadValues) => {
+  const submit = async (v: StartLoadValues) => {
     if (!store || !userId || !companyId) {
       setError("Still signing you in. Try again in a moment.");
       return;
@@ -216,6 +218,21 @@ export default function HomePage() {
     setBusy(true);
     setError(null);
     try {
+      // An order number can only be on one live trip.
+      const numbers = [v.orderNumber, ...v.extraOrderNumbers].filter((x) => x.trim());
+      const repeated = repeatedRefs(numbers);
+      if (repeated.length) {
+        setError(`Order ${repeated[0]} is entered twice.`);
+        return;
+      }
+      const excludeTrip = openTrip?.trip_id ?? null;
+      const localUsed = usedOrderNumbers(trips, store.list("trip_orders", () => true), excludeTrip);
+      const taken = conflicts(numbers, localUsed);
+      if (!taken.length) taken.push(...(await serverOrderConflicts(companyId, numbers, excludeTrip)));
+      if (taken.length) {
+        setError(`Order ${taken[0]} is already on another trip.`);
+        return;
+      }
       const rows = buildStartLoad(
         {
           companyId,
@@ -341,8 +358,10 @@ export default function HomePage() {
         router.push("/planner");
         break;
       case "arrive_pickup":
+        // Arrived: straight to the Planner to build the load.
         arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
         void syncNow();
+        router.push("/planner");
         break;
       case "loaded":
         setLoadedOpen(true);
@@ -351,14 +370,47 @@ export default function HomePage() {
         setPicker({ mode: "add" });
         break;
       case "arrive_delivery":
+        // Arrived: straight into Finish Delivery.
         arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
         void syncNow();
+        setFinishOpen(true);
         break;
       case "finish_delivery":
         setFinishOpen(true);
         break;
     }
   };
+
+  // Arriving straight from the Planner's load report ("Arrived at Delivery"):
+  // /planner/home?arrive=1 arrives the next delivery and opens Finish
+  // Delivery. With no delivery set yet, the picker opens first.
+  const [autoArrive, setAutoArrive] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("arrive") !== "1") return;
+    setAutoArrive(true);
+    params.delete("arrive");
+    const q = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));
+  }, []);
+  useEffect(() => {
+    if (!autoArrive || !store || !userId || !openTrip) return;
+    if (step.kind === "arrive_delivery") {
+      arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
+      void syncNow();
+      setFinishOpen(true);
+      setAutoArrive(false);
+    } else if (step.kind === "finish_delivery") {
+      setFinishOpen(true);
+      setAutoArrive(false);
+    } else if (step.kind === "add_delivery") {
+      setPicker({ mode: "add" });
+    } else {
+      setAutoArrive(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoArrive, step.kind, store, userId, openTrip?.trip_id]);
 
   // ── Handoff (§10) ──────────────────────────────────────────────────────────
   const [handoffName, setHandoffName] = useState<string | null>(null);
@@ -567,6 +619,12 @@ export default function HomePage() {
         planLabel="Set in the Planner when you load"
         equipmentLabel={equipmentLabel}
         locations={locations}
+        tanks={locList.tanks}
+        origin={origin}
+        companyId={companyId}
+        userId={userId}
+        onToggleStar={(id, star) => void locList.toggleStar(id, star).catch(() => {})}
+        onLocationAdded={() => void locList.reload()}
         busy={busy}
         error={error}
         onClose={() => setSheetOpen(false)}
@@ -616,9 +674,13 @@ export default function HomePage() {
         title={picker?.mode === "reroute" ? "Change delivery" : picker?.mode === "split" ? "Send to another delivery" : "Add delivery"}
         origin={origin}
         locations={locations}
+        tanks={locList.tanks}
+        companyId={companyId}
+        userId={userId}
+        onLocationAdded={() => void locList.reload()}
         onToggleStar={(id, star) => void locList.toggleStar(id, star).catch(() => {})}
         onPick={onPick}
-        onClose={() => setPicker(null)}
+        onClose={() => { setPicker(null); setAutoArrive(false); }}
         onManage={() => { setPicker(null); router.push("/planner/locations"); }}
       />
     </div>

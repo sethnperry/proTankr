@@ -16,6 +16,7 @@ export type DeliveryLocation = {
   address: string | null;
   city: string | null;
   state: string | null;
+  zip?: string | null;
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;

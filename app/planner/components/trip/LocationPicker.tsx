@@ -3,9 +3,11 @@
 //
 // Delivery location picker (docs/trip-workflow-design.md §4): Near Me opens on
 // everything within 150 air miles of the pickup terminal, starred locations
-// always show, search by number, name or city. A one-off name works too.
+// always show, search by number, name or city. A place that isn't saved yet
+// is added as a real location ("+ New location"), never typed as a one-off,
+// so the company list stays clean.
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import {
   NEAR_ME_MILES,
@@ -14,12 +16,16 @@ import {
   locationTitle,
   type DeliveryLocation,
   type LatLon,
+  type LocationTank,
 } from "@/lib/trips/deliveryLocations";
 import type { DeliveryDestination } from "@/lib/trips/tripFlow";
-import type { DeliveryType } from "@/lib/trips/types";
-import { fieldInput, fieldLabel, linkBtn, muted, primaryBtn } from "./tripUi";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { dashedBtn, fieldInput, linkBtn, muted } from "./tripUi";
+import { LocationEditor } from "./LocationEditor";
 
-export function LocationPicker({ open, title, origin, locations, onToggleStar, onPick, onClose, onManage }: {
+export function LocationPicker({
+  open, title, origin, locations, tanks = [], companyId, userId, onToggleStar, onPick, onClose, onManage, onLocationAdded,
+}: {
   open: boolean;
   title: string;
   origin: LatLon | null;
@@ -28,11 +34,23 @@ export function LocationPicker({ open, title, origin, locations, onToggleStar, o
   onPick: (to: DeliveryDestination) => void;
   onClose: () => void;
   onManage?: () => void;
+  tanks?: LocationTank[];
+  companyId: string | null;
+  userId: string | null;
+  // Called after "+ New location" saves, so the caller can reload its list.
+  onLocationAdded?: () => void;
 }) {
   const [nearMe, setNearMe] = useState(true);
   const [query, setQuery] = useState("");
-  const [oneOff, setOneOff] = useState("");
-  const [oneOffType, setOneOffType] = useState<DeliveryType>("drop");
+  const [adding, setAdding] = useState(false);
+  const { data: products } = useProductsCatalog();
+
+  // Each open starts on the list.
+  useEffect(() => {
+    if (open) setAdding(false);
+  }, [open]);
+
+  const pick = (l: DeliveryLocation) => onPick({ locationId: l.location_id, oneOffName: null, deliveryType: l.delivery_type });
 
   const list = useMemo(
     () => filterLocations(locations, { origin, nearMe: nearMe && !!origin, query }),
@@ -44,6 +62,25 @@ export function LocationPicker({ open, title, origin, locations, onToggleStar, o
     border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
     background: on ? "rgba(255,255,255,0.12)" : "transparent", color: on ? "#fff" : muted,
   });
+
+  if (adding && companyId && userId) {
+    return (
+      <FullscreenModal open={open} title="New location" onClose={() => setAdding(false)} footer={null}>
+        <button type="button" onClick={() => setAdding(false)} style={{ ...linkBtn, marginBottom: 12 }}>‹ Back to list</button>
+        <LocationEditor
+          companyId={companyId}
+          userId={userId}
+          location={null}
+          tanks={tanks}
+          existing={locations}
+          products={products}
+          seedName={query.trim()}
+          onSaved={(l) => { onLocationAdded?.(); pick(l); }}
+          onUseExisting={pick}
+        />
+      </FullscreenModal>
+    );
+  }
 
   return (
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
@@ -78,7 +115,7 @@ export function LocationPicker({ open, title, origin, locations, onToggleStar, o
               {l.starred ? "★" : "☆"}
             </button>
             <button type="button"
-              onClick={() => onPick({ locationId: l.location_id, oneOffName: null, deliveryType: l.delivery_type })}
+              onClick={() => pick(l)}
               style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", color: "#fff", padding: "12px 10px 12px 0", cursor: "pointer" }}>
               <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locationTitle(l)}</div>
               <div style={{ fontSize: 12, color: muted }}>
@@ -90,17 +127,11 @@ export function LocationPicker({ open, title, origin, locations, onToggleStar, o
         ))}
       </div>
 
-      <div style={fieldLabel}>Somewhere else (one-off)</div>
-      <input value={oneOff} onChange={(e) => setOneOff(e.target.value)} placeholder="Customer or site name" style={{ ...fieldInput, marginBottom: 8 }} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <button type="button" style={toggle(oneOffType === "drop")} onClick={() => setOneOffType("drop")}>Drop</button>
-        <button type="button" style={toggle(oneOffType === "pump_off")} onClick={() => setOneOffType("pump_off")}>Pump off</button>
-      </div>
-      <button type="button" disabled={!oneOff.trim()}
-        onClick={() => onPick({ locationId: null, oneOffName: oneOff.trim(), deliveryType: oneOffType })}
-        style={{ ...primaryBtn, padding: "12px 0", fontSize: 15, opacity: oneOff.trim() ? 1 : 0.5 }}>
-        Use “{oneOff.trim() || "…"}”
-      </button>
+      {companyId && userId && (
+        <button type="button" onClick={() => setAdding(true)} style={dashedBtn}>
+          + New location{query.trim() ? ` “${query.trim()}”` : ""}
+        </button>
+      )}
       {onManage && (
         <div style={{ textAlign: "center", marginTop: 14 }}>
           <button type="button" onClick={onManage} style={linkBtn}>Manage saved locations ›</button>
