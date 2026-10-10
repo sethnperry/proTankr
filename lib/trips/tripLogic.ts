@@ -52,32 +52,7 @@ export function lastShipperCustomer(trips: TripRow[], userId: string): { shipper
   return { shipper: mine[0]?.shipper ?? null, customer: mine[0]?.customer ?? null };
 }
 
-// ── Next step ────────────────────────────────────────────────────────────────
-
-export type TripStep =
-  | { kind: "start"; label: string }
-  | { kind: "planner"; label: string; detail: string }
-  | { kind: "later"; label: string; detail: string };
-
-// The dashboard's one big button. Phase 2 covers Start Load and handing the
-// driver to the Planner to load; Arrived / Loaded / Finish Delivery come with
-// phases 3 and 5.
-export function nextStep(trip: TripRow | null, pickup: TripPickupRow | null): TripStep {
-  if (!trip) return { kind: "start", label: "Start Load" };
-  const where = pickup?.name ? ` at ${pickup.name}` : "";
-  switch (trip.status) {
-    case "draft":
-      return { kind: "planner", label: "Go to Planner", detail: `Load${where}` };
-    case "loading":
-      return { kind: "planner", label: "Back to Load", detail: `Loading${where}` };
-    case "in_transit":
-      return { kind: "later", label: "In Transit", detail: "Delivery steps are coming next" };
-    case "delivering":
-      return { kind: "later", label: "Delivering", detail: "Delivery steps are coming next" };
-    default:
-      return { kind: "start", label: "Start Load" };
-  }
-}
+// The dashboard's next step lives in tripFlow.ts (nextStep).
 
 // ── Start Load ───────────────────────────────────────────────────────────────
 
@@ -196,19 +171,42 @@ export function buildStartLoad(
         },
   ];
 
-  // Deliveries: by position, reusing old ids; removed ones are cancelled.
-  const oldDeliveries = (ex?.deliveries ?? []).filter((d) => d.status !== "cancelled").sort((a, b) => a.seq - b.seq);
+  // Deliveries: only planned ones are editable. Completed (or cancelled)
+  // deliveries stay as they are; planned ones are matched by position,
+  // reusing old ids, and numbered after the completed ones. A planned
+  // delivery whose destination changed logs a reroute; removed ones are
+  // cancelled.
+  const kept = (ex?.deliveries ?? []).filter((d) => d.status !== "planned");
+  const oldDeliveries = (ex?.deliveries ?? []).filter((d) => d.status === "planned").sort((a, b) => a.seq - b.seq);
+  const seqBase = kept.reduce((m, d) => Math.max(m, d.seq), 0);
   const wanted = input.deliveries.filter((d) => !deliveryIsEmpty(d));
+  const reroutes: TripEventRow[] = [];
   const deliveries: StartLoadRows["deliveries"] = [
-    ...wanted.map((d, i) => ({
-      delivery_id: oldDeliveries[i]?.delivery_id ?? opts.newId(),
-      trip_id: tripId,
-      seq: i + 1,
-      location_id: d.locationId,
-      one_off_name: d.locationId ? null : blank(d.oneOffName),
-      delivery_type: d.deliveryType,
-      status: "planned" as const,
-    })),
+    ...wanted.map((d, i) => {
+      const old = oldDeliveries[i];
+      const row = {
+        delivery_id: old?.delivery_id ?? opts.newId(),
+        trip_id: tripId,
+        seq: seqBase + i + 1,
+        location_id: d.locationId,
+        one_off_name: d.locationId ? null : blank(d.oneOffName),
+        delivery_type: d.deliveryType,
+        status: "planned" as const,
+      };
+      if (old && ((old.location_id ?? null) !== row.location_id
+        || (!row.location_id && (old.one_off_name ?? null) !== row.one_off_name)
+        || old.delivery_type !== row.delivery_type)) {
+        reroutes.push({
+          event_id: opts.newId(), trip_id: tripId, event_type: "delivery_rerouted", occurred_at: nowIso,
+          actor_id: input.userId, pickup_id: null, delivery_id: old.delivery_id,
+          payload: {
+            from: { location_id: old.location_id, one_off_name: old.one_off_name, delivery_type: old.delivery_type },
+            to: { location_id: row.location_id, one_off_name: row.one_off_name, delivery_type: row.delivery_type },
+          },
+        });
+      }
+      return row;
+    }),
     ...oldDeliveries.slice(wanted.length).map((d) => ({
       delivery_id: d.delivery_id,
       trip_id: tripId,
@@ -217,7 +215,7 @@ export function buildStartLoad(
   ];
 
   const events: TripEventRow[] = ex
-    ? []
+    ? reroutes
     : [{
         event_id: opts.newId(),
         trip_id: tripId,
@@ -291,10 +289,11 @@ export function linkLoadToOpenTrip(
   args: { userId: string; loadId: string; pickup: LoadPickupInfo; now: Date; newId: () => string },
 ): boolean {
   const trip = openTripForDriver(store.list("trips"), args.userId);
-  if (!trip || (trip.status !== "draft" && trip.status !== "loading")) return false;
+  if (!trip || (trip.status !== "draft" && trip.status !== "loading" && trip.status !== "in_transit")) return false;
   const pickups = store.list("trip_pickups", (p) => p.trip_id === trip.trip_id).sort((a, b) => a.seq - b.seq);
   if (pickups.some((p) => p.load_id === args.loadId)) return true;
-  const target = pickups.find((p) => !p.load_id);
+  // A pickup already left is done; a rack hop adds a new one.
+  const target = pickups.find((p) => !p.load_id && !p.left_at);
   if (!target) return false;
   store.put("trip_pickups", { pickup_id: target.pickup_id, load_id: args.loadId, ...pickupFields(args.pickup) });
   store.put("trips", { trip_id: trip.trip_id, status: "loading" });

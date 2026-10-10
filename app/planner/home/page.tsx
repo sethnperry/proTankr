@@ -9,31 +9,56 @@
 // trip store (lib/trips) and syncs in the background, so a driver with no
 // signal at the terminal still gets a working button.
 //
-// Phase 2 covers Start Load and handing the driver to the Planner. The load
-// itself is still begun/cancelled in the Planner, which attaches it to this
-// trip (useLoadWorkflow -> linkLoadToOpenTrip). Arrived/Loaded/Delivery steps
-// come in later phases.
+// The big button walks the trip: Start Load → Arrived → (Planner) → Loaded →
+// Arrived → Finish Delivery. The load itself is begun in the Planner, which
+// attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { newId } from "@/lib/trips/tripStore";
-import { useDeliveryLocations, useTripHydration, locationLabel } from "@/lib/trips/useTripHydration";
+import { useTripHydration } from "@/lib/trips/useTripHydration";
+import { rememberTanks, useDeliveryLocationList, useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
+import { locationPlace, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import {
   applyStartLoad,
   buildStartLoad,
   cancelTrip,
   lastShipperCustomer,
-  nextStep,
   openTripForDriver,
   truckBeginMiles,
   tripChildren,
   type StartLoadDelivery,
 } from "@/lib/trips/tripLogic";
-import type { TripRow } from "@/lib/trips/types";
+import {
+  activePickup,
+  addPickup,
+  arriveDelivery,
+  arrivePickup,
+  compartmentsForDelivery,
+  confirmLoaded,
+  finishDelivery,
+  handoffCandidate,
+  nextStep,
+  onBoard,
+  pickupNeedsOdometer,
+  plannedDeliveries,
+  rerouteDelivery,
+  splitToNewDelivery,
+  takeOverTrip,
+  tripSnapshot,
+  type DeliveryDestination,
+} from "@/lib/trips/tripFlow";
+import type { TripDeliveryRow, TripRow } from "@/lib/trips/types";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
+import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
+import { FinishDeliverySheet, type FinishDeliverySubmit } from "../components/trip/FinishDeliverySheet";
+import { LocationPicker } from "../components/trip/LocationPicker";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -51,14 +76,23 @@ const card: React.CSSProperties = {
   padding: 14,
 };
 const muted = "rgba(255,255,255,0.5)";
+const smallLink: React.CSSProperties = {
+  border: "none", background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0,
+};
+
+type PickerMode =
+  | { mode: "add" }
+  | { mode: "split"; ids: string[]; from: string | null }
+  | { mode: "reroute"; delivery: TripDeliveryRow };
 
 export default function HomePage() {
   const shell = useCalculatorShell();
   const router = useRouter();
   const { equipment, location, terminals, expirations } = shell;
   const userId = shell.effectiveUserId || null;
+  const companyId = shell.companyId || null;
   const truckId = equipment.selectedCombo?.truck_id ?? equipment.currentTruckId ?? null;
-  const trailerId = equipment.selectedCombo?.trailer_id ?? null;
+  const trailerId = equipment.selectedCombo?.trailer_id ?? equipment.currentTrailerId ?? null;
 
   // Same audience as the driver Planner. Waits for role/super-admin/solo to
   // resolve, same as the Cards and Dispatch gates.
@@ -70,8 +104,23 @@ export default function HomePage() {
   }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
 
   const { state, store, syncNow, pendingCount, failed } = useTripStore(userId);
-  useTripHydration(store, userId, truckId);
-  const locations = useDeliveryLocations(shell.companyId, userId);
+  useTripHydration(store, userId, truckId, trailerId);
+  const { settings, reasons } = useTripSettings(companyId);
+  const signature = useDriverSignature(userId);
+  const locList = useDeliveryLocationList(companyId, userId);
+  const locations = locList.locations;
+  const { data: products } = useProductsCatalog();
+  const { data: terminalCatalog } = useTerminalsCatalog();
+
+  const productName = (id: string | null) => {
+    if (!id) return "Product";
+    const p = products.find((x) => x.product_id === id);
+    return p ? String(p.display_name || p.product_name || "Product") : "Product";
+  };
+  const deliveryName = (d: TripDeliveryRow) => {
+    const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null;
+    return loc ? locationTitle(loc) : d.one_off_name ?? "Delivery";
+  };
 
   const trips = useMemo(() => Object.values(state.rows.trips ?? {}) as TripRow[], [state]);
   const openTrip = userId ? openTripForDriver(trips, userId) : null;
@@ -80,7 +129,13 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store, openTrip?.trip_id, state],
   );
-  const step = nextStep(openTrip, children?.pickup ?? null);
+  const snap = useMemo(
+    () => (store && openTrip ? tripSnapshot(store, openTrip.trip_id) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store, openTrip?.trip_id, state],
+  );
+  const step = nextStep(openTrip, snap, deliveryName);
+  const handoff = !openTrip && userId ? handoffCandidate(trips, trailerId, userId) : null;
 
   // ── Current terminal (the Planner's) ───────────────────────────────────────
   const terminalName = useMemo(() => {
@@ -96,6 +151,14 @@ export default function HomePage() {
   const equipmentLabel = equipment.equipmentLabel
     ?? (equipment.isBobtail ? `Truck ${equipment.currentTruckName ?? ""} (bobtail)`.trim() : "No equipment selected");
 
+  // Near Me measures from the pickup terminal (§4).
+  const origin = useMemo<LatLon | null>(() => {
+    const p = snap ? activePickup(snap.pickups) ?? [...snap.pickups].reverse().find((x) => x.terminal_id) : null;
+    const id = String(p?.terminal_id || location.selectedTerminalId || "");
+    const t = id ? terminalCatalog.find((x) => String(x.terminal_id) === id) : null;
+    return t && t.lat != null && t.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null;
+  }, [snap, location.selectedTerminalId, terminalCatalog]);
+
   // ── Start Load prefills ────────────────────────────────────────────────────
   const [sheetOpen, setSheetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -103,14 +166,15 @@ export default function HomePage() {
   const editing = !!openTrip;
 
   const initialValues = useMemo<StartLoadValues>(() => {
-    if (openTrip && children) {
+    if (openTrip && children && snap) {
+      const planned = plannedDeliveries(snap.deliveries);
       return {
         orderNumber: children.primaryOrder?.order_number ?? "",
         extraOrderNumbers: children.extraOrders.map((o) => o.order_number ?? ""),
         shipper: openTrip.shipper ?? "",
         customer: openTrip.customer ?? "",
-        deliveries: children.deliveries.length
-          ? children.deliveries.map((d) => ({ locationId: d.location_id, oneOffName: d.one_off_name, deliveryType: d.delivery_type }))
+        deliveries: planned.length
+          ? planned.map((d) => ({ locationId: d.location_id, oneOffName: d.one_off_name, deliveryType: d.delivery_type }))
           : [{ locationId: null, oneOffName: "", deliveryType: "drop" }],
         beginMiles: openTrip.begin_miles == null ? "" : String(openTrip.begin_miles),
       };
@@ -141,10 +205,10 @@ export default function HomePage() {
       if (star) return { locationId: star.location_id, oneOffName: null, deliveryType: star.delivery_type };
       return { locationId: null, oneOffName: "", deliveryType: "drop" };
     }
-  }, [openTrip, children, trips, userId, truckId, store, locations]);
+  }, [openTrip, children, snap, trips, userId, truckId, store, locations]);
 
   const submit = (v: StartLoadValues) => {
-    if (!store || !userId || !shell.companyId) {
+    if (!store || !userId || !companyId) {
       setError("Still signing you in. Try again in a moment.");
       return;
     }
@@ -154,7 +218,7 @@ export default function HomePage() {
     try {
       const rows = buildStartLoad(
         {
-          companyId: shell.companyId,
+          companyId,
           userId,
           truckId,
           trailerId,
@@ -198,29 +262,155 @@ export default function HomePage() {
     void syncNow();
   };
 
-  const onBigButton = () => {
-    if (step.kind === "start") {
-      setError(null);
-      setSheetOpen(true);
-    } else if (step.kind === "planner") {
-      router.push("/planner");
+  // ── Pickup / delivery steps ────────────────────────────────────────────────
+  const [loadedOpen, setLoadedOpen] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [picker, setPicker] = useState<PickerMode | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tripId: string | null } | null>(null);
+  const clock = () => ({ now: new Date(), newId });
+
+  const loadedPickup = step.kind === "loaded" ? step.pickup : null;
+  const finishDeliveryRow = step.kind === "finish_delivery" ? step.delivery : null;
+
+  const onLoadedSubmit = (v: LoadedSubmit) => {
+    if (!store || !userId || !companyId || !loadedPickup) return;
+    confirmLoaded(store, {
+      userId, companyId, trailerId, pickup: loadedPickup, ...v, ...clock(),
+    });
+    setLoadedOpen(false);
+    setNotice({ text: "Loaded. Drive safe.", tripId: null });
+    void syncNow();
+  };
+
+  const onFinishSubmit = async (v: FinishDeliverySubmit) => {
+    if (!store || !userId || !companyId || !finishDeliveryRow || !openTrip) return;
+    const tripId = openTrip.trip_id;
+    const { tripComplete } = finishDelivery(store, {
+      userId, companyId, trailerId, delivery: finishDeliveryRow, ...v, ...clock(),
+    });
+    setFinishOpen(false);
+    setNotice(tripComplete
+      ? { text: "Trip complete.", tripId }
+      : { text: "Delivery finished.", tripId: null });
+    void syncNow();
+    if (finishDeliveryRow.location_id) {
+      const seen = v.tanks.map((t) => ({ tank_number: t.tank_number, product_id: t.product_id }));
+      await rememberTanks(finishDeliveryRow.location_id, seen, locList.tanks);
+      void locList.reload();
     }
+  };
+
+  const onPick = (to: DeliveryDestination) => {
+    if (!store || !userId || !openTrip || !picker || !snap) return;
+    if (picker.mode === "reroute") {
+      rerouteDelivery(store, { userId, delivery: picker.delivery, to, ...clock() });
+    } else {
+      const ids = picker.mode === "split" ? picker.ids : onBoard(snap.compLoads).map((c) => c.compartment_load_id);
+      splitToNewDelivery(store, {
+        userId, tripId: openTrip.trip_id, compartmentLoadIds: ids, to,
+        fromDeliveryId: picker.mode === "split" ? picker.from : null, ...clock(),
+      });
+    }
+    setPicker(null);
+    void syncNow();
+  };
+
+  const addAnotherPickup = () => {
+    if (!store || !userId || !openTrip) return;
+    addPickup(store, {
+      userId, tripId: openTrip.trip_id,
+      terminalId: location.selectedTerminalId || null,
+      rackId: location.selectedRackId || null,
+      name: terminalName,
+      city: location.selectedCity || null,
+      state: location.selectedState || null,
+      ...clock(),
+    });
+    void syncNow();
+  };
+
+  const onBigButton = () => {
+    setNotice(null);
+    if (!store || !userId) return;
+    switch (step.kind) {
+      case "start":
+        setError(null);
+        setSheetOpen(true);
+        break;
+      case "planner":
+        router.push("/planner");
+        break;
+      case "arrive_pickup":
+        arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
+        void syncNow();
+        break;
+      case "loaded":
+        setLoadedOpen(true);
+        break;
+      case "add_delivery":
+        setPicker({ mode: "add" });
+        break;
+      case "arrive_delivery":
+        arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
+        void syncNow();
+        break;
+      case "finish_delivery":
+        setFinishOpen(true);
+        break;
+    }
+  };
+
+  // ── Handoff (§10) ──────────────────────────────────────────────────────────
+  const [handoffName, setHandoffName] = useState<string | null>(null);
+  useEffect(() => {
+    const id = handoff?.driver_id;
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc("get_display_names_full", { p_user_ids: [id] });
+      const row = ((data ?? []) as any[]).find((r) => r?.user_id === id);
+      if (!cancelled) setHandoffName(row?.display_name ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [handoff?.driver_id]);
+  const doTakeOver = () => {
+    if (!store || !userId || !handoff) return;
+    takeOverTrip(store, { userId, trip: handoff, truckId, ...clock() });
+    void syncNow();
   };
 
   const expired = expirations.expiredCount ?? 0;
   const warning = expirations.warningCount ?? 0;
   const canCards = canReachDestination("cards", shell.role, shell.isSuperAdmin, shell.isSolo ?? false);
 
-  const deliveryText = (children?.deliveries ?? [])
-    .map((d) => {
-      const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null;
-      return loc ? locationLabel(loc) : d.one_off_name ?? "Delivery";
-    })
-    .join(" · ");
+  const pickups = snap?.pickups ?? [];
+  const liveDeliveries = (snap?.deliveries ?? []).filter((d) => d.status !== "cancelled");
+  const anyDelivered = liveDeliveries.some((d) => d.status === "complete");
+  const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered;
+  const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 40px", color: "#fff" }}>
       <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.02, marginBottom: 12 }}>Driver Dashboard</div>
+
+      {/* Handoff */}
+      {handoff && (
+        <div style={{ ...card, marginBottom: 14, borderColor: "rgba(251,191,36,0.5)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>
+            {handoffName ?? "Another driver"} has an open trip on this trailer.
+          </div>
+          <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>
+            Take it over to finish the deliveries.
+          </div>
+          <button type="button" onClick={doTakeOver}
+            style={{ marginTop: 10, borderRadius: 10, border: "none", background: "#fbbf24", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+            Take Over Trip
+          </button>
+        </div>
+      )}
+
       {/* Trip */}
       {openTrip ? (
         <div style={{ ...card, marginBottom: 14 }}>
@@ -228,10 +418,7 @@ export default function HomePage() {
             <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Current trip · {STATUS_LABEL[openTrip.status]}
             </div>
-            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }}
-              style={{ border: "none", background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>
-              Edit
-            </button>
+            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
           </div>
           <div style={{ fontSize: 18, fontWeight: 800 }}>
             {children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "No order number"}
@@ -244,16 +431,47 @@ export default function HomePage() {
               {[openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ")}
             </div>
           )}
-          <div style={{ fontSize: 14, marginTop: 10 }}>
-            <span style={{ color: muted }}>Pickup </span>{children?.pickup?.name ?? "Not set"}
-          </div>
-          <div style={{ fontSize: 14, marginTop: 4 }}>
-            <span style={{ color: muted }}>Delivery </span>{deliveryText || "Not set"}
-          </div>
-          {openTrip.status === "draft" && (
-            <div style={{ marginTop: 12 }}>
-              {confirmCancel ? (
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+
+          {pickups.map((p, i) => (
+            <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6 }}>
+              <span style={{ color: muted, width: 66, flexShrink: 0 }}>{pickups.length > 1 ? `Pickup ${i + 1}` : "Pickup"}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>{p.name ?? "Not set"}</span>
+              <span style={{ color: muted, fontSize: 12 }}>{p.left_at ? "Loaded" : p.arrived_at ? "Arrived" : ""}</span>
+            </div>
+          ))}
+          {liveDeliveries.length === 0 && (
+            <div style={{ fontSize: 14, marginTop: 4 }}><span style={{ color: muted }}>Delivery </span>Not set</div>
+          )}
+          {liveDeliveries.map((d, i) => (
+            <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
+              <span style={{ color: muted, width: 66, flexShrink: 0 }}>{liveDeliveries.length > 1 ? `Delivery ${i + 1}` : "Delivery"}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                {deliveryName(d)}
+                {d.location_id && (() => {
+                  const loc = locations.find((l) => l.location_id === d.location_id);
+                  const place = loc ? locationPlace(loc) : "";
+                  return place ? <span style={{ color: muted, fontSize: 12 }}> · {place}</span> : null;
+                })()}
+              </span>
+              {d.status === "complete" ? (
+                <span style={{ color: muted, fontSize: 12 }}>Done</span>
+              ) : (
+                <button type="button" onClick={() => setPicker({ mode: "reroute", delivery: d })} style={{ ...smallLink, fontSize: 12 }}>
+                  Change
+                </button>
+              )}
+            </div>
+          ))}
+
+          <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+            {canAddPickup && (
+              <button type="button" onClick={addAnotherPickup} style={{ ...smallLink, color: muted }}>
+                + Another pickup{terminalName ? ` (${terminalName})` : ""}
+              </button>
+            )}
+            {openTrip.status === "draft" && (
+              confirmCancel ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
                   <span style={{ fontSize: 13, color: "#f87171", flex: 1 }}>Cancel this trip?</span>
                   <button type="button" onClick={doCancelTrip}
                     style={{ borderRadius: 8, border: "1px solid #f87171", background: "transparent", color: "#f87171", padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -265,13 +483,15 @@ export default function HomePage() {
                   </button>
                 </div>
               ) : (
-                <button type="button" onClick={() => setConfirmCancel(true)}
-                  style={{ border: "none", background: "transparent", color: muted, fontSize: 13, cursor: "pointer", padding: 0 }}>
+                <button type="button" onClick={() => setConfirmCancel(true)} style={{ ...smallLink, color: muted }}>
                   Cancel trip
                 </button>
-              )}
-            </div>
-          )}
+              )
+            )}
+            <button type="button" onClick={() => router.push(`/planner/trips/${openTrip.trip_id}`)} style={{ ...smallLink, color: muted }}>
+              PTD ›
+            </button>
+          </div>
         </div>
       ) : (
         <div style={{ ...card, marginBottom: 14 }}>
@@ -280,16 +500,23 @@ export default function HomePage() {
         </div>
       )}
 
+      {notice && (
+        <div style={{ ...card, marginBottom: 14, borderColor: "rgba(74,222,128,0.5)", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{notice.text}</span>
+          {notice.tripId && (
+            <button type="button" onClick={() => router.push(`/planner/trips/${notice.tripId}`)} style={smallLink}>View PTD ›</button>
+          )}
+          <button type="button" onClick={() => setNotice(null)} style={{ ...smallLink, color: muted }}>✕</button>
+        </div>
+      )}
+
       {/* Next step */}
       <button
         type="button"
         onClick={onBigButton}
-        disabled={step.kind === "later"}
         style={{
           width: "100%", padding: "20px 0", borderRadius: 14, border: "none",
-          background: step.kind === "later" ? "rgba(255,255,255,0.15)" : "#fff",
-          color: step.kind === "later" ? "rgba(255,255,255,0.7)" : "#000",
-          fontSize: 20, fontWeight: 800, cursor: step.kind === "later" ? "default" : "pointer",
+          background: "#fff", color: "#000", fontSize: 20, fontWeight: 800, cursor: "pointer",
         }}
       >
         {step.label}
@@ -308,6 +535,7 @@ export default function HomePage() {
           value={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring soon` : "All current"}
           valueColor={expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined}
           onClick={() => shell.setExpModalOpen(true)}
+          last={!(pendingCount > 0 || failed.length > 0)}
         />
         {(pendingCount > 0 || failed.length > 0) && (
           <InfoRow
@@ -324,6 +552,8 @@ export default function HomePage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
         <Tile label="Planner" onClick={() => router.push("/planner")} />
         <Tile label="Equipment" onClick={() => shell.setEquipOpen(true)} />
+        <Tile label="Trips & PTDs" onClick={() => router.push("/planner/trips")} />
+        <Tile label="Delivery Locations" onClick={() => router.push("/planner/locations")} />
         {canCards && <Tile label="Cards" onClick={() => router.push("/planner/cards")} />}
         <Tile label="Reports" onClick={() => router.push("/planner/reports")} />
       </div>
@@ -341,6 +571,55 @@ export default function HomePage() {
         error={error}
         onClose={() => setSheetOpen(false)}
         onSubmit={submit}
+      />
+
+      {loadedPickup && snap && (
+        <LoadedSheet
+          open={loadedOpen}
+          pickup={loadedPickup}
+          compLoads={snap.compLoads.filter((c) => c.pickup_id === loadedPickup.pickup_id && c.disposition !== "cancelled")}
+          orders={children?.orders ?? []}
+          settings={settings}
+          reasons={reasons.filter((r) => r.kind === "loading" && r.is_active)}
+          needsOdometer={pickupNeedsOdometer(snap.pickups, loadedPickup.pickup_id)}
+          productName={productName}
+          signature={signature.svg}
+          onSaveSignature={signature.save}
+          onSubmit={onLoadedSubmit}
+          onClose={() => setLoadedOpen(false)}
+        />
+      )}
+
+      {finishDeliveryRow && snap && store && (
+        <FinishDeliverySheet
+          open={finishOpen}
+          title={`Finish · ${deliveryName(finishDeliveryRow)}`}
+          delivery={finishDeliveryRow}
+          compartments={compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id)}
+          savedTanks={store.list("trip_delivery_tanks", (t) => t.delivery_id === finishDeliveryRow.delivery_id)}
+          locationTanks={finishDeliveryRow.location_id ? locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id) : []}
+          settings={settings}
+          reasons={reasons.filter((r) => r.kind === "delivery" && r.is_active)}
+          isLast={plannedCount <= 1}
+          beginMiles={openTrip?.begin_miles ?? null}
+          productName={productName}
+          signature={signature.svg}
+          onSaveSignature={signature.save}
+          onSplit={(ids) => setPicker({ mode: "split", ids, from: finishDeliveryRow.delivery_id })}
+          onSubmit={(v) => void onFinishSubmit(v)}
+          onClose={() => setFinishOpen(false)}
+        />
+      )}
+
+      <LocationPicker
+        open={!!picker}
+        title={picker?.mode === "reroute" ? "Change delivery" : picker?.mode === "split" ? "Send to another delivery" : "Add delivery"}
+        origin={origin}
+        locations={locations}
+        onToggleStar={(id, star) => void locList.toggleStar(id, star).catch(() => {})}
+        onPick={onPick}
+        onClose={() => setPicker(null)}
+        onManage={() => { setPicker(null); router.push("/planner/locations"); }}
       />
     </div>
   );

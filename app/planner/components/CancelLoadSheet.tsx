@@ -256,10 +256,10 @@ export default function CancelLoadSheet({
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
               Logging or updating your card keeps today's terminal access. Going back to the planner undoes it.
             </div>
-            <button type="button" style={primaryRowStyle} onClick={onLogTheLoad}>Log the Load</button>
+            <button type="button" style={primaryRowStyle} onClick={onLogTheLoad}>Loaded</button>
             <button type="button" style={secondaryRowStyle} onClick={onUpdateCardOnly}>Update Card, No Load</button>
             <button type="button" style={secondaryRowStyle} onClick={() => setMode("reportType")}>Report Terminal Issue</button>
-            <button type="button" style={cancelStyle} onClick={onBackToPlanner}>Back to Planner</button>
+            <button type="button" style={cancelStyle} onClick={onBackToPlanner}>Didn&apos;t Load / Cancel</button>
           </>
         )}
 

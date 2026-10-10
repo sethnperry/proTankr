@@ -8,7 +8,6 @@ import {
   cancelTrip,
   lastShipperCustomer,
   linkLoadToOpenTrip,
-  nextStep,
   openTripForDriver,
   retagLoadPickup,
   truckBeginMiles,
@@ -145,13 +144,6 @@ test("shipper/customer prefill from the driver's last trip that had them", () =>
     trip({ shipper: "Cancelled", status: "cancelled", started_at: "2026-10-03T00:00:00Z" }),
   ];
   assert.deepEqual(lastShipperCustomer(trips, ME), { shipper: "New", customer: "Cust" });
-});
-
-test("next step follows the trip state", () => {
-  assert.equal(nextStep(null, null).label, "Start Load");
-  const p = { name: "Marathon" } as never;
-  assert.deepEqual(nextStep(trip({ status: "draft" }), p), { kind: "planner", label: "Go to Planner", detail: "Load at Marathon" });
-  assert.equal(nextStep(trip({ status: "loading" }), null).label, "Back to Load");
 });
 
 test("a Planner load attaches to the open trip and a cancel puts it back", () => {

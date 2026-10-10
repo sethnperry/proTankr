@@ -12,9 +12,23 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { OPEN_STATUSES } from "./tripLogic";
 import type { TripStore } from "./tripStore";
-import type { DeliveryType, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "./types";
+import type {
+  CompartmentReadinessRow,
+  DeliveryType,
+  TripCompartmentLoadRow,
+  TripDeliveryRow,
+  TripDeliveryTankRow,
+  TripOrderRow,
+  TripPickupRow,
+  TripRow,
+} from "./types";
 
-export function useTripHydration(store: TripStore | null, userId: string | null, truckId: string | null) {
+export function useTripHydration(
+  store: TripStore | null,
+  userId: string | null,
+  truckId: string | null,
+  trailerId: string | null = null,
+) {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -22,37 +36,50 @@ export function useTripHydration(store: TripStore | null, userId: string | null,
     setLoading(true);
     try {
       const open = [...OPEN_STATUSES];
-      const [openRes, recentRes, truckRes] = await Promise.all([
+      const empty = Promise.resolve({ data: [] as unknown[], error: null });
+      const [openRes, recentRes, truckRes, trailerRes, readinessRes] = await Promise.all([
         supabase.from("trips").select("*").eq("driver_id", userId).in("status", open),
         supabase.from("trips").select("*").eq("driver_id", userId).order("created_at", { ascending: false }).limit(10),
         truckId
           ? supabase.from("trips").select("*").eq("truck_id", truckId).not("end_miles", "is", null)
               .order("completed_at", { ascending: false }).limit(1)
-          : Promise.resolve({ data: [], error: null }),
+          : empty,
+        // Another driver's open trip on this trailer (handoff, §10).
+        trailerId ? supabase.from("trips").select("*").eq("trailer_id", trailerId).in("status", open) : empty,
+        trailerId ? supabase.from("compartment_readiness").select("*").eq("trailer_id", trailerId) : empty,
       ]);
       const trips = new Map<string, TripRow>();
-      for (const res of [openRes, recentRes, truckRes]) {
+      for (const res of [openRes, recentRes, truckRes, trailerRes]) {
         for (const t of ((res.data ?? []) as TripRow[])) trips.set(t.trip_id, t);
       }
       store.hydrate("trips", [...trips.values()]);
+      store.hydrate("compartment_readiness", (readinessRes.data ?? []) as CompartmentReadinessRow[]);
 
-      const openIds = ((openRes.data ?? []) as TripRow[]).map((t) => t.trip_id);
+      const openIds = [...trips.values()].filter((t) => OPEN_STATUSES.has(t.status)).map((t) => t.trip_id);
       if (openIds.length) {
-        const [o, p, d] = await Promise.all([
+        const [o, p, d, c] = await Promise.all([
           supabase.from("trip_orders").select("*").in("trip_id", openIds),
           supabase.from("trip_pickups").select("*").in("trip_id", openIds),
           supabase.from("trip_deliveries").select("*").in("trip_id", openIds),
+          supabase.from("trip_compartment_loads").select("*").in("trip_id", openIds),
         ]);
         store.hydrate("trip_orders", (o.data ?? []) as TripOrderRow[]);
         store.hydrate("trip_pickups", (p.data ?? []) as TripPickupRow[]);
-        store.hydrate("trip_deliveries", (d.data ?? []) as TripDeliveryRow[]);
+        const deliveries = (d.data ?? []) as TripDeliveryRow[];
+        store.hydrate("trip_deliveries", deliveries);
+        store.hydrate("trip_compartment_loads", (c.data ?? []) as TripCompartmentLoadRow[]);
+        const deliveryIds = deliveries.map((x) => x.delivery_id);
+        if (deliveryIds.length) {
+          const t = await supabase.from("trip_delivery_tanks").select("*").in("delivery_id", deliveryIds);
+          store.hydrate("trip_delivery_tanks", (t.data ?? []) as TripDeliveryTankRow[]);
+        }
       }
     } catch (e) {
       console.warn("[trips] hydrate failed:", e);
     } finally {
       setLoading(false);
     }
-  }, [store, userId, truckId]);
+  }, [store, userId, truckId, trailerId]);
 
   useEffect(() => {
     void refresh();

@@ -14,6 +14,8 @@ import type { CapacityResult } from "@/lib/capacity/computeAvailableCapacity";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import { linkLoadToOpenTrip, unlinkCancelledLoad } from "@/lib/trips/tripLogic";
+import { recordLoadCompleted } from "@/lib/trips/tripFlow";
+import { netMethodForProduct } from "@/lib/trips/netGallons";
 
 /** What record_load_utilization returns. Nullable percentage on purpose: an
  *  excluded load genuinely has no score, and null says that where a 0 would
@@ -503,6 +505,30 @@ export function useLoadWorkflow({
         completed_at: new Date().toISOString(),
         product_updates,
       });
+
+// Trip workflow (phase 3): the load's compartments become the trip's
+// compartment loads (net calculated), on the pickup this load is attached
+// to. Local write, non-fatal; no trip -> nothing happens.
+if (authUserId) {
+  try {
+    recordLoadCompleted(getTripStore(authUserId), {
+      userId: authUserId,
+      loadId: targetLoadId,
+      readings: readings.map((r) => ({
+        comp: r.comp,
+        productId: r.productId,
+        gallons: r.gallons,
+        api: Number.isFinite(r.api) ? r.api : null,
+        tempF: r.tempF != null && Number.isFinite(r.tempF) ? r.tempF : null,
+        netMethod: netMethodForProduct(productNameById.get(r.productId) ?? null),
+      })),
+      now: new Date(),
+      newId: newTripId,
+    });
+  } catch (e) {
+    console.warn("[trips] record load on trip failed (non-fatal):", e);
+  }
+}
 
 // Update terminal temp bias with the observed error (self-training)
 // error = actual_temp - UNBIASED prediction.

@@ -797,7 +797,7 @@ export default function LoadingModal(props: {
                     lineHeight: 1.3,
                   }}
                 >
-                  None of your planned products are sold at {terminalLabel || "this terminal"}. Tap “Back to Planner” below to swap them for products carried here.
+                  None of your planned products are sold at {terminalLabel || "this terminal"}. Tap “Didn’t Load / Cancel” below to swap them for products carried here.
                 </div>
               ) : (
                 <div style={styles.help}>No filled compartments in the plan.</div>
@@ -1070,7 +1070,7 @@ export default function LoadingModal(props: {
               disabled={busy}
               style={{ ...(styles as any).doneBtn, opacity: busy ? 0.55 : 1, width: "100%" }}
             >
-              {loadedDisabled ? (loadedLabel ?? "Saving…") : "Log the Load"}
+              {loadedDisabled ? (loadedLabel ?? "Saving…") : "Loaded"}
             </button>
 
             <button
@@ -1112,7 +1112,7 @@ export default function LoadingModal(props: {
                 opacity: busy ? 0.55 : 1,
               }}
             >
-              Back to Planner
+              Didn&apos;t Load / Cancel
             </button>
           </div>
         )}
@@ -1162,7 +1162,7 @@ export default function LoadingModal(props: {
       />
       <Spotlight
         rect={logLoadButtonRect}
-        title="Log the Load"
+        title="Loaded"
         body="When you're ready, tap here."
         actionLabel="Got it"
         onAction={() => setTourStep(null)}

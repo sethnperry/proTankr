@@ -3138,7 +3138,7 @@ const lastProductInfoById = useMemo(() => {
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}
         loadedDisabled={loadWorkflow.completeBusy}
-        loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Log the Load"}
+        loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Loaded"}
         errorMessage={loadWorkflow.completeError}
         allPlannedUnavailable={unavailableComps.length > 0}
         tuneRows={tuneRows}
