@@ -84,9 +84,10 @@ Per compartment, separate from the trailer's maintenance/wash statuses:
 - The existing wash record gains a type: **Exterior** or **Interior**. Interior
   sets the chosen compartments to Cleaned & Purged.
 - **Switch-loading warning**: because Residue remembers the last product, the app
-  can warn when loading a product into a compartment whose last product creates
-  a static-ignition risk (classic case: diesel into a compartment that last held
-  gasoline). Exact rule table to be confirmed before building.
+  warns when a **diesel-family product** (diesel/ULSD, dyed diesel, biodiesel
+  blends, kerosene, jet, heating oil) is planned into a compartment whose
+  residue is **gasoline** (any grade or ethanol blend). That's the one rule; it
+  is a warning, not a block. Shown on the plan before loading, not after.
 
 ---
 
@@ -177,13 +178,24 @@ Today's planner uses a simplified expansion model that's fine for weight but is
 **not** the terminal method. For net we implement the standard volume
 correction:
 
-- Gasoline, diesel, jet and other refined products: API MPMS Ch. 11.1 /
-  ASTM D1250 (Table 6B), including its rounding rules (input temp and API to
-  0.1, correction factor to the standard's specified decimals, net to whole
-  gallons) — exact rounding to be confirmed against real BOLs.
-- Ethanol and biodiesel (B100 and blends): different methods. Confirm which each
-  uses before shipping; until confirmed, prefill net only for refined products
-  and leave these for the driver to enter from the BOL.
+**Decision**: one method to start — API MPMS Ch. 11.1 / ASTM D1250
+**Table 6B** (generalized refined products) — for every product except neat
+ethanol and B100. That covers gasoline (all grades, including finished E10/E15),
+diesel, dyed diesel, biodiesel blends (B5/B20), kerosene, jet. Rounding per the
+standard (temp and API to 0.1, correction factor to the standard's decimals,
+net to whole gallons), confirmed by the BOL test set.
+
+- **Neat ethanol and B100**: no net prefill; the driver enters net from the BOL.
+  They use different correction methods and are rare loads; not worth adding
+  until there's demand.
+- **Each product is marked validated or not.** A product is validated once the
+  BOL test set shows our net matching to the gallon. All covered products
+  prefill net, but the ±2 gallon edited-net flag only appears on the PTD for
+  validated products, so an unproven calculation can never produce a flag.
+- Known risk the test set will settle: some terminals compute ethanol-blended
+  gasoline net per component (base gasoline + ethanol separately) instead of on
+  the blend. If BOLs show that, E10/E15 get the component method; until then
+  they stay unvalidated (prefilled, never flagged).
 
 **Gate before release**: collect 20–50 real BOLs across products and terminals,
 run our calculation on each BOL's own gross/temp/API, and ship only when ours
@@ -254,6 +266,9 @@ a new delivery with its own location, times and readings, still in the same trip
 
 ## 10. Deviations
 
+- **Shipper / customer per order number**: possible but very abnormal. Not shown
+  anywhere on the normal screens; reachable only from an order number's own
+  edit view. Defaults to the trip's shipper/customer.
 - **Extra order numbers**: up to one per compartment. Set per compartment only
   when added.
 - **Different BOL / supplier / pickup per product or compartment**: edited on
@@ -332,8 +347,6 @@ Delivered as a PDF the driver can share or print; stored with the trip.
 
 ## 15. Open items
 
-- Switch-loading rule table (which product sequences warn).
-- Net-gallon method for ethanol and biodiesel; exact rounding of the refined
-  products standard (settled by the BOL test set).
-- Whether shipper/customer can differ per order number on one trip.
+- Exact rounding of Table 6B and whether E10/E15 BOLs use per-component net
+  (both settled by the BOL test set).
 - PTD barcode scheme.
