@@ -412,7 +412,7 @@ export function useLoadWorkflow({
 
   const onLoadedFromLoadingModal = useCallback(async (
     compEntries: Record<number, { gallons: number; api: number; tempF: number }>,
-    opts?: { loadId?: string }
+    opts?: { loadId?: string; afterTripRecord?: () => void }
   ) => {
     // opts.loadId is set only by the "Edit Load" path (page.tsx wraps this
     // in onEditLoad, passing reportLoadId) -- re-running this exact
@@ -527,6 +527,13 @@ if (authUserId) {
     });
   } catch (e) {
     console.warn("[trips] record load on trip failed (non-fatal):", e);
+  }
+  // Planner trip mode: BOL, supplier, net, times, signature land on the
+  // compartment loads just written above.
+  try {
+    opts?.afterTripRecord?.();
+  } catch (e) {
+    console.warn("[trips] trip details after load failed (non-fatal):", e);
   }
 }
 

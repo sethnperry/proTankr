@@ -10563,3 +10563,29 @@ Open: late entry (§12) is not built; retained compartments get minimal
 handling; no product counts as validated until a BOL test set exists
 (`VALIDATED_PRODUCT_IDS` is empty). Verified: `tsc`, 173 tests, `next build
 --webpack`, and a static render of the PTD with string-shaped numbers.
+
+## Trip tap-through feedback (2026-10-11, branch `claude/gifted-babbage-r0evrs`)
+
+Nine items from Seth's first tap-through. Needs migration
+`supabase/migrations/20261011000000_trip_feedback.sql` (**not yet applied**;
+run `docs/trip-feedback-apply-checklist.sql` first). Until it runs, supplier
+rows and `supplier_id` on compartment loads won't sync. Not click-tested.
+
+- Order numbers and BOL numbers are deduped per company (`lib/trips/refCheck.ts`).
+- Delivery locations are picked from a shared list with an address
+  (LocationPicker/LocationEditor); drivers can add one.
+- Suppliers are their own deduped list (`useSuppliers`, `SupplierPicker`).
+- Tapping Arrived at a pickup opens the Planner; tapping Arrived at a
+  delivery opens Finish Delivery directly.
+- The Planner's Loaded step-through (LoadingModal) now asks per compartment
+  for BOL, supplier, gross, net, temp, API, then a times step and the loading
+  driver's signature. `page.tsx` records it via `confirmLoaded` (edits via
+  `updateLoadedCompartments`). Applies only when the load belongs to an open
+  trip's pickup; otherwise the Planner works as before.
+- Load report shows BOL/supplier/net per compartment and the times; its main
+  button is "Arrived at Delivery" (`/planner/home?arrive=1`).
+- PTD rearranged: barcode across the top, title row under it, per-pickup
+  box with times on their own rows and the loading driver's signature,
+  compartments as wrapping cards (the 11-column table ran off a phone),
+  deliveries as compartment → tank with Veeder-Root before/after, then
+  times, driver, consignee.

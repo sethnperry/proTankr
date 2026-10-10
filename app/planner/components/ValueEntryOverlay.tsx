@@ -21,6 +21,10 @@ export type ValueEntryField = {
   suffix?: string;
   /** Digits + at most one decimal point (API/Temp) vs. digits-only (gallons). Default false. */
   decimal?: boolean;
+  /** Free text (a BOL number): no number filtering, text keyboard. */
+  text?: boolean;
+  /** Shown after this field (e.g. the supplier button between BOL and gross). */
+  after?: React.ReactNode;
 };
 
 type Props = {
@@ -40,6 +44,10 @@ type Props = {
    *  "‹ Back" (stepping to the previous entry) on every step but the first,
    *  rather than adding a second control. Defaults to "Cancel". */
   cancelLabel?: string;
+  /** Red line above the buttons (e.g. "BOL already used"). */
+  error?: string | null;
+  /** Disables the submit button and relabels it (an async check is running). */
+  busyLabel?: string | null;
 };
 
 function sanitize(raw: string, decimal: boolean): string {
@@ -50,7 +58,10 @@ function sanitize(raw: string, decimal: boolean): string {
   return v;
 }
 
-export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel" }: Props) {
+export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel", error, busyLabel }: Props) {
+  // Many fields (the trip Loaded steps: BOL, gross, net, temp, API) get a
+  // smaller input so the card still fits above the keyboard.
+  const compact = fields.length > 3;
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   // Re-focus (and re-select) the first field whenever the step changes.
@@ -90,7 +101,8 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%", maxWidth: 280,
+          width: "100%", maxWidth: compact ? 320 : 280,
+          maxHeight: "calc(100dvh - 48px)", overflowY: "auto" as const, boxSizing: "border-box" as const,
           background: "#161616", border: "1px solid rgba(255,255,255,0.12)",
           borderRadius: 4, padding: 20,
           display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
@@ -101,7 +113,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
           {title}
         </div>
 
-        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: compact ? 8 : 12 }}>
           {fields.map((f, i) => (
             <div key={f.key} style={{ width: "100%" }}>
               {fields.length > 1 && (
@@ -113,17 +125,19 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                 <input
                   ref={i === 0 ? firstInputRef : undefined}
                   type="text"
-                  inputMode={f.decimal ? "decimal" : "numeric"}
-                  pattern={f.decimal ? undefined : "[0-9]*"}
+                  inputMode={f.text ? "text" : f.decimal ? "decimal" : "numeric"}
+                  pattern={f.text || f.decimal ? undefined : "[0-9]*"}
+                  autoCapitalize={f.text ? "characters" : undefined}
+                  autoCorrect={f.text ? "off" : undefined}
                   autoFocus={i === 0}
                   value={f.value}
-                  onChange={(e) => f.onChange(sanitize(e.target.value, !!f.decimal))}
+                  onChange={(e) => f.onChange(f.text ? e.target.value : sanitize(e.target.value, !!f.decimal))}
                   onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
                   style={{
                     width: "100%", textAlign: "center" as const,
                     background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.20)",
-                    color: "#fff", fontSize: 40, fontWeight: 700, padding: "4px 0",
+                    color: "#fff", fontSize: compact ? 26 : 40, fontWeight: 700, padding: compact ? "2px 0" : "4px 0",
                   }}
                 />
                 {f.suffix && (
@@ -132,6 +146,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                   </span>
                 )}
               </div>
+              {f.after}
             </div>
           ))}
         </div>
@@ -140,6 +155,10 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
             {hint}
           </div>
+        )}
+
+        {error && (
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", textAlign: "center" as const }}>{error}</div>
         )}
 
         <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 4 }}>
@@ -157,13 +176,15 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
           <button
             type="button"
             onClick={onSubmit}
+            disabled={!!busyLabel}
             style={{
               flex: 1, padding: "12px 0", borderRadius: 4,
               border: "none", background: "#fff",
               color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer",
+              opacity: busyLabel ? 0.5 : 1,
             }}
           >
-            {submitLabel}
+            {busyLabel || submitLabel}
           </button>
         </div>
       </div>

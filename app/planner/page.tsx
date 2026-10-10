@@ -88,7 +88,14 @@ import { computeSpotlightStep, type SpotlightTarget } from "./utils/setupCheckli
 import { isSetupGuideAcknowledged, markSetupGuideAcknowledged } from "./utils/tourProgress";
 import { recordLocationForSwitchTracking, hasSwitchedCity } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
-import { getTripStore } from "@/lib/trips/useTripStore";
+import { getTripStore, useTripStore } from "@/lib/trips/useTripStore";
+import { newId as newTripId } from "@/lib/trips/tripStore";
+import { useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
+import { useSuppliers } from "@/lib/trips/useSuppliers";
+import { bolConflicts } from "@/lib/trips/refCheck";
+import { confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
+import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips/types";
+import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
 import { retagLoadPickup } from "@/lib/trips/tripLogic";
 
@@ -1456,6 +1463,120 @@ export default function CalculatorPage() {
     activeSlotLetter,
     capacityResult,
   });
+
+  // ── Trip mode for the Loaded flow ─────────────────────────────────────────
+  // When this load is attached to a trip pickup, Plan Review's Loaded steps
+  // also take BOL, supplier and net per compartment, then times and the
+  // loading driver's signature, and the report's next step is Arrived at
+  // Delivery. No trip -> the Planner works exactly as before.
+  const tripStoreHook = useTripStore(effectiveUserId || null);
+  const tripStoreObj = tripStoreHook.store;
+  const { settings: tripSettings, reasons: tripReasons } = useTripSettings(shell.companyId || null);
+  const tripSignature = useDriverSignature(effectiveUserId || null);
+  const { suppliers: tripSuppliers, addSupplier: addTripSupplier } = useSuppliers(tripStoreObj, tripStoreHook.state, shell.companyId || null, effectiveUserId || null);
+  const tripLoadId = loadWorkflow.reportLoadId ?? loadWorkflow.activeLoadId ?? null;
+  const tripPickup = useMemo(() => {
+    if (!tripLoadId) return null;
+    const pickups = Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[];
+    const pk = pickups.find((p) => p.load_id === tripLoadId);
+    if (!pk) return null;
+    const trip = (tripStoreHook.state.rows.trips ?? {})[pk.trip_id] as TripRow | undefined;
+    if (!trip || trip.status === "complete" || trip.status === "cancelled") return null;
+    return pk;
+  }, [tripLoadId, tripStoreHook.state]);
+
+  const tripModeForLoading = useMemo<LoadingTripMode | null>(() => {
+    if (!tripPickup || !tripStoreObj || !shell.companyId) return null;
+    const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
+      .filter((c) => c.pickup_id === tripPickup.pickup_id && c.disposition !== "cancelled");
+    const compDefaults: LoadingTripMode["compDefaults"] = {};
+    for (const c of comps) {
+      compDefaults[c.comp_number] = {
+        bol: c.bol_number, supplier: c.supplier, supplierId: (c as any).supplier_id ?? null,
+        net: c.net_gallons,
+        netTouched: c.net_gallons != null && c.net_calculated_gallons != null && c.net_gallons !== c.net_calculated_gallons,
+      };
+    }
+    const snap = tripSnapshot(tripStoreObj, tripPickup.trip_id);
+    const allComps = Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[];
+    const trips = Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[];
+    const mine = new Set(comps.map((c) => c.compartment_load_id));
+    return {
+      pickupName: null,
+      settings: tripSettings,
+      reasons: tripReasons.filter((r) => r.kind === "loading" && r.is_active),
+      arrivedAt: tripPickup.arrived_at,
+      existingTimes: tripPickup.left_at ? { arrivedAt: tripPickup.arrived_at, beginAt: tripPickup.begin_at, leftAt: tripPickup.left_at } as StepTimes : null,
+      existingDelayReasonId: tripPickup.delay_reason_id,
+      existingDelayNote: tripPickup.delay_note,
+      needsOdometer: pickupNeedsOdometer(snap.pickups, tripPickup.pickup_id),
+      existingOdometer: tripPickup.odometer,
+      suppliers: tripSuppliers,
+      onAddSupplier: addTripSupplier,
+      checkBols: (values) => bolConflicts(trips, allComps, shell.companyId!, values, mine),
+      signature: tripSignature.svg,
+      onSaveSignature: tripSignature.save,
+      compDefaults,
+      onArrivedAtDelivery: () => {
+        loadWorkflow.closeLoadReport();
+        router.push("/planner/home?arrive=1");
+      },
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save]);
+
+  // Runs right after recordLoadCompleted wrote gross/temp/API for this load.
+  const recordTripLoaded = useCallback((extras: TripLoadExtras | undefined, editOnly: boolean) => {
+    if (!extras || !tripStoreObj || !tripPickup || !effectiveUserId || !shell.companyId) return;
+    const pickup = (tripStoreObj.list("trip_pickups", (p) => p.pickup_id === tripPickup.pickup_id)[0]) ?? tripPickup;
+    const comps = tripStoreObj.list("trip_compartment_loads", (c) => c.pickup_id === pickup.pickup_id && c.disposition !== "cancelled");
+    if (editOnly) {
+      updateLoadedCompartments(tripStoreObj, comps.map((c) => {
+        const x = extras.byComp[c.comp_number];
+        return {
+          compartment_load_id: c.compartment_load_id,
+          bol_number: x ? x.bol : c.bol_number,
+          supplier: x ? x.supplier : c.supplier,
+          supplier_id: x ? x.supplierId : ((c as any).supplier_id ?? null),
+          net_gallons: x ? x.net : c.net_gallons,
+        };
+      }));
+    } else if (extras.times) {
+      const edits: LoadedCompartmentEdit[] = comps.map((c) => {
+        const x = extras.byComp[c.comp_number];
+        return {
+          compartment_load_id: c.compartment_load_id,
+          comp_number: c.comp_number,
+          product_id: c.product_id,
+          order_id: c.order_id,
+          bol_number: x?.bol ?? c.bol_number,
+          supplier: x?.supplier ?? c.supplier,
+          supplier_id: x ? x.supplierId : ((c as any).supplier_id ?? null),
+          gross_gallons: c.gross_gallons,
+          net_gallons: x?.net ?? c.net_gallons,
+          net_calculated_gallons: c.net_calculated_gallons,
+          temp_f: c.temp_f,
+          api: c.api,
+        };
+      });
+      confirmLoaded(tripStoreObj, {
+        userId: effectiveUserId,
+        companyId: shell.companyId,
+        trailerId: equipment.selectedCombo?.trailer_id ?? equipment.currentTrailerId ?? null,
+        pickup,
+        times: extras.times,
+        delayReasonId: extras.delayReasonId ?? null,
+        delayNote: extras.delayNote ?? null,
+        odometer: extras.odometer ?? null,
+        compartments: edits,
+        signed: !!extras.signed,
+        now: new Date(),
+        newId: newTripId,
+      });
+    }
+    void tripStoreHook.syncNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId]);
 
   // ── Incentive running-average card ────────────────────────────────────────
   // Left side is this load's own recovered points; right side is the
@@ -3131,11 +3252,12 @@ const lastProductInfoById = useMemo(() => {
           actualGrossLbs: loadWorkflow.loadReport?.actual_gross_lbs ?? null,
         } : null}
         onNewLoad={loadWorkflow.closeLoadReport}
-        onEditLoad={(entries) => loadWorkflow.onLoadedFromLoadingModal(entries, { loadId: loadWorkflow.reportLoadId ?? undefined })}
+        onEditLoad={(entries, extras) => loadWorkflow.onLoadedFromLoadingModal(entries, { loadId: loadWorkflow.reportLoadId ?? undefined, afterTripRecord: () => recordTripLoaded(extras, true) })}
         onDeleteLoad={loadWorkflow.deleteReportedLoad}
         deleteBusy={loadWorkflow.reportBusy}
         deleteError={loadWorkflow.reportError}
-        onLoaded={(entries) => loadWorkflow.onLoadedFromLoadingModal(entries)}
+        onLoaded={(entries, extras) => loadWorkflow.onLoadedFromLoadingModal(entries, extras ? { afterTripRecord: () => recordTripLoaded(extras, false) } : undefined)}
+        trip={tripModeForLoading}
         onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}

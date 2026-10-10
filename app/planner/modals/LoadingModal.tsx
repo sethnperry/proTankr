@@ -9,6 +9,97 @@ import { isPlanReviewTourSeen, markPlanReviewTourSeen } from "../utils/tourProgr
 import { correctedGrossLbs, burnCreditLbs, LEGAL_GROSS_LBS as LEGAL_LIMIT_LBS } from "../utils/fuelBurn";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 import type { ReportLine } from "../hooks/useLoadWorkflow";
+import { SupplierPicker } from "../components/trip/SupplierPicker";
+import { DelayReasonField, SignatureAccept, TimesEditor, delayReasonOk, fieldInput, fieldLabel, fmtTime, numOrNull } from "../components/trip/tripUi";
+import { calculateNetGallons, netMethodForProduct } from "@/lib/trips/netGallons";
+import { defaultStepTimes, delayMinutes, needsDelayReason, timesProblem, type StepTimes } from "@/lib/trips/tripFlow";
+import { normalizeRef } from "@/lib/trips/refs";
+import type { SupplierRow } from "@/lib/trips/types";
+import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
+
+// ── Trip mode (2026-10-11) ─────────────────────────────────────────────────
+// When the load is attached to an open trip, "Loaded" also collects what the
+// dashboard's Loaded screen used to: BOL and supplier per compartment (carried
+// into the next compartment, editable), net gallons (calculated, editable to
+// match the BOL), then one window for the times and one for the loading
+// driver's signature. The report's main button becomes "Arrived at Delivery".
+export type TripCompExtra = {
+  bol: string;
+  supplier: string;
+  supplierId: string | null;
+  net: number | null;
+  netCalculated: number | null;
+};
+export type TripLoadExtras = {
+  byComp: Record<number, TripCompExtra>;
+  times?: StepTimes;
+  delayReasonId?: string | null;
+  delayNote?: string | null;
+  odometer?: number | null;
+  signed?: boolean;
+};
+export type LoadingTripMode = {
+  pickupName: string | null;
+  settings: TripSettings;
+  reasons: DelayReason[];
+  arrivedAt: string | null;
+  existingTimes: StepTimes | null;
+  existingDelayReasonId: string | null;
+  existingDelayNote: string | null;
+  needsOdometer: boolean;
+  existingOdometer: number | null;
+  suppliers: SupplierRow[];
+  onAddSupplier: (name: string) => SupplierRow | null;
+  // BOL numbers among `values` already on another load.
+  checkBols: (values: string[]) => Promise<string[]>;
+  signature: string | null;
+  onSaveSignature: (path: string) => Promise<void>;
+  // What's already recorded per compartment (edit, and the report).
+  compDefaults: Record<number, { bol: string | null; supplier: string | null; supplierId: string | null; net: number | null; netTouched: boolean }>;
+  onArrivedAtDelivery: () => void;
+};
+
+// One full-card step window, same look as ValueEntryOverlay.
+function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error }: {
+  title: string;
+  children: React.ReactNode;
+  onBack: () => void;
+  backLabel: string;
+  onNext: () => void;
+  nextLabel: string;
+  error?: string | null;
+}) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: "flex-start", justifyContent: "center",
+      paddingLeft: 16, paddingRight: 16, paddingBottom: 16,
+      paddingTop: "calc(env(safe-area-inset-top, 0px) + 24px)",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 380, maxHeight: "calc(100dvh - 48px)", overflowY: "auto" as const, boxSizing: "border-box" as const,
+        background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, padding: 18,
+        display: "flex", flexDirection: "column", gap: 12, color: "#fff",
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const, textAlign: "center" as const }}>
+          {title}
+        </div>
+        {children}
+        {error && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", textAlign: "center" as const }}>{error}</div>}
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <button type="button" onClick={onBack}
+            style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            {backLabel}
+          </button>
+          <button type="button" onClick={onNext}
+            style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            {nextLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Plan Review (redesign 2026-09-05) / Load Report (redesign 2026-09-20) ──
 // Per explicit direction, this screen went back to being clean and simple:
@@ -280,7 +371,7 @@ export default function LoadingModal(props: {
   // sequence used at Log the Load, seeded from this report's own real
   // values, and updates the already-submitted load with whatever's
   // re-entered.
-  onEditLoad?: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>) => void;
+  onEditLoad?: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>, extras?: TripLoadExtras) => void;
   // "Delete Load" -- removes this completed load entirely. Destructive;
   // this modal shows its own inline confirm before calling it.
   onDeleteLoad?: () => void;
@@ -292,7 +383,9 @@ export default function LoadingModal(props: {
   // internally (physical comp order), then fires this once every planned
   // compartment has a real entry -- page.tsx/useLoadWorkflow then submits
   // using these driver-entered values directly, not the plan's own numbers.
-  onLoaded: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>) => void;
+  onLoaded: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>, extras?: TripLoadExtras) => void;
+  // Set when this load is attached to an open trip (see LoadingTripMode).
+  trip?: LoadingTripMode | null;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
   // Report Terminal Issue: hands off to CancelLoadSheet's report flow.
@@ -387,6 +480,7 @@ export default function LoadingModal(props: {
     fuelTankGallons,
     onSaveFuelTankGallons,
     userId,
+    trip,
   } = props;
 
   // Fuel-burn correction -- display only, never written to the load. The
@@ -495,6 +589,25 @@ export default function LoadingModal(props: {
   const [seqApi, setSeqApi] = useState("");
   const [seqTemp, setSeqTemp] = useState("");
   const [compEntries, setCompEntries] = useState<Record<number, { gallons: number; api: number; tempF: number }>>({});
+  // Trip mode extras for the current step and the ones already confirmed.
+  const [seqBol, setSeqBol] = useState("");
+  const [seqSupplier, setSeqSupplier] = useState("");
+  const [seqSupplierId, setSeqSupplierId] = useState<string | null>(null);
+  const [seqNet, setSeqNet] = useState("");
+  const [seqNetTouched, setSeqNetTouched] = useState(false);
+  const [seqError, setSeqError] = useState<string | null>(null);
+  const [seqBusy, setSeqBusy] = useState(false);
+  const [pickingSupplier, setPickingSupplier] = useState(false);
+  const [tripExtras, setTripExtras] = useState<Record<number, TripCompExtra>>({});
+  const okBols = useRef<Set<string>>(new Set());
+  // After the compartments: the times window, then the signature window.
+  const [tripStep, setTripStep] = useState<"times" | "sign" | null>(null);
+  const [tripTimes, setTripTimes] = useState<StepTimes | null>(null);
+  const [tripReasonId, setTripReasonId] = useState<string | null>(null);
+  const [tripNote, setTripNote] = useState("");
+  const [tripOdometer, setTripOdometer] = useState("");
+  const [tripSigned, setTripSigned] = useState(false);
+  const [tripStepError, setTripStepError] = useState<string | null>(null);
 
   // Reset all sequence state whenever the modal closes, so a re-open never
   // resumes a half-finished sequence from a previous load.
@@ -505,6 +618,12 @@ export default function LoadingModal(props: {
       setGallonsTarget(null);
       setEditingReport(false);
       setConfirmDelete(false);
+      setTripExtras({});
+      setTripStep(null);
+      setSeqError(null);
+      setSeqBusy(false);
+      setPickingSupplier(false);
+      okBols.current = new Set();
     }
   }, [open]);
 
@@ -523,6 +642,31 @@ export default function LoadingModal(props: {
     if (compSeqIndex == null) return;
     const line = orderedCompLines[compSeqIndex];
     if (!line) return;
+    setSeqError(null);
+
+    if (trip) {
+      const own = tripExtras[line.comp];
+      const def = trip.compDefaults[line.comp];
+      let prev: TripCompExtra | null = null;
+      for (let i = compSeqIndex - 1; i >= 0; i--) {
+        const e = tripExtras[orderedCompLines[i].comp];
+        if (e) { prev = e; break; }
+      }
+      setSeqBol(own?.bol ?? def?.bol ?? prev?.bol ?? "");
+      if (own) { setSeqSupplier(own.supplier); setSeqSupplierId(own.supplierId); }
+      else if (def?.supplier) { setSeqSupplier(def.supplier); setSeqSupplierId(def.supplierId); }
+      else { setSeqSupplier(prev?.supplier ?? ""); setSeqSupplierId(prev?.supplierId ?? null); }
+      if (own) {
+        setSeqNet(own.net != null ? String(own.net) : "");
+        setSeqNetTouched(own.net != null && own.net !== own.netCalculated);
+      } else if (def?.netTouched && def.net != null) {
+        setSeqNet(String(def.net));
+        setSeqNetTouched(true);
+      } else {
+        setSeqNet("");
+        setSeqNetTouched(false);
+      }
+    }
 
     const existing = compEntries[line.comp];
     if (existing) {
@@ -564,6 +708,7 @@ export default function LoadingModal(props: {
   function startLogSequence() {
     if (orderedCompLines.length === 0) { onLoaded({}); return; }
     setCompEntries({});
+    setTripExtras({});
     setCompSeqIndex(0);
   }
   function startEditSequence() {
@@ -577,6 +722,7 @@ export default function LoadingModal(props: {
     setEditingReport(true);
     if (report.lines.length === 0) { onEditLoad?.({}); return; }
     setCompEntries({});
+    setTripExtras({});
     setCompSeqIndex(0);
   }
   function cancelLogSequence() {
@@ -587,18 +733,38 @@ export default function LoadingModal(props: {
     if (compSeqIndex == null || compSeqIndex <= 0) return;
     setCompSeqIndex(compSeqIndex - 1);
   }
-  function commitCompStep() {
-    if (compSeqIndex == null) return;
+  async function commitCompStep() {
+    if (compSeqIndex == null || seqBusy) return;
     const line = orderedCompLines[compSeqIndex];
     if (!line) { setCompSeqIndex(null); return; }
 
     const gallonsN = parseFloat(seqGallons);
     const apiN = parseFloat(seqApi);
     const tempN = parseFloat(seqTemp);
-    // Silently keep the step open on invalid input -- no alert(), matching
-    // this modal's own established convention -- rather than advancing (or
-    // completing) with garbage data.
-    if (!Number.isFinite(gallonsN) || !Number.isFinite(apiN) || !Number.isFinite(tempN)) return;
+    // Keep the step open on invalid input rather than advancing (or
+    // completing) with garbage data. Trip mode says why.
+    if (!Number.isFinite(gallonsN) || !Number.isFinite(apiN) || !Number.isFinite(tempN)) {
+      if (trip) setSeqError("Enter gross, temp and API.");
+      return;
+    }
+
+    let extra: TripCompExtra | null = null;
+    if (trip) {
+      const bol = seqBol.trim();
+      if (!bol) { setSeqError("Enter the BOL number."); return; }
+      if (!seqSupplier.trim()) { setSeqError("Pick the supplier."); return; }
+      const netN = parseFloat(seqNetShown);
+      if (!Number.isFinite(netN) || netN < 0) { setSeqError("Enter the net gallons."); return; }
+      const key = normalizeRef(bol);
+      if (!okBols.current.has(key)) {
+        setSeqBusy(true);
+        const dup = await trip.checkBols([bol]).catch(() => [] as string[]);
+        setSeqBusy(false);
+        if (dup.length) { setSeqError(`BOL ${bol} is already on another load.`); return; }
+        okBols.current.add(key);
+      }
+      extra = { bol, supplier: seqSupplier.trim(), supplierId: seqSupplierId, net: netN, netCalculated: seqCalc };
+    }
 
     const cap = persistedCapForComp?.(line.comp) ?? null;
     const clampedGallons = editingReport
@@ -607,13 +773,24 @@ export default function LoadingModal(props: {
 
     const updated = { ...compEntries, [line.comp]: { gallons: clampedGallons, api: apiN, tempF: tempN } };
     setCompEntries(updated);
+    const updatedExtras = extra ? { ...tripExtras, [line.comp]: extra } : tripExtras;
+    if (extra) setTripExtras(updatedExtras);
 
     const isLast = compSeqIndex >= orderedCompLines.length - 1;
     if (isLast) {
       setCompSeqIndex(null);
       if (editingReport) {
-        onEditLoad?.(updated);
+        onEditLoad?.(updated, trip ? { byComp: updatedExtras } : undefined);
         setEditingReport(false);
+      } else if (trip) {
+        // On to the times window, then the signature.
+        setTripTimes(trip.existingTimes ?? defaultStepTimes(new Date(), trip.settings.begin_offset_minutes, trip.arrivedAt));
+        setTripReasonId(trip.existingDelayReasonId);
+        setTripNote(trip.existingDelayNote ?? "");
+        setTripOdometer(trip.existingOdometer != null ? String(trip.existingOdometer) : "");
+        setTripSigned(false);
+        setTripStepError(null);
+        setTripStep("times");
       } else {
         onLoaded(updated);
       }
@@ -659,6 +836,34 @@ export default function LoadingModal(props: {
   }));
 
   const seqLine = compSeqIndex != null ? orderedCompLines[compSeqIndex] : null;
+  const seqCalc = trip && seqLine
+    ? calculateNetGallons(numOrNull(seqGallons), numOrNull(seqApi), numOrNull(seqTemp), netMethodForProduct(productNameById.get(seqLine.productId) ?? null))
+    : null;
+  const seqNetShown = seqNetTouched ? seqNet : (seqCalc != null ? String(seqCalc) : seqNet);
+
+  function finishTimesStep() {
+    if (!trip || !tripTimes) return;
+    const tp = timesProblem(tripTimes);
+    if (tp) return setTripStepError(tp);
+    if (!delayReasonOk(tripTimes, trip.settings.loading_delay_threshold_minutes, tripReasonId, tripNote)) return setTripStepError("Pick a delay reason.");
+    if (trip.needsOdometer && numOrNull(tripOdometer) == null) return setTripStepError("Enter the odometer.");
+    setTripStepError(null);
+    setTripStep("sign");
+  }
+  function finishSignStep() {
+    if (!trip || !tripTimes) return;
+    if (!tripSigned) return setTripStepError("Accept your signature to finish.");
+    const delayNeeded = needsDelayReason(delayMinutes(tripTimes.arrivedAt, tripTimes.beginAt), trip.settings.loading_delay_threshold_minutes);
+    setTripStep(null);
+    onLoaded(compEntries, {
+      byComp: tripExtras,
+      times: tripTimes,
+      delayReasonId: delayNeeded ? tripReasonId : null,
+      delayNote: delayNeeded && !tripReasonId ? tripNote.trim() || null : null,
+      odometer: trip.needsOdometer ? numOrNull(tripOdometer) : trip.existingOdometer,
+      signed: tripSigned,
+    });
+  }
   const seqDot = seqLine ? ((productHexCodeById?.[seqLine.productId] && String(productHexCodeById[seqLine.productId]).trim()) || "rgba(255,255,255,0.5)") : undefined;
   const seqLabel = seqLine ? `C${seqLine.comp} · ${productNameById.get(seqLine.productId) ?? seqLine.productId}` : "";
   const seqSubmitLabel = compSeqIndex != null && compSeqIndex < orderedCompLines.length - 1 ? "Next" : (editingReport ? "Save Load" : "Log Load");
@@ -737,6 +942,39 @@ export default function LoadingModal(props: {
                 </div>
               );
             })}
+
+            {trip && (() => {
+              const rows = reportLinesSorted.map((l) => ({ comp: l.comp, d: trip.compDefaults[l.comp] })).filter((r) => r.d);
+              if (!rows.length) return null;
+              const netTotal = rows.reduce((t, r) => t + (r.d!.net ?? 0), 0);
+              const tm = trip.existingTimes;
+              return (
+                <div style={{
+                  display: "flex", flexDirection: "column", gap: 3, marginTop: 6, padding: "6px 10px", borderRadius: 6,
+                  border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+                }}>
+                  {rows.map(({ comp, d }) => (
+                    <div key={comp} style={{ display: "flex", gap: 8, fontSize: 12, color: "rgba(255,255,255,0.55)", minWidth: 0 }}>
+                      <span style={{ fontWeight: 700, color: "rgba(255,255,255,0.35)", width: 20, flexShrink: 0 }}>C{comp}</span>
+                      <span style={{ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                        BOL {d!.bol || "—"} · {d!.supplier || "No supplier"}
+                      </span>
+                      <span style={{ fontWeight: 700, flexShrink: 0 }}>{d!.net != null ? `${Math.round(d!.net)} net` : "— net"}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4, borderTop: "1px solid rgba(255,255,255,0.10)", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>
+                    <span>NET TOTAL</span><span>{Math.round(netTotal)} gal</span>
+                  </div>
+                  {tm && (
+                    <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "2px 12px", paddingTop: 4, fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+                      <span>Arrived {fmtTime(tm.arrivedAt)}</span>
+                      <span>Began {fmtTime(tm.beginAt)}</span>
+                      <span>Left {fmtTime(tm.leftAt)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Totals -- per-product sums (2+ distinct products only, see
                 below) plus the whole-load Total, grouped inside one bordered
@@ -993,13 +1231,23 @@ export default function LoadingModal(props: {
               </div>
             ) : null}
 
-            <button
-              type="button"
-              onClick={() => { onClose(); onNewLoad?.(); }}
-              style={{ ...(styles as any).doneBtn, width: "100%" }}
-            >
-              Return to Planner
-            </button>
+            {trip ? (
+              <button
+                type="button"
+                onClick={trip.onArrivedAtDelivery}
+                style={{ ...(styles as any).doneBtn, width: "100%" }}
+              >
+                Arrived at Delivery
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { onClose(); onNewLoad?.(); }}
+                style={{ ...(styles as any).doneBtn, width: "100%" }}
+              >
+                Return to Planner
+              </button>
+            )}
 
             <button
               type="button"
@@ -1056,6 +1304,16 @@ export default function LoadingModal(props: {
                 }}
               >
                 Delete Load
+              </button>
+            )}
+
+            {trip && (
+              <button
+                type="button"
+                onClick={() => { onClose(); onNewLoad?.(); }}
+                style={{ width: "100%", padding: "10px 0", border: "none", background: "transparent", color: "rgba(255,255,255,0.40)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+              >
+                Back to Planner
               </button>
             )}
           </div>
@@ -1134,20 +1392,100 @@ export default function LoadingModal(props: {
           order, dot + "C{n} · Product" at the top. Gallons/API/Temp all
           confirmed together. */}
       <ValueEntryOverlay
-        open={compSeqIndex != null}
+        open={compSeqIndex != null && !pickingSupplier}
         title={seqLabel}
         dotColor={seqDot}
-        fields={[
+        fields={trip ? [
+          {
+            key: "bol", label: "BOL #", value: seqBol, text: true,
+            onChange: (v) => { setSeqBol(v); setSeqError(null); },
+            after: (
+              <button type="button" onClick={() => setPickingSupplier(true)}
+                style={{
+                  width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 4, cursor: "pointer",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)",
+                  color: seqSupplier ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 15, fontWeight: 700,
+                }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{seqSupplier || "Pick supplier"}</span>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
+              </button>
+            ),
+          },
+          { key: "gallons", label: "Gross", value: seqGallons, onChange: (v) => { setSeqGallons(v); setSeqError(null); }, suffix: "gal" },
+          { key: "net", label: "Net", value: seqNetShown, onChange: (v) => { setSeqNet(v); setSeqNetTouched(true); setSeqError(null); }, suffix: "gal", decimal: true },
+          { key: "temp", label: "Temp", value: seqTemp, onChange: (v) => { setSeqTemp(v); setSeqError(null); }, suffix: "°F", decimal: true },
+          { key: "api", label: "API", value: seqApi, onChange: (v) => { setSeqApi(v); setSeqError(null); }, decimal: true },
+        ] : [
           { key: "gallons", label: "Gallons", value: seqGallons, onChange: setSeqGallons, suffix: "gal" },
           { key: "temp", label: "Temp", value: seqTemp, onChange: setSeqTemp, suffix: "°F", decimal: true },
           { key: "api", label: "API", value: seqApi, onChange: setSeqApi, decimal: true },
         ]}
-        hint={orderedCompLines.length > 1 && compSeqIndex != null ? `Compartment ${compSeqIndex + 1} of ${orderedCompLines.length}` : undefined}
+        hint={(orderedCompLines.length > 1 && compSeqIndex != null) || (trip && seqNetTouched && seqCalc != null) ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            {orderedCompLines.length > 1 && compSeqIndex != null && <span>Compartment {compSeqIndex + 1} of {orderedCompLines.length}</span>}
+            {trip && seqNetTouched && seqCalc != null && String(seqCalc) !== seqNet && (
+              <button type="button" onClick={() => { setSeqNet(String(seqCalc)); setSeqNetTouched(false); }}
+                style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}>
+                Calculated net {seqCalc} · use it
+              </button>
+            )}
+          </div>
+        ) : undefined}
         onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}
         cancelLabel={compSeqIndex != null && compSeqIndex > 0 ? "‹ Back" : "Cancel"}
-        onSubmit={commitCompStep}
+        onSubmit={() => { void commitCompStep(); }}
         submitLabel={seqSubmitLabel}
+        error={seqError}
+        busyLabel={seqBusy ? "Checking…" : null}
       />
+
+      {trip && (
+        <SupplierPicker
+          open={pickingSupplier}
+          suppliers={trip.suppliers}
+          current={seqSupplier || null}
+          onAdd={trip.onAddSupplier}
+          onPick={(p) => { setSeqSupplier(p.name); setSeqSupplierId(p.supplier_id); setSeqError(null); setPickingSupplier(false); }}
+          onClose={() => setPickingSupplier(false)}
+        />
+      )}
+
+      {trip && tripStep === "times" && tripTimes && (
+        <StepCard
+          title={trip.pickupName ? `Times · ${trip.pickupName}` : "Loading times"}
+          onBack={() => { setTripStep(null); setTripStepError(null); setCompSeqIndex(Math.max(0, orderedCompLines.length - 1)); }}
+          backLabel="‹ Back"
+          onNext={finishTimesStep}
+          nextLabel="Next"
+          error={tripStepError}
+        >
+          <TimesEditor times={tripTimes} onChange={(t) => { setTripTimes(t); setTripStepError(null); }} beginLabel="Began loading" />
+          <DelayReasonField times={tripTimes} threshold={trip.settings.loading_delay_threshold_minutes} reasons={trip.reasons} kind="loading"
+            reasonId={tripReasonId} note={tripNote} onChange={(id, n) => { setTripReasonId(id); setTripNote(n); setTripStepError(null); }} />
+          {trip.needsOdometer && (
+            <div>
+              <div style={fieldLabel}>Odometer</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>This pickup is in a different city from the last one.</div>
+              <input value={tripOdometer} onChange={(e) => { setTripOdometer(e.target.value); setTripStepError(null); }} inputMode="numeric" style={fieldInput} />
+            </div>
+          )}
+        </StepCard>
+      )}
+
+      {trip && tripStep === "sign" && (
+        <StepCard
+          title="Loading driver"
+          onBack={() => { setTripStep("times"); setTripStepError(null); }}
+          backLabel="‹ Back"
+          onNext={finishSignStep}
+          nextLabel="Log Load"
+          error={tripStepError}
+        >
+          <SignatureAccept savedPath={trip.signature} onSave={trip.onSaveSignature} accepted={tripSigned}
+            onAccept={(v) => { setTripSigned(v); setTripStepError(null); }} who="the loading driver" />
+        </StepCard>
+      )}
 
       {/* First-open walkthrough -- see the tourStep effect above. Both
           Spotlight calls are unconditional; each one's own rect is already

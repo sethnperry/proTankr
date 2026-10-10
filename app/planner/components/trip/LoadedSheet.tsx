@@ -17,7 +17,8 @@ import {
   type LoadedCompartmentEdit,
   type StepTimes,
 } from "@/lib/trips/tripFlow";
-import type { TripCompartmentLoadRow, TripOrderRow, TripPickupRow } from "@/lib/trips/types";
+import type { SupplierRow, TripCompartmentLoadRow, TripOrderRow, TripPickupRow } from "@/lib/trips/types";
+import { SupplierPicker } from "./SupplierPicker";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
 import {
   DelayReasonField,
@@ -61,7 +62,7 @@ const str = (n: number | null | undefined) => (n == null ? "" : String(n));
 
 export function LoadedSheet({
   open, pickup, compLoads, orders, settings, reasons, needsOdometer, productName,
-  signature, onSaveSignature, onSubmit, onClose,
+  signature, onSaveSignature, suppliers, onAddSupplier, checkBols, onSubmit, onClose,
 }: {
   open: boolean;
   pickup: TripPickupRow;
@@ -73,11 +74,18 @@ export function LoadedSheet({
   productName: (id: string | null) => string;
   signature: string | null;
   onSaveSignature: (path: string) => Promise<void>;
+  suppliers: SupplierRow[];
+  onAddSupplier: (name: string) => SupplierRow | null;
+  // BOL numbers among `values` already used on another load.
+  checkBols: (values: string[], excludeIds: Set<string>) => Promise<string[]>;
   onSubmit: (v: LoadedSubmit) => void;
   onClose: () => void;
 }) {
   const [bol, setBol] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [supplierId, setSupplierId] = useState<string | null>(null);
+  const [pickingSupplier, setPickingSupplier] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [times, setTimes] = useState<StepTimes>(() => defaultStepTimes(new Date(), 0, null));
   const [reasonId, setReasonId] = useState<string | null>(null);
@@ -94,7 +102,9 @@ export function LoadedSheet({
     const bols = [...new Set(sorted.map((c) => c.bol_number).filter(Boolean))] as string[];
     setBol(bols[0] ?? "");
     setPerRowBol(bols.length > 1);
-    setSupplier(sorted.find((c) => c.supplier)?.supplier ?? "");
+    const sup = sorted.find((c) => c.supplier || c.supplier_id);
+    setSupplier(sup?.supplier ?? "");
+    setSupplierId(sup?.supplier_id ?? null);
     setRows(sorted.map((c) => ({
       id: c.compartment_load_id,
       comp: c.comp_number,
@@ -140,7 +150,7 @@ export function LoadedSheet({
     { gross: 0, net: 0 },
   ), [rows]);
 
-  const submit = () => {
+  const submit = async () => {
     const tp = timesProblem(times);
     if (tp) return setErr(tp);
     if (!delayReasonOk(times, settings.loading_delay_threshold_minutes, reasonId, note)) return setErr("Pick a delay reason.");
@@ -149,6 +159,12 @@ export function LoadedSheet({
     if (rows.some((r) => !(numOrNull(r.gross)! > 0))) return setErr("Every compartment needs gross gallons.");
     if (needsOdometer && numOrNull(odometer) == null) return setErr("Enter the odometer.");
     if (!signed) return setErr("Accept your signature to finish.");
+    if (!supplier.trim()) return setErr("Pick the supplier.");
+    const bolValues = [...new Set(rows.map((r) => (perRowBol ? r.bol : bol).trim()).filter(Boolean))];
+    setChecking(true);
+    const dup = await checkBols(bolValues, new Set(compLoads.map((c) => c.compartment_load_id))).catch(() => []);
+    setChecking(false);
+    if (dup.length) return setErr(`BOL ${dup.join(", ")} is already on another load.`);
     onSubmit({
       times,
       delayReasonId: delayNeeded ? reasonId : null,
@@ -162,6 +178,7 @@ export function LoadedSheet({
         order_id: r.orderId,
         bol_number: (perRowBol ? r.bol : bol).trim() || null,
         supplier: supplier.trim() || null,
+        supplier_id: supplierId,
         gross_gallons: numOrNull(r.gross),
         net_gallons: numOrNull(r.net),
         net_calculated_gallons: calcFor(r),
@@ -183,7 +200,10 @@ export function LoadedSheet({
           </div>
           <div>
             <div style={fieldLabel}>Supplier</div>
-            <input value={supplier} onChange={(e) => setSupplier(e.target.value)} style={fieldInput} />
+            <button type="button" onClick={() => setPickingSupplier(true)}
+              style={{ ...fieldInput, textAlign: "left", cursor: "pointer", color: supplier ? "#fff" : muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {supplier || "Choose"}
+            </button>
           </div>
         </div>
         <button type="button" onClick={() => setPerRowBol((v) => !v)} style={{ ...linkBtn, marginTop: 8, color: muted }}>
@@ -260,7 +280,17 @@ export function LoadedSheet({
       </div>
 
       {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
-      <button type="button" onClick={submit} style={primaryBtn}>Confirm Loaded</button>
+      <button type="button" onClick={() => void submit()} disabled={checking} style={{ ...primaryBtn, opacity: checking ? 0.5 : 1 }}>
+        {checking ? "Checking…" : "Confirm Loaded"}
+      </button>
+      <SupplierPicker
+        open={pickingSupplier}
+        suppliers={suppliers}
+        current={supplier || null}
+        onAdd={onAddSupplier}
+        onPick={(p) => { setSupplier(p.name); setSupplierId(p.supplier_id); setPickingSupplier(false); }}
+        onClose={() => setPickingSupplier(false)}
+      />
     </FullscreenModal>
   );
 }

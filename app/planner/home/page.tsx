@@ -54,9 +54,11 @@ import {
   tripSnapshot,
   type DeliveryDestination,
 } from "@/lib/trips/tripFlow";
-import type { TripDeliveryRow, TripRow } from "@/lib/trips/types";
+import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
+import { useSuppliers } from "@/lib/trips/useSuppliers";
+import { bolConflicts } from "@/lib/trips/refCheck";
 import { FinishDeliverySheet, type FinishDeliverySubmit } from "../components/trip/FinishDeliverySheet";
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
@@ -109,6 +111,7 @@ export default function HomePage() {
   useTripHydration(store, userId, truckId, trailerId);
   const { settings, reasons } = useTripSettings(companyId);
   const signature = useDriverSignature(userId);
+  const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
   const locList = useDeliveryLocationList(companyId, userId);
   const locations = locList.locations;
   const { data: products } = useProductsCatalog();
@@ -643,6 +646,13 @@ export default function HomePage() {
           productName={productName}
           signature={signature.svg}
           onSaveSignature={signature.save}
+          suppliers={suppliers}
+          onAddSupplier={addSupplier}
+          checkBols={(values, exclude) => bolConflicts(
+            trips,
+            Object.values(state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[],
+            companyId, values, exclude,
+          )}
           onSubmit={onLoadedSubmit}
           onClose={() => setLoadedOpen(false)}
         />

@@ -267,6 +267,7 @@ export type LoadedCompartmentEdit = {
   order_id: string | null;
   bol_number: string | null;
   supplier: string | null;
+  supplier_id?: string | null;
   gross_gallons: number | null;
   net_gallons: number | null;
   net_calculated_gallons: number | null;
@@ -308,6 +309,7 @@ export function confirmLoaded(
       order_id: c.order_id,
       bol_number: c.bol_number,
       supplier: c.supplier,
+      ...(c.supplier_id !== undefined ? { supplier_id: c.supplier_id } : {}),
       gross_gallons: c.gross_gallons,
       net_gallons: c.net_gallons,
       net_calculated_gallons: c.net_calculated_gallons,
@@ -331,6 +333,24 @@ export function confirmLoaded(
     logEvent(store, args.newId, {
       trip_id: p.trip_id, event_type: "signature_accepted", occurred_at: at, actor_id: args.userId,
       pickup_id: p.pickup_id, payload: { role: "loading_driver" },
+    });
+  }
+}
+
+// Edit Load from the Planner report: BOL, supplier and net only. Gross,
+// temp and API were already rewritten by recordLoadCompleted; trip status
+// and times stay as they are.
+export function updateLoadedCompartments(
+  store: TripStoreLike,
+  compartments: { compartment_load_id: string; bol_number: string | null; supplier: string | null; supplier_id: string | null; net_gallons: number | null }[],
+) {
+  for (const c of compartments) {
+    store.put("trip_compartment_loads", {
+      compartment_load_id: c.compartment_load_id,
+      bol_number: c.bol_number,
+      supplier: c.supplier,
+      supplier_id: c.supplier_id,
+      net_gallons: c.net_gallons,
     });
   }
 }

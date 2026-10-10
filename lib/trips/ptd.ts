@@ -118,7 +118,31 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
   const pickups = [...input.pickups]
     .sort((a, b) => a.seq - b.seq)
     .filter((p) => p.left_at || loads.some((c) => c.pickup_id === p.pickup_id))
-    .map((p) => ({ ...stop(p, [p.name, [p.city, p.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Pickup"), odometer: num(p.odometer) }));
+    .map((p) => ({ pickupId: p.pickup_id, ...stop(p, [p.name, [p.city, p.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Pickup"), odometer: num(p.odometer) }));
+
+  // What went where at one delivery: each compartment to its tank, with that
+  // tank's Veeder-Root before/after. Tanks read but not matched to a
+  // compartment are listed after.
+  const deliveryDrops = (d: TripDeliveryRow) => {
+    const tanks = input.tanks
+      .filter((t) => t.delivery_id === d.delivery_id)
+      .sort((a, b) => a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }))
+      .map((t) => ({
+        tank: t.tank_number,
+        product: t.product_id ? names.product(t.product_id) : null,
+        before: num(t.before_reading),
+        after: num(t.after_reading),
+        water: num(t.water_reading),
+      }));
+    const here = compartments.filter((c) => loads.find((l) => l.comp_number === c.comp)?.delivery_id === d.delivery_id);
+    const used = new Set<string>();
+    const drops = here.map((c) => {
+      const t = c.tank ? tanks.find((x) => x.tank === c.tank) ?? null : null;
+      if (t) used.add(t.tank);
+      return { comp: c.comp, product: c.product, net: c.net, tank: c.tank, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null };
+    });
+    return { compartments: here.map((c) => c.comp), drops, tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
+  };
 
   const deliveries = input.deliveries
     .filter((d) => d.status !== "cancelled")
@@ -133,23 +157,13 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       driverSignedAt: d.driver_signed_at,
       consigneeName: d.consignee_name,
       consigneeSignature: d.consignee_signature,
-      compartments: compartments.filter((c) => loads.find((l) => l.comp_number === c.comp)?.delivery_id === d.delivery_id).map((c) => c.comp),
-      tanks: input.tanks
-        .filter((t) => t.delivery_id === d.delivery_id)
-        .sort((a, b) => a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }))
-        .map((t) => ({
-          tank: t.tank_number,
-          product: t.product_id ? names.product(t.product_id) : null,
-          before: num(t.before_reading),
-          after: num(t.after_reading),
-          water: num(t.water_reading),
-        })),
+      ...deliveryDrops(d),
     }));
 
   // Loading drivers, with when they accepted (signature_accepted events).
   const loadingSigs = input.events
     .filter((e) => e.event_type === "signature_accepted" && (e.payload as any)?.role === "loading_driver")
-    .map((e) => ({ driverId: e.actor_id, name: names.driver(e.actor_id), at: e.occurred_at }));
+    .map((e) => ({ driverId: e.actor_id, name: names.driver(e.actor_id), at: e.occurred_at, pickupId: e.pickup_id ?? null }));
 
   const begin = num(trip.begin_miles), end = num(trip.end_miles);
   return {

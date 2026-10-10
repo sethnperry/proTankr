@@ -6,7 +6,8 @@
 // skips the server half; the driver can still save.
 
 import { supabase } from "@/lib/supabase/client";
-import { normalizeRef } from "./refs";
+import { conflicts, normalizeRef, usedBolNumbers } from "./refs";
+import type { TripCompartmentLoadRow, TripRow } from "./types";
 
 function variants(values: string[]): string[] {
   const out = new Set<string>();
@@ -66,4 +67,21 @@ export async function serverBolConflicts(companyId: string, values: string[], ex
   } catch {
     return [];
   }
+}
+
+// BOL numbers among `values` already used somewhere else: the phone's own
+// trips first, then the server. `excludeIds` are the compartment loads being
+// saved now, so one BOL across several compartments of the same load is fine.
+export async function bolConflicts(
+  trips: TripRow[],
+  compLoads: TripCompartmentLoadRow[],
+  companyId: string | null,
+  values: string[],
+  excludeIds: Set<string>,
+): Promise<string[]> {
+  const local = conflicts(values, usedBolNumbers(trips, compLoads, excludeIds));
+  const server = companyId ? await serverBolConflicts(companyId, values, excludeIds) : [];
+  const out = [...local];
+  for (const s of server) if (!out.some((o) => normalizeRef(o) === normalizeRef(s))) out.push(s);
+  return out;
 }

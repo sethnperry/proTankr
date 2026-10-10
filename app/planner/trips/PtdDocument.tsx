@@ -45,7 +45,7 @@ export function Barcode({ text, height = 44 }: { text: string; height?: number }
   const { bars, width } = code39Bars(text);
   return (
     <div style={{ textAlign: "center" }}>
-      <svg viewBox={`0 0 ${width + 20} ${height}`} style={{ width: Math.min(260, (width + 20) * 1.4), height, display: "block", margin: "0 auto" }} preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${width + 20} ${height}`} style={{ width: "100%", maxWidth: 520, height, display: "block", margin: "0 auto" }} preserveAspectRatio="none">
         <rect x={0} y={0} width={width + 20} height={height} fill="#fff" />
         {bars.map((b, i) => <rect key={i} x={b.x + 10} y={0} width={b.w} height={height} fill="#000" />)}
       </svg>
@@ -63,15 +63,49 @@ function Field({ label, value, wide }: { label: string; value?: React.ReactNode;
   );
 }
 
-function StopTimes({ stop, beginLabel }: { stop: { arrivedAt: string | null; beginAt: string | null; leftAt: string | null; delayMinutes: number | null; delayReason: string | null; delayNote: string | null }; beginLabel: string }) {
-  const delay = stop.delayReason || stop.delayNote;
+type StopLike = { arrivedAt: string | null; beginAt: string | null; leftAt: string | null; delayMinutes: number | null; delayReason: string | null; delayNote: string | null };
+
+// One label/value row: label left, value right. Used for times so each one
+// gets its own line instead of a run-on sentence.
+function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10.5 }}>
-      Arrived {fmtDateTime(stop.arrivedAt) || "—"} · {beginLabel} {fmtDateTime(stop.beginAt) || "—"} · Left {fmtDateTime(stop.leftAt) || "—"}
-      {delay ? <> · <b>Delay{stop.delayMinutes != null ? ` ${stop.delayMinutes} min` : ""}:</b> {[stop.delayReason, stop.delayNote].filter(Boolean).join(" — ")}</> : null}
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, borderBottom: "1px dotted #bbb", padding: "2px 0" }}>
+      <span style={{ color: faint }}>{label}</span>
+      <span style={{ fontWeight: 700, textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}>{value || "—"}</span>
     </div>
   );
 }
+
+function StopTimes({ stop, beginLabel, endLabel = "Left" }: { stop: StopLike; beginLabel: string; endLabel?: string }) {
+  const delay = stop.delayReason || stop.delayNote;
+  return (
+    <div style={{ marginTop: 4 }}>
+      <Row label="Arrived" value={fmtDateTime(stop.arrivedAt)} />
+      <Row label={beginLabel} value={fmtDateTime(stop.beginAt)} />
+      <Row label={endLabel} value={fmtDateTime(stop.leftAt)} />
+      {delay ? (
+        <Row
+          label={`Delay${stop.delayMinutes != null ? ` ${stop.delayMinutes} min` : ""}`}
+          value={[stop.delayReason, stop.delayNote].filter(Boolean).join(" — ")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// A small labeled value that wraps with its neighbors (compartment cards).
+function Item({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value == null || value === "") return null;
+  return (
+    <span style={{ maxWidth: "100%", overflowWrap: "anywhere" }}>
+      <span style={{ color: faint, fontSize: 9, textTransform: "uppercase", whiteSpace: "nowrap" }}>{label} </span>
+      <b>{value}</b>
+    </span>
+  );
+}
+
+const box: React.CSSProperties = { border: line, padding: 8, marginBottom: 8, breakInside: "avoid" };
+const sigLabel: React.CSSProperties = { fontSize: 9, color: faint, textTransform: "uppercase", marginTop: 6 };
 
 export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSignature }: {
   ptd: Ptd;
@@ -84,20 +118,37 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
   // be shown. Anyone else's acceptance prints as an electronic signature line.
   const sig = (driverId: string | null) =>
     driverId && driverId === viewerId && viewerSignature
-      ? <div style={{ width: 160, color: ink }}><SignatureView path={viewerSignature} height={40} /></div>
+      ? <div style={{ width: 160, maxWidth: "100%", color: ink }}><SignatureView path={viewerSignature} height={40} /></div>
       : null;
+
+  const loadingSig = (s: Ptd["loadingSigs"][number], i: number) => (
+    <div key={i} style={{ marginTop: 2 }}>
+      {sig(s.driverId)}
+      <div style={{ fontWeight: 700 }}>{s.name}</div>
+      <div style={{ fontSize: 10, color: faint }}>Signed electronically {fmtDateTime(s.at)}</div>
+    </div>
+  );
+  // Loading signatures that name a pickup go under it; any without one (older
+  // events) go under the first pickup.
+  const matched = new Set<number>();
+  const sigsFor = (pickupId: string, first: boolean) =>
+    ptd.loadingSigs
+      .map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => {
+        const hit = s.pickupId ? s.pickupId === pickupId : first;
+        if (hit) matched.add(i);
+        return hit;
+      });
 
   return (
     <div style={page} className="ptd-page">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 900 }}>Product Transfer Document</div>
-          <div style={{ color: faint }}>
-            {ptd.status === "complete" ? `Completed ${fmtDateTime(ptd.completedAt)}` : ptd.status === "cancelled" ? "Cancelled" : "In progress"}
-            {ptd.enteredLate ? " · Entered after the fact" : ""}
-          </div>
+      <Barcode text={ptd.code} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "2px 12px", marginTop: 8 }}>
+        <div style={{ fontSize: 17, fontWeight: 900 }}>Product Transfer Document</div>
+        <div style={{ color: faint }}>
+          {ptd.status === "complete" ? `Completed ${fmtDateTime(ptd.completedAt)}` : ptd.status === "cancelled" ? "Cancelled" : "In progress"}
+          {ptd.enteredLate ? " · Entered after the fact" : ""}
         </div>
-        <Barcode text={ptd.code} />
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
@@ -114,44 +165,53 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
 
       <div style={h2}>Pickups</div>
       {ptd.pickups.length === 0 && <div style={{ color: faint }}>None yet.</div>}
-      {ptd.pickups.map((p, i) => (
-        <div key={i} style={{ marginBottom: 6 }}>
-          <div style={{ fontWeight: 700 }}>{p.name}{p.odometer != null ? ` · Odometer ${p.odometer.toLocaleString("en-US")}` : ""}</div>
-          <StopTimes stop={p} beginLabel="Began loading" />
+      {ptd.pickups.map((p, i) => {
+        const sigs = sigsFor(p.pickupId, i === 0);
+        return (
+          <div key={p.pickupId} style={box}>
+            <div style={{ fontWeight: 800 }}>{p.name}</div>
+            {p.odometer != null && <div style={{ color: faint }}>Odometer {p.odometer.toLocaleString("en-US")}</div>}
+            <StopTimes stop={p} beginLabel="Began loading" />
+            <div style={sigLabel}>Loading driver</div>
+            {sigs.length === 0 ? <div style={{ color: faint }}>Not signed yet.</div> : sigs.map(({ s, i: k }) => loadingSig(s, k))}
+          </div>
+        );
+      })}
+      {ptd.loadingSigs.some((_, i) => !matched.has(i)) && (
+        <div style={box}>
+          <div style={sigLabel}>Loading driver</div>
+          {ptd.loadingSigs.map((s, i) => (matched.has(i) ? null : loadingSig(s, i)))}
         </div>
-      ))}
+      )}
 
       <div style={h2}>Compartments</div>
-      <table style={table}>
-        <thead>
-          <tr>
-            {["C", "Product", "Order", "BOL", "Supplier", "Gross", "Net", "°F", "API", "Delivered to", "Tank"].map((h) => <th key={h} style={th}>{h}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {ptd.compartments.map((c) => (
-            <tr key={c.comp}>
-              <td style={td}>{c.comp}</td>
-              <td style={td}>{c.product}{c.flag ? <div style={{ color: "#b45309", fontSize: 9 }}>{c.flag}</div> : null}</td>
-              <td style={td}>{c.order ?? ""}</td>
-              <td style={td}>{c.bol ?? ""}</td>
-              <td style={td}>{c.supplier ?? ""}</td>
-              <td style={tdR}>{gal(c.gross)}</td>
-              <td style={tdR}>{gal(c.net)}</td>
-              <td style={tdR}>{dec(c.temp)}</td>
-              <td style={tdR}>{dec(c.api)}</td>
-              <td style={td}>{c.disposition === "retained" ? "Retained on trailer" : c.delivery ?? ""}</td>
-              <td style={td}>{c.tank ?? ""}</td>
-            </tr>
-          ))}
-          <tr>
-            <td style={{ ...td, fontWeight: 800 }} colSpan={5}>Total</td>
-            <td style={{ ...tdR, fontWeight: 800 }}>{gal(ptd.totals.gross)}</td>
-            <td style={{ ...tdR, fontWeight: 800 }}>{gal(ptd.totals.net)}</td>
-            <td style={td} colSpan={4} />
-          </tr>
-        </tbody>
-      </table>
+      {ptd.compartments.length === 0 && <div style={{ color: faint }}>None yet.</div>}
+      {ptd.compartments.map((c) => (
+        <div key={c.comp} style={{ ...box, padding: "6px 8px", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <b>C{c.comp} · {c.product}</b>
+            <span style={{ color: faint, textAlign: "right" }}>
+              {c.disposition === "retained" ? "Retained on trailer" : [c.delivery, c.tank ? `Tank ${c.tank}` : null].filter(Boolean).join(" · ")}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 14px", marginTop: 3 }}>
+            <Item label="Order" value={c.order} />
+            <Item label="BOL" value={c.bol} />
+            <Item label="Supplier" value={c.supplier} />
+            <Item label="Gross" value={gal(c.gross)} />
+            <Item label="Net" value={gal(c.net)} />
+            <Item label="°F" value={dec(c.temp)} />
+            <Item label="API" value={dec(c.api)} />
+          </div>
+          {c.flag ? <div style={{ color: "#b45309", fontSize: 9, marginTop: 2 }}>{c.flag}</div> : null}
+        </div>
+      ))}
+      {ptd.compartments.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, fontWeight: 800 }}>
+          <span>Total gross {gal(ptd.totals.gross)}</span>
+          <span>Total net {gal(ptd.totals.net)}</span>
+        </div>
+      )}
 
       {ptd.billing.length > 0 && (
         <>
@@ -169,51 +229,51 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
 
       <div style={h2}>Deliveries</div>
       {ptd.deliveries.length === 0 && <div style={{ color: faint }}>None yet.</div>}
-      {ptd.deliveries.map((d, i) => (
-        <div key={i} style={{ border: line, padding: 8, marginBottom: 8, breakInside: "avoid" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ fontWeight: 800 }}>{d.name}</div>
-            <div style={{ color: faint }}>{d.deliveryType === "pump_off" ? "Pump off" : "Drop"}{d.status === "planned" ? " · Not delivered yet" : ""}</div>
-          </div>
-          <StopTimes stop={d} beginLabel={d.deliveryType === "pump_off" ? "Began pumping" : "Began delivering"} />
-          {d.compartments.length > 0 && <div style={{ fontSize: 10.5 }}>Compartments: {d.compartments.map((c) => `C${c}`).join(", ")}</div>}
-          {d.tanks.length > 0 && (
-            <table style={{ ...table, marginTop: 4 }}>
-              <thead><tr>{["Tank", "Product", "Before", "After", "Water"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {d.tanks.map((t, j) => (
-                  <tr key={j}>
-                    <td style={td}>{t.tank}</td><td style={td}>{t.product ?? ""}</td>
-                    <td style={tdR}>{gal(t.before)}</td><td style={tdR}>{gal(t.after)}</td><td style={tdR}>{dec(t.water)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 6 }}>
-            <div style={{ flex: "1 1 200px" }}>
-              <div style={{ fontSize: 9, color: faint, textTransform: "uppercase" }}>Delivering driver</div>
-              {sig(d.driverId)}
-              <div style={{ fontWeight: 700 }}>{d.driver ?? ""}</div>
-              {d.driverSignedAt && <div style={{ fontSize: 10, color: faint }}>Signed electronically {fmtDateTime(d.driverSignedAt)}</div>}
+      {ptd.deliveries.map((d, i) => {
+        const pump = d.deliveryType === "pump_off";
+        return (
+          <div key={i} style={box}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ fontWeight: 800, minWidth: 0, overflowWrap: "anywhere" }}>{d.name}</div>
+              <div style={{ color: faint, whiteSpace: "nowrap" }}>{pump ? "Pump off" : "Drop"}{d.status === "planned" ? " · Not delivered yet" : ""}</div>
             </div>
-            <div style={{ flex: "1 1 200px" }}>
-              <div style={{ fontSize: 9, color: faint, textTransform: "uppercase" }}>Consignee</div>
-              {d.consigneeSignature && <div style={{ width: 160, color: ink }}><SignatureView path={d.consigneeSignature} height={40} /></div>}
-              <div style={{ fontWeight: 700 }}>{d.consigneeName ?? ""}</div>
-            </div>
-          </div>
-        </div>
-      ))}
 
-      <div style={h2}>Loading driver</div>
-      {ptd.loadingSigs.length === 0 && <div style={{ color: faint }}>Not signed yet.</div>}
-      {ptd.loadingSigs.map((s, i) => (
-        <div key={i} style={{ marginBottom: 4 }}>
-          {sig(s.driverId)}
-          <b>{s.name}</b> <span style={{ color: faint }}>· Signed electronically {fmtDateTime(s.at)}</span>
-        </div>
-      ))}
+            {(d.drops.length > 0 || d.otherTanks.length > 0) && (
+              <div style={{ marginTop: 4 }}>
+                {d.drops.map((x) => (
+                  <div key={x.comp} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
+                    <b>C{x.comp} → {x.tank ? `Tank ${x.tank}` : "Tank —"}</b>
+                    <span style={{ color: faint }}>{x.product}{x.net != null ? ` · ${gal(x.net)} net` : ""}</span>
+                    <Item label="Before" value={gal(x.before)} />
+                    <Item label="After" value={gal(x.after)} />
+                    <Item label="Water" value={dec(x.water)} />
+                  </div>
+                ))}
+                {d.otherTanks.map((t) => (
+                  <div key={`t${t.tank}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
+                    <b>Tank {t.tank}</b>
+                    {t.product && <span style={{ color: faint }}>{t.product}</span>}
+                    <Item label="Before" value={gal(t.before)} />
+                    <Item label="After" value={gal(t.after)} />
+                    <Item label="Water" value={dec(t.water)} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <StopTimes stop={d} beginLabel={pump ? "Began pumping" : "Began delivering"} />
+
+            <div style={sigLabel}>Delivering driver</div>
+            {sig(d.driverId)}
+            <div style={{ fontWeight: 700 }}>{d.driver ?? ""}</div>
+            {d.driverSignedAt && <div style={{ fontSize: 10, color: faint }}>Signed electronically {fmtDateTime(d.driverSignedAt)}</div>}
+
+            <div style={sigLabel}>Consignee</div>
+            {d.consigneeSignature && <div style={{ width: 160, maxWidth: "100%", color: ink }}><SignatureView path={d.consigneeSignature} height={40} /></div>}
+            <div style={{ fontWeight: 700 }}>{d.consigneeName ?? ""}</div>
+          </div>
+        );
+      })}
 
       <div style={{ marginTop: 14, fontSize: 9, color: faint }}>Generated by ProTankr · {ptd.code}</div>
     </div>
@@ -222,16 +282,14 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
 
 // Same layout, nothing filled in.
 export function BlankPtd() {
-  const blankRows = (n: number, cols: number) =>
-    Array.from({ length: n }, (_, i) => <tr key={i}>{Array.from({ length: cols }, (_, j) => <td key={j} style={{ ...td, height: 20 }} />)}</tr>);
   const times = (
-    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
       <Field label="Arrived" /><Field label="Began" /><Field label="Left" /><Field label="Delay reason" wide />
     </div>
   );
   return (
     <div style={page} className="ptd-page">
-      <div style={{ fontSize: 18, fontWeight: 900 }}>Product Transfer Document</div>
+      <div style={{ fontSize: 17, fontWeight: 900 }}>Product Transfer Document</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
         <Field label="Order #" wide /><Field label="Date" />
         <Field label="Shipper" wide /><Field label="Customer" wide />
@@ -239,30 +297,40 @@ export function BlankPtd() {
         <Field label="Begin miles" /><Field label="End miles" /><Field label="Total miles" />
       </div>
       <div style={h2}>Pickup</div>
-      <Field label="Terminal / location" wide />
-      {times}
+      <div style={box}>
+        <Field label="Terminal / location" wide />
+        {times}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+          <Field label="Loading driver signature" wide /><Field label="Odometer" />
+        </div>
+      </div>
       <div style={h2}>Compartments</div>
-      <table style={table}>
-        <thead><tr>{["C", "Product", "Order", "BOL", "Supplier", "Gross", "Net", "°F", "API", "Delivered to", "Tank"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-        <tbody>{blankRows(6, 11)}</tbody>
-      </table>
+      {[1, 2, 3, 4, 5, 6].map((n) => (
+        <div key={n} style={{ ...box, padding: "6px 8px", marginBottom: 6 }}>
+          <div style={{ fontWeight: 800 }}>C{n}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Field label="Product" /><Field label="Order" /><Field label="BOL" /><Field label="Supplier" />
+            <Field label="Gross" /><Field label="Net" /><Field label="°F" /><Field label="API" />
+          </div>
+        </div>
+      ))}
       {[1, 2].map((n) => (
-        <div key={n} style={{ border: line, padding: 8, marginTop: 10, breakInside: "avoid" }}>
+        <div key={n} style={{ ...box, marginTop: 10 }}>
           <div style={{ fontWeight: 800 }}>Delivery {n}</div>
-          <Field label="Location" wide />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <Field label="Location" wide /><Field label="Drop / Pump off" />
+          </div>
+          {[1, 2, 3].map((r) => (
+            <div key={r} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+              <Field label="Comp" /><Field label="Tank" /><Field label="Before" /><Field label="After" />
+            </div>
+          ))}
           {times}
-          <table style={{ ...table, marginTop: 6 }}>
-            <thead><tr>{["Tank", "Product", "Before", "After", "Water"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-            <tbody>{blankRows(3, 5)}</tbody>
-          </table>
-          <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 10 }}>
             <Field label="Delivering driver signature" wide /><Field label="Consignee name / signature" wide />
           </div>
         </div>
       ))}
-      <div style={{ display: "flex", gap: 16, marginTop: 14 }}>
-        <Field label="Loading driver signature" wide /><Field label="Date / time" />
-      </div>
     </div>
   );
 }

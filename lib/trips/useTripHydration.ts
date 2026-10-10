@@ -14,7 +14,6 @@ import { OPEN_STATUSES } from "./tripLogic";
 import type { TripStore } from "./tripStore";
 import type {
   CompartmentReadinessRow,
-  DeliveryType,
   TripCompartmentLoadRow,
   TripDeliveryRow,
   TripDeliveryTankRow,
@@ -86,54 +85,4 @@ export function useTripHydration(
   }, [refresh]);
 
   return { loading, refresh };
-}
-
-export type DeliveryLocationLite = {
-  location_id: string;
-  name: string;
-  location_number: string | null;
-  city: string | null;
-  state: string | null;
-  delivery_type: DeliveryType;
-  starred: boolean;
-};
-
-// The company's delivery locations (design §4), starred first. The list is
-// built out in phase 5; until then it may be empty and Start Load falls back
-// to a one-off name.
-export function useDeliveryLocations(companyId: string | null, userId: string | null) {
-  const [locations, setLocations] = useState<DeliveryLocationLite[]>([]);
-
-  useEffect(() => {
-    if (!companyId || !userId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const [l, s] = await Promise.all([
-          supabase.from("delivery_locations")
-            .select("location_id,name,location_number,city,state,delivery_type")
-            .eq("company_id", companyId).eq("is_active", true).order("name"),
-          supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId),
-        ]);
-        if (cancelled) return;
-        const starred = new Set(((s.data ?? []) as { location_id: string }[]).map((r) => r.location_id));
-        const rows = ((l.data ?? []) as Omit<DeliveryLocationLite, "starred">[]).map((r) => ({ ...r, starred: starred.has(r.location_id) }));
-        rows.sort((a, b) => Number(b.starred) - Number(a.starred) || a.name.localeCompare(b.name));
-        setLocations(rows);
-      } catch (e) {
-        console.warn("[trips] delivery locations failed:", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [companyId, userId]);
-
-  return locations;
-}
-
-export function locationLabel(l: Pick<DeliveryLocationLite, "name" | "location_number" | "city" | "state">): string {
-  const num = l.location_number ? `#${l.location_number} ` : "";
-  const place = [l.city, l.state].filter(Boolean).join(", ");
-  return `${num}${l.name}${place ? ` · ${place}` : ""}`;
 }
