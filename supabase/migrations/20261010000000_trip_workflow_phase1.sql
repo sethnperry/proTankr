@@ -9,7 +9,7 @@
 --
 -- Offline-first: the phone generates every primary key (uuid) and queues
 -- upserts, so every trip table takes a client-supplied id and a
--- client_updated_at. A trigger keeps the newest client write per row
+-- client_updated_at. One trigger (trip_sync_write) keeps the newest client write per row
 -- (last-write-wins by the device's own edit time, not by arrival order), so a
 -- phone that comes back online late can't overwrite a newer edit made on
 -- another phone during a driver handoff.
@@ -54,19 +54,33 @@ begin
 end;
 $$;
 
--- Last-write-wins by client edit time. An update carrying an older
--- client_updated_at than the stored row is ignored (the row keeps its
--- newer values) instead of failing, so a stale queued write from a phone that
--- was offline drains cleanly without blocking the rest of its queue.
-create or replace function public.trip_keep_newest_client_write()
+-- Last-write-wins by client edit time, for every table the phone syncs.
+--
+-- One trigger (not "keep newest" + "touch updated_at" as two) so a stale
+-- write leaves the row completely untouched, updated_at included.
+--
+-- * client_updated_at is always set: a write that omits it (a web/admin edit,
+--   or a buggy client) counts as an edit made now. It can never sneak past a
+--   newer edit by leaving the field null.
+-- * An update carrying an older client_updated_at than the stored row is
+--   ignored (the row keeps its newer values) instead of failing, so a stale
+--   queued write from a phone that was offline drains cleanly without blocking
+--   the rest of its queue. Works for plain updates and for upserts
+--   (ON CONFLICT DO UPDATE fires BEFORE UPDATE triggers).
+create or replace function public.trip_sync_write()
 returns trigger
 language plpgsql
 as $$
 begin
-  if old.client_updated_at is not null
-     and new.client_updated_at is not null
-     and new.client_updated_at < old.client_updated_at then
-    return old;
+  if new.client_updated_at is null then
+    new.client_updated_at := now();
+  end if;
+  if tg_op = 'UPDATE' then
+    if old.client_updated_at is not null
+       and new.client_updated_at < old.client_updated_at then
+      return old;
+    end if;
+    new.updated_at := now();
   end if;
   return new;
 end;
@@ -174,11 +188,10 @@ create policy delivery_locations_update on public.delivery_locations
   with check (public.trip_company_member(company_id));
 
 drop trigger if exists delivery_locations_touch on public.delivery_locations;
-create trigger delivery_locations_touch before update on public.delivery_locations
-  for each row execute function public.trip_touch_updated_at();
 drop trigger if exists delivery_locations_newest on public.delivery_locations;
-create trigger delivery_locations_newest before update on public.delivery_locations
-  for each row execute function public.trip_keep_newest_client_write();
+drop trigger if exists delivery_locations_sync on public.delivery_locations;
+create trigger delivery_locations_sync before insert or update on public.delivery_locations
+  for each row execute function public.trip_sync_write();
 
 -- The location's own tanks, remembered so compartment -> tank is prefilled.
 create table if not exists public.delivery_location_tanks (
@@ -208,11 +221,10 @@ create policy delivery_location_tanks_all on public.delivery_location_tanks
       and public.trip_company_member(l.company_id)));
 
 drop trigger if exists delivery_location_tanks_touch on public.delivery_location_tanks;
-create trigger delivery_location_tanks_touch before update on public.delivery_location_tanks
-  for each row execute function public.trip_touch_updated_at();
 drop trigger if exists delivery_location_tanks_newest on public.delivery_location_tanks;
-create trigger delivery_location_tanks_newest before update on public.delivery_location_tanks
-  for each row execute function public.trip_keep_newest_client_write();
+drop trigger if exists delivery_location_tanks_sync on public.delivery_location_tanks;
+create trigger delivery_location_tanks_sync before insert or update on public.delivery_location_tanks
+  for each row execute function public.trip_sync_write();
 
 -- Personal stars (always shown in the picker regardless of distance).
 create table if not exists public.delivery_location_stars (
@@ -278,11 +290,10 @@ create policy trips_update on public.trips
   with check (public.trip_company_member(company_id));
 
 drop trigger if exists trips_touch on public.trips;
-create trigger trips_touch before update on public.trips
-  for each row execute function public.trip_touch_updated_at();
 drop trigger if exists trips_newest on public.trips;
-create trigger trips_newest before update on public.trips
-  for each row execute function public.trip_keep_newest_client_write();
+drop trigger if exists trips_sync on public.trips;
+create trigger trips_sync before insert or update on public.trips
+  for each row execute function public.trip_sync_write();
 
 -- Membership of the company that owns a trip (defined after trips exists;
 -- SQL function bodies are checked at creation).
@@ -424,15 +435,13 @@ begin
     execute format('drop policy if exists %I on public.%I', t || '_member', t);
     execute format('drop trigger if exists %I on public.%I', t || '_touch', t);
     execute format('drop trigger if exists %I on public.%I', t || '_newest', t);
+    execute format('drop trigger if exists %I on public.%I', t || '_sync', t);
     execute format(
       'create policy %I on public.%I for all using (public.trip_member(trip_id)) with check (public.trip_member(trip_id))',
       t || '_member', t);
     execute format(
-      'create trigger %I before update on public.%I for each row execute function public.trip_touch_updated_at()',
-      t || '_touch', t);
-    execute format(
-      'create trigger %I before update on public.%I for each row execute function public.trip_keep_newest_client_write()',
-      t || '_newest', t);
+      'create trigger %I before insert or update on public.%I for each row execute function public.trip_sync_write()',
+      t || '_sync', t);
   end loop;
 end $$;
 
@@ -446,11 +455,10 @@ create policy trip_delivery_tanks_member on public.trip_delivery_tanks
     select 1 from public.trip_deliveries d
     where d.delivery_id = trip_delivery_tanks.delivery_id and public.trip_member(d.trip_id)));
 drop trigger if exists trip_delivery_tanks_touch on public.trip_delivery_tanks;
-create trigger trip_delivery_tanks_touch before update on public.trip_delivery_tanks
-  for each row execute function public.trip_touch_updated_at();
 drop trigger if exists trip_delivery_tanks_newest on public.trip_delivery_tanks;
-create trigger trip_delivery_tanks_newest before update on public.trip_delivery_tanks
-  for each row execute function public.trip_keep_newest_client_write();
+drop trigger if exists trip_delivery_tanks_sync on public.trip_delivery_tanks;
+create trigger trip_delivery_tanks_sync before insert or update on public.trip_delivery_tanks
+  for each row execute function public.trip_sync_write();
 
 -- Append-only audit log: handoffs, reroutes, edits, arrivals.
 create table if not exists public.trip_events (
@@ -510,11 +518,10 @@ create policy compartment_readiness_update on public.compartment_readiness
   with check (public.trip_company_member(company_id));
 
 drop trigger if exists compartment_readiness_touch on public.compartment_readiness;
-create trigger compartment_readiness_touch before update on public.compartment_readiness
-  for each row execute function public.trip_touch_updated_at();
 drop trigger if exists compartment_readiness_newest on public.compartment_readiness;
-create trigger compartment_readiness_newest before update on public.compartment_readiness
-  for each row execute function public.trip_keep_newest_client_write();
+drop trigger if exists compartment_readiness_sync on public.compartment_readiness;
+create trigger compartment_readiness_sync before insert or update on public.compartment_readiness
+  for each row execute function public.trip_sync_write();
 
 -- ---------------------------------------------------------------------------
 -- Saved driver signature (drawn once, tap to accept after)
@@ -554,5 +561,8 @@ end $$;
 -- Which compartments an interior wash covered (null = all).
 alter table public.wash_records
   add column if not exists interior_comp_numbers integer[];
+
+-- Earlier draft of the sync trigger (split in two); no trigger uses it now.
+drop function if exists public.trip_keep_newest_client_write();
 
 commit;
