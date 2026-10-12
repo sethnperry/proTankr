@@ -168,6 +168,21 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         <Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} />
       </div>
 
+      {ptd.parks.length > 0 && (
+        <div style={{ ...box, marginTop: 10 }}>
+          {ptd.parks.map((p, i) => (
+            <div key={i}>
+              <Row label="Parked preloaded" value={`${fmtDateTime(p.parkedAt)} → ${p.resumedAt ? fmtDateTime(p.resumedAt) : "still parked"}`} />
+              {(p.where || p.note) && (
+                <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>
+                  {[p.where ? `At ${p.where}` : null, p.note].filter(Boolean).join(" · ")}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {ptd.truckChanges.length > 0 && (
         <div style={{ ...box, marginTop: 10 }}>
           {ptd.truckChanges.map((c, i) => (

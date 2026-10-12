@@ -10769,3 +10769,24 @@ the Planner both use it, so the window opens on whichever screen the driver
 is on after a truck swap. The Planner's amber "Truck changed" banner now
 reopens the window in place instead of linking to the dashboard. Not
 click-tested.
+
+### Park Preloaded (2026-10-12)
+
+Driver Dashboard → "Park preloaded" (trip card link, shown between stops with
+product on board) stages a loaded trailer for a slip-seat driver or for the
+same driver after a layover. Migration `20261012020000_trip_parked.sql`
+(**applied 2026-10-12** via the Management API): `trips.status` gains
+`'parked'`, plus `parked_at/_by/_for ('slip_seat'|'layover')/_where/_note`.
+
+- `lib/trips/tripFlow.ts`: `canPark`, `parkTrip` (status parked + `parked`
+  event), `parkedTripOnTrailer`, `resumeTrip` (status in_transit, driver and
+  truck move to whoever resumes, clears the parked fields, logs `resumed` and,
+  for a different driver, `handoff`), `parkRecords` for the PTD. 1 test.
+- A parked trip isn't "open", so the driver can start another trip. Whoever
+  holds that trailer sees a blue "Parked preloaded" card (who, when, for whom,
+  where, note, what's on board) and the big button reads Resume Trip / Take
+  Over Trip instead of Start Load. Hydration pulls parked trips on the trailer
+  and their compartments.
+- `ParkSheet.tsx`: who it's for, where, note, time. PTD shows each park →
+  resume. Not click-tested. Known gap: the PTD's total trip time includes the
+  parked hours.

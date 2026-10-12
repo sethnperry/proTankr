@@ -8,7 +8,8 @@
 // device's own edit time. The server keeps the newest client edit per row
 // (trip_sync_write), so a late-arriving stale write can't clobber a newer one.
 
-export type TripStatus = "draft" | "loading" | "in_transit" | "delivering" | "complete" | "cancelled";
+export type TripStatus = "draft" | "loading" | "in_transit" | "delivering" | "parked" | "complete" | "cancelled";
+export type ParkFor = "slip_seat" | "layover";
 export type DeliveryType = "drop" | "pump_off";
 export type PickupType = "terminal" | "railcar" | "transload" | "other";
 export type CompartmentDisposition = "loaded" | "delivered" | "retained" | "cancelled";
@@ -32,6 +33,12 @@ export type TripRow = Synced & {
   notes: string | null;
   started_at: string | null;
   completed_at: string | null;
+  // Park Preloaded (set while status = 'parked'; cleared on resume).
+  parked_at?: string | null;
+  parked_by?: string | null;
+  parked_for?: ParkFor | null;
+  parked_where?: string | null;
+  parked_note?: string | null;
 };
 
 export type TripOrderRow = Synced & {

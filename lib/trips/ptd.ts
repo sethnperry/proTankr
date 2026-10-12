@@ -4,7 +4,7 @@
 // from a trip's rows. Pure: the page supplies names and renders.
 
 import { ptdCode } from "./code39.ts";
-import { delayMinutes } from "./tripFlow.ts";
+import { delayMinutes, parkRecords } from "./tripFlow.ts";
 import { editedNetFlag } from "./netGallons.ts";
 import { billingTime } from "./billingTime.ts";
 import { terminalIssueLabel } from "./terminalIssues.ts";
@@ -198,6 +198,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     endMiles: end,
     totalMiles: tripMiles(begin, end, changes),
     truckChanges: changes,
+    parks: parkRecords(input.events),
     pickups,
     deliveries,
     compartments,

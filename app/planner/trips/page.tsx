@@ -19,6 +19,7 @@ const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
   loading: { label: "Loading", color: "#fbbf24" },
   in_transit: { label: "In transit", color: "#60a5fa" },
   delivering: { label: "Delivering", color: "#60a5fa" },
+  parked: { label: "Parked preloaded", color: "#93c5fd" },
   complete: { label: "Complete", color: "#4ade80" },
   cancelled: { label: "Cancelled", color: "rgba(255,255,255,0.35)" },
 };

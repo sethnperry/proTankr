@@ -42,6 +42,7 @@ import {
 import {
   activePickup,
   addPickup,
+  canPark,
   arriveDelivery,
   arrivePickup,
   compartmentsForDelivery,
@@ -51,6 +52,10 @@ import {
   handoffCandidate,
   nextStep,
   onBoard,
+  PARK_FOR_LABEL,
+  parkTrip,
+  parkedTripOnTrailer,
+  resumeTrip,
   pickupNeedsOdometer,
   plannedDeliveries,
   rerouteDelivery,
@@ -63,6 +68,7 @@ import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/tri
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
+import { ParkSheet, type ParkSubmit } from "../components/trip/ParkSheet";
 import { TripEquipmentSheets, useTripEquipment } from "../hooks/useTripEquipment";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
 import { isTerminalIssueCode } from "@/lib/trips/terminalIssues";
@@ -80,6 +86,7 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
   loading: "Loading",
   in_transit: "In transit",
   delivering: "Delivering",
+  parked: "Parked preloaded",
   complete: "Complete",
   cancelled: "Cancelled",
 };
@@ -156,6 +163,14 @@ export default function HomePage() {
   // step's label ("Continue Trip") during the navigation.
   const [openingPlanner, setOpeningPlanner] = useState(false);
   const handoff = !openTrip && userId ? handoffCandidate(trips, trailerId, userId) : null;
+  // A load parked on the trailer this driver holds (theirs after a layover, or
+  // someone else's for a slip seat).
+  const parked = !openTrip ? parkedTripOnTrailer(trips, trailerId) : null;
+  const parkedSnap = useMemo(
+    () => (store && parked ? tripSnapshot(store, parked.trip_id) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store, parked?.trip_id, state],
+  );
 
   // ── Current terminal (the Planner's) ───────────────────────────────────────
   const terminalName = useMemo(() => {
@@ -459,6 +474,10 @@ export default function HomePage() {
     if (!store || !userId) return;
     switch (step.kind) {
       case "start":
+        if (parked) {
+          doResume();
+          break;
+        }
         setError(null);
         setSheetOpen(true);
         break;
@@ -530,7 +549,7 @@ export default function HomePage() {
   // ── Handoff (§10) ──────────────────────────────────────────────────────────
   const [handoffName, setHandoffName] = useState<string | null>(null);
   useEffect(() => {
-    const id = handoff?.driver_id;
+    const id = handoff?.driver_id ?? (parked && parked.parked_by !== userId ? parked.parked_by ?? parked.driver_id : null);
     if (!id) return;
     let cancelled = false;
     (async () => {
@@ -541,7 +560,27 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [handoff?.driver_id]);
+  }, [handoff?.driver_id, parked?.parked_by, parked?.driver_id, userId]);
+  // ── Park Preloaded ────────────────────────────────────────────────────────
+  const [parkOpen, setParkOpen] = useState(false);
+  const loadLine = (c: TripCompartmentLoadRow) =>
+    `C${c.comp_number} · ${productName(c.product_id)}${c.gross_gallons != null ? ` · ${Math.round(Number(c.gross_gallons)).toLocaleString("en-US")} gal` : ""}`;
+  const onBoardLines = (compLoads: TripCompartmentLoadRow[] | undefined) =>
+    onBoard(compLoads ?? []).sort((a, b) => a.comp_number - b.comp_number).map(loadLine);
+  const showPark = !!snap && canPark(openTrip, step, onBoard(snap.compLoads).length > 0);
+  const doPark = (v: ParkSubmit) => {
+    if (!store || !userId || !openTrip) return;
+    parkTrip(store, { trip: openTrip, userId, ...v, ...clock() });
+    setParkOpen(false);
+    setNotice({ text: "Load parked. Start another trip when you're ready.", tripId: openTrip.trip_id });
+    void syncNow();
+  };
+  const doResume = () => {
+    if (!store || !userId || !parked) return;
+    resumeTrip(store, { trip: parked, userId, truckId, ...clock() });
+    void syncNow();
+  };
+
   const doTakeOver = () => {
     if (!store || !userId || !handoff) return;
     takeOverTrip(store, { userId, trip: handoff, truckId, ...clock() });
@@ -576,6 +615,28 @@ export default function HomePage() {
             style={{ marginTop: 10, borderRadius: 10, border: "none", background: "#fbbf24", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
             Take Over Trip
           </button>
+        </div>
+      )}
+
+      {/* Parked preloaded on this trailer */}
+      {parked && (
+        <div style={{ ...card, marginBottom: 14, borderColor: "rgba(96,165,250,0.55)" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Parked preloaded
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>
+            {parked.parked_by === userId || (!parked.parked_by && parked.driver_id === userId) ? "You" : handoffName ?? "Another driver"} parked this trailer
+            {parked.parked_at ? ` ${new Date(parked.parked_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
+            {parked.parked_for ? ` · ${PARK_FOR_LABEL[parked.parked_for]}` : ""}
+          </div>
+          {parked.parked_where && <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>At {parked.parked_where}</div>}
+          {parked.parked_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{parked.parked_note}&rdquo;</div>}
+          <div style={{ marginTop: 8 }}>
+            {onBoardLines(parkedSnap?.compLoads).map((l) => <div key={l} style={{ fontSize: 14 }}>{l}</div>)}
+          </div>
+          <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
+            {parked.driver_id === userId ? "Resume to deliver it." : "Take it over to deliver it. The trip moves to you."}
+          </div>
         </div>
       )}
 
@@ -637,6 +698,11 @@ export default function HomePage() {
                 Couldn&apos;t load here
               </button>
             )}
+            {showPark && (
+              <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd" }}>
+                Park preloaded
+              </button>
+            )}
             {canAddPickup && (
               <button type="button" onClick={addAnotherPickup} style={{ ...smallLink, color: muted }}>
                 + Another pickup{terminalName ? ` (${terminalName})` : ""}
@@ -692,11 +758,21 @@ export default function HomePage() {
           background: "#fff", color: "#000", fontSize: 20, fontWeight: 800, cursor: "pointer",
         }}
       >
-        {openingPlanner ? "Opening Planner…" : step.label}
+        {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
+          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
+          : step.label}
       </button>
       {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
+
+      <ParkSheet
+        open={parkOpen}
+        trailerLabel={(() => { const n = (trailerId && equipment.trailerNameById?.[trailerId]) || equipment.currentTrailerName; return n ? `Trailer ${n}` : "The trailer"; })()}
+        onBoard={onBoardLines(snap?.compLoads)}
+        onSubmit={doPark}
+        onClose={() => setParkOpen(false)}
+      />
 
       {/* Info */}
       <div style={{ ...card, marginTop: 16, padding: 0 }}>

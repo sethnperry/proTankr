@@ -11,6 +11,7 @@ import { calculateNetGallons, type NetMethod } from "./netGallons.ts";
 import { OPEN_STATUSES, type TripStoreLike } from "./tripLogic.ts";
 import type {
   DeliveryType,
+  ParkFor,
   ReadinessStatus,
   TripCompartmentLoadRow,
   TripDeliveryRow,
@@ -667,4 +668,108 @@ export function takeOverTrip(
     trip_id: args.trip.trip_id, event_type: "handoff", occurred_at: args.now.toISOString(), actor_id: args.userId,
     payload: { from_driver_id: args.trip.driver_id, to_driver_id: args.userId },
   });
+}
+
+// ── Park Preloaded ───────────────────────────────────────────────────────────
+// A loaded trailer staged for a slip-seat driver, or for the same driver after
+// a layover. The trip keeps its load and stops; whoever picks up the trailer
+// resumes it (a different driver takes it over, same as a handoff).
+
+export const PARK_EVENT = "parked";
+export const RESUME_EVENT = "resumed";
+
+export const PARK_FOR_LABEL: Record<ParkFor, string> = {
+  slip_seat: "Slip seat driver",
+  layover: "Me, after layover",
+};
+
+// Parking is offered between stops only: product on board, nothing arrived
+// and unfinished, nothing mid-load.
+export function canPark(trip: TripRow | null, step: TripStep, hasLoadOnBoard: boolean): boolean {
+  if (!trip || !OPEN_STATUSES.has(trip.status) || !hasLoadOnBoard) return false;
+  return step.kind === "arrive_delivery" || step.kind === "add_delivery";
+}
+
+export function parkTrip(
+  store: TripStoreLike,
+  args: { trip: TripRow; userId: string; parkFor: ParkFor; where: string | null; note: string | null; parkedAt: string } & Clock,
+) {
+  const where = args.where?.trim() || null;
+  const note = args.note?.trim() || null;
+  store.put("trips", {
+    trip_id: args.trip.trip_id,
+    status: "parked",
+    parked_at: args.parkedAt,
+    parked_by: args.userId,
+    parked_for: args.parkFor,
+    parked_where: where,
+    parked_note: note,
+  });
+  logEvent(store, args.newId, {
+    trip_id: args.trip.trip_id, event_type: PARK_EVENT, occurred_at: args.parkedAt, actor_id: args.userId,
+    payload: { parked_for: args.parkFor, where, note, from_status: args.trip.status },
+  });
+}
+
+// The parked trip on this trailer, if any (anyone's, including the driver's own).
+export function parkedTripOnTrailer(trips: TripRow[], trailerId: string | null): TripRow | null {
+  if (!trailerId) return null;
+  const parked = trips
+    .filter((t) => t.trailer_id === trailerId && t.status === "parked")
+    .sort((a, b) => String(b.parked_at ?? "").localeCompare(String(a.parked_at ?? "")));
+  return parked[0] ?? null;
+}
+
+// Resume a parked trip. A different driver takes it over (logged as a handoff
+// too); the truck becomes whatever truck is pulling the trailer now.
+export function resumeTrip(
+  store: TripStoreLike,
+  args: { trip: TripRow; userId: string; truckId: string | null } & Clock,
+) {
+  const at = args.now.toISOString();
+  store.put("trips", {
+    trip_id: args.trip.trip_id,
+    status: "in_transit",
+    driver_id: args.userId,
+    truck_id: args.truckId ?? args.trip.truck_id,
+    parked_at: null,
+    parked_by: null,
+    parked_for: null,
+    parked_where: null,
+    parked_note: null,
+  });
+  logEvent(store, args.newId, {
+    trip_id: args.trip.trip_id, event_type: RESUME_EVENT, occurred_at: at, actor_id: args.userId,
+    payload: { parked_at: args.trip.parked_at ?? null, parked_by: args.trip.parked_by ?? null },
+  });
+  if (args.trip.driver_id !== args.userId) {
+    logEvent(store, args.newId, {
+      trip_id: args.trip.trip_id, event_type: "handoff", occurred_at: at, actor_id: args.userId,
+      payload: { from_driver_id: args.trip.driver_id, to_driver_id: args.userId },
+    });
+  }
+}
+
+export type ParkRecord = { parkedAt: string; resumedAt: string | null; parkFor: ParkFor | null; where: string | null; note: string | null };
+
+// Every park on a trip, paired with the resume that followed it (for the PTD).
+export function parkRecords(events: TripEventRow[]): ParkRecord[] {
+  const sorted = [...events].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+  const out: ParkRecord[] = [];
+  for (const e of sorted) {
+    if (e.event_type === PARK_EVENT) {
+      const p = (e.payload ?? {}) as Record<string, unknown>;
+      out.push({
+        parkedAt: e.occurred_at,
+        resumedAt: null,
+        parkFor: (p.parked_for as ParkFor) ?? null,
+        where: (p.where as string) ?? null,
+        note: (p.note as string) ?? null,
+      });
+    } else if (e.event_type === RESUME_EVENT) {
+      const open = [...out].reverse().find((r) => !r.resumedAt);
+      if (open) open.resumedAt = e.occurred_at;
+    }
+  }
+  return out;
 }

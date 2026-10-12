@@ -251,3 +251,39 @@ test("handoff: another driver's open trip on my trailer can be taken over", () =
   assert.equal(s.list("trips")[0].truck_id, "truck-b");
   assert.equal(s.list("trip_events")[0].event_type, "handoff");
 });
+
+test("park and resume", async () => {
+  const { canPark, parkTrip, parkedTripOnTrailer, resumeTrip, parkRecords, nextStep } = await import("./tripFlow.ts");
+  const rows: Record<string, any[]> = {};
+  const store = {
+    put: (t: string, r: any) => { (rows[t] ??= []).push(r); },
+    list: (t: string) => rows[t] ?? [],
+  } as any;
+  const trip: any = { trip_id: "t1", trailer_id: "R1", driver_id: "A", truck_id: "T1", status: "in_transit" };
+  const step = nextStep(trip, { pickups: [], deliveries: [], compLoads: [] });
+  assert.equal(step.kind, "add_delivery");
+  assert.equal(canPark(trip, step, true), true);
+  assert.equal(canPark(trip, step, false), false);
+  assert.equal(canPark({ ...trip, status: "draft" }, { kind: "start", label: "" } as any, true), false);
+
+  let id = 0;
+  const clock = { now: new Date("2026-10-12T20:00:00Z"), newId: () => `e${++id}` };
+  parkTrip(store, { trip, userId: "A", parkFor: "slip_seat", where: " Yard ", note: "", parkedAt: "2026-10-12T20:00:00Z", ...clock });
+  const parked = { ...trip, ...rows.trips[0] };
+  assert.equal(parked.status, "parked");
+  assert.equal(parked.parked_where, "Yard");
+  assert.equal(parked.parked_note, null);
+  assert.equal(parkedTripOnTrailer([parked], "R1")?.trip_id, "t1");
+  assert.equal(parkedTripOnTrailer([parked], "R2"), null);
+
+  resumeTrip(store, { trip: parked, userId: "B", truckId: "T2", now: new Date("2026-10-13T11:00:00Z"), newId: clock.newId });
+  const resumed = rows.trips[1];
+  assert.equal(resumed.status, "in_transit");
+  assert.equal(resumed.driver_id, "B");
+  assert.equal(resumed.truck_id, "T2");
+  assert.deepEqual(rows.trip_events.map((e) => e.event_type), ["parked", "resumed", "handoff"]);
+  const recs = parkRecords(rows.trip_events);
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].resumedAt, "2026-10-13T11:00:00.000Z");
+  assert.equal(recs[0].parkFor, "slip_seat");
+});
