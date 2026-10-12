@@ -8,6 +8,7 @@ import { delayMinutes } from "./tripFlow.ts";
 import { editedNetFlag } from "./netGallons.ts";
 import { billingTime } from "./billingTime.ts";
 import { terminalIssueLabel } from "./terminalIssues.ts";
+import { tripMiles, truckChanges } from "./truckChange.ts";
 import type {
   TripCompartmentLoadRow,
   TripDeliveryRow,
@@ -183,6 +184,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
   );
 
   const begin = num(trip.begin_miles), end = num(trip.end_miles);
+  const changes = truckChanges(input.events);
   return {
     code: ptdCode(trip.trip_id),
     orderNumbers,
@@ -194,7 +196,8 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     enteredLate: trip.entered_late,
     beginMiles: begin,
     endMiles: end,
-    totalMiles: begin != null && end != null ? Math.round((end - begin) * 10) / 10 : null,
+    totalMiles: tripMiles(begin, end, changes),
+    truckChanges: changes,
     pickups,
     deliveries,
     compartments,

@@ -64,6 +64,8 @@ import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadShe
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
 import { EquipmentChangeWarning } from "../components/trip/EquipmentChangeWarning";
+import { TruckChangeSheet, type TruckChangeView } from "../components/trip/TruckChangeSheet";
+import { grossWithTare, needsTruckChange, productLbsOnBoard, recordTruckChange } from "@/lib/trips/truckChange";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
 import { isTerminalIssueCode } from "@/lib/trips/terminalIssues";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
@@ -206,6 +208,70 @@ export default function HomePage() {
   const tripTruckId = openTrip?.truck_id ?? truckId;
   const tripTrailerName = tripTrailerId ? equipment.trailerNameById?.[tripTrailerId] ?? (tripTrailerId === equipment.currentTrailerId ? equipment.currentTrailerName : null) ?? null : null;
   const tripTruckName = tripTruckId ? equipment.truckNameById?.[tripTruckId] ?? (tripTruckId === equipment.currentTruckId ? equipment.currentTruckName : null) ?? null : null;
+
+  // ── Truck change (loaded trailer behind a different truck) ────────────────
+  // Product weight on board, from each loaded compartment's gallons/API/temp.
+  const onBoardWeight = useMemo(() => {
+    if (!snap) return null;
+    const alpha = (id: string | null) => {
+      const p = id ? products.find((x) => x.product_id === id) : null;
+      return p?.alpha_per_f != null ? Number(p.alpha_per_f) : null;
+    };
+    return productLbsOnBoard(snap.compLoads, alpha);
+  }, [snap, products]);
+  const currentCombo = equipment.selectedCombo;
+  const currentGross = tripLoaded && onBoardWeight ? grossWithTare(currentCombo?.tare_lbs, onBoardWeight.lbs) : null;
+  const truckChanged = needsTruckChange(openTrip, truckId, trailerId, tripLoaded);
+
+  // The old truck's tare with this trailer, for the before/after comparison.
+  // Its combo is usually decoupled by now, so it's read directly.
+  const [oldTare, setOldTare] = useState<number | null>(null);
+  useEffect(() => {
+    setOldTare(null);
+    const from = openTrip?.truck_id, trailer = openTrip?.trailer_id;
+    if (!truckChanged || !from || !trailer) return;
+    let alive = true;
+    void supabase.from("equipment_combos").select("tare_lbs")
+      .eq("truck_id", from).eq("trailer_id", trailer)
+      .order("claimed_at", { ascending: false, nullsFirst: false }).limit(1)
+      .then(({ data }) => { if (alive) setOldTare(data?.[0]?.tare_lbs != null ? Number(data[0].tare_lbs) : null); });
+    return () => { alive = false; };
+  }, [truckChanged, openTrip?.truck_id, openTrip?.trailer_id]);
+
+  const [truckSheetDismissed, setTruckSheetDismissed] = useState<string | null>(null);
+  const [truckBusy, setTruckBusy] = useState(false);
+  const truckKey = truckChanged ? `${openTrip?.trip_id}:${truckId}` : null;
+  const truckSheetOpen = !!truckKey && truckSheetDismissed !== truckKey && !shell.equipOpen;
+  const truckView: TruckChangeView | null = truckChanged && onBoardWeight ? {
+    fromName: tripTruckName,
+    toName: truckId ? equipment.truckNameById?.[truckId] ?? equipment.currentTruckName ?? null : null,
+    trailerName: tripTrailerName,
+    productLbs: onBoardWeight.lbs,
+    missing: onBoardWeight.missing,
+    fromTare: oldTare,
+    toTare: currentCombo?.tare_lbs != null ? Number(currentCombo.tare_lbs) : null,
+    target: currentCombo?.target_weight != null ? Number(currentCombo.target_weight) : null,
+    grossBefore: grossWithTare(oldTare, onBoardWeight.lbs),
+    grossAfter: currentGross,
+  } : null;
+  const doRecordTruckChange = (fromOdo: number | null, toOdo: number | null) => {
+    if (!store || !userId || !openTrip || !truckId || !truckView) return;
+    setTruckBusy(true);
+    recordTruckChange(store, {
+      trip: openTrip, actorId: userId, now: new Date(), newId,
+      payload: {
+        from_truck_id: openTrip.truck_id, to_truck_id: truckId,
+        from_truck_name: truckView.fromName, to_truck_name: truckView.toName,
+        trailer_id: openTrip.trailer_id,
+        from_odometer: fromOdo, to_odometer: toOdo,
+        from_tare_lbs: truckView.fromTare, to_tare_lbs: truckView.toTare,
+        product_lbs: Math.round(truckView.productLbs),
+        gross_before_lbs: truckView.grossBefore, gross_after_lbs: truckView.grossAfter,
+      },
+    });
+    setTruckBusy(false);
+    void syncNow();
+  };
 
   // ── Start Load prefills ────────────────────────────────────────────────────
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -711,6 +777,14 @@ export default function HomePage() {
       {/* Info */}
       <div style={{ ...card, marginTop: 16, padding: 0 }}>
         <InfoRow label="Equipment" value={equipmentLabel} onClick={openEquipment} />
+        {tripLoaded && (truckChanged || currentGross != null) && (
+          <InfoRow
+            label="Gross"
+            value={truckChanged ? "Truck changed · tap to record" : `${currentGross!.toLocaleString("en-US")} lbs (est.)`}
+            valueColor={truckChanged ? "#fbbf24" : currentGross! > 80000 ? "#f87171" : currentCombo?.target_weight != null && currentGross! > Number(currentCombo.target_weight) ? "#fbbf24" : undefined}
+            onClick={() => { if (truckChanged) setTruckSheetDismissed(null); }}
+          />
+        )}
         <InfoRow label="Terminal" value={pickupLabel ?? "Select a terminal"}
           onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
         <InfoRow
@@ -789,6 +863,13 @@ export default function HomePage() {
         onSubmit={submit}
       />
 
+      <TruckChangeSheet
+        open={truckSheetOpen}
+        view={truckView}
+        busy={truckBusy}
+        onRecord={doRecordTruckChange}
+        onClose={() => setTruckSheetDismissed(truckKey)}
+      />
       <EquipmentChangeWarning
         open={equipWarnOpen}
         trailerName={tripTrailerName}

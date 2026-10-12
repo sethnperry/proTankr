@@ -10728,3 +10728,24 @@ Out of Product before opening the Planner. Not click-tested.
   is on board or a load is in progress warns that the load stays with the
   trailer and a different truck changes tare. Warning only; nothing
   recalculates gross for a new truck yet. Not click-tested.
+
+### Truck change mid-trip: recorded on the trip, gross recalculated (2026-10-12)
+
+A loaded trailer behind a different truck stays the SAME trip. No migration:
+it's a `truck_change` row in `trip_events` plus `trips.truck_id` moving to
+the new truck (`lib/trips/truckChange.ts`, 5 tests).
+
+- Dashboard detects it (`needsTruckChange`: trip truck ≠ current truck, same
+  trailer, product on board) and opens `TruckChangeSheet`: product on board
+  (each loaded compartment's gross gallons at its logged API/temp, via the
+  Planner's `computeActualLbsForLine`), the new truck+trailer combo's tare,
+  new gross colored vs target/legal, the old gross for comparison (old
+  combo's tare read straight from `equipment_combos`, since it's usually
+  decoupled), and optional odometers for both trucks. "Not Now" hides it;
+  a **Gross** info row stays ("Truck changed · tap to record") until it's
+  recorded, and shows the estimated gross otherwise while loaded.
+- PTD: Truck reads "A → B", a "Truck changed" box lists time, odometers and
+  gross after. Total miles sum each truck's leg (`tripMiles`); null if a
+  swap is missing either odometer.
+- Not handled: a different trailer (that's a drop; the old trailer keeps
+  the load). Not click-tested on a device.

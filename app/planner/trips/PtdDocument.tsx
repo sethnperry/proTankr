@@ -159,12 +159,30 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         <Field label="Date" value={fmtDate(ptd.date)} />
         <Field label="Shipper" value={ptd.shipper} wide />
         <Field label="Customer" value={ptd.customer} wide />
-        <Field label="Truck" value={truckName} />
+        <Field label="Truck" value={ptd.truckChanges.length
+          ? [ptd.truckChanges[0].fromName, ...ptd.truckChanges.map((c, i) => (i === ptd.truckChanges.length - 1 ? (truckName ?? c.toName) : c.toName))].map((n) => n ?? "?").join(" → ")
+          : truckName} />
         <Field label="Trailer" value={trailerName} />
         <Field label="Begin miles" value={ptd.beginMiles?.toLocaleString("en-US")} />
         <Field label="End miles" value={ptd.endMiles?.toLocaleString("en-US")} />
         <Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} />
       </div>
+
+      {ptd.truckChanges.length > 0 && (
+        <div style={{ ...box, marginTop: 10 }}>
+          {ptd.truckChanges.map((c, i) => (
+            <div key={i}>
+              <Row label="Truck changed" value={`${c.fromName ?? "?"} → ${c.toName ?? "?"} · ${fmtDateTime(c.at)}`} />
+              {(c.fromOdometer != null || c.toOdometer != null) && (
+                <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>
+                  Miles {c.fromOdometer?.toLocaleString("en-US") ?? "?"} → {c.toOdometer?.toLocaleString("en-US") ?? "?"}
+                  {c.grossAfter != null ? ` · Gross after ${c.grossAfter.toLocaleString("en-US")} lbs` : ""}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={h2}>Pickups</div>
       {ptd.pickups.length === 0 && <div style={{ color: faint }}>None yet.</div>}
