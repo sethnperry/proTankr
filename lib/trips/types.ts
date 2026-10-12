@@ -89,7 +89,10 @@ export type TripDeliveryTankRow = Synced & {
   product_id: string | null;
   before_reading: number | null;
   after_reading: number | null;
-  water_reading: number | null;
+  water_reading: number | null; // always inches
+  // Before/after are tank-monitor gallons, or inches when the tank was stuck.
+  // Optional: rows written before 20261012000000 have no value locally.
+  reading_unit?: "gallons" | "inches";
   receipt_photo_path: string | null;
 };
 

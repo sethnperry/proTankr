@@ -133,13 +133,14 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
         before: num(t.before_reading),
         after: num(t.after_reading),
         water: num(t.water_reading),
+        unit: t.reading_unit ?? "gallons",
       }));
     const here = compartments.filter((c) => loads.find((l) => l.comp_number === c.comp)?.delivery_id === d.delivery_id);
     const used = new Set<string>();
     const drops = here.map((c) => {
       const t = c.tank ? tanks.find((x) => x.tank === c.tank) ?? null : null;
       if (t) used.add(t.tank);
-      return { comp: c.comp, product: c.product, net: c.net, tank: c.tank, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null };
+      return { comp: c.comp, product: c.product, net: c.net, tank: c.tank, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
     });
     return { compartments: here.map((c) => c.comp), drops, tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
   };

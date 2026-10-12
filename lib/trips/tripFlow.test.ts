@@ -94,7 +94,7 @@ test("next step walks the whole trip", () => {
     userId: ME, companyId: "co", trailerId: "trailer-1", delivery: snap().deliveries[0],
     times: defaultStepTimes(NOW, 10, snap().deliveries[0].arrived_at), delayReasonId: null, delayNote: null,
     delivered: snap().compLoads.map((c) => ({ compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: "1" })),
-    tanks: [{ tank_number: "1", product_id: "d2", before_reading: 10, after_reading: 90, water_reading: 0 }],
+    tanks: [{ tank_number: "1", product_id: "d2", before_reading: 10, after_reading: 90, water_reading: 0, reading_unit: "gallons" }],
     consigneeName: null, consigneeSignature: null, signed: true, endMiles: 1100, now: NOW, newId,
   });
   assert.equal(res.tripComplete, true);

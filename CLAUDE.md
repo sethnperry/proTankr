@@ -10566,10 +10566,11 @@ handling; no product counts as validated until a BOL test set exists
 
 ## Trip tap-through feedback (2026-10-11, branch `claude/gifted-babbage-r0evrs`)
 
-Nine items from Seth's first tap-through. Needs migration
-`supabase/migrations/20261011000000_trip_feedback.sql` (**not yet applied**;
-run `docs/trip-feedback-apply-checklist.sql` first). Until it runs, supplier
-rows and `supplier_id` on compartment loads won't sync. Not click-tested.
+Nine items from Seth's first tap-through. Migration
+`supabase/migrations/20261011000000_trip_feedback.sql` was **applied
+2026-10-12** (via the Supabase Management API; checklist passed 6/6). It
+had been missed, so supplier rows from the Citgo load were rejected and sat
+as "6 changes couldn't save" until the retry below. Not click-tested.
 
 - Order numbers and BOL numbers are deduped per company (`lib/trips/refCheck.ts`).
 - Delivery locations are picked from a shared list with an address
@@ -10616,3 +10617,28 @@ From a real load at Citgo/Tampa. No migration. Not click-tested.
   PTD); its BOL lines are grouped per BOL with their compartments.
 - Dashboard: after Arrived the big button shows "Opening Planner…" instead
   of flashing "Go to Planner".
+
+## Finish Delivery tank readings in pop-outs; failed syncs can retry (2026-10-12)
+
+Migrations `20261011000000_trip_feedback.sql` and
+`20261012000000_delivery_tank_reading_unit.sql` were applied live via the
+Supabase Management API (`api.supabase.com/v1/projects/<ref>/database/query`,
+proxy-injected credentials in the cloud session), which is now the way to
+apply and check migrations from here. Not click-tested.
+
+- Finish Delivery: the main sheet no longer has tank inputs. Tank readings
+  are pop-out windows (`ValueEntryOverlay`), one product at a time: before
+  readings for EVERY store tank of that product (tanks level out after the
+  drop), with "Dropped into" chips per compartment when there are several
+  tanks and an "Add tank" box for unsaved tanks, then after readings.
+- `lib/trips/tankReadings.ts` (5 tests): total rise across the product's
+  tanks vs delivered gross gallons. Over 25 gal off shows orange, over 100
+  red, shown in the after window and on the sheet. Gallons/Inches toggle; in
+  inches there's no comparison (dispatch uses the tank chart). New column
+  `trip_delivery_tanks.reading_unit` ('gallons' default | 'inches'); the PTD
+  prints "in" for inches. Water is always inches and only recorded through
+  "Water present? Tap to record" (pick tanks, enter inches).
+- Sync: rejected rows used to sit in `failed` forever, and tapping the Sync
+  row only drained the empty queue. `tripStore.retryFailed()` re-queues them
+  (also run once per app start), and the dashboard's Sync row opens a
+  details sheet listing each failure with Retry and Discard.

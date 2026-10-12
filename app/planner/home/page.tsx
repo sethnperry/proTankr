@@ -14,6 +14,8 @@
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
 import React, { useEffect, useMemo, useState } from "react";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import type { TripTable } from "@/lib/trips/types";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
@@ -107,7 +109,8 @@ export default function HomePage() {
     }
   }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
 
-  const { state, store, syncNow, pendingCount, failed } = useTripStore(userId);
+  const { state, store, syncNow, retryFailed, dismissFailed, pendingCount, failed } = useTripStore(userId);
+  const [syncOpen, setSyncOpen] = useState(false);
   useTripHydration(store, userId, truckId, trailerId);
   const { settings, reasons } = useTripSettings(companyId);
   const signature = useDriverSignature(userId);
@@ -602,11 +605,20 @@ export default function HomePage() {
             label="Sync"
             value={failed.length > 0 ? `${failed.length} change${failed.length === 1 ? "" : "s"} couldn't save` : `${pendingCount} waiting for signal`}
             valueColor={failed.length > 0 ? "#f87171" : muted}
-            onClick={() => void syncNow()}
+            onClick={() => { void syncNow(); setSyncOpen(true); }}
             last
           />
         )}
       </div>
+
+      <SyncDetailsSheet
+        open={syncOpen}
+        failed={failed}
+        pendingCount={pendingCount}
+        onRetry={() => void retryFailed()}
+        onDiscard={dismissFailed}
+        onClose={() => setSyncOpen(false)}
+      />
 
       {/* Tools */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
@@ -733,5 +745,78 @@ function Tile({ label, onClick }: { label: string; onClick: () => void }) {
     >
       {label}
     </button>
+  );
+}
+
+const SYNC_TABLE_LABEL: Record<string, string> = {
+  suppliers: "Supplier",
+  trips: "Trip",
+  trip_orders: "Order",
+  trip_pickups: "Pickup",
+  trip_deliveries: "Delivery",
+  trip_delivery_tanks: "Tank reading",
+  trip_compartment_loads: "Compartment",
+  trip_events: "Trip history entry",
+  compartment_readiness: "Compartment status",
+};
+
+// What didn't save and why, with Retry (after a fix ships) and Discard.
+function SyncDetailsSheet({ open, failed, pendingCount, onRetry, onDiscard, onClose }: {
+  open: boolean;
+  failed: { table: TripTable; key: string; error: string; failedAt: number }[];
+  pendingCount: number;
+  onRetry: () => void;
+  onDiscard: (table: TripTable, key: string) => void;
+  onClose: () => void;
+}) {
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  return (
+    <FullscreenModal open={open} title="Sync" onClose={onClose} footer={null}>
+      {failed.length === 0 && pendingCount === 0 && (
+        <div style={{ fontSize: 15, color: "#4ade80", fontWeight: 700, marginBottom: 12 }}>Everything is saved.</div>
+      )}
+      {pendingCount > 0 && (
+        <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>
+          {pendingCount} change{pendingCount === 1 ? "" : "s"} waiting to send. They go up on their own when there&apos;s signal.
+        </div>
+      )}
+      {failed.length > 0 && (
+        <>
+          <div style={{ fontSize: 14, color: muted, marginBottom: 10 }}>
+            The server turned these down. They&apos;re still on this phone. Retry sends them again.
+          </div>
+          <button type="button" onClick={onRetry}
+            style={{ width: "100%", padding: "14px 0", borderRadius: 6, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 800, cursor: "pointer", marginBottom: 14 }}>
+            Retry {failed.length === 1 ? "" : `all ${failed.length}`}
+          </button>
+          {failed.map((f) => {
+            const id = `${f.table}|${f.key}`;
+            return (
+              <div key={id} style={{ padding: "10px 12px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{SYNC_TABLE_LABEL[f.table] ?? f.table}</span>
+                  <span style={{ fontSize: 12, color: muted }}>
+                    {new Date(f.failedAt).toLocaleString("en-US", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "#f87171", marginTop: 4, overflowWrap: "anywhere" }}>{f.error}</div>
+                {confirmKey === id ? (
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: muted, flex: 1 }}>Discard this change for good?</span>
+                    <button type="button" onClick={() => { onDiscard(f.table, f.key); setConfirmKey(null); }}
+                      style={{ background: "#f87171", color: "#000", border: "none", borderRadius: 4, padding: "6px 10px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Discard</button>
+                    <button type="button" onClick={() => setConfirmKey(null)}
+                      style={{ background: "transparent", color: muted, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Keep</button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setConfirmKey(id)}
+                    style={{ marginTop: 6, background: "transparent", border: "none", padding: 0, color: muted, fontSize: 12, cursor: "pointer" }}>Discard</button>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </FullscreenModal>
   );
 }

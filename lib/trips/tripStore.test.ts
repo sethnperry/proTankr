@@ -127,6 +127,23 @@ test("one rejected row is isolated; the rest of the batch still lands", async ()
   assert.equal(s.pendingCount(), 1);
 });
 
+test("retryFailed re-queues rejected rows once the server accepts them", async () => {
+  const s = createTripStore({ storageKey: "k" });
+  s.put("suppliers", { supplier_id: "sup", company_id: "c", name: "Citgo" });
+  let tableMissing = true;
+  const r = recorder(() =>
+    tableMissing ? { ok: false, error: { message: "relation does not exist", code: "42P01", status: 404 } } : { ok: true },
+  );
+  await s.drain(r.send);
+  assert.equal(s.getState().failed.length, 1);
+  tableMissing = false; // the migration ran
+  assert.equal(s.retryFailed(), 1);
+  assert.equal(s.getState().failed.length, 0);
+  const res = await s.drain(r.send);
+  assert.equal(res.sent, 1);
+  assert.equal(s.pendingCount(), 0);
+});
+
 test("an edit made while the row is in flight stays queued", async () => {
   const s = createTripStore({ storageKey: "k" });
   s.put("trips", { trip_id: TRIP, notes: "first" });

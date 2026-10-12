@@ -19,6 +19,8 @@ import type { TripTable, TripTableRows } from "./types";
 const WRITE_DEBOUNCE_MS = 1_000;
 
 const stores = new Map<string, TripStore>();
+// Stores whose rejected rows were already retried once this app session.
+const retriedOnStart = new Set<string>();
 const sender = createSupabaseSender(supabase);
 const EMPTY = emptyState();
 
@@ -57,9 +59,21 @@ export function useTripStore(userId: string | null | undefined) {
     return store.drain(sender);
   }, [store]);
 
+  // Retry rejected rows (once per app start: a fix may have shipped since),
+  // or on demand from the sync details.
+  const retryFailed = useCallback(() => {
+    if (!store) return Promise.resolve(null);
+    store.retryFailed();
+    return store.drain(sender);
+  }, [store]);
+
   // Drain on mount, on reconnect, and on return to the foreground.
   useEffect(() => {
     if (!store) return;
+    if (userId && !retriedOnStart.has(userId) && store.getState().failed.length > 0) {
+      retriedOnStart.add(userId);
+      store.retryFailed();
+    }
     void syncNow();
     const onOnline = () => void syncNow();
     const onVisible = () => {
@@ -71,7 +85,7 @@ export function useTripStore(userId: string | null | undefined) {
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [store, syncNow]);
+  }, [store, syncNow, userId]);
 
   // Drain shortly after a write, or when the earliest backed-off write comes due.
   const nextDueAt = store?.nextDueAt() ?? null;
@@ -96,6 +110,8 @@ export function useTripStore(userId: string | null | undefined) {
     store,
     put,
     syncNow,
+    retryFailed,
+    dismissFailed: (table: TripTable, key: string) => store?.dismissFailed(table, key),
     pendingCount: queueLen,
     failed: state.failed,
     lastSyncedAt: state.lastSyncedAt,

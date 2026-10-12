@@ -258,6 +258,21 @@ export function createTripStore(opts: TripStoreOptions) {
     commit({ ...state, failed: state.failed.filter((f) => !(f.table === table && f.key === key)) });
   }
 
+  // Put rejected rows back on the queue (e.g. after a migration fixed what the
+  // server was rejecting). A row no longer on the phone is just dropped.
+  // Returns how many were re-queued.
+  function retryFailed(): number {
+    let queue = state.queue;
+    let n = 0;
+    for (const f of state.failed) {
+      if (!state.rows[f.table][f.key]) continue;
+      queue = enqueue(queue, f.table, f.key);
+      n += 1;
+    }
+    commit({ ...state, queue, failed: [] });
+    return n;
+  }
+
   // Push the queue to the server. Concurrent calls share one in-flight drain.
   function drain(send: Sender): Promise<DrainResult> {
     if (!draining) {
@@ -348,6 +363,7 @@ export function createTripStore(opts: TripStoreOptions) {
 
   return {
     getState: () => state,
+    retryFailed,
     subscribe(fn: () => void) {
       listeners.add(fn);
       return () => {

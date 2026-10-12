@@ -28,6 +28,8 @@ const tdR: React.CSSProperties = { ...td, textAlign: "right", whiteSpace: "nowra
 
 const gal = (n: number | null | undefined) => (n == null ? "" : Math.round(n).toLocaleString("en-US"));
 const dec = (n: number | null | undefined, d = 1) => (n == null ? "" : n.toFixed(d));
+// Tank monitor gallons, or inches when the tank was stuck.
+const reading = (n: number | null | undefined, unit: string) => (n == null ? "" : unit === "inches" ? `${dec(n, 2)} in` : gal(n));
 
 export function fmtDateTime(iso: string | null | undefined) {
   if (!iso) return "";
@@ -244,18 +246,18 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
                   <div key={x.comp} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
                     <b>C{x.comp} → {x.tank ? `Tank ${x.tank}` : "Tank —"}</b>
                     <span style={{ color: faint }}>{x.product}{x.net != null ? ` · ${gal(x.net)} net` : ""}</span>
-                    <Item label="Before" value={gal(x.before)} />
-                    <Item label="After" value={gal(x.after)} />
-                    <Item label="Water" value={dec(x.water)} />
+                    <Item label="Before" value={reading(x.before, x.unit)} />
+                    <Item label="After" value={reading(x.after, x.unit)} />
+                    <Item label="Water" value={x.water == null ? "" : `${dec(x.water)} in`} />
                   </div>
                 ))}
                 {d.otherTanks.map((t) => (
                   <div key={`t${t.tank}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
                     <b>Tank {t.tank}</b>
                     {t.product && <span style={{ color: faint }}>{t.product}</span>}
-                    <Item label="Before" value={gal(t.before)} />
-                    <Item label="After" value={gal(t.after)} />
-                    <Item label="Water" value={dec(t.water)} />
+                    <Item label="Before" value={reading(t.before, t.unit)} />
+                    <Item label="After" value={reading(t.after, t.unit)} />
+                    <Item label="Water" value={t.water == null ? "" : `${dec(t.water)} in`} />
                   </div>
                 ))}
               </div>

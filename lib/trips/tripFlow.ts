@@ -463,6 +463,7 @@ export type DeliveryTankReading = {
   before_reading: number | null;
   after_reading: number | null;
   water_reading: number | null;
+  reading_unit: "gallons" | "inches";
 };
 
 // Finish Delivery (§9): times, tanks, which compartments went where,
@@ -516,6 +517,7 @@ export function finishDelivery(
       before_reading: t.before_reading,
       after_reading: t.after_reading,
       water_reading: t.water_reading,
+      reading_unit: t.reading_unit,
     });
   }
 
