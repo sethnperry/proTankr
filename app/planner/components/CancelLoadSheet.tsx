@@ -80,7 +80,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill } from "../theme";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
-import type { OutageReportType } from "../hooks/useTerminalOutageReports";
+import { isTerminalWide, type OutageReportType } from "../hooks/useTerminalOutageReports";
+import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 
 type PlanRowLike = {
   comp_number: number;
@@ -176,7 +177,8 @@ export default function CancelLoadSheet({
   // synchronously readable that way (the closure would still see the
   // pre-update values).
   async function submitReportFor(type: OutageReportType, productIds: string[]) {
-    if (productIds.length === 0) return;
+    const wide = isTerminalWide(type);
+    if (!wide && productIds.length === 0) return;
     setSubmitBusy(true);
     setSubmitError(null);
     const { error } = await onSubmitOutageReport(type, productIds);
@@ -185,9 +187,10 @@ export default function CancelLoadSheet({
       // Land on the picker (pre-selected, error visible) so there's a
       // normal retry path -- matters most for the single-product auto-
       // submit skip below, which never shows the picker on the happy path.
+      // Terminal-wide reports have no product picker; stay on the type list.
       setReportType(type);
       setSelectedProductIds(new Set(productIds));
-      setMode("reportProducts");
+      setMode(wide ? "reportType" : "reportProducts");
       setSubmitError(error);
       return;
     }
@@ -214,6 +217,13 @@ export default function CancelLoadSheet({
   // as before (the whole reason it exists -- never assume every product
   // was affected).
   function selectReportType(type: OutageReportType) {
+    // Long Line / Terminal Issue are terminal-wide: no product to pick.
+    if (isTerminalWide(type)) {
+      setReportType(type);
+      setSelectedProductIds(new Set());
+      submitReportFor(type, []);
+      return;
+    }
     if (productChoices.length === 1) {
       setReportType(type);
       const onlyId = productChoices[0].productId;
@@ -271,20 +281,19 @@ export default function CancelLoadSheet({
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
               This posts a heads-up banner for other drivers heading to this terminal.
             </div>
-            <button
-              type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
-              disabled={submitBusy}
-              onClick={() => selectReportType("out_of_product")}
-            >
-              {submitBusy && reportType === "out_of_product" ? "Submitting…" : "Out of Product"}
-            </button>
-            <button
-              type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
-              disabled={submitBusy}
-              onClick={() => selectReportType("out_of_allocation")}
-            >
-              {submitBusy && reportType === "out_of_allocation" ? "Submitting…" : "Out of Allocation"}
-            </button>
+            {TERMINAL_ISSUES.map((t) => (
+              <button
+                key={t.code}
+                type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
+                disabled={submitBusy}
+                onClick={() => selectReportType(t.code)}
+              >
+                {submitBusy && reportType === t.code ? "Submitting…" : t.label}
+              </button>
+            ))}
+            {submitError && reportType && isTerminalWide(reportType) && (
+              <div style={{ color: "#f87171", fontSize: 13, marginBottom: 8 }}>{submitError}</div>
+            )}
             <button type="button" style={cancelStyle} onClick={() => (initialMode === "reportType" ? dismissAll() : setMode("menu"))} disabled={submitBusy}>Back</button>
           </>
         )}

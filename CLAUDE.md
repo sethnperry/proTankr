@@ -10691,3 +10691,12 @@ Migration `20261012010000_rack_attempts_and_billing_times.sql`, **applied
   time" offsets (`loading_begin_offset_minutes`/`delivery_begin_offset_minutes`,
   fallback to the old `begin_offset_minutes`), and a note listing the
   built-in terminal issues.
+
+### Report sheet after Finish Loading gets all four issues (2026-10-12)
+
+`CancelLoadSheet.tsx`'s Report Terminal Issue list now maps over
+`TERMINAL_ISSUES`, so Long Line and Terminal Issue sit next to Out of
+Product / Out of Allocation. The two terminal-wide ones skip the product
+picker and submit at once (product_id null, shown to every company); an
+error on those stays on the issue list. The card-renewal question still
+follows any successful report. Not click-tested.
