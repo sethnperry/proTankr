@@ -38,7 +38,7 @@ export function EquipmentChangeWarning({ open, trailerName, truckName, loaded, o
             : <>This trip&apos;s load is planned on <b>{trailer}</b>{truckName ? <> behind <b>Truck {truckName}</b></> : null}.</>}
         </div>
         <ul style={{ fontSize: 13, lineHeight: 1.5, color: muted, paddingLeft: 18, margin: "10px 0 16px" }}>
-          <li>A different truck has a different tare, so the gross weight changes. After you pick it, the dashboard records the truck change and shows the new gross.</li>
+          <li>A different truck has a different tare, so the gross weight changes. After you pick it, record the truck change on the Driver Dashboard to see the new gross.</li>
           <li>Dropping {trailer} leaves the load with it. Whoever picks it up delivers it.</li>
         </ul>
         <button type="button" onClick={onContinue} style={{ ...primaryBtn, width: "100%" }}>Change Equipment</button>

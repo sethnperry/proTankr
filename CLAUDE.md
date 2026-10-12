@@ -10749,3 +10749,13 @@ the new truck (`lib/trips/truckChange.ts`, 5 tests).
   swap is missing either odometer.
 - Not handled: a different trailer (that's a drop; the old trailer keeps
   the load). Not click-tested on a device.
+
+### Planner's equipment icon gets the same mid-trip warning (2026-10-12)
+
+`app/planner/page.tsx`: the header EQ icon and the bobtail/trailer-only
+"Select a …" button open `EquipmentChangeWarning` first while the open trip
+has product on board or a load in progress (`tripEquip`). After a truck swap
+the Planner shows an amber "Truck changed · record it and check the new
+gross" banner (under `TripStepBanner`) that links to the Driver Dashboard,
+where `TruckChangeSheet` records it. SetupGate's equipment step is unchanged
+(no trip exists before equipment is set). Not click-tested.

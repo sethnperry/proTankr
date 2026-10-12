@@ -99,6 +99,8 @@ import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips
 import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
 import { openTripForDriver, retagLoadPickup } from "@/lib/trips/tripLogic";
+import { needsTruckChange } from "@/lib/trips/truckChange";
+import { EquipmentChangeWarning } from "./components/trip/EquipmentChangeWarning";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
@@ -2466,6 +2468,29 @@ const lastProductInfoById = useMemo(() => {
     return (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
       .some((p) => p.trip_id === trip.trip_id && !p.load_id && !p.left_at);
   }, [effectiveUserId, tripStoreHook.state]);
+  // Same mid-trip equipment warning as the Driver Dashboard: the load stays
+  // with the trailer, and a different truck changes tare.
+  const tripEquip = useMemo(() => {
+    if (!effectiveUserId) return null;
+    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
+    if (!trip) return null;
+    const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
+      .filter((c) => c.trip_id === trip.trip_id);
+    const loaded = comps.some((c) => c.disposition === "loaded");
+    const loading = (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
+      .some((p) => p.trip_id === trip.trip_id && !!p.load_id && !p.left_at);
+    return { trip, loaded, hasLoad: loaded || loading };
+  }, [effectiveUserId, tripStoreHook.state]);
+  const [equipWarnOpen, setEquipWarnOpen] = useState(false);
+  const openEquipment = () => (tripEquip?.hasLoad ? setEquipWarnOpen(true) : setEquipOpen(true));
+  const curTruckId = equipment.selectedCombo?.truck_id ?? equipment.currentTruckId ?? null;
+  const curTrailerId = equipment.selectedCombo?.trailer_id ?? equipment.currentTrailerId ?? null;
+  const tripTruckChanged = needsTruckChange(tripEquip?.trip ?? null, curTruckId, curTrailerId, !!tripEquip?.loaded);
+  const unitName = (id: string | null | undefined, byId: Record<string, string> | undefined, curId: string | null, curName: string | null) =>
+    id ? byId?.[id] ?? (id === curId ? curName : null) ?? null : null;
+  const tripEquipTrailerName = unitName(tripEquip?.trip.trailer_id ?? curTrailerId, equipment.trailerNameById, equipment.currentTrailerId, equipment.currentTrailerName);
+  const tripEquipTruckName = unitName(tripEquip?.trip.truck_id ?? curTruckId, equipment.truckNameById, equipment.currentTruckId, equipment.currentTruckName);
+
   const loadLabel = loadWorkflow.beginLoadBusy ? "Starting…"
     : loadWorkflow.activeLoadId ? "Load started"
     : tripAwaitingLoad ? "BEGIN LOADING"
@@ -2718,7 +2743,7 @@ const lastProductInfoById = useMemo(() => {
           ? "No trailer coupled — add one to plan a load."
           : "No truck coupled — add one to plan a load."}
       </div>
-      <button type="button" onClick={() => setEquipOpen(true)}
+      <button type="button" onClick={openEquipment}
         style={{ marginTop: 18, background: "#ffffff", color: "#000000", border: "none", borderRadius: 6, padding: "12px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
         Select a {missingUnitWord}
       </button>
@@ -2872,6 +2897,31 @@ const lastProductInfoById = useMemo(() => {
       )}
       {setupSpotlightEl}
       <TripStepBanner userId={effectiveUserId || null} />
+      {tripTruckChanged && (
+        <button
+          type="button"
+          onClick={() => router.push("/planner/home")}
+          style={{
+            display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", gap: 10,
+            border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.08)", color: "#fff",
+            borderRadius: 10, padding: "8px 12px", marginTop: 8, cursor: "pointer", textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>
+            <b style={{ color: "#fbbf24" }}>Truck changed</b>
+            <span style={{ color: "rgba(255,255,255,0.6)" }}> · record it and check the new gross</span>
+          </span>
+          <span style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>›</span>
+        </button>
+      )}
+      <EquipmentChangeWarning
+        open={equipWarnOpen}
+        trailerName={tripEquipTrailerName}
+        truckName={tripEquipTruckName}
+        loaded={!!tripEquip?.loaded}
+        onContinue={() => { setEquipWarnOpen(false); setEquipOpen(true); }}
+        onClose={() => setEquipWarnOpen(false)}
+      />
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
@@ -3040,7 +3090,7 @@ const lastProductInfoById = useMemo(() => {
             {(() => {
               const equipBtnProps = {
                 type: "button" as const,
-                onClick: () => setEquipOpen(true),
+                onClick: openEquipment,
                 title: "Equipment",
                 // boxShadow/borderRadius explicitly zeroed -- SetupGate's
                 // own version of this shared-layoutId button has a real
