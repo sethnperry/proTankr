@@ -99,8 +99,7 @@ import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips
 import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
 import { openTripForDriver, retagLoadPickup } from "@/lib/trips/tripLogic";
-import { needsTruckChange } from "@/lib/trips/truckChange";
-import { EquipmentChangeWarning } from "./components/trip/EquipmentChangeWarning";
+import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
@@ -2468,28 +2467,11 @@ const lastProductInfoById = useMemo(() => {
     return (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
       .some((p) => p.trip_id === trip.trip_id && !p.load_id && !p.left_at);
   }, [effectiveUserId, tripStoreHook.state]);
-  // Same mid-trip equipment warning as the Driver Dashboard: the load stays
-  // with the trailer, and a different truck changes tare.
-  const tripEquip = useMemo(() => {
-    if (!effectiveUserId) return null;
-    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
-    if (!trip) return null;
-    const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
-      .filter((c) => c.trip_id === trip.trip_id);
-    const loaded = comps.some((c) => c.disposition === "loaded");
-    const loading = (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
-      .some((p) => p.trip_id === trip.trip_id && !!p.load_id && !p.left_at);
-    return { trip, loaded, hasLoad: loaded || loading };
-  }, [effectiveUserId, tripStoreHook.state]);
-  const [equipWarnOpen, setEquipWarnOpen] = useState(false);
-  const openEquipment = () => (tripEquip?.hasLoad ? setEquipWarnOpen(true) : setEquipOpen(true));
-  const curTruckId = equipment.selectedCombo?.truck_id ?? equipment.currentTruckId ?? null;
-  const curTrailerId = equipment.selectedCombo?.trailer_id ?? equipment.currentTrailerId ?? null;
-  const tripTruckChanged = needsTruckChange(tripEquip?.trip ?? null, curTruckId, curTrailerId, !!tripEquip?.loaded);
-  const unitName = (id: string | null | undefined, byId: Record<string, string> | undefined, curId: string | null, curName: string | null) =>
-    id ? byId?.[id] ?? (id === curId ? curName : null) ?? null : null;
-  const tripEquipTrailerName = unitName(tripEquip?.trip.trailer_id ?? curTrailerId, equipment.trailerNameById, equipment.currentTrailerId, equipment.currentTrailerName);
-  const tripEquipTruckName = unitName(tripEquip?.trip.truck_id ?? curTruckId, equipment.truckNameById, equipment.currentTruckId, equipment.currentTruckName);
+  // Mid-trip equipment change, shared with the Driver Dashboard: warning
+  // before the picker, and the truck-change record when a loaded trailer is
+  // now behind a different truck.
+  const tripEquip = useTripEquipment(tripStoreHook, effectiveUserId || null);
+  const openEquipment = tripEquip.openEquipment;
 
   const loadLabel = loadWorkflow.beginLoadBusy ? "Starting…"
     : loadWorkflow.activeLoadId ? "Load started"
@@ -2897,10 +2879,10 @@ const lastProductInfoById = useMemo(() => {
       )}
       {setupSpotlightEl}
       <TripStepBanner userId={effectiveUserId || null} />
-      {tripTruckChanged && (
+      {tripEquip.truckChanged && (
         <button
           type="button"
-          onClick={() => router.push("/planner/home")}
+          onClick={tripEquip.reopenTruckChange}
           style={{
             display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", gap: 10,
             border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.08)", color: "#fff",
@@ -2914,14 +2896,7 @@ const lastProductInfoById = useMemo(() => {
           <span style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>›</span>
         </button>
       )}
-      <EquipmentChangeWarning
-        open={equipWarnOpen}
-        trailerName={tripEquipTrailerName}
-        truckName={tripEquipTruckName}
-        loaded={!!tripEquip?.loaded}
-        onContinue={() => { setEquipWarnOpen(false); setEquipOpen(true); }}
-        onClose={() => setEquipWarnOpen(false)}
-      />
+      <TripEquipmentSheets {...tripEquip.sheets} />
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>

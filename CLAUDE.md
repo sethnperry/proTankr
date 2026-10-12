@@ -10759,3 +10759,13 @@ the Planner shows an amber "Truck changed · record it and check the new
 gross" banner (under `TripStepBanner`) that links to the Driver Dashboard,
 where `TruckChangeSheet` records it. SetupGate's equipment step is unchanged
 (no trip exists before equipment is set). Not click-tested.
+
+### Truck-change window in the Planner too (2026-10-12)
+
+The warning + truck-change logic moved out of the dashboard into one shared
+hook, `app/planner/hooks/useTripEquipment.tsx` (`useTripEquipment(storeHook,
+userId)` + `<TripEquipmentSheets {...sheets} />`). The Driver Dashboard and
+the Planner both use it, so the window opens on whichever screen the driver
+is on after a truck swap. The Planner's amber "Truck changed" banner now
+reopens the window in place instead of linking to the dashboard. Not
+click-tested.
