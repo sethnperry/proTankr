@@ -208,7 +208,8 @@ export async function clearOutageReportsForProduct(
 export function useActiveOutageBanner(
   terminalId: string | null,
   effectiveUserId: string | null,
-  plannedProductIds: Set<string> | null | undefined
+  // "all" skips the product filter (the Driver Dashboard before a plan exists).
+  plannedProductIds: Set<string> | "all" | null | undefined
 ): {
   tickerMessage: string | null;
   reports: ComposedOutageReport[];
@@ -251,7 +252,8 @@ export function useActiveOutageBanner(
     // Product reports only matter for products the driver plans to load; a
     // terminal-wide report (Long Line, Terminal Issue) matters to anyone
     // headed there, plan or no plan.
-    const planned = plannedProductIds ?? new Set<string>();
+    const allProducts = plannedProductIds === "all";
+    const planned = plannedProductIds instanceof Set ? plannedProductIds : new Set<string>();
     const tz = timeZone || "America/New_York";
     const cutoffMs = mostRecentClearingCheckpoint(Date.now(), tz);
 
@@ -271,7 +273,7 @@ export function useActiveOutageBanner(
     const seen = new Set<string>();
     const rows: OutageRow[] = [];
     for (const r of data as OutageRow[]) {
-      if (!isTerminalWide(r.report_type) && !(r.product_id && planned.has(r.product_id))) continue;
+      if (!allProducts && !isTerminalWide(r.report_type) && !(r.product_id && planned.has(r.product_id))) continue;
       const key = `${r.report_type}:${r.product_id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);

@@ -10700,3 +10700,14 @@ Product / Out of Allocation. The two terminal-wide ones skip the product
 picker and submit at once (product_id null, shown to every company); an
 error on those stays on the issue list. The card-renewal question still
 follows any successful report. Not click-tested.
+
+### Driver Dashboard: Alerts row for terminal reports (2026-10-12)
+
+`app/planner/home/page.tsx` shows an **Alerts** row under Expirations, only
+while the trip's pickup terminal (or the Planner's terminal) has active
+outage reports. Red, lists each report's short text ("Long Line · Out of
+ULSD"), and tapping it opens the same `TerminalOutageDetailModal` the header
+ticker uses (Clear Now for your own reports). It calls
+`useActiveOutageBanner` with the planned products, or `"all"` (new option,
+no product filter) when no plan exists yet this session, so a driver sees an
+Out of Product before opening the Planner. Not click-tested.

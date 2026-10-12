@@ -27,6 +27,8 @@ import { rememberTanks, useDeliveryLocationList, useDriverSignature, useTripSett
 import { locationPlace, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
+import { useActiveOutageBanner } from "../hooks/useTerminalOutageReports";
+import TerminalOutageDetailModal from "../modals/TerminalOutageDetailModal";
 import {
   applyStartLoad,
   buildStartLoad,
@@ -175,6 +177,20 @@ export default function HomePage() {
     const t = id ? terminalCatalog.find((x) => String(x.terminal_id) === id) : null;
     return t && t.lat != null && t.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null;
   }, [snap, location.selectedTerminalId, terminalCatalog]);
+
+  // ── Terminal alerts (outage reports at the pickup terminal) ──────────────
+  // Same reports as the header ticker, but for the trip's pickup terminal,
+  // and every product's reports when no plan has been made yet this session.
+  const alertTerminalId = useMemo(() => {
+    const p = snap ? activePickup(snap.pickups) ?? [...snap.pickups].reverse().find((x) => x.terminal_id) : null;
+    return String(p?.terminal_id || location.selectedTerminalId || "") || null;
+  }, [snap, location.selectedTerminalId]);
+  const alertProducts = useMemo<Set<string> | "all">(
+    () => (shell.plannedProductIds.size > 0 ? shell.plannedProductIds : "all"),
+    [shell.plannedProductIds],
+  );
+  const terminalAlerts = useActiveOutageBanner(alertTerminalId, userId || null, alertProducts);
+  const [alertsOpen, setAlertsOpen] = useState(false);
 
   // ── Start Load prefills ────────────────────────────────────────────────────
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -687,8 +703,17 @@ export default function HomePage() {
           value={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring soon` : "All current"}
           valueColor={expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined}
           onClick={() => shell.setExpModalOpen(true)}
-          last={!(pendingCount > 0 || failed.length > 0)}
+          last={!(pendingCount > 0 || failed.length > 0) && terminalAlerts.reports.length === 0}
         />
+        {terminalAlerts.reports.length > 0 && (
+          <InfoRow
+            label="Alerts"
+            value={terminalAlerts.reports.map((r) => r.tickerText).join(" · ")}
+            valueColor="#f87171"
+            onClick={() => setAlertsOpen(true)}
+            last={!(pendingCount > 0 || failed.length > 0)}
+          />
+        )}
         {(pendingCount > 0 || failed.length > 0) && (
           <InfoRow
             label="Sync"
@@ -699,6 +724,14 @@ export default function HomePage() {
           />
         )}
       </div>
+
+      <TerminalOutageDetailModal
+        open={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        reports={terminalAlerts.reports}
+        timeZone={terminalAlerts.timeZone}
+        onCleared={terminalAlerts.refresh}
+      />
 
       <SyncDetailsSheet
         open={syncOpen}
