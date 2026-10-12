@@ -10865,3 +10865,14 @@ fell outside the 60 completed trips the board reads. Now recorded.
 - Dispatch board cards (in progress and parked) open `/planner/trips/{id}`,
   the PTD in progress. The PTD's back link now goes back (was always to the
   Trips list). Not click-tested.
+
+### Test trips removed; phone drops trips deleted on the server (2026-10-12)
+
+Deleted test trips 123456789 (x2), 123456780 and 123345 via the Management
+API (children cascade; their `load_log` rows were kept on purpose) and
+cancelled the empty 10/12 draft at Marathon. The phone's offline store only
+ever added or updated rows from the server, so deleted trips would have
+stayed in its list. New `lib/trips/pruneTrips.ts` (`pruneMissingTrips`,
+2 tests) drops local trips of this driver that the server no longer returns,
+within the fetched window, skipping any with unsent changes. Called from the
+Trips list (last 50) and dashboard hydration (last 10). Not click-tested.

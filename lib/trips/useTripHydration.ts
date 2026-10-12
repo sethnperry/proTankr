@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { OPEN_STATUSES } from "./tripLogic";
+import { pruneMissingTrips } from "./pruneTrips";
 import type { TripStore } from "./tripStore";
 import type {
   CompartmentReadinessRow,
@@ -53,6 +54,8 @@ export function useTripHydration(
         for (const t of ((res.data ?? []) as TripRow[])) trips.set(t.trip_id, t);
       }
       store.hydrate("trips", [...trips.values()]);
+      // A trip deleted on the server (e.g. test data) leaves the phone too.
+      if (!recentRes.error) pruneMissingTrips(store, userId, (recentRes.data ?? []) as TripRow[], 10);
       store.hydrate("compartment_readiness", (readinessRes.data ?? []) as CompartmentReadinessRow[]);
 
       const openIds = [...trips.values()].filter((t) => OPEN_STATUSES.has(t.status) || t.status === "parked").map((t) => t.trip_id);

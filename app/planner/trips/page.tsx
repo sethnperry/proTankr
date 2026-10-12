@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
+import { pruneMissingTrips } from "@/lib/trips/pruneTrips";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { ptdCode } from "@/lib/trips/code39";
 import type { TripOrderRow, TripRow } from "@/lib/trips/types";
@@ -45,6 +46,8 @@ export default function TripsPage() {
         if (cancelled || t.error) return;
         const trips = (t.data ?? []) as TripRow[];
         store.hydrate("trips", trips);
+        // Trips deleted on the server leave the phone's list too.
+        pruneMissingTrips(store, userId, trips, 50);
         const ids = trips.map((x) => x.trip_id);
         for (let i = 0; i < ids.length; i += 200) {
           const o = await supabase.from("trip_orders").select("*").in("trip_id", ids.slice(i, i + 200));
