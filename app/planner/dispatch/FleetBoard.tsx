@@ -1,0 +1,215 @@
+"use client";
+// app/planner/dispatch/FleetBoard.tsx
+//
+// Dispatch Dashboard: every load in progress with its route line, then every
+// parked load. Presentational only (data comes from useFleetTrips), so it can
+// be rendered without a browser.
+//
+// The route line is a U (lib/trips/fleetProgress.ts): start city top left,
+// rack(s) along the top to the right, then down and back left through the
+// deliveries, last delivery under the start. A dot shows where the truck is.
+
+import React from "react";
+import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
+import type { FleetTrip } from "@/lib/trips/useFleetTrips";
+import { PARK_FOR_LABEL } from "@/lib/trips/tripFlow";
+import { productColorFor } from "@/app/planner/utils/productColor";
+
+export type BoardProduct = { name: string; code: string; hex: string | null };
+
+const muted = "rgba(255,255,255,0.5)";
+const card: React.CSSProperties = {
+  borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)",
+  padding: "12px 14px", marginBottom: 10, cursor: "pointer", textAlign: "left", width: "100%", color: "#fff",
+  display: "block",
+};
+const sectionLabel: React.CSSProperties = {
+  fontSize: 12, fontWeight: 800, color: muted, textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px",
+};
+
+const MOVING = "#4ade80";
+const PARKED = "#93c5fd";
+
+// Horizontal layout: fractions 0..1 map to LEFT..RIGHT percent of the width.
+const LEFT = 5;
+const RIGHT = 95;
+const px = (x: number) => LEFT + (RIGHT - LEFT) * x;
+const TOP_Y = 26;
+const BOT_Y = 66;
+const HEIGHT = 92;
+
+function RouteLine({ route, parked }: { route: TripRoute; parked: boolean }) {
+  const { nodes, position } = route;
+  const dotColor = parked ? PARKED : MOVING;
+  const y = (row: "top" | "bottom") => (row === "top" ? TOP_Y : BOT_Y);
+
+  // Segments between consecutive nodes. The top→bottom hop goes down the
+  // right edge first, then left.
+  type Seg = { pts: [number, number][]; i: number };
+  const segs: Seg[] = [];
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const a = nodes[i], b = nodes[i + 1];
+    const pts: [number, number][] = a.row === b.row
+      ? [[px(a.x), y(a.row)], [px(b.x), y(b.row)]]
+      : [[px(a.x), y(a.row)], [RIGHT, y(a.row)], [RIGHT, y(b.row)], [px(b.x), y(b.row)]];
+    segs.push({ pts, i });
+  }
+  const travelled = (i: number) => i + 1 < position.at || (i + 1 === position.at && !position.enRoute);
+  const enRouteSeg = position.enRoute ? segs.find((s) => s.i + 1 === position.at) : null;
+
+  // Midpoint of the last straight leg of the en-route segment.
+  let dot: [number, number];
+  if (enRouteSeg) {
+    const p = enRouteSeg.pts;
+    const [x1, y1] = p[p.length - 2], [x2, y2] = p[p.length - 1];
+    dot = [(x1 + x2) / 2, (y1 + y2) / 2];
+  } else {
+    const n = nodes[position.at];
+    dot = [px(n.x), y(n.row)];
+  }
+
+  const line = (pts: [number, number][], stroke: string, w: number, key: string) =>
+    pts.slice(1).map((p, k) => (
+      <line key={`${key}-${k}`} x1={`${pts[k][0]}%`} y1={pts[k][1]} x2={`${p[0]}%`} y2={p[1]}
+        stroke={stroke} strokeWidth={w} strokeLinecap="round" />
+    ));
+
+  return (
+    <div style={{ position: "relative", height: HEIGHT, marginTop: 6 }}>
+      <svg width="100%" height={HEIGHT} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+        {segs.map((s) => line(s.pts, travelled(s.i) ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.15)", 2, `s${s.i}`))}
+        {enRouteSeg && (() => {
+          // Brighten everything before the dot on the en-route segment.
+          const p = enRouteSeg.pts;
+          const head = [...p.slice(0, p.length - 1), dot] as [number, number][];
+          return line(head, "rgba(255,255,255,0.85)", 2, "head");
+        })()}
+        {nodes.map((n, i) => {
+          const cx = `${px(n.x)}%`, cy = y(n.row);
+          if (n.state === "skipped") {
+            return <circle key={n.key} cx={cx} cy={cy} r={4} fill="#0b0b0b" stroke="rgba(248,113,113,0.7)" strokeWidth={1.5} />;
+          }
+          const done = n.state === "done" || i < position.at;
+          return <circle key={n.key} cx={cx} cy={cy} r={4.5} fill={done ? "#fff" : "#0b0b0b"}
+            stroke={done ? "#fff" : "rgba(255,255,255,0.4)"} strokeWidth={1.5} />;
+        })}
+        <circle cx={`${dot[0]}%`} cy={dot[1]} r={8} fill={dotColor} opacity={0.25} />
+        <circle cx={`${dot[0]}%`} cy={dot[1]} r={5} fill={dotColor} />
+      </svg>
+      {nodes.map((n, i) => {
+        const left = px(n.x);
+        const atLeft = n.x === 0;
+        const atRight = n.x === 1;
+        const top = n.row === "top";
+        const isHere = i === position.at;
+        return (
+          <div key={`l-${n.key}`} style={{
+            position: "absolute",
+            top: top ? 0 : BOT_Y + 8,
+            left: atRight ? undefined : `${left}%`,
+            right: atRight ? `${100 - left}%` : undefined,
+            transform: atLeft ? "translateX(-6px)" : atRight ? "translateX(6px)" : "translateX(-50%)",
+            textAlign: atLeft ? "left" : atRight ? "right" : "center",
+            maxWidth: "42%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            fontSize: 12, lineHeight: "15px",
+            fontWeight: isHere ? 800 : 600,
+            color: n.state === "skipped" ? "rgba(248,113,113,0.8)" : isHere ? "#fff" : "rgba(255,255,255,0.65)",
+            textDecoration: n.state === "skipped" ? "line-through" : undefined,
+          }}>
+            {n.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProductChips({ ft, product }: { ft: FleetTrip; product: (id: string | null) => BoardProduct }) {
+  const aboard = ft.compLoads
+    .filter((c) => c.disposition === "loaded" || c.disposition === "retained")
+    .sort((a, b) => b.comp_number - a.comp_number);
+  if (aboard.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 6 }}>
+      {aboard.map((c) => {
+        const p = product(c.product_id);
+        const g = c.gross_gallons != null ? Math.round(Number(c.gross_gallons)).toLocaleString("en-US") : null;
+        return (
+          <span key={c.compartment_load_id} style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.hex ?? productColorFor(p.name) }} />
+            C{c.comp_number} {p.code}{g ? ` · ${g}` : ""}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+const unitLabel = (ft: FleetTrip) =>
+  [ft.truckName ? `Truck ${ft.truckName}` : null, ft.trailerName ? `Trailer ${ft.trailerName}` : null].filter(Boolean).join(" · ");
+
+export function FleetBoard({ trips, locations, product, now, onPickDriver }: {
+  trips: FleetTrip[];
+  locations: Map<string, Place>;
+  product: (id: string | null) => BoardProduct;
+  now: Date;
+  onPickDriver: (driverId: string) => void;
+}) {
+  const live = trips.filter((t) => t.trip.status !== "parked");
+  const parked = trips.filter((t) => t.trip.status === "parked");
+
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={sectionLabel}>Loads in progress ({live.length})</div>
+      {live.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No loads in progress.</div>}
+      {live.map((ft) => {
+        const route = buildTripRoute(ft.trip, ft.pickups, ft.deliveries, locations, ft.start);
+        const since = elapsed(route.since, now);
+        return (
+          <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onPickDriver(ft.trip.driver_id)}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+              <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {ft.driverName ?? "Driver"}
+              </span>
+              <span style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>{unitLabel(ft)}</span>
+            </div>
+            <div style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ color: MOVING, fontWeight: 700 }}>{route.status}</span>
+              {since && <span style={{ color: muted }}>{since}</span>}
+              {ft.orderNumbers.length > 0 && <span style={{ color: muted }}>· Order {ft.orderNumbers.join(", ")}</span>}
+            </div>
+            <RouteLine route={route} parked={false} />
+            <ProductChips ft={ft} product={product} />
+          </button>
+        );
+      })}
+
+      <div style={{ ...sectionLabel, marginTop: 14 }}>Parked loads ({parked.length})</div>
+      {parked.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No parked loads.</div>}
+      {parked.map((ft) => {
+        const t = ft.trip;
+        const since = elapsed(t.parked_at ?? null, now);
+        return (
+          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(147,197,253,0.35)" }} onClick={() => onPickDriver(t.driver_id)}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+              <span style={{ fontSize: 15, fontWeight: 800 }}>{ft.trailerName ? `Trailer ${ft.trailerName}` : "Trailer"}</span>
+              <span style={{ fontSize: 12, color: PARKED, fontWeight: 700, whiteSpace: "nowrap" }}>
+                {t.parked_for ? PARK_FOR_LABEL[t.parked_for] : "Parked"}
+              </span>
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 }}>
+              {t.parked_where ? `At ${t.parked_where}` : "Location not given"}
+              {since ? <span style={{ color: muted }}> · {since}</span> : null}
+            </div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+              Parked by {ft.parkedByName ?? ft.driverName ?? "a driver"}
+              {ft.orderNumbers.length > 0 ? ` · Order ${ft.orderNumbers.join(", ")}` : ""}
+            </div>
+            {t.parked_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{t.parked_note}&rdquo;</div>}
+            <ProductChips ft={ft} product={product} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}

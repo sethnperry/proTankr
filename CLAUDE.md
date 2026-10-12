@@ -10823,3 +10823,24 @@ stop). No migration. Not click-tested.
   and `initial`; same 3:1 shape so the saved signature isn't stretched).
   Still required at Finish if the company setting says so.
 - Tests: 2 added (retain/progress in `tripFlow.test.ts`, `prefillAfter`).
+
+### Dispatch Dashboard: loads in progress + parked loads (2026-10-12)
+
+`/planner/dispatch` (before a driver is picked) now shows two lists above the
+driver picker, company-wide. Data: `lib/trips/useFleetTrips.ts` reads open +
+parked trips and their children straight from the server (phase 1 RLS lets any
+company member read them), polls every 60s and on tab focus. No migration.
+Not click-tested; `FleetBoard` was static-rendered with sample data
+(esbuild + `renderToStaticMarkup`, NODE_PATH=node_modules).
+
+- **Loads in progress**: driver, truck/trailer, status ("Loading at Marathon",
+  "En route to Store 12", "Delivering at …") with time in that state, order #s,
+  products aboard, and a U-shaped route line (`lib/trips/fleetProgress.ts`,
+  4 tests): start city top left, rack(s) along the top to the right, down the
+  right edge, then deliveries back left with the last one under the start. A
+  green dot marks the truck (mid-segment when en route). Rack hops show as a
+  red crossed-out stop. Start city = the truck's last completed delivery
+  before this trip started ("Start" if unknown).
+- **Parked loads**: trailer, who it's for, where, how long, parked by, note,
+  products aboard.
+- Tapping a card opens that driver's dispatch view.

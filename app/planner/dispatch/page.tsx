@@ -52,6 +52,9 @@ import DriverPicker from "../components/DriverPicker";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { addDaysISO_, daysUntilISO_, formatMDYWithCountdown_ } from "../utils/dates";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { useFleetTrips } from "@/lib/trips/useFleetTrips";
+import { FleetBoard, type BoardProduct } from "./FleetBoard";
 
 // This page deliberately does NOT use cardTheme.ts's shared cardStateFor --
 // that function fades anything expired more than 7 days ago from "expired"
@@ -161,6 +164,16 @@ export default function DispatchPage() {
   const router = useRouter();
   const { selectedDriverId, setSelectedDriverId, companyId, effectiveUserId, authUserId } = shell;
   const canUseAppAs = shell.role === "admin" || shell.isSuperAdmin;
+
+  // Loads in progress + parked loads, company-wide (Dispatch board).
+  const fleet = useFleetTrips(companyId || null);
+  const { data: catalog } = useProductsCatalog();
+  const boardProduct = (id: string | null): BoardProduct => {
+    const p = id ? catalog.find((x) => x.product_id === id) : null;
+    const name = p ? String(p.display_name || p.product_name || "Product") : "Product";
+    const hex = typeof p?.hex_code === "string" && p.hex_code.trim() ? p.hex_code.trim() : null;
+    return { name, code: String(p?.button_code ?? (name.split(" ")[0] || "PRD")).toUpperCase(), hex };
+  };
 
   // This page had NO access gate at all before this -- a driver/lead hitting
   // this URL directly wasn't blocked, only kept off it by the (now-removed)
@@ -377,6 +390,10 @@ export default function DispatchPage() {
   if (!selectedDriverId) {
     return (
       <div style={{ paddingTop: 4 }}>
+        {fleet.error && <div style={{ fontSize: 13, color: "#f87171", marginBottom: 10 }}>{fleet.error}</div>}
+        <FleetBoard trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
+          onPickDriver={(id) => setSelectedDriverId(id)} />
+        <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Drivers</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 10 }}>Select a driver to view.</div>
         <DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} />
       </div>
