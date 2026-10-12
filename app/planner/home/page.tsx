@@ -67,6 +67,7 @@ import {
 } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
+import { truckLastDeliveryCity } from "@/lib/trips/startPlace";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
 import { ParkSheet, type ParkSubmit } from "../components/trip/ParkSheet";
@@ -231,6 +232,8 @@ export default function HomePage() {
           ? planned.map((d) => ({ locationId: d.location_id, oneOffName: d.one_off_name, deliveryType: d.delivery_type }))
           : [{ locationId: null, oneOffName: "", deliveryType: "drop" }],
         beginMiles: openTrip.begin_miles == null ? "" : String(openTrip.begin_miles),
+        startCity: openTrip.start_city ?? "",
+        startState: openTrip.start_state ?? "",
       };
     }
     const prev = userId ? lastShipperCustomer(trips, userId) : { shipper: null, customer: null };
@@ -242,6 +245,8 @@ export default function HomePage() {
       customer: prev.customer ?? "",
       deliveries: [defaultDelivery()],
       beginMiles: miles == null ? "" : String(miles),
+      startCity: "",
+      startState: "",
     };
 
     // The delivery the driver used last (this phone's history), else their
@@ -304,6 +309,8 @@ export default function HomePage() {
           },
           deliveries: v.deliveries,
           beginMiles: miles != null && Number.isFinite(miles) ? miles : null,
+          startCity: v.startCity,
+          startState: v.startState,
         },
         {
           now: new Date(),
@@ -878,6 +885,7 @@ export default function HomePage() {
         error={error}
         onClose={() => setSheetOpen(false)}
         onSubmit={submit}
+        suggestStart={() => truckLastDeliveryCity(truckId)}
       />
 
       <TripEquipmentSheets {...tripEquip.sheets} />

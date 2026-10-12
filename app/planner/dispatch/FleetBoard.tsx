@@ -148,12 +148,12 @@ function ProductChips({ ft, product }: { ft: FleetTrip; product: (id: string | n
 const unitLabel = (ft: FleetTrip) =>
   [ft.truckName ? `Truck ${ft.truckName}` : null, ft.trailerName ? `Trailer ${ft.trailerName}` : null].filter(Boolean).join(" · ");
 
-export function FleetBoard({ trips, locations, product, now, onPickDriver }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip }: {
   trips: FleetTrip[];
   locations: Map<string, Place>;
   product: (id: string | null) => BoardProduct;
   now: Date;
-  onPickDriver: (driverId: string) => void;
+  onOpenTrip: (tripId: string) => void; // opens the PTD in progress
 }) {
   const live = trips.filter((t) => t.trip.status !== "parked");
   const parked = trips.filter((t) => t.trip.status === "parked");
@@ -166,7 +166,7 @@ export function FleetBoard({ trips, locations, product, now, onPickDriver }: {
         const route = buildTripRoute(ft.trip, ft.pickups, ft.deliveries, locations, ft.start);
         const since = elapsed(route.since, now);
         return (
-          <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onPickDriver(ft.trip.driver_id)}>
+          <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onOpenTrip(ft.trip.trip_id)}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {ft.driverName ?? "Driver"}
@@ -190,7 +190,7 @@ export function FleetBoard({ trips, locations, product, now, onPickDriver }: {
         const t = ft.trip;
         const since = elapsed(t.parked_at ?? null, now);
         return (
-          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(147,197,253,0.35)" }} onClick={() => onPickDriver(t.driver_id)}>
+          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(147,197,253,0.35)" }} onClick={() => onOpenTrip(t.trip_id)}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800 }}>{ft.trailerName ? `Trailer ${ft.trailerName}` : "Trailer"}</span>
               <span style={{ fontSize: 12, color: PARKED, fontWeight: 700, whiteSpace: "nowrap" }}>

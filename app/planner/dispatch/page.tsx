@@ -392,7 +392,7 @@ export default function DispatchPage() {
       <div style={{ paddingTop: 4 }}>
         {fleet.error && <div style={{ fontSize: 13, color: "#f87171", marginBottom: 10 }}>{fleet.error}</div>}
         <FleetBoard trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
-          onPickDriver={(id) => setSelectedDriverId(id)} />
+          onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
         <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Drivers</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 10 }}>Select a driver to view.</div>
         <DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} />

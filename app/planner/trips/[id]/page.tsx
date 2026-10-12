@@ -182,7 +182,7 @@ export default function TripPtdPage() {
   return (
     <div style={{ padding: 16, paddingBottom: 40 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
-        <button type="button" onClick={() => router.push("/planner/trips")} style={back}>‹ Trips</button>
+        <button type="button" onClick={() => (window.history.length > 1 ? router.back() : router.push("/planner/trips"))} style={back}>‹ Back</button>
         {ptd && <button type="button" onClick={() => window.print()} style={btn}>Print / Save PDF</button>}
       </div>
       {!ptd && (

@@ -28,6 +28,8 @@ export type TripRow = Synced & {
   shipper: string | null;
   customer: string | null;
   begin_miles: number | null;
+  start_city?: string | null;
+  start_state?: string | null;
   end_miles: number | null;
   entered_late: boolean;
   notes: string | null;

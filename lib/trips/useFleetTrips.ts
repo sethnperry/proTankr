@@ -112,7 +112,10 @@ export function useFleetTrips(companyId: string | null) {
         parkedByName: t.parked_by ? nameOf.get(t.parked_by) ?? null : null,
         truckName: t.truck_id ? truckName.get(t.truck_id) ?? null : null,
         trailerName: t.trailer_id ? trailerName.get(t.trailer_id) ?? null : null,
-        start: t.truck_id ? truckStartPlace(doneByTruck.get(t.truck_id) ?? [], t.started_at) : null,
+        // Recorded at Start Load; older trips fall back to the truck's last delivery.
+        start: t.start_city
+          ? { name: null, city: t.start_city, state: t.start_state ?? null }
+          : t.truck_id ? truckStartPlace(doneByTruck.get(t.truck_id) ?? [], t.started_at) : null,
       })));
       setLocations(locs);
       setError(null);

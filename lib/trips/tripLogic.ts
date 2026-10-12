@@ -82,6 +82,8 @@ export type StartLoadInput = {
   pickup: StartLoadPickup;
   deliveries: StartLoadDelivery[];
   beginMiles: number | null;
+  startCity?: string | null;
+  startState?: string | null;
 };
 
 export type StartLoadRows = {
@@ -125,6 +127,8 @@ export function buildStartLoad(
     shipper: blank(input.shipper),
     customer: blank(input.customer),
     begin_miles: input.beginMiles,
+    start_city: blank(input.startCity),
+    start_state: blank(input.startState),
   };
   if (!ex) {
     Object.assign(trip, {

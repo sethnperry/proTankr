@@ -14,6 +14,7 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
 import { locationPlace, locationTitle, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
 import { LocationPicker } from "./trip/LocationPicker";
+import { currentCity, type StartPlace } from "@/lib/trips/startPlace";
 
 export type StartLoadValues = {
   orderNumber: string;
@@ -22,6 +23,8 @@ export type StartLoadValues = {
   customer: string;
   deliveries: StartLoadDelivery[];
   beginMiles: string;
+  startCity: string;
+  startState: string;
 };
 
 const label: React.CSSProperties = {
@@ -62,6 +65,7 @@ export function StartLoadSheet({
   error,
   onClose,
   onSubmit,
+  suggestStart,
 }: {
   open: boolean;
   editing: boolean;
@@ -81,6 +85,8 @@ export function StartLoadSheet({
   error?: string | null;
   onClose: () => void;
   onSubmit: (v: StartLoadValues) => void;
+  // Prefill for "Starting from" when the card opens with it blank.
+  suggestStart?: () => Promise<StartPlace | null>;
 }) {
   const [v, setV] = useState<StartLoadValues>(initial);
 
@@ -89,6 +95,35 @@ export function StartLoadSheet({
     if (open) setV(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // "Starting from": the truck's last delivery city, else the phone's city if
+  // location is already allowed (no surprise permission prompt). Never
+  // overwrites something typed.
+  const [locating, setLocating] = useState(false);
+  const fillStart = (p: StartPlace | null) => {
+    if (p) setV((s) => (s.startCity.trim() ? s : { ...s, startCity: p.city, startState: p.state ?? s.startState }));
+  };
+  useEffect(() => {
+    if (!open || initial.startCity.trim()) return;
+    let cancelled = false;
+    (async () => {
+      let p = suggestStart ? await suggestStart() : null;
+      if (!p) {
+        const granted = await navigator.permissions?.query({ name: "geolocation" as PermissionName })
+          .then((r) => r.state === "granted").catch(() => false);
+        if (granted) p = await currentCity();
+      }
+      if (!cancelled) fillStart(p);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const locateMe = async () => {
+    setLocating(true);
+    const p = await currentCity();
+    setLocating(false);
+    if (p) setV((s) => ({ ...s, startCity: p.city, startState: p.state ?? "" }));
+  };
 
   const byId = useMemo(() => new Map(locations.map((l) => [l.location_id, l])), [locations]);
   const [picking, setPicking] = useState<number | null>(null);
@@ -161,6 +196,22 @@ export function StartLoadSheet({
           <div style={{ flex: 1 }}>
             <div style={label}>Customer</div>
             <input style={input} value={v.customer} onChange={(e) => setV((s) => ({ ...s, customer: e.target.value }))} placeholder="Customer" />
+          </div>
+        </div>
+
+        <div style={row}>
+          <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
+            <span>Starting from</span>
+            <button type="button" onClick={() => void locateMe()} disabled={locating}
+              style={{ ...removeBtn, fontSize: 12, padding: 0, color: "rgba(255,255,255,0.75)", fontWeight: 700 }}>
+              {locating ? "Locating…" : "Use my location"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input style={{ ...input, flex: 3 }} value={v.startCity}
+              onChange={(e) => setV((s) => ({ ...s, startCity: e.target.value }))} placeholder="City" />
+            <input style={{ ...input, flex: 1, textTransform: "uppercase" }} value={v.startState} maxLength={2}
+              onChange={(e) => setV((s) => ({ ...s, startState: e.target.value.toUpperCase() }))} placeholder="ST" />
           </div>
         </div>
 

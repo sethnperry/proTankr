@@ -10844,3 +10844,24 @@ Not click-tested; `FleetBoard` was static-rendered with sample data
 - **Parked loads**: trailer, who it's for, where, how long, parked by, note,
   products aboard.
 - Tapping a card opens that driver's dispatch view.
+
+### Trip start city recorded; dispatch cards open the PTD (2026-10-12)
+
+Start city showed "Start" because it was only derived from the truck's
+previous completed delivery: unknown on a truck's first trip, when that
+delivery was a one-off name or a location with no city, or when the trip
+fell outside the 60 completed trips the board reads. Now recorded.
+
+- Migration `20261012030000_trip_start_city.sql` (**applied 2026-10-12**):
+  `trips.start_city` / `start_state`.
+- Start Load has a "Starting from" field (city + ST). On open, if blank, it
+  prefills from the truck's last completed delivery city
+  (`lib/trips/startPlace.ts`), else the phone's city only if location
+  permission is already granted; "Use my location" asks. Editable.
+- `/api/geocode?lat=&lon=` reverse mode returns `{city, state}` (state code
+  via `lib/geo/usStates.ts`).
+- `useFleetTrips` uses the stored start, falling back to the old derivation
+  for older trips.
+- Dispatch board cards (in progress and parked) open `/planner/trips/{id}`,
+  the PTD in progress. The PTD's back link now goes back (was always to the
+  Trips list). Not click-tested.
