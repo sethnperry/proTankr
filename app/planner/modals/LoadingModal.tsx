@@ -14,6 +14,7 @@ import { DelayReasonField, SignatureAccept, TimesEditor, delayReasonOk, fieldInp
 import { calculateNetGallons, netMethodForProduct } from "@/lib/trips/netGallons";
 import { defaultStepTimes, delayMinutes, needsDelayReason, timesProblem, type StepTimes } from "@/lib/trips/tripFlow";
 import { normalizeRef } from "@/lib/trips/refs";
+import { buildBolGroups, distributeWhole, initialBolAssignment, type BolAssignment } from "@/lib/trips/bolGroups";
 import type { SupplierRow } from "@/lib/trips/types";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
 
@@ -44,6 +45,8 @@ export type LoadingTripMode = {
   reasons: DelayReason[];
   arrivedAt: string | null;
   existingTimes: StepTimes | null;
+  // When Start Loading was tapped (the pickup's begin time), if recorded.
+  beganAt: string | null;
   existingDelayReasonId: string | null;
   existingDelayNote: string | null;
   needsOdometer: boolean;
@@ -577,19 +580,23 @@ export default function LoadingModal(props: {
     setGallonsTarget(null);
   }
 
-  // ── Log the Load / Edit Load: per-compartment Gallons/API/Temp entry
-  // sequence ───────────────────────────────────────────────────────────────
-  // Walked in physical compartment order (not per product). Each step is
-  // fully local, synchronous state -- no async round-trip to wait on -- and
-  // once the last compartment is confirmed, onLoaded (or onEditLoad, while
-  // editingReport) fires immediately with the whole map, built locally so
-  // the just-typed final entry is never missing from what's submitted.
+  // ── Finish Loading / Edit Load: one window per product ─────────────────
+  // (2026-10-11) The driver enters what's on the BOL once per product, not
+  // once per compartment: BOL # and supplier (trip mode), then API, temp,
+  // gross and net. When one product came on more than one BOL, Split Load
+  // assigns its compartments to BOL groups and each group gets its own
+  // window. A window's gross and net are spread over its compartments by
+  // planned gallons (lib/trips/bolGroups.ts), so onLoaded/onEditLoad still
+  // get one entry per compartment, same shape as before.
   const [compSeqIndex, setCompSeqIndex] = useState<number | null>(null);
+  const [bolAssign, setBolAssign] = useState<BolAssignment>({});
+  const [splitProductId, setSplitProductId] = useState<string | null>(null);
+  const [splitDraft, setSplitDraft] = useState<BolAssignment>({});
   const [seqGallons, setSeqGallons] = useState("");
   const [seqApi, setSeqApi] = useState("");
   const [seqTemp, setSeqTemp] = useState("");
   const [compEntries, setCompEntries] = useState<Record<number, { gallons: number; api: number; tempF: number }>>({});
-  // Trip mode extras for the current step and the ones already confirmed.
+  // Trip mode extras for the current window and the ones already confirmed.
   const [seqBol, setSeqBol] = useState("");
   const [seqSupplier, setSeqSupplier] = useState("");
   const [seqSupplierId, setSeqSupplierId] = useState<string | null>(null);
@@ -597,10 +604,11 @@ export default function LoadingModal(props: {
   const [seqNetTouched, setSeqNetTouched] = useState(false);
   const [seqError, setSeqError] = useState<string | null>(null);
   const [seqBusy, setSeqBusy] = useState(false);
+  const [seqFocus, setSeqFocus] = useState<string | null>(null);
   const [pickingSupplier, setPickingSupplier] = useState(false);
   const [tripExtras, setTripExtras] = useState<Record<number, TripCompExtra>>({});
   const okBols = useRef<Set<string>>(new Set());
-  // After the compartments: the times window, then the signature window.
+  // After the products: the times window, then the signature window.
   const [tripStep, setTripStep] = useState<"times" | "sign" | null>(null);
   const [tripTimes, setTripTimes] = useState<StepTimes | null>(null);
   const [tripReasonId, setTripReasonId] = useState<string | null>(null);
@@ -608,6 +616,14 @@ export default function LoadingModal(props: {
   const [tripOdometer, setTripOdometer] = useState("");
   const [tripSigned, setTripSigned] = useState(false);
   const [tripStepError, setTripStepError] = useState<string | null>(null);
+
+  const seqGroups = useMemo(
+    () => buildBolGroups(orderedCompLines.map((l) => ({ comp: l.comp, productId: l.productId, gallons: l.gallons })), bolAssign),
+    [orderedCompLines, bolAssign]
+  );
+  const lineByComp = useMemo(() => new Map(orderedCompLines.map((l) => [l.comp, l])), [orderedCompLines]);
+  const seqGroup = compSeqIndex != null ? seqGroups[compSeqIndex] ?? null : null;
+  const seqGroupKey = seqGroup ? `${seqGroup.productId}:${seqGroup.comps.join(",")}` : "";
 
   // Reset all sequence state whenever the modal closes, so a re-open never
   // resumes a half-finished sequence from a previous load.
@@ -623,62 +639,64 @@ export default function LoadingModal(props: {
       setSeqError(null);
       setSeqBusy(false);
       setPickingSupplier(false);
+      setBolAssign({});
+      setSplitProductId(null);
       okBols.current = new Set();
     }
   }, [open]);
 
-  // Prefill the current step. If this compartment already has a committed
-  // entry (the driver tapped Back to review/re-check it, or stepped forward
-  // again after going back), show exactly what's already stored for it --
-  // never recomputed -- so "Back" is a true review, not a re-guess.
-  // Otherwise (first time reaching this step): Gallons always comes from
-  // that compartment's own planned amount (never chained from another
-  // compartment). API/Temp prefer, in order: this compartment's own real
-  // entry from the report being edited; forward-chained from the nearest
-  // EARLIER compartment of the SAME product already confirmed this
-  // sequence (never reversed, never backfilled onto an earlier step); the
-  // last-observed/predicted values already seeded into productInputs.
+  // Prefill the current window. Values already confirmed for its
+  // compartments (the driver went Back) are shown as-is. Otherwise gross is
+  // the planned gallons for those compartments; API/temp come from the
+  // report being edited, else an earlier window of the same product, else
+  // the last-observed/predicted values seeded into productInputs. BOL and
+  // supplier carry over from the previous window when it's a different
+  // product (one BOL usually covers the whole load); a split of the same
+  // product starts blank because it's a different BOL by definition.
   useEffect(() => {
-    if (compSeqIndex == null) return;
-    const line = orderedCompLines[compSeqIndex];
-    if (!line) return;
+    if (compSeqIndex == null || !seqGroup) return;
     setSeqError(null);
+    const comps = seqGroup.comps;
+    const first = comps[0];
+    const prevGroup = compSeqIndex > 0 ? seqGroups[compSeqIndex - 1] : null;
 
     if (trip) {
-      const own = tripExtras[line.comp];
-      const def = trip.compDefaults[line.comp];
-      let prev: TripCompExtra | null = null;
-      for (let i = compSeqIndex - 1; i >= 0; i--) {
-        const e = tripExtras[orderedCompLines[i].comp];
-        if (e) { prev = e; break; }
-      }
-      setSeqBol(own?.bol ?? def?.bol ?? prev?.bol ?? "");
+      const own = tripExtras[first];
+      const def = trip.compDefaults[first];
+      const prevExtra = prevGroup && prevGroup.productId !== seqGroup.productId ? tripExtras[prevGroup.comps[0]] : undefined;
+      setSeqBol(own?.bol ?? def?.bol ?? prevExtra?.bol ?? "");
       if (own) { setSeqSupplier(own.supplier); setSeqSupplierId(own.supplierId); }
       else if (def?.supplier) { setSeqSupplier(def.supplier); setSeqSupplierId(def.supplierId); }
-      else { setSeqSupplier(prev?.supplier ?? ""); setSeqSupplierId(prev?.supplierId ?? null); }
-      if (own) {
-        setSeqNet(own.net != null ? String(own.net) : "");
-        setSeqNetTouched(own.net != null && own.net !== own.netCalculated);
-      } else if (def?.netTouched && def.net != null) {
-        setSeqNet(String(def.net));
+      else { setSeqSupplier(prevExtra?.supplier ?? ""); setSeqSupplierId(prevExtra?.supplierId ?? null); }
+      const ownAll = comps.every((c) => tripExtras[c]);
+      const defAll = comps.every((c) => trip.compDefaults[c]?.net != null);
+      if (ownAll) {
+        const net = comps.reduce((t, c) => t + (tripExtras[c].net ?? 0), 0);
+        const calc = comps.reduce((t, c) => t + (tripExtras[c].netCalculated ?? 0), 0);
+        setSeqNet(String(net));
+        setSeqNetTouched(comps.some((c) => tripExtras[c].net !== tripExtras[c].netCalculated) && net !== calc);
+      } else if (defAll && comps.some((c) => trip.compDefaults[c]?.netTouched)) {
+        setSeqNet(String(comps.reduce((t, c) => t + (trip.compDefaults[c]?.net ?? 0), 0)));
         setSeqNetTouched(true);
       } else {
         setSeqNet("");
         setSeqNetTouched(false);
       }
+      setSeqFocus("bol");
+    } else {
+      setSeqFocus("api");
     }
 
-    const existing = compEntries[line.comp];
-    if (existing) {
-      setSeqGallons(String(Math.round(existing.gallons)));
-      setSeqApi(String(existing.api));
-      setSeqTemp(existing.tempF.toFixed(1));
+    if (comps.every((c) => compEntries[c])) {
+      setSeqGallons(String(Math.round(comps.reduce((t, c) => t + compEntries[c].gallons, 0))));
+      setSeqApi(String(compEntries[first].api));
+      setSeqTemp(compEntries[first].tempF.toFixed(1));
       return;
     }
 
-    setSeqGallons(String(Math.round(line.gallons)));
+    setSeqGallons(String(Math.round(comps.reduce((t, c) => t + (lineByComp.get(c)?.gallons ?? 0), 0))));
 
-    const ownReportEntry = reportEntryByComp.get(line.comp);
+    const ownReportEntry = reportEntryByComp.get(first);
     if (ownReportEntry && ownReportEntry.api != null && ownReportEntry.tempF != null) {
       setSeqApi(String(ownReportEntry.api));
       setSeqTemp(ownReportEntry.tempF.toFixed(1));
@@ -687,28 +705,29 @@ export default function LoadingModal(props: {
 
     let inherited: { api: number; tempF: number } | null = null;
     for (let i = compSeqIndex - 1; i >= 0; i--) {
-      const prior = orderedCompLines[i];
-      if (prior.productId !== line.productId) continue;
-      const entry = compEntries[prior.comp];
+      const g = seqGroups[i];
+      if (g.productId !== seqGroup.productId) continue;
+      const entry = compEntries[g.comps[0]];
       if (entry) { inherited = { api: entry.api, tempF: entry.tempF }; break; }
     }
     if (inherited) {
       setSeqApi(String(inherited.api));
       setSeqTemp(inherited.tempF.toFixed(1));
     } else {
-      const pi = productInputs[line.productId];
+      const pi = productInputs[seqGroup.productId];
       setSeqApi(pi?.api ? String(pi.api) : "");
       setSeqTemp(pi?.tempF != null ? Number(pi.tempF).toFixed(1) : "");
     }
-    // Intentionally keyed on the index only -- re-seeding on every
-    // compEntries/productInputs change would clobber what the driver is typing.
+    // Keyed on the window only -- re-seeding on every compEntries/
+    // productInputs change would clobber what the driver is typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compSeqIndex]);
+  }, [compSeqIndex, seqGroupKey]);
 
   function startLogSequence() {
     if (orderedCompLines.length === 0) { onLoaded({}); return; }
     setCompEntries({});
     setTripExtras({});
+    setBolAssign({});
     setCompSeqIndex(0);
   }
   function startEditSequence() {
@@ -723,6 +742,10 @@ export default function LoadingModal(props: {
     if (report.lines.length === 0) { onEditLoad?.({}); return; }
     setCompEntries({});
     setTripExtras({});
+    // Compartments of one product already on different BOLs start split.
+    const bols: Record<number, string | null> = {};
+    if (trip) for (const l of report.lines) bols[l.comp] = trip.compDefaults[l.comp]?.bol ?? null;
+    setBolAssign(initialBolAssignment(report.lines.map((l) => ({ comp: l.comp, productId: l.productId, gallons: l.gallons })), bols));
     setCompSeqIndex(0);
   }
   function cancelLogSequence() {
@@ -733,29 +756,71 @@ export default function LoadingModal(props: {
     if (compSeqIndex == null || compSeqIndex <= 0) return;
     setCompSeqIndex(compSeqIndex - 1);
   }
+
+  // ── Split Load: assign one product's compartments to BOLs ───────────────
+  function openSplit() {
+    if (!seqGroup) return;
+    const pid = seqGroup.productId;
+    const draft: BolAssignment = {};
+    for (const g of seqGroups) if (g.productId === pid) for (const c of g.comps) draft[c] = g.bolIndex;
+    setSplitDraft(draft);
+    setSplitProductId(pid);
+  }
+  function finishSplit() {
+    const pid = splitProductId;
+    if (!pid) return;
+    const productComps = orderedCompLines.filter((l) => l.productId === pid).map((l) => l.comp);
+    const next = { ...bolAssign };
+    for (const c of productComps) next[c] = splitDraft[c] ?? 1;
+    // The grouping changed, so this product's confirmed windows start over.
+    setCompEntries((prev) => { const o = { ...prev }; for (const c of productComps) delete o[c]; return o; });
+    setTripExtras((prev) => { const o = { ...prev }; for (const c of productComps) delete o[c]; return o; });
+    setBolAssign(next);
+    setSplitProductId(null);
+    const regrouped = buildBolGroups(orderedCompLines.map((l) => ({ comp: l.comp, productId: l.productId, gallons: l.gallons })), next);
+    const firstIdx = regrouped.findIndex((g) => g.productId === pid);
+    setCompSeqIndex(firstIdx >= 0 ? firstIdx : 0);
+  }
+
   async function commitCompStep() {
     if (compSeqIndex == null || seqBusy) return;
-    const line = orderedCompLines[compSeqIndex];
-    if (!line) { setCompSeqIndex(null); return; }
+    const group = seqGroups[compSeqIndex];
+    if (!group) { setCompSeqIndex(null); return; }
 
     const gallonsN = parseFloat(seqGallons);
     const apiN = parseFloat(seqApi);
     const tempN = parseFloat(seqTemp);
-    // Keep the step open on invalid input rather than advancing (or
-    // completing) with garbage data. Trip mode says why.
-    if (!Number.isFinite(gallonsN) || !Number.isFinite(apiN) || !Number.isFinite(tempN)) {
-      if (trip) setSeqError("Enter gross, temp and API.");
+    // Keep the window open on invalid input rather than advancing (or
+    // completing) with garbage data.
+    if (!Number.isFinite(gallonsN) || !Number.isFinite(apiN) || !Number.isFinite(tempN) || gallonsN < 0) {
+      setSeqError("Enter API, temp and gross.");
       return;
     }
 
-    let extra: TripCompExtra | null = null;
+    // Sanity check against what these compartments can hold (a typo, not a
+    // real BOL, is the only way past it). Editing a logged load skips it:
+    // there's no live plan cap to bound against.
+    if (!editingReport && persistedCapForComp) {
+      const caps = group.comps.map((c) => persistedCapForComp(c));
+      if (caps.every((c) => c != null)) {
+        const hold = caps.reduce((t, c) => t + (c as number), 0);
+        if (gallonsN > hold + 1) { setSeqError(`More than ${group.comps.length > 1 ? "these compartments hold" : "this compartment holds"} (${Math.round(hold).toLocaleString()} gal).`); return; }
+      }
+    }
+
+    let bol = "";
+    let netN: number | null = null;
     if (trip) {
-      const bol = seqBol.trim();
+      bol = seqBol.trim();
       if (!bol) { setSeqError("Enter the BOL number."); return; }
       if (!seqSupplier.trim()) { setSeqError("Pick the supplier."); return; }
-      const netN = parseFloat(seqNetShown);
+      netN = parseFloat(seqNetShown);
       if (!Number.isFinite(netN) || netN < 0) { setSeqError("Enter the net gallons."); return; }
+      // A split exists because the BOLs differ.
       const key = normalizeRef(bol);
+      const sameProductOther = seqGroups.some((g, i) => i !== compSeqIndex && g.productId === group.productId
+        && tripExtras[g.comps[0]] && normalizeRef(tripExtras[g.comps[0]].bol) === key);
+      if (sameProductOther) { setSeqError("Each split needs its own BOL number."); return; }
       if (!okBols.current.has(key)) {
         setSeqBusy(true);
         const dup = await trip.checkBols([bol]).catch(() => [] as string[]);
@@ -763,28 +828,39 @@ export default function LoadingModal(props: {
         if (dup.length) { setSeqError(`BOL ${bol} is already on another load.`); return; }
         okBols.current.add(key);
       }
-      extra = { bol, supplier: seqSupplier.trim(), supplierId: seqSupplierId, net: netN, netCalculated: seqCalc };
     }
 
-    const cap = persistedCapForComp?.(line.comp) ?? null;
-    const clampedGallons = editingReport
-      ? Math.max(0, gallonsN) // editing a real load: no live plan cap to bound against
-      : (cap != null ? Math.max(0, Math.min(cap, gallonsN)) : Math.max(0, gallonsN));
-
-    const updated = { ...compEntries, [line.comp]: { gallons: clampedGallons, api: apiN, tempF: tempN } };
+    // Spread the window's gross (and net) over its compartments by planned gallons.
+    const weights = group.comps.map((c) => lineByComp.get(c)?.gallons ?? 0);
+    const grossShares = distributeWhole(gallonsN, weights);
+    const updated = { ...compEntries };
+    group.comps.forEach((c, i) => { updated[c] = { gallons: grossShares[i], api: apiN, tempF: tempN }; });
     setCompEntries(updated);
-    const updatedExtras = extra ? { ...tripExtras, [line.comp]: extra } : tripExtras;
-    if (extra) setTripExtras(updatedExtras);
 
-    const isLast = compSeqIndex >= orderedCompLines.length - 1;
+    let updatedExtras = tripExtras;
+    if (trip && netN != null) {
+      const netShares = distributeWhole(netN, grossShares);
+      const calcShares = seqCalc != null ? distributeWhole(seqCalc, grossShares) : group.comps.map(() => null);
+      updatedExtras = { ...tripExtras };
+      group.comps.forEach((c, i) => {
+        updatedExtras[c] = {
+          bol, supplier: seqSupplier.trim(), supplierId: seqSupplierId,
+          net: netShares[i], netCalculated: calcShares[i],
+        };
+      });
+      setTripExtras(updatedExtras);
+    }
+
+    const isLast = compSeqIndex >= seqGroups.length - 1;
     if (isLast) {
       setCompSeqIndex(null);
       if (editingReport) {
         onEditLoad?.(updated, trip ? { byComp: updatedExtras } : undefined);
         setEditingReport(false);
       } else if (trip) {
-        // On to the times window, then the signature.
-        setTripTimes(trip.existingTimes ?? defaultStepTimes(new Date(), trip.settings.begin_offset_minutes, trip.arrivedAt));
+        // On to the times window, then the signature. Begin is the Start
+        // Loading tap; leave is now.
+        setTripTimes(trip.existingTimes ?? defaultStepTimes(new Date(), trip.settings.begin_offset_minutes, trip.arrivedAt, trip.beganAt));
         setTripReasonId(trip.existingDelayReasonId);
         setTripNote(trip.existingDelayNote ?? "");
         setTripOdometer(trip.existingOdometer != null ? String(trip.existingOdometer) : "");
@@ -835,9 +911,8 @@ export default function LoadingModal(props: {
     lbsPerGal: p.gallons > 0 ? p.lbs / p.gallons : null,
   }));
 
-  const seqLine = compSeqIndex != null ? orderedCompLines[compSeqIndex] : null;
-  const seqCalc = trip && seqLine
-    ? calculateNetGallons(numOrNull(seqGallons), numOrNull(seqApi), numOrNull(seqTemp), netMethodForProduct(productNameById.get(seqLine.productId) ?? null))
+  const seqCalc = trip && seqGroup
+    ? calculateNetGallons(numOrNull(seqGallons), numOrNull(seqApi), numOrNull(seqTemp), netMethodForProduct(productNameById.get(seqGroup.productId) ?? null))
     : null;
   const seqNetShown = seqNetTouched ? seqNet : (seqCalc != null ? String(seqCalc) : seqNet);
 
@@ -864,9 +939,13 @@ export default function LoadingModal(props: {
       signed: tripSigned,
     });
   }
-  const seqDot = seqLine ? ((productHexCodeById?.[seqLine.productId] && String(productHexCodeById[seqLine.productId]).trim()) || "rgba(255,255,255,0.5)") : undefined;
-  const seqLabel = seqLine ? `C${seqLine.comp} · ${productNameById.get(seqLine.productId) ?? seqLine.productId}` : "";
-  const seqSubmitLabel = compSeqIndex != null && compSeqIndex < orderedCompLines.length - 1 ? "Next" : (editingReport ? "Save Load" : "Log Load");
+  const seqDot = seqGroup ? ((productHexCodeById?.[seqGroup.productId] && String(productHexCodeById[seqGroup.productId]).trim()) || "rgba(255,255,255,0.5)") : undefined;
+  const seqLabel = seqGroup
+    ? `${productNameById.get(seqGroup.productId) ?? seqGroup.productId}${seqGroup.bolCount > 1 ? ` · BOL ${seqGroup.bolIndex} of ${seqGroup.bolCount}` : ""}`
+    : "";
+  const seqProductCompCount = seqGroup ? orderedCompLines.filter((l) => l.productId === seqGroup.productId).length : 0;
+  const seqIsLast = compSeqIndex != null && compSeqIndex >= seqGroups.length - 1;
+  const seqSubmitLabel = !seqIsLast ? "Next" : (editingReport ? "Save Load" : trip ? "Next" : "Finish Loading");
 
   const busy = Boolean(loadedDisabled);
 
@@ -944,27 +1023,32 @@ export default function LoadingModal(props: {
             })}
 
             {trip && (() => {
-              const rows = reportLinesSorted.map((l) => ({ comp: l.comp, d: trip.compDefaults[l.comp] })).filter((r) => r.d);
-              if (!rows.length) return null;
-              const netTotal = rows.reduce((t, r) => t + (r.d!.net ?? 0), 0);
+              // BOL and supplier per BOL, with the compartments on it. Net
+              // gallons are billing-only (PTD), so the recap doesn't show them.
+              const groups: { bol: string; supplier: string; comps: number[] }[] = [];
+              for (const l of reportLinesSorted) {
+                const d = trip.compDefaults[l.comp];
+                if (!d) continue;
+                const bol = d.bol || "—";
+                const supplier = d.supplier || "No supplier";
+                const g = groups.find((x) => x.bol === bol && x.supplier === supplier);
+                if (g) g.comps.push(l.comp); else groups.push({ bol, supplier, comps: [l.comp] });
+              }
+              if (!groups.length) return null;
               const tm = trip.existingTimes;
               return (
                 <div style={{
                   display: "flex", flexDirection: "column", gap: 3, marginTop: 6, padding: "6px 10px", borderRadius: 6,
                   border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
                 }}>
-                  {rows.map(({ comp, d }) => (
-                    <div key={comp} style={{ display: "flex", gap: 8, fontSize: 12, color: "rgba(255,255,255,0.55)", minWidth: 0 }}>
-                      <span style={{ fontWeight: 700, color: "rgba(255,255,255,0.35)", width: 20, flexShrink: 0 }}>C{comp}</span>
+                  {groups.map((g) => (
+                    <div key={`${g.bol}|${g.supplier}`} style={{ display: "flex", gap: 8, fontSize: 12, color: "rgba(255,255,255,0.55)", minWidth: 0 }}>
                       <span style={{ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                        BOL {d!.bol || "—"} · {d!.supplier || "No supplier"}
+                        BOL {g.bol} · {g.supplier}
                       </span>
-                      <span style={{ fontWeight: 700, flexShrink: 0 }}>{d!.net != null ? `${Math.round(d!.net)} net` : "— net"}</span>
+                      <span style={{ fontWeight: 700, color: "rgba(255,255,255,0.35)", flexShrink: 0 }}>{g.comps.map((c) => `C${c}`).join(" ")}</span>
                     </div>
                   ))}
-                  <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4, borderTop: "1px solid rgba(255,255,255,0.10)", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>
-                    <span>NET TOTAL</span><span>{Math.round(netTotal)} gal</span>
-                  </div>
                   {tm && (
                     <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "2px 12px", paddingTop: 4, fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
                       <span>Arrived {fmtTime(tm.arrivedAt)}</span>
@@ -1328,7 +1412,7 @@ export default function LoadingModal(props: {
               disabled={busy}
               style={{ ...(styles as any).doneBtn, opacity: busy ? 0.55 : 1, width: "100%" }}
             >
-              {loadedDisabled ? (loadedLabel ?? "Saving…") : "Loaded"}
+              {loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}
             </button>
 
             <button
@@ -1388,17 +1472,20 @@ export default function LoadingModal(props: {
         onSubmit={commitGallonsOverlay}
       />
 
-      {/* Log the Load / Edit Load: one compartment at a time, in physical
-          order, dot + "C{n} · Product" at the top. Gallons/API/Temp all
-          confirmed together. */}
+      {/* Finish Loading / Edit Load: one window per product (per BOL after
+          a split). BOL # and supplier first (trip mode), then API, temp,
+          gross, net -- the keypad's Next walks the fields in that order. */}
       <ValueEntryOverlay
-        open={compSeqIndex != null && !pickingSupplier}
+        open={compSeqIndex != null && !pickingSupplier && splitProductId == null}
         title={seqLabel}
         dotColor={seqDot}
-        fields={trip ? [
-          {
+        focusKey={seqFocus}
+        fields={[
+          ...(trip ? [{
             key: "bol", label: "BOL #", value: seqBol, text: true,
-            onChange: (v) => { setSeqBol(v); setSeqError(null); },
+            onChange: (v: string) => { setSeqBol(v); setSeqError(null); },
+            // Next on the BOL opens the supplier list when none is picked yet.
+            onEnter: () => { if (seqSupplier.trim()) return false; setPickingSupplier(true); return true; },
             after: (
               <button type="button" onClick={() => setPickingSupplier(true)}
                 style={{
@@ -1411,27 +1498,34 @@ export default function LoadingModal(props: {
                 <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
               </button>
             ),
-          },
-          { key: "gallons", label: "Gross", value: seqGallons, onChange: (v) => { setSeqGallons(v); setSeqError(null); }, suffix: "gal" },
-          { key: "net", label: "Net", value: seqNetShown, onChange: (v) => { setSeqNet(v); setSeqNetTouched(true); setSeqError(null); }, suffix: "gal", decimal: true },
-          { key: "temp", label: "Temp", value: seqTemp, onChange: (v) => { setSeqTemp(v); setSeqError(null); }, suffix: "°F", decimal: true },
-          { key: "api", label: "API", value: seqApi, onChange: (v) => { setSeqApi(v); setSeqError(null); }, decimal: true },
-        ] : [
-          { key: "gallons", label: "Gallons", value: seqGallons, onChange: setSeqGallons, suffix: "gal" },
-          { key: "temp", label: "Temp", value: seqTemp, onChange: setSeqTemp, suffix: "°F", decimal: true },
-          { key: "api", label: "API", value: seqApi, onChange: setSeqApi, decimal: true },
+          }] : []),
+          { key: "api", label: "API", value: seqApi, onChange: (v: string) => { setSeqApi(v); setSeqError(null); }, decimal: true },
+          { key: "temp", label: "Temp", value: seqTemp, onChange: (v: string) => { setSeqTemp(v); setSeqError(null); }, suffix: "°F", decimal: true },
+          { key: "gallons", label: "Gross", value: seqGallons, onChange: (v: string) => { setSeqGallons(v); setSeqError(null); }, suffix: "gal" },
+          ...(trip ? [{ key: "net", label: "Net", value: seqNetShown, onChange: (v: string) => { setSeqNet(v); setSeqNetTouched(true); setSeqError(null); }, suffix: "gal", decimal: true }] : []),
         ]}
-        hint={(orderedCompLines.length > 1 && compSeqIndex != null) || (trip && seqNetTouched && seqCalc != null) ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            {orderedCompLines.length > 1 && compSeqIndex != null && <span>Compartment {compSeqIndex + 1} of {orderedCompLines.length}</span>}
+        footer={seqProductCompCount > 1 ? (
+          <button type="button" onClick={openSplit}
+            style={{
+              width: "100%", padding: "9px 10px", borderRadius: 4, cursor: "pointer",
+              border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
+              color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 700,
+            }}>
+            {seqGroup && seqGroup.bolCount > 1 ? "Change Split" : "Split Load"}
+          </button>
+        ) : undefined}
+        hint={(
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center" as const }}>
+            {seqGroup && <span>{seqGroup.comps.map((c) => `C${c}`).join(" + ")}{seqGroups.length > 1 && compSeqIndex != null ? ` · ${compSeqIndex + 1} of ${seqGroups.length}` : ""}</span>}
             {trip && seqNetTouched && seqCalc != null && String(seqCalc) !== seqNet && (
               <button type="button" onClick={() => { setSeqNet(String(seqCalc)); setSeqNetTouched(false); }}
                 style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}>
                 Calculated net {seqCalc} · use it
               </button>
             )}
+            <span>If the BOL shows more than one, use the lowest API and the coldest temperature.</span>
           </div>
-        ) : undefined}
+        )}
         onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}
         cancelLabel={compSeqIndex != null && compSeqIndex > 0 ? "‹ Back" : "Cancel"}
         onSubmit={() => { void commitCompStep(); }}
@@ -1440,13 +1534,52 @@ export default function LoadingModal(props: {
         busyLabel={seqBusy ? "Checking…" : null}
       />
 
+      {/* Split Load: which BOL each of this product's compartments came on. */}
+      {splitProductId != null && (() => {
+        const comps = orderedCompLines.filter((l) => l.productId === splitProductId);
+        const used = Math.max(1, ...comps.map((l) => splitDraft[l.comp] ?? 1));
+        const choices = Math.min(comps.length, used + 1);
+        return (
+          <StepCard
+            title={`Split · ${productNameById.get(splitProductId) ?? splitProductId}`}
+            onBack={() => setSplitProductId(null)}
+            backLabel="Cancel"
+            onNext={finishSplit}
+            nextLabel="Done"
+          >
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "center" as const }}>
+              Group the compartments by BOL. Each BOL gets its own window.
+            </div>
+            {comps.map((l) => (
+              <div key={l.comp} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, width: 32 }}>C{l.comp}</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", flex: "1 1 auto" }}>{Math.round(l.gallons).toLocaleString()} gal</span>
+                {Array.from({ length: choices }, (_, i) => i + 1).map((n) => {
+                  const on = (splitDraft[l.comp] ?? 1) === n;
+                  return (
+                    <button key={n} type="button" onClick={() => setSplitDraft((d) => ({ ...d, [l.comp]: n }))}
+                      style={{
+                        padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                        border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
+                        background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.7)",
+                      }}>
+                      BOL {n}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </StepCard>
+        );
+      })()}
+
       {trip && (
         <SupplierPicker
           open={pickingSupplier}
           suppliers={trip.suppliers}
           current={seqSupplier || null}
           onAdd={trip.onAddSupplier}
-          onPick={(p) => { setSeqSupplier(p.name); setSeqSupplierId(p.supplier_id); setSeqError(null); setPickingSupplier(false); }}
+          onPick={(p) => { setSeqSupplier(p.name); setSeqSupplierId(p.supplier_id); setSeqError(null); setSeqFocus("api"); setPickingSupplier(false); }}
           onClose={() => setPickingSupplier(false)}
         />
       )}
@@ -1454,7 +1587,7 @@ export default function LoadingModal(props: {
       {trip && tripStep === "times" && tripTimes && (
         <StepCard
           title={trip.pickupName ? `Times · ${trip.pickupName}` : "Loading times"}
-          onBack={() => { setTripStep(null); setTripStepError(null); setCompSeqIndex(Math.max(0, orderedCompLines.length - 1)); }}
+          onBack={() => { setTripStep(null); setTripStepError(null); setCompSeqIndex(Math.max(0, seqGroups.length - 1)); }}
           backLabel="‹ Back"
           onNext={finishTimesStep}
           nextLabel="Next"
@@ -1479,7 +1612,7 @@ export default function LoadingModal(props: {
           onBack={() => { setTripStep("times"); setTripStepError(null); }}
           backLabel="‹ Back"
           onNext={finishSignStep}
-          nextLabel="Log Load"
+          nextLabel="Finish Loading"
           error={tripStepError}
         >
           <SignatureAccept savedPath={trip.signature} onSave={trip.onSaveSignature} accepted={tripSigned}
@@ -1500,8 +1633,8 @@ export default function LoadingModal(props: {
       />
       <Spotlight
         rect={logLoadButtonRect}
-        title="Loaded"
-        body="When you're ready, tap here."
+        title="Finish Loading"
+        body="When you're done loading, tap here."
         actionLabel="Got it"
         onAction={() => setTourStep(null)}
       />

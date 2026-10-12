@@ -159,6 +159,7 @@ test("a Planner load attaches to the open trip and a cancel puts it back", () =>
   assert.equal(p.terminal_id, "term-2");
   assert.equal(p.name, "Global South");
   assert.equal(p.city, "Tampa", "fields not passed are kept");
+  assert.equal(p.begin_at, NOW.toISOString(), "Start Loading is the begin time");
 
   // Same load again is a no-op success, not a second pickup.
   assert.ok(linkLoadToOpenTrip(s, { userId: ME, loadId: "load-1", pickup: { terminalId: "x", rackId: null }, now: NOW, newId }));
@@ -172,6 +173,7 @@ test("a Planner load attaches to the open trip and a cancel puts it back", () =>
   p = tripChildren(s, t.trip_id).pickup!;
   assert.equal(t.status, "draft");
   assert.equal(p.load_id, null);
+  assert.equal(p.begin_at, null, "a cancelled load clears its begin time");
   assert.deepEqual(
     s.list("trip_events").map((e) => e.event_type).sort(),
     ["load_begun", "load_cancelled", "trip_started"],

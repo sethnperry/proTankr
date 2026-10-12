@@ -25,6 +25,10 @@ export type ValueEntryField = {
   text?: boolean;
   /** Shown after this field (e.g. the supplier button between BOL and gross). */
   after?: React.ReactNode;
+  /** Keypad Next/Enter on this field. Return true when handled (e.g. it
+   *  opened the supplier picker); otherwise focus moves to the next field,
+   *  and the last field submits. */
+  onEnter?: () => boolean;
 };
 
 type Props = {
@@ -48,6 +52,10 @@ type Props = {
   error?: string | null;
   /** Disables the submit button and relabels it (an async check is running). */
   busyLabel?: string | null;
+  /** Field to focus when the card opens or this value changes (default: first). */
+  focusKey?: string | null;
+  /** Rendered between the fields and the hint (e.g. a Split Load button). */
+  footer?: React.ReactNode;
 };
 
 function sanitize(raw: string, decimal: boolean): string {
@@ -58,11 +66,11 @@ function sanitize(raw: string, decimal: boolean): string {
   return v;
 }
 
-export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel", error, busyLabel }: Props) {
+export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel", error, busyLabel, focusKey, footer }: Props) {
   // Many fields (the trip Loaded steps: BOL, gross, net, temp, API) get a
   // smaller input so the card still fits above the keyboard.
   const compact = fields.length > 3;
-  const firstInputRef = useRef<HTMLInputElement>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Re-focus (and re-select) the first field whenever the step changes.
   // `autoFocus` on the input below only fires when that DOM node is newly
@@ -77,9 +85,22 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
   // compartment number).
   useEffect(() => {
     if (!open) return;
-    firstInputRef.current?.focus();
-    firstInputRef.current?.select();
-  }, [open, title]);
+    const key = focusKey && inputRefs.current[focusKey] ? focusKey : fields[0]?.key;
+    const el = key ? inputRefs.current[key] : null;
+    el?.focus();
+    el?.select();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, title, focusKey]);
+
+  // Keypad Next walks the fields in order; the last one submits.
+  const onFieldEnter = (i: number) => {
+    const f = fields[i];
+    if (f.onEnter && f.onEnter()) return;
+    const next = fields[i + 1];
+    const el = next ? inputRefs.current[next.key] : null;
+    if (el) { el.focus(); el.select(); return; }
+    onSubmit();
+  };
 
   if (!open) return null;
 
@@ -123,17 +144,18 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
               )}
               <div style={{ position: "relative" }}>
                 <input
-                  ref={i === 0 ? firstInputRef : undefined}
+                  ref={(el) => { inputRefs.current[f.key] = el; }}
                   type="text"
                   inputMode={f.text ? "text" : f.decimal ? "decimal" : "numeric"}
                   pattern={f.text || f.decimal ? undefined : "[0-9]*"}
                   autoCapitalize={f.text ? "characters" : undefined}
                   autoCorrect={f.text ? "off" : undefined}
-                  autoFocus={i === 0}
+                  autoFocus={i === 0 && !focusKey}
+                  enterKeyHint={i < fields.length - 1 ? "next" : "done"}
                   value={f.value}
                   onChange={(e) => f.onChange(f.text ? e.target.value : sanitize(e.target.value, !!f.decimal))}
                   onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onFieldEnter(i); } }}
                   style={{
                     width: "100%", textAlign: "center" as const,
                     background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.20)",
@@ -150,6 +172,8 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
             </div>
           ))}
         </div>
+
+        {footer}
 
         {hint && (
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>

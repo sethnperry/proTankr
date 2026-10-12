@@ -10589,3 +10589,30 @@ rows and `supplier_id` on compartment loads won't sync. Not click-tested.
   compartments as wrapping cards (the 11-column table ran off a phone),
   deliveries as compartment → tank with Veeder-Root before/after, then
   times, driver, consignee.
+
+## Finish Loading per product, Start Loading time (2026-10-12, branch `claude/gifted-babbage-r0evrs`)
+
+From a real load at Citgo/Tampa. No migration. Not click-tested.
+
+- Planner LOAD reads **START LOADING** when the driver's open trip has a
+  pickup waiting. `linkLoadToOpenTrip` stamps that tap as the pickup's
+  `begin_at` (cleared again if the load is cancelled), and the times window
+  prefills begin = that time, leave = now (`defaultStepTimes` gained a
+  `beganAt` arg; LoadedSheet passes it too).
+- "Loaded"/"Log the Load" is now **Finish Loading** (Plan Review, the sheet,
+  the signature step).
+- Finish Loading is one window per product, not per compartment: BOL # and
+  supplier (trip mode), then API, temp, gross, net, with a note to use the
+  lowest API and coldest temp on the BOL. **Split Load** (shown when a
+  product is in 2+ compartments) groups that product's compartments by BOL;
+  each group gets its own window. A window's gross and net are spread over
+  its compartments by planned gallons (`lib/trips/bolGroups.ts`, 4 tests),
+  so `onLoaded`/`onEditLoad` still get one entry per compartment. Editing a
+  logged load starts split where the recorded BOLs differ.
+- Keypad Next walks the fields (`ValueEntryOverlay`: `enterKeyHint`, per-field
+  `onEnter`, `focusKey`, `footer`); Next on an empty-supplier BOL opens the
+  supplier list, and picking one focuses API.
+- The load recap no longer shows net gallons (billing only, still on the
+  PTD); its BOL lines are grouped per BOL with their compartments.
+- Dashboard: after Arrived the big button shows "Opening Planner…" instead
+  of flashing "Go to Planner".

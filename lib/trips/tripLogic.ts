@@ -295,7 +295,12 @@ export function linkLoadToOpenTrip(
   // A pickup already left is done; a rack hop adds a new one.
   const target = pickups.find((p) => !p.load_id && !p.left_at);
   if (!target) return false;
-  store.put("trip_pickups", { pickup_id: target.pickup_id, load_id: args.loadId, ...pickupFields(args.pickup) });
+  // Start Loading is tapped when loading actually begins: that instant is the
+  // pickup's begin time (Finish Loading prefills leave = now).
+  store.put("trip_pickups", {
+    pickup_id: target.pickup_id, load_id: args.loadId, ...pickupFields(args.pickup),
+    begin_at: target.begin_at ?? args.now.toISOString(),
+  });
   store.put("trips", { trip_id: trip.trip_id, status: "loading" });
   event(store, args.newId, {
     trip_id: trip.trip_id, event_type: "load_begun", occurred_at: args.now.toISOString(),
@@ -312,7 +317,7 @@ export function unlinkCancelledLoad(
 ): boolean {
   const pickup = store.list("trip_pickups", (p) => p.load_id === args.loadId)[0];
   if (!pickup) return false;
-  store.put("trip_pickups", { pickup_id: pickup.pickup_id, load_id: null });
+  store.put("trip_pickups", { pickup_id: pickup.pickup_id, load_id: null, ...(pickup.left_at ? {} : { begin_at: null }) });
   const trip = store.list("trips", (t) => t.trip_id === pickup.trip_id)[0];
   const stillLoading = store.list("trip_pickups", (p) => p.trip_id === pickup.trip_id && !!p.load_id && p.pickup_id !== pickup.pickup_id).length > 0;
   if (trip && trip.status === "loading" && !stillLoading) {

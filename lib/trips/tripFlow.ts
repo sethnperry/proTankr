@@ -112,10 +112,14 @@ export function nextStep(
 export type StepTimes = { arrivedAt: string; beginAt: string; leftAt: string };
 
 // Prefilled times when the driver finishes a step: begin = now − offset,
-// leave = now. Begin never lands before arrival.
-export function defaultStepTimes(now: Date, offsetMinutes: number, arrivedAt: string | null): StepTimes {
+// leave = now. Begin never lands before arrival. `beganAt` is a begin time the
+// driver already recorded (Start Loading in the Planner); when it's valid it
+// wins over the offset.
+export function defaultStepTimes(now: Date, offsetMinutes: number, arrivedAt: string | null, beganAt?: string | null): StepTimes {
   const leave = now.getTime();
   let begin = leave - Math.max(0, offsetMinutes) * MIN;
+  const began = beganAt ? Date.parse(beganAt) : NaN;
+  if (Number.isFinite(began) && began <= leave) begin = began;
   const arrived = arrivedAt ? Date.parse(arrivedAt) : NaN;
   if (Number.isFinite(arrived) && arrived > begin) begin = Math.min(arrived, leave);
   const iso = (t: number) => new Date(t).toISOString();

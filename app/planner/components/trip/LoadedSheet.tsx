@@ -119,7 +119,7 @@ export function LoadedSheet({
     })));
     const t = pickup.begin_at && pickup.left_at
       ? { arrivedAt: pickup.arrived_at ?? pickup.begin_at, beginAt: pickup.begin_at, leftAt: pickup.left_at }
-      : defaultStepTimes(new Date(), settings.begin_offset_minutes, pickup.arrived_at);
+      : defaultStepTimes(new Date(), settings.begin_offset_minutes, pickup.arrived_at, pickup.begin_at);
     setTimes(t);
     setReasonId(pickup.delay_reason_id);
     setNote(pickup.delay_note ?? "");

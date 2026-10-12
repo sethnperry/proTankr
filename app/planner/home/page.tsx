@@ -140,6 +140,9 @@ export default function HomePage() {
     [store, openTrip?.trip_id, state],
   );
   const step = nextStep(openTrip, snap, deliveryName);
+  // Set while routing to the Planner, so the button doesn't flash the next
+  // step's label ("Go to Planner") during the navigation.
+  const [openingPlanner, setOpeningPlanner] = useState(false);
   const handoff = !openTrip && userId ? handoffCandidate(trips, trailerId, userId) : null;
 
   // ── Current terminal (the Planner's) ───────────────────────────────────────
@@ -358,10 +361,12 @@ export default function HomePage() {
         setSheetOpen(true);
         break;
       case "planner":
+        setOpeningPlanner(true);
         router.push("/planner");
         break;
       case "arrive_pickup":
         // Arrived: straight to the Planner to build the load.
+        setOpeningPlanner(true);
         arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
         void syncNow();
         router.push("/planner");
@@ -574,9 +579,9 @@ export default function HomePage() {
           background: "#fff", color: "#000", fontSize: 20, fontWeight: 800, cursor: "pointer",
         }}
       >
-        {step.label}
+        {openingPlanner ? "Opening Planner…" : step.label}
       </button>
-      {step.kind !== "start" && (
+      {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
 

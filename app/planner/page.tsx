@@ -97,7 +97,7 @@ import { confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartme
 import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
-import { retagLoadPickup } from "@/lib/trips/tripLogic";
+import { openTripForDriver, retagLoadPickup } from "@/lib/trips/tripLogic";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
@@ -1506,6 +1506,7 @@ export default function CalculatorPage() {
       settings: tripSettings,
       reasons: tripReasons.filter((r) => r.kind === "loading" && r.is_active),
       arrivedAt: tripPickup.arrived_at,
+      beganAt: tripPickup.begin_at,
       existingTimes: tripPickup.left_at ? { arrivedAt: tripPickup.arrived_at, beginAt: tripPickup.begin_at, leftAt: tripPickup.left_at } as StepTimes : null,
       existingDelayReasonId: tripPickup.delay_reason_id,
       existingDelayNote: tripPickup.delay_note,
@@ -2406,8 +2407,18 @@ const lastProductInfoById = useMemo(() => {
   // along with that mechanism (see the recap card's own comment for why:
   // recapValid didn't actually verify the live plan matched the last real
   // load, it just trivially matched itself). Always "LOAD" now.
-  const loadLabel = loadWorkflow.beginLoadBusy ? "Loading…"
+  // On a trip, the tap is the moment loading begins (it becomes the
+  // pickup's begin time), so the button says so.
+  const tripAwaitingLoad = useMemo(() => {
+    if (!effectiveUserId) return false;
+    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
+    if (!trip || (trip.status !== "draft" && trip.status !== "loading" && trip.status !== "in_transit")) return false;
+    return (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
+      .some((p) => p.trip_id === trip.trip_id && !p.load_id && !p.left_at);
+  }, [effectiveUserId, tripStoreHook.state]);
+  const loadLabel = loadWorkflow.beginLoadBusy ? "Starting…"
     : loadWorkflow.activeLoadId ? "Load started"
+    : tripAwaitingLoad ? "START LOADING"
     : "LOAD";
 
   // Same tap-to-load/tap-empty-to-save sequence the old PresetDial's own
@@ -3262,7 +3273,7 @@ const lastProductInfoById = useMemo(() => {
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}
         loadedDisabled={loadWorkflow.completeBusy}
-        loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Loaded"}
+        loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Finish Loading"}
         errorMessage={loadWorkflow.completeError}
         allPlannedUnavailable={unavailableComps.length > 0}
         tuneRows={tuneRows}

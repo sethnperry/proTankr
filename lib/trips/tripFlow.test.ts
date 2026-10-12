@@ -132,6 +132,11 @@ test("step times: begin = now - offset but never before arrival; delay and probl
   const late = defaultStepTimes(NOW, 10, "2026-10-10T14:58:00Z");
   assert.equal(late.beginAt, "2026-10-10T14:58:00.000Z");
   assert.equal(timesProblem(t), null);
+  // A recorded Start Loading time wins over the offset, still never before arrival.
+  const began = defaultStepTimes(NOW, 10, "2026-10-10T14:00:00Z", "2026-10-10T14:20:00Z");
+  assert.equal(began.beginAt, "2026-10-10T14:20:00.000Z");
+  assert.equal(began.leftAt, NOW.toISOString());
+  assert.equal(defaultStepTimes(NOW, 10, "2026-10-10T14:30:00Z", "2026-10-10T14:20:00Z").beginAt, "2026-10-10T14:30:00.000Z");
   assert.equal(timesProblem({ ...t, beginAt: "2026-10-10T13:00:00Z" }), "Begin can't be before arrival.");
 });
 
