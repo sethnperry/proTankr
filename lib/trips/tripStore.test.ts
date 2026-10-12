@@ -144,6 +144,25 @@ test("retryFailed re-queues rejected rows once the server accepts them", async (
   assert.equal(s.pendingCount(), 0);
 });
 
+test("a server error that keeps coming back moves to failed; no signal never does", async () => {
+  const c = clock();
+  const s = createTripStore({ storageKey: "k", now: c.now });
+  s.put("trips", { trip_id: TRIP, company_id: "c", driver_id: "u", created_by: "u", status: "draft" });
+  let err = { message: "JWT expired", code: "PGRST303", status: 401 };
+  const r = recorder(() => ({ ok: false, error: err }));
+  for (let i = 0; i < 4; i++) { await s.drain(r.send); c.advance(10 * 60_000); }
+  assert.equal(s.pendingCount(), 1, "still waiting after 4 tries");
+  await s.drain(r.send);
+  assert.equal(s.pendingCount(), 0);
+  assert.deepEqual(s.getState().failed.map((f) => f.error), ["JWT expired (PGRST303)"]);
+
+  s.retryFailed();
+  err = { message: "Failed to fetch", code: undefined as never, status: 0 };
+  for (let i = 0; i < 8; i++) { await s.drain(r.send); c.advance(10 * 60_000); }
+  assert.equal(s.pendingCount(), 1, "no signal keeps waiting");
+  assert.equal(s.getState().failed.length, 0);
+});
+
 test("an edit made while the row is in flight stays queued", async () => {
   const s = createTripStore({ storageKey: "k" });
   s.put("trips", { trip_id: TRIP, notes: "first" });

@@ -603,7 +603,7 @@ export default function HomePage() {
         {(pendingCount > 0 || failed.length > 0) && (
           <InfoRow
             label="Sync"
-            value={failed.length > 0 ? `${failed.length} change${failed.length === 1 ? "" : "s"} couldn't save` : `${pendingCount} waiting for signal`}
+            value={failed.length > 0 ? `${failed.length} change${failed.length === 1 ? "" : "s"} couldn't save` : `${pendingCount} waiting to send`}
             valueColor={failed.length > 0 ? "#f87171" : muted}
             onClick={() => { void syncNow(); setSyncOpen(true); }}
             last
@@ -614,6 +614,7 @@ export default function HomePage() {
       <SyncDetailsSheet
         open={syncOpen}
         failed={failed}
+        queue={state.queue}
         pendingCount={pendingCount}
         onRetry={() => void retryFailed()}
         onDiscard={dismissFailed}
@@ -761,9 +762,10 @@ const SYNC_TABLE_LABEL: Record<string, string> = {
 };
 
 // What didn't save and why, with Retry (after a fix ships) and Discard.
-function SyncDetailsSheet({ open, failed, pendingCount, onRetry, onDiscard, onClose }: {
+function SyncDetailsSheet({ open, failed, queue, pendingCount, onRetry, onDiscard, onClose }: {
   open: boolean;
   failed: { table: TripTable; key: string; error: string; failedAt: number }[];
+  queue: { table: TripTable; key: string; attempts: number; lastError: string | null }[];
   pendingCount: number;
   onRetry: () => void;
   onDiscard: (table: TripTable, key: string) => void;
@@ -776,8 +778,19 @@ function SyncDetailsSheet({ open, failed, pendingCount, onRetry, onDiscard, onCl
         <div style={{ fontSize: 15, color: "#4ade80", fontWeight: 700, marginBottom: 12 }}>Everything is saved.</div>
       )}
       {pendingCount > 0 && (
-        <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>
-          {pendingCount} change{pendingCount === 1 ? "" : "s"} waiting to send. They go up on their own when there&apos;s signal.
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 14, color: muted, marginBottom: 8 }}>
+            {pendingCount} change{pendingCount === 1 ? "" : "s"} waiting to send. They go up on their own.
+          </div>
+          {queue.map((q) => (
+            <div key={`${q.table}|${q.key}`} style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, marginBottom: 6 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                {SYNC_TABLE_LABEL[q.table] ?? q.table}
+                {q.attempts > 0 && <span style={{ fontSize: 12, color: muted, fontWeight: 500 }}> · tried {q.attempts}×</span>}
+              </div>
+              {q.lastError && <div style={{ fontSize: 12, color: "#fbbf24", marginTop: 2, overflowWrap: "anywhere" }}>{q.lastError}</div>}
+            </div>
+          ))}
         </div>
       )}
       {failed.length > 0 && (

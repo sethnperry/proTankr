@@ -10642,3 +10642,13 @@ apply and check migrations from here. Not click-tested.
   row only drained the empty queue. `tripStore.retryFailed()` re-queues them
   (also run once per app start), and the dashboard's Sync row opens a
   details sheet listing each failure with Retry and Discard.
+- Follow-up same day ("2 waiting for signal" with good signal): any error
+  `isPermanentError` doesn't flag (401, 5xx, a 23503 missing parent) was
+  shown as "waiting for signal" and retried forever. Now, once the server has
+  answered with the same kind of error `SERVER_RETRY_LIMIT` (5) times, the
+  row moves to "couldn't save" with the error and code, where Retry/Discard
+  work. Only no-signal errors (status 0) wait indefinitely. The Sync page
+  also lists each waiting item with its last error, and the row reads
+  "waiting to send". Root cause of those 2 rows not found: a supplier
+  upsert replayed as the user (rolled back) succeeds, and the Management
+  API's log endpoints weren't reachable to see the real reply.

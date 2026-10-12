@@ -79,6 +79,11 @@ export type DrainResult = {
 
 const BASE_BACKOFF_MS = 5_000;
 const MAX_BACKOFF_MS = 5 * 60_000;
+// A "temporary" error the server itself keeps returning (a missing parent, an
+// expired session, a 5xx) stops counting as waiting for signal after this many
+// tries and shows under "couldn't save", where it can be retried or discarded.
+// No-signal errors (status 0) keep retrying forever.
+export const SERVER_RETRY_LIMIT = 5;
 
 export function emptyState(): TripStoreState {
   const rows = {} as TripStoreState["rows"];
@@ -306,7 +311,7 @@ export function createTripStore(opts: TripStoreOptions) {
         continue;
       }
       if (!isPermanentError(res.error)) {
-        markRetry(table, snapshot.map((s) => s.key), res.error.message);
+        markRetry(table, snapshot.map((s) => s.key), res.error);
         return { sent, failed, stalled: true, remaining: state.queue.length };
       }
       // A batch was rejected outright: send its rows one at a time so one bad
@@ -320,7 +325,7 @@ export function createTripStore(opts: TripStoreOptions) {
           markFailed(table, s.key, s.version, one.error.message);
           failed += 1;
         } else {
-          markRetry(table, [s.key], one.error.message);
+          markRetry(table, [s.key], one.error);
           return { sent, failed, stalled: true, remaining: state.queue.length };
         }
       }
@@ -338,15 +343,25 @@ export function createTripStore(opts: TripStoreOptions) {
     });
   }
 
-  function markRetry(table: TripTable, keys: string[], message: string) {
+  function markRetry(table: TripTable, keys: string[], error: SendError) {
     const set = new Set(keys);
+    const serverAnswered = (error.status ?? 0) > 0;
+    const giveUp: QueueEntry[] = [];
+    const queue: QueueEntry[] = [];
+    for (const q of state.queue) {
+      if (q.table !== table || !set.has(q.key)) { queue.push(q); continue; }
+      const attempts = q.attempts + 1;
+      if (serverAnswered && attempts >= SERVER_RETRY_LIMIT) { giveUp.push(q); continue; }
+      queue.push({ ...q, attempts, nextAttemptAt: now() + backoff(attempts), lastError: error.message });
+    }
+    const label = error.code ? `${error.message} (${error.code})` : error.message;
     commit({
       ...state,
-      queue: state.queue.map((q) => {
-        if (q.table !== table || !set.has(q.key)) return q;
-        const attempts = q.attempts + 1;
-        return { ...q, attempts, nextAttemptAt: now() + backoff(attempts), lastError: message };
-      }),
+      queue,
+      failed: [
+        ...state.failed.filter((f) => !giveUp.some((g) => g.table === f.table && g.key === f.key)),
+        ...giveUp.map((g) => ({ table: g.table, key: g.key, error: label, failedAt: now() })),
+      ],
     });
   }
 
