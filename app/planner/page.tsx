@@ -1524,6 +1524,7 @@ export default function CalculatorPage() {
         loadWorkflow.closeLoadReport();
         router.push("/planner/home?arrive=1");
       },
+      onBackToDashboard: () => router.push("/planner/home"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save]);
@@ -2467,7 +2468,7 @@ const lastProductInfoById = useMemo(() => {
   }, [effectiveUserId, tripStoreHook.state]);
   const loadLabel = loadWorkflow.beginLoadBusy ? "Starting…"
     : loadWorkflow.activeLoadId ? "Load started"
-    : tripAwaitingLoad ? "START LOADING"
+    : tripAwaitingLoad ? "BEGIN LOADING"
     : "LOAD";
 
   // Same tap-to-load/tap-empty-to-save sequence the old PresetDial's own

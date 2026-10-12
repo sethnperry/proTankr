@@ -263,7 +263,7 @@ export function LoadedSheet({
 
       <div style={sectionCard}>
         <div style={sectionTitle}>Times</div>
-        <TimesEditor times={times} onChange={setTimes} beginLabel="Began loading" />
+        <TimesEditor times={times} onChange={setTimes} beginLabel="Begin loading" />
         <DelayReasonField times={times} threshold={settings.loading_delay_threshold_minutes} reasons={reasons} kind="loading"
           reasonId={reasonId} note={note} onChange={(id, n) => { setReasonId(id); setNote(n); }} />
       </div>

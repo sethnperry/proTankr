@@ -96,7 +96,7 @@ export function nextStep(
     }
     return {
       kind: "planner",
-      label: p.load_id ? "Back to Load" : "Go to Planner",
+      label: "Continue Trip",
       detail: p.load_id ? `Loading${where}` : `Plan and load${where}`,
     };
   }
@@ -152,7 +152,7 @@ export function timesProblem(t: StepTimes): string | null {
   const a = Date.parse(t.arrivedAt), b = Date.parse(t.beginAt), l = Date.parse(t.leftAt);
   if (![a, b, l].every(Number.isFinite)) return "Enter all three times.";
   if (b < a) return "Begin can't be before arrival.";
-  if (l < b) return "Leave can't be before begin.";
+  if (l < b) return "Depart can't be before Begin.";
   return null;
 }
 

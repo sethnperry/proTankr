@@ -10711,3 +10711,19 @@ ticker uses (Clear Now for your own reports). It calls
 `useActiveOutageBanner` with the planned products, or `"all"` (new option,
 no product filter) when no plan exists yet this session, so a driver sees an
 Out of Product before opening the Planner. Not click-tested.
+
+### Arrived / Begin / Depart, report Edit menu, mid-trip equipment warning (2026-10-12)
+
+- Times read **Arrived / Begin / Depart** everywhere (times editor, No-load
+  sheet, load report, PTD, Trip Settings help). Planner LOAD on a waiting
+  pickup reads **BEGIN LOADING**.
+- Load report: Delete moved inside **Edit Load** (Edit Details / Delete Load
+  with its confirm / Close). "Back to Planner" is now **Back to Dashboard**
+  (`/planner/home`).
+- Dashboard: the step that sends the driver to the Planner now reads
+  **Continue Trip** (was Back to Load / Go to Planner). Steps that stamp a
+  time (Arrived, Finish Delivery) keep their own labels.
+- `EquipmentChangeWarning`: tapping Equipment on the dashboard while product
+  is on board or a load is in progress warns that the load stays with the
+  trailer and a different truck changes tare. Warning only; nothing
+  recalculates gross for a new truck yet. Not click-tested.

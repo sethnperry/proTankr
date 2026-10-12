@@ -433,7 +433,7 @@ export function FinishDeliverySheet({
 
       <div style={sectionCard}>
         <div style={sectionTitle}>Times</div>
-        <TimesEditor times={times} onChange={setTimes} beginLabel={pumpOff ? "Began pumping" : "Began delivery"} />
+        <TimesEditor times={times} onChange={setTimes} beginLabel={pumpOff ? "Begin pumping" : "Begin delivery"} />
         <DelayReasonField times={times} threshold={settings.delivery_delay_threshold_minutes} reasons={reasons} kind="delivery"
           reasonId={reasonId} note={note} onChange={(id, n) => { setReasonId(id); setNote(n); }} />
       </div>

@@ -79,7 +79,7 @@ function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   );
 }
 
-function StopTimes({ stop, beginLabel, endLabel = "Left" }: { stop: StopLike; beginLabel: string; endLabel?: string }) {
+function StopTimes({ stop, beginLabel, endLabel = "Depart" }: { stop: StopLike; beginLabel: string; endLabel?: string }) {
   const delay = stop.delayReason || stop.delayNote;
   return (
     <div style={{ marginTop: 4 }}>
@@ -179,13 +179,13 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
                 <div style={{ marginTop: 4, fontWeight: 700 }}>Couldn&apos;t load: {p.noLoadReason}</div>
                 <div style={{ marginTop: 4 }}>
                   <Row label="Arrived" value={fmtDateTime(p.arrivedAt)} />
-                  {p.beginAt && <Row label="Began loading" value={fmtDateTime(p.beginAt)} />}
-                  <Row label="Left" value={fmtDateTime(p.leftAt)} />
+                  {p.beginAt && <Row label="Begin loading" value={fmtDateTime(p.beginAt)} />}
+                  <Row label="Depart" value={fmtDateTime(p.leftAt)} />
                 </div>
               </>
             ) : (
               <>
-                <StopTimes stop={p} beginLabel="Began loading" />
+                <StopTimes stop={p} beginLabel="Begin loading" />
                 <div style={sigLabel}>Loading driver</div>
                 {sigs.length === 0 ? <div style={{ color: faint }}>Not signed yet.</div> : sigs.map(({ s, i: k }) => loadingSig(s, k))}
               </>
@@ -277,7 +277,7 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
               </div>
             )}
 
-            <StopTimes stop={d} beginLabel={pump ? "Began pumping" : "Began delivering"} />
+            <StopTimes stop={d} beginLabel={pump ? "Begin pumping" : "Begin delivering"} />
 
             <div style={sigLabel}>Delivering driver</div>
             {sig(d.driverId)}
@@ -326,7 +326,7 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
 export function BlankPtd() {
   const times = (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
-      <Field label="Arrived" /><Field label="Began" /><Field label="Left" /><Field label="Delay reason" wide />
+      <Field label="Arrived" /><Field label="Begin" /><Field label="Depart" /><Field label="Delay reason" wide />
     </div>
   );
   return (

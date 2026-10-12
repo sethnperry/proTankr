@@ -63,6 +63,7 @@ import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/tri
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
+import { EquipmentChangeWarning } from "../components/trip/EquipmentChangeWarning";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
 import { isTerminalIssueCode } from "@/lib/trips/terminalIssues";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
@@ -152,7 +153,7 @@ export default function HomePage() {
   );
   const step = nextStep(openTrip, snap, deliveryName);
   // Set while routing to the Planner, so the button doesn't flash the next
-  // step's label ("Go to Planner") during the navigation.
+  // step's label ("Continue Trip") during the navigation.
   const [openingPlanner, setOpeningPlanner] = useState(false);
   const handoff = !openTrip && userId ? handoffCandidate(trips, trailerId, userId) : null;
 
@@ -191,6 +192,20 @@ export default function HomePage() {
   );
   const terminalAlerts = useActiveOutageBanner(alertTerminalId, userId || null, alertProducts);
   const [alertsOpen, setAlertsOpen] = useState(false);
+
+  // ── Equipment change mid-trip ──────────────────────────────────────────────
+  // The load stays with the trailer; a new truck changes tare. Warn before the
+  // picker opens while product is on board or a load is in progress.
+  const tripHasLoad = !!openTrip && !!snap && (
+    onBoard(snap.compLoads).length > 0 || snap.pickups.some((p) => !!p.load_id && !p.left_at)
+  );
+  const tripLoaded = !!snap && onBoard(snap.compLoads).length > 0;
+  const [equipWarnOpen, setEquipWarnOpen] = useState(false);
+  const openEquipment = () => (tripHasLoad ? setEquipWarnOpen(true) : shell.setEquipOpen(true));
+  const tripTrailerId = openTrip?.trailer_id ?? trailerId;
+  const tripTruckId = openTrip?.truck_id ?? truckId;
+  const tripTrailerName = tripTrailerId ? equipment.trailerNameById?.[tripTrailerId] ?? (tripTrailerId === equipment.currentTrailerId ? equipment.currentTrailerName : null) ?? null : null;
+  const tripTruckName = tripTruckId ? equipment.truckNameById?.[tripTruckId] ?? (tripTruckId === equipment.currentTruckId ? equipment.currentTruckName : null) ?? null : null;
 
   // ── Start Load prefills ────────────────────────────────────────────────────
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -695,7 +710,7 @@ export default function HomePage() {
 
       {/* Info */}
       <div style={{ ...card, marginTop: 16, padding: 0 }}>
-        <InfoRow label="Equipment" value={equipmentLabel} onClick={() => shell.setEquipOpen(true)} />
+        <InfoRow label="Equipment" value={equipmentLabel} onClick={openEquipment} />
         <InfoRow label="Terminal" value={pickupLabel ?? "Select a terminal"}
           onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
         <InfoRow
@@ -746,7 +761,7 @@ export default function HomePage() {
       {/* Tools */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
         <Tile label="Planner" onClick={() => router.push("/planner")} />
-        <Tile label="Equipment" onClick={() => shell.setEquipOpen(true)} />
+        <Tile label="Equipment" onClick={openEquipment} />
         <Tile label="Trips & PTDs" onClick={() => router.push("/planner/trips")} />
         <Tile label="Delivery Locations" onClick={() => router.push("/planner/locations")} />
         {canCards && <Tile label="Cards" onClick={() => router.push("/planner/cards")} />}
@@ -774,6 +789,14 @@ export default function HomePage() {
         onSubmit={submit}
       />
 
+      <EquipmentChangeWarning
+        open={equipWarnOpen}
+        trailerName={tripTrailerName}
+        truckName={tripTruckName}
+        loaded={tripLoaded}
+        onContinue={() => { setEquipWarnOpen(false); shell.setEquipOpen(true); }}
+        onClose={() => setEquipWarnOpen(false)}
+      />
       <NoLoadSheet
           open={noLoadOpen && !!workingPickup}
           rackName={workingPickup?.name ?? terminalName ?? "this rack"}

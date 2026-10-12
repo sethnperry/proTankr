@@ -144,13 +144,13 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       <div style={card}>
         <div style={title}>Times</div>
         {!isAdmin && <div style={{ fontSize: 12, color: muted, marginBottom: 10 }}>Only an admin can change these.</div>}
-        <NumRow label="Loading time" help="If the driver didn't tap Start Loading, Began loading is prefilled this long before they finish."
+        <NumRow label="Loading time" help="If the driver didn't tap Begin Loading, Begin loading is prefilled this long before they finish."
           value={loadingOffset(settings)} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_begin_offset_minutes: n }))} />
-        <NumRow label="Delivery time" help="Began delivering is prefilled this long before the driver taps Finish Delivery."
+        <NumRow label="Delivery time" help="Begin delivering is prefilled this long before the driver taps Finish Delivery."
           value={deliveryOffset(settings)} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_begin_offset_minutes: n }))} />
-        <NumRow label="Loading delay" help="Arrived → began loading longer than this asks for a reason."
+        <NumRow label="Loading delay" help="Arrived → begin loading longer than this asks for a reason."
           value={settings.loading_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_delay_threshold_minutes: n }))} />
-        <NumRow label="Delivery delay" help="Arrived → began delivering longer than this asks for a reason."
+        <NumRow label="Delivery delay" help="Arrived → begin delivering longer than this asks for a reason."
           value={settings.delivery_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_delay_threshold_minutes: n }))} />
       </div>
       <div style={card}>
