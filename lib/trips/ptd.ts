@@ -8,6 +8,7 @@ import { delayMinutes, parkRecords } from "./tripFlow.ts";
 import { editedNetFlag } from "./netGallons.ts";
 import { billingTime } from "./billingTime.ts";
 import { terminalIssueLabel } from "./terminalIssues.ts";
+import { cancelReasonLabel } from "./cancelReasons.ts";
 import { tripMiles, truckChanges } from "./truckChange.ts";
 import type {
   TripCompartmentLoadRow,
@@ -199,6 +200,15 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     totalMiles: tripMiles(begin, end, changes),
     truckChanges: changes,
     parks: parkRecords(input.events),
+    cancellation: trip.status === "cancelled"
+      ? {
+          at: trip.cancelled_at ?? null,
+          by: trip.cancelled_by ? names.driver(trip.cancelled_by) : null,
+          reasons: (trip.cancel_reasons ?? []).map(cancelReasonLabel),
+          note: trip.cancel_note ?? null,
+          returnedTo: trip.cancel_returned_to ?? null,
+        }
+      : null,
     pickups,
     deliveries,
     compartments,

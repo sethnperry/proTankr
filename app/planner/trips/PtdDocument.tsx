@@ -168,6 +168,14 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         <Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} />
       </div>
 
+      {ptd.cancellation && (
+        <div style={{ border: "1px solid #b91c1c", borderRadius: 6, padding: "6px 8px", marginTop: 10 }}>
+          <div style={{ fontWeight: 800 }}>Load cancelled{ptd.cancellation.at ? ` ${fmtDateTime(ptd.cancellation.at)}` : ""}{ptd.cancellation.by ? ` by ${ptd.cancellation.by}` : ""}</div>
+          <div>{ptd.cancellation.reasons.length ? ptd.cancellation.reasons.join(" → ") : "No reason given"}</div>
+          {ptd.cancellation.note && <div>&ldquo;{ptd.cancellation.note}&rdquo;</div>}
+          {ptd.cancellation.returnedTo && <div style={{ color: faint }}>Headed to {ptd.cancellation.returnedTo}</div>}
+        </div>
+      )}
       {ptd.parks.length > 0 && (
         <div style={{ ...box, marginTop: 10 }}>
           {ptd.parks.map((p, i) => (

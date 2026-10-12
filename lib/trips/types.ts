@@ -41,6 +41,13 @@ export type TripRow = Synced & {
   parked_for?: ParkFor | null;
   parked_where?: string | null;
   parked_note?: string | null;
+  // Cancel a load (20261013000000). Reasons in the order picked.
+  cancel_reasons?: string[] | null;
+  cancel_note?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancel_returned_to?: string | null;
+  driver_hidden?: boolean;
 };
 
 export type TripOrderRow = Synced & {

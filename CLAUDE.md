@@ -10883,3 +10883,31 @@ child rows (likely the "waiting to send" items). `forgetTrip(id,
 {dropPending:true})` now drops the trip's rows plus their queue/failed
 entries; `pruneMissingTrips` uses it, but still keeps a trip whose own trips
 row is unsent (it may be a new offline trip). 1 test added. Not click-tested.
+
+### Cancel a load with compounding reasons (2026-10-12)
+
+Driver Dashboard → **Cancel load** (trip card link, any open trip with
+nothing on board; product on board means park or deliver). Migration
+`20261013000000_trip_cancel_reasons.sql` (**applied 2026-10-12** via the
+Management API): `trips.cancel_reasons text[]` (order picked),
+`cancel_note`, `cancelled_at`, `cancelled_by`, `cancel_returned_to`,
+`driver_hidden`. Not click-tested.
+
+- `lib/trips/cancelReasons.ts` (2 tests): the list (terminal: allocation,
+  product, long line, gauging/sourcing reset, terminal issue, rack hopping;
+  road: traffic, out of hours, weather, equipment; other: dispatch/customer
+  cancelled, entered by mistake, other), labels, `reasonCounts`.
+- `CancelTripSheet`: tick every reason, numbered in the order picked; note
+  (required for Other), headed to, ending miles, time.
+- `tripFlow.cancelLoad` (1 test): closes a rack still in progress as
+  no-load at the cancel time (reason = first terminal issue picked),
+  cancels planned deliveries, logs `trip_cancelled` with the reasons. The
+  dashboard also cancels any planned `load_log` for the trip. Replaces the
+  old draft-only "Cancel trip" confirm.
+- Trips list: cancelled rows show the reasons and a **Hide** button
+  (`setTripHidden`); "Show hidden (n)" brings them back. Hiding never hides
+  from managers.
+- Dispatch Dashboard: **Cancelled loads · last 30 days**
+  (`useCancelledTrips`), reason counts across them, then each load: driver,
+  truck, order, time on the load, reasons in order, racks tried with why,
+  note, where headed. Tap opens the PTD, which shows a "Load cancelled" box.

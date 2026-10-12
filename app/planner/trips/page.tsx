@@ -11,6 +11,8 @@ import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { pruneMissingTrips } from "@/lib/trips/pruneTrips";
 import { useTripStore } from "@/lib/trips/useTripStore";
+import { setTripHidden } from "@/lib/trips/tripFlow";
+import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
 import type { TripOrderRow, TripRow } from "@/lib/trips/types";
 import { fmtDateTime } from "./PtdDocument";
@@ -34,7 +36,8 @@ export default function TripsPage() {
   const router = useRouter();
   const shell = useCalculatorShell();
   const userId = shell.effectiveUserId || null;
-  const { state, store } = useTripStore(userId);
+  const { state, store, syncNow } = useTripStore(userId);
+  const [showHidden, setShowHidden] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,6 +81,14 @@ export default function TripsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, state]);
 
+  const hiddenCount = rows.filter((r) => r.trip.driver_hidden).length;
+  const visible = showHidden ? rows : rows.filter((r) => !r.trip.driver_hidden);
+  const setHidden = (tripId: string, hidden: boolean) => {
+    if (!store) return;
+    setTripHidden(store, tripId, hidden);
+    void syncNow();
+  };
+
   return (
     <div style={{ padding: 16, paddingBottom: 40, maxWidth: 640, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -87,15 +98,20 @@ export default function TripsPage() {
           Blank PTD
         </button>
       </div>
-      {rows.length === 0 && (
+      {visible.length === 0 && (
         <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 15, textAlign: "center", marginTop: 40 }}>
-          {loading ? "Loading…" : "No trips yet. Start one from the Driver Dashboard."}
+          {loading ? "Loading…" : rows.length ? "Nothing to show." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {rows.map(({ trip, order }) => {
+      {visible.map(({ trip, order }) => {
         const s = STATUS[trip.status];
+        const cancelled = trip.status === "cancelled";
+        const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
         return (
-          <button key={trip.trip_id} type="button" onClick={() => router.push(`/planner/trips/${trip.trip_id}`)} style={card}>
+          <div key={trip.trip_id} role="button" tabIndex={0}
+            onClick={() => router.push(`/planner/trips/${trip.trip_id}`)}
+            onKeyDown={(e) => { if (e.key === "Enter") router.push(`/planner/trips/${trip.trip_id}`); }}
+            style={{ ...card, opacity: trip.driver_hidden ? 0.55 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>{order ? `Order ${order}` : ptdCode(trip.trip_id)}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.label}</div>
@@ -103,12 +119,28 @@ export default function TripsPage() {
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
               {[trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
             </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
-              {fmtDateTime(trip.completed_at ?? trip.started_at) || "Not started"}
+            {reasons && <div style={{ fontSize: 13, color: "#f87171", marginTop: 2 }}>{reasons}</div>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+                {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
+              </div>
+              {cancelled && (
+                <button type="button"
+                  onClick={(e) => { e.stopPropagation(); setHidden(trip.trip_id, !trip.driver_hidden); }}
+                  style={{ border: "none", background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "4px 0" }}>
+                  {trip.driver_hidden ? "Unhide" : "Hide"}
+                </button>
+              )}
             </div>
-          </button>
+          </div>
         );
       })}
+      {hiddenCount > 0 && (
+        <button type="button" onClick={() => setShowHidden((v) => !v)}
+          style={{ display: "block", margin: "10px auto 0", border: "none", background: "transparent", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          {showHidden ? "Hide hidden trips" : `Show hidden (${hiddenCount})`}
+        </button>
+      )}
     </div>
   );
 }

@@ -54,6 +54,7 @@ import { addDaysISO_, daysUntilISO_, formatMDYWithCountdown_ } from "../utils/da
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
+import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 
 // This page deliberately does NOT use cardTheme.ts's shared cardStateFor --
@@ -167,6 +168,7 @@ export default function DispatchPage() {
 
   // Loads in progress + parked loads, company-wide (Dispatch board).
   const fleet = useFleetTrips(companyId || null);
+  const cancelledTrips = useCancelledTrips(companyId || null);
   const { data: catalog } = useProductsCatalog();
   const boardProduct = (id: string | null): BoardProduct => {
     const p = id ? catalog.find((x) => x.product_id === id) : null;
@@ -391,7 +393,7 @@ export default function DispatchPage() {
     return (
       <div style={{ paddingTop: 4 }}>
         {fleet.error && <div style={{ fontSize: 13, color: "#f87171", marginBottom: 10 }}>{fleet.error}</div>}
-        <FleetBoard trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
+        <FleetBoard cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
         <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Drivers</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 10 }}>Select a driver to view.</div>

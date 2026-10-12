@@ -830,3 +830,64 @@ export function parkRecords(events: TripEventRow[]): ParkRecord[] {
   }
   return out;
 }
+
+// ── Cancel a load ────────────────────────────────────────────────────────────
+//
+// The driver gives up on an open trip with nothing on board (e.g. no
+// allocation and out of hours, so back to the yard empty). Reasons compound
+// and are kept in the order picked. A rack the driver was still at is closed
+// as a no-load at the cancel time, so the PTD keeps the time spent there.
+// Product on board can't be cancelled: park it or deliver it.
+
+export function canCancelLoad(trip: TripRow | null, hasLoadOnBoard: boolean): boolean {
+  return !!trip && OPEN_STATUSES.has(trip.status) && !hasLoadOnBoard;
+}
+
+export function cancelLoad(
+  store: TripStoreLike,
+  args: {
+    trip: TripRow;
+    userId: string;
+    reasons: string[];
+    note: string | null;
+    returnedTo: string | null;
+    endMiles: number | null;
+    cancelledAt: string;
+    rackReason: string; // a TerminalIssueCode or "other", for an unfinished rack
+  } & Clock,
+) {
+  const t = args.trip;
+  for (const p of store.list("trip_pickups", (x) => x.trip_id === t.trip_id && !x.outcome && !!x.arrived_at && !x.left_at)) {
+    store.put("trip_pickups", {
+      pickup_id: p.pickup_id,
+      left_at: args.cancelledAt,
+      load_id: null,
+      outcome: "no_load",
+      no_load_reason: args.rackReason,
+      no_load_note: args.note,
+    });
+  }
+  for (const d of store.list("trip_deliveries", (x) => x.trip_id === t.trip_id && x.status === "planned")) {
+    store.put("trip_deliveries", { delivery_id: d.delivery_id, status: "cancelled" });
+  }
+  store.put("trips", {
+    trip_id: t.trip_id,
+    status: "cancelled",
+    cancel_reasons: args.reasons,
+    cancel_note: args.note?.trim() || null,
+    cancel_returned_to: args.returnedTo?.trim() || null,
+    cancelled_at: args.cancelledAt,
+    cancelled_by: args.userId,
+    end_miles: args.endMiles ?? t.end_miles,
+  });
+  logEvent(store, args.newId, {
+    trip_id: t.trip_id, event_type: "trip_cancelled", occurred_at: args.cancelledAt, actor_id: args.userId,
+    payload: { reasons: args.reasons, note: args.note?.trim() || null, returned_to: args.returnedTo?.trim() || null },
+  });
+}
+
+// Hide (or show again) a cancelled trip in the driver's own Trips list.
+// Managers still see it.
+export function setTripHidden(store: TripStoreLike, tripId: string, hidden: boolean) {
+  store.put("trips", { trip_id: tripId, driver_hidden: hidden });
+}

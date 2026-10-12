@@ -9,11 +9,14 @@
 // rack(s) along the top to the right, then down and back left through the
 // deliveries, last delivery under the start. A dot shows where the truck is.
 
-import React from "react";
+import React, { useState } from "react";
 import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
 import { PARK_FOR_LABEL } from "@/lib/trips/tripFlow";
 import { productColorFor } from "@/app/planner/utils/productColor";
+import { cancelReasonLabel, reasonCounts } from "@/lib/trips/cancelReasons";
+import type { CancelledTrip } from "@/lib/trips/useCancelledTrips";
+import { terminalIssueLabel } from "@/lib/trips/terminalIssues";
 
 export type BoardProduct = { name: string; code: string; hex: string | null };
 
@@ -148,7 +151,89 @@ function ProductChips({ ft, product }: { ft: FleetTrip; product: (id: string | n
 const unitLabel = (ft: FleetTrip) =>
   [ft.truckName ? `Truck ${ft.truckName}` : null, ft.trailerName ? `Trailer ${ft.trailerName}` : null].filter(Boolean).join(" · ");
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip }: {
+const CANCELLED = "#f87171";
+const fmtWhen = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+const fmtSpan = (from: string | null | undefined, to: string | null | undefined) => {
+  if (!from || !to) return null;
+  const m = Math.round((Date.parse(to) - Date.parse(from)) / 60_000);
+  if (!Number.isFinite(m) || m < 0) return null;
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+};
+
+function CancelledSection({ cancelled, days, onOpenTrip }: {
+  cancelled: CancelledTrip[];
+  days: number;
+  onOpenTrip: (tripId: string) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const counts = reasonCounts(cancelled);
+  const shown = all ? cancelled : cancelled.slice(0, 5);
+  return (
+    <>
+      <div style={{ ...sectionLabel, marginTop: 14 }}>Cancelled loads · last {days} days ({cancelled.length})</div>
+      {cancelled.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No cancelled loads.</div>}
+      {counts.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          {counts.map((c) => (
+            <span key={c.code} style={{ fontSize: 12, fontWeight: 700, padding: "4px 8px", borderRadius: 999, border: "1px solid rgba(248,113,113,0.35)", color: "rgba(255,255,255,0.85)" }}>
+              {cancelReasonLabel(c.code)} ×{c.count}
+            </span>
+          ))}
+        </div>
+      )}
+      {shown.map((ct) => {
+        const t = ct.trip;
+        const reasons = t.cancel_reasons ?? [];
+        const racks = ct.pickups.filter((p) => p.arrived_at || p.outcome);
+        const span = fmtSpan(t.started_at, t.cancelled_at);
+        return (
+          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)" }} onClick={() => onOpenTrip(t.trip_id)}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+              <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {ct.driverName ?? "Driver"}
+              </span>
+              <span style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>{fmtWhen(t.cancelled_at ?? t.started_at)}</span>
+            </div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+              {[ct.truckName ? `Truck ${ct.truckName}` : null, ct.orderNumbers.length ? `Order ${ct.orderNumbers.join(", ")}` : null, span ? `${span} on the load` : null]
+                .filter(Boolean).join(" · ")}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, alignItems: "center" }}>
+              {reasons.length === 0
+                ? <span style={{ fontSize: 13, color: muted }}>No reason given</span>
+                : reasons.map((r, i) => (
+                  <span key={r} style={{ fontSize: 13, color: CANCELLED, fontWeight: 700 }}>
+                    {i > 0 ? "→ " : ""}{cancelReasonLabel(r)}
+                  </span>
+                ))}
+            </div>
+            {racks.length > 0 && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>
+                Racks: {racks.map((p) => {
+                  const why = p.outcome === "no_load" ? terminalIssueLabel(p.no_load_reason) : null;
+                  return `${p.name ?? "Rack"}${why ? ` (${why})` : ""}`;
+                }).join(" → ")}
+              </div>
+            )}
+            {t.cancel_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{t.cancel_note}&rdquo;</div>}
+            {t.cancel_returned_to && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Headed to {t.cancel_returned_to}</div>}
+          </button>
+        );
+      })}
+      {cancelled.length > 5 && (
+        <button type="button" onClick={() => setAll((v) => !v)}
+          style={{ border: "none", background: "transparent", color: muted, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "4px 0" }}>
+          {all ? "Show fewer" : `Show all ${cancelled.length}`}
+        </button>
+      )}
+    </>
+  );
+}
+
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30 }: {
+  cancelled?: CancelledTrip[];
+  cancelledDays?: number;
   trips: FleetTrip[];
   locations: Map<string, Place>;
   product: (id: string | null) => BoardProduct;
@@ -210,6 +295,8 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip }: {
           </button>
         );
       })}
+
+      {cancelled && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} />}
     </div>
   );
 }

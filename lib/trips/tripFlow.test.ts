@@ -7,6 +7,9 @@ import {
   addPickup,
   arriveDelivery,
   arrivePickup,
+  canCancelLoad,
+  cancelLoad,
+  setTripHidden,
   compartmentsForDelivery,
   confirmLoaded,
   defaultStepTimes,
@@ -332,4 +335,28 @@ test("retain keeps compartments aboard for the next leg; progress is saved as yo
   assert.equal(kept.disposition, "loaded");
   assert.equal(kept.delivery_id, null);
   assert.equal(nextStep(getTrip(), snap()).kind, "add_delivery");
+});
+
+test("cancel a load: reasons in order, open rack closed as no-load, deliveries cancelled", () => {
+  const { s, newId, trip, snap, getTrip } = setup();
+  arrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
+  assert.equal(canCancelLoad(getTrip(), false), true);
+  assert.equal(canCancelLoad(getTrip(), true), false);
+  cancelLoad(s, {
+    trip: getTrip(), userId: ME, reasons: ["traffic", "rack_hopping", "out_of_allocation", "hours_of_service"],
+    note: "No allocation after gauging", returnedTo: "Yard", endMiles: 1080,
+    cancelledAt: "2026-10-10T18:00:00Z", rackReason: "out_of_allocation", now: NOW, newId,
+  });
+  const t = getTrip();
+  assert.equal(t.status, "cancelled");
+  assert.deepEqual(t.cancel_reasons, ["traffic", "rack_hopping", "out_of_allocation", "hours_of_service"]);
+  assert.equal(t.end_miles, 1080);
+  const p = snap().pickups[0];
+  assert.equal(p.outcome, "no_load");
+  assert.equal(p.no_load_reason, "out_of_allocation");
+  assert.equal(p.left_at, "2026-10-10T18:00:00Z");
+  assert.ok(snap().deliveries.every((d) => d.status === "cancelled"));
+  assert.equal(canCancelLoad(t, false), false);
+  setTripHidden(s, trip.trip_id, true);
+  assert.equal(getTrip().driver_hidden, true);
 });

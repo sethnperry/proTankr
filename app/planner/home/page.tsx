@@ -32,7 +32,6 @@ import TerminalOutageDetailModal from "../modals/TerminalOutageDetailModal";
 import {
   applyStartLoad,
   buildStartLoad,
-  cancelTrip,
   lastShipperCustomer,
   openTripForDriver,
   truckBeginMiles,
@@ -47,6 +46,8 @@ import {
   arrivePickup,
   compartmentsForDelivery,
   closePickupNoLoad,
+  canCancelLoad,
+  cancelLoad,
   confirmLoaded,
   finishDelivery,
   handoffCandidate,
@@ -67,6 +68,8 @@ import {
 } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
+import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/CancelTripSheet";
+import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastDeliveryCity } from "@/lib/trips/startPlace";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
@@ -330,12 +333,35 @@ export default function HomePage() {
     }
   };
 
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const doCancelTrip = () => {
+  // ── Cancel load (nothing on board) ───────────────────────────────────────
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelErr, setCancelErr] = useState<string | null>(null);
+  const onCancelSubmit = async (v: CancelTripSubmit) => {
     if (!store || !userId || !openTrip) return;
-    cancelTrip(store, openTrip, userId, { now: new Date(), newId });
-    setConfirmCancel(false);
-    void syncNow();
+    setCancelBusy(true);
+    setCancelErr(null);
+    try {
+      // Any load started in the Planner for this trip goes too.
+      for (const p of store.list("trip_pickups", (x) => x.trip_id === openTrip.trip_id && !!x.load_id && !x.outcome)) {
+        try {
+          await cancelPlannedLoad(p.load_id as string);
+        } catch (e) {
+          console.warn("[trips] cancel planned load failed (non-fatal):", e);
+        }
+      }
+      clearActivePlannedLoad(userId);
+      cancelLoad(store, {
+        trip: openTrip, userId, reasons: v.reasons, note: v.note, returnedTo: v.returnedTo,
+        endMiles: v.endMiles, cancelledAt: v.cancelledAt, rackReason: rackReasonFor(v.reasons), ...clock(),
+      });
+      setCancelOpen(false);
+      void syncNow();
+    } catch (e: any) {
+      setCancelErr(e?.message ?? "Couldn't cancel the load.");
+    } finally {
+      setCancelBusy(false);
+    }
   };
 
   // ── Pickup / delivery steps ────────────────────────────────────────────────
@@ -732,24 +758,10 @@ export default function HomePage() {
                 + Another pickup{terminalName ? ` (${terminalName})` : ""}
               </button>
             )}
-            {openTrip.status === "draft" && (
-              confirmCancel ? (
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
-                  <span style={{ fontSize: 13, color: "#f87171", flex: 1 }}>Cancel this trip?</span>
-                  <button type="button" onClick={doCancelTrip}
-                    style={{ borderRadius: 8, border: "1px solid #f87171", background: "transparent", color: "#f87171", padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    Cancel Trip
-                  </button>
-                  <button type="button" onClick={() => setConfirmCancel(false)}
-                    style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", padding: "6px 12px", fontSize: 13, cursor: "pointer" }}>
-                    Keep
-                  </button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => setConfirmCancel(true)} style={{ ...smallLink, color: muted }}>
-                  Cancel trip
-                </button>
-              )
+            {canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0) && (
+              <button type="button" onClick={() => { setCancelErr(null); setCancelOpen(true); }} style={{ ...smallLink, color: "#f87171" }}>
+                Cancel load
+              </button>
             )}
             <button type="button" onClick={() => router.push(`/planner/trips/${openTrip.trip_id}`)} style={{ ...smallLink, color: muted }}>
               PTD ›
@@ -889,6 +901,14 @@ export default function HomePage() {
       />
 
       <TripEquipmentSheets {...tripEquip.sheets} />
+      <CancelTripSheet
+        open={cancelOpen && !!openTrip}
+        title={children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "Load"}
+        busy={cancelBusy}
+        error={cancelErr}
+        onSubmit={(v) => void onCancelSubmit(v)}
+        onClose={() => setCancelOpen(false)}
+      />
       <NoLoadSheet
           open={noLoadOpen && !!workingPickup}
           rackName={workingPickup?.name ?? terminalName ?? "this rack"}
