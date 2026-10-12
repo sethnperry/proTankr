@@ -41,3 +41,11 @@ test("signed gallons", () => {
   assert.equal(fmtSignedGallons(1234), "+1,234 gal");
   assert.equal(fmtSignedGallons(0.2), "±0 gal");
 });
+
+test("after reading prefill", async () => {
+  const { prefillAfter } = await import("./tankReadings.ts");
+  assert.equal(prefillAfter(1200, 3800.4, "gallons"), 5000);
+  assert.equal(prefillAfter(1200, 0, "gallons"), 1200);
+  assert.equal(prefillAfter(null, 3800, "gallons"), null);
+  assert.equal(prefillAfter(40, 3800, "inches"), null);
+});

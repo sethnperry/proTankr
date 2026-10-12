@@ -59,3 +59,11 @@ export function tanksForProduct(
   for (const t of extra) if (t.product_id === productId) add(t.tank_number);
   return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
+
+// The after reading the delivery screen prefills (gallons only): the before
+// reading plus what went into that tank. Inches can't be prefilled (they need
+// the tank chart). Null when there's no before reading yet.
+export function prefillAfter(before: number | null, intoTank: number, unit: ReadingUnit): number | null {
+  if (unit !== "gallons" || before == null || !Number.isFinite(before)) return null;
+  return Math.round(before + Math.max(0, intoTank));
+}

@@ -10790,3 +10790,36 @@ same driver after a layover. Migration `20261012020000_trip_parked.sql`
 - `ParkSheet.tsx`: who it's for, where, note, time. PTD shows each park →
   resume. Not click-tested. Known gap: the PTD's total trip time includes the
   parked hours.
+
+### Delivery screen rebuilt as its own dashboard (2026-10-12)
+
+`FinishDeliverySheet.tsx` (checkbox list + one long form) is replaced by
+`app/planner/components/trip/DeliveryDashboard.tsx`, opened on Arrive at a
+delivery (dashboard button now reads **Continue Delivery** for an arrived
+stop). No migration. Not click-tested.
+
+- Compartments drawn like the Planner (bars right to left, widths from
+  `trailer_compartments.max_gallons`, product hex color, code, gallons).
+  Under each bar a drop-into button opens a picker: that product's store
+  tanks, "+ Other tank #", or **Retain on trailer**. Compartments headed to a
+  later stop show dimmed as "Next stop".
+- One big button: **Drop / Pump Off** (from `delivery_type`) → start-time
+  pop-out (now, editable, delay reason if over the threshold) → tank readings
+  pop-outs (before, then after prefilled with before + gallons sent to that
+  tank, gallons only: `prefillAfter` in `tankReadings.ts`) → back on the
+  screen the button reads **Finish Delivery** → depart time, ending miles on
+  the last stop, driver signature → **Complete** or **Complete · Next Leg**.
+- Retain: `finishDelivery` takes `retained`; those compartments stay
+  `loaded` with `delivery_id` null and the trip stays open, so the next step
+  is Add Delivery (the next leg). Ending miles are only asked when nothing is
+  retained and no other stop is planned. The old "send to another delivery"
+  split button is gone from this screen (Retain + Add Delivery covers it).
+- Progress saves as the driver goes via `saveDeliveryProgress` (begin time +
+  delay reason, tank picks, readings → trip rows). Retain picks, water and
+  the consignee signature are kept in a localStorage draft per delivery
+  (`proTankr:delivery:<id>`), cleared on Complete.
+- Consignee signature is a row with a green check once applied; its pop-out
+  goes full screen when the phone is sideways (`SignaturePad` gained `fill`
+  and `initial`; same 3:1 shape so the saved signature isn't stretched).
+  Still required at Finish if the company setting says so.
+- Tests: 2 added (retain/progress in `tripFlow.test.ts`, `prefillAfter`).

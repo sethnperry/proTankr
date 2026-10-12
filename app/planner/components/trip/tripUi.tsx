@@ -143,11 +143,14 @@ export function SignatureView({ path, height = 60 }: { path: string; height?: nu
   );
 }
 
-export function SignaturePad({ onChange }: { onChange: (path: string | null) => void }) {
+// `fill`: as big as the screen allows at the signature's 3:1 shape (the
+// consignee pop-out in landscape). Same shape as always, so the saved
+// signature isn't stretched.
+export function SignaturePad({ onChange, fill, initial }: { onChange: (path: string | null) => void; fill?: boolean; initial?: string | null }) {
   const ref = useRef<SVGSVGElement | null>(null);
-  const [path, setPath] = useState("");
+  const [path, setPath] = useState(initial ?? "");
   const drawing = useRef(false);
-  const pathRef = useRef("");
+  const pathRef = useRef(initial ?? "");
 
   const point = (e: React.PointerEvent) => {
     const r = ref.current!.getBoundingClientRect();
@@ -167,7 +170,9 @@ export function SignaturePad({ onChange }: { onChange: (path: string | null) => 
       <svg
         ref={ref}
         viewBox={`0 0 ${SIG_W} ${SIG_H}`}
-        style={{ width: "100%", height: 120, background: "#fff", borderRadius: 8, touchAction: "none", display: "block", color: "#000" }}
+        style={fill
+          ? { width: "min(100%, calc((100dvh - 130px) * 3))", aspectRatio: "3 / 1", height: "auto", margin: "0 auto", background: "#fff", borderRadius: 8, touchAction: "none", display: "block", color: "#000" }
+          : { width: "100%", height: 120, background: "#fff", borderRadius: 8, touchAction: "none", display: "block", color: "#000" }}
         onPointerDown={(e) => {
           (e.target as Element).setPointerCapture?.(e.pointerId);
           drawing.current = true;

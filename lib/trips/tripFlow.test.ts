@@ -287,3 +287,49 @@ test("park and resume", async () => {
   assert.equal(recs[0].resumedAt, "2026-10-13T11:00:00.000Z");
   assert.equal(recs[0].parkFor, "slip_seat");
 });
+
+test("retain keeps compartments aboard for the next leg; progress is saved as you go", async () => {
+  const { saveDeliveryProgress } = await import("./tripFlow.ts");
+  const { s, newId, snap, getTrip } = setup();
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000), reading(2, 3000)], now: NOW, newId });
+  const pickup = snap().pickups[0];
+  confirmLoaded(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", pickup,
+    times: defaultStepTimes(NOW, 10, pickup.arrived_at), delayReasonId: null, delayNote: null, odometer: null,
+    compartments: snap().compLoads.map((c) => ({ ...c, bol_number: "B1", supplier: "Sup" })), signed: true, now: NOW, newId,
+  });
+  const d = snap().deliveries[0];
+  arriveDelivery(s, { userId: ME, delivery: d, now: NOW, newId });
+  const [c1, c2] = snap().compLoads;
+
+  saveDeliveryProgress(s, {
+    delivery: d, beginAt: "2026-10-12T15:05:00.000Z", delayReasonId: null, delayNote: null,
+    tanks: [{ tank_number: "4", product_id: "d2", before_reading: 1000, after_reading: null, water_reading: null, reading_unit: "gallons" }],
+    compTanks: [{ compartment_load_id: c1.compartment_load_id, tank_number: "4" }],
+    newId,
+  });
+  assert.equal(snap().deliveries[0].begin_at, "2026-10-12T15:05:00.000Z");
+  assert.equal(s.list("trip_delivery_tanks").length, 1);
+  assert.equal(snap().compLoads[0].tank_number, "4");
+  saveDeliveryProgress(s, {
+    delivery: d,
+    tanks: [{ tank_number: "4", product_id: "d2", before_reading: 1000, after_reading: 5000, water_reading: null, reading_unit: "gallons" }],
+    newId,
+  });
+  assert.equal(s.list("trip_delivery_tanks").length, 1, "same tank row is updated");
+
+  const res = finishDelivery(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", delivery: snap().deliveries[0],
+    times: defaultStepTimes(NOW, 0, null), delayReasonId: null, delayNote: null,
+    delivered: [{ compartment_load_id: c1.compartment_load_id, comp_number: 1, product_id: "d2", tank_number: "4" }],
+    retained: [{ compartment_load_id: c2.compartment_load_id, comp_number: 2, product_id: "d2", tank_number: null }],
+    tanks: [], consigneeName: null, consigneeSignature: null, signed: true, endMiles: null, now: NOW, newId,
+  });
+  assert.equal(res.tripComplete, false);
+  assert.equal(getTrip().status, "in_transit");
+  const kept = snap().compLoads.find((c) => c.compartment_load_id === c2.compartment_load_id)!;
+  assert.equal(kept.disposition, "loaded");
+  assert.equal(kept.delivery_id, null);
+  assert.equal(nextStep(getTrip(), snap()).kind, "add_delivery");
+});

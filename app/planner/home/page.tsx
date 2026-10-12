@@ -59,6 +59,7 @@ import {
   pickupNeedsOdometer,
   plannedDeliveries,
   rerouteDelivery,
+  saveDeliveryProgress,
   splitToNewDelivery,
   takeOverTrip,
   tripSnapshot,
@@ -76,7 +77,7 @@ import { cancelPlannedLoad } from "@/lib/supabase/load";
 import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
-import { FinishDeliverySheet, type FinishDeliverySubmit } from "../components/trip/FinishDeliverySheet";
+import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type FinishDeliverySubmit, type ProductInfo } from "../components/trip/DeliveryDashboard";
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
@@ -362,16 +363,32 @@ export default function HomePage() {
     const { tripComplete } = finishDelivery(store, {
       userId, companyId, trailerId, delivery: finishDeliveryRow, ...v, ...clock(),
     });
+    clearDeliveryDraft(finishDeliveryRow.delivery_id);
     setFinishOpen(false);
     setNotice(tripComplete
       ? { text: "Trip complete.", tripId }
-      : { text: "Delivery finished.", tripId: null });
+      : v.retained.length
+        ? { text: "Delivery finished. Pick where the rest is going.", tripId: null }
+        : { text: "Delivery finished.", tripId: null });
     void syncNow();
     if (finishDeliveryRow.location_id) {
       const seen = v.tanks.map((t) => ({ tank_number: t.tank_number, product_id: t.product_id }));
       await rememberTanks(finishDeliveryRow.location_id, seen, locList.tanks);
       void locList.reload();
     }
+  };
+
+  const onDeliveryProgress = (p: DeliveryProgress) => {
+    if (!store || !finishDeliveryRow) return;
+    saveDeliveryProgress(store, { delivery: finishDeliveryRow, ...p, newId });
+    void syncNow();
+  };
+  const productInfo = (id: string | null): ProductInfo => {
+    const p = id ? products.find((x) => x.product_id === id) : null;
+    const name = productName(id);
+    const hex = typeof p?.hex_code === "string" && p.hex_code.trim() ? p.hex_code.trim() : null;
+    const code = String(p?.button_code ?? (name.split(" ")[0] || "PRD")).trim().toUpperCase();
+    return { name, code, hex };
   };
 
   const onPick = (to: DeliveryDestination) => {
@@ -898,26 +915,32 @@ export default function HomePage() {
         />
       )}
 
-      {finishDeliveryRow && snap && store && (
-        <FinishDeliverySheet
-          open={finishOpen}
-          title={`Finish · ${deliveryName(finishDeliveryRow)}`}
-          delivery={finishDeliveryRow}
-          compartments={compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id)}
-          savedTanks={store.list("trip_delivery_tanks", (t) => t.delivery_id === finishDeliveryRow.delivery_id)}
-          locationTanks={finishDeliveryRow.location_id ? locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id) : []}
-          settings={settings}
-          reasons={reasons.filter((r) => r.kind === "delivery" && r.is_active)}
-          isLast={plannedCount <= 1}
-          beginMiles={openTrip?.begin_miles ?? null}
-          productName={productName}
-          signature={signature.svg}
-          onSaveSignature={signature.save}
-          onSplit={(ids) => setPicker({ mode: "split", ids, from: finishDeliveryRow.delivery_id })}
-          onSubmit={(v) => void onFinishSubmit(v)}
-          onClose={() => setFinishOpen(false)}
-        />
-      )}
+      {finishDeliveryRow && snap && store && (() => {
+        const here = compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id);
+        const hereIds = new Set(here.map((c) => c.compartment_load_id));
+        return (
+          <DeliveryDashboard
+            open={finishOpen}
+            title={deliveryName(finishDeliveryRow)}
+            delivery={finishDeliveryRow}
+            compartments={here}
+            laterAboard={onBoard(snap.compLoads).filter((c) => !hereIds.has(c.compartment_load_id))}
+            trailerId={openTrip?.trailer_id ?? trailerId}
+            savedTanks={store.list("trip_delivery_tanks", (t) => t.delivery_id === finishDeliveryRow.delivery_id)}
+            locationTanks={finishDeliveryRow.location_id ? locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id) : []}
+            settings={settings}
+            reasons={reasons.filter((r) => r.kind === "delivery" && r.is_active)}
+            otherPlanned={Math.max(0, plannedCount - 1)}
+            beginMiles={openTrip?.begin_miles ?? null}
+            productInfo={productInfo}
+            signature={signature.svg}
+            onSaveSignature={signature.save}
+            onSaveProgress={onDeliveryProgress}
+            onSubmit={(v) => void onFinishSubmit(v)}
+            onClose={() => setFinishOpen(false)}
+          />
+        );
+      })()}
 
       <LocationPicker
         open={!!picker}

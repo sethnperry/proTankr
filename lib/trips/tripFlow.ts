@@ -113,7 +113,7 @@ export function nextStep(
   if (!next.arrived_at) {
     return { kind: "arrive_delivery", label: "Arrive", detail: `Tap at ${name}, while still parked`, delivery: next };
   }
-  return { kind: "finish_delivery", label: "Finish Delivery", detail: name, delivery: next };
+  return { kind: "finish_delivery", label: "Continue Delivery", detail: name, delivery: next };
 }
 
 // ── Times and delays (§5) ────────────────────────────────────────────────────
@@ -538,6 +538,9 @@ export function finishDelivery(
     consigneeSignature: string | null;
     signed: boolean;
     endMiles: number | null;
+    // Kept aboard for the next leg of this same trip (Retain on the delivery
+    // screen). They come off this delivery and the trip stays open.
+    retained?: DeliveredCompartment[];
   } & Clock,
 ): { tripComplete: boolean } {
   const d = args.delivery;
@@ -591,7 +594,11 @@ export function finishDelivery(
     "trip_deliveries",
     (x) => x.trip_id === d.trip_id && x.status === "planned" && x.delivery_id !== d.delivery_id,
   );
-  const tripComplete = remaining.length === 0;
+  const retained = args.retained ?? [];
+  for (const c of retained) {
+    store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, delivery_id: null, tank_number: null });
+  }
+  const tripComplete = remaining.length === 0 && retained.length === 0;
   if (tripComplete) {
     const deliveredIds = new Set(args.delivered.map((c) => c.compartment_load_id));
     const leftAboard = store.list(
@@ -613,7 +620,11 @@ export function finishDelivery(
   logEvent(store, args.newId, {
     trip_id: d.trip_id, event_type: "delivery_finished", occurred_at: at, actor_id: args.userId,
     delivery_id: d.delivery_id,
-    payload: { compartments: args.delivered.map((c) => c.comp_number), trip_complete: tripComplete },
+    payload: {
+      compartments: args.delivered.map((c) => c.comp_number),
+      retained: retained.map((c) => c.comp_number),
+      trip_complete: tripComplete,
+    },
   });
   if (args.signed) {
     logEvent(store, args.newId, {
@@ -622,6 +633,52 @@ export function finishDelivery(
     });
   }
   return { tripComplete };
+}
+
+// Delivery progress saved as the driver goes (Drop / Pump Off, tank readings),
+// so leaving the screen or a refresh doesn't lose it. Finish Delivery writes
+// the rest.
+export function saveDeliveryProgress(
+  store: TripStoreLike,
+  args: {
+    delivery: TripDeliveryRow;
+    beginAt?: string;
+    delayReasonId?: string | null;
+    delayNote?: string | null;
+    tanks?: DeliveryTankReading[];
+    compTanks?: { compartment_load_id: string; tank_number: string | null }[];
+    newId: () => string;
+  },
+) {
+  const d = args.delivery;
+  if (args.beginAt) {
+    store.put("trip_deliveries", {
+      delivery_id: d.delivery_id,
+      begin_at: args.beginAt,
+      delay_reason_id: args.delayReasonId ?? null,
+      delay_note: args.delayNote ?? null,
+    });
+  }
+  if (args.tanks) {
+    const old = new Map(store.list("trip_delivery_tanks", (t) => t.delivery_id === d.delivery_id).map((t) => [t.tank_number, t]));
+    for (const t of args.tanks) {
+      const num = t.tank_number.trim();
+      if (!num) continue;
+      store.put("trip_delivery_tanks", {
+        delivery_tank_id: old.get(num)?.delivery_tank_id ?? args.newId(),
+        delivery_id: d.delivery_id,
+        tank_number: num,
+        product_id: t.product_id,
+        before_reading: t.before_reading,
+        after_reading: t.after_reading,
+        water_reading: t.water_reading,
+        reading_unit: t.reading_unit,
+      });
+    }
+  }
+  for (const c of args.compTanks ?? []) {
+    store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, tank_number: c.tank_number });
+  }
 }
 
 // Compartments this delivery should default to: aboard and assigned here, or
