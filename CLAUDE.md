@@ -10876,3 +10876,10 @@ stayed in its list. New `lib/trips/pruneTrips.ts` (`pruneMissingTrips`,
 2 tests) drops local trips of this driver that the server no longer returns,
 within the fetched window, skipping any with unsent changes. Called from the
 Trips list (last 50) and dashboard hydration (last 10). Not click-tested.
+
+Follow-up same day: the phone still listed the deleted trips. `forgetTrip`
+refused any trip with a queued row, and the deleted test trips had unsent
+child rows (likely the "waiting to send" items). `forgetTrip(id,
+{dropPending:true})` now drops the trip's rows plus their queue/failed
+entries; `pruneMissingTrips` uses it, but still keeps a trip whose own trips
+row is unsent (it may be a new offline trip). 1 test added. Not click-tested.

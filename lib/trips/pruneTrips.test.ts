@@ -29,3 +29,13 @@ test("a full page only prunes inside its window", () => {
   assert.deepEqual(dropped, ["gone"]);
   assert.ok(s.get("trips", "old"));
 });
+
+test("a server-deleted trip goes even with unsent child rows, which are dropped too", () => {
+  const s = storeWith([trip("a", "2026-10-10T00:00:00Z")]);
+  s.put("trip_events", { event_id: "e1", trip_id: "a", type: "note" } as never);
+  assert.equal(s.getState().queue.length, 1);
+  const dropped = pruneMissingTrips(s, ME, [], 50);
+  assert.deepEqual(dropped, ["a"]);
+  assert.equal(s.list("trips").length, 0);
+  assert.equal(s.getState().queue.length, 0);
+});

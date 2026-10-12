@@ -235,8 +235,10 @@ export function createTripStore(opts: TripStoreOptions) {
   }
 
   // Drop a trip and all of its rows from the phone (e.g. once it's complete and
-  // fully synced). Refuses while any of its rows are still queued.
-  function forgetTrip(tripId: string): boolean {
+  // fully synced). Refuses while any of its rows are still queued, unless
+  // `dropPending`: the server deleted the trip, so its queued/failed child rows
+  // can never save (they'd fail the foreign key) and are dropped with it.
+  function forgetTrip(tripId: string, opts?: { dropPending?: boolean }): boolean {
     const deliveryIds = new Set(
       list("trip_deliveries", (d) => d.trip_id === tripId).map((d) => d.delivery_id),
     );
@@ -252,10 +254,17 @@ export function createTripStore(opts: TripStoreOptions) {
         if (belongs(t, r as Record<string, unknown>)) doomed.push({ table: t, key });
       }
     }
-    if (doomed.some((d) => state.queue.some((q) => q.table === d.table && q.key === d.key))) return false;
+    const isDoomed = (e: { table: TripTable; key: string }) =>
+      doomed.some((d) => d.table === e.table && d.key === e.key);
+    if (!opts?.dropPending && state.queue.some(isDoomed)) return false;
     for (const t of SYNC_ORDER) rows[t] = { ...rows[t] };
     for (const d of doomed) delete rows[d.table][d.key];
-    commit({ ...state, rows: rows as TripStoreState["rows"] });
+    commit({
+      ...state,
+      rows: rows as TripStoreState["rows"],
+      queue: state.queue.filter((q) => !isDoomed(q)),
+      failed: state.failed.filter((f) => !isDoomed(f)),
+    });
     return true;
   }
 
