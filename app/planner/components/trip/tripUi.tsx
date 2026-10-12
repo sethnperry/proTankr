@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { delayMinutes, needsDelayReason, type StepTimes } from "@/lib/trips/tripFlow";
 import type { DelayReason } from "@/lib/trips/useTripData";
+import { TERMINAL_ISSUES, issueChoiceValue } from "@/lib/trips/terminalIssues";
 
 export const muted = "rgba(255,255,255,0.5)";
 
@@ -97,6 +98,9 @@ export function DelayReasonField({ times, threshold, reasons, kind, reasonId, no
   const mins = delayMinutes(times.arrivedAt, times.beginAt);
   const need = needsDelayReason(mins, threshold);
   const opts = reasons.filter((r) => r.kind === kind && r.is_active);
+  // Loading delays lead with the shared terminal issues (they also warn other
+  // drivers); the company's own reasons follow.
+  const issues = kind === "loading" ? TERMINAL_ISSUES : [];
   return (
     <div style={{ marginTop: 4 }}>
       <div style={{ fontSize: 13, color: need ? "#fbbf24" : muted }}>
@@ -107,6 +111,7 @@ export function DelayReasonField({ times, threshold, reasons, kind, reasonId, no
         <div style={{ marginTop: 8 }}>
           <select value={reasonId ?? "__other__"} onChange={(e) => onChange(e.target.value === "__other__" ? null : e.target.value, note)}
             style={{ ...fieldInput, marginBottom: 8 }}>
+            {issues.map((t) => <option key={t.code} value={issueChoiceValue(t.code)}>{t.label}</option>)}
             {opts.map((r) => <option key={r.reason_id} value={r.reason_id}>{r.label}</option>)}
             <option value="__other__">Other</option>
           </select>

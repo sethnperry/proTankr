@@ -13,7 +13,9 @@ import { supabase } from "@/lib/supabase/client";
 import type { DeliveryLocation, LocationTank } from "./deliveryLocations";
 
 export type TripSettings = {
-  begin_offset_minutes: number;
+  begin_offset_minutes: number; // old single offset, the fallback for both below
+  loading_begin_offset_minutes: number | null;
+  delivery_begin_offset_minutes: number | null;
   loading_delay_threshold_minutes: number;
   delivery_delay_threshold_minutes: number;
   require_consignee_signature: boolean;
@@ -22,11 +24,22 @@ export type TripSettings = {
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {
   begin_offset_minutes: 10,
+  loading_begin_offset_minutes: 10,
+  delivery_begin_offset_minutes: 10,
   loading_delay_threshold_minutes: 30,
   delivery_delay_threshold_minutes: 30,
   require_consignee_signature: false,
   require_tank_readings: false,
 };
+
+// Minutes subtracted from "now" to prefill Began when the driver finishes a
+// pickup or delivery.
+export function loadingOffset(s: TripSettings): number {
+  return s.loading_begin_offset_minutes ?? s.begin_offset_minutes;
+}
+export function deliveryOffset(s: TripSettings): number {
+  return s.delivery_begin_offset_minutes ?? s.begin_offset_minutes;
+}
 
 export type DelayReason = { reason_id: string; kind: "loading" | "delivery"; label: string; sort_order: number; is_active: boolean };
 

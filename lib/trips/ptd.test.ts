@@ -62,3 +62,29 @@ test("billing rolls up net per product per order; retained excluded; flags only 
   assert.equal(ptd.pickups[0].delayReason, "Line at rack");
   assert.equal(ptd.deliveries[0].timeLabel, "Pump Time");
 });
+
+test("rack hop: the no-load rack shows its reason and counts toward the loading time", () => {
+  const base = { trip_id: trip.trip_id, pickup_type: "terminal" as const, terminal_id: null, rack_id: null, city: "Tampa", state: "FL",
+    odometer: null, delay_reason_id: null, delay_note: null, load_id: null };
+  const ptd = buildPtd(
+    {
+      trip: { ...trip, started_at: "2026-10-10T09:30:00Z" },
+      orders: [],
+      pickups: [
+        { ...base, pickup_id: "p0", seq: 1, name: "Marathon", arrived_at: "2026-10-10T09:50:00Z", begin_at: null,
+          left_at: "2026-10-10T10:20:00Z", outcome: "no_load", no_load_reason: "long_line", no_load_note: null },
+        { ...base, pickup_id: "p1", seq: 2, name: "Citgo", arrived_at: "2026-10-10T10:35:00Z", begin_at: "2026-10-10T10:45:00Z",
+          left_at: "2026-10-10T11:00:00Z", outcome: "loaded", delay_code: "terminal_issue" },
+      ],
+      deliveries: [], compLoads: [cl({ comp_number: 1 })], tanks: [], events: [],
+    },
+    { product: () => "Diesel", delivery: () => "", driver: () => "Seth", delayReason: () => null },
+  );
+  assert.equal(ptd.pickups.length, 2);
+  assert.equal(ptd.pickups[0].noLoad, true);
+  assert.equal(ptd.pickups[0].noLoadReason, "Long Line");
+  assert.equal(ptd.pickups[1].delayReason, "Terminal Issue");
+  assert.equal(ptd.time.travelToRack, 20);
+  assert.equal(ptd.time.loadingSpan, 70);
+  assert.equal(ptd.time.racksTried, 2);
+});

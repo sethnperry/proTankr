@@ -6,6 +6,8 @@
 import { ptdCode } from "./code39.ts";
 import { delayMinutes } from "./tripFlow.ts";
 import { editedNetFlag } from "./netGallons.ts";
+import { billingTime } from "./billingTime.ts";
+import { terminalIssueLabel } from "./terminalIssues.ts";
 import type {
   TripCompartmentLoadRow,
   TripDeliveryRow,
@@ -111,14 +113,22 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     beginAt: s.begin_at,
     leftAt: s.left_at,
     delayMinutes: delayMinutes(s.arrived_at, s.begin_at),
-    delayReason: names.delayReason(s.delay_reason_id),
+    delayReason: ("delay_code" in s && terminalIssueLabel(s.delay_code)) || names.delayReason(s.delay_reason_id),
     delayNote: s.delay_note,
   });
 
   const pickups = [...input.pickups]
     .sort((a, b) => a.seq - b.seq)
     .filter((p) => p.left_at || loads.some((c) => c.pickup_id === p.pickup_id))
-    .map((p) => ({ pickupId: p.pickup_id, ...stop(p, [p.name, [p.city, p.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Pickup"), odometer: num(p.odometer) }));
+    .map((p) => ({
+      pickupId: p.pickup_id,
+      ...stop(p, [p.name, [p.city, p.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Pickup"),
+      odometer: num(p.odometer),
+      noLoad: p.outcome === "no_load",
+      noLoadReason: p.outcome === "no_load"
+        ? (terminalIssueLabel(p.no_load_reason) ?? (p.no_load_note || "Other")) + (p.no_load_note && terminalIssueLabel(p.no_load_reason) ? ` (${p.no_load_note})` : "")
+        : null,
+    }));
 
   // What went where at one delivery: each compartment to its tank, with that
   // tank's Veeder-Root before/after. Tanks read but not matched to a
@@ -166,6 +176,12 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     .filter((e) => e.event_type === "signature_accepted" && (e.payload as any)?.role === "loading_driver")
     .map((e) => ({ driverId: e.actor_id, name: names.driver(e.actor_id), at: e.occurred_at, pickupId: e.pickup_id ?? null }));
 
+  const time = billingTime(
+    trip.started_at,
+    pickups.map((p) => ({ kind: "rack" as const, name: p.name, arrivedAt: p.arrivedAt, beginAt: p.beginAt, leftAt: p.leftAt, noLoad: p.noLoad, noLoadReason: input.pickups.find((x) => x.pickup_id === p.pickupId)?.no_load_reason ?? null, noLoadNote: input.pickups.find((x) => x.pickup_id === p.pickupId)?.no_load_note ?? null, delayReason: p.delayReason ?? p.delayNote })),
+    deliveries.map((d) => ({ kind: "delivery" as const, name: d.name, arrivedAt: d.arrivedAt, beginAt: d.beginAt, leftAt: d.leftAt, delayReason: d.delayReason ?? d.delayNote })),
+  );
+
   const begin = num(trip.begin_miles), end = num(trip.end_miles);
   return {
     code: ptdCode(trip.trip_id),
@@ -186,6 +202,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     billing: [...billing.values()],
     totals: { gross: sum(compartments.map((c) => c.gross)), net: sum(compartments.map((c) => c.net)) },
     loadingSigs,
+    time,
   };
 }
 

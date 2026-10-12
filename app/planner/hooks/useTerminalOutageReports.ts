@@ -42,7 +42,13 @@ import { resolveEffectiveRackId } from "../utils/rack";
 import { mostRecentClearingCheckpoint, nextClearingCheckpoint } from "../utils/dates";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 
-export type OutageReportType = "out_of_product" | "out_of_allocation";
+export type OutageReportType = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue";
+
+// Long Line and Terminal Issue are about the whole terminal, not a product
+// (product_id is null), and show to every driver headed there.
+export function isTerminalWide(t: OutageReportType): boolean {
+  return t === "long_line" || t === "terminal_issue";
+}
 
 const OUTAGE_POLL_MS = 90_000;
 
@@ -71,7 +77,8 @@ type SubmitArgs = {
 export async function submitOutageReport({
   terminalId, selectedRackId, productIds, reportType, companyId, userId, truckLabel,
 }: SubmitArgs): Promise<{ error: string | null }> {
-  if (!terminalId || !companyId || !userId || productIds.length === 0) {
+  const wide = isTerminalWide(reportType);
+  if (!terminalId || !companyId || !userId || (!wide && productIds.length === 0)) {
     return { error: "Missing required info to submit this report." };
   }
 
@@ -90,7 +97,7 @@ export async function submitOutageReport({
     }
   }
 
-  const rows = productIds.map((productId) => ({
+  const rows = (wide ? [null] : productIds).map((productId) => ({
     terminal_id: terminalId,
     rack_id: rackId,
     product_id: productId,
@@ -109,7 +116,7 @@ export async function submitOutageReport({
 
 type OutageRow = {
   report_id: string;
-  product_id: string;
+  product_id: string | null;
   report_type: OutageReportType;
   company_id: string;
   reporter_user_id: string;
@@ -241,10 +248,10 @@ export function useActiveOutageBanner(
 
   const fetchAndCompose = useCallback(async () => {
     if (!terminalId) { setTickerMessage(null); setReports([]); return; }
-    // Nothing planned yet (or Planner hasn't been visited this session) --
-    // nothing to judge relevance against, so show nothing rather than
-    // guessing. See this file's own 2026-08-31 header comment.
-    if (!plannedProductIds || plannedProductIds.size === 0) { setTickerMessage(null); setReports([]); return; }
+    // Product reports only matter for products the driver plans to load; a
+    // terminal-wide report (Long Line, Terminal Issue) matters to anyone
+    // headed there, plan or no plan.
+    const planned = plannedProductIds ?? new Set<string>();
     const tz = timeZone || "America/New_York";
     const cutoffMs = mostRecentClearingCheckpoint(Date.now(), tz);
 
@@ -264,15 +271,15 @@ export function useActiveOutageBanner(
     const seen = new Set<string>();
     const rows: OutageRow[] = [];
     for (const r of data as OutageRow[]) {
-      if (!plannedProductIds.has(r.product_id)) continue;
-      const key = `${r.report_type}:${r.product_id}`;
+      if (!isTerminalWide(r.report_type) && !(r.product_id && planned.has(r.product_id))) continue;
+      const key = `${r.report_type}:${r.product_id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       rows.push(r);
     }
     if (rows.length === 0) { setTickerMessage(null); setReports([]); return; }
 
-    const companyIds = Array.from(new Set(rows.filter((r) => r.report_type === "out_of_product").map((r) => r.company_id)));
+    const companyIds = Array.from(new Set(rows.filter((r) => r.report_type !== "out_of_allocation").map((r) => r.company_id)));
     const reporterIds = Array.from(new Set(rows.filter((r) => r.report_type === "out_of_allocation").map((r) => r.reporter_user_id)));
 
     const [companiesRes, namesRes]: any[] = await Promise.all([
@@ -287,13 +294,16 @@ export function useActiveOutageBanner(
     const displayNameByUserId = new Map<string, string>((namesRes.data ?? []).map((n: any) => [n.user_id, n.display_name ?? ""]));
 
     const composed: ComposedOutageReport[] = rows.map((r) => {
-      const productName = productFullById.get(r.product_id) ?? "product";
-      const shortName = productShortById.get(r.product_id) ?? productName;
+      const wide = isTerminalWide(r.report_type);
+      const productName = wide
+        ? (r.report_type === "long_line" ? "Long Line" : "Terminal Issue")
+        : (productFullById.get(r.product_id ?? "") ?? "product");
+      const shortName = wide ? productName : (productShortById.get(r.product_id ?? "") ?? productName);
       const createdAtMs = new Date(r.created_at).getTime();
       const truck = r.truck_label || "?";
       const isProduct = r.report_type === "out_of_product";
-      const tickerText = isProduct ? `Out of ${shortName}` : `OOA ${shortName}`;
-      const personLabel = isProduct
+      const tickerText = wide ? shortName : isProduct ? `Out of ${shortName}` : `OOA ${shortName}`;
+      const personLabel = r.report_type !== "out_of_allocation"
         ? (companyNameById.get(r.company_id) || "Company")
         : (displayNameByUserId.get(r.reporter_user_id) || "Driver");
       return {
@@ -315,9 +325,10 @@ export function useActiveOutageBanner(
     // one continuous line. Only one arrow") -- Out of Product entries
     // joined by " - ", Out of Allocation entries joined by " - ", the two
     // groups (when both present) joined by a wider "   ---   " separator.
+    const terminalPart = composed.filter((c) => isTerminalWide(c.reportType)).map((c) => c.tickerText).join(" - ");
     const productPart = composed.filter((c) => c.reportType === "out_of_product").map((c) => c.tickerText).join(" - ");
     const allocationPart = composed.filter((c) => c.reportType === "out_of_allocation").map((c) => c.tickerText).join(" - ");
-    setTickerMessage([productPart, allocationPart].filter(Boolean).join("   ---   ") || null);
+    setTickerMessage([terminalPart, productPart, allocationPart].filter(Boolean).join("   ---   ") || null);
   }, [terminalId, timeZone, effectiveUserId, plannedProductIds, productFullById, productShortById]);
 
   useEffect(() => {
@@ -334,4 +345,26 @@ export function useActiveOutageBanner(
   }, [fetchAndCompose]);
 
   return { tickerMessage, reports, timeZone: timeZone || "America/New_York", refresh: fetchAndCompose };
+}
+
+// A loading delay picked from the shared terminal-issue list also warns other
+// drivers. Best effort; products only matter for the product-scoped issues.
+export async function reportDelayIssue(args: {
+  delayChoice: string | null;
+  terminalId: string | null;
+  rackId: string | null;
+  productIds: string[];
+  companyId: string;
+  userId: string;
+  truckLabel: string;
+}): Promise<void> {
+  const choice = args.delayChoice ?? "";
+  if (!choice.startsWith("issue:") || !args.terminalId) return;
+  const code = choice.slice("issue:".length) as OutageReportType;
+  if (!["out_of_product", "out_of_allocation", "long_line", "terminal_issue"].includes(code)) return;
+  const { error } = await submitOutageReport({
+    terminalId: args.terminalId, selectedRackId: args.rackId, productIds: [...new Set(args.productIds)],
+    reportType: code, companyId: args.companyId, userId: args.userId, truckLabel: args.truckLabel,
+  });
+  if (error) console.warn("[trips] delay issue report failed (non-fatal):", error);
 }

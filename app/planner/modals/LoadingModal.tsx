@@ -17,6 +17,7 @@ import { normalizeRef } from "@/lib/trips/refs";
 import { buildBolGroups, distributeWhole, initialBolAssignment, type BolAssignment } from "@/lib/trips/bolGroups";
 import type { SupplierRow } from "@/lib/trips/types";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
+import { loadingOffset } from "@/lib/trips/useTripData";
 
 // ── Trip mode (2026-10-11) ─────────────────────────────────────────────────
 // When the load is attached to an open trip, "Loaded" also collects what the
@@ -860,7 +861,7 @@ export default function LoadingModal(props: {
       } else if (trip) {
         // On to the times window, then the signature. Begin is the Start
         // Loading tap; leave is now.
-        setTripTimes(trip.existingTimes ?? defaultStepTimes(new Date(), trip.settings.begin_offset_minutes, trip.arrivedAt, trip.beganAt));
+        setTripTimes(trip.existingTimes ?? defaultStepTimes(new Date(), loadingOffset(trip.settings), trip.arrivedAt, trip.beganAt));
         setTripReasonId(trip.existingDelayReasonId);
         setTripNote(trip.existingDelayNote ?? "");
         setTripOdometer(trip.existingOdometer != null ? String(trip.existingOdometer) : "");

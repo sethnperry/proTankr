@@ -12,7 +12,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { DEFAULT_TRIP_SETTINGS, type DelayReason, type TripSettings } from "@/lib/trips/useTripData";
+import { DEFAULT_TRIP_SETTINGS, deliveryOffset, loadingOffset, type DelayReason, type TripSettings } from "@/lib/trips/useTripData";
+import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 
 const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { borderRadius: 12, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 };
@@ -89,7 +90,9 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
     setMsg(null);
     const { error } = await supabase.from("trip_settings").upsert({
       company_id: companyId,
-      begin_offset_minutes: Math.min(240, settings.begin_offset_minutes),
+      begin_offset_minutes: Math.min(240, loadingOffset(settings)),
+      loading_begin_offset_minutes: Math.min(240, loadingOffset(settings)),
+      delivery_begin_offset_minutes: Math.min(240, deliveryOffset(settings)),
       loading_delay_threshold_minutes: Math.min(1440, settings.loading_delay_threshold_minutes),
       delivery_delay_threshold_minutes: Math.min(1440, settings.delivery_delay_threshold_minutes),
       require_consignee_signature: settings.require_consignee_signature,
@@ -141,8 +144,10 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       <div style={card}>
         <div style={title}>Times</div>
         {!isAdmin && <div style={{ fontSize: 12, color: muted, marginBottom: 10 }}>Only an admin can change these.</div>}
-        <NumRow label="Begin offset" help="“Began loading/delivering” starts this long before the driver finishes."
-          value={settings.begin_offset_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, begin_offset_minutes: n }))} />
+        <NumRow label="Loading time" help="If the driver didn't tap Start Loading, Began loading is prefilled this long before they finish."
+          value={loadingOffset(settings)} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_begin_offset_minutes: n }))} />
+        <NumRow label="Delivery time" help="Began delivering is prefilled this long before the driver taps Finish Delivery."
+          value={deliveryOffset(settings)} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_begin_offset_minutes: n }))} />
         <NumRow label="Loading delay" help="Arrived → began loading longer than this asks for a reason."
           value={settings.loading_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_delay_threshold_minutes: n }))} />
         <NumRow label="Delivery delay" help="Arrived → began delivering longer than this asks for a reason."
@@ -152,11 +157,19 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
         <div style={title}>Finish Delivery requires</div>
         <CheckRow label="Consignee signature" help="Printed name and signature from the customer."
           value={settings.require_consignee_signature} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_consignee_signature: v }))} />
-        <CheckRow label="Tank readings" help="A tank number per compartment, and before/after readings."
+        <CheckRow label="Tank readings" help="Before and after readings for every tank of each product delivered."
           value={settings.require_tank_readings} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_tank_readings: v }))} />
         {isAdmin && <button type="button" onClick={saveSettings} disabled={busy} style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save settings"}</button>}
       </div>
       {msg && <div style={{ color: msg.ok ? "#4ade80" : "#f87171", fontSize: 14, marginBottom: 12 }}>{msg.text}</div>}
+      <div style={card}>
+        <div style={title}>Terminal issues (built in)</div>
+        <div style={{ fontSize: 13, color: muted }}>
+          {TERMINAL_ISSUES.map((t) => t.label).join(", ")}. Drivers pick these when a rack is slow or they can&apos;t load.
+          They show on the PTD with the times, and warn other drivers headed to that terminal. Out of Allocation only
+          warns your own drivers.
+        </div>
+      </div>
       {reasonList("loading")}
       {reasonList("delivery")}
     </FullscreenModal>

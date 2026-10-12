@@ -38,12 +38,12 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
   // is dropped here per explicit direction; company name alone. Out of
   // Allocation stays same-company-only (RLS-scoped), where the truck
   // number is useful context, not exposure.
-  const topLine = report.reportType === "out_of_product"
+  const topLine = report.reportType !== "out_of_allocation"
     ? report.personLabel
     : `${report.personLabel} Truck ${report.truckLabel}`;
   const productLine = report.reportType === "out_of_product"
     ? `Terminal Out of ${report.productName}`
-    : `OOA ${report.productName}`;
+    : report.reportType === "out_of_allocation" ? `OOA ${report.productName}` : report.productName;
   const productColor = productColorFor(report.productName);
   const markedHhmm = hhmmInTimeZone(report.createdAtMs, timeZone);
   const clearsHhmm = hhmmInTimeZone(report.expiresAtMs, timeZone);
@@ -104,6 +104,7 @@ export default function TerminalOutageDetailModal({
     onCleared();
   }
 
+  const terminalReports = reports.filter((r) => r.reportType === "long_line" || r.reportType === "terminal_issue");
   const productReports = reports.filter((r) => r.reportType === "out_of_product");
   const allocationReports = reports.filter((r) => r.reportType === "out_of_allocation");
 
@@ -116,6 +117,16 @@ export default function TerminalOutageDetailModal({
           <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 14 }}>No active issues at this terminal.</div>
         ) : (
           <>
+            {terminalReports.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.4)", letterSpacing: 0.5, textTransform: "uppercase" as const }}>
+                  Terminal
+                </div>
+                {terminalReports.map((r) => (
+                  <ReportRow key={r.reportId} report={r} timeZone={timeZone} onClear={handleClear} clearing={clearingId === r.reportId} />
+                ))}
+              </div>
+            )}
             {productReports.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.4)", letterSpacing: 0.5, textTransform: "uppercase" as const }}>

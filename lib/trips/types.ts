@@ -60,6 +60,11 @@ export type TripPickupRow = Synced & {
   delay_reason_id: string | null;
   delay_note: string | null;
   load_id: string | null;
+  // Rack hopping (20261012010000). Optional: older local rows lack them.
+  outcome?: "loaded" | "no_load" | null;
+  no_load_reason?: string | null; // a TerminalIssueCode, or "other"
+  no_load_note?: string | null;
+  delay_code?: string | null; // a TerminalIssueCode picked as the delay reason
 };
 
 export type TripDeliveryRow = Synced & {

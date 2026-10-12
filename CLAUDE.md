@@ -10652,3 +10652,42 @@ apply and check migrations from here. Not click-tested.
   "waiting to send". Root cause of those 2 rows not found: a supplier
   upsert replayed as the user (rolled back) succeeds, and the Management
   API's log endpoints weren't reachable to see the real reply.
+
+## Rack hopping, billing time on the PTD, split begin offsets (2026-10-12)
+
+Migration `20261012010000_rack_attempts_and_billing_times.sql`, **applied
+2026-10-12** via the Management API. Not click-tested.
+
+- One terminal-issue list (`lib/trips/terminalIssues.ts`): Long Line, Out of
+  Product, Out of Allocation, Terminal Issue. Used by the Plan Review
+  terminal-switch sheet, the new "Couldn't load here" sheet, and the loading
+  delay picker. Picking one also posts a `terminal_outage_reports` row:
+  Long Line / Terminal Issue are terminal-wide (product_id null, now
+  allowed) and show to every company; Out of Allocation stays company-only.
+  The banner shows terminal-wide reports with no plan needed; the detail
+  modal has a "Terminal" section.
+- `trip_pickups` gained `outcome` ('loaded'|'no_load'), `no_load_reason`,
+  `no_load_note`, `delay_code`. `confirmLoaded` sets outcome loaded and
+  splits an "issue:<code>" delay choice into `delay_code` (never into the
+  uuid `delay_reason_id`). `closePickupNoLoad` ends a rack with no load.
+- Dashboard: "Couldn't load here" on an arrived pickup opens `NoLoadSheet`
+  (reason, product for product issues, note, arrived/left). It cancels any
+  planned load at that rack, closes the pickup, posts the report. `nextStep`
+  then returns `next_rack` ("Next Rack"): the shared terminal picker opens
+  and the picked terminal becomes the next pickup (Arrived, Planner, Start
+  Loading as usual).
+- Plan Review terminal switch on a trip is now a rack hop too: the load is
+  cancelled (plan kept), the old pickup closes as no-load with the first
+  issue reported in the sheet ("other" if none), and the new terminal is
+  added as the next pickup. Previously it retagged the pickup and lost the
+  first rack's time.
+- PTD: no-load racks print "Couldn't load: reason" with their times, and a
+  Time section (`lib/trips/billingTime.ts`, 4 tests) lists travel legs (from
+  the Start Load tap), time at each stop (waited / loading or delivering),
+  then totals: travel to first rack, trying to load (first rack arrival to
+  leaving the rack that loaded), travel to delivery, at deliveries, total
+  travel, total trip.
+- Company Dashboard → Trip Settings: separate "Loading time" and "Delivery
+  time" offsets (`loading_begin_offset_minutes`/`delivery_begin_offset_minutes`,
+  fallback to the old `begin_offset_minutes`), and a note listing the
+  built-in terminal issues.

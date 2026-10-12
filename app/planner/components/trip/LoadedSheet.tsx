@@ -20,6 +20,8 @@ import {
 import type { SupplierRow, TripCompartmentLoadRow, TripOrderRow, TripPickupRow } from "@/lib/trips/types";
 import { SupplierPicker } from "./SupplierPicker";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
+import { loadingOffset } from "@/lib/trips/useTripData";
+import { isTerminalIssueCode, issueChoiceValue } from "@/lib/trips/terminalIssues";
 import {
   DelayReasonField,
   SignatureAccept,
@@ -119,9 +121,9 @@ export function LoadedSheet({
     })));
     const t = pickup.begin_at && pickup.left_at
       ? { arrivedAt: pickup.arrived_at ?? pickup.begin_at, beginAt: pickup.begin_at, leftAt: pickup.left_at }
-      : defaultStepTimes(new Date(), settings.begin_offset_minutes, pickup.arrived_at, pickup.begin_at);
+      : defaultStepTimes(new Date(), loadingOffset(settings), pickup.arrived_at, pickup.begin_at);
     setTimes(t);
-    setReasonId(pickup.delay_reason_id);
+    setReasonId(pickup.delay_code && isTerminalIssueCode(pickup.delay_code) ? issueChoiceValue(pickup.delay_code) : pickup.delay_reason_id);
     setNote(pickup.delay_note ?? "");
     setOdometer(str(pickup.odometer));
     setSigned(false);

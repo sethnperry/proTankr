@@ -69,7 +69,8 @@ import RecallDifferentEquipmentSheet from "./components/RecallDifferentEquipment
 import SetupChecklist from "./components/SetupChecklist";
 import Spotlight, { useSpotlightRect } from "./components/TourSpotlight";
 import StaleApiOverlay, { type StaleProduct } from "./components/StaleApiOverlay";
-import { submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
+import { reportDelayIssue, submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
+import { isTerminalIssueCode, issueChoiceValue } from "@/lib/trips/terminalIssues";
 import ProductTempModal from "./modals/ProductTempModal";
 import CompartmentModal from "./modals/CompartmentModal";
 
@@ -93,7 +94,7 @@ import { newId as newTripId } from "@/lib/trips/tripStore";
 import { useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
-import { confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
+import { addPickup, closePickupNoLoad, confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
@@ -1508,7 +1509,8 @@ export default function CalculatorPage() {
       arrivedAt: tripPickup.arrived_at,
       beganAt: tripPickup.begin_at,
       existingTimes: tripPickup.left_at ? { arrivedAt: tripPickup.arrived_at, beginAt: tripPickup.begin_at, leftAt: tripPickup.left_at } as StepTimes : null,
-      existingDelayReasonId: tripPickup.delay_reason_id,
+      existingDelayReasonId: tripPickup.delay_code && isTerminalIssueCode(tripPickup.delay_code)
+        ? issueChoiceValue(tripPickup.delay_code) : tripPickup.delay_reason_id,
       existingDelayNote: tripPickup.delay_note,
       needsOdometer: pickupNeedsOdometer(snap.pickups, tripPickup.pickup_id),
       existingOdometer: tripPickup.odometer,
@@ -1573,6 +1575,13 @@ export default function CalculatorPage() {
         signed: !!extras.signed,
         now: new Date(),
         newId: newTripId,
+      });
+      void reportDelayIssue({
+        delayChoice: extras.delayReasonId ?? null,
+        terminalId: pickup.terminal_id, rackId: pickup.rack_id,
+        productIds: edits.map((c) => c.product_id).filter((x): x is string => !!x),
+        companyId: shell.companyId, userId: effectiveUserId,
+        truckLabel: equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? "",
       });
     }
     void tripStoreHook.syncNow();
@@ -1983,7 +1992,44 @@ export default function CalculatorPage() {
   // for the OLD terminal's reading), and refreshes temp -- silently in the
   // background if the city didn't change, or by reopening Confirm Temp for
   // a real review if it did (see the two effects below).
+  // Issues reported from the switch sheet for the terminal being left; the
+  // first one becomes that rack's "couldn't load" reason on the trip.
+  const switchReportedIssueRef = useRef<string | null>(null);
+
   const applyTerminalSwitch = useCallback((prev: TerminalSnapshot, next: TerminalSnapshot) => {
+    // Trip workflow: leaving a rack mid-load is a rack hop. The rack is
+    // recorded as "couldn't load" (with any issue reported in the sheet), the
+    // load is cancelled (the plan stays), and the next terminal becomes a new
+    // pickup the driver taps Arrived at when they get there. That keeps the
+    // travel and time at each rack on the PTD.
+    if (loadWorkflow.activeLoadId && tripPickup && effectiveUserId) {
+      const pickup = tripPickup;
+      const reason = switchReportedIssueRef.current ?? "other";
+      switchReportedIssueRef.current = null;
+      void (async () => {
+        await loadWorkflow.cancelActiveLoad();
+        try {
+          const store = getTripStore(effectiveUserId);
+          const fresh = store.list("trip_pickups", (x) => x.pickup_id === pickup.pickup_id)[0] ?? pickup;
+          const now = new Date();
+          closePickupNoLoad(store, {
+            userId: effectiveUserId, pickup: fresh, reason, note: null,
+            arrivedAt: fresh.arrived_at ?? pickup.begin_at ?? null, beginAt: pickup.begin_at,
+            leftAt: now.toISOString(), now, newId: newTripId,
+          });
+          addPickup(store, {
+            userId: effectiveUserId, tripId: fresh.trip_id,
+            terminalId: next.terminalId || null, rackId: next.rackId || null,
+            name: next.terminalName || null, city: next.city || null, state: next.state || null,
+            now, newId: newTripId,
+          });
+          void tripStoreHook.syncNow();
+        } catch (e) {
+          console.warn("[trips] rack hop failed (non-fatal):", e);
+        }
+      })();
+      return;
+    }
     if (loadWorkflow.activeLoadId) {
       // Trip workflow: the trip's pickup follows the load to the new terminal.
       if (effectiveUserId) {
@@ -2026,7 +2072,7 @@ export default function CalculatorPage() {
     } else {
       setPendingSameCityTempApply({ armed: true, sawLoadingStart: false, productIds: plannedProductIdsForSwitch });
     }
-  }, [loadWorkflow.activeLoadId, plannedProductIdsForSwitch, setProductApi, effectiveUserId, equipment.selectedComboId]);
+  }, [loadWorkflow, tripPickup, tripStoreHook, plannedProductIdsForSwitch, setProductApi, effectiveUserId, equipment.selectedComboId]);
 
   // "Yes, Update My Card at {prev}" -- the driver did get carded in at the
   // terminal they're leaving, so renew that terminal's access date, then
@@ -2107,7 +2153,10 @@ export default function CalculatorPage() {
   const handleSubmitOutageReportForPreviousTerminal = useCallback(
     (reportType: OutageReportType, productIds: string[]) => {
       const prev = terminalSwitchConfirm?.prev;
-      return handleSubmitOutageReport(reportType, productIds, prev?.terminalId, prev?.rackId || null);
+      return handleSubmitOutageReport(reportType, productIds, prev?.terminalId, prev?.rackId || null).then((r) => {
+        if (!r.error && !switchReportedIssueRef.current) switchReportedIssueRef.current = reportType;
+        return r;
+      });
     },
     [terminalSwitchConfirm, handleSubmitOutageReport]
   );

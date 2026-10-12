@@ -13,7 +13,7 @@
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { TripTable } from "@/lib/trips/types";
 import { useRouter } from "next/navigation";
@@ -43,6 +43,7 @@ import {
   arriveDelivery,
   arrivePickup,
   compartmentsForDelivery,
+  closePickupNoLoad,
   confirmLoaded,
   finishDelivery,
   handoffCandidate,
@@ -59,6 +60,11 @@ import {
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
+import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
+import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
+import { isTerminalIssueCode } from "@/lib/trips/terminalIssues";
+import { cancelPlannedLoad } from "@/lib/supabase/load";
+import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
 import { FinishDeliverySheet, type FinishDeliverySubmit } from "../components/trip/FinishDeliverySheet";
@@ -303,6 +309,12 @@ export default function HomePage() {
     confirmLoaded(store, {
       userId, companyId, trailerId, pickup: loadedPickup, ...v, ...clock(),
     });
+    void reportDelayIssue({
+      delayChoice: v.delayReasonId,
+      terminalId: loadedPickup.terminal_id, rackId: loadedPickup.rack_id,
+      productIds: v.compartments.map((c) => c.product_id).filter((x): x is string => !!x),
+      companyId, userId, truckLabel: equipment.currentTruckName ?? "",
+    });
     setLoadedOpen(false);
     setNotice({ text: "Loaded. Drive safe.", tripId: null });
     void syncNow();
@@ -355,6 +367,72 @@ export default function HomePage() {
     void syncNow();
   };
 
+  // ── Couldn't load here / next rack ───────────────────────────────────────
+  const workingPickup = snap ? activePickup(snap.pickups) : null;
+  const canNoLoad = !!workingPickup && (!!workingPickup.arrived_at || !!workingPickup.load_id)
+    && step.kind === "planner";
+  const [noLoadOpen, setNoLoadOpen] = useState(false);
+  const [noLoadBusy, setNoLoadBusy] = useState(false);
+  const [noLoadErr, setNoLoadErr] = useState<string | null>(null);
+  const plannedProducts = useMemo(
+    () => [...shell.plannedProductIds].map((id) => ({ productId: id, name: productName(id) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shell.plannedProductIds, products],
+  );
+
+  const onNoLoadSubmit = async (v: NoLoadSubmit) => {
+    if (!store || !userId || !companyId || !workingPickup) return;
+    setNoLoadBusy(true);
+    setNoLoadErr(null);
+    const pickup = workingPickup;
+    // A load started in the Planner at this rack is cancelled (the plan stays).
+    if (pickup.load_id) {
+      try {
+        await cancelPlannedLoad(pickup.load_id);
+      } catch (e) {
+        console.warn("[trips] cancel planned load failed (non-fatal):", e);
+      }
+      clearActivePlannedLoad(userId);
+    }
+    closePickupNoLoad(store, {
+      userId, pickup, reason: v.reason, note: v.note, arrivedAt: v.arrivedAt, leftAt: v.leftAt, ...clock(),
+    });
+    void syncNow();
+    // Warn other drivers headed there. Best effort: the rack is already closed
+    // on the trip either way.
+    if (isTerminalIssueCode(v.reason) && pickup.terminal_id) {
+      const { error: repErr } = await submitOutageReport({
+        terminalId: pickup.terminal_id,
+        selectedRackId: pickup.rack_id,
+        productIds: v.productIds,
+        reportType: v.reason as OutageReportType,
+        companyId,
+        userId,
+        truckLabel: equipment.currentTruckName ?? "",
+      });
+      if (repErr) console.warn("[trips] terminal issue report failed (non-fatal):", repErr);
+    }
+    setNoLoadBusy(false);
+    setNoLoadOpen(false);
+    setNotice({ text: "Saved. Pick the next terminal.", tripId: null });
+  };
+
+  // Next Rack: pick the terminal (the shared picker), then it becomes the
+  // trip's next pickup. Picking the same terminal again counts too (a
+  // different rack there, or trying again later).
+  const [nextRackPending, setNextRackPending] = useState(false);
+  const nextRackSawPicker = useRef(false);
+  useEffect(() => {
+    if (!nextRackPending) return;
+    const pickerOpen = shell.termOpen || shell.locOpen || shell.rackPickerOpen || shell.rackResolving;
+    if (pickerOpen) { nextRackSawPicker.current = true; return; }
+    if (!nextRackSawPicker.current) return;
+    nextRackSawPicker.current = false;
+    setNextRackPending(false);
+    if (location.selectedTerminalId) addAnotherPickup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextRackPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
+
   const onBigButton = () => {
     setNotice(null);
     if (!store || !userId) return;
@@ -376,6 +454,11 @@ export default function HomePage() {
         break;
       case "loaded":
         setLoadedOpen(true);
+        break;
+      case "next_rack":
+        setNextRackPending(true);
+        if (location.selectedCity) shell.setTermOpen(true);
+        else shell.setLocOpen(true);
         break;
       case "add_delivery":
         setPicker({ mode: "add" });
@@ -451,7 +534,8 @@ export default function HomePage() {
   const pickups = snap?.pickups ?? [];
   const liveDeliveries = (snap?.deliveries ?? []).filter((d) => d.status !== "cancelled");
   const anyDelivered = liveDeliveries.some((d) => d.status === "complete");
-  const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered;
+  const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
+    && step.kind !== "next_rack";
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
 
   return (
@@ -527,6 +611,11 @@ export default function HomePage() {
           ))}
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+            {canNoLoad && (
+              <button type="button" onClick={() => { setNoLoadErr(null); setNoLoadOpen(true); }} style={{ ...smallLink, color: "#fbbf24" }}>
+                Couldn&apos;t load here
+              </button>
+            )}
             {canAddPickup && (
               <button type="button" onClick={addAnotherPickup} style={{ ...smallLink, color: muted }}>
                 + Another pickup{terminalName ? ` (${terminalName})` : ""}
@@ -652,6 +741,16 @@ export default function HomePage() {
         onSubmit={submit}
       />
 
+      <NoLoadSheet
+          open={noLoadOpen && !!workingPickup}
+          rackName={workingPickup?.name ?? terminalName ?? "this rack"}
+          arrivedAt={workingPickup?.arrived_at ?? workingPickup?.begin_at ?? null}
+          products={plannedProducts}
+          busy={noLoadBusy}
+          error={noLoadErr}
+          onSubmit={(v) => void onNoLoadSubmit(v)}
+          onClose={() => setNoLoadOpen(false)}
+        />
       {loadedPickup && snap && (
         <LoadedSheet
           open={loadedOpen}

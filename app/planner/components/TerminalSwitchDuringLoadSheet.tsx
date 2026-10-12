@@ -51,7 +51,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill } from "../theme";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
-import type { OutageReportType } from "../hooks/useTerminalOutageReports";
+import { isTerminalWide, type OutageReportType } from "../hooks/useTerminalOutageReports";
+import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 
 type PlanRowLike = {
   comp_number: number;
@@ -134,7 +135,7 @@ export default function TerminalSwitchDuringLoadSheet({
   // identical helper -- selectReportType needs to submit in the same tick
   // it sets reportType/selectedProductIds.
   async function submitReportFor(type: OutageReportType, productIds: string[]) {
-    if (productIds.length === 0) return;
+    if (productIds.length === 0 && !isTerminalWide(type)) return;
     setSubmitBusy(true);
     setSubmitError(null);
     const { error } = await onSubmitOutageReport(type, productIds);
@@ -159,6 +160,11 @@ export default function TerminalSwitchDuringLoadSheet({
   }
 
   function selectReportType(type: OutageReportType) {
+    if (isTerminalWide(type)) {
+      setReportType(type);
+      submitReportFor(type, []);
+      return;
+    }
     if (productChoices.length === 1) {
       setReportType(type);
       const onlyId = productChoices[0].productId;
@@ -217,22 +223,18 @@ export default function TerminalSwitchDuringLoadSheet({
               What's the issue?
             </div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
-              This posts a heads-up banner for other drivers heading to {prevTerminalName}.
+              This warns other drivers headed to {prevTerminalName} and goes on your PTD.
             </div>
-            <button
-              type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
-              disabled={submitBusy}
-              onClick={() => selectReportType("out_of_product")}
-            >
-              {submitBusy && reportType === "out_of_product" ? "Submitting…" : "Out of Product"}
-            </button>
-            <button
-              type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
-              disabled={submitBusy}
-              onClick={() => selectReportType("out_of_allocation")}
-            >
-              {submitBusy && reportType === "out_of_allocation" ? "Submitting…" : "Out of Allocation"}
-            </button>
+            {TERMINAL_ISSUES.map((t) => (
+              <button
+                key={t.code}
+                type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
+                disabled={submitBusy}
+                onClick={() => selectReportType(t.code)}
+              >
+                {submitBusy && reportType === t.code ? "Submitting…" : t.label}
+              </button>
+            ))}
             <button type="button" style={cancelStyle} onClick={() => setMode("menu")} disabled={submitBusy}>Back</button>
           </>
         )}

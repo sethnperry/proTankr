@@ -38,6 +38,7 @@ import {
 import type { LocationTank } from "@/lib/trips/deliveryLocations";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripDeliveryTankRow } from "@/lib/trips/types";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
+import { deliveryOffset } from "@/lib/trips/useTripData";
 import {
   DelayReasonField,
   SignatureAccept,
@@ -138,7 +139,7 @@ export function FinishDeliverySheet({
 
   useEffect(() => {
     if (!open) return;
-    setTimes(defaultStepTimes(new Date(), settings.begin_offset_minutes, delivery.arrived_at));
+    setTimes(defaultStepTimes(new Date(), deliveryOffset(settings), delivery.arrived_at));
     setReasonId(null);
     setNote("");
     setConsignee(delivery.consignee_name ?? "");

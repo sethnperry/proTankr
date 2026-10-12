@@ -18,6 +18,7 @@ import type {
   TripPickupRow,
   TripRow,
 } from "./types.ts";
+import { splitDelayChoice } from "./terminalIssues.ts";
 
 type Clock = { now: Date; newId: () => string };
 
@@ -71,6 +72,7 @@ export type TripStep =
   | { kind: "arrive_pickup"; label: string; detail: string; pickup: TripPickupRow }
   | { kind: "planner"; label: string; detail: string }
   | { kind: "loaded"; label: string; detail: string; pickup: TripPickupRow }
+  | { kind: "next_rack"; label: string; detail: string }
   | { kind: "add_delivery"; label: string; detail: string }
   | { kind: "arrive_delivery"; label: string; detail: string; delivery: TripDeliveryRow }
   | { kind: "finish_delivery"; label: string; detail: string; delivery: TripDeliveryRow };
@@ -97,6 +99,12 @@ export function nextStep(
       label: p.load_id ? "Back to Load" : "Go to Planner",
       detail: p.load_id ? `Loading${where}` : `Plan and load${where}`,
     };
+  }
+  // Every rack so far ended without a load (rack hop): pick the next one.
+  const nothingLoaded = !s.compLoads.some((c) => c.disposition === "loaded" || c.disposition === "delivered" || c.disposition === "retained");
+  if (s.pickups.length > 0 && nothingLoaded && s.pickups.every((x) => x.left_at)) {
+    const last = s.pickups[s.pickups.length - 1];
+    return { kind: "next_rack", label: "Next Rack", detail: `Couldn't load${last.name ? ` at ${last.name}` : ""}. Pick the next terminal.` };
   }
   const next = plannedDeliveries(s.deliveries)[0];
   if (!next) return { kind: "add_delivery", label: "Add Delivery", detail: "Where is this load going?" };
@@ -298,14 +306,19 @@ export function confirmLoaded(
   } & Clock,
 ) {
   const p = args.pickup;
+  // The delay picker can carry a shared terminal issue instead of a company
+  // reason (lib/trips/terminalIssues.ts).
+  const { delayReasonId, delayCode } = splitDelayChoice(args.delayReasonId);
   store.put("trip_pickups", {
     pickup_id: p.pickup_id,
     arrived_at: args.times.arrivedAt,
     begin_at: args.times.beginAt,
     left_at: args.times.leftAt,
-    delay_reason_id: args.delayReasonId,
+    delay_reason_id: delayReasonId,
+    delay_code: delayCode,
     delay_note: args.delayNote,
     odometer: args.odometer,
+    outcome: "loaded",
   });
   for (const c of args.compartments) {
     store.put("trip_compartment_loads", {
@@ -387,6 +400,45 @@ export function addPickup(
     actor_id: args.userId, pickup_id: pickupId, payload: { seq },
   });
   return pickupId;
+}
+
+// Couldn't load here (rack hop): the pickup ends with no load, with the
+// terminal issue that stopped it and the times spent there. Any compartment
+// already recorded against it is cancelled. The trip goes back to waiting
+// for the next rack.
+export function closePickupNoLoad(
+  store: TripStoreLike,
+  args: {
+    userId: string;
+    pickup: TripPickupRow;
+    reason: string; // TerminalIssueCode or "other"
+    note: string | null;
+    arrivedAt: string | null;
+    beginAt?: string | null; // Start Loading, if it was tapped before giving up
+    leftAt: string;
+  } & Clock,
+) {
+  const p = args.pickup;
+  const arrived = args.arrivedAt ?? p.arrived_at ?? args.leftAt;
+  store.put("trip_pickups", {
+    pickup_id: p.pickup_id,
+    arrived_at: arrived,
+    begin_at: args.beginAt ?? p.begin_at ?? null,
+    left_at: args.leftAt,
+    load_id: null,
+    outcome: "no_load",
+    no_load_reason: args.reason,
+    no_load_note: args.note,
+  });
+  for (const c of store.list("trip_compartment_loads", (x) => x.pickup_id === p.pickup_id && x.disposition === "loaded")) {
+    store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, disposition: "cancelled" });
+  }
+  store.put("trips", { trip_id: p.trip_id, status: "loading" });
+  logEvent(store, args.newId, {
+    trip_id: p.trip_id, event_type: "pickup_no_load", occurred_at: args.now.toISOString(),
+    actor_id: args.userId, pickup_id: p.pickup_id,
+    payload: { reason: args.reason, note: args.note },
+  });
 }
 
 // ── Delivery (phase 5) ───────────────────────────────────────────────────────
