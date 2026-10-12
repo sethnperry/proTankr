@@ -62,7 +62,7 @@ export function NoLoadSheet({ open, rackName, arrivedAt, products, busy, error, 
     if (reason === "other" && !note.trim()) return setErr("Add a short note.");
     const a = fromLocalInput(arrived), l = fromLocalInput(left);
     if (!a || !l) return setErr("Enter both times.");
-    if (Date.parse(l) < Date.parse(a)) return setErr("Depart can't be before Arrived.");
+    if (Date.parse(l) < Date.parse(a)) return setErr("Depart can't be before Arrive.");
     onSubmit({ reason, productIds: scoped ? [...picked] : [], note: note.trim() || null, arrivedAt: a, leftAt: l });
   };
 
@@ -105,7 +105,7 @@ export function NoLoadSheet({ open, rackName, arrivedAt, products, busy, error, 
 
       <div style={sectionCard}>
         <div style={sectionTitle}>Times at {rackName}</div>
-        <div style={fieldLabel}>Arrived</div>
+        <div style={fieldLabel}>Arrive</div>
         <input type="datetime-local" value={arrived} onChange={(e) => setArrived(e.target.value)} style={{ ...fieldInput, marginBottom: 10 }} />
         <div style={fieldLabel}>Depart</div>
         <input type="datetime-local" value={left} onChange={(e) => setLeft(e.target.value)} style={fieldInput} />

@@ -10714,8 +10714,9 @@ Out of Product before opening the Planner. Not click-tested.
 
 ### Arrived / Begin / Depart, report Edit menu, mid-trip equipment warning (2026-10-12)
 
-- Times read **Arrived / Begin / Depart** everywhere (times editor, No-load
-  sheet, load report, PTD, Trip Settings help). Planner LOAD on a waiting
+- Steps and inputs read **Arrive / Begin / Depart** (dashboard button, times
+  editor, No-load sheet, "Arrive at Delivery"); the load recap and the PTD
+  read **Arrived / Began / Departed** (corrected same day). Planner LOAD on a waiting
   pickup reads **BEGIN LOADING**.
 - Load report: Delete moved inside **Edit Load** (Edit Details / Delete Load
   with its confirm / Close). "Back to Planner" is now **Back to Dashboard**

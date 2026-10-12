@@ -148,9 +148,9 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           value={loadingOffset(settings)} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_begin_offset_minutes: n }))} />
         <NumRow label="Delivery time" help="Begin delivering is prefilled this long before the driver taps Finish Delivery."
           value={deliveryOffset(settings)} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_begin_offset_minutes: n }))} />
-        <NumRow label="Loading delay" help="Arrived → begin loading longer than this asks for a reason."
+        <NumRow label="Loading delay" help="Arrive → Begin loading longer than this asks for a reason."
           value={settings.loading_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_delay_threshold_minutes: n }))} />
-        <NumRow label="Delivery delay" help="Arrived → begin delivering longer than this asks for a reason."
+        <NumRow label="Delivery delay" help="Arrive → Begin delivering longer than this asks for a reason."
           value={settings.delivery_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_delay_threshold_minutes: n }))} />
       </div>
       <div style={card}>

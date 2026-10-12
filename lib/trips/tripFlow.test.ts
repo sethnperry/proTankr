@@ -137,7 +137,7 @@ test("step times: begin = now - offset but never before arrival; delay and probl
   assert.equal(began.beginAt, "2026-10-10T14:20:00.000Z");
   assert.equal(began.leftAt, NOW.toISOString());
   assert.equal(defaultStepTimes(NOW, 10, "2026-10-10T14:30:00Z", "2026-10-10T14:20:00Z").beginAt, "2026-10-10T14:30:00.000Z");
-  assert.equal(timesProblem({ ...t, beginAt: "2026-10-10T13:00:00Z" }), "Begin can't be before arrival.");
+  assert.equal(timesProblem({ ...t, beginAt: "2026-10-10T13:00:00Z" }), "Begin can't be before Arrive.");
 });
 
 test("odometer only on a cross-city rack hop", () => {

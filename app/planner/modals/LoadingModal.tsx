@@ -24,7 +24,7 @@ import { loadingOffset } from "@/lib/trips/useTripData";
 // dashboard's Loaded screen used to: BOL and supplier per compartment (carried
 // into the next compartment, editable), net gallons (calculated, editable to
 // match the BOL), then one window for the times and one for the loading
-// driver's signature. The report's main button becomes "Arrived at Delivery".
+// driver's signature. The report's main button becomes "Arrive at Delivery".
 export type TripCompExtra = {
   bol: string;
   supplier: string;
@@ -1055,8 +1055,8 @@ export default function LoadingModal(props: {
                   {tm && (
                     <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "2px 12px", paddingTop: 4, fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
                       <span>Arrived {fmtTime(tm.arrivedAt)}</span>
-                      <span>Begin {fmtTime(tm.beginAt)}</span>
-                      <span>Depart {fmtTime(tm.leftAt)}</span>
+                      <span>Began {fmtTime(tm.beginAt)}</span>
+                      <span>Departed {fmtTime(tm.leftAt)}</span>
                     </div>
                   )}
                 </div>
@@ -1324,7 +1324,7 @@ export default function LoadingModal(props: {
                 onClick={trip.onArrivedAtDelivery}
                 style={{ ...(styles as any).doneBtn, width: "100%" }}
               >
-                Arrived at Delivery
+                Arrive at Delivery
               </button>
             ) : (
               <button

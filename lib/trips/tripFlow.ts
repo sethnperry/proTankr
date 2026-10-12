@@ -92,7 +92,7 @@ export function nextStep(
     const logged = s.compLoads.some((c) => c.pickup_id === p.pickup_id && c.disposition !== "cancelled");
     if (logged) return { kind: "loaded", label: "Loaded", detail: `Confirm BOL and times${where}`, pickup: p };
     if (!p.arrived_at && !p.load_id) {
-      return { kind: "arrive_pickup", label: "Arrived", detail: `Tap when you get${where || " to the pickup"}`, pickup: p };
+      return { kind: "arrive_pickup", label: "Arrive", detail: `Tap when you get${where || " to the pickup"}`, pickup: p };
     }
     return {
       kind: "planner",
@@ -110,7 +110,7 @@ export function nextStep(
   if (!next) return { kind: "add_delivery", label: "Add Delivery", detail: "Where is this load going?" };
   const name = deliveryName(next);
   if (!next.arrived_at) {
-    return { kind: "arrive_delivery", label: "Arrived", detail: `Tap at ${name}, while still parked`, delivery: next };
+    return { kind: "arrive_delivery", label: "Arrive", detail: `Tap at ${name}, while still parked`, delivery: next };
   }
   return { kind: "finish_delivery", label: "Finish Delivery", detail: name, delivery: next };
 }
@@ -151,7 +151,7 @@ export function needsDelayReason(minutes: number | null, thresholdMinutes: numbe
 export function timesProblem(t: StepTimes): string | null {
   const a = Date.parse(t.arrivedAt), b = Date.parse(t.beginAt), l = Date.parse(t.leftAt);
   if (![a, b, l].every(Number.isFinite)) return "Enter all three times.";
-  if (b < a) return "Begin can't be before arrival.";
+  if (b < a) return "Begin can't be before Arrive.";
   if (l < b) return "Depart can't be before Begin.";
   return null;
 }

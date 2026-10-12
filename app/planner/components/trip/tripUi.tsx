@@ -78,7 +78,7 @@ export function TimesEditor({ times, onChange, beginLabel }: {
   );
   return (
     <>
-      {row("Arrived", "arrivedAt")}
+      {row("Arrive", "arrivedAt")}
       {row(beginLabel, "beginAt")}
       {row("Depart", "leftAt")}
     </>
