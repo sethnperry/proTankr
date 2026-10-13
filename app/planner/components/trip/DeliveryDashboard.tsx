@@ -8,9 +8,11 @@
 // big button that walks the drop:
 //
 //   Drop / Pump Off   → start time (now, editable; delay reason if late)
-//                     → tank readings, one product at a time: before for
-//                       every store tank of that product, then after
-//                       (prefilled before + what went in, when in gallons)
+//   Tank readings     → optional, from each product's readings row: before
+//                       for every store tank of that product, then after
+//                       (prefilled before + what went in, when in gallons).
+//                       If the company requires them, Finish opens the first
+//                       missing product instead of the finish form.
 //   Finish Delivery   → depart time, ending miles on the last stop, driver
 //                       signature → Complete (or Complete · Next Leg when
 //                       anything is retained or another stop is planned)
@@ -420,11 +422,6 @@ export function DeliveryDashboard({
       compTanks: compTanks(),
     });
     setBeginOpen(false);
-    // Straight into tank readings the first time.
-    if (!dropped && products.length > 0) {
-      setStepErr(null);
-      setStep({ productIdx: 0, phase: "before" });
-    }
   };
 
   // ── Tank readings ──────────────────────────────────────────────────────────
@@ -522,6 +519,16 @@ export function DeliveryDashboard({
 
   // ── Finish ─────────────────────────────────────────────────────────────────
   const openFinish = () => {
+    // Company requires readings: Finish opens the first product still missing
+    // them instead of the finish form.
+    if (settings.require_tank_readings) {
+      const missing = products.findIndex((p) => !readingsDone(p));
+      if (missing >= 0) {
+        setStepErr("Tank readings are required before you can finish.");
+        setStep({ productIdx: missing, phase: "before" });
+        return;
+      }
+    }
     setFinishErr(null);
     setDepartText(toLocalInput(new Date().toISOString()));
     setEndMiles("");
@@ -700,7 +707,7 @@ export function DeliveryDashboard({
       </button>
       <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
         {bigDetail}
-        {dropped && products.length > 0 && !tanksDoneAll && settings.require_tank_readings ? " · readings needed" : ""}
+        {dropped && products.length > 0 && !tanksDoneAll && settings.require_tank_readings ? " · tank readings required" : ""}
       </div>
 
       {/* Drop-into picker */}

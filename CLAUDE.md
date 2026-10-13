@@ -10911,3 +10911,13 @@ Management API): `trips.cancel_reasons text[]` (order picked),
   (`useCancelledTrips`), reason counts across them, then each load: driver,
   truck, order, time on the load, reasons in order, racks tried with why,
   note, where headed. Tap opens the PTD, which shows a "Load cancelled" box.
+
+### Tank readings optional in the drop sequence (2026-10-13)
+
+`DeliveryDashboard.tsx`: after the Drop / Pump Off start time the screen no
+longer jumps into the tank-readings pop-outs. Readings are entered from each
+product's readings row ("Optional ›", or "Enter ›" when the company requires
+them). With `require_tank_readings` on, tapping Finish Delivery opens the
+first product still missing readings ("Tank readings are required before you
+can finish") instead of the finish form, and the Complete check still blocks.
+Not click-tested.
