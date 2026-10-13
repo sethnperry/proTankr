@@ -10921,3 +10921,24 @@ them). With `require_tank_readings` on, tapping Finish Delivery opens the
 first product still missing readings ("Tank readings are required before you
 can finish") instead of the finish form, and the Complete check still blocks.
 Not click-tested.
+
+### Terminal switch on a trip asks why; tried racks show as "Tried" (2026-10-13)
+
+Real load: Marathon was out of allocation, driver switched to Kinder Morgan
+from Plan Review. The trip recorded it correctly (Marathon no_load, Kinder
+Morgan as the next pickup) but the reason was never asked (saved "other"),
+and the dashboard listed Marathon as "Pickup 1 · Loaded" because the label
+only checked `left_at`. Not click-tested.
+
+- `TerminalSwitchDuringLoadSheet`: on a trip with a load in progress
+  (`requireReason`), it opens on "Why are you leaving {terminal}?" first:
+  the four terminal issues (posted as outage reports as before), "Load
+  changed by dispatch", or Other (needs a note). The reason and note go to
+  `closePickupNoLoad`. No way past it without a reason.
+- `lib/trips/terminalIssues.ts`: `OTHER_NO_LOAD_REASONS` (load_changed,
+  other) + `noLoadReasonLabel`. `NoLoadSheet` offers the same list; only
+  real terminal issues show the "other drivers will see this" line.
+- Driver Dashboard trip card: a no-load rack reads "Tried  ~~Marathon~~
+  Couldn't load · Out of Allocation"; only racks that loaded or are still
+  open are numbered as pickups. PTD text via `noLoadText` in `ptd.ts`.
+- Today's trip (order 4816492) Marathon row corrected to out_of_allocation.

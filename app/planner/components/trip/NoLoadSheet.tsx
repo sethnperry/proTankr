@@ -8,11 +8,11 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
+import { isTerminalIssueCode, OTHER_NO_LOAD_REASONS, TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 import { fieldInput, fieldLabel, fromLocalInput, muted, primaryBtn, sectionCard, sectionTitle, toLocalInput } from "./tripUi";
 
 export type NoLoadSubmit = {
-  reason: string; // TerminalIssueCode or "other"
+  reason: string; // TerminalIssueCode, "load_changed" or "other"
   productIds: string[]; // for Out of Product / Out of Allocation
   note: string | null;
   arrivedAt: string;
@@ -74,7 +74,9 @@ export function NoLoadSheet({ open, rackName, arrivedAt, products, busy, error, 
           {TERMINAL_ISSUES.map((t) => (
             <button key={t.code} type="button" style={chip(reason === t.code)} onClick={() => setReason(t.code)}>{t.label}</button>
           ))}
-          <button type="button" style={chip(reason === "other")} onClick={() => setReason("other")}>Other</button>
+          {OTHER_NO_LOAD_REASONS.map((r) => (
+            <button key={r.code} type="button" style={chip(reason === r.code)} onClick={() => setReason(r.code)}>{r.label}</button>
+          ))}
         </div>
         {scoped && products.length > 0 && (
           <div style={{ marginTop: 14 }}>
@@ -92,7 +94,7 @@ export function NoLoadSheet({ open, rackName, arrivedAt, products, busy, error, 
             </div>
           </div>
         )}
-        {reason && reason !== "other" && (
+        {isTerminalIssueCode(reason) && (
           <div style={{ fontSize: 12, color: muted, marginTop: 12 }}>
             {reason === "out_of_allocation" ? "Your company's drivers" : "Other drivers"} headed to {rackName} will see this.
           </div>

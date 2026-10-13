@@ -76,7 +76,7 @@ import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
 import { ParkSheet, type ParkSubmit } from "../components/trip/ParkSheet";
 import { TripEquipmentSheets, useTripEquipment } from "../hooks/useTripEquipment";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
-import { isTerminalIssueCode } from "@/lib/trips/terminalIssues";
+import { isTerminalIssueCode, noLoadReasonLabel } from "@/lib/trips/terminalIssues";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
 import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
@@ -711,13 +711,26 @@ export default function HomePage() {
             </div>
           )}
 
-          {pickups.map((p, i) => (
-            <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6 }}>
-              <span style={{ color: muted, width: 66, flexShrink: 0 }}>{pickups.length > 1 ? `Pickup ${i + 1}` : "Pickup"}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>{p.name ?? "Not set"}</span>
-              <span style={{ color: muted, fontSize: 12 }}>{p.left_at ? "Loaded" : p.arrived_at ? "Arrived" : ""}</span>
-            </div>
-          ))}
+          {(() => {
+            // A rack the driver left without loading is a rack hop, not a
+            // second pickup: show it as "Tried", and number only real pickups.
+            const real = pickups.filter((p) => p.outcome !== "no_load");
+            return pickups.map((p, i) => {
+              const noLoad = p.outcome === "no_load";
+              const n = real.indexOf(p);
+              const label = noLoad ? "Tried" : real.length > 1 ? `Pickup ${n + 1}` : "Pickup";
+              const status = noLoad
+                ? `Couldn't load${noLoadReasonLabel(p.no_load_reason) && p.no_load_reason !== "other" ? ` · ${noLoadReasonLabel(p.no_load_reason)}` : ""}`
+                : p.outcome === "loaded" || (p.left_at && p.load_id) ? "Loaded" : p.arrived_at ? "Arrived" : "";
+              return (
+                <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6 }}>
+                  <span style={{ color: muted, width: 66, flexShrink: 0 }}>{label}</span>
+                  <span style={{ flex: 1, minWidth: 0, ...(noLoad ? { color: muted, textDecoration: "line-through" } : {}) }}>{p.name ?? "Not set"}</span>
+                  <span style={{ color: noLoad ? "#f87171" : muted, fontSize: 12 }}>{status}</span>
+                </div>
+              );
+            });
+          })()}
           {liveDeliveries.length === 0 && (
             <div style={{ fontSize: 14, marginTop: 4 }}><span style={{ color: muted }}>Delivery </span>Not set</div>
           )}

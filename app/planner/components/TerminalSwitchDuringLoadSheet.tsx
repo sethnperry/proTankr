@@ -52,7 +52,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill } from "../theme";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 import { isTerminalWide, type OutageReportType } from "../hooks/useTerminalOutageReports";
-import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
+import { OTHER_NO_LOAD_REASONS, TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 
 type PlanRowLike = {
   comp_number: number;
@@ -74,6 +74,12 @@ type Props = {
   planRows: PlanRowLike[];
   productNameById: Map<string, string>;
   onSubmitOutageReport: (reportType: OutageReportType, productIds: string[]) => Promise<{ error: string | null }>;
+
+  // On a trip, leaving a rack mid-load closes it as "couldn't load", so the
+  // reason is asked first and can't be skipped. Terminal issues go through
+  // onSubmitOutageReport; the rest come back here.
+  requireReason?: boolean;
+  onReasonPicked?: (code: string, note: string | null) => void;
 };
 
 const secondaryRowStyle: React.CSSProperties = {
@@ -90,8 +96,11 @@ const cancelStyle: React.CSSProperties = {
 export default function TerminalSwitchDuringLoadSheet({
   open, prevTerminalName, newTerminalName, onUpdateCardAtPrevious, onSwitchWithoutUpdating,
   darkMode, accentColor, planRows, productNameById, onSubmitOutageReport,
+  requireReason = false, onReasonPicked,
 }: Props) {
-  const [mode, setMode] = useState<"menu" | "reportType" | "reportProducts">("menu");
+  const [mode, setMode] = useState<"reason" | "otherNote" | "menu" | "reportType" | "reportProducts">(requireReason ? "reason" : "menu");
+  const [otherNote, setOtherNote] = useState("");
+  const [reasonGiven, setReasonGiven] = useState(false);
   const [reportType, setReportType] = useState<OutageReportType | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [submitBusy, setSubmitBusy] = useState(false);
@@ -101,13 +110,15 @@ export default function TerminalSwitchDuringLoadSheet({
   // attempt -- same reasoning as CancelLoadSheet's identical effect.
   useEffect(() => {
     if (open) {
-      setMode("menu");
+      setMode(requireReason ? "reason" : "menu");
+      setOtherNote("");
+      setReasonGiven(false);
       setReportType(null);
       setSelectedProductIds(new Set());
       setSubmitBusy(false);
       setSubmitError(null);
     }
-  }, [open]);
+  }, [open, requireReason]);
 
   const productChoices = useMemo(() => {
     const seen = new Set<string>();
@@ -151,6 +162,7 @@ export default function TerminalSwitchDuringLoadSheet({
     // own report path: nothing here cancels the load or asks a follow-up
     // question -- just go back to the real decision (update the previous
     // terminal's card or not / report another issue).
+    setReasonGiven(true);
     setMode("menu");
   }
 
@@ -197,6 +209,65 @@ export default function TerminalSwitchDuringLoadSheet({
           padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
         }}
       >
+        {mode === "reason" && (
+          <>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginBottom: 4 }}>
+              Why are you leaving {prevTerminalName}?
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
+              {prevTerminalName} goes on your PTD as couldn&apos;t load, and {newTerminalName} becomes your pickup.
+            </div>
+            {TERMINAL_ISSUES.map((t) => (
+              <button
+                key={t.code}
+                type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
+                disabled={submitBusy}
+                onClick={() => selectReportType(t.code)}
+              >
+                {submitBusy && reportType === t.code ? "Submitting…" : t.label}
+              </button>
+            ))}
+            {OTHER_NO_LOAD_REASONS.map((r) => (
+              <button
+                key={r.code}
+                type="button" style={secondaryRowStyle} disabled={submitBusy}
+                onClick={() => {
+                  if (r.code === "other") { setMode("otherNote"); return; }
+                  onReasonPicked?.(r.code, null);
+                  setReasonGiven(true);
+                  setMode("menu");
+                }}
+              >
+                {r.label}
+              </button>
+            ))}
+          </>
+        )}
+
+        {mode === "otherNote" && (
+          <>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginBottom: 10 }}>
+              What happened at {prevTerminalName}?
+            </div>
+            <input
+              autoFocus value={otherNote} onChange={(e) => setOtherNote(e.target.value)}
+              placeholder="Short note for your PTD"
+              style={{
+                width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, marginBottom: 10,
+                border: "1px solid rgba(255,255,255,0.18)", background: "rgba(0,0,0,0.35)", color: "#fff", fontSize: 16,
+              }}
+            />
+            <button
+              type="button" style={{ ...primaryRowStyle, opacity: otherNote.trim() ? 1 : 0.55 }}
+              disabled={!otherNote.trim()}
+              onClick={() => { onReasonPicked?.("other", otherNote.trim()); setReasonGiven(true); setMode("menu"); }}
+            >
+              Continue
+            </button>
+            <button type="button" style={cancelStyle} onClick={() => setMode("reason")}>Back</button>
+          </>
+        )}
+
         {mode === "menu" && (
           <>
             <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginBottom: 4 }}>
@@ -303,7 +374,7 @@ export default function TerminalSwitchDuringLoadSheet({
             >
               {submitBusy ? "Submitting…" : "Submit Report"}
             </button>
-            <button type="button" style={cancelStyle} onClick={() => setMode("reportType")}>Back</button>
+            <button type="button" style={cancelStyle} onClick={() => setMode(requireReason && !reasonGiven ? "reason" : "reportType")}>Back</button>
           </>
         )}
       </div>

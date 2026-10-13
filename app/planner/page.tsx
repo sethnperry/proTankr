@@ -1997,6 +1997,7 @@ export default function CalculatorPage() {
   // Issues reported from the switch sheet for the terminal being left; the
   // first one becomes that rack's "couldn't load" reason on the trip.
   const switchReportedIssueRef = useRef<string | null>(null);
+  const switchReasonNoteRef = useRef<string | null>(null);
 
   const applyTerminalSwitch = useCallback((prev: TerminalSnapshot, next: TerminalSnapshot) => {
     // Trip workflow: leaving a rack mid-load is a rack hop. The rack is
@@ -2007,7 +2008,9 @@ export default function CalculatorPage() {
     if (loadWorkflow.activeLoadId && tripPickup && effectiveUserId) {
       const pickup = tripPickup;
       const reason = switchReportedIssueRef.current ?? "other";
+      const reasonNote = switchReasonNoteRef.current;
       switchReportedIssueRef.current = null;
+      switchReasonNoteRef.current = null;
       void (async () => {
         await loadWorkflow.cancelActiveLoad();
         try {
@@ -2015,7 +2018,7 @@ export default function CalculatorPage() {
           const fresh = store.list("trip_pickups", (x) => x.pickup_id === pickup.pickup_id)[0] ?? pickup;
           const now = new Date();
           closePickupNoLoad(store, {
-            userId: effectiveUserId, pickup: fresh, reason, note: null,
+            userId: effectiveUserId, pickup: fresh, reason, note: reasonNote,
             arrivedAt: fresh.arrived_at ?? pickup.begin_at ?? null, beginAt: pickup.begin_at,
             leftAt: now.toISOString(), now, newId: newTripId,
           });
@@ -3370,6 +3373,11 @@ const lastProductInfoById = useMemo(() => {
         planRows={effectivePlanRows as any[]}
         productNameById={productNameById}
         onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
+        requireReason={!!(loadWorkflow.activeLoadId && tripPickup)}
+        onReasonPicked={(code, note) => {
+          if (!switchReportedIssueRef.current) switchReportedIssueRef.current = code;
+          switchReasonNoteRef.current = note;
+        }}
       />
 
       {/* Opened only from the Loading modal's "Report Terminal Issue" button

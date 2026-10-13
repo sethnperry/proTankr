@@ -7,7 +7,14 @@ import { ptdCode } from "./code39.ts";
 import { delayMinutes, parkRecords } from "./tripFlow.ts";
 import { editedNetFlag } from "./netGallons.ts";
 import { billingTime } from "./billingTime.ts";
-import { terminalIssueLabel } from "./terminalIssues.ts";
+import { noLoadReasonLabel, terminalIssueLabel } from "./terminalIssues.ts";
+
+// "Out of Allocation (note)", or just the note when the reason is Other.
+function noLoadText(reason: string | null | undefined, note: string | null | undefined): string {
+  const label = noLoadReasonLabel(reason);
+  if (!label || reason === "other") return note || "Other";
+  return note ? `${label} (${note})` : label;
+}
 import { cancelReasonLabel } from "./cancelReasons.ts";
 import { tripMiles, truckChanges } from "./truckChange.ts";
 import type {
@@ -128,7 +135,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       odometer: num(p.odometer),
       noLoad: p.outcome === "no_load",
       noLoadReason: p.outcome === "no_load"
-        ? (terminalIssueLabel(p.no_load_reason) ?? (p.no_load_note || "Other")) + (p.no_load_note && terminalIssueLabel(p.no_load_reason) ? ` (${p.no_load_note})` : "")
+        ? noLoadText(p.no_load_reason, p.no_load_note)
         : null,
     }));
 

@@ -39,3 +39,15 @@ export function splitDelayChoice(choice: string | null): { delayReasonId: string
   }
   return { delayReasonId: choice, delayCode: null };
 }
+
+// Why a rack ended with no load. The terminal issues, plus reasons that
+// aren't the terminal's fault. Stored in trip_pickups.no_load_reason.
+export const OTHER_NO_LOAD_REASONS: { code: string; label: string }[] = [
+  { code: "load_changed", label: "Load changed by dispatch" },
+  { code: "other", label: "Other" },
+];
+
+export function noLoadReasonLabel(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return terminalIssueLabel(code) ?? OTHER_NO_LOAD_REASONS.find((r) => r.code === code)?.label ?? null;
+}
