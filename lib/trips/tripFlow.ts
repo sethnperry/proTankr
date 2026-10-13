@@ -78,14 +78,14 @@ export type TripStep =
   | { kind: "arrive_delivery"; label: string; detail: string; delivery: TripDeliveryRow }
   | { kind: "finish_delivery"; label: string; detail: string; delivery: TripDeliveryRow };
 
-// The dashboard's one big button: Start Load → Arrived → Loaded → Arrived →
+// The dashboard's one big button: Begin Trip → Arrived → Loaded → Arrived →
 // Finish Delivery. `deliveryName` names a delivery for the detail line.
 export function nextStep(
   trip: TripRow | null,
   snap: TripSnapshot | null,
   deliveryName: (d: TripDeliveryRow) => string = (d) => d.one_off_name ?? "the delivery",
 ): TripStep {
-  if (!trip || !OPEN_STATUSES.has(trip.status)) return { kind: "start", label: "Start Load" };
+  if (!trip || !OPEN_STATUSES.has(trip.status)) return { kind: "start", label: "Begin Trip" };
   const s = snap ?? { pickups: [], deliveries: [], compLoads: [] };
   const p = activePickup(s.pickups);
   if (p) {

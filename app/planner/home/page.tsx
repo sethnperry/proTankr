@@ -9,7 +9,7 @@
 // trip store (lib/trips) and syncs in the background, so a driver with no
 // signal at the terminal still gets a working button.
 //
-// The big button walks the trip: Start Load → Arrived → (Planner) → Loaded →
+// The big button walks the trip: Begin Trip → Arrived → (Planner) → Loaded →
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
@@ -535,13 +535,25 @@ export default function HomePage() {
         setOpeningPlanner(true);
         router.push("/planner");
         break;
-      case "arrive_pickup":
-        // Arrived: straight to the Planner to build the load.
+      case "arrive_pickup": {
+        // Arrived: straight to the Planner to build the load, on this
+        // pickup's terminal (the Planner may still be on an earlier one).
         setOpeningPlanner(true);
         arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
+        const loc = shell.location;
+        const pk = step.pickup;
+        if (pk.terminal_id && pk.terminal_id !== String(loc.selectedTerminalId || "")) {
+          loc.skipResetRef.current = true;
+          if (pk.state) loc.setSelectedState(pk.state);
+          if (pk.city) loc.setSelectedCity(pk.city);
+          loc.setSelectedTerminalId(pk.terminal_id);
+          loc.setSelectedRackId(pk.rack_id ?? "");
+          setTimeout(() => { loc.skipResetRef.current = false; }, 50);
+        }
         void syncNow();
         router.push("/planner");
         break;
+      }
       case "loaded":
         setLoadedOpen(true);
         break;
@@ -697,7 +709,11 @@ export default function HomePage() {
             <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Current trip · {STATUS_LABEL[openTrip.status]}
             </div>
-            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
+            {/* The trip record is locked once the driver has arrived anywhere:
+                from then on it's a record of what happened. */}
+            {!pickups.some((p) => p.arrived_at || p.load_id || p.left_at) && (
+              <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
+            )}
           </div>
           <div style={{ fontSize: 18, fontWeight: 800 }}>
             {children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "No order number"}

@@ -10942,3 +10942,29 @@ only checked `left_at`. Not click-tested.
   Couldn't load · Out of Allocation"; only racks that loaded or are still
   open are numbered as pickups. PTD text via `noLoadText` in `ptd.ts`.
 - Today's trip (order 4816492) Marathon row corrected to out_of_allocation.
+
+### Arrive before loading; tried racks locked; Begin Trip (2026-10-13, later)
+
+Same trip, second hop: Kinder Morgan was out of allocation too. The driver
+picked Buckey North and the trip's first stop (Marathon, already left) was
+renamed Buckey North. Cause: the trip card's Edit (`buildStartLoad`) rewrote
+the first pickup with the Planner's terminal and only protected a pickup
+with a load attached; Marathon's load had been cancelled. Not click-tested.
+
+- `buildStartLoad`: a pickup that's been arrived at, loaded, left or given
+  an outcome is never rewritten. Trip card hides Edit once any pickup has
+  been arrived at. "Start Load" is now **Begin Trip** (button + sheet).
+- Planner, on a trip: the LOAD button reads **ARRIVE AT {terminal}** until
+  the waiting pickup is arrived; tapping it stamps the arrival (the pickup
+  follows the Planner's terminal first if it differs). Only then BEGIN
+  LOADING. `tripWaitingPickup` in `page.tsx`.
+- Planner terminal change with no load in progress (picker opened by the
+  driver, not the load-time restore): leaving an arrived rack opens the same
+  switch sheet with the required reason and closes it as no-load; before
+  arriving, the pickup just follows the pick (`retargetWaitingPickup`, never
+  touches an arrived/loaded/left pickup). `applyTerminalSwitch` treats an
+  arrived waiting pickup as a hop too.
+- Dashboard Arrive at a pickup also moves the Planner to that pickup's
+  terminal.
+- 2 tests. Data fixed for order 4816492: Marathon restored, Kinder Morgan
+  no-load out of allocation (no times), Buckey North added as pickup 3.

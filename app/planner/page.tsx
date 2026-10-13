@@ -94,11 +94,11 @@ import { newId as newTripId } from "@/lib/trips/tripStore";
 import { useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
-import { addPickup, closePickupNoLoad, confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
+import { addPickup, arrivePickup, closePickupNoLoad, confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
-import { openTripForDriver, retagLoadPickup } from "@/lib/trips/tripLogic";
+import { openTripForDriver, retagLoadPickup, retargetWaitingPickup } from "@/lib/trips/tripLogic";
 import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1487,6 +1487,19 @@ export default function CalculatorPage() {
     return pk;
   }, [tripLoadId, tripStoreHook.state]);
 
+  // The open trip's next pickup that isn't loaded or left yet. Loading can't
+  // begin until the driver has arrived there.
+  const tripWaitingPickup = useMemo<TripPickupRow | null>(() => {
+    if (!effectiveUserId) return null;
+    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
+    if (!trip || (trip.status !== "draft" && trip.status !== "loading" && trip.status !== "in_transit")) return null;
+    return (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
+      .filter((p) => p.trip_id === trip.trip_id && !p.load_id && !p.left_at)
+      .sort((a, b) => a.seq - b.seq)[0] ?? null;
+  }, [effectiveUserId, tripStoreHook.state]);
+  const tripAwaitingLoad = !!tripWaitingPickup;
+  const tripNeedsArrive = !!tripWaitingPickup && !tripWaitingPickup.arrived_at;
+
   const tripModeForLoading = useMemo<LoadingTripMode | null>(() => {
     if (!tripPickup || !tripStoreObj || !shell.companyId) return null;
     const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
@@ -2005,14 +2018,18 @@ export default function CalculatorPage() {
     // load is cancelled (the plan stays), and the next terminal becomes a new
     // pickup the driver taps Arrived at when they get there. That keeps the
     // travel and time at each rack on the PTD.
-    if (loadWorkflow.activeLoadId && tripPickup && effectiveUserId) {
-      const pickup = tripPickup;
+    // A rack the driver already arrived at but hadn't started loading counts
+    // too: they're leaving it, so it's a hop the same way.
+    const hopPickup = loadWorkflow.activeLoadId ? tripPickup : (tripWaitingPickup?.arrived_at ? tripWaitingPickup : null);
+    if (hopPickup && effectiveUserId) {
+      const pickup = hopPickup;
+      const hadLoad = !!loadWorkflow.activeLoadId;
       const reason = switchReportedIssueRef.current ?? "other";
       const reasonNote = switchReasonNoteRef.current;
       switchReportedIssueRef.current = null;
       switchReasonNoteRef.current = null;
       void (async () => {
-        await loadWorkflow.cancelActiveLoad();
+        if (hadLoad) await loadWorkflow.cancelActiveLoad();
         try {
           const store = getTripStore(effectiveUserId);
           const fresh = store.list("trip_pickups", (x) => x.pickup_id === pickup.pickup_id)[0] ?? pickup;
@@ -2077,7 +2094,7 @@ export default function CalculatorPage() {
     } else {
       setPendingSameCityTempApply({ armed: true, sawLoadingStart: false, productIds: plannedProductIdsForSwitch });
     }
-  }, [loadWorkflow, tripPickup, tripStoreHook, plannedProductIdsForSwitch, setProductApi, effectiveUserId, equipment.selectedComboId]);
+  }, [loadWorkflow, tripPickup, tripWaitingPickup, tripStoreHook, plannedProductIdsForSwitch, setProductApi, effectiveUserId, equipment.selectedComboId]);
 
   // "Yes, Update My Card at {prev}" -- the driver did get carded in at the
   // terminal they're leaving, so renew that terminal's access date, then
@@ -2110,6 +2127,70 @@ export default function CalculatorPage() {
     setTerminalSwitchConfirm(null);
     applyTerminalSwitch(prev, next);
   }, [terminalSwitchConfirm, applyTerminalSwitch]);
+
+  // Trip workflow, no load in progress: the driver changed terminals from the
+  // Planner's own picker. Leaving a rack they already arrived at is a rack
+  // hop (same sheet as Plan Review: why, card, then the new terminal becomes
+  // the next pickup). Before arriving, the pickup just follows the pick.
+  // Armed only when the driver opens the picker (so the Planner restoring
+  // its last terminal on load never counts as a switch).
+  const plannerPickFromRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (shell.termOpen || shell.locOpen || shell.rackPickerOpen || shell.rackResolving) {
+      if (plannerPickFromRef.current == null) plannerPickFromRef.current = String(location.selectedTerminalId || "");
+      return;
+    }
+    const prev = plannerPickFromRef.current;
+    plannerPickFromRef.current = null;
+    const cur = String(location.selectedTerminalId || "");
+    if (!prev || !cur || prev === cur) return;
+    if (loadWorkflow.activeLoadId || terminalSwitchWatch || terminalSwitchConfirm) return;
+    const p = tripWaitingPickup;
+    if (!p || !effectiveUserId || (p.terminal_id && p.terminal_id !== prev)) return;
+    const next: TerminalSnapshot = {
+      terminalId: cur, terminalName: terminalLabel || "Terminal",
+      rackId: String(location.selectedRackId || ""),
+      city: location.selectedCity, state: location.selectedState,
+    };
+    if (p.arrived_at) {
+      setTerminalSwitchConfirm({
+        prev: { terminalId: prev, terminalName: p.name || "the last terminal", rackId: p.rack_id ?? "", city: p.city ?? "", state: p.state ?? "" },
+        next,
+      });
+      return;
+    }
+    try {
+      if (retargetWaitingPickup(getTripStore(effectiveUserId), p.pickup_id, {
+        terminalId: next.terminalId || null, rackId: next.rackId || null,
+        name: next.terminalName, city: next.city, state: next.state,
+      })) void tripStoreHook.syncNow();
+    } catch (e) {
+      console.warn("[trips] retarget pickup failed (non-fatal):", e);
+    }
+  }, [shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, loadWorkflow.activeLoadId, terminalSwitchWatch, terminalSwitchConfirm, tripWaitingPickup, effectiveUserId, tripStoreHook]);
+
+  // ARRIVE AT {terminal}: loading can't begin on a trip until the driver has
+  // arrived at the pickup. Arriving is at the terminal selected here; if
+  // that's not the one the pickup named, the pickup follows it first.
+  const handleArriveAtPickup = useCallback(() => {
+    const p = tripWaitingPickup;
+    if (!p || !effectiveUserId || !location.selectedTerminalId) return;
+    try {
+      const store = getTripStore(effectiveUserId);
+      const cur = String(location.selectedTerminalId);
+      if (p.terminal_id !== cur) {
+        retargetWaitingPickup(store, p.pickup_id, {
+          terminalId: cur, rackId: location.selectedRackId ? String(location.selectedRackId) : null,
+          name: terminalLabel || null, city: location.selectedCity, state: location.selectedState,
+        });
+      }
+      const fresh = store.list("trip_pickups", (x) => x.pickup_id === p.pickup_id)[0] ?? p;
+      arrivePickup(store, { userId: effectiveUserId, pickup: fresh, now: new Date(), newId: newTripId });
+      void tripStoreHook.syncNow();
+    } catch (e) {
+      console.warn("[trips] arrive failed:", e);
+    }
+  }, [tripWaitingPickup, effectiveUserId, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, tripStoreHook]);
 
   // Same-city silent refresh: waits for useFuelTempPrediction's own refetch
   // (already triggered automatically -- its signature includes terminalId,
@@ -2463,13 +2544,7 @@ const lastProductInfoById = useMemo(() => {
   // load, it just trivially matched itself). Always "LOAD" now.
   // On a trip, the tap is the moment loading begins (it becomes the
   // pickup's begin time), so the button says so.
-  const tripAwaitingLoad = useMemo(() => {
-    if (!effectiveUserId) return false;
-    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
-    if (!trip || (trip.status !== "draft" && trip.status !== "loading" && trip.status !== "in_transit")) return false;
-    return (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as TripPickupRow[])
-      .some((p) => p.trip_id === trip.trip_id && !p.load_id && !p.left_at);
-  }, [effectiveUserId, tripStoreHook.state]);
+
   // Mid-trip equipment change, shared with the Driver Dashboard: warning
   // before the picker, and the truck-change record when a loaded trailer is
   // now behind a different truck.
@@ -2478,6 +2553,7 @@ const lastProductInfoById = useMemo(() => {
 
   const loadLabel = loadWorkflow.beginLoadBusy ? "Starting…"
     : loadWorkflow.activeLoadId ? "Load started"
+    : tripNeedsArrive ? `ARRIVE AT ${(terminalLabel || tripWaitingPickup?.name || "TERMINAL").toUpperCase()}`
     : tripAwaitingLoad ? "BEGIN LOADING"
     : "LOAD";
 
@@ -3196,9 +3272,10 @@ const lastProductInfoById = useMemo(() => {
               // stale/missing reading (see apiBasis.ts) and the Tune line colors
               // the API by confidence, so the interrupting Good/Better/Best
               // overlay is no longer needed -- begin straight into Plan Review.
+              if (tripNeedsArrive) { handleArriveAtPickup(); return; }
               requestBegin({});
             }}
-            disabled={loadDisabled}
+            disabled={tripNeedsArrive ? !location.selectedTerminalId : loadDisabled}
             style={{
               // Fixed white bg / black text now, per explicit direction --
               // was themeFill/themeTextOnFill (graphite or accent-colored
@@ -3206,7 +3283,8 @@ const lastProductInfoById = useMemo(() => {
               // follows the accent color at all.
               borderRadius: 6, border: "none", background: "#ffffff",
               padding: "10px 14px", width: "100%", height: isUltraWideLandscape ? "100%" : undefined,
-              cursor: loadDisabled ? "not-allowed" : "pointer", opacity: loadDisabled ? 0.5 : 1,
+              cursor: (tripNeedsArrive ? !location.selectedTerminalId : loadDisabled) ? "not-allowed" : "pointer",
+              opacity: (tripNeedsArrive ? !location.selectedTerminalId : loadDisabled) ? 0.5 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -3373,7 +3451,7 @@ const lastProductInfoById = useMemo(() => {
         planRows={effectivePlanRows as any[]}
         productNameById={productNameById}
         onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
-        requireReason={!!(loadWorkflow.activeLoadId && tripPickup)}
+        requireReason={!!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}
         onReasonPicked={(code, note) => {
           if (!switchReportedIssueRef.current) switchReportedIssueRef.current = code;
           switchReasonNoteRef.current = note;

@@ -10,6 +10,7 @@ import {
   linkLoadToOpenTrip,
   openTripForDriver,
   retagLoadPickup,
+  retargetWaitingPickup,
   truckBeginMiles,
   tripChildren,
   unlinkCancelledLoad,
@@ -113,6 +114,35 @@ test("editing after the load began leaves the pickup's terminal alone", () => {
     now: NOW, newId, existing: { trip: t, orders: c.orders, pickups: c.pickups, deliveries: c.deliveries },
   }));
   assert.equal(tripChildren(s, t.trip_id).pickup?.terminal_id, "term-2");
+});
+
+test("editing after a rack hop leaves the tried rack alone", () => {
+  const s = createTripStore({ storageKey: "k" });
+  const newId = ids();
+  applyStartLoad(s, buildStartLoad(input(), { now: NOW, newId }));
+  const t = s.list("trips")[0];
+  const p = tripChildren(s, t.trip_id).pickups[0];
+  // Marathon: arrived, couldn't load, left (no load_id).
+  s.put("trip_pickups", { pickup_id: p.pickup_id, arrived_at: NOW.toISOString(), left_at: NOW.toISOString(), outcome: "no_load" });
+  const c = tripChildren(s, t.trip_id);
+  applyStartLoad(s, buildStartLoad(input({ pickup: { terminalId: "term-9", rackId: null, name: "Buckey North", city: null, state: null } }), {
+    now: NOW, newId, existing: { trip: t, orders: c.orders, pickups: c.pickups, deliveries: c.deliveries },
+  }));
+  const after = s.list("trip_pickups", (x) => x.pickup_id === p.pickup_id)[0];
+  assert.equal(after.terminal_id, "term-1");
+  assert.equal(after.name, "Marathon");
+});
+
+test("a waiting pickup follows a new pick until the driver arrives", () => {
+  const s = createTripStore({ storageKey: "k" });
+  const newId = ids();
+  applyStartLoad(s, buildStartLoad(input(), { now: NOW, newId }));
+  const p = s.list("trip_pickups")[0];
+  assert.equal(retargetWaitingPickup(s, p.pickup_id, { terminalId: "term-2", rackId: null, name: "Kinder Morgan" }), true);
+  assert.equal(s.list("trip_pickups")[0].terminal_id, "term-2");
+  s.put("trip_pickups", { pickup_id: p.pickup_id, arrived_at: NOW.toISOString() });
+  assert.equal(retargetWaitingPickup(s, p.pickup_id, { terminalId: "term-3", rackId: null, name: "Buckey" }), false);
+  assert.equal(s.list("trip_pickups")[0].terminal_id, "term-2", "an arrived pickup is never rewritten");
 });
 
 test("open trip: newest open trip for this driver only", () => {

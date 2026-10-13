@@ -156,11 +156,11 @@ export function buildStartLoad(
     ...oldExtras.slice(extras.length).map((o) => ({ order_id: o.order_id, trip_id: tripId, order_number: null, is_primary: false })),
   ];
 
-  // Pickup: the first one. A pickup already tied to a load keeps its own
-  // terminal (the Planner owns it from there).
+  // Pickup: the first one. A pickup already used (arrived, tied to a load,
+  // or left) keeps its own terminal: it's a record of where the driver was.
   const oldPickup = [...(ex?.pickups ?? [])].sort((a, b) => a.seq - b.seq)[0] ?? null;
   const pickups: StartLoadRows["pickups"] = [
-    oldPickup?.load_id
+    oldPickup && (oldPickup.load_id || oldPickup.arrived_at || oldPickup.left_at || oldPickup.outcome)
       ? { pickup_id: oldPickup.pickup_id, trip_id: tripId }
       : {
           pickup_id: oldPickup?.pickup_id ?? opts.newId(),
@@ -331,6 +331,16 @@ export function unlinkCancelledLoad(
     trip_id: pickup.trip_id, event_type: "load_cancelled", occurred_at: args.now.toISOString(),
     actor_id: args.userId, pickup_id: pickup.pickup_id, payload: { load_id: args.loadId },
   });
+  return true;
+}
+
+// The driver picked a different terminal before arriving at the next
+// pickup: that's just where they're headed now, so the pickup follows.
+// Never touches a pickup that's been arrived at, loaded or left.
+export function retargetWaitingPickup(store: TripStoreLike, pickupId: string, pickup: LoadPickupInfo): boolean {
+  const p = store.list("trip_pickups", (r) => r.pickup_id === pickupId)[0];
+  if (!p || p.arrived_at || p.load_id || p.left_at) return false;
+  store.put("trip_pickups", { pickup_id: p.pickup_id, ...pickupFields(pickup) });
   return true;
 }
 
