@@ -1187,9 +1187,7 @@ export default function HomePage() {
       )}
 
       <GaugePanel cells={[
-          tripLoaded && currentGross != null
-            ? { label: "Gross", value: currentGross.toLocaleString("en-US"), unit: "lb", color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget) }
-            : { label: "Trip", value: openTrip ? STATUS_SHORT[openTrip.status] : "None" },
+          { label: "Trip", value: openTrip ? STATUS_SHORT[openTrip.status] : "None" },
           // Company trucks headed to my terminal, and loads headed to my delivery.
           { label: "To Rack", value: String(toMyTerminal.length), unit: toMyTerminal.length === 1 ? "trk" : "trks",
             color: toMyTerminal.length ? undefined : L.muted, onClick: () => setTerminalNowOpen(true) },
@@ -1240,7 +1238,8 @@ export default function HomePage() {
 
       {/* Attention rows: only when something needs it. */}
       {(() => {
-        const showGross = tripLoaded && (truckChanged || currentGross != null);
+        // Gross already shows on the trip card; only the truck-change prompt stays here.
+        const showGross = tripLoaded && truckChanged;
         const showExp = expired > 0 || warning > 0;
         const showSync = pendingCount > 0 || failed.length > 0;
         if (!showGross && !showExp && !showSync) return null;
@@ -1248,10 +1247,10 @@ export default function HomePage() {
           <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>
             {showGross && (
               <InfoRow
-                label="Gross"
-                value={truckChanged ? "Truck changed · tap to record" : `${currentGross!.toLocaleString("en-US")} lbs (est.)`}
-                valueColor={truckChanged ? "#fbbf24" : currentGross! > 80000 ? "#f87171" : currentTarget != null && currentGross! > currentTarget ? "#fbbf24" : undefined}
-                onClick={() => { if (truckChanged) tripEquip.reopenTruckChange(); }}
+                label="Truck changed"
+                value="Tap to record"
+                valueColor="#fbbf24"
+                onClick={() => tripEquip.reopenTruckChange()}
                 last={!showExp && !showSync}
               />
             )}
