@@ -2,14 +2,14 @@
 // app/planner/components/trip/DashboardCards.tsx
 //
 // Readout cards for the Driver Dashboard.
-//   Always shown: Terminal Status, Recent Deliveries.
+//   Always shown: Terminal status, Recent Deliveries (selected store).
 //   Shown only when there's something: trucks headed to my terminal, loads
 //   headed to my delivery, parked preloads.
 // Each card is collapsed to a line or two; tap the header to expand.
 
 import React, { useState } from "react";
 import { apiTierColor, type ApiTier } from "../../utils/apiBasis";
-import type { TerminalProductStatus, RecentDelivery } from "../../hooks/useDashboardCards";
+import type { TerminalProductStatus, StoreDelivery } from "../../hooks/useDashboardCards";
 import type { HeadingToDelivery, HeadingToTerminal, FleetTripLike } from "@/lib/trips/dashboardCards";
 import type { ComposedOutageReport } from "../../hooks/useTerminalOutageReports";
 import { PARK_FOR_LABEL, onBoard } from "@/lib/trips/tripFlow";
@@ -94,19 +94,24 @@ const rowStyle: React.CSSProperties = {
 
 // ── Terminal Status (always shown) ─────────────────────────────────────────
 
-export function TerminalStatusCard({ terminalName, rackName, products, reports, onOpenReports, onChangeTerminal }: {
+export function TerminalStatusCard({ placeLabel, terminalName, rackName, products, reports, onOpenReports, onChangeTerminal, onUpdate }: {
+  // "City, ST" of the terminal: the card's label.
+  placeLabel: string | null;
   terminalName: string | null;
   rackName: string | null;
   products: TerminalProductStatus[];
   reports: ComposedOutageReport[];
   onOpenReports: () => void;
   onChangeTerminal: () => void;
+  // Opens the status update window (products out/available, long line, ...).
+  onUpdate: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const title = placeLabel || "Terminal";
   if (!terminalName) {
     return (
       <div style={cardStyle}>
-        <CardHeader title="Terminal" summary="Select a terminal" summaryColor={muted} open={false} onToggle={onChangeTerminal} />
+        <CardHeader title={title} summary="Select a terminal" summaryColor={muted} open={false} onToggle={onChangeTerminal} />
       </div>
     );
   }
@@ -120,7 +125,7 @@ export function TerminalStatusCard({ terminalName, rackName, products, reports, 
   return (
     <div style={cardStyle}>
       <CardHeader
-        title="Terminal"
+        title={title}
         summary={<><span style={{ color: "#fff" }}>{terminalName}</span><span style={{ color: reports.length || outCount ? red : muted, fontWeight: 600 }}> · {summary}</span></>}
         open={open}
         onToggle={() => setOpen((o) => !o)}
@@ -135,7 +140,11 @@ export function TerminalStatusCard({ terminalName, rackName, products, reports, 
         </button>
       )}
       {open && (
-        <>
+        <button
+          type="button"
+          onClick={onUpdate}
+          style={{ display: "block", width: "100%", padding: 0, border: "none", background: "transparent", color: "#fff", textAlign: "left", cursor: "pointer" }}
+        >
           {rackName && (
             <div style={{ ...rowStyle, color: muted, fontSize: 12 }}>{rackName}</div>
           )}
@@ -157,59 +166,100 @@ export function TerminalStatusCard({ terminalName, rackName, products, reports, 
               </span>
             </div>
           ))}
-          {newest && (
-            <div style={{ ...rowStyle, color: muted, fontSize: 12 }}>Last reading {ago(newest)}</div>
-          )}
-        </>
+          <div style={{ ...rowStyle, display: "flex", color: muted, fontSize: 12 }}>
+            <span style={{ flex: 1 }}>{newest ? `Last reading ${ago(newest)}` : ""}</span>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>Update status ›</span>
+          </div>
+        </button>
       )}
     </div>
   );
 }
 
 // ── Recent Deliveries (always shown) ───────────────────────────────────────
+// For the selected delivery location, every carrier. Collapsed shows the
+// latest drop; tap a drop for the store's tank levels after it.
 
-export function RecentDeliveriesCard({ items, productInfo, onOpenTrip }: {
-  items: RecentDelivery[];
+export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore }: {
+  storeName: string | null;
+  items: StoreDelivery[];
   productInfo: ProductInfoFn;
   onOpenTrip: (tripId: string) => void;
+  onPickStore: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (!storeName) {
+    return (
+      <div style={cardStyle}>
+        <CardHeader title="Recent Deliveries" summary="Select a delivery location" summaryColor={muted} open={false} onToggle={onPickStore} />
+      </div>
+    );
+  }
   const shown = open ? items : items.slice(0, 1);
-  const latest = items[0];
   return (
     <div style={cardStyle}>
-      <CardHeader
-        title="Recent Deliveries"
-        summary={latest ? when(latest.leftAt) : "None yet"}
-        summaryColor={latest ? "#fff" : muted}
-        open={open}
-        onToggle={() => setOpen((o) => !o)}
-      />
-      {shown.map((d) => (
-        <button
-          key={d.deliveryId}
-          type="button"
-          onClick={() => onOpenTrip(d.tripId)}
-          style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: "#fff", textAlign: "left", cursor: "pointer" }}
-        >
-          <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-            <span style={{ flex: 1, minWidth: 0, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.place}</span>
-            <span style={{ color: muted, fontSize: 12, flexShrink: 0 }}>{when(d.leftAt)}</span>
+      <CardHeader title="Recent Deliveries" summary={storeName} open={open} onToggle={() => setOpen((o) => !o)} />
+      {shown.map((d) => {
+        const isOpen = expanded === d.deliveryId;
+        return (
+          <div key={d.deliveryId} style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <button
+              type="button"
+              onClick={() => setExpanded(isOpen ? null : d.deliveryId)}
+              aria-expanded={isOpen}
+              style={{ ...rowStyle, borderTop: "none", width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}
+            >
+              <span style={{ flex: "0 1 auto", minWidth: 0, maxWidth: "40%", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: d.ownCompany ? "#fff" : "rgba(255,255,255,0.8)" }}>
+                {d.isMine ? "You" : d.who}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
+                {d.products.map((x) => {
+                  const info = productInfo(x.productId);
+                  return (
+                    <span key={String(x.productId)} style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                      <Dot color={colorOf(info)} />{info.code} {gal(x.gallons)}
+                    </span>
+                  );
+                })}
+              </span>
+              <span style={{ color: muted, fontSize: 12, flexShrink: 0 }}>{when(d.leftAt)}</span>
+            </button>
+            {isOpen && (
+              <div style={{ padding: "0 14px 10px", fontSize: 13 }}>
+                {d.tanks.length === 0 ? (
+                  <div style={{ color: muted }}>No tank readings recorded.</div>
+                ) : (
+                  <>
+                    <div style={{ color: muted, fontSize: 12, marginBottom: 4 }}>Tank levels after</div>
+                    {d.tanks.map((t, i) => {
+                      const info = productInfo(t.productId);
+                      return (
+                        <div key={`${t.tankNumber}-${i}`} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+                          <Dot color={colorOf(info)} />
+                          <span style={{ flex: 1 }}>Tank {t.tankNumber} <span style={{ color: muted }}>{info.code}</span></span>
+                          <span style={{ fontWeight: 700 }}>
+                            {t.unit === "inches" ? `${t.after.toLocaleString("en-US")} in` : gal(t.after)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {d.tripId && (
+                  <button type="button" onClick={() => onOpenTrip(d.tripId!)} style={{ marginTop: 6, padding: 0, border: "none", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    Open PTD ›
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-            {d.orderNumber && <span style={{ color: muted }}>Order {d.orderNumber}</span>}
-            {d.dropped.map((x) => {
-              const info = productInfo(x.productId);
-              return (
-                <span key={String(x.productId)} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <Dot color={colorOf(info)} />{info.code} {gal(x.gallons)}
-                </span>
-              );
-            })}
-          </div>
-        </button>
-      ))}
-      {open && items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No completed deliveries yet.</div>}
+        );
+      })}
+      {items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No deliveries recorded here yet.</div>}
+      <button type="button" onClick={onPickStore} style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: muted, fontSize: 12, textAlign: "left", cursor: "pointer" }}>
+        Change location ›
+      </button>
     </div>
   );
 }

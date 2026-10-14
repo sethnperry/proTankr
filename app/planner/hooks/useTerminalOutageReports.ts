@@ -127,6 +127,7 @@ type OutageRow = {
 export type ComposedOutageReport = {
   reportId: string;
   reportType: OutageReportType;
+  productId: string | null;
   /** Full product name, e.g. "Premium Unleaded E10 93" -- the detail
    * card's product line, colored per productColorFor(). */
   productName: string;
@@ -310,6 +311,7 @@ export function useActiveOutageBanner(
         : (displayNameByUserId.get(r.reporter_user_id) || "Driver");
       return {
         reportId: r.report_id,
+        productId: r.product_id,
         reportType: r.report_type,
         productName,
         tickerText,
@@ -317,7 +319,7 @@ export function useActiveOutageBanner(
         truckLabel: truck,
         createdAtMs,
         expiresAtMs: nextClearingCheckpoint(createdAtMs, tz),
-        canClear: !!effectiveUserId && r.reporter_user_id === effectiveUserId,
+        canClear: !!effectiveUserId && (r.reporter_user_id === effectiveUserId || r.report_type !== "out_of_allocation"),
       };
     });
 

@@ -13,7 +13,7 @@
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { TripPickupRow, TripTable } from "@/lib/trips/types";
 import { useRouter } from "next/navigation";
@@ -94,7 +94,8 @@ import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
-import { useRecentDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
+import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
+import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
@@ -120,6 +121,10 @@ const smallLink: React.CSSProperties = {
 
 type PickerMode =
   | { mode: "add" }
+  // Dashboard "Delivery Location": sets where this driver is headed. On a
+  // trip it reroutes the next delivery (or adds one); otherwise it's kept
+  // for the next Begin Trip.
+  | { mode: "select" }
   | { mode: "split"; ids: string[]; from: string | null }
   | { mode: "reroute"; delivery: TripDeliveryRow };
 
@@ -245,7 +250,33 @@ export default function HomePage() {
     () => Object.values(state.rows.trip_deliveries ?? {}).filter((d: any) => d.status === "complete").length,
     [state],
   );
-  const recent = useRecentDeliveries(userId, completedDeliveries);
+  // The driver's delivery location: the trip's next delivery when there is
+  // one, else the last one picked here (kept per user on this phone).
+  const deliveryKey = userId ? `proTankr:u:${userId}:deliveryLocation` : null;
+  const [storedLocId, setStoredLocId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!deliveryKey) return;
+    try { setStoredLocId(window.localStorage.getItem(deliveryKey)); } catch { /* storage blocked */ }
+  }, [deliveryKey]);
+  const rememberDelivery = useCallback((id: string | null) => {
+    setStoredLocId(id);
+    if (!deliveryKey) return;
+    try {
+      if (id) window.localStorage.setItem(deliveryKey, id);
+      else window.localStorage.removeItem(deliveryKey);
+    } catch { /* storage blocked */ }
+  }, [deliveryKey]);
+  useEffect(() => {
+    if (myDelivery?.location_id && myDelivery.location_id !== storedLocId) rememberDelivery(myDelivery.location_id);
+  }, [myDelivery?.location_id, storedLocId, rememberDelivery]);
+  const selectedLocId = myDelivery?.location_id ?? storedLocId;
+  const selectedLoc = selectedLocId ? locations.find((l) => l.location_id === selectedLocId) ?? null : null;
+  const recent = useStoreDeliveries(selectedLoc?.location_id ?? null, completedDeliveries);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusPlace = useMemo(() => {
+    const t = alertTerminalId ? terminalCatalog.find((x) => String(x.terminal_id) === alertTerminalId) : null;
+    return t ? [t.city, t.state].filter(Boolean).join(", ") || null : null;
+  }, [alertTerminalId, terminalCatalog]);
 
   // ── Mid-trip equipment change (warning + truck change record) ────────────
   const tripEquip = useTripEquipment({ state, store, syncNow }, userId);
@@ -289,6 +320,8 @@ export default function HomePage() {
     // The delivery the driver used last (this phone's history), else their
     // first starred location, else a blank one-off.
     function defaultDelivery(): StartLoadDelivery {
+      const picked = storedLocId ? locations.find((l) => l.location_id === storedLocId) : null;
+      if (picked) return { locationId: picked.location_id, oneOffName: null, deliveryType: picked.delivery_type };
       if (store && userId) {
         const mine = new Map(trips.filter((t) => t.driver_id === userId).map((t) => [t.trip_id, t]));
         const recent = store
@@ -301,7 +334,7 @@ export default function HomePage() {
       if (star) return { locationId: star.location_id, oneOffName: null, deliveryType: star.delivery_type };
       return { locationId: null, oneOffName: "", deliveryType: "drop" };
     }
-  }, [openTrip, children, snap, trips, userId, truckId, store, locations]);
+  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId]);
 
   const submit = async (v: StartLoadValues) => {
     if (!store || !userId || !companyId) {
@@ -459,6 +492,23 @@ export default function HomePage() {
   };
 
   const onPick = (to: DeliveryDestination) => {
+    if (picker?.mode === "select") {
+      if (to.locationId) rememberDelivery(to.locationId);
+      const next = snap ? plannedDeliveries(snap.deliveries)[0] : null;
+      if (store && userId && openTrip && snap) {
+        if (next) {
+          if (next.location_id !== to.locationId) rerouteDelivery(store, { userId, delivery: next, to, ...clock() });
+        } else {
+          splitToNewDelivery(store, {
+            userId, tripId: openTrip.trip_id, compartmentLoadIds: onBoard(snap.compLoads).map((c) => c.compartment_load_id),
+            to, fromDeliveryId: null, ...clock(),
+          });
+        }
+        void syncNow();
+      }
+      setPicker(null);
+      return;
+    }
     if (!store || !userId || !openTrip || !picker || !snap) return;
     if (picker.mode === "reroute") {
       rerouteDelivery(store, { userId, delivery: picker.delivery, to, ...clock() });
@@ -1080,47 +1130,80 @@ export default function HomePage() {
       <div style={{ marginTop: 16, marginBottom: 6, fontSize: 12, fontWeight: 700, color: muted, letterSpacing: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {equipmentLabel}
       </div>
-      <div style={{ ...card, marginTop: 0, padding: 0 }}>
-        {tripLoaded && (truckChanged || currentGross != null) && (
-          <InfoRow
-            label="Gross"
-            value={truckChanged ? "Truck changed · tap to record" : `${currentGross!.toLocaleString("en-US")} lbs (est.)`}
-            valueColor={truckChanged ? "#fbbf24" : currentGross! > 80000 ? "#f87171" : currentTarget != null && currentGross! > currentTarget ? "#fbbf24" : undefined}
-            onClick={() => { if (truckChanged) tripEquip.reopenTruckChange(); }}
-          />
-        )}
-        <InfoRow
-          label="Expirations"
-          value={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring soon` : "All current"}
-          valueColor={expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined}
-          onClick={() => shell.setExpModalOpen(true)}
-          last={!(pendingCount > 0 || failed.length > 0)}
-        />
-        {(pendingCount > 0 || failed.length > 0) && (
-          <InfoRow
-            label="Sync"
-            value={failed.length > 0 ? `${failed.length} change${failed.length === 1 ? "" : "s"} couldn't save` : `${pendingCount} waiting to send`}
-            valueColor={failed.length > 0 ? "#f87171" : muted}
-            onClick={() => { void syncNow(); setSyncOpen(true); }}
-            last
-          />
-        )}
-      </div>
+      {(() => {
+        const showGross = tripLoaded && (truckChanged || currentGross != null);
+        const showExp = expired > 0 || warning > 0;
+        const showSync = pendingCount > 0 || failed.length > 0;
+        if (!showGross && !showExp && !showSync) return null;
+        return (
+          <div style={{ ...card, marginTop: 0, padding: 0 }}>
+            {showGross && (
+              <InfoRow
+                label="Gross"
+                value={truckChanged ? "Truck changed · tap to record" : `${currentGross!.toLocaleString("en-US")} lbs (est.)`}
+                valueColor={truckChanged ? "#fbbf24" : currentGross! > 80000 ? "#f87171" : currentTarget != null && currentGross! > currentTarget ? "#fbbf24" : undefined}
+                onClick={() => { if (truckChanged) tripEquip.reopenTruckChange(); }}
+                last={!showExp && !showSync}
+              />
+            )}
+            {showExp && (
+              <InfoRow
+                label="Expirations"
+                value={expired > 0 ? `${expired} expired` : `${warning} expiring soon`}
+                valueColor={expired > 0 ? "#f87171" : "#fbbf24"}
+                onClick={() => shell.setExpModalOpen(true)}
+                last={!showSync}
+              />
+            )}
+            {showSync && (
+              <InfoRow
+                label="Sync"
+                value={failed.length > 0 ? `${failed.length} change${failed.length === 1 ? "" : "s"} couldn't save` : `${pendingCount} waiting to send`}
+                valueColor={failed.length > 0 ? "#f87171" : muted}
+                onClick={() => { void syncNow(); setSyncOpen(true); }}
+                last
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Readouts: terminal status and recent deliveries always; the rest
           only when there's something to show. */}
       <TerminalStatusCard
+        placeLabel={statusPlace}
         terminalName={statusTerminalName}
         rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
         products={terminalStatus.products}
         reports={terminalAlerts.reports}
         onOpenReports={() => setAlertsOpen(true)}
         onChangeTerminal={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
+        onUpdate={() => setStatusOpen(true)}
+      />
+      <TerminalStatusSheet
+        open={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        terminalId={alertTerminalId}
+        terminalName={statusTerminalName}
+        rackId={terminalStatus.rackId}
+        rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
+        products={terminalStatus.products}
+        reports={terminalAlerts.reports}
+        companyId={companyId}
+        userId={userId}
+        truckLabel={equipment.currentTruckName ?? ""}
+        onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
       />
       <HeadingToTerminalCard terminalName={statusTerminalName} items={toMyTerminal} productInfo={productInfo} />
       <HeadingToDeliveryCard deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo} />
       <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
-      <RecentDeliveriesCard items={recent.items} productInfo={productInfo} onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
+      <RecentDeliveriesCard
+        storeName={selectedLoc ? locationTitle(selectedLoc) : null}
+        items={recent.items}
+        productInfo={productInfo}
+        onOpenTrip={(id) => router.push(`/planner/trips/${id}`)}
+        onPickStore={() => setPicker({ mode: "select" })}
+      />
 
       <TerminalOutageDetailModal
         open={alertsOpen}
@@ -1141,12 +1224,13 @@ export default function HomePage() {
       />
 
       {/* Tools */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+      {/* Left: the things on the cards above, top to bottom. Right: records. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: 10, marginTop: 16 }}>
         <Tile label="Equipment" onClick={openEquipment} />
-        <Tile label="Terminals" onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
-        <Tile label="Trips & PTDs" onClick={() => router.push("/planner/trips")} />
-        <Tile label="Delivery Locations" onClick={() => router.push("/planner/locations")} />
+        <Tile label="Terminal" onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
+        <Tile label="Delivery Location" onClick={() => setPicker({ mode: "select" })} />
         {canCards && <Tile label="Cards" onClick={() => router.push("/planner/cards")} />}
+        <Tile label="Trips" onClick={() => router.push("/planner/trips")} />
         <Tile label="Reports" onClick={() => router.push("/planner/reports")} />
       </div>
 
@@ -1245,7 +1329,8 @@ export default function HomePage() {
 
       <LocationPicker
         open={!!picker}
-        title={picker?.mode === "reroute" ? "Change delivery" : picker?.mode === "split" ? "Send to another delivery" : "Add delivery"}
+        title={picker?.mode === "reroute" ? "Change delivery" : picker?.mode === "split" ? "Send to another delivery" : picker?.mode === "select" ? "Delivery location" : "Add delivery"}
+        selectedLocationId={picker?.mode === "reroute" ? picker.delivery.location_id : picker?.mode === "select" ? selectedLocId : null}
         origin={origin}
         locations={locations}
         tanks={locList.tanks}

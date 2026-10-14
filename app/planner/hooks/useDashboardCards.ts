@@ -4,13 +4,13 @@
 // Data for the Driver Dashboard's two permanent cards:
 //   - Terminal status: the pickup terminal's products at one rack, with the
 //     last API/temp reading and whether it's marked out.
-//   - Recent deliveries: this driver's last completed drops.
+//   - Recent deliveries: the selected store's last completed drops, every
+//     carrier.
 // Both read straight from the server and fail open (an error leaves the card
 // empty, never breaks the dashboard).
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { locationPlace, locationTitle } from "@/lib/trips/deliveryLocations";
 
 export type TerminalProductStatus = {
   productId: string;
@@ -26,13 +26,14 @@ export type TerminalProductStatus = {
 const STATUS_POLL_MS = 5 * 60_000;
 
 export function useTerminalStatus(terminalId: string | null, preferredRackId: string | null) {
+  const [rackId, setRackId] = useState<string | null>(null);
   const [rackName, setRackName] = useState<string | null>(null);
   const [rackCount, setRackCount] = useState(0);
   const [products, setProducts] = useState<TerminalProductStatus[]>([]);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    if (!terminalId) { setProducts([]); setRackName(null); setRackCount(0); return; }
+    if (!terminalId) { setProducts([]); setRackId(null); setRackName(null); setRackCount(0); return; }
     setLoading(true);
     try {
       const racks = await supabase.from("terminal_racks").select("rack_id, rack_name").eq("terminal_id", terminalId).order("rack_name");
@@ -40,6 +41,7 @@ export function useTerminalStatus(terminalId: string | null, preferredRackId: st
       setRackCount(list.length);
       const rack = list.find((r) => r.rack_id === preferredRackId) ?? list[0] ?? null;
       setRackName(rack?.rack_name ?? null);
+      setRackId(rack?.rack_id ?? null);
       if (!rack) { setProducts([]); return; }
       const res = await supabase
         .from("rack_product_status")
@@ -72,78 +74,63 @@ export function useTerminalStatus(terminalId: string | null, preferredRackId: st
     return () => window.clearInterval(id);
   }, [load]);
 
-  return { rackName, rackCount, products, loading, reload: load };
+  return { rackId, rackName, rackCount, products, loading, reload: load };
 }
 
-export type RecentDelivery = {
+export type StoreDelivery = {
   deliveryId: string;
-  tripId: string;
-  place: string;
+  // Only on the viewer's own deliveries (no PTD for anyone else).
+  tripId: string | null;
+  isMine: boolean;
+  ownCompany: boolean;
+  // Our driver's name, or another carrier's short company name.
+  who: string;
   leftAt: string | null;
-  orderNumber: string | null;
-  dropped: { productId: string | null; gallons: number }[];
+  products: { productId: string | null; gallons: number }[];
+  tanks: { tankNumber: string; productId: string | null; after: number; unit: "gallons" | "inches" }[];
 };
 
+// Recent deliveries at one store, every carrier. The server matches the same
+// store saved by other companies (recent_deliveries_at_location).
 // refreshKey: bump to refetch (e.g. after finishing a delivery).
-export function useRecentDeliveries(userId: string | null, refreshKey: unknown, limit = 8) {
-  const [items, setItems] = useState<RecentDelivery[]>([]);
+export function useStoreDeliveries(locationId: string | null, refreshKey: unknown, limit = 10) {
+  const [items, setItems] = useState<StoreDelivery[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!userId) { setItems([]); return; }
+    if (!locationId) { setItems([]); return; }
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const dr = await supabase
-          .from("trip_deliveries")
-          .select("delivery_id, trip_id, location_id, one_off_name, left_at")
-          .eq("delivering_driver_id", userId)
-          .eq("status", "complete")
-          .order("left_at", { ascending: false, nullsFirst: false })
-          .limit(limit);
-        const dels = (dr.data ?? []) as { delivery_id: string; trip_id: string; location_id: string | null; one_off_name: string | null; left_at: string | null }[];
-        if (dels.length === 0) { if (!cancelled) setItems([]); return; }
-        const tripIds = [...new Set(dels.map((d) => d.trip_id))];
-        const locIds = [...new Set(dels.map((d) => d.location_id).filter((x): x is string => !!x))];
-        const none = Promise.resolve({ data: [] as any[] });
-        const [cl, od, lr] = await Promise.all([
-          supabase.from("trip_compartment_loads").select("delivery_id, order_id, product_id, gross_gallons, disposition").in("delivery_id", dels.map((d) => d.delivery_id)),
-          supabase.from("trip_orders").select("order_id, trip_id, order_number, is_primary").in("trip_id", tripIds),
-          locIds.length ? supabase.from("delivery_locations").select("location_id, name, location_number, city, state").in("location_id", locIds) : none,
-        ]);
-        const loads = (cl.data ?? []) as any[];
-        const orders = (od.data ?? []) as any[];
-        const locs = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, l]));
-        const out = dels.map((d): RecentDelivery => {
-          const mine = loads.filter((c) => c.delivery_id === d.delivery_id && c.disposition === "delivered");
-          const byProduct = new Map<string | null, number>();
-          for (const c of mine) byProduct.set(c.product_id, (byProduct.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
-          const orderId = mine.find((c) => c.order_id)?.order_id;
-          const order = orders.find((o) => o.order_id === orderId)
-            ?? orders.find((o) => o.trip_id === d.trip_id && o.is_primary);
-          const loc = d.location_id ? locs.get(d.location_id) : null;
-          const place = loc
-            ? [locationTitle(loc), locationPlace(loc)].filter(Boolean).join(" · ")
-            : d.one_off_name ?? "Delivery";
-          return {
-            deliveryId: d.delivery_id,
-            tripId: d.trip_id,
-            place,
-            leftAt: d.left_at,
-            orderNumber: order?.order_number ?? null,
-            dropped: [...byProduct].map(([productId, gallons]) => ({ productId, gallons })),
-          };
-        });
+        const { data, error } = await supabase.rpc("recent_deliveries_at_location", { p_location_id: locationId, p_limit: limit });
+        if (error) throw error;
+        const rows = (Array.isArray(data) ? data : []) as any[];
+        const out = rows.map((r): StoreDelivery => ({
+          deliveryId: String(r.delivery_id),
+          tripId: r.trip_id ? String(r.trip_id) : null,
+          isMine: !!r.is_mine,
+          ownCompany: !!r.own_company,
+          who: String(r.who ?? "Driver"),
+          leftAt: r.left_at ?? null,
+          products: ((r.products ?? []) as any[]).map((p) => ({ productId: p.product_id ?? null, gallons: Number(p.gallons ?? 0) })),
+          tanks: ((r.tanks ?? []) as any[]).map((t) => ({
+            tankNumber: String(t.tank_number ?? ""),
+            productId: t.product_id ?? null,
+            after: Number(t.after ?? 0),
+            unit: t.unit === "inches" ? "inches" : "gallons",
+          })),
+        }));
         if (!cancelled) setItems(out);
       } catch (e) {
-        console.warn("[dashboard] recent deliveries failed:", e);
+        console.warn("[dashboard] store deliveries failed:", e);
+        if (!cancelled) setItems([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [userId, refreshKey, limit]);
+  }, [locationId, refreshKey, limit]);
 
   return { items, loading };
 }

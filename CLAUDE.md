@@ -11085,3 +11085,38 @@ No migration. Not click-tested; cards static-rendered with sample data.
   driver's plan isn't readable by other drivers. "Nearby" isn't measured:
   every company parked preload is listed.
 - Components: `app/planner/components/trip/DashboardCards.tsx`.
+
+### Outage auto-clear, terminal status window, store-wide recent deliveries, city-grouped location picker (2026-10-14)
+
+Migrations applied 2026-10-14 via the Management API. Not click-tested.
+
+- `20261014020000_clear_outage_on_load.sql`: trigger `trg_clear_outage_on_load`
+  on `load_log` (status → 'loaded'). Clears `rack_product_status.is_out` for the
+  loaded products at the load's rack (every rack of the terminal if no rack)
+  and deletes that terminal's `out_of_product` reports for them, any company.
+  Tested in a rolled-back transaction. One-time cleanup cleared Buckey North
+  D2 (and Marathon 87/D2), which had stayed out after real loads.
+- `20261014040000_outage_reports_clear_terminal_wide.sql`: any signed-in user
+  can delete `out_of_product`, `long_line` and `terminal_issue` reports;
+  Out of Allocation stays reporter-only. `canClear` in the banner hook matches.
+- Dashboard Terminal card: labeled with the terminal's "City, ST". Its expanded
+  view opens `TerminalStatusSheet` (mark a product Out/Available at the rack,
+  report/clear Long Line and Terminal Issue, clear your own allocation reports).
+- `20261014030000_recent_deliveries_at_location.sql`:
+  `recent_deliveries_at_location(location_id, limit)`, SECURITY DEFINER. Matches
+  the same store saved by other companies (same state, normalized name and store
+  number, and same normalized city — "Ft." = "Fort" — or within ~2 mi). Returns
+  who (our driver's name, else a short carrier name), gross gallons per product,
+  finish time, after-delivery tank readings, and `trip_id` only for the
+  caller's own deliveries (no PTD for anyone else).
+- Recent Deliveries card now follows the selected delivery location: the trip's
+  next delivery, else the last one picked from the dashboard's Delivery Location
+  tile (localStorage `proTankr:u:<uid>:deliveryLocation`). Picking on a trip
+  reroutes the next delivery (or adds one); off a trip it prefills Begin Trip.
+- `LocationPicker` rebuilt like the terminal picker: "Showing locations in City
+  · Change", same card style with a star, starred first (store number then
+  name), "Show N more" for the rest of the city. Change lists cities with a
+  search that finds locations in any city. Helpers + 2 tests in
+  `deliveryLocations.ts`.
+- Expirations row shows only when something is expired or expiring. Tiles fill
+  by column: Equipment, Terminal, Delivery Location | Cards, Trips, Reports.

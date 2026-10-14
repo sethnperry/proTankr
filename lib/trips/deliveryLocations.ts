@@ -87,3 +87,70 @@ export function locationTitle(l: Pick<DeliveryLocation, "name" | "location_numbe
 export function locationPlace(l: Pick<DeliveryLocation, "city" | "state">): string {
   return [l.city, l.state].filter(Boolean).join(", ");
 }
+
+// ── City-grouped picker (matches the terminal picker) ─────────────────────
+
+export type LocationCity = { city: string; state: string; key: string; count: number };
+
+export function cityKeyOf(l: Pick<DeliveryLocation, "city" | "state">): string {
+  return `${(l.city ?? "").trim().toLowerCase()}|${(l.state ?? "").trim().toUpperCase()}`;
+}
+
+// Every city with an active location, alphabetical. A location with no city
+// falls in a "" city (shown as "No city").
+export function locationCities(locations: DeliveryLocation[]): LocationCity[] {
+  const map = new Map<string, LocationCity>();
+  for (const l of locations) {
+    if (l.is_active === false) continue;
+    const key = cityKeyOf(l);
+    const cur = map.get(key);
+    if (cur) cur.count++;
+    else map.set(key, { city: (l.city ?? "").trim(), state: (l.state ?? "").trim().toUpperCase(), key, count: 1 });
+  }
+  return [...map.values()].sort((a, b) =>
+    Number(a.city === "") - Number(b.city === "") || a.city.localeCompare(b.city) || a.state.localeCompare(b.state));
+}
+
+// Store number (numeric-aware), then name. Locations without a number last.
+export function byNumberThenName(a: Pick<DeliveryLocation, "location_number" | "name">, b: Pick<DeliveryLocation, "location_number" | "name">): number {
+  const an = (a.location_number ?? "").trim();
+  const bn = (b.location_number ?? "").trim();
+  if (an && !bn) return -1;
+  if (!an && bn) return 1;
+  if (an && bn) {
+    const c = an.localeCompare(bn, undefined, { numeric: true, sensitivity: "base" });
+    if (c) return c;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+// One city's locations, starred first, each group by number then name.
+export function locationsInCity(locations: DeliveryLocation[], key: string): { starred: DeliveryLocation[]; others: DeliveryLocation[] } {
+  const inCity = locations.filter((l) => l.is_active !== false && cityKeyOf(l) === key);
+  return {
+    starred: inCity.filter((l) => l.starred).sort(byNumberThenName),
+    others: inCity.filter((l) => !l.starred).sort(byNumberThenName),
+  };
+}
+
+// Which city the picker opens on: the selected location's, else the
+// nearest location to the pickup, else a starred location's, else the first.
+export function defaultLocationCity(
+  locations: DeliveryLocation[],
+  opts: { selectedId?: string | null; origin?: LatLon | null },
+): string | null {
+  const active = locations.filter((l) => l.is_active !== false);
+  if (active.length === 0) return null;
+  const sel = opts.selectedId ? active.find((l) => l.location_id === opts.selectedId) : null;
+  if (sel) return cityKeyOf(sel);
+  if (opts.origin) {
+    let best: { l: DeliveryLocation; d: number } | null = null;
+    for (const l of active) {
+      if (!hasCoords(l)) continue;
+      const d = airMiles(opts.origin, l);
+      if (!best || d < best.d) best = { l, d };
+    }
+    if (best) return cityKeyOf(best.l);
+  }
+  return cityKeyOf(active.find((l) => l.starred) ?? active[0]);
+}
