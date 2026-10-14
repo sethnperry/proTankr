@@ -4,11 +4,10 @@
 // works through before a terminal issues access (company letter, training
 // video, orientation, training loads, a final check load).
 //
-// There is no qualification data in the database yet. This module only
-// describes how such data would be summarized and drawn; the dashboard feeds
-// it clearly labeled mock data in development.
+// Real steps come from lib/terminals/accessSteps.ts (terminal requirements +
+// the driver's progress).
 
-export type QualStepKind = "letter" | "video" | "orientation" | "training_load" | "check_load" | "other";
+export type QualStepKind = "letter" | "video" | "register" | "orientation" | "training_load" | "check_load" | "card" | "other";
 export type QualStepState = "done" | "next" | "pending" | "blocked";
 
 export type QualStep = { kind: QualStepKind; label: string; state: QualStepState };
@@ -29,6 +28,8 @@ export const QUAL_KIND_MARK: Record<QualStepKind, string> = {
   orientation: "O",
   training_load: "T",
   check_load: "C",
+  register: "R",
+  card: "★",
   other: "•",
 };
 

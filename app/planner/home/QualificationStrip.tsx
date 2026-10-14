@@ -1,16 +1,15 @@
 "use client";
 // app/planner/home/QualificationStrip.tsx
 //
-// Terminal-qualification strip prototype. Draws whatever steps it's given;
-// nothing in the database supplies real steps yet, so the dashboard only
-// shows this with clearly labeled mock data (?mockQual=1, dev or super admin).
+// Access steps underway, one row per terminal. Steps come from
+// lib/terminals/accessSteps.ts; tapping a row opens the steps sheet.
 //
 // Monochrome: filled = done, outlined with a corner tick = next, dim outline
 // = pending, hatched = blocked/waiting on someone else. The letter under each
 // segment is the step type (L letter, V video, O orientation, T training
 // load, C check load), so state never relies on color.
 
-import React, { useState } from "react";
+import React from "react";
 import { useDashLook } from "./dashLook";
 import {
   QUAL_KIND_MARK, compactSteps, summarizeQualification,
@@ -49,7 +48,8 @@ function Row({ t, onOpen, first }: { t: QualTerminal; onOpen: () => void; first?
   const L = useDashLook();
   const sum = summarizeQualification(t.steps);
   const { folded, steps } = compactSteps(t.steps, MAX_SEGMENTS);
-  const nextText = sum.complete ? "All steps done · waiting on access" : sum.blocked
+  const nextText = t.steps.length === 0 ? "Not set up yet · tap to answer a few questions"
+    : sum.complete ? "All steps done · waiting on access" : sum.blocked
     ? `Waiting · ${sum.blocked.label}` : sum.next ? `Next · ${sum.next.label}` : "";
   return (
     <button type="button" onClick={onOpen} className="dash-press"
@@ -83,56 +83,11 @@ function Row({ t, onOpen, first }: { t: QualTerminal; onOpen: () => void; first?
   );
 }
 
-export function QualificationCard({ items }: { items: QualTerminal[] }) {
+export function QualificationCard({ items, onOpen }: { items: QualTerminal[]; onOpen: (terminalId: string) => void }) {
   const L = useDashLook();
-  const [open, setOpen] = useState<QualTerminal | null>(null);
   return (
     <div style={{ ...L.primary, padding: "2px 14px 2px" }}>
-      {items.map((t, i) => <Row key={t.terminalId} t={t} first={i === 0} onOpen={() => setOpen(t)} />)}
-      {open && (
-        <div style={{ borderTop: `1px solid ${L.hairline}`, padding: "10px 0 12px" }}>
-          <div style={{ display: "flex", alignItems: "baseline" }}>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 800 }}>{open.name} checklist</span>
-            <button type="button" onClick={() => setOpen(null)} style={{ background: "none", border: "none", color: L.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
-          </div>
-          {open.steps.map((s, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, marginTop: 6 }}>
-              <span style={{ width: 16, textAlign: "center", fontWeight: 800, color: s.state === "done" ? "#fff" : L.faint }}>
-                {s.state === "done" ? "✓" : s.state === "blocked" ? "…" : s.state === "next" ? "›" : "○"}
-              </span>
-              <span style={{ flex: 1, color: s.state === "done" ? L.muted : "#fff", textDecoration: s.state === "done" ? "line-through" : undefined }}>{s.label}</span>
-              <span style={{ fontSize: 11, color: s.state === "blocked" ? "#fbbf24" : L.faint }}>
-                {s.state === "blocked" ? "Waiting" : s.state === "next" ? "Next" : s.state === "done" ? "Done" : ""}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      {items.map((t, i) => <Row key={t.terminalId} t={t} first={i === 0} onOpen={() => onOpen(t.terminalId)} />)}
     </div>
   );
-}
-
-// Mock terminals covering few/many steps, different training-load counts,
-// complete, partial, and blocked. Dev/super-admin only, never saved.
-export function mockQualification(): QualTerminal[] {
-  const st = (kind: QualStep["kind"], label: string, state: QualStep["state"]): QualStep => ({ kind, label, state });
-  const loads = (n: number, done: number, firstState: QualStep["state"] = "next") =>
-    Array.from({ length: n }, (_, i) => st("training_load", `Training load ${i + 1}`, i < done ? "done" : i === done ? firstState : "pending"));
-  return [
-    { terminalId: "q1", name: "Buckeye North", steps: [
-      st("letter", "Company letter", "done"), st("video", "Training video", "done"),
-      st("orientation", "On-site orientation", "next"), ...loads(2, 0, "pending"), st("check_load", "Operator check load", "pending"),
-    ] },
-    { terminalId: "q2", name: "Kinder Morgan Port Everglades Terminal", steps: [
-      st("letter", "Company letter", "done"), st("video", "Training video", "done"), st("orientation", "On-site orientation", "done"),
-      ...loads(8, 6), st("check_load", "Operator check load", "pending"),
-    ] },
-    { terminalId: "q3", name: "Citgo", steps: [
-      st("letter", "Company letter", "blocked"), st("video", "Training video", "pending"), st("check_load", "Operator check load", "pending"),
-    ] },
-    { terminalId: "q4", name: "Marathon", steps: [
-      st("letter", "Company letter", "done"), st("orientation", "On-site orientation", "done"),
-      ...loads(3, 3), st("check_load", "Operator check load", "done"),
-    ] },
-  ];
 }

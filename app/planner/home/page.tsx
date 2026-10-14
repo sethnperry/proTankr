@@ -98,7 +98,9 @@ import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCard
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
 import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./DashboardChrome";
-import { QualificationCard, mockQualification } from "./QualificationStrip";
+import { QualificationCard, type QualTerminal } from "./QualificationStrip";
+import { openAccessSteps, useAccessQualifications } from "../components/access/useAccessSteps";
+import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/accessSteps";
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
@@ -112,6 +114,12 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
   parked: "Parked preloaded",
   complete: "Complete",
   cancelled: "Cancelled",
+};
+
+// Short forms for the gauge panel's Trip box (one word fits).
+const STATUS_SHORT: Record<TripRow["status"], string> = {
+  draft: "Draft", loading: "Loading", in_transit: "Transit", delivering: "Drop",
+  parked: "Parked", complete: "Done", cancelled: "Cancel",
 };
 
 const muted = "rgba(255,255,255,0.5)";
@@ -866,14 +874,16 @@ export default function HomePage() {
   useScrollBackdrop(wrapEl, L);
 
   // ── Terminal access readiness ─────────────────────────────────────────────
-  // The qualification strip has no real data yet (no table holds terminal
-  // requirements). ?mockQual=1 shows a labeled mock, in development or for a
-  // super admin only. Never saved.
-  const [mockQualParam, setMockQualParam] = useState(false);
-  useEffect(() => {
-    setMockQualParam(new URLSearchParams(window.location.search).get("mockQual") === "1");
-  }, []);
-  const mockQual = mockQualParam && (process.env.NODE_ENV !== "production" || shell.isSuperAdmin);
+  // Access steps underway (driver_terminal_qualifications + requirements).
+  const accessQuals = useAccessQualifications(userId).data;
+  const stepsByTerminal = (() => {
+    const m = new Map<string, ReturnType<typeof accessSteps>>();
+    for (const [tid, e] of accessQuals ?? []) {
+      if (!inProgress(e.prog)) continue;
+      m.set(tid, requirementsComplete(e.req) ? accessSteps(e.req, e.prog, e.loadsCompleted) : []);
+    }
+    return m;
+  })();
   // The trip's pickup city when there is one, else the Planner's city.
   const readinessPlace = (() => {
     const p = snap ? activePickup(snap.pickups) : null;
@@ -896,6 +906,14 @@ export default function HomePage() {
         state: (t.state ?? null) as string | null,
         renewalDays: Number(t.renewal_days ?? 90) || 90,
         cardedOn: terminals.accessDateByTerminalId[id] ?? null,
+        steps: stepsByTerminal.has(id)
+          ? (() => {
+              const st = stepsByTerminal.get(id)!;
+              // Not set up yet: one empty "next" line until the questions are answered.
+              const states = st.length ? st.map((x) => x.state) : (["next"] as const).slice();
+              return { done: st.filter((x) => x.state === "done").length, total: Math.max(1, st.length), states };
+            })()
+          : null,
       });
     };
     for (const t of terminalCatalog) add(t);
@@ -1164,7 +1182,7 @@ export default function HomePage() {
       <GaugePanel cells={[
           tripLoaded && currentGross != null
             ? { label: "Gross", value: currentGross.toLocaleString("en-US"), unit: "lb", color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget) }
-            : { label: "Trip", value: openTrip ? STATUS_LABEL[openTrip.status] : "None" },
+            : { label: "Trip", value: openTrip ? STATUS_SHORT[openTrip.status] : "None" },
           { label: "Access", value: `${readiness.access}/${readiness.segments.length}`,
             color: readiness.expired > 0 ? EXPIRY_COLOR.expired : readiness.expiring > 0 ? EXPIRY_COLOR.expiring : readiness.soon > 0 ? EXPIRY_COLOR.soon : undefined,
             onClick: () => openTerminalList(null) },
@@ -1260,12 +1278,20 @@ export default function HomePage() {
         summary={readiness}
         loading={terminals.termLoading}
         onOpenTerminal={openTerminalList}
+        onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
         onChangeCity={() => shell.setLocOpen(true)}
       />
-      {mockQual && (
+      {stepsByTerminal.size > 0 && (
         <>
-          <SectionLabel right={<span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "#000", background: "#fbbf24", borderRadius: 3, padding: "2px 5px" }}>MOCK DATA</span>}>Getting carded</SectionLabel>
-          <QualificationCard items={mockQualification()} />
+          <SectionLabel>Access steps</SectionLabel>
+          <QualificationCard
+            items={[...stepsByTerminal.entries()].map(([tid, st]): QualTerminal => ({
+              terminalId: tid,
+              name: String(terminalCatalog.find((t) => String(t.terminal_id) === tid)?.terminal_name ?? "Terminal"),
+              steps: st,
+            }))}
+            onOpen={(tid) => openAccessSteps({ terminalId: tid })}
+          />
         </>
       )}
       </div>

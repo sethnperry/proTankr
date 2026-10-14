@@ -11166,3 +11166,41 @@ the stray BP Tampa `terminal_access` row on Seth's account (carded
 2026-08-13, never loaded). Not built yet: the new-access step sequence
 (horizontal lines in a no-access box); needs tables for each terminal's
 steps and each driver's progress, design with the user first.
+
+### Terminal access steps (2026-10-14)
+
+Migration `20261014050000_terminal_access_steps.sql` (**applied 2026-10-14**
+via the Management API): `terminal_access_requirements` (one row per terminal,
+shared by every company, editable by any signed-in user: drivers, company
+admins and ProTankr admins set it up together), `driver_authorization_letters`
+(the driver's company letter, files in `equipment-docs` under
+`{company_id}/authorization_letters/{user_id}/`; reusable at other terminals),
+`driver_terminal_qualifications` (one row per driver per terminal).
+
+- `lib/terminals/accessSteps.ts` (2 tests): steps in order. Letter goes where
+  the terminal needs it (before first load / before check load / before card /
+  not sure = first), then video or PowerPoint, register at the new-user web
+  address, onsite orientation, training loads, check load (the last required
+  load, with an operator), card issued. Any order allowed; the check load or
+  card shows blocked while a letter due before it is missing.
+- Training loads = the driver's `load_log` rows here with status `loaded`
+  since `started_at`, plus `loads_adjust` (+/- in the sheet).
+- `app/planner/components/access/`: `TerminalAccessSheet` (setup questions if
+  the terminal isn't set up, letter attach "stored or new", checklist, edit
+  terminal steps, "I already have a card here", stop tracking),
+  `AccessStepsHost` (one shared sheet in ShellChrome, opened by
+  `openAccessSteps()` window event), `useAccessSteps.ts` (React Query).
+- Starts automatically: the Planner's begin-load calls `openAccessSteps` with
+  the pre-load carded date. No access (never carded, or 30+ days past expiry)
+  → creates the qualification (started 15 min back so this load counts as
+  training load 1; a finished one is reset for a new sequence) and opens the
+  sheet. Steps underway → opens the sheet every load.
+- Card issued → sets `terminal_access` to today and completes the steps.
+- Also reachable from the dashboard strip (tap a no-access or in-progress box
+  twice) and the terminal list's expanded card ("Access Steps"). Dashboard
+  strip draws steps underway as one horizontal line per step; an "Access
+  steps" card lists them. The mock qualification card is gone.
+
+Verified by clicking through on real data (setup questions, start, attach a
+letter, check off orientation, strip lines); test rows deleted after. Not
+verified: the automatic start from a real load (the account was mid-trip).

@@ -1,4 +1,5 @@
 "use client";
+import { openAccessSteps } from "./components/access/useAccessSteps";
 import { motion } from "framer-motion";
 import { clearSetupSession } from "@/lib/setupSession";
 import { useRouter } from "next/navigation";
@@ -1725,6 +1726,11 @@ export default function CalculatorPage() {
       prevValue: terminals.accessDateByTerminalId[location.selectedTerminalId] ?? null,
     };
     loadWorkflow.beginLoadToSupabase();
+    // Terminal access steps: starts them if there's no access here, or shows
+    // what's left if they're underway (see AccessStepsHost).
+    if (location.selectedTerminalId) {
+      openAccessSteps({ terminalId: String(location.selectedTerminalId), fromLoad: { prevCardedOn: preLoadCardedOnRef.current.prevValue } });
+    }
     // beginLoadToSupabase closes over the current (post-override) planRows;
     // this effect runs after that render commits, so the snapshot is fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps

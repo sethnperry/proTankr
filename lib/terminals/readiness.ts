@@ -9,7 +9,10 @@
 
 import { daysUntilIso, expiryStateForDays } from "../expiry.ts";
 
-export type ReadinessState = "ready" | "soon" | "expiring" | "expired" | "none";
+export type ReadinessState = "ready" | "soon" | "expiring" | "expired" | "none" | "training";
+
+// Access steps underway at a terminal, bottom to top (lib/terminals/accessSteps.ts).
+export type ReadinessSteps = { done: number; total: number; states: ("done" | "next" | "pending" | "blocked")[] };
 
 export type ReadinessInput = {
   terminalId: string;
@@ -18,6 +21,9 @@ export type ReadinessInput = {
   state: string | null;
   renewalDays: number | null;
   cardedOn: string | null; // YYYY-MM-DD
+  // Access steps in progress here (card not issued yet). Shown instead of
+  // the access fill.
+  steps?: ReadinessSteps | null;
 };
 
 export type ReadinessSegment = {
@@ -34,6 +40,7 @@ export type ReadinessSegment = {
   // Expired more than the grace period ago: shown as no access.
   timedOut: boolean;
   isPickup: boolean;
+  steps: ReadinessSteps | null;
 };
 
 export type ReadinessSummary = {
@@ -44,6 +51,7 @@ export type ReadinessSummary = {
   expiring: number;
   expired: number;
   none: number;
+  training: number;
   // The one thing worth saying: the pickup terminal's problem, else the
   // worst other problem, else the next renewal.
   headline: { tone: "ok" | "soon" | "warn" | "bad" | "muted"; text: string } | null;
@@ -77,7 +85,11 @@ export function terminalReadiness(
     seen.add(r.terminalId);
     const isPickup = !!opts.pickupTerminalId && r.terminalId === opts.pickupTerminalId;
     const renewalDays = Number(r.renewalDays) > 0 ? Number(r.renewalDays) : 90;
-    const base = { terminalId: r.terminalId, name: r.name, short: shortName(r.name), renewalDays, isPickup };
+    const base = { terminalId: r.terminalId, name: r.name, short: shortName(r.name), renewalDays, isPickup, steps: r.steps ?? null };
+    if (r.steps) {
+      segments.push({ ...base, state: "training", cardedOn: r.cardedOn, expiresOn: null, daysLeft: null, remaining: 0, timedOut: false });
+      continue;
+    }
     if (!r.cardedOn) {
       segments.push({ ...base, state: "none", cardedOn: null, expiresOn: null, daysLeft: null, remaining: 0, timedOut: false });
       continue;
@@ -95,18 +107,19 @@ export function terminalReadiness(
     });
   }
   // Terminals you can load at first, then the rest; alphabetical within.
-  const hasAccess = (s: ReadinessSegment) => (s.state === "none" ? 1 : 0);
+  const hasAccess = (s: ReadinessSegment) => (s.state === "none" ? 2 : s.state === "training" ? 1 : 0);
   segments.sort((a, b) => hasAccess(a) - hasAccess(b) || a.name.localeCompare(b.name));
 
   const count = (s: ReadinessState) => segments.filter((x) => x.state === s).length;
   const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
   const problem = (s: ReadinessSegment) =>
     s.state === "none" ? `No access at ${s.name}`
+      : s.state === "training" ? `${s.name}: access steps ${s.steps!.done} of ${s.steps!.total}`
       : s.state === "expired" ? `${s.name} expired ${days(-(s.daysLeft ?? 0))} ago`
       : s.daysLeft === 0 ? `${s.name} expires today`
       : `${s.name} expires in ${days(s.daysLeft ?? 0)}`;
-  const tone = (s: ReadinessSegment): "soon" | "warn" | "bad" =>
-    s.state === "soon" ? "soon" : s.state === "expiring" ? "warn" : "bad";
+  const tone = (s: ReadinessSegment): "soon" | "warn" | "bad" | "muted" =>
+    s.state === "soon" ? "soon" : s.state === "expiring" ? "warn" : s.state === "training" ? "muted" : "bad";
 
   let headline: ReadinessSummary["headline"] = null;
   const pickup = segments.find((s) => s.isPickup);
@@ -118,6 +131,9 @@ export function terminalReadiness(
     headline = { tone: tone(pickup), text: `Pickup: ${problem(pickup)}` };
   } else if (worst) {
     headline = { tone: tone(worst), text: problem(worst) };
+  } else if (segments.some((s) => s.state === "training")) {
+    const t = segments.find((s) => s.state === "training")!;
+    headline = { tone: "muted", text: problem(t) };
   } else if (segments.some((s) => s.state === "ready")) {
     const next = segments.filter((s) => s.state === "ready").sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
     headline = { tone: "ok", text: `Next renewal: ${next.name} in ${days(next.daysLeft ?? 0)}` };
@@ -128,7 +144,7 @@ export function terminalReadiness(
   const soon = count("soon"), expiring = count("expiring");
   return {
     segments, access: count("ready") + soon + expiring, soon, expiring,
-    expired: count("expired"), none: count("none"), headline,
+    expired: count("expired"), none: count("none"), training: count("training"), headline,
   };
 }
 

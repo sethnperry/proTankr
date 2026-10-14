@@ -41,3 +41,14 @@ test("pickup problem leads; healthy city shows the next renewal", () => {
   assert.equal(shortName("Buckey North"), "BN");
   assert.equal(shortName("Citgo"), "CI");
 });
+
+test("terminal with access steps underway shows as training, after access", () => {
+  const r = terminalReadiness([
+    row("Alpha", { cardedOn: "2026-10-14" }),
+    row("Bravo", { cardedOn: "2026-10-14", steps: { done: 2, total: 5, states: ["done", "done", "next", "pending", "pending"] } }),
+    row("Charlie", { cardedOn: null }),
+  ], { city: "Tampa", state: "FL", todayIso: today });
+  assert.deepEqual(r.segments.map((s) => [s.name, s.state]), [["Alpha", "ready"], ["Bravo", "training"], ["Charlie", "none"]]);
+  assert.equal(r.access, 1);
+  assert.equal(r.training, 1);
+});

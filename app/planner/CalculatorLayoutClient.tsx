@@ -18,6 +18,7 @@
 // metadata exports to live in a server component -- this client component
 // holds all the actual interactive shell logic.
 
+import { AccessStepsHost } from "./components/access/AccessStepsHost";
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import NavMenu from "@/lib/ui/NavMenu";
@@ -384,6 +385,16 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         myRole={shell.role}
         companyId={shell.companyId}
         onLoadMyTerminals={shell.terminals.loadMyTerminals}
+      />
+
+      {/* Terminal access steps: one shared sheet, opened via openAccessSteps(). */}
+      <AccessStepsHost
+        userId={shell.effectiveUserId || null}
+        companyId={shell.companyId ?? null}
+        onCardIssued={async (tid) => {
+          await shell.terminals.setAccessDateForTerminal(tid, new Date().toISOString().slice(0, 10));
+          await shell.terminals.refreshTerminalAccessForUser();
+        }}
       />
 
       <RackSelectSheet

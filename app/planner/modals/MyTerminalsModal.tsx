@@ -1,5 +1,6 @@
 "use client";
 
+import { openAccessSteps } from "../components/access/useAccessSteps";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
@@ -391,6 +392,17 @@ export default function MyTerminalsModal(props: {
                               </button>
                             )}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => openAccessSteps({ terminalId: tid })}
+                            style={{
+                              width: "100%", marginTop: 8, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 6,
+                              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
+                              color: "#fff", cursor: "pointer",
+                            }}
+                          >
+                            Access Steps
+                          </button>
                         </div>
                       </div>
                     )}
