@@ -15,7 +15,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import type { TripTable } from "@/lib/trips/types";
+import type { TripPickupRow, TripTable } from "@/lib/trips/types";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
@@ -41,6 +41,8 @@ import {
 import {
   activePickup,
   addPickup,
+  addTripOrder,
+  setPickupOrder,
   canPark,
   arriveDelivery,
   arrivePickup,
@@ -89,6 +91,7 @@ import { CompartmentStrip } from "../components/trip/CompartmentStrip";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "../utils/productColor";
+import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -489,11 +492,31 @@ export default function HomePage() {
     target: currentTarget,
   }), [compSizes, aboardRows, currentGross, currentTarget]);
   const [addOpen, setAddOpen] = useState(false);
-  const [addDraft, setAddDraft] = useState<AddPickupDraft>({ stage: "comps", comps: [], products: {} });
+  const primaryOrderId = children?.primaryOrder?.order_id ?? null;
+  const defaultOrder = (): OrderChoice => primaryOrderId ? { kind: "existing", orderId: primaryOrderId } : { kind: "new", number: "" };
+  const [addDraft, setAddDraft] = useState<AddPickupDraft>({ stage: "comps", comps: [], products: {}, order: { kind: "new", number: "" } });
+  const [addBusy, setAddBusy] = useState(false);
+  const [orderErr, setOrderErr] = useState<string | null>(null);
+  // An order choice → an order id on this trip. A new number is checked
+  // against the company's other live trips, then added (or matched to one
+  // already on this trip). Null = keep the primary order.
+  const resolveOrder = async (choice: OrderChoice): Promise<{ orderId: string | null } | { error: string }> => {
+    if (!store || !openTrip) return { error: "No trip." };
+    if (choice.kind === "existing") return { orderId: choice.orderId === primaryOrderId ? null : choice.orderId };
+    const num = choice.number.trim();
+    if (!num) return { error: "Enter the order number." };
+    const local = usedOrderNumbers(trips, store.list("trip_orders", () => true), openTrip.trip_id);
+    const taken = conflicts([num], local);
+    if (!taken.length && companyId) taken.push(...(await serverOrderConflicts(companyId, [num], openTrip.trip_id)));
+    if (taken.length) return { error: `Order ${taken[0]} is already on another trip.` };
+    const id = addTripOrder(store, { tripId: openTrip.trip_id, orderNumber: num, newId });
+    return { orderId: id === primaryOrderId ? null : id };
+  };
   const [addTermPending, setAddTermPending] = useState(false);
   const addSawPicker = useRef(false);
   const openAddPickup = () => {
-    setAddDraft({ stage: "comps", comps: addCheck.emptyComps.length === 1 ? [...addCheck.emptyComps] : [], products: {} });
+    setOrderErr(null);
+    setAddDraft({ stage: "comps", comps: addCheck.emptyComps.length === 1 ? [...addCheck.emptyComps] : [], products: {}, order: defaultOrder() });
     setAddOpen(true);
   };
   const addPickTerminal = () => {
@@ -512,12 +535,17 @@ export default function HomePage() {
     setAddDraft((d) => ({ ...d, stage: location.selectedTerminalId ? "products" : "comps" }));
     setAddOpen(true);
   }, [addTermPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
-  const confirmAddPickup = () => {
+  const confirmAddPickup = async () => {
     if (!store || !userId || !openTrip) return;
     const plannedComps = addDraft.comps
       .filter((n) => !!addDraft.products[n])
       .map((n) => ({ comp_number: n, product_id: addDraft.products[n] }));
     if (!plannedComps.length) return;
+    setAddBusy(true);
+    setOrderErr(null);
+    const res = await resolveOrder(addDraft.order);
+    setAddBusy(false);
+    if ("error" in res) { setOrderErr(res.error); return; }
     addPickup(store, {
       userId, tripId: openTrip.trip_id,
       terminalId: location.selectedTerminalId || null,
@@ -526,10 +554,26 @@ export default function HomePage() {
       city: location.selectedCity || null,
       state: location.selectedState || null,
       plannedComps,
+      orderId: res.orderId,
       ...clock(),
     });
     setAddOpen(false);
     setNotice({ text: `Pickup added at ${terminalName ?? "the terminal"}. Tap Arrive when you get there.`, tripId: null });
+    void syncNow();
+  };
+
+  // Change which order a pickup loads under (tap its order on the trip card).
+  const [orderPickup, setOrderPickup] = useState<TripPickupRow | null>(null);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const savePickupOrder = async (choice: OrderChoice) => {
+    if (!store || !userId || !orderPickup) return;
+    setOrderBusy(true);
+    setOrderErr(null);
+    const res = await resolveOrder(choice);
+    setOrderBusy(false);
+    if ("error" in res) { setOrderErr(res.error); return; }
+    setPickupOrder(store, { userId, pickup: orderPickup, orderId: res.orderId, ...clock() });
+    setOrderPickup(null);
     void syncNow();
   };
 
@@ -811,6 +855,10 @@ export default function HomePage() {
             // A rack the driver left without loading is a rack hop, not a
             // second pickup: show it as "Tried", and number only real pickups.
             const real = pickups.filter((p) => p.outcome !== "no_load");
+            const orderRows = children?.orders ?? [];
+            const multiOrder = orderRows.filter((o) => !!o.order_number).length > 1;
+            const orderNumberFor = (p: TripPickupRow) =>
+              (p.order_id ? orderRows.find((o) => o.order_id === p.order_id) : children?.primaryOrder)?.order_number ?? null;
             return pickups.map((p, i) => {
               const noLoad = p.outcome === "no_load";
               const n = real.indexOf(p);
@@ -824,7 +872,15 @@ export default function HomePage() {
               return (
                 <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
                   <span style={{ color: loaded ? "#4ade80" : muted, width: 66, flexShrink: 0 }}>{label}</span>
-                  <span style={{ flex: 1, minWidth: 0, ...(noLoad ? { color: muted, textDecoration: "line-through" } : {}) }}>{p.name ?? "Not set"}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={noLoad ? { color: muted, textDecoration: "line-through" } : undefined}>{p.name ?? "Not set"}</span>
+                    {!noLoad && (pickups.length > 1 || multiOrder || p.order_id) && (
+                      <button type="button" onClick={() => { setOrderErr(null); setOrderPickup(p); }}
+                        style={{ display: "block", background: "none", border: "none", padding: 0, marginTop: 1, color: muted, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                        Order {orderNumberFor(p) ?? "—"} ›
+                      </button>
+                    )}
+                  </span>
                   {lastLoaded && canAddPickup ? (
                     <button type="button" onClick={openAddPickup} style={{ ...smallLink, fontSize: 12 }}>+ Another pickup</button>
                   ) : (
@@ -949,9 +1005,23 @@ export default function HomePage() {
         catalog={products.map((p) => { const i = productInfo(p.product_id); return { product_id: p.product_id, name: i.name, code: i.code, hex: i.hex }; })}
         terminalLabel={pickupLabel}
         rackId={location.selectedRackId || null}
+        orders={children?.orders ?? []}
+        orderError={orderErr}
+        busy={addBusy}
         onPickTerminal={addPickTerminal}
         onConfirm={confirmAddPickup}
         onClose={() => setAddOpen(false)}
+      />
+
+      <PickupOrderSheet
+        open={!!orderPickup}
+        rackName={orderPickup?.name ?? "this rack"}
+        orders={children?.orders ?? []}
+        initial={orderPickup?.order_id ? { kind: "existing", orderId: orderPickup.order_id } : defaultOrder()}
+        busy={orderBusy}
+        error={orderErr}
+        onSave={(v) => void savePickupOrder(v)}
+        onClose={() => setOrderPickup(null)}
       />
 
       <ParkSheet

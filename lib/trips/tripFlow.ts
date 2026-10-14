@@ -247,7 +247,7 @@ export function recordLoadCompleted(
       compartment_load_id: old?.compartment_load_id ?? args.newId(),
       trip_id: tripId,
       pickup_id: pickup.pickup_id,
-      order_id: old?.order_id ?? primary?.order_id ?? null,
+      order_id: old?.order_id ?? pickup.order_id ?? primary?.order_id ?? null,
       comp_number: r.comp,
       product_id: r.productId,
       gross_gallons: r.gallons,
@@ -386,6 +386,7 @@ export function addPickup(
     city: string | null;
     state: string | null;
     plannedComps?: { comp_number: number; product_id: string }[] | null;
+    orderId?: string | null;
   } & Clock,
 ): string {
   const pickups = store.list("trip_pickups", (p) => p.trip_id === args.tripId);
@@ -396,6 +397,7 @@ export function addPickup(
     terminal_id: args.terminalId, rack_id: args.rackId, name: args.name, city: args.city, state: args.state,
     load_id: null, arrived_at: null, begin_at: null, left_at: null,
     ...(args.plannedComps?.length ? { planned_comps: args.plannedComps } : {}),
+    ...(args.orderId ? { order_id: args.orderId } : {}),
   });
   store.put("trips", { trip_id: args.tripId, status: "loading" });
   logEvent(store, args.newId, {
@@ -404,6 +406,45 @@ export function addPickup(
     payload: { seq, ...(args.plannedComps?.length ? { planned_comps: args.plannedComps } : {}) },
   });
   return pickupId;
+}
+
+// An order number on this trip: an existing one with the same number is
+// reused, otherwise a new (non-primary) order is added. Returns its id.
+export function addTripOrder(
+  store: TripStoreLike,
+  args: { tripId: string; orderNumber: string; newId: () => string },
+): string | null {
+  const num = args.orderNumber.trim();
+  if (!num) return null;
+  const key = num.toUpperCase().replace(/\s+/g, "");
+  const existing = store.list("trip_orders", (o) => o.trip_id === args.tripId)
+    .find((o) => (o.order_number ?? "").toUpperCase().replace(/\s+/g, "") === key);
+  if (existing) return existing.order_id;
+  const orderId = args.newId();
+  store.put("trip_orders", {
+    order_id: orderId, trip_id: args.tripId, order_number: num,
+    shipper: null, customer: null, is_primary: false,
+  });
+  return orderId;
+}
+
+// Which order a pickup loads under. Compartments already loaded there move
+// with it, so the PTD shows the right order per compartment.
+export function setPickupOrder(
+  store: TripStoreLike,
+  args: { userId: string; pickup: TripPickupRow; orderId: string | null } & Clock,
+) {
+  const p = args.pickup;
+  store.put("trip_pickups", { pickup_id: p.pickup_id, order_id: args.orderId });
+  const primary = store.list("trip_orders", (o) => o.trip_id === p.trip_id && o.is_primary)[0] ?? null;
+  const target = args.orderId ?? primary?.order_id ?? null;
+  for (const c of store.list("trip_compartment_loads", (c) => c.pickup_id === p.pickup_id && c.disposition !== "cancelled")) {
+    store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, order_id: target });
+  }
+  logEvent(store, args.newId, {
+    trip_id: p.trip_id, event_type: "pickup_order_set", occurred_at: args.now.toISOString(),
+    actor_id: args.userId, pickup_id: p.pickup_id, payload: { order_id: target },
+  });
 }
 
 // Couldn't load here (rack hop): the pickup ends with no load, with the

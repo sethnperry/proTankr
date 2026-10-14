@@ -7,7 +7,8 @@
 //      Blocks when every compartment is loaded or the gross is at legal.
 //   2. Pick the empty compartments to fill.
 //   3. Pick the terminal (the shared terminal picker, opened by the parent).
-//   4. Pick the product for each compartment.
+//   4. Pick the order it loads under (the trip's, or a different one) and
+//      the product for each compartment.
 // Confirm adds the pickup with those compartments; arriving there opens the
 // Planner on just them (app/planner/page.tsx, planned_comps).
 
@@ -17,6 +18,8 @@ import { supabase } from "@/lib/supabase/client";
 import { grossColor, type AddPickupCheck } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { CompartmentStrip } from "./CompartmentStrip";
+import { OrderChooser, type OrderChoice } from "./OrderChooser";
+import type { TripOrderRow } from "@/lib/trips/types";
 import { muted, primaryBtn, sectionCard, sectionTitle } from "./tripUi";
 
 export type AddPickupProduct = { product_id: string; name: string; code: string; hex: string | null };
@@ -25,6 +28,7 @@ export type AddPickupDraft = {
   stage: "comps" | "products";
   comps: number[];
   products: Record<number, string>;
+  order: OrderChoice;
 };
 
 const chip = (on: boolean): React.CSSProperties => ({
@@ -37,7 +41,7 @@ const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 export function AddPickupSheet({
   open, draft, setDraft, check, compSizes, aboard, catalog, terminalLabel, rackId,
-  onPickTerminal, onConfirm, onClose,
+  orders, orderError, busy, onPickTerminal, onConfirm, onClose,
 }: {
   open: boolean;
   draft: AddPickupDraft;
@@ -48,6 +52,9 @@ export function AddPickupSheet({
   catalog: AddPickupProduct[];
   terminalLabel: string | null;
   rackId: string | null;
+  orders: TripOrderRow[];
+  orderError: string | null;
+  busy: boolean;
   onPickTerminal: () => void;
   onConfirm: () => void;
   onClose: () => void;
@@ -103,7 +110,8 @@ export function AddPickupSheet({
 
   const warnColor = !check.canAdd ? "#f87171"
     : check.level === "over_target" || check.level === "near_target" ? "#fbbf24" : muted;
-  const allPicked = draft.comps.length > 0 && draft.comps.every((n) => !!draft.products[n]);
+  const orderOk = draft.order.kind === "existing" || !!draft.order.number.trim();
+  const allPicked = draft.comps.length > 0 && draft.comps.every((n) => !!draft.products[n]) && orderOk && !busy;
 
   return (
     <FullscreenModal open={open} title="Add Another Pickup" onClose={onClose} footer={null}>
@@ -160,6 +168,8 @@ export function AddPickupSheet({
               </button>
             </div>
           </div>
+          <OrderChooser orders={orders} value={draft.order} error={orderError}
+            onChange={(order) => setDraft({ ...draft, order })} />
           {draft.comps.map((n) => (
             <div key={n} style={sectionCard}>
               <div style={sectionTitle}>C{n} · product</div>

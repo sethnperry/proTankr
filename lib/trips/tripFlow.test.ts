@@ -5,6 +5,8 @@ import { createTripStore } from "./tripStore.ts";
 import { applyStartLoad, buildStartLoad, linkLoadToOpenTrip, type StartLoadInput } from "./tripLogic.ts";
 import {
   addPickup,
+  addTripOrder,
+  setPickupOrder,
   arriveDelivery,
   arrivePickup,
   canCancelLoad,
@@ -359,4 +361,26 @@ test("cancel a load: reasons in order, open rack closed as no-load, deliveries c
   assert.equal(canCancelLoad(t, false), false);
   setTripHidden(s, trip.trip_id, true);
   assert.equal(getTrip().driver_hidden, true);
+});
+
+test("a second pickup can load under its own order number", () => {
+  const { s, newId, trip, snap } = setup();
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000)], now: NOW, newId });
+  const primary = s.list("trip_orders").find((o) => o.is_primary)!;
+  assert.equal(snap().compLoads[0].order_id, primary.order_id);
+  // Same number as an order already on the trip reuses it.
+  assert.equal(addTripOrder(s, { tripId: trip.trip_id, orderNumber: " 4471 ", newId }), primary.order_id);
+  const second = addTripOrder(s, { tripId: trip.trip_id, orderNumber: "5520", newId })!;
+  assert.notEqual(second, primary.order_id);
+  addPickup(s, { userId: ME, tripId: trip.trip_id, terminalId: "term-2", rackId: null, name: "Buckeye", city: "Tampa", state: "FL", orderId: second, now: NOW, newId });
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L2", pickup: { terminalId: "term-2", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L2", readings: [reading(2, 3000)], now: NOW, newId });
+  const c2 = snap().compLoads.find((c) => c.comp_number === 2)!;
+  assert.equal(c2.order_id, second);
+  // Changing the first pickup's order moves its compartments with it.
+  setPickupOrder(s, { userId: ME, pickup: snap().pickups[0], orderId: second, now: NOW, newId });
+  assert.equal(snap().compLoads.find((c) => c.comp_number === 1)!.order_id, second);
+  setPickupOrder(s, { userId: ME, pickup: snap().pickups[0], orderId: null, now: NOW, newId });
+  assert.equal(snap().compLoads.find((c) => c.comp_number === 1)!.order_id, primary.order_id);
 });

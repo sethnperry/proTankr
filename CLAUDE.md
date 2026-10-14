@@ -11001,3 +11001,24 @@ Migration `20261014000000_trip_pickup_planned_comps.sql` (**applied
   Finish Loading records only those compartments on that pickup
   (`recordLoadCompleted` is already per pickup). The picked products
   become the live plan (slot 0) like any Planner edit.
+
+### Order number per pickup (2026-10-14)
+
+A driver sent to several terminals can load each under a different order.
+Migration `20261014010000_trip_pickup_order.sql` (**applied 2026-10-14** via
+the Management API): `trip_pickups.order_id` (null = the trip's primary
+order). Not click-tested.
+
+- `tripFlow.addTripOrder` (reuses an order already on the trip with the same
+  number, else adds a non-primary one) and `setPickupOrder` (moves that
+  pickup's compartment loads to the order too). `addPickup` takes `orderId`;
+  `recordLoadCompleted` stamps new compartments with the pickup's order. 1 test.
+- `OrderChooser.tsx`: the trip's orders as chips plus "+ Different order".
+  A new number is checked against the company's other live trips (local, then
+  server) before it's added.
+- Add Another Pickup asks for the order on the product step (defaults to the
+  trip's order).
+- Trip card: on a trip with more than one pickup (tried racks count) or more
+  than one order, each pickup line shows "Order N ›"; tapping it opens
+  `PickupOrderSheet` to change it. The PTD already prints the order per
+  compartment.

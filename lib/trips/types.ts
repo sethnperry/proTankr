@@ -84,6 +84,8 @@ export type TripPickupRow = Synced & {
   // A second pickup on a partly loaded trailer (20261014000000): the empty
   // compartments it fills and with what. Null = an ordinary pickup.
   planned_comps?: { comp_number: number; product_id: string }[] | null;
+  // The order this pickup loads under (20261014010000). Null = primary order.
+  order_id?: string | null;
 };
 
 export type TripDeliveryRow = Synced & {
