@@ -118,7 +118,7 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
 
 // Short forms for the gauge panel's Trip box (one word fits).
 const STATUS_SHORT: Record<TripRow["status"], string> = {
-  draft: "Draft", loading: "Loading", in_transit: "Transit", delivering: "Drop",
+  draft: "MT", loading: "Loading", in_transit: "Transit", delivering: "Drop",
   parked: "Parked", complete: "Done", cancelled: "Cancel",
 };
 
