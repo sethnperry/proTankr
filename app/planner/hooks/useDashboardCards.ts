@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { unitAlerts, type UnitAlertSummary, type OdometerPoint, type ServiceTypeInput, type ServiceRecordInput } from "@/lib/equipment/unitAlerts";
 
 export type TerminalProductStatus = {
   productId: string;
@@ -165,4 +166,47 @@ export function useTrailerResidue(trailerId: string | null, refreshKey?: unknown
     return () => { alive = false; };
   }, [trailerId, refreshKey]);
   return residue;
+}
+
+// Everything coming due on one truck or trailer: permits + service
+// (lib/equipment/unitAlerts.ts). Truck miles come from trip odometer readings.
+export function useUnitAlerts(unit: "truck" | "trailer", unitId: string | null, companyId: string | null, refreshKey?: unknown) {
+  const [summary, setSummary] = useState<UnitAlertSummary>({ alerts: [], count: 0, worst: null });
+  useEffect(() => {
+    setSummary({ alerts: [], count: 0, worst: null });
+    if (!unitId) return;
+    let alive = true;
+    const col = unit === "truck" ? "truck_id" : "trailer_id";
+    void (async () => {
+      try {
+        const [permits, records, types, trips] = await Promise.all([
+          supabase.from("equipment_permits").select("expiration_date, permit_types(name)").eq(col, unitId),
+          supabase.from("service_records").select("service_type_id, date, reading_value, created_at").eq(col, unitId),
+          companyId
+            ? supabase.from("service_types").select("service_type_id, name, interval_kind, interval_value, applies_to, is_active").eq("company_id", companyId)
+            : Promise.resolve({ data: [] as unknown[] }),
+          unit === "truck"
+            ? supabase.from("trips").select("begin_miles, end_miles, created_at, completed_at").eq("truck_id", unitId)
+                .order("created_at", { ascending: false }).limit(60)
+            : Promise.resolve({ data: [] as unknown[] }),
+        ]);
+        const odometer: OdometerPoint[] = [];
+        for (const t of (trips.data ?? []) as { begin_miles: number | null; end_miles: number | null; created_at: string; completed_at: string | null }[]) {
+          if (t.begin_miles != null) odometer.push({ miles: Number(t.begin_miles), at: t.created_at });
+          if (t.end_miles != null) odometer.push({ miles: Number(t.end_miles), at: t.completed_at ?? t.created_at });
+        }
+        const s = unitAlerts({
+          unit,
+          permits: ((permits.data ?? []) as unknown as { expiration_date: string | null; permit_types: { name: string } | null }[])
+            .map((p) => ({ name: p.permit_types?.name ?? "Permit", expiration_date: p.expiration_date })),
+          types: ((types.data ?? []) as ServiceTypeInput[]).map((t) => ({ ...t, interval_value: t.interval_value == null ? null : Number(t.interval_value) })),
+          records: ((records.data ?? []) as ServiceRecordInput[]).map((r) => ({ ...r, reading_value: r.reading_value == null ? null : Number(r.reading_value) })),
+          odometer,
+        });
+        if (alive) setSummary(s);
+      } catch { /* fail open: no alerts */ }
+    })();
+    return () => { alive = false; };
+  }, [unit, unitId, companyId, refreshKey]);
+  return summary;
 }

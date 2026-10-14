@@ -105,7 +105,8 @@ import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readines
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
-import { useTrailerResidue } from "../hooks/useDashboardCards";
+import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
+import type { UnitAlertSummary } from "@/lib/equipment/unitAlerts";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -115,12 +116,6 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
   parked: "Parked preloaded",
   complete: "Complete",
   cancelled: "Cancelled",
-};
-
-// Short forms for the gauge panel's Trip box (one word fits).
-const STATUS_SHORT: Record<TripRow["status"], string> = {
-  draft: "MT", loading: "Loading", in_transit: "Transit", delivering: "Drop",
-  parked: "Parked", complete: "Done", cancelled: "Cancel",
 };
 
 const muted = "rgba(255,255,255,0.5)";
@@ -868,6 +863,15 @@ export default function HomePage() {
   // Right-now sheets opened from the gauges and the Terminal tool.
   const [terminalNowOpen, setTerminalNowOpen] = useState(false);
   const [dropNowOpen, setDropNowOpen] = useState(false);
+  // Truck / trailer alert squares: permits + service coming due.
+  const truckAlerts = useUnitAlerts("truck", truckId, companyId);
+  const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
+  const [unitAlertsOpen, setUnitAlertsOpen] = useState<"truck" | "trailer" | null>(null);
+  const unitCell = (label: string, s: UnitAlertSummary, which: "truck" | "trailer", has: boolean) => ({
+    label, value: has ? String(s.count) : "—", unit: has ? "due" : undefined,
+    color: s.worst ? EXPIRY_COLOR[s.worst] : LOOK.muted,
+    onClick: has ? () => setUnitAlertsOpen(which) : undefined,
+  });
   const switchTerminal = () => {
     setTerminalNowOpen(false);
     if (location.selectedCity) shell.setTermOpen(true);
@@ -1187,16 +1191,13 @@ export default function HomePage() {
       )}
 
       <GaugePanel cells={[
-          { label: "Trip", value: openTrip ? STATUS_SHORT[openTrip.status] : "None" },
+          unitCell("Truck", truckAlerts, "truck", !!truckId),
+          unitCell("Trailer", trailerAlerts, "trailer", !!trailerId),
           // Company trucks headed to my terminal, and loads headed to my delivery.
           { label: "To Rack", value: String(toMyTerminal.length), unit: toMyTerminal.length === 1 ? "trk" : "trks",
             color: toMyTerminal.length ? undefined : L.muted, onClick: () => setTerminalNowOpen(true) },
           { label: "To Drop", value: String(toMyDelivery.length), unit: toMyDelivery.length === 1 ? "load" : "loads",
             color: toMyDelivery.length ? undefined : L.muted, onClick: () => setDropNowOpen(true) },
-          { label: "Sync", value: failed.length > 0 ? String(failed.length) : String(pendingCount),
-            unit: failed.length > 0 ? "err" : pendingCount > 0 ? "wait" : "ok",
-            color: failed.length > 0 ? "#f87171" : undefined,
-            onClick: () => { void syncNow(); setSyncOpen(true); } },
         ]} />
 
       <AddPickupSheet
@@ -1341,6 +1342,25 @@ export default function HomePage() {
           style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>
           Switch Terminal
         </button>
+      </FullscreenModal>
+      <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
+        {(() => {
+          const s = unitAlertsOpen === "trailer" ? trailerAlerts : truckAlerts;
+          return (
+            <>
+              {s.alerts.length === 0 && <div style={{ ...card, color: muted, fontSize: 14 }}>Nothing due in the next 30 days.</div>}
+              {s.alerts.map((a, i) => (
+                <div key={i} style={{ ...card, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span aria-hidden style={{ width: 8, height: 8, background: EXPIRY_COLOR[a.state], flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 700 }}>{a.name}<span style={{ color: muted, fontWeight: 500, fontSize: 12, marginLeft: 6 }}>{a.kind === "permit" ? "Permit" : "Service"}</span></span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: EXPIRY_COLOR[a.state], textAlign: "right" }}>{a.detail}</span>
+                </div>
+              ))}
+              <button type="button" onClick={() => { setUnitAlertsOpen(null); openEquipment(); }}
+                style={{ ...card, width: "100%", marginTop: 6, color: "#fff", fontWeight: 800, cursor: "pointer", textAlign: "center" }}>Open Equipment</button>
+            </>
+          );
+        })()}
       </FullscreenModal>
       <FullscreenModal open={dropNowOpen} title={myDelivery ? deliveryName(myDelivery) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
         <HeadingToDeliveryCard defaultOpen deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo}

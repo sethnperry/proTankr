@@ -11217,3 +11217,20 @@ verified: the automatic start from a real load (the account was mid-trip).
   - **To Drop**: company loads headed to my next delivery. Tapping it opens a drop sheet.
   - The Access count still lives on the access strip.
 - **Terminal tool** opens a terminal sheet with the status card expanded (rack products, reports, Update status), the trucks headed there, and **Switch Terminal**, which opens the terminal picker. The Terminal and Heading-to cards moved out of Right Now and into these sheets.
+
+### Truck and Trailer alert squares; Sync back to a card; no hours-based service (2026-10-14)
+
+No migration. Screenshot-checked against real data.
+
+- **Gauges** are now Truck, Trailer, To Rack, To Drop.
+  - The Sync square is gone. Sync shows only as an attention card when something is waiting or failed.
+  - Gross is gone from the gauges and the attention card, since it's on the trip card. A swap still shows the "Truck changed · tap to record" card.
+- **Truck / Trailer squares**: a count of everything due within 30 days or past due on that unit, colored by the worst item (`lib/expiry.ts`). Tapping one lists the items and has an Open Equipment button.
+  - Items counted: permits (`equipment_permits`) plus service. Service is by date (duration types) or, for trucks, by miles.
+  - Miles turn into days using the truck's own average from trip odometer readings over the last 30 days, once those readings span 7 days. Until then it uses 500 miles a day.
+  - Code: `lib/equipment/unitAlerts.ts` (3 tests) and `useUnitAlerts` in `useDashboardCards.ts`.
+- **Service types**:
+  - Hours are no longer offered, since nothing records engine or trailer hours. An existing hours type shows a warning to switch it.
+  - Trailer-only types can't be by miles: picking Trailer only switches Miles to Duration and clears the number.
+  - A "both" miles type counts on the truck only.
+  - The live "Inspect & Grease, 500 hours" trailer type still needs changing to a day interval.

@@ -166,12 +166,24 @@ export function ServiceTypeEditorModal({
                 value={kind}
                 onChange={(v) => setKind(v as any)}
                 options={[
-                  { value: "miles", label: "Miles" },
-                  { value: "hours", label: "Hours" },
+                  // Trailers have no odometer and nothing records engine
+                  // hours, so service is by date, or miles for trucks.
+                  ...(appliesTo !== "trailer" ? [{ value: "miles", label: "Miles" }] : []),
                   { value: "duration", label: "Duration (days)" },
                   { value: "none", label: "None" },
+                  ...(kind === "hours" ? [{ value: "hours", label: "Hours (not tracked)" }] : []),
                 ]}
               />
+              {kind === "hours" && (
+                <div style={{ color: "#fbbf24", fontSize: 12, marginTop: 6 }}>
+                  Hours aren't tracked, so this service never comes due. Pick Duration (days){appliesTo !== "trailer" ? " or Miles" : ""}.
+                </div>
+              )}
+              {kind === "miles" && appliesTo !== "truck" && (
+                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 6 }}>
+                  Miles are counted on the truck only. Trailers have no odometer.
+                </div>
+              )}
             </div>
             {kind !== "none" && (
               <div>
@@ -191,7 +203,11 @@ export function ServiceTypeEditorModal({
               <label style={fieldLabel}>Applies to</label>
               <CustomSelect
                 value={appliesTo}
-                onChange={(v) => setAppliesTo(v as any)}
+                onChange={(v) => {
+                  setAppliesTo(v as any);
+                  // A trailer-only service can't be by miles; don't reuse the mile number as days.
+                  if (v === "trailer" && kind === "miles") { setKind("duration"); setValue(""); }
+                }}
                 options={[
                   { value: "both", label: "Truck & Trailer" },
                   { value: "truck", label: "Truck only" },
