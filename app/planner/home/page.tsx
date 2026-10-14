@@ -105,6 +105,7 @@ import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readines
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
+import { useTrailerResidue } from "../hooks/useDashboardCards";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -570,6 +571,36 @@ export default function HomePage() {
     for (const c of aboardRows) m[c.comp_number] = { product_id: c.product_id, gallons: c.gross_gallons != null ? Number(c.gross_gallons) : null };
     return m;
   }, [aboardRows]);
+  // What the trailer last carried, for empty compartments (residue).
+  const residue = useTrailerResidue(tripTrailerId, `${openTrip?.status ?? ""}|${aboardRows.length}`);
+  const stripSlots = Object.keys(compSizes).map(Number).map((n) => {
+    const a = aboard[n];
+    const info = a ? productInfo(a.product_id) : null;
+    const r = !a && residue[n] ? productInfo(residue[n]) : null;
+    return {
+      comp: n, size: compSizes[n] || 1,
+      color: info ? info.hex ?? productColorFor(info.name) : null,
+      residue: r ? r.hex ?? productColorFor(r.name) : null,
+      title: info ? `C${n} · ${info.name}` : r ? `C${n} · empty, last held ${r.name}` : `C${n} · empty`,
+    };
+  });
+  const hasResidue = stripSlots.some((x) => x.residue);
+  const trailerStrip = stripSlots.length > 0 ? (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <span style={{ width: 66, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}><CompartmentStrip slots={stripSlots} /></div>
+      {aboardRows.length > 0 && currentGross != null ? (
+        <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
+          {currentGross.toLocaleString("en-US")}
+          <span style={{ fontSize: 10, fontWeight: 700, color: LOOK.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>
+        </span>
+      ) : (
+        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", color: LOOK.muted, whiteSpace: "nowrap" }}>
+          {aboardRows.length > 0 ? "" : hasResidue ? "RESIDUE" : "EMPTY"}
+        </span>
+      )}
+    </div>
+  ) : null;
   const addCheck = useMemo(() => checkAddPickup({
     compNumbers: Object.keys(compSizes).map(Number),
     onBoard: aboardRows,
@@ -834,6 +865,14 @@ export default function HomePage() {
   }, [handoff?.driver_id, parked?.parked_by, parked?.driver_id, userId]);
   // ── Park Preloaded ────────────────────────────────────────────────────────
   const [parkOpen, setParkOpen] = useState(false);
+  // Right-now sheets opened from the gauges and the Terminal tool.
+  const [terminalNowOpen, setTerminalNowOpen] = useState(false);
+  const [dropNowOpen, setDropNowOpen] = useState(false);
+  const switchTerminal = () => {
+    setTerminalNowOpen(false);
+    if (location.selectedCity) shell.setTermOpen(true);
+    else shell.setLocOpen(true);
+  };
   const loadLine = (c: TripCompartmentLoadRow) =>
     `C${c.comp_number} · ${productName(c.product_id)}${c.gross_gallons != null ? ` · ${Math.round(Number(c.gross_gallons)).toLocaleString("en-US")} gal` : ""}`;
   const onBoardLines = (compLoads: TripCompartmentLoadRow[] | undefined) =>
@@ -1035,11 +1074,11 @@ export default function HomePage() {
               const noLoad = p.outcome === "no_load";
               const n = real.indexOf(p);
               const loaded = p.outcome === "loaded" || (!!p.left_at && !!p.load_id);
-              const label = noLoad ? "Tried" : loaded ? "Loaded" : real.length > 1 ? `Pickup ${n + 1}` : "Pickup";
-              const status = noLoad ? "" : loaded ? "" : p.arrived_at ? "Arrived" : "";
+              // The label is the stage: Pickup → Arrived → Loaded.
+              const label = noLoad ? "Tried" : loaded ? "Loaded" : p.arrived_at ? "Arrived" : "Pickup";
+              const t = p.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(p.terminal_id)) : null;
+              const place = t ? [t.city, t.state].filter(Boolean).join(", ") : [p.city, p.state].filter(Boolean).join(", ");
               const reason = noLoad ? (noLoadReasonLabel(p.no_load_reason) || "Other") : "";
-              // "+ Another pickup" sits on the last loaded rack's line.
-              const lastLoaded = loaded && !real.slice(n + 1).some((q) => q.outcome === "loaded" || (!!q.left_at && !!q.load_id));
               if (noLoad) {
                 // Tried rack: terminal struck through, then the reason in red.
                 // One line; a long name scrolls sideways instead of wrapping.
@@ -1055,7 +1094,7 @@ export default function HomePage() {
               }
               return (
                 <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-                  <span style={{ color: loaded ? "#4ade80" : muted, width: 66, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color: loaded ? "#4ade80" : p.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: p.arrived_at && !loaded ? 700 : undefined }}>{label}</span>
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={noLoad ? { color: muted, textDecoration: "line-through" } : undefined}>{p.name ?? "Not set"}</span>
                     {!noLoad && (pickups.length > 1 || multiOrder || p.order_id) && (
@@ -1065,67 +1104,50 @@ export default function HomePage() {
                       </button>
                     )}
                   </span>
-                  {lastLoaded && canAddPickup ? (
-                    <button type="button" onClick={openAddPickup} style={{ ...smallLink, fontSize: 12 }}>+ Another pickup</button>
-                  ) : (
-                    <span style={{ color: noLoad ? "#f87171" : muted, fontSize: 12 }}>{status}</span>
-                  )}
+                  <span style={{ color: muted, fontSize: 12, whiteSpace: "nowrap" }}>{place}</span>
                 </div>
               );
             });
           })()}
-          {/* What's aboard: the trailer on one line in product colors (C1 on
-              the right, like the Planner), and the live gross. */}
-          {aboardRows.length > 0 && Object.keys(compSizes).length > 0 && (
-            <div style={{ marginTop: 8, marginBottom: 4, display: "flex", gap: 6, alignItems: "center" }}>
-              <span style={{ width: 66, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CompartmentStrip slots={Object.keys(compSizes).map(Number).map((n) => {
-                  const a = aboard[n];
-                  const info = a ? productInfo(a.product_id) : null;
-                  return {
-                    comp: n, size: compSizes[n] || 1,
-                    color: info ? info.hex ?? productColorFor(info.name) : null,
-                    title: info ? `C${n} · ${info.name}` : `C${n} · empty`,
-                  };
-                })} />
-              </div>
-              {currentGross != null && (
-                <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
-                  {currentGross.toLocaleString("en-US")}
-                  <span style={{ fontSize: 10, fontWeight: 700, color: L.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>
-                </span>
-              )}
-            </div>
-          )}
+          {/* The trailer on one line, between pickup and delivery: product
+              colors when loaded (C1 on the right, like the Planner), residue
+              dots for what it last carried when empty. */}
+          {trailerStrip && <div style={{ marginTop: 8, marginBottom: 4 }}>{trailerStrip}</div>}
           {liveDeliveries.length === 0 && (
-            <div style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6 }}>
+            <div style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
               <span style={{ color: muted, width: 66, flexShrink: 0 }}>Delivery</span>
-              <span style={{ flex: 1, minWidth: 0 }}>Not set</span>
+              <button type="button" onClick={() => setPicker({ mode: "select" })}
+                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, color: "#fff", fontSize: 14, textAlign: "left", cursor: "pointer" }}>
+                Not set <span style={{ color: muted }}>›</span>
+              </button>
             </div>
           )}
-          {liveDeliveries.map((d, i) => (
-            <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-              <span style={{ color: muted, width: 66, flexShrink: 0 }}>{liveDeliveries.length > 1 ? `Delivery ${i + 1}` : "Delivery"}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                {deliveryName(d)}
-                {d.location_id && (() => {
-                  const loc = locations.find((l) => l.location_id === d.location_id);
-                  const place = loc ? locationPlace(loc) : "";
-                  return place ? <span style={{ color: muted, fontSize: 12 }}> · {place}</span> : null;
-                })()}
-              </span>
-              {d.status === "complete" ? (
-                <span style={{ color: muted, fontSize: 12 }}>Done</span>
-              ) : (
-                <button type="button" onClick={() => setPicker({ mode: "reroute", delivery: d })} style={{ ...smallLink, fontSize: 12 }}>
-                  Change
-                </button>
-              )}
-            </div>
-          ))}
+          {liveDeliveries.map((d) => {
+            // The label is the stage: Delivery → Arrived → Delivered.
+            const done = d.status === "complete";
+            const label = done ? "Delivered" : d.arrived_at ? "Arrived" : "Delivery";
+            const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null;
+            const place = loc ? locationPlace(loc) : "";
+            return (
+              <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
+                <span style={{ color: done ? "#4ade80" : d.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: d.arrived_at && !done ? 700 : undefined }}>{label}</span>
+                {done ? (
+                  <span style={{ flex: 1, minWidth: 0 }}>{deliveryName(d)}</span>
+                ) : (
+                  <button type="button" onClick={() => setPicker({ mode: "reroute", delivery: d })} aria-label={`Change ${deliveryName(d)}`}
+                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, color: "#fff", fontSize: 14, textAlign: "left", cursor: "pointer" }}>
+                    {deliveryName(d)} <span style={{ color: muted }}>›</span>
+                  </button>
+                )}
+                <span style={{ color: muted, fontSize: 12, whiteSpace: "nowrap" }}>{place}</span>
+              </div>
+            );
+          })}
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+            {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
+              <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
+            )}
             {canNoLoad && (
               <button type="button" onClick={() => { setNoLoadErr(null); setNoLoadOpen(true); }} style={{ ...smallLink, color: "#fbbf24" }}>
                 Couldn&apos;t load here
@@ -1150,6 +1172,7 @@ export default function HomePage() {
         <div style={{ ...card, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>No trip in progress</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", marginTop: 6 }}>Start a load when you have an order.</div>
+          {trailerStrip && <div style={{ marginTop: 12, marginLeft: -72 }}>{trailerStrip}</div>}
         </div>
       )}
 
@@ -1163,33 +1186,15 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Next step */}
-      <button
-        type="button"
-        onClick={onBigButton}
-        className="dash-press"
-        style={{
-          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
-        }}
-      >
-        {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
-          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
-          : step.label}
-      </button>
-      {step.kind !== "start" && !openingPlanner && (
-        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
-      )}
       <GaugePanel cells={[
           tripLoaded && currentGross != null
             ? { label: "Gross", value: currentGross.toLocaleString("en-US"), unit: "lb", color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget) }
             : { label: "Trip", value: openTrip ? STATUS_SHORT[openTrip.status] : "None" },
-          { label: "Access", value: `${readiness.access}/${readiness.segments.length}`,
-            color: readiness.expired > 0 ? EXPIRY_COLOR.expired : readiness.expiring > 0 ? EXPIRY_COLOR.expiring : readiness.soon > 0 ? EXPIRY_COLOR.soon : undefined,
-            onClick: () => openTerminalList(null) },
-          { label: "Cards", value: expired > 0 ? String(expired) : warning > 0 ? String(warning) : soonCount > 0 ? String(soonCount) : "OK",
-            unit: expired > 0 ? "exp" : warning > 0 ? "7d" : soonCount > 0 ? "30d" : undefined,
-            color: expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : soonCount > 0 ? EXPIRY_COLOR.soon : undefined,
-            onClick: () => shell.setExpModalOpen(true) },
+          // Company trucks headed to my terminal, and loads headed to my delivery.
+          { label: "To Rack", value: String(toMyTerminal.length), unit: toMyTerminal.length === 1 ? "trk" : "trks",
+            color: toMyTerminal.length ? undefined : L.muted, onClick: () => setTerminalNowOpen(true) },
+          { label: "To Drop", value: String(toMyDelivery.length), unit: toMyDelivery.length === 1 ? "load" : "loads",
+            color: toMyDelivery.length ? undefined : L.muted, onClick: () => setDropNowOpen(true) },
           { label: "Sync", value: failed.length > 0 ? String(failed.length) : String(pendingCount),
             unit: failed.length > 0 ? "err" : pendingCount > 0 ? "wait" : "ok",
             color: failed.length > 0 ? "#f87171" : undefined,
@@ -1300,16 +1305,6 @@ export default function HomePage() {
       {/* Readouts: terminal status and recent deliveries always; the rest
           only when there's something to show. */}
       <SectionLabel first>Right now</SectionLabel>
-      <TerminalStatusCard
-        placeLabel={statusPlace}
-        terminalName={statusTerminalName}
-        rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
-        products={terminalStatus.products}
-        reports={terminalAlerts.reports}
-        onOpenReports={() => setAlertsOpen(true)}
-        onChangeTerminal={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
-        onUpdate={() => setStatusOpen(true)}
-      />
       <TerminalStatusSheet
         open={statusOpen}
         onClose={() => setStatusOpen(false)}
@@ -1324,8 +1319,34 @@ export default function HomePage() {
         truckLabel={equipment.currentTruckName ?? ""}
         onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
       />
-      <HeadingToTerminalCard terminalName={statusTerminalName} items={toMyTerminal} productInfo={productInfo} />
-      <HeadingToDeliveryCard deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo} />
+      {/* Terminal: right-now status of the selected terminal + who's headed
+          there, with a switch button. Opened from the Terminal tool and the
+          To Rack gauge. */}
+      <FullscreenModal open={terminalNowOpen} title={statusTerminalName ?? "Terminal"} onClose={() => setTerminalNowOpen(false)} footer={null}>
+        <TerminalStatusCard
+          defaultOpen
+          placeLabel={statusPlace}
+          terminalName={statusTerminalName}
+          rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
+          products={terminalStatus.products}
+          reports={terminalAlerts.reports}
+          onOpenReports={() => setAlertsOpen(true)}
+          onChangeTerminal={switchTerminal}
+          onUpdate={() => setStatusOpen(true)}
+        />
+        <div style={{ marginTop: 10 }}>
+          <HeadingToTerminalCard defaultOpen terminalName={statusTerminalName} items={toMyTerminal} productInfo={productInfo}
+            emptyText="No other company trucks headed here right now." />
+        </div>
+        <button type="button" onClick={switchTerminal} className="dash-press"
+          style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>
+          Switch Terminal
+        </button>
+      </FullscreenModal>
+      <FullscreenModal open={dropNowOpen} title={myDelivery ? deliveryName(myDelivery) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
+        <HeadingToDeliveryCard defaultOpen deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo}
+          emptyText={myDelivery ? "No other company loads headed here right now." : "Set a delivery on your trip to see other loads headed there."} />
+      </FullscreenModal>
       <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
       <RecentDeliveriesCard
         storeName={selectedLoc ? locationTitle(selectedLoc) : null}
@@ -1353,12 +1374,33 @@ export default function HomePage() {
         onClose={() => setSyncOpen(false)}
       />
 
+      <div style={{ marginTop: 18 }}>
+      {/* Next step */}
+      <button
+        type="button"
+        onClick={onBigButton}
+        className="dash-press"
+        style={{
+          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
+        }}
+      >
+        {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
+          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
+          : step.label}
+      </button>
+      {step.kind !== "start" && !openingPlanner && (
+        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
+      )}
+      </div>
+
       {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
       <SectionLabel>Tools</SectionLabel>
       {(() => {
         const tools: ToolItem[] = [
           { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
-          { icon: "terminal", label: "Terminal", sub: terminalName ?? "Not set", onClick: () => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true)) },
+          { icon: "terminal", label: "Terminal", sub: statusTerminalName ?? "Not set",
+            subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
+            onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
             sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} within 7 days` : soonCount > 0 ? `${soonCount} within 30 days` : "All current",

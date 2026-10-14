@@ -96,7 +96,7 @@ const rowStyle: React.CSSProperties = {
 
 // ── Terminal Status (always shown) ─────────────────────────────────────────
 
-export function TerminalStatusCard({ placeLabel, terminalName, rackName, products, reports, onOpenReports, onChangeTerminal, onUpdate }: {
+export function TerminalStatusCard({ placeLabel, terminalName, rackName, products, reports, onOpenReports, onChangeTerminal, onUpdate, defaultOpen = false }: {
   // "City, ST" of the terminal: the card's label.
   placeLabel: string | null;
   terminalName: string | null;
@@ -107,8 +107,9 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
   onChangeTerminal: () => void;
   // Opens the status update window (products out/available, long line, ...).
   onUpdate: () => void;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const title = placeLabel || "Terminal";
   if (!terminalName) {
     return (
@@ -268,13 +269,19 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
 
 // ── Conditional cards (render nothing when empty) ──────────────────────────
 
-export function HeadingToTerminalCard({ terminalName, items, productInfo }: {
+export function HeadingToTerminalCard({ terminalName, items, productInfo, defaultOpen = false, emptyText }: {
   terminalName: string | null;
   items: HeadingToTerminal[];
   productInfo: ProductInfoFn;
+  defaultOpen?: boolean;
+  // Shown instead of nothing when the list is empty (inside a sheet).
+  emptyText?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  if (items.length === 0) return null;
+  const [open, setOpen] = useState(defaultOpen);
+  if (items.length === 0) {
+    if (!emptyText) return null;
+    return <div style={cardStyle}><div style={{ ...rowStyle, borderTop: "none", color: muted }}>{emptyText}</div></div>;
+  }
   const arrived = items.filter((x) => x.arrived).length;
   const summary = `${items.length} truck${items.length === 1 ? "" : "s"}${arrived ? ` · ${arrived} there` : ""}`;
   return (
@@ -296,13 +303,18 @@ export function HeadingToTerminalCard({ terminalName, items, productInfo }: {
   );
 }
 
-export function HeadingToDeliveryCard({ deliveryName, items, productInfo }: {
+export function HeadingToDeliveryCard({ deliveryName, items, productInfo, defaultOpen = false, emptyText }: {
   deliveryName: string | null;
   items: HeadingToDelivery[];
   productInfo: ProductInfoFn;
+  defaultOpen?: boolean;
+  emptyText?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  if (items.length === 0) return null;
+  const [open, setOpen] = useState(defaultOpen);
+  if (items.length === 0) {
+    if (!emptyText) return null;
+    return <div style={cardStyle}><div style={{ ...rowStyle, borderTop: "none", color: muted }}>{emptyText}</div></div>;
+  }
   return (
     <div style={cardStyle}>
       <CardHeader

@@ -11204,3 +11204,16 @@ admins and ProTankr admins set it up together), `driver_authorization_letters`
 Verified by clicking through on real data (setup questions, start, attach a
 letter, check off orientation, strip lines); test rows deleted after. Not
 verified: the automatic start from a real load (the account was mid-trip).
+
+### Dashboard rework: status labels, residue strip, To Rack / To Drop, Terminal sheet (2026-10-14)
+
+`app/planner/home/page.tsx`, no migration. Screenshot-checked against real data; nothing was tapped through a trip.
+
+- **Status labels on the trip card.** Pickup lines read Pickup → Arrived → Loaded (a no-load rack still reads Tried). Their right side now shows the terminal's City, ST. "+ Another pickup" moved to the action row. Delivery lines read Delivery → Arrived → Delivered. The delivery name opens the reroute picker and its city sits on the right.
+- **Trailer strip always shows**, on the trip card and the no-trip card. When the trailer is empty, each compartment shows **residue**: dots in the last product's color on a dashed outline in that color. The source is `useTrailerResidue` (`useDashboardCards.ts`): the newest `loaded` `load_log` across the trailer's combos, then its `load_lines`. `CompartmentStrip` gained `residue`. The right-side label shows gross lbs when anything is aboard, else RESIDUE (or EMPTY if there's no history). During a partial load, the empty compartments show no residue.
+- **The big step button moved down**, right above Tools.
+- **Gauges.** Access and Cards are replaced:
+  - **To Rack**: company trucks headed to my terminal. Tapping it opens the terminal sheet.
+  - **To Drop**: company loads headed to my next delivery. Tapping it opens a drop sheet.
+  - The Access count still lives on the access strip.
+- **Terminal tool** opens a terminal sheet with the status card expanded (rack products, reports, Update status), the trucks headed there, and **Switch Terminal**, which opens the terminal picker. The Terminal and Heading-to cards moved out of Right Now and into these sheets.
