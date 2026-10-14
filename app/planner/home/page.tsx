@@ -97,7 +97,7 @@ import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trip
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { DashLookProvider, DashStyles, LOOKS, SectionLabel, useDashLook, useLookPreference, useScrollBackdrop, useScrolledPast } from "./dashLook";
-import { LookSwitch, TerminalAccessStrip, ToolTile } from "./DashboardChrome";
+import { GaugePanel, LookSwitch, TerminalAccessStrip, ToolList, ToolPanel, ToolTile, type ToolItem } from "./DashboardChrome";
 import { QualificationCard, mockQualification } from "./QualificationStrip";
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
@@ -954,7 +954,9 @@ export default function HomePage() {
       } : { marginBottom: 12 }}>
         <div style={{ ...L.title, ...(titleCollapsed ? { fontSize: 17, letterSpacing: "-0.01em" } : null), transition: "font-size 160ms ease" }}>Driver Dashboard</div>
         {!titleCollapsed && (
-          <div style={{ fontSize: 13, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{equipmentLabel}</div>
+          <div className={L.instrument ? "dash-num" : undefined} style={L.instrument
+            ? { fontSize: 30, fontWeight: 800, marginTop: 4, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
+            : { fontSize: 13, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{equipmentLabel}</div>
         )}
       </div>
 
@@ -1181,6 +1183,24 @@ export default function HomePage() {
       {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
+      {L.instrument && (
+        <GaugePanel cells={[
+          tripLoaded && currentGross != null
+            ? { label: "Gross", value: currentGross.toLocaleString("en-US"), unit: "lb", color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget) }
+            : { label: "Trip", value: openTrip ? STATUS_LABEL[openTrip.status] : "None" },
+          { label: "Access", value: `${readiness.ready}/${readiness.segments.length}`,
+            color: readiness.expired > 0 ? "#f87171" : readiness.expiring > 0 ? "#fbbf24" : undefined,
+            onClick: () => openTerminalList(null) },
+          { label: "Cards", value: expired > 0 ? String(expired) : warning > 0 ? String(warning) : "OK",
+            unit: expired > 0 ? "exp" : warning > 0 ? "soon" : undefined,
+            color: expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined,
+            onClick: () => shell.setExpModalOpen(true) },
+          { label: "Sync", value: failed.length > 0 ? String(failed.length) : String(pendingCount),
+            unit: failed.length > 0 ? "err" : pendingCount > 0 ? "wait" : "ok",
+            color: failed.length > 0 ? "#f87171" : undefined,
+            onClick: () => { void syncNow(); setSyncOpen(true); } },
+        ]} />
+      )}
 
       <AddPickupSheet
         open={addOpen}
@@ -1333,19 +1353,26 @@ export default function HomePage() {
 
       {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
       <SectionLabel>Tools</SectionLabel>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: 10 }}>
-        <ToolTile icon="truck" label="Equipment" sub={equipmentLabel} onClick={openEquipment} delay={40} />
-        <ToolTile icon="terminal" label="Terminal" sub={terminalName ?? "Not set"} onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} delay={70} />
-        <ToolTile icon="store" label="Delivery" sub={selectedLoc ? locationTitle(selectedLoc) : "Not set"} onClick={() => setPicker({ mode: "select" })} delay={100} />
-        {canCards && (
-          <ToolTile icon="card" label="Cards" delay={130}
-            sub={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring` : "All current"}
-            subColor={expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined}
-            onClick={() => router.push("/planner/cards")} />
-        )}
-        <ToolTile icon="route" label="Trips" sub={openTrip ? "Trip in progress" : "History & PTDs"} onClick={() => router.push("/planner/trips")} delay={160} />
-        <ToolTile icon="chart" label="Reports" sub="Loads & history" onClick={() => router.push("/planner/reports")} delay={190} />
-      </div>
+      {(() => {
+        const tools: ToolItem[] = [
+          { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
+          { icon: "terminal", label: "Terminal", sub: terminalName ?? "Not set", onClick: () => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true)) },
+          { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
+          ...(canCards ? [{ icon: "card" as const, label: "Cards",
+            sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring` : "All current",
+            subColor: expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined,
+            onClick: () => router.push("/planner/cards") }] : []),
+          { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => router.push("/planner/trips") },
+          { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => router.push("/planner/reports") },
+        ];
+        if (L.tools === "list") return <ToolList items={tools} />;
+        if (L.tools === "panel") return <ToolPanel items={tools} />;
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: 10 }}>
+            {tools.map((t, i) => <ToolTile key={t.label} {...t} delay={40 + i * 30} />)}
+          </div>
+        );
+      })()}
       {mockAllowed && <LookSwitch value={lookName} onChange={setLookName} />}
       </div>
       </div>

@@ -36,6 +36,9 @@ export type Look = {
   animate: boolean;
   // Instrument treatment: bigger tabular numbers, square status markers.
   instrument: boolean;
+  // How the tools are laid out: tiles (A), a grouped list (B), a compact
+  // icon panel (C).
+  tools: "tiles" | "list" | "panel";
   muted: string;
   faint: string;
 };
@@ -73,24 +76,55 @@ const A: Look = {
   stickyTitle: false,
   animate: false,
   instrument: false,
+  tools: "tiles",
   muted: "rgba(255,255,255,0.52)",
   faint: "rgba(255,255,255,0.3)",
 };
 
-// B: native-inspired. A, plus a title bar that floats over the page while
-// scrolling (the one translucent surface), and short entrance motion.
-const B: Look = { ...A, name: "b", label: "B · Native", stickyTitle: true, animate: true };
+// B: native-inspired. Big title that collapses into a blurred one-line bar
+// while scrolling, sentence-case labels, softer rounded surfaces, and the
+// tools as one grouped list with chevrons, like a phone's settings screen.
+const B: Look = {
+  ...A,
+  name: "b",
+  label: "B · Native",
+  radius: 16,
+  primary: {
+    background: "#1a1a1c",
+    border: "1px solid rgba(255,255,255,0.06)",
+    borderRadius: 16,
+    boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset",
+  },
+  secondary: { background: "#1a1a1c", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 14 },
+  sectionLabel: { fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.55)", margin: "26px 4px 8px" },
+  cta: { background: "#fff", color: "#000", borderRadius: 16, border: "none" },
+  title: { fontSize: 34, fontWeight: 800, letterSpacing: "-0.03em" },
+  backdrop: { background: "#000" },
+  stickyTitle: true,
+  animate: true,
+  tools: "list",
+};
 
-// C: instrument-inspired. A, plus stronger numbers and square status marks.
+// C: instrument-inspired. Square corners, a gauge panel of big readouts
+// under the main button, uppercase labels, square status marks, and the
+// tools as a compact three-across icon panel.
 const C: Look = {
   ...A,
   name: "c",
   label: "C · Instrument",
-  primary: { ...A.primary, borderRadius: 8 },
-  secondary: { ...A.secondary, borderRadius: 6 },
-  radius: 8,
-  cta: { ...A.cta, borderRadius: 8 },
+  radius: 2,
+  primary: { background: "#121213", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 2 },
+  secondary: { background: "#0f0f10", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2 },
+  hairline: "rgba(255,255,255,0.12)",
+  sectionLabel: {
+    fontSize: 10, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase",
+    color: "rgba(255,255,255,0.5)", margin: "20px 0 6px", paddingBottom: 6, borderBottom: "1px solid rgba(255,255,255,0.12)",
+  },
+  cta: { background: "#fff", color: "#000", borderRadius: 2, border: "none", letterSpacing: "0.06em", textTransform: "uppercase" },
+  title: { fontSize: 13, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase" },
+  backdrop: { background: "#080808" },
   instrument: true,
+  tools: "panel",
 };
 
 export const LOOKS: Record<LookName, Look> = { a: A, b: B, c: C };

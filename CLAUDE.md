@@ -11124,11 +11124,14 @@ Migrations applied 2026-10-14 via the Management API. Not click-tested.
 ### Driver Dashboard variants + terminal access strip (2026-10-14, branch only)
 
 Three variants on `/planner/home` (`app/planner/home/dashLook.tsx`), same
-layout and data: **A** refined mono (graphite cards one step above a
-near-black page, faint top highlight, small uppercase labels, press/focus
-states), **B** native (A plus a title bar that collapses to one blurred line
-while scrolling, solid fallback, short entrance motion), **C** instrument
-(A plus tighter corners, bigger tabular numbers, square status marks). Pick
+data: **A** refined mono (graphite cards on a near-black page, small
+uppercase labels, 2-column tool tiles), **B** native (big title that
+collapses to a blurred one-line bar on scroll, sentence-case labels, rounder
+surfaces, tools as one grouped settings-style list), **C** instrument (square
+corners, big equipment number, a 4-cell gauge panel under the main button:
+Trip/Gross, Access, Cards, Sync; uppercase labels; tools as a 3-across icon
+panel). First pass only changed radius and font sizes and the screenshots
+looked identical, so the variants now differ in structure. Pick
 with `?variant=a|b|c` (remembered per phone) or the switch at the bottom (dev
 or super admin). Default A. Temporary: remove the switch once one is chosen.
 

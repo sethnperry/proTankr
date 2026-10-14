@@ -194,3 +194,70 @@ export function LookSwitch({ value, onChange }: { value: string; onChange: (v: "
     </div>
   );
 }
+
+// ── Variant-specific tool layouts ───────────────────────────────────────────
+
+export type ToolItem = { icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick: () => void };
+
+// B: one grouped list, icon + label + detail + chevron, like a settings screen.
+export function ToolList({ items }: { items: ToolItem[] }) {
+  const L = useDashLook();
+  return (
+    <div style={{ ...L.secondary, overflow: "hidden", padding: 0 }}>
+      {items.map((t, i) => (
+        <button key={t.label} type="button" onClick={t.onClick} className="dash-press"
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "0 14px", minHeight: 54,
+            background: "none", border: "none", color: "#fff", cursor: "pointer", textAlign: "left" }}>
+          <span style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon name={t.icon} color="#fff" />
+          </span>
+          <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, alignSelf: "stretch",
+            borderBottom: i < items.length - 1 ? `1px solid ${L.hairline}` : "none" }}>
+            <span style={{ flex: 1, fontSize: 16, fontWeight: 600 }}>{t.label}</span>
+            {t.sub && <span style={{ fontSize: 14, color: t.subColor ?? L.muted, maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.sub}</span>}
+            <span style={{ color: L.faint, fontSize: 18 }}>›</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// C: compact three-across icon panel, square, label under the icon.
+export function ToolPanel({ items }: { items: ToolItem[] }) {
+  const L = useDashLook();
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${L.hairline}`, background: L.hairline, gap: 1 }}>
+      {items.map((t) => (
+        <button key={t.label} type="button" onClick={t.onClick} className="dash-press"
+          style={{ background: "#0f0f10", border: "none", color: "#fff", cursor: "pointer", padding: "14px 6px 12px",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 7, minHeight: 82 }}>
+          <Icon name={t.icon} color={t.subColor ?? "rgba(255,255,255,0.85)"} />
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// C: a row of big readouts under the main button.
+export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void };
+export function GaugePanel({ cells }: { cells: GaugeCell[] }) {
+  const L = useDashLook();
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12 }}>
+      {cells.map((c) => (
+        <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick} className={c.onClick ? "dash-press" : undefined}
+          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span aria-hidden style={{ width: 6, height: 6, background: c.color ?? "rgba(255,255,255,0.5)", flexShrink: 0 }} />
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+          </div>
+          <div className="dash-num" style={{ marginTop: 6, fontSize: 24, fontWeight: 800, lineHeight: 1, color: c.color ?? "#fff", whiteSpace: "nowrap" }}>
+            {c.value}{c.unit && <span style={{ fontSize: 11, fontWeight: 700, color: L.muted, marginLeft: 2 }}>{c.unit}</span>}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
