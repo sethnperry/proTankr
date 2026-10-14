@@ -37,7 +37,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
   const selected = segs.find((s) => s.terminalId === sel) ?? null;
   const total = segs.length;
   const fillColor = (s: ReadinessSegment) =>
-    s.state === "expired" ? RED : s.state === "expiring" ? AMBER : L.name === "glass" ? "rgba(255,255,255,0.92)" : "#f2f2f2";
+    s.state === "expired" ? RED : s.state === "expiring" ? AMBER : "#f2f2f2";
   const toneColor = (t: string) => (t === "bad" ? RED : t === "warn" ? AMBER : t === "ok" ? "rgba(255,255,255,0.78)" : L.muted);
 
   return (
@@ -50,7 +50,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
         </button>
         {total > 0 && (
           <span style={{ fontSize: 13, color: L.muted, whiteSpace: "nowrap" }}>
-            <span style={{ color: "#fff", fontWeight: 800 }}>{summary.ready}</span> of {total} ready
+            <span className="dash-num" style={{ color: "#fff", fontWeight: 800, fontSize: L.instrument ? 17 : undefined }}>{summary.ready}</span>{L.instrument ? <span className="dash-num">/{total}</span> : <> of {total}</>} ready
           </span>
         )}
       </div>
@@ -78,7 +78,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
                     {s.isPickup && <span style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: `5px solid ${fillColor(s)}` }} />}
                   </div>
                   <div style={{
-                    position: "relative", height: 46, marginTop: 2, borderRadius: 7, overflow: "hidden",
+                    position: "relative", height: 46, marginTop: 2, borderRadius: L.instrument ? 2 : 6, overflow: "hidden",
                     background: s.state === "none" ? "transparent" : s.state === "expired" ? "rgba(248,113,113,0.12)" : "rgba(255,255,255,0.08)",
                     border: s.state === "none" ? `1px dashed ${L.faint}` : isSel ? "1px solid rgba(255,255,255,0.7)" : "1px solid transparent",
                     boxShadow: isSel && s.state === "none" ? "0 0 0 1px rgba(255,255,255,0.5)" : undefined,
@@ -158,11 +158,11 @@ export function ToolTile({ icon, label, sub, subColor, onClick, delay = 0 }: {
       className={`dash-press${L.animate ? " dash-enter" : ""}`}
       style={{
         ...L.secondary, color: "#fff", cursor: "pointer", textAlign: "left", padding: "13px 14px",
-        display: "flex", alignItems: "center", gap: 12, minHeight: 64, minWidth: 0,
+        display: "flex", alignItems: "center", gap: 12, minHeight: 60, minWidth: 0,
         animationDelay: L.animate ? `${delay}ms` : undefined,
       }}
     >
-      <Icon name={icon} color={L.name === "glass" ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.75)"} />
+      <Icon name={icon} color="rgba(255,255,255,0.8)" />
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>{label}</span>
         {sub && (
@@ -175,9 +175,9 @@ export function ToolTile({ icon, label, sub, subColor, onClick, delay = 0 }: {
   );
 }
 
-export function LookSwitch({ value, onChange }: { value: string; onChange: (v: "mono" | "glass") => void }) {
+export function LookSwitch({ value, onChange }: { value: string; onChange: (v: "a" | "b" | "c") => void }) {
   const L = useDashLook();
-  const opt = (v: "mono" | "glass", label: string) => (
+  const opt = (v: "a" | "b" | "c", label: string) => (
     <button type="button" onClick={() => onChange(v)}
       style={{ flex: 1, padding: "7px 0", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
         background: value === v ? "#fff" : "transparent", color: value === v ? "#000" : L.muted }}>
@@ -186,9 +186,10 @@ export function LookSwitch({ value, onChange }: { value: string; onChange: (v: "
   );
   return (
     <div style={{ marginTop: 28, display: "flex", justifyContent: "center" }}>
-      <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 999, border: `1px solid ${L.hairline}`, width: 220 }}>
-        {opt("mono", "Mono")}
-        {opt("glass", "Glass")}
+      <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 999, border: `1px solid ${L.hairline}`, width: 260 }}>
+        {opt("a", "A Mono")}
+        {opt("b", "B Native")}
+        {opt("c", "C Instr.")}
       </div>
     </div>
   );

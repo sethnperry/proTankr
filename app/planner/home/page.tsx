@@ -96,8 +96,9 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
-import { DashLookProvider, DashStyles, LOOKS, SectionLabel, useLookPreference, useScrollBackdrop } from "./dashLook";
+import { DashLookProvider, DashStyles, LOOKS, SectionLabel, useDashLook, useLookPreference, useScrollBackdrop, useScrolledPast } from "./dashLook";
 import { LookSwitch, TerminalAccessStrip, ToolTile } from "./DashboardChrome";
+import { QualificationCard, mockQualification } from "./QualificationStrip";
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
@@ -862,13 +863,19 @@ export default function HomePage() {
   const card: React.CSSProperties = { ...L.primary, padding: 14 };
   const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
   useScrollBackdrop(wrapEl, L);
+  const titleCollapsed = useScrolledPast(wrapEl, L.stickyTitle);
 
   // ── Terminal access readiness ─────────────────────────────────────────────
-  const [mockAccess, setMockAccess] = useState(false);
+  // Mock data for design comparison only: ?mockAccess=1 / ?mockQual=1, in
+  // development or for a super admin. Never saved, always labeled.
+  const [mockParams, setMockParams] = useState({ access: false, qual: false });
   useEffect(() => {
-    if (process.env.NODE_ENV === "production") return;
-    setMockAccess(new URLSearchParams(window.location.search).get("mockAccess") === "1");
+    const q = new URLSearchParams(window.location.search);
+    setMockParams({ access: q.get("mockAccess") === "1", qual: q.get("mockQual") === "1" });
   }, []);
+  const mockAllowed = process.env.NODE_ENV !== "production" || shell.isSuperAdmin;
+  const mockAccess = mockAllowed && mockParams.access;
+  const mockQual = mockAllowed && mockParams.qual;
   // The trip's pickup city when there is one, else the Planner's city.
   const readinessPlace = (() => {
     const p = snap ? activePickup(snap.pickups) : null;
@@ -937,14 +944,18 @@ export default function HomePage() {
         ["--dash-card-radius" as any]: `${L.secondary.borderRadius}px`,
       }}
     >
-      {/* Title. In the glass look it stays pinned under a blurred bar. */}
+      {/* Title. In variant B it floats over the page under a blurred bar. */}
       <div className={L.stickyTitle ? "dash-titlebar" : undefined} style={L.stickyTitle ? {
-        position: "sticky", top: 0, zIndex: 5, margin: "-12px -28px 8px", padding: "12px 28px 10px",
-        background: "linear-gradient(180deg, rgba(11,11,11,0.96), rgba(11,11,11,0.62))", backdropFilter: "blur(18px) saturate(150%)", WebkitBackdropFilter: "blur(18px) saturate(150%)",
-        borderBottom: `1px solid ${L.hairline}`,
+        position: "sticky", top: 0, zIndex: 5, margin: "-12px -28px 8px", padding: titleCollapsed ? "10px 28px 10px" : "12px 28px 10px",
+        background: titleCollapsed ? "rgba(11,11,11,0.78)" : "transparent",
+        backdropFilter: titleCollapsed ? "blur(18px) saturate(150%)" : undefined, WebkitBackdropFilter: titleCollapsed ? "blur(18px) saturate(150%)" : undefined,
+        borderBottom: `1px solid ${titleCollapsed ? L.hairline : "transparent"}`,
+        transition: "background-color 160ms ease, border-color 160ms ease",
       } : { marginBottom: 12 }}>
-        <div style={L.title}>Driver Dashboard</div>
-        <div style={{ fontSize: 13, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{equipmentLabel}</div>
+        <div style={{ ...L.title, ...(titleCollapsed ? { fontSize: 17, letterSpacing: "-0.01em" } : null), transition: "font-size 160ms ease" }}>Driver Dashboard</div>
+        {!titleCollapsed && (
+          <div style={{ fontSize: 13, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{equipmentLabel}</div>
+        )}
       </div>
 
       <div className="dash-cols">
@@ -1002,7 +1013,7 @@ export default function HomePage() {
               <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
             )}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>
+          <div className="dash-num" style={{ fontSize: L.instrument ? 20 : 18, fontWeight: 800, letterSpacing: L.instrument ? "-0.01em" : undefined }}>
             {children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "No order number"}
             {children && children.extraOrders.length > 0 && (
               <span style={{ fontSize: 13, fontWeight: 600, color: muted }}> +{children.extraOrders.length} more</span>
@@ -1082,8 +1093,9 @@ export default function HomePage() {
                 })} />
               </div>
               {currentGross != null && (
-                <span style={{ fontSize: 15, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
+                <span className="dash-num" style={{ fontSize: L.instrument ? 19 : 15, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
                   {currentGross.toLocaleString("en-US")}
+                  {L.instrument && <span style={{ fontSize: 10, fontWeight: 700, color: L.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>}
                 </span>
               )}
             </div>
@@ -1254,6 +1266,12 @@ export default function HomePage() {
         onOpenTerminal={openTerminalList}
         onChangeCity={() => shell.setLocOpen(true)}
       />
+      {mockQual && (
+        <>
+          <SectionLabel right={<span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "#000", background: "#fbbf24", borderRadius: 3, padding: "2px 5px" }}>MOCK DATA</span>}>Getting carded</SectionLabel>
+          <QualificationCard items={mockQualification()} />
+        </>
+      )}
       </div>
 
       <div className="dash-side">
@@ -1328,7 +1346,7 @@ export default function HomePage() {
         <ToolTile icon="route" label="Trips" sub={openTrip ? "Trip in progress" : "History & PTDs"} onClick={() => router.push("/planner/trips")} delay={160} />
         <ToolTile icon="chart" label="Reports" sub="Loads & history" onClick={() => router.push("/planner/reports")} delay={190} />
       </div>
-      {shell.isSuperAdmin && <LookSwitch value={lookName} onChange={setLookName} />}
+      {mockAllowed && <LookSwitch value={lookName} onChange={setLookName} />}
       </div>
       </div>
 
@@ -1448,18 +1466,21 @@ export default function HomePage() {
 function InfoRow({ label, value, valueColor, onClick, last }: {
   label: string; value: string; valueColor?: string; onClick: () => void; last?: boolean;
 }) {
+  const L = useDashLook();
   return (
     <button
       type="button"
       onClick={onClick}
+      className="dash-press"
       style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "13px 14px",
         border: "none", borderBottom: last ? "none" : "1px solid rgba(255,255,255,0.06)",
         background: "transparent", color: "#fff", cursor: "pointer", textAlign: "left",
       }}
     >
-      <span style={{ fontSize: 13, color: muted, width: 92, flexShrink: 0 }}>{label}</span>
-      <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: valueColor ?? "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {L.instrument && <span aria-hidden style={{ width: 7, height: 7, flexShrink: 0, background: valueColor ?? "rgba(255,255,255,0.55)" }} />}
+      <span style={{ fontSize: L.instrument ? 11 : 13, fontWeight: L.instrument ? 700 : undefined, letterSpacing: L.instrument ? "0.08em" : undefined, textTransform: L.instrument ? "uppercase" : undefined, color: muted, width: L.instrument ? 84 : 92, flexShrink: 0 }}>{label}</span>
+      <span className="dash-num" style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: valueColor ?? "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {value}
       </span>
       <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>

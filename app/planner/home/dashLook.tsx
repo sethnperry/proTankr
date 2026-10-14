@@ -1,24 +1,26 @@
 "use client";
 // app/planner/home/dashLook.tsx
 //
-// Visual treatments for the Driver Dashboard, compared side by side while
-// the design settles:
-//   mono  — refined monochrome: solid graphite surfaces, hairlines, clear
-//           section labels, no blur.
-//   glass — native-inspired: a soft lit backdrop, translucent blurred
-//           surfaces on the primary cards only, a sticky blurred title bar,
-//           short entrance and press transitions.
-// Pick with ?look=mono|glass (remembered on this phone) or the switch at the
-// bottom of the dashboard (super admins only). Layout is shared; only these
-// tokens differ.
+// Visual variants for the Driver Dashboard, compared while the design
+// settles. Same layout and data in all three; only these tokens differ.
+//   A  refined monochrome: layered graphite surfaces, thin borders, small
+//      uppercase labels, press and focus states.
+//   B  native-inspired: A plus a floating title bar (the one translucent
+//      surface, solid where blur isn't supported) and short entrance motion.
+//   C  instrument-inspired: A plus tighter corners, bigger tabular numbers
+//      and square status marks.
+// Pick with ?variant=a|b|c (remembered on this phone) or the switch at the
+// bottom of the dashboard (super admins only). Temporary: remove once one
+// is chosen.
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 
-export type LookName = "mono" | "glass";
+export type LookName = "a" | "b" | "c";
 
 export type Look = {
   name: LookName;
+  label: string;
   radius: number;
   // Primary surfaces: trip card, terminal access.
   primary: React.CSSProperties;
@@ -28,87 +30,73 @@ export type Look = {
   sectionLabel: React.CSSProperties;
   cta: React.CSSProperties;
   title: React.CSSProperties;
-  // Fixed layer painted behind the page (null = plain page background).
+  // Painted on the page's scroll container (null = plain page background).
   backdrop: React.CSSProperties | null;
   stickyTitle: boolean;
   animate: boolean;
+  // Instrument treatment: bigger tabular numbers, square status markers.
+  instrument: boolean;
   muted: string;
   faint: string;
 };
 
-const MONO: Look = {
-  name: "mono",
-  radius: 16,
+// A: refined monochrome. Near-black page with a faint highlight at the top,
+// graphite cards one step lighter, a thin top edge, small uppercase labels.
+const A: Look = {
+  name: "a",
+  label: "A · Mono",
+  radius: 12,
   primary: {
-    background: "#141414",
+    background: "#151516",
     border: "1px solid rgba(255,255,255,0.09)",
-    borderRadius: 16,
+    borderRadius: 12,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.5)",
   },
   secondary: {
-    background: "#121212",
+    background: "#111112",
     border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: 16,
+    borderRadius: 10,
   },
   hairline: "rgba(255,255,255,0.07)",
   sectionLabel: {
-    fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase",
-    color: "rgba(255,255,255,0.42)", margin: "22px 4px 8px",
+    fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+    color: "rgba(255,255,255,0.42)", margin: "22px 2px 8px",
   },
   cta: {
-    background: "#fff", color: "#000", borderRadius: 16, border: "none",
-    boxShadow: "none",
+    background: "#fff", color: "#000", borderRadius: 12, border: "none",
+    letterSpacing: "0.01em", boxShadow: "0 1px 0 rgba(0,0,0,0.4)",
   },
-  title: { fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" },
-  backdrop: null,
+  title: { fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" },
+  backdrop: {
+    background: "radial-gradient(1100px 380px at 50% -140px, rgba(255,255,255,0.055), transparent 70%), #0b0b0b",
+  },
   stickyTitle: false,
   animate: false,
-  muted: "rgba(255,255,255,0.5)",
+  instrument: false,
+  muted: "rgba(255,255,255,0.52)",
   faint: "rgba(255,255,255,0.3)",
 };
 
-const GLASS: Look = {
-  name: "glass",
-  radius: 22,
-  primary: {
-    background: "linear-gradient(180deg, rgba(255,255,255,0.085) 0%, rgba(255,255,255,0.035) 100%)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 22,
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), 0 12px 32px rgba(0,0,0,0.38)",
-    backdropFilter: "blur(22px) saturate(150%)",
-    WebkitBackdropFilter: "blur(22px) saturate(150%)",
-  },
-  secondary: {
-    background: "rgba(255,255,255,0.045)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 18,
-  },
-  hairline: "rgba(255,255,255,0.08)",
-  sectionLabel: {
-    fontSize: 12, fontWeight: 600, letterSpacing: "0.01em",
-    color: "rgba(255,255,255,0.55)", margin: "24px 6px 8px",
-  },
-  cta: {
-    background: "linear-gradient(180deg, #ffffff 0%, #f1f1f3 100%)", color: "#000", borderRadius: 20, border: "none",
-    boxShadow: "0 1px 0 rgba(255,255,255,0.6) inset, 0 10px 30px rgba(0,0,0,0.45)",
-  },
-  title: { fontSize: 30, fontWeight: 900, letterSpacing: "-0.025em" },
-  backdrop: {
-    background:
-      "radial-gradient(900px 520px at 0% -8%, rgba(120,146,190,0.22), transparent 62%)," +
-      "radial-gradient(700px 480px at 105% 4%, rgba(255,255,255,0.07), transparent 60%)," +
-      "radial-gradient(800px 600px at 50% 110%, rgba(90,110,140,0.12), transparent 60%)," +
-      "#08090b",
-  },
-  stickyTitle: true,
-  animate: true,
-  muted: "rgba(255,255,255,0.55)",
-  faint: "rgba(255,255,255,0.32)",
+// B: native-inspired. A, plus a title bar that floats over the page while
+// scrolling (the one translucent surface), and short entrance motion.
+const B: Look = { ...A, name: "b", label: "B · Native", stickyTitle: true, animate: true };
+
+// C: instrument-inspired. A, plus stronger numbers and square status marks.
+const C: Look = {
+  ...A,
+  name: "c",
+  label: "C · Instrument",
+  primary: { ...A.primary, borderRadius: 8 },
+  secondary: { ...A.secondary, borderRadius: 6 },
+  radius: 8,
+  cta: { ...A.cta, borderRadius: 8 },
+  instrument: true,
 };
 
-export const LOOKS: Record<LookName, Look> = { mono: MONO, glass: GLASS };
+export const LOOKS: Record<LookName, Look> = { a: A, b: B, c: C };
 
 // The default until the comparison is settled.
-export const DEFAULT_LOOK: LookName = "glass";
+export const DEFAULT_LOOK: LookName = "a";
 
 const LookContext = createContext<Look>(LOOKS[DEFAULT_LOOK]);
 export const DashLookProvider = LookContext.Provider;
@@ -116,20 +104,20 @@ export function useDashLook(): Look {
   return useContext(LookContext);
 }
 
-const STORE_KEY = "proTankr:dashLook";
+const STORE_KEY = "proTankr:dashVariant";
 
 export function useLookPreference(): [LookName, (n: LookName) => void] {
   const [name, setName] = useState<LookName>(DEFAULT_LOOK);
   useEffect(() => {
     try {
-      const q = new URLSearchParams(window.location.search).get("look");
-      if (q === "mono" || q === "glass") {
+      const q = new URLSearchParams(window.location.search).get("variant");
+      if (q === "a" || q === "b" || q === "c") {
         window.localStorage.setItem(STORE_KEY, q);
         setName(q);
         return;
       }
       const s = window.localStorage.getItem(STORE_KEY);
-      if (s === "mono" || s === "glass") setName(s);
+      if (s === "a" || s === "b" || s === "c") setName(s);
     } catch { /* storage blocked */ }
   }, []);
   const set = useCallback((n: LookName) => {
@@ -153,6 +141,24 @@ export function useScrollBackdrop(el: HTMLElement | null, look: Look) {
   }, [el, look]);
 }
 
+// True once the page's scroll container has scrolled past the title, so a
+// floating title bar can collapse to a compact one-line bar.
+export function useScrolledPast(el: HTMLElement | null, enabled: boolean, px = 40): boolean {
+  const [past, setPast] = useState(false);
+  useEffect(() => {
+    if (!el || !enabled) { setPast(false); return; }
+    let host: HTMLElement | null = el.parentElement;
+    while (host && !/(auto|scroll)/.test(getComputedStyle(host).overflowY)) host = host.parentElement;
+    if (!host) return;
+    const h = host;
+    const on = () => setPast(h.scrollTop > px);
+    on();
+    h.addEventListener("scroll", on, { passive: true });
+    return () => h.removeEventListener("scroll", on);
+  }, [el, enabled, px]);
+  return past;
+}
+
 // Shared CSS: press feedback, entrance, and the two-column desktop layout.
 export function DashStyles() {
   return (
@@ -160,8 +166,11 @@ export function DashStyles() {
       // Plain <style>: scoped styled-jsx doesn't attach in this setup.
       dangerouslySetInnerHTML={{
         __html: `
-.dash-press{transition:transform 140ms ease, background-color 140ms ease, opacity 140ms ease}
-.dash-press:active{transform:scale(0.985)}
+.dash-press{transition:transform 120ms ease, filter 120ms ease, opacity 120ms ease;-webkit-tap-highlight-color:transparent}
+.dash-press:active{transform:scale(0.985);filter:brightness(0.92)}
+.dash-wrap button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.dash-num{font-variant-numeric:tabular-nums}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.dash-titlebar{background:#0b0b0b !important}}
 @keyframes dashEnter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .dash-enter{animation:dashEnter 320ms cubic-bezier(.2,.7,.2,1) both}
 @media (prefers-reduced-motion: reduce){.dash-enter{animation:none}.dash-press{transition:none}.dash-press:active{transform:none}}
