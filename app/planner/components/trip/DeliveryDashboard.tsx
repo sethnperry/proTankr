@@ -175,8 +175,10 @@ function OptionCard({ title, dotColor, children, onClose }: { title: string; dot
 
 export function DeliveryDashboard({
   open, title, delivery, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
-  otherPlanned, beginMiles, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onClose,
+  otherPlanned, beginMiles, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
 }: {
+  // Park Preloaded, offered until Drop / Pump Off begins.
+  onPark?: () => void;
   open: boolean;
   title: string;
   delivery: TripDeliveryRow;
@@ -645,7 +647,7 @@ export function DeliveryDashboard({
         )}
         {retained.length > 0 && (
           <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 12, textAlign: "center" }}>
-            Retained compartments stay aboard. Complete starts the next leg.
+            Retained compartments stay aboard. Complete, then pick the next delivery or Park preloaded for another driver.
           </div>
         )}
       </div>
@@ -709,6 +711,12 @@ export function DeliveryDashboard({
         {bigDetail}
         {dropped && products.length > 0 && !tanksDoneAll && settings.require_tank_readings ? " · tank readings required" : ""}
       </div>
+      {!dropped && onPark && (
+        <button type="button" onClick={onPark}
+          style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", color: "#93c5fd", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          Not dropping here? Park preloaded
+        </button>
+      )}
 
       {/* Drop-into picker */}
       {pickRow && pickInfo && (

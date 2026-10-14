@@ -784,10 +784,12 @@ export const PARK_FOR_LABEL: Record<ParkFor, string> = {
   layover: "Me, after layover",
 };
 
-// Parking is offered between stops only: product on board, nothing arrived
-// and unfinished, nothing mid-load.
+// Parking is offered whenever product is aboard and nothing is going in the
+// ground: between stops, and at a delivery until Drop / Pump Off begins. After
+// a partial drop (the rest retained), the trip is between stops again.
 export function canPark(trip: TripRow | null, step: TripStep, hasLoadOnBoard: boolean): boolean {
   if (!trip || !OPEN_STATUSES.has(trip.status) || !hasLoadOnBoard) return false;
+  if (step.kind === "finish_delivery") return !step.delivery.begin_at;
   return step.kind === "arrive_delivery" || step.kind === "add_delivery";
 }
 
@@ -797,6 +799,23 @@ export function parkTrip(
 ) {
   const where = args.where?.trim() || null;
   const note = args.note?.trim() || null;
+  // A delivery arrived at but not begun goes back to planned-and-not-arrived,
+  // with its tank picks cleared: the plan can still change, and whoever
+  // resumes arrives fresh.
+  const undone = store.list(
+    "trip_deliveries",
+    (d) => d.trip_id === args.trip.trip_id && d.status === "planned" && !!d.arrived_at && !d.begin_at,
+  );
+  for (const d of undone) {
+    store.put("trip_deliveries", { delivery_id: d.delivery_id, arrived_at: null, delay_reason_id: null, delay_note: null });
+  }
+  if (undone.length) {
+    const aboard = store.list(
+      "trip_compartment_loads",
+      (c) => c.trip_id === args.trip.trip_id && c.disposition === "loaded" && c.tank_number != null,
+    );
+    for (const c of aboard) store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, tank_number: null });
+  }
   store.put("trips", {
     trip_id: args.trip.trip_id,
     status: "parked",
@@ -808,7 +827,10 @@ export function parkTrip(
   });
   logEvent(store, args.newId, {
     trip_id: args.trip.trip_id, event_type: PARK_EVENT, occurred_at: args.parkedAt, actor_id: args.userId,
-    payload: { parked_for: args.parkFor, where, note, from_status: args.trip.status },
+    payload: {
+      parked_for: args.parkFor, where, note, from_status: args.trip.status,
+      reset_deliveries: undone.map((d) => d.delivery_id),
+    },
   });
 }
 

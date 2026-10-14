@@ -384,3 +384,35 @@ test("a second pickup can load under its own order number", () => {
   setPickupOrder(s, { userId: ME, pickup: snap().pickups[0], orderId: null, now: NOW, newId });
   assert.equal(snap().compLoads.find((c) => c.comp_number === 1)!.order_id, primary.order_id);
 });
+
+test("park stays open at a delivery until the drop begins, and after a partial drop", async () => {
+  const { canPark, parkTrip, saveDeliveryProgress } = await import("./tripFlow.ts");
+  const { s, newId, snap, getTrip } = setup();
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000), reading(2, 3000)], now: NOW, newId });
+  const pickup = snap().pickups[0];
+  confirmLoaded(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", pickup,
+    times: defaultStepTimes(NOW, 10, pickup.arrived_at), delayReasonId: null, delayNote: null, odometer: null,
+    compartments: snap().compLoads.map((c) => ({ ...c, bol_number: "B1", supplier: "Sup" })), signed: true, now: NOW, newId,
+  });
+  const d = snap().deliveries[0];
+  arriveDelivery(s, { userId: ME, delivery: d, now: NOW, newId });
+  const [c1] = snap().compLoads;
+  saveDeliveryProgress(s, { delivery: snap().deliveries[0], compTanks: [{ compartment_load_id: c1.compartment_load_id, tank_number: "4" }], newId });
+
+  let step = nextStep(getTrip(), snap());
+  assert.equal(step.kind, "finish_delivery");
+  assert.equal(canPark(getTrip(), step, true), true, "arrived, not dropped: can park");
+
+  parkTrip(s, { trip: getTrip(), userId: ME, parkFor: "slip_seat", where: null, note: null, parkedAt: NOW.toISOString(), now: NOW, newId });
+  assert.equal(getTrip().status, "parked");
+  assert.equal(snap().deliveries[0].arrived_at, null, "delivery back to not arrived");
+  assert.equal(snap().deliveries[0].status, "planned");
+  assert.equal(snap().compLoads[0].tank_number, null, "tank picks cleared");
+
+  const begun = { ...getTrip(), status: "delivering" as const };
+  step = nextStep(begun, { ...snap(), deliveries: [{ ...snap().deliveries[0], arrived_at: NOW.toISOString(), begin_at: NOW.toISOString() }] });
+  assert.equal(step.kind, "finish_delivery");
+  assert.equal(canPark(begun, step, true), false, "drop begun: no park");
+});

@@ -408,7 +408,7 @@ export default function HomePage() {
     setNotice(tripComplete
       ? { text: "Trip complete.", tripId }
       : v.retained.length
-        ? { text: "Delivery finished. Pick where the rest is going.", tripId: null }
+        ? { text: "Delivery finished. Pick where the rest is going, or Park preloaded for another driver.", tripId: null }
         : { text: "Delivery finished.", tripId: null });
     void syncNow();
     if (finishDeliveryRow.location_id) {
@@ -756,8 +756,12 @@ export default function HomePage() {
   const showPark = !!snap && canPark(openTrip, step, onBoard(snap.compLoads).length > 0);
   const doPark = (v: ParkSubmit) => {
     if (!store || !userId || !openTrip) return;
+    for (const d of snap?.deliveries ?? []) {
+      if (d.status === "planned" && d.arrived_at && !d.begin_at) clearDeliveryDraft(d.delivery_id);
+    }
     parkTrip(store, { trip: openTrip, userId, ...v, ...clock() });
     setParkOpen(false);
+    setFinishOpen(false);
     setNotice({ text: "Load parked. Start another trip when you're ready.", tripId: openTrip.trip_id });
     void syncNow();
   };
@@ -1186,6 +1190,7 @@ export default function HomePage() {
             onSaveSignature={signature.save}
             onSaveProgress={onDeliveryProgress}
             onSubmit={(v) => void onFinishSubmit(v)}
+            onPark={showPark ? () => { setFinishOpen(false); setParkOpen(true); } : undefined}
             onClose={() => setFinishOpen(false)}
           />
         );

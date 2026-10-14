@@ -11022,3 +11022,21 @@ order). Not click-tested.
   than one order, each pickup line shows "Order N ›"; tapping it opens
   `PickupOrderSheet` to change it. The PTD already prints the order per
   compartment.
+
+### Park Preloaded until the drop; park after a partial drop (2026-10-14)
+
+Park disappeared once the driver arrived at a delivery (step `finish_delivery`
+wasn't allowed). No migration. Not click-tested.
+
+- `canPark` now also allows `finish_delivery` while the delivery has no
+  `begin_at` (Drop / Pump Off not tapped). Once the drop begins it's gone.
+- `parkTrip` puts an arrived-but-not-begun delivery back to not arrived
+  (arrived_at and delay reason cleared, still `planned`) and clears tank picks
+  on compartments still aboard, so the plan stays changeable and whoever
+  resumes arrives fresh. Logged as `reset_deliveries` on the park event. The
+  dashboard also clears that delivery's phone draft. 1 test.
+- Delivery screen: "Not dropping here? Park preloaded" under the big button
+  until the drop begins.
+- Partial drop: Retain the rest, Complete, and the trip is between stops
+  (`add_delivery`), where Park is offered. Copy on the Retain note and the
+  finish notice now says so.
