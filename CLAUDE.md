@@ -11040,3 +11040,12 @@ wasn't allowed). No migration. Not click-tested.
 - Partial drop: Retain the rest, Complete, and the trip is between stops
   (`add_delivery`), where Park is offered. Copy on the Retain note and the
   finish notice now says so.
+
+### Drop start-time pop-out totals gallons per tank (2026-10-14)
+
+`DeliveryDashboard.tsx`: the Drop / Pump Off start-time pop-out now lists
+"Into each tank": one line per tank picked (tank order), product dot and
+code, which compartments, total gross gallons, and net when every
+compartment going into that tank has a net figure. Retained compartments
+aren't counted. For closing the order in the dispatch system without a
+calculator. Display only, no migration. Not click-tested.

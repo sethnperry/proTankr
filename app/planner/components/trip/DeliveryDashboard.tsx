@@ -398,6 +398,21 @@ export function DeliveryDashboard({
   const arrivedAt = delivery.arrived_at ?? delivery.begin_at ?? new Date().toISOString();
   const beginIso = fromLocalInput(beginText) || "";
   const beginTimes: StepTimes = { arrivedAt, beginAt: beginIso || arrivedAt, leftAt: beginIso || arrivedAt };
+  // Gallons going into each tank (for closing the order in dispatch), in tank order.
+  const tankTotals = useMemo(() => {
+    const m = new Map<string, { tank: string; productId: string | null; comps: number[]; gross: number; net: number; netAll: boolean }>();
+    for (const c of delivered) {
+      const t = choice[c.compartment_load_id];
+      const e = m.get(t) ?? { tank: t, productId: c.product_id, comps: [], gross: 0, net: 0, netAll: true };
+      e.comps.push(c.comp_number);
+      e.gross += gross(c);
+      const n = c.net_gallons == null ? NaN : Number(c.net_gallons);
+      if (Number.isFinite(n)) e.net += n; else e.netAll = false;
+      m.set(t, e);
+    }
+    return [...m.values()].sort((a, b) => a.tank.localeCompare(b.tank, undefined, { numeric: true }));
+  }, [delivered, choice]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openBegin = () => {
     setBeginErr(null);
     if (!dropped) {
@@ -756,6 +771,25 @@ export function DeliveryDashboard({
         fields={[]}
         footer={
           <div style={{ width: "100%" }}>
+            {tankTotals.length > 0 && (
+              <div style={{ marginBottom: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "8px 10px" }}>
+                <div style={{ ...miniLabel, marginBottom: 4 }}>Into each tank</div>
+                {tankTotals.map((t) => {
+                  const info = productInfo(t.productId);
+                  return (
+                    <div key={t.tank} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "4px 0", fontSize: 14 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: info.hex ?? productColorFor(info.name) }} />
+                      <span style={{ fontWeight: 800 }}>Tank {t.tank}</span>
+                      <span style={{ color: muted, fontSize: 12, flex: 1, minWidth: 0 }}>{info.code} · C{[...t.comps].sort((a, b) => a - b).join(", C")}</span>
+                      <span style={{ fontWeight: 800, whiteSpace: "nowrap" }}>
+                        {Math.round(t.gross).toLocaleString("en-US")} gal
+                        {t.netAll && t.net > 0 && <span style={{ color: muted, fontWeight: 600, fontSize: 12 }}> · net {Math.round(t.net).toLocaleString("en-US")}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <input type="datetime-local" value={beginText} onChange={(e) => setBeginText(e.target.value)} style={{ ...fieldInput, marginBottom: 10 }} />
             <DelayReasonField times={beginTimes} threshold={settings.delivery_delay_threshold_minutes} reasons={reasons} kind="delivery"
               reasonId={reasonId} note={note} onChange={(id, n) => { setReasonId(id); setNote(n); }} />
