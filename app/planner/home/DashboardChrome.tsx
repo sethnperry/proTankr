@@ -41,7 +41,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
   const toneColor = (t: string) => (t === "bad" ? RED : t === "warn" ? AMBER : t === "ok" ? "rgba(255,255,255,0.78)" : L.muted);
 
   return (
-    <div style={{ ...L.primary, padding: "14px 14px 12px" }} className={L.animate ? "dash-enter" : undefined}>
+    <div style={{ ...L.primary, padding: "14px 14px 12px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
         <button type="button" onClick={onChangeCity}
           style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", padding: 0, color: "#fff", cursor: "pointer" }}>
@@ -50,7 +50,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
         </button>
         {total > 0 && (
           <span style={{ fontSize: 13, color: L.muted, whiteSpace: "nowrap" }}>
-            <span className="dash-num" style={{ color: "#fff", fontWeight: 800, fontSize: L.instrument ? 17 : undefined }}>{summary.ready}</span>{L.instrument ? <span className="dash-num">/{total}</span> : <> of {total}</>} ready
+            <span className="dash-num" style={{ color: "#fff", fontWeight: 800, fontSize: 17 }}>{summary.ready}</span><span className="dash-num">/{total}</span> ready
           </span>
         )}
       </div>
@@ -78,7 +78,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
                     {s.isPickup && <span style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: `5px solid ${fillColor(s)}` }} />}
                   </div>
                   <div style={{
-                    position: "relative", height: 46, marginTop: 2, borderRadius: L.instrument ? 2 : 6, overflow: "hidden",
+                    position: "relative", height: 46, marginTop: 2, borderRadius: 2, overflow: "hidden",
                     background: s.state === "none" ? "transparent" : s.state === "expired" ? "rgba(248,113,113,0.12)" : "rgba(255,255,255,0.08)",
                     border: s.state === "none" ? `1px dashed ${L.faint}` : isSel ? "1px solid rgba(255,255,255,0.7)" : "1px solid transparent",
                     boxShadow: isSel && s.state === "none" ? "0 0 0 1px rgba(255,255,255,0.5)" : undefined,
@@ -147,83 +147,11 @@ function Icon({ name, color }: { name: ToolIcon; color: string }) {
   );
 }
 
-export function ToolTile({ icon, label, sub, subColor, onClick, delay = 0 }: {
-  icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick: () => void; delay?: number;
-}) {
-  const L = useDashLook();
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`dash-press${L.animate ? " dash-enter" : ""}`}
-      style={{
-        ...L.secondary, color: "#fff", cursor: "pointer", textAlign: "left", padding: "13px 14px",
-        display: "flex", alignItems: "center", gap: 12, minHeight: 60, minWidth: 0,
-        animationDelay: L.animate ? `${delay}ms` : undefined,
-      }}
-    >
-      <Icon name={icon} color="rgba(255,255,255,0.8)" />
-      <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>{label}</span>
-        {sub && (
-          <span style={{ display: "block", fontSize: 12, color: subColor ?? L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {sub}
-          </span>
-        )}
-      </span>
-    </button>
-  );
-}
-
-export function LookSwitch({ value, onChange }: { value: string; onChange: (v: "a" | "b" | "c") => void }) {
-  const L = useDashLook();
-  const opt = (v: "a" | "b" | "c", label: string) => (
-    <button type="button" onClick={() => onChange(v)}
-      style={{ flex: 1, padding: "7px 0", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
-        background: value === v ? "#fff" : "transparent", color: value === v ? "#000" : L.muted }}>
-      {label}
-    </button>
-  );
-  return (
-    <div style={{ marginTop: 28, display: "flex", justifyContent: "center" }}>
-      <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 999, border: `1px solid ${L.hairline}`, width: 260 }}>
-        {opt("a", "A Mono")}
-        {opt("b", "B Native")}
-        {opt("c", "C Instr.")}
-      </div>
-    </div>
-  );
-}
-
-// ── Variant-specific tool layouts ───────────────────────────────────────────
+// ── Tools and gauge panel ───────────────────────────────────────────────────
 
 export type ToolItem = { icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick: () => void };
 
-// B: one grouped list, icon + label + detail + chevron, like a settings screen.
-export function ToolList({ items }: { items: ToolItem[] }) {
-  const L = useDashLook();
-  return (
-    <div style={{ ...L.secondary, overflow: "hidden", padding: 0 }}>
-      {items.map((t, i) => (
-        <button key={t.label} type="button" onClick={t.onClick} className="dash-press"
-          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "0 14px", minHeight: 54,
-            background: "none", border: "none", color: "#fff", cursor: "pointer", textAlign: "left" }}>
-          <span style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Icon name={t.icon} color="#fff" />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, alignSelf: "stretch",
-            borderBottom: i < items.length - 1 ? `1px solid ${L.hairline}` : "none" }}>
-            <span style={{ flex: 1, fontSize: 16, fontWeight: 600 }}>{t.label}</span>
-            {t.sub && <span style={{ fontSize: 14, color: t.subColor ?? L.muted, maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.sub}</span>}
-            <span style={{ color: L.faint, fontSize: 18 }}>›</span>
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// C: compact three-across icon panel, square, label under the icon.
+// Compact three-across icon panel, square, label under the icon.
 export function ToolPanel({ items }: { items: ToolItem[] }) {
   const L = useDashLook();
   return (
@@ -240,7 +168,7 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
   );
 }
 
-// C: a row of big readouts under the main button.
+// A row of big readouts under the main button.
 export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void };
 export function GaugePanel({ cells }: { cells: GaugeCell[] }) {
   const L = useDashLook();

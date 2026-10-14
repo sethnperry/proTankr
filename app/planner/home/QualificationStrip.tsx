@@ -23,7 +23,7 @@ export type QualTerminal = { terminalId: string; name: string; steps: QualStep[]
 
 function Segment({ s }: { s: QualStep }) {
   const L = useDashLook();
-  const r = L.instrument ? 2 : 4;
+  const r = 2;
   const base: React.CSSProperties = { position: "relative", height: 22, borderRadius: r };
   const look: React.CSSProperties =
     s.state === "done" ? { background: "#f2f2f2" }
@@ -57,13 +57,13 @@ function Row({ t, onOpen, first }: { t: QualTerminal; onOpen: () => void; first?
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
         <span className="dash-num" style={{ fontSize: 12, color: L.muted, whiteSpace: "nowrap" }}>
-          <span style={{ color: "#fff", fontWeight: 800, fontSize: L.instrument ? 15 : 13 }}>{sum.done}</span>/{sum.total} steps
+          <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>{sum.done}</span>/{sum.total} steps
         </span>
       </div>
       <div style={{ display: "flex", gap: 4, marginTop: 9, alignItems: "flex-start" }}>
         {folded > 0 && (
           <div style={{ flex: "0 0 auto" }}>
-            <div className="dash-num" style={{ height: 22, borderRadius: L.instrument ? 2 : 4, background: "#f2f2f2", color: "#000", fontSize: 11, fontWeight: 800, padding: "0 6px", display: "flex", alignItems: "center" }}>
+            <div className="dash-num" style={{ height: 22, borderRadius: 2, background: "#f2f2f2", color: "#000", fontSize: 11, fontWeight: 800, padding: "0 6px", display: "flex", alignItems: "center" }}>
               {folded}✓
             </div>
             <div style={{ fontSize: 10, marginTop: 4, color: L.faint, textAlign: "center" }}>done</div>

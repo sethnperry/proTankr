@@ -11121,19 +11121,19 @@ Migrations applied 2026-10-14 via the Management API. Not click-tested.
 - Expirations row shows only when something is expired or expiring. Tiles fill
   by column: Equipment, Terminal, Delivery Location | Cards, Trips, Reports.
 
-### Driver Dashboard variants + terminal access strip (2026-10-14, branch only)
+### Driver Dashboard: instrument look + terminal access strip (2026-10-14, branch only)
 
-Three variants on `/planner/home` (`app/planner/home/dashLook.tsx`), same
-data: **A** refined mono (graphite cards on a near-black page, small
-uppercase labels, 2-column tool tiles), **B** native (big title that
-collapses to a blurred one-line bar on scroll, sentence-case labels, rounder
-surfaces, tools as one grouped settings-style list), **C** instrument (square
-corners, big equipment number, a 4-cell gauge panel under the main button:
-Trip/Gross, Access, Cards, Sync; uppercase labels; tools as a 3-across icon
-panel). First pass only changed radius and font sizes and the screenshots
-looked identical, so the variants now differ in structure. Pick
-with `?variant=a|b|c` (remembered per phone) or the switch at the bottom (dev
-or super admin). Default A. Temporary: remove the switch once one is chosen.
+Compared three variants (A mono, B native, C instrument) with screenshots;
+the operator picked **C**. The switch, `?variant=` and `?mockAccess=` are
+gone; `app/planner/home/dashLook.tsx` now holds one `LOOK`. The look: square
+corners, near-black surfaces with thin borders, uppercase letter-spaced
+labels, tabular numbers; small "DRIVER DASHBOARD" label over the truck/trailer
+number in large type; uppercase BEGIN TRIP; a 4-cell gauge panel under it
+(`GaugePanel`: Trip or Gross when loaded, Access ready/total, Cards, Sync, each
+opens its screen); attention rows with square status marks; tools as a
+3-across icon panel (`ToolPanel`). Readout cards pick up the surfaces through
+CSS variables. A first pass that only changed radius/font size looked
+identical in screenshots; differences have to be structural to show.
 
 Terminal access strip (`DashboardChrome.tsx`, `lib/terminals/readiness.ts`):
 one bar per starred or carded terminal in the pickup's city (else the
@@ -11145,4 +11145,3 @@ Qualification strip (`QualificationStrip.tsx`, `lib/terminals/qualification.ts`,
 2 tests): **mock only**. No table holds terminal requirements or progress
 (checked live 2026-10-14; `load_log.trainee_id` is unused). Shown labeled
 "MOCK DATA" with `?mockQual=1` (dev or super admin). Real data needs a schema.
-`?mockAccess=1` fakes the access strip the same way.

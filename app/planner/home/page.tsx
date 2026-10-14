@@ -96,8 +96,8 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
-import { DashLookProvider, DashStyles, LOOKS, SectionLabel, useDashLook, useLookPreference, useScrollBackdrop, useScrolledPast } from "./dashLook";
-import { GaugePanel, LookSwitch, TerminalAccessStrip, ToolList, ToolPanel, ToolTile, type ToolItem } from "./DashboardChrome";
+import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
+import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./DashboardChrome";
 import { QualificationCard, mockQualification } from "./QualificationStrip";
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
@@ -858,24 +858,20 @@ export default function HomePage() {
   const canCards = canReachDestination("cards", shell.role, shell.isSuperAdmin, shell.isSolo ?? false);
 
   // ── Look (see dashLook.tsx) ───────────────────────────────────────────────
-  const [lookName, setLookName] = useLookPreference();
-  const L = LOOKS[lookName];
+  const L = LOOK;
   const card: React.CSSProperties = { ...L.primary, padding: 14 };
   const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
   useScrollBackdrop(wrapEl, L);
-  const titleCollapsed = useScrolledPast(wrapEl, L.stickyTitle);
 
   // ── Terminal access readiness ─────────────────────────────────────────────
-  // Mock data for design comparison only: ?mockAccess=1 / ?mockQual=1, in
-  // development or for a super admin. Never saved, always labeled.
-  const [mockParams, setMockParams] = useState({ access: false, qual: false });
+  // The qualification strip has no real data yet (no table holds terminal
+  // requirements). ?mockQual=1 shows a labeled mock, in development or for a
+  // super admin only. Never saved.
+  const [mockQualParam, setMockQualParam] = useState(false);
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    setMockParams({ access: q.get("mockAccess") === "1", qual: q.get("mockQual") === "1" });
+    setMockQualParam(new URLSearchParams(window.location.search).get("mockQual") === "1");
   }, []);
-  const mockAllowed = process.env.NODE_ENV !== "production" || shell.isSuperAdmin;
-  const mockAccess = mockAllowed && mockParams.access;
-  const mockQual = mockAllowed && mockParams.qual;
+  const mockQual = mockQualParam && (process.env.NODE_ENV !== "production" || shell.isSuperAdmin);
   // The trip's pickup city when there is one, else the Planner's city.
   const readinessPlace = (() => {
     const p = snap ? activePickup(snap.pickups) : null;
@@ -903,20 +899,9 @@ export default function HomePage() {
         starred: !!mine?.starred,
       });
     }
-    if (mockAccess) {
-      // Dev only (?mockAccess=1): fake rows covering every state. Never saved.
-      const today = isoToday_();
-      const ago = (n: number) => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
-      const m = (id: string, name: string, cardedAgo: number | null, renewal = 90): ReadinessInput =>
-        ({ terminalId: id, name, city: "Demo", state: "XX", renewalDays: renewal, cardedOn: cardedAgo == null ? null : ago(cardedAgo), starred: true });
-      return terminalReadiness([
-        m("m1", "Buckey North", 2, 273), m("m2", "Chevron", 55, 60), m("m3", "Citgo", 30), m("m4", "Global", 96),
-        m("m5", "Kinder Morgan", 140), m("m6", "Marathon", null), m("m7", "Sunoco", 10), m("m8", "Motiva", 86),
-      ], { city: "Demo", state: "XX", todayIso: today, pickupTerminalId: "m4" });
-    }
     return terminalReadiness(rows, { city: readinessPlace.city, state: readinessPlace.state, todayIso: isoToday_(), pickupTerminalId: readinessPlace.pickupId });
   })();
-  const readinessLabel = mockAccess ? "Demo data" : [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
+  const readinessLabel = [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
   const openTerminalList = (terminalId: string | null) => {
     if (terminalId) shell.setExpandedTerminalId(terminalId);
     if (location.selectedCity) shell.setTermOpen(true);
@@ -944,20 +929,12 @@ export default function HomePage() {
         ["--dash-card-radius" as any]: `${L.secondary.borderRadius}px`,
       }}
     >
-      {/* Title. In variant B it floats over the page under a blurred bar. */}
-      <div className={L.stickyTitle ? "dash-titlebar" : undefined} style={L.stickyTitle ? {
-        position: "sticky", top: 0, zIndex: 5, margin: "-12px -28px 8px", padding: titleCollapsed ? "10px 28px 10px" : "12px 28px 10px",
-        background: titleCollapsed ? "rgba(11,11,11,0.78)" : "transparent",
-        backdropFilter: titleCollapsed ? "blur(18px) saturate(150%)" : undefined, WebkitBackdropFilter: titleCollapsed ? "blur(18px) saturate(150%)" : undefined,
-        borderBottom: `1px solid ${titleCollapsed ? L.hairline : "transparent"}`,
-        transition: "background-color 160ms ease, border-color 160ms ease",
-      } : { marginBottom: 12 }}>
-        <div style={{ ...L.title, ...(titleCollapsed ? { fontSize: 17, letterSpacing: "-0.01em" } : null), transition: "font-size 160ms ease" }}>Driver Dashboard</div>
-        {!titleCollapsed && (
-          <div className={L.instrument ? "dash-num" : undefined} style={L.instrument
-            ? { fontSize: 30, fontWeight: 800, marginTop: 4, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
-            : { fontSize: 13, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{equipmentLabel}</div>
-        )}
+      {/* Title: small label, the truck/trailer number large. */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={L.title}>Driver Dashboard</div>
+        <div className="dash-num" style={{ fontSize: 30, fontWeight: 800, marginTop: 4, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {equipmentLabel}
+        </div>
       </div>
 
       <div className="dash-cols">
@@ -1004,7 +981,7 @@ export default function HomePage() {
 
       {/* Trip */}
       {openTrip ? (
-        <div className={L.animate ? "dash-enter" : undefined} style={{ ...card, marginBottom: 14 }}>
+        <div style={{ ...card, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Current trip · {STATUS_LABEL[openTrip.status]}
@@ -1015,7 +992,7 @@ export default function HomePage() {
               <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
             )}
           </div>
-          <div className="dash-num" style={{ fontSize: L.instrument ? 20 : 18, fontWeight: 800, letterSpacing: L.instrument ? "-0.01em" : undefined }}>
+          <div className="dash-num" style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>
             {children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "No order number"}
             {children && children.extraOrders.length > 0 && (
               <span style={{ fontSize: 13, fontWeight: 600, color: muted }}> +{children.extraOrders.length} more</span>
@@ -1095,9 +1072,9 @@ export default function HomePage() {
                 })} />
               </div>
               {currentGross != null && (
-                <span className="dash-num" style={{ fontSize: L.instrument ? 19 : 15, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
+                <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
                   {currentGross.toLocaleString("en-US")}
-                  {L.instrument && <span style={{ fontSize: 10, fontWeight: 700, color: L.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>}
+                  <span style={{ fontSize: 10, fontWeight: 700, color: L.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>
                 </span>
               )}
             </div>
@@ -1183,8 +1160,7 @@ export default function HomePage() {
       {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
-      {L.instrument && (
-        <GaugePanel cells={[
+      <GaugePanel cells={[
           tripLoaded && currentGross != null
             ? { label: "Gross", value: currentGross.toLocaleString("en-US"), unit: "lb", color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget) }
             : { label: "Trip", value: openTrip ? STATUS_LABEL[openTrip.status] : "None" },
@@ -1200,7 +1176,6 @@ export default function HomePage() {
             color: failed.length > 0 ? "#f87171" : undefined,
             onClick: () => { void syncNow(); setSyncOpen(true); } },
         ]} />
-      )}
 
       <AddPickupSheet
         open={addOpen}
@@ -1365,15 +1340,8 @@ export default function HomePage() {
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => router.push("/planner/trips") },
           { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => router.push("/planner/reports") },
         ];
-        if (L.tools === "list") return <ToolList items={tools} />;
-        if (L.tools === "panel") return <ToolPanel items={tools} />;
-        return (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: 10 }}>
-            {tools.map((t, i) => <ToolTile key={t.label} {...t} delay={40 + i * 30} />)}
-          </div>
-        );
+        return <ToolPanel items={tools} />;
       })()}
-      {mockAllowed && <LookSwitch value={lookName} onChange={setLookName} />}
       </div>
       </div>
 
@@ -1493,7 +1461,6 @@ export default function HomePage() {
 function InfoRow({ label, value, valueColor, onClick, last }: {
   label: string; value: string; valueColor?: string; onClick: () => void; last?: boolean;
 }) {
-  const L = useDashLook();
   return (
     <button
       type="button"
@@ -1505,8 +1472,8 @@ function InfoRow({ label, value, valueColor, onClick, last }: {
         background: "transparent", color: "#fff", cursor: "pointer", textAlign: "left",
       }}
     >
-      {L.instrument && <span aria-hidden style={{ width: 7, height: 7, flexShrink: 0, background: valueColor ?? "rgba(255,255,255,0.55)" }} />}
-      <span style={{ fontSize: L.instrument ? 11 : 13, fontWeight: L.instrument ? 700 : undefined, letterSpacing: L.instrument ? "0.08em" : undefined, textTransform: L.instrument ? "uppercase" : undefined, color: muted, width: L.instrument ? 84 : 92, flexShrink: 0 }}>{label}</span>
+      <span aria-hidden style={{ width: 7, height: 7, flexShrink: 0, background: valueColor ?? "rgba(255,255,255,0.55)" }} />
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: muted, width: 84, flexShrink: 0 }}>{label}</span>
       <span className="dash-num" style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: valueColor ?? "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {value}
       </span>
