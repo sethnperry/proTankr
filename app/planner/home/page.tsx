@@ -101,6 +101,7 @@ import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./Das
 import { QualificationCard, mockQualification } from "./QualificationStrip";
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
+import { EXPIRY_COLOR } from "@/lib/expiry";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
@@ -855,6 +856,7 @@ export default function HomePage() {
 
   const expired = expirations.expiredCount ?? 0;
   const warning = expirations.warningCount ?? 0;
+  const soonCount = expirations.soonCount ?? 0;
   const canCards = canReachDestination("cards", shell.role, shell.isSuperAdmin, shell.isSolo ?? false);
 
   // ── Look (see dashLook.tsx) ───────────────────────────────────────────────
@@ -879,26 +881,25 @@ export default function HomePage() {
     if (t?.city) return { city: String(t.city), state: String(t.state ?? ""), pickupId: String(t.terminal_id) };
     return { city: location.selectedCity || "", state: location.selectedState || "", pickupId: p?.terminal_id ? String(p.terminal_id) : null };
   })();
+  // Every terminal in the city, with this driver's last carded date if any.
   const readiness = (() => {
-    const ids = new Set<string>([
-      ...terminals.terminals.map((t) => String(t.terminal_id)),
-      ...Object.keys(terminals.accessDateByTerminalId),
-    ]);
-    if (readinessPlace.pickupId) ids.add(readinessPlace.pickupId);
     const rows: ReadinessInput[] = [];
-    for (const id of ids) {
-      const mine = terminals.terminals.find((t) => String(t.terminal_id) === id);
-      const cat = terminalCatalog.find((t) => String(t.terminal_id) === id);
-      const name = String(cat?.terminal_name ?? mine?.terminal_name ?? "Terminal");
+    const seen = new Set<string>();
+    const add = (t: any) => {
+      const id = String(t?.terminal_id ?? "");
+      if (!id || seen.has(id)) return;
+      seen.add(id);
       rows.push({
-        terminalId: id, name,
-        city: (cat?.city ?? mine?.city ?? null) as string | null,
-        state: (cat?.state ?? mine?.state ?? null) as string | null,
-        renewalDays: Number((cat as any)?.renewal_days ?? 90) || 90,
+        terminalId: id,
+        name: String(t.terminal_name ?? "Terminal"),
+        city: (t.city ?? null) as string | null,
+        state: (t.state ?? null) as string | null,
+        renewalDays: Number(t.renewal_days ?? 90) || 90,
         cardedOn: terminals.accessDateByTerminalId[id] ?? null,
-        starred: !!mine?.starred,
       });
-    }
+    };
+    for (const t of terminalCatalog) add(t);
+    for (const t of terminals.terminals) add(t);
     return terminalReadiness(rows, { city: readinessPlace.city, state: readinessPlace.state, todayIso: isoToday_(), pickupTerminalId: readinessPlace.pickupId });
   })();
   const readinessLabel = [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
@@ -1164,12 +1165,12 @@ export default function HomePage() {
           tripLoaded && currentGross != null
             ? { label: "Gross", value: currentGross.toLocaleString("en-US"), unit: "lb", color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget) }
             : { label: "Trip", value: openTrip ? STATUS_LABEL[openTrip.status] : "None" },
-          { label: "Access", value: `${readiness.ready}/${readiness.segments.length}`,
-            color: readiness.expired > 0 ? "#f87171" : readiness.expiring > 0 ? "#fbbf24" : undefined,
+          { label: "Access", value: `${readiness.access}/${readiness.segments.length}`,
+            color: readiness.expired > 0 ? EXPIRY_COLOR.expired : readiness.expiring > 0 ? EXPIRY_COLOR.expiring : readiness.soon > 0 ? EXPIRY_COLOR.soon : undefined,
             onClick: () => openTerminalList(null) },
-          { label: "Cards", value: expired > 0 ? String(expired) : warning > 0 ? String(warning) : "OK",
-            unit: expired > 0 ? "exp" : warning > 0 ? "soon" : undefined,
-            color: expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined,
+          { label: "Cards", value: expired > 0 ? String(expired) : warning > 0 ? String(warning) : soonCount > 0 ? String(soonCount) : "OK",
+            unit: expired > 0 ? "exp" : warning > 0 ? "7d" : soonCount > 0 ? "30d" : undefined,
+            color: expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : soonCount > 0 ? EXPIRY_COLOR.soon : undefined,
             onClick: () => shell.setExpModalOpen(true) },
           { label: "Sync", value: failed.length > 0 ? String(failed.length) : String(pendingCount),
             unit: failed.length > 0 ? "err" : pendingCount > 0 ? "wait" : "ok",
@@ -1234,8 +1235,8 @@ export default function HomePage() {
             {showExp && (
               <InfoRow
                 label="Expirations"
-                value={expired > 0 ? `${expired} expired` : `${warning} expiring soon`}
-                valueColor={expired > 0 ? "#f87171" : "#fbbf24"}
+                value={expired > 0 ? `${expired} expired` : `${warning} within 7 days`}
+                valueColor={expired > 0 ? EXPIRY_COLOR.expired : EXPIRY_COLOR.expiring}
                 onClick={() => shell.setExpModalOpen(true)}
                 last={!showSync}
               />
@@ -1334,8 +1335,8 @@ export default function HomePage() {
           { icon: "terminal", label: "Terminal", sub: terminalName ?? "Not set", onClick: () => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true)) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
-            sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring` : "All current",
-            subColor: expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined,
+            sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} within 7 days` : soonCount > 0 ? `${soonCount} within 30 days` : "All current",
+            subColor: expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : soonCount > 0 ? EXPIRY_COLOR.soon : undefined,
             onClick: () => router.push("/planner/cards") }] : []),
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => router.push("/planner/trips") },
           { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => router.push("/planner/reports") },

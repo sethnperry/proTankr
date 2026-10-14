@@ -11,10 +11,8 @@
 // identity/schedule, equipment + its expiring/expired permit items,
 // terminal card status (grouped by city), badges, credentials, and a
 // dispatcher-notes box. All expiration coloring throughout this page uses
-// one local expStateFor rule (expiring within 7 days = amber, ANY past
-// date = red, no date on file = gray -- see that function's own comment
-// for why this isn't cardTheme.ts's shared cardStateFor) so nothing on
-// this page disagrees with itself about what "soon" or "overdue" means.
+// the app-wide rule in lib/expiry.ts (30 days yellow, 7 days orange,
+// past red, no date gray).
 //
 // 2026-08-07 rework (per explicit user direction): Terminal Cards grouped
 // by city; added Badges and Credentials sections (same admin+dispatch RLS
@@ -43,6 +41,7 @@
 // already reads, so this now agrees with that too instead of disagreeing
 // with two different "current" equipment views at once.
 
+import { expiryStateFor, EXPIRY_COLOR, type ExpiryState } from "@/lib/expiry";
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -50,38 +49,21 @@ import { startSetupSession } from "@/lib/setupSession";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import DriverPicker from "../components/DriverPicker";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
-import { addDaysISO_, daysUntilISO_, formatMDYWithCountdown_ } from "../utils/dates";
+import { addDaysISO_, formatMDYWithCountdown_ } from "../utils/dates";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 
-// This page deliberately does NOT use cardTheme.ts's shared cardStateFor --
-// that function fades anything expired more than 7 days ago from "expired"
-// (red) to a separate "inactive" state (gray), which doesn't match what was
-// actually asked for here ("expired cards should show date in red" has no
-// day-limit; only "expiring" was scoped to "the next 7 days"). Under the
-// shared function, a permit 8+ days overdue would silently render gray
-// instead of red -- worse, collectExpiringPermits() below would drop it
-// from the Equipment list entirely, since its filter only ever looked for
-// "expiring"/"expired", never "inactive". This 3-state version has no such
-// cliff: anything in the past is "expired," full stop.
-type ExpState = "not_set" | "valid" | "expiring" | "expired";
-function expStateFor(iso: string | null | undefined): ExpState {
-  if (!iso) return "not_set";
-  const days = daysUntilISO_(iso);
-  if (days === null) return "not_set";
-  if (days < 0) return "expired";
-  if (days <= 7) return "expiring";
-  return "valid";
+// Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
+// and credentials stay red however long ago they expired; terminal cards
+// time out to "no access" 30 days after expiring.
+type ExpState = ExpiryState;
+function expStateFor(iso: string | null | undefined, access = false): ExpState {
+  return expiryStateFor(iso, { access });
 }
-const DARK_EXP_COLOR: Record<ExpState, string> = {
-  not_set: "rgba(255,255,255,0.35)",
-  valid: "rgba(255,255,255,0.85)",
-  expiring: "#f59e0b",
-  expired: "#ef4444",
-};
+const DARK_EXP_COLOR = EXPIRY_COLOR;
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun..Sat, matches the mockup's day-icon row
 
@@ -132,7 +114,7 @@ function collectExpiringPermits(unitLabel: string, rows: EquipmentPermitRow[]): 
     const iso = r.expiration_date;
     if (!iso) continue;
     const state = expStateFor(iso);
-    if (state === "expiring" || state === "expired") {
+    if (state === "soon" || state === "expiring" || state === "expired") {
       out.push({ label: `${unitLabel} — ${r.permit_types?.name ?? "Permit"}`, iso });
     }
   }
@@ -148,13 +130,13 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function ExpirationLine({ label, iso }: { label: string; iso: string | null }) {
-  const state = expStateFor(iso);
+function ExpirationLine({ label, iso, access = false }: { label: string; iso: string | null; access?: boolean }) {
+  const state = expStateFor(iso, access);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
       <span style={{ color: "#fff", fontWeight: 600 }}>{label}</span>
       <span style={{ fontWeight: 800, color: DARK_EXP_COLOR[state] }}>
-        {iso ? formatMDYWithCountdown_(iso) : "Not on file"}
+        {state === "inactive" ? "No access" : iso ? formatMDYWithCountdown_(iso) : "Not on file"}
       </span>
     </div>
   );
@@ -545,6 +527,7 @@ export default function DispatchPage() {
                         key={c.terminal_id}
                         label={c.terminal_name}
                         iso={c.expiresISO}
+                        access
                       />
                     ))}
                   </div>

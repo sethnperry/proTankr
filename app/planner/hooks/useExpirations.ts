@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { ACCESS_GRACE_DAYS, EXP_SOON_DAYS, EXP_WARN_DAYS, expiryStateForDays, type ExpiryState } from "@/lib/expiry";
 
 export type ExpirationItem = {
   id: string;
@@ -14,6 +15,9 @@ export type ExpirationItem = {
   expiresISO: string;
   daysLeft: number;
   expired: boolean;
+  // App-wide color level (lib/expiry.ts): soon (8-30 days, yellow),
+  // expiring (0-7, orange), expired (red).
+  level: ExpiryState;
   // Terminal items only -- carried as structured fields (not just parsed
   // back out of entitySubtitle) so the notification modal can group by
   // city without re-parsing a "City, ST" display string.
@@ -36,15 +40,14 @@ type PermitRow = {
 
 type BadgeRow = { id: string; port_name: string; category: string | null; expiration_date: string | null };
 
-const TRUCK_WARN_DAYS      = 30;
-const TRAILER_WARN_DAYS    = 30;
-// Terminal cards, badges, and credentials all share the same 7-day warn
-// window -- matches the Dispatch tab's own expStateFor (see
-// app/planner/dispatch/page.tsx), which this modal is organized to agree
-// with rather than inventing a second set of thresholds.
-const TERMINAL_WARN_DAYS   = 7;
-const BADGE_WARN_DAYS      = 7;
-const CREDENTIAL_WARN_DAYS = 7;
+// Everything is listed from 30 days out (lib/expiry.ts). Terminal access
+// drops off 30 days after it expires: by then it's "no access", not a
+// renewal to chase.
+const TRUCK_WARN_DAYS      = EXP_SOON_DAYS;
+const TRAILER_WARN_DAYS    = EXP_SOON_DAYS;
+const TERMINAL_WARN_DAYS   = EXP_SOON_DAYS;
+const BADGE_WARN_DAYS      = EXP_SOON_DAYS;
+const CREDENTIAL_WARN_DAYS = EXP_SOON_DAYS;
 
 const DEFER_KEY = "protankr_exp_deferred_v1";
 
@@ -148,6 +151,7 @@ export function useExpirations(opts: {
   // Build item list
   const items = useMemo<ExpirationItem[]>(() => {
     const out: ExpirationItem[] = [];
+    const push = (it: Omit<ExpirationItem, "level">) => out.push({ ...it, level: expiryStateForDays(it.daysLeft) });
 
     const name_ = truckName || "Truck";
     for (const row of truckPermits) {
@@ -156,7 +160,7 @@ export function useExpirations(opts: {
       const label = row.permit_types?.name ?? "Permit";
       const days = daysUntil(iso);
       if (days <= TRUCK_WARN_DAYS) {
-        out.push({ id: `truck-${truckId}-${row.equipment_permit_id}`, label, entityName: name_, entitySubtitle: label, entityType: "truck", entityId: String(truckId), expiresISO: iso, daysLeft: days, expired: days < 0 });
+        push({ id: `truck-${truckId}-${row.equipment_permit_id}`, label, entityName: name_, entitySubtitle: label, entityType: "truck", entityId: String(truckId), expiresISO: iso, daysLeft: days, expired: days < 0 });
       }
     }
 
@@ -167,7 +171,7 @@ export function useExpirations(opts: {
       const label = row.permit_types?.name ?? "Permit";
       const days = daysUntil(iso);
       if (days <= TRAILER_WARN_DAYS) {
-        out.push({ id: `trailer-${trailerId}-${row.equipment_permit_id}`, label, entityName: trailerName_, entitySubtitle: label, entityType: "trailer", entityId: String(trailerId), expiresISO: iso, daysLeft: days, expired: days < 0 });
+        push({ id: `trailer-${trailerId}-${row.equipment_permit_id}`, label, entityName: trailerName_, entitySubtitle: label, entityType: "trailer", entityId: String(trailerId), expiresISO: iso, daysLeft: days, expired: days < 0 });
       }
     }
 
@@ -192,11 +196,11 @@ export function useExpirations(opts: {
       const renewalDays = Number(terminal?.renewal_days ?? terminal?.renewalDays ?? 90) || 90;
       const expiresISO = addDaysISO_(lastVisitISO, renewalDays);
       const days = daysUntil(expiresISO);
-      if (days <= TERMINAL_WARN_DAYS) {
+      if (days <= TERMINAL_WARN_DAYS && days >= -ACCESS_GRACE_DAYS) {
         const city  = terminal?.city  ? String(terminal.city)  : "";
         const state = terminal?.state ? String(terminal.state) : "";
         const subtitle = city && state ? `${city}, ${state}` : city || state || "Terminal Card";
-        out.push({
+        push({
           id: `terminal-${terminalId}`,
           label: subtitle,
           entityName: terminal?.terminal_name ?? `Terminal ${terminalId}`,
@@ -218,7 +222,7 @@ export function useExpirations(opts: {
       const days = daysUntil(iso);
       if (days <= BADGE_WARN_DAYS) {
         const name = b.category ? `${b.port_name} (${b.category})` : b.port_name;
-        out.push({ id: `badge-${b.id}`, label: name, entityName: name, entitySubtitle: "Badge", entityType: "badge", entityId: String(b.id), expiresISO: iso, daysLeft: days, expired: days < 0 });
+        push({ id: `badge-${b.id}`, label: name, entityName: name, entitySubtitle: "Badge", entityType: "badge", entityId: String(b.id), expiresISO: iso, daysLeft: days, expired: days < 0 });
       }
     }
 
@@ -231,7 +235,7 @@ export function useExpirations(opts: {
       if (!c.iso) continue;
       const days = daysUntil(c.iso);
       if (days <= CREDENTIAL_WARN_DAYS) {
-        out.push({ id: `credential-${c.key}`, label: c.name, entityName: c.name, entitySubtitle: "Credential", entityType: "credential", entityId: c.key, expiresISO: c.iso, daysLeft: days, expired: days < 0 });
+        push({ id: `credential-${c.key}`, label: c.name, entityName: c.name, entitySubtitle: "Credential", entityType: "credential", entityId: c.key, expiresISO: c.iso, daysLeft: days, expired: days < 0 });
       }
     }
 
@@ -275,12 +279,15 @@ export function useExpirations(opts: {
   const deferredItems = useMemo(() => items.filter(i =>  deferred.has(i.id)), [items, deferred]);
 
   const expiredCount  = useMemo(() => activeItems.filter(i => i.expired).length,  [activeItems]);
-  const warningCount  = useMemo(() => activeItems.filter(i => !i.expired).length, [activeItems]);
+  // Bell badge: expired + expiring within 7 days. 8-30 day items are listed
+  // (yellow) but don't light the bell.
+  const warningCount  = useMemo(() => activeItems.filter(i => !i.expired && i.daysLeft <= EXP_WARN_DAYS).length, [activeItems]);
+  const soonCount     = useMemo(() => activeItems.filter(i => !i.expired && i.daysLeft > EXP_WARN_DAYS).length, [activeItems]);
   const mostUrgent    = activeItems[0] ?? null;
   const allDeferred   = items.length > 0 && activeItems.length === 0;
 
   // Memoized -- see useEquipment.ts's identical comment for why.
   return useMemo(() => ({
-    items, activeItems, deferredItems, expiredCount, warningCount, mostUrgent, allDeferred, toggleDefer,
-  }), [items, activeItems, deferredItems, expiredCount, warningCount, mostUrgent, allDeferred, toggleDefer]);
+    items, activeItems, deferredItems, expiredCount, warningCount, soonCount, mostUrgent, allDeferred, toggleDefer,
+  }), [items, activeItems, deferredItems, expiredCount, warningCount, soonCount, mostUrgent, allDeferred, toggleDefer]);
 }

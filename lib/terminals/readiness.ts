@@ -1,12 +1,15 @@
 // lib/terminals/readiness.ts
 //
-// Terminal access readiness for one city: which terminals this driver can
-// load at right now. Uses the same rule as the rest of the app (Cards tab,
-// bell): access expires `renewal_days` after the last carded date; within
-// 7 days it's expiring; past it, expired. A starred terminal with no carded
-// date is "not carded". Pure, so it can be tested without a session.
+// Terminal access for one city: every terminal in the city, and whether this
+// driver can load there right now. Uses the app-wide rule (lib/expiry.ts):
+// access expires `renewal_days` after the last carded date; 8-30 days left is
+// "soon" (yellow), 0-7 "expiring" (orange), past it "expired" (red), and 30
+// days after that it times out to no access. A terminal never carded is no
+// access. Pure, so it can be tested without a session.
 
-export type ReadinessState = "ready" | "expiring" | "expired" | "none";
+import { daysUntilIso, expiryStateForDays } from "../expiry.ts";
+
+export type ReadinessState = "ready" | "soon" | "expiring" | "expired" | "none";
 
 export type ReadinessInput = {
   terminalId: string;
@@ -15,7 +18,6 @@ export type ReadinessInput = {
   state: string | null;
   renewalDays: number | null;
   cardedOn: string | null; // YYYY-MM-DD
-  starred: boolean;
 };
 
 export type ReadinessSegment = {
@@ -27,35 +29,31 @@ export type ReadinessSegment = {
   expiresOn: string | null;
   daysLeft: number | null;
   renewalDays: number;
-  // 0..1 share of the renewal period still left (1 = just carded).
+  // 0..1 share of the renewal period still left (1 = carded today).
   remaining: number;
+  // Expired more than the grace period ago: shown as no access.
+  timedOut: boolean;
   isPickup: boolean;
 };
 
 export type ReadinessSummary = {
   segments: ReadinessSegment[];
-  ready: number;
+  // Can load now (ready + soon + expiring).
+  access: number;
+  soon: number;
   expiring: number;
   expired: number;
   none: number;
   // The one thing worth saying: the pickup terminal's problem, else the
   // worst other problem, else the next renewal.
-  headline: { tone: "ok" | "warn" | "bad" | "muted"; text: string } | null;
+  headline: { tone: "ok" | "soon" | "warn" | "bad" | "muted"; text: string } | null;
 };
-
-export const WARN_DAYS = 7;
 
 function addDays(iso: string, days: number): string {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
   dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString().slice(0, 10);
-}
-
-function daysBetween(fromIso: string, toIso: string): number {
-  const a = Date.UTC(...(fromIso.slice(0, 10).split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v)) as [number, number, number]));
-  const b = Date.UTC(...(toIso.slice(0, 10).split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v)) as [number, number, number]));
-  return Math.round((b - a) / 86400000);
 }
 
 export function shortName(name: string): string {
@@ -76,48 +74,61 @@ export function terminalReadiness(
   for (const r of rows) {
     if (seen.has(r.terminalId)) continue;
     if (norm(r.city) !== norm(opts.city) || norm(r.state) !== norm(opts.state)) continue;
-    const isPickup = !!opts.pickupTerminalId && r.terminalId === opts.pickupTerminalId;
-    if (!r.starred && !r.cardedOn && !isPickup) continue;
     seen.add(r.terminalId);
+    const isPickup = !!opts.pickupTerminalId && r.terminalId === opts.pickupTerminalId;
     const renewalDays = Number(r.renewalDays) > 0 ? Number(r.renewalDays) : 90;
+    const base = { terminalId: r.terminalId, name: r.name, short: shortName(r.name), renewalDays, isPickup };
     if (!r.cardedOn) {
-      segments.push({ terminalId: r.terminalId, name: r.name, short: shortName(r.name), state: "none", cardedOn: null, expiresOn: null, daysLeft: null, renewalDays, remaining: 0, isPickup });
+      segments.push({ ...base, state: "none", cardedOn: null, expiresOn: null, daysLeft: null, remaining: 0, timedOut: false });
       continue;
     }
     const expiresOn = addDays(r.cardedOn, renewalDays);
-    const daysLeft = daysBetween(opts.todayIso, expiresOn);
-    const state: ReadinessState = daysLeft < 0 ? "expired" : daysLeft <= WARN_DAYS ? "expiring" : "ready";
+    const daysLeft = daysUntilIso(expiresOn, opts.todayIso) ?? 0;
+    const level = expiryStateForDays(daysLeft, { access: true });
+    const state: ReadinessState =
+      level === "inactive" ? "none" : level === "valid" ? "ready" : level === "soon" ? "soon"
+        : level === "expiring" ? "expiring" : "expired";
     segments.push({
-      terminalId: r.terminalId, name: r.name, short: shortName(r.name), state,
-      cardedOn: r.cardedOn, expiresOn, daysLeft, renewalDays,
-      remaining: Math.max(0, Math.min(1, daysLeft / renewalDays)), isPickup,
+      ...base, state, cardedOn: r.cardedOn, expiresOn, daysLeft,
+      remaining: Math.max(0, Math.min(1, daysLeft / renewalDays)),
+      timedOut: level === "inactive",
     });
   }
-  segments.sort((a, b) => a.name.localeCompare(b.name));
+  // Terminals you can load at first, then the rest; alphabetical within.
+  const hasAccess = (s: ReadinessSegment) => (s.state === "none" ? 1 : 0);
+  segments.sort((a, b) => hasAccess(a) - hasAccess(b) || a.name.localeCompare(b.name));
 
   const count = (s: ReadinessState) => segments.filter((x) => x.state === s).length;
   const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
   const problem = (s: ReadinessSegment) =>
-    s.state === "none" ? `Not carded at ${s.name}`
+    s.state === "none" ? `No access at ${s.name}`
       : s.state === "expired" ? `${s.name} expired ${days(-(s.daysLeft ?? 0))} ago`
-      : s.state === "expiring" ? (s.daysLeft === 0 ? `${s.name} expires today` : `${s.name} expires in ${days(s.daysLeft ?? 0)}`)
-      : "";
+      : s.daysLeft === 0 ? `${s.name} expires today`
+      : `${s.name} expires in ${days(s.daysLeft ?? 0)}`;
+  const tone = (s: ReadinessSegment): "soon" | "warn" | "bad" =>
+    s.state === "soon" ? "soon" : s.state === "expiring" ? "warn" : "bad";
 
   let headline: ReadinessSummary["headline"] = null;
   const pickup = segments.find((s) => s.isPickup);
-  const rank = { expired: 0, none: 1, expiring: 2, ready: 3 } as const;
-  const worst = [...segments].filter((s) => s.state === "expired" || s.state === "expiring")
+  const rank = { expired: 0, expiring: 1, soon: 2 } as const;
+  const worst = segments
+    .filter((s): s is ReadinessSegment & { state: keyof typeof rank } => s.state in rank)
     .sort((a, b) => rank[a.state] - rank[b.state] || (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
   if (pickup && pickup.state !== "ready") {
-    headline = { tone: pickup.state === "expiring" ? "warn" : "bad", text: `Pickup: ${problem(pickup)}` };
+    headline = { tone: tone(pickup), text: `Pickup: ${problem(pickup)}` };
   } else if (worst) {
-    headline = { tone: worst.state === "expired" ? "bad" : "warn", text: problem(worst) };
+    headline = { tone: tone(worst), text: problem(worst) };
+  } else if (segments.some((s) => s.state === "ready")) {
+    const next = segments.filter((s) => s.state === "ready").sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
+    headline = { tone: "ok", text: `Next renewal: ${next.name} in ${days(next.daysLeft ?? 0)}` };
   } else if (segments.length > 0) {
-    const next = [...segments].filter((s) => s.state === "ready").sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
-    headline = next
-      ? { tone: "ok", text: `Next renewal: ${next.name} in ${days(next.daysLeft ?? 0)}` }
-      : { tone: "muted", text: "No terminals carded here yet" };
+    headline = { tone: "muted", text: "No access at any terminal here yet" };
   }
 
-  return { segments, ready: count("ready"), expiring: count("expiring"), expired: count("expired"), none: count("none"), headline };
+  const soon = count("soon"), expiring = count("expiring");
+  return {
+    segments, access: count("ready") + soon + expiring, soon, expiring,
+    expired: count("expired"), none: count("none"), headline,
+  };
 }
+

@@ -41,26 +41,13 @@ import { useUtilizationPeriod } from "@/lib/capacity/useUtilizationPeriod";
 import { UTILIZATION_METRIC_LABEL } from "@/lib/capacity/computeUtilization";
 import { fetchServiceTypes } from "../modals/ServiceTypeManager";
 import { computeUnitServiceDue } from "../modals/SoloEquipmentModal";
-import { cardStateFor, type CardState } from "../cards/cardTheme";
+import { cardStateFor, accessStateFor, DARK_EXP_COLOR } from "../cards/cardTheme";
 import { daysUntilISO_ } from "../utils/dates";
 import { GRAPHITE, GRAPHITE_DARKER } from "../theme";
 import { buildTerminalCardsReportBody, type TerminalCardsScope, type TerminalStatusItem } from "./buildTerminalCardsReport";
 
 type EquipRow = { truck_id?: string; trailer_id?: string; truck_name?: string; trailer_name?: string; active: boolean | null };
 
-// cardTheme.ts's own EXP_COLOR assumes a light "pearl card-wallet"
-// background (its own doc comment says so) -- ReportTile below renders on
-// a dark graphite gradient, so EXP_COLOR's near-black "valid"/"not_set"
-// colors were invisible there. Same fix already applied in
-// FleetCardsModal.tsx/FleetCredentialsModal.tsx/dispatch/page.tsx for the
-// identical reason -- same state names, colors re-picked for a dark surface.
-const DARK_EXP_COLOR: Record<CardState, string> = {
-  not_set: "rgba(255,255,255,0.35)",
-  valid: "rgba(255,255,255,0.85)",
-  expiring: "#f59e0b",
-  expired: "#ef4444",
-  inactive: "rgba(255,255,255,0.35)",
-};
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "numeric" });
@@ -329,8 +316,8 @@ export default function ReportsPage() {
     for (const t of terminals.terminals ?? []) {
       const tid = String((t as any).terminal_id);
       const iso = terminals.terminalDisplayInfo(t, tid);
-      const state = cardStateFor(iso);
-      if (state === "expiring" || state === "expired" || state === "inactive") count++;
+      const state = accessStateFor(iso);
+      if (state === "soon" || state === "expiring" || state === "expired") count++;
     }
     return count;
   }, [terminals.terminals, terminals.terminalDisplayInfo]);
@@ -352,7 +339,7 @@ export default function ReportsPage() {
       .map((t: any) => {
         const tid = String(t.terminal_id);
         const expiresISO = terminals.terminalDisplayInfo(t, tid);
-        return { tid, name: String(t.terminal_name ?? "Terminal"), state: cardStateFor(expiresISO), expiresISO };
+        return { tid, name: String(t.terminal_name ?? "Terminal"), state: accessStateFor(expiresISO), expiresISO };
       });
     const catalog = (terminals.terminalCatalog ?? [])
       .filter((c: any) => String(c.city ?? "Unknown") === city)

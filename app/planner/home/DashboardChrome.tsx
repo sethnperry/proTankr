@@ -7,9 +7,12 @@
 import React, { useState } from "react";
 import { useDashLook } from "./dashLook";
 import type { ReadinessSegment, ReadinessSummary } from "@/lib/terminals/readiness";
+import { EXPIRY_COLOR } from "@/lib/expiry";
 
-const AMBER = "#fbbf24";
-const RED = "#f87171";
+// Shared expiration colors (lib/expiry.ts): white > 30 days, yellow 8-30,
+// orange 0-7, red expired.
+const C = EXPIRY_COLOR;
+const RED = C.expired;
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -17,13 +20,15 @@ function fmtDate(iso: string | null): string {
   return `${m}/${d}/${y.slice(2)}`;
 }
 
-// ── Terminal access strip ───────────────────────────────────────────────────
-// One bar per terminal in the city: the fill is how much of the renewal
-// period is left (full = just carded), the color is the state. A dashed empty
-// bar is a starred terminal with no carded date. The trip's pickup terminal
-// gets a marker. Tap a bar for its dates; tap again (or Open) for the
-// terminal list.
+const stateColor = (s: ReadinessSegment) =>
+  s.state === "expired" ? C.expired : s.state === "expiring" ? C.expiring : s.state === "soon" ? C.soon : s.state === "ready" ? "#f2f2f2" : null;
 
+// ── Terminal access strip ───────────────────────────────────────────────────
+// One box per terminal in the city. Filled from the bottom by how much of the
+// renewal period is left (full white = carded today), colored by the
+// app-wide rule. Expired = red hatch. No access (never carded, or expired
+// more than 30 days) = empty box with a grey X. The trip's pickup terminal
+// gets a marker. Tap a box for its dates; tap again to open the terminal.
 export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCity, loading }: {
   place: string | null;
   summary: ReadinessSummary;
@@ -36,9 +41,10 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
   const segs = summary.segments;
   const selected = segs.find((s) => s.terminalId === sel) ?? null;
   const total = segs.length;
-  const fillColor = (s: ReadinessSegment) =>
-    s.state === "expired" ? RED : s.state === "expiring" ? AMBER : "#f2f2f2";
-  const toneColor = (t: string) => (t === "bad" ? RED : t === "warn" ? AMBER : t === "ok" ? "rgba(255,255,255,0.78)" : L.muted);
+  const toneColor = (t: string) =>
+    t === "bad" ? C.expired : t === "warn" ? C.expiring : t === "soon" ? C.soon : t === "ok" ? "rgba(255,255,255,0.78)" : L.muted;
+  const dayText = (s: ReadinessSegment) =>
+    s.state === "none" ? "—" : s.daysLeft! < 0 ? `−${-s.daysLeft!}d` : `${s.daysLeft}d`;
 
   return (
     <div style={{ ...L.primary, padding: "14px 14px 12px" }}>
@@ -50,53 +56,61 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
         </button>
         {total > 0 && (
           <span style={{ fontSize: 13, color: L.muted, whiteSpace: "nowrap" }}>
-            <span className="dash-num" style={{ color: "#fff", fontWeight: 800, fontSize: 17 }}>{summary.ready}</span><span className="dash-num">/{total}</span> ready
+            <span className="dash-num" style={{ color: "#fff", fontWeight: 800, fontSize: 17 }}>{summary.access}</span><span className="dash-num">/{total}</span> access
           </span>
         )}
       </div>
 
       {total === 0 ? (
         <div style={{ fontSize: 14, color: L.muted, marginTop: 10 }}>
-          {loading ? "Loading terminals…" : place ? "Star the terminals you use in this city to track access here." : "Pick a city to see your terminal access."}
+          {loading ? "Loading terminals…" : place ? "No terminals listed in this city." : "Pick a city to see your terminal access."}
         </div>
       ) : (
         <div className="pt-tabscroll" style={{ overflowX: "auto", margin: "12px -4px 0", padding: "0 4px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 5, minWidth: total * 35 }}>
             {segs.map((s) => {
               const isSel = s.terminalId === sel;
-              const fill = s.state === "none" ? 0 : s.state === "expired" ? 1 : Math.max(0.08, s.remaining);
+              const color = stateColor(s);
+              const none = s.state === "none";
+              const expired = s.state === "expired";
+              const fill = Math.max(0.06, s.remaining);
+              const label = none ? (s.timedOut ? "access timed out" : "no access") : expired ? "expired" : `${s.daysLeft} days left`;
               return (
                 <button
                   key={s.terminalId}
                   type="button"
                   className="dash-press"
-                  aria-label={`${s.name}: ${s.state === "none" ? "not carded" : s.state}`}
+                  aria-label={`${s.name}: ${label}`}
                   onClick={() => (isSel ? onOpenTerminal(s.terminalId) : setSel(s.terminalId))}
                   style={{ flex: "1 1 0", minWidth: 30, maxWidth: 72, background: "none", border: "none", padding: 0, cursor: "pointer", color: "#fff" }}
                 >
                   <div style={{ height: 8, display: "flex", justifyContent: "center", alignItems: "flex-end" }}>
-                    {s.isPickup && <span style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: `5px solid ${fillColor(s)}` }} />}
+                    {s.isPickup && <span style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: `5px solid ${color ?? "#fff"}` }} />}
                   </div>
                   <div style={{
                     position: "relative", height: 46, marginTop: 2, borderRadius: 2, overflow: "hidden",
-                    background: s.state === "none" ? "transparent" : s.state === "expired" ? "rgba(248,113,113,0.12)" : "rgba(255,255,255,0.08)",
-                    border: s.state === "none" ? `1px dashed ${L.faint}` : isSel ? "1px solid rgba(255,255,255,0.7)" : "1px solid transparent",
-                    boxShadow: isSel && s.state === "none" ? "0 0 0 1px rgba(255,255,255,0.5)" : undefined,
+                    background: none ? "transparent" : expired ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.08)",
+                    border: isSel ? "1px solid rgba(255,255,255,0.8)"
+                      : none ? `1px solid ${L.faint}` : expired ? `1px solid ${RED}88` : "1px solid transparent",
                   }}>
-                    {s.state === "expired" ? (
-                      <div style={{ position: "absolute", inset: 0, background: `repeating-linear-gradient(135deg, ${RED}55 0 4px, transparent 4px 8px)` }} />
+                    {none ? (
+                      <svg width="100%" height="100%" viewBox="0 0 30 46" preserveAspectRatio="none" aria-hidden style={{ position: "absolute", inset: 0 }}>
+                        <path d="M9 16 L21 30 M21 16 L9 30" stroke="rgba(255,255,255,0.32)" strokeWidth="1.6" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                      </svg>
+                    ) : expired ? (
+                      <div style={{ position: "absolute", inset: 0, background: `repeating-linear-gradient(135deg, ${RED}66 0 4px, transparent 4px 8px)` }} />
                     ) : (
-                      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: `${fill * 100}%`, background: fillColor(s), transition: "height 400ms ease" }} />
+                      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: `${fill * 100}%`, background: color!, transition: "height 400ms ease" }} />
                     )}
                   </div>
                   <div style={{
                     fontSize: 10, fontWeight: s.isPickup || isSel ? 800 : 600, marginTop: 5, letterSpacing: "0.02em",
-                    color: s.state === "expired" ? RED : s.state === "expiring" ? AMBER : isSel || s.isPickup ? "#fff" : L.muted,
+                    color: none ? L.faint : isSel || s.isPickup ? "#fff" : L.muted,
                   }}>
                     {s.short}
                   </div>
-                  <div style={{ fontSize: 9, marginTop: 1, color: s.state === "expired" ? RED : s.state === "expiring" ? AMBER : L.faint, fontVariantNumeric: "tabular-nums" }}>
-                    {s.state === "none" ? "—" : s.daysLeft! < 0 ? `−${-s.daysLeft!}d` : `${s.daysLeft}d`}
+                  <div style={{ fontSize: 9, marginTop: 1, color: none ? L.faint : s.state === "ready" ? L.muted : color!, fontVariantNumeric: "tabular-nums" }}>
+                    {dayText(s)}
                   </div>
                 </button>
               );
@@ -107,16 +121,16 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onChangeCi
 
       {selected ? (
         <button type="button" onClick={() => onOpenTerminal(selected.terminalId)}
-          style={{ display: "flex", width: "100%", alignItems: "baseline", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${L.hairline}`, background: "none", border: "none", borderTopStyle: "solid", borderTopWidth: 1, borderTopColor: L.hairline, color: "#fff", cursor: "pointer", textAlign: "left" }}>
+          style={{ display: "flex", width: "100%", alignItems: "baseline", gap: 8, marginTop: 10, paddingTop: 10, background: "none", border: "none", borderTopStyle: "solid", borderTopWidth: 1, borderTopColor: L.hairline, color: "#fff", cursor: "pointer", textAlign: "left" }}>
           <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
             <span style={{ fontWeight: 800 }}>{selected.name}</span>
             <span style={{ color: L.muted }}>
               {selected.state === "none"
-                ? " · not carded"
+                ? (selected.timedOut ? ` · no access · expired ${fmtDate(selected.expiresOn)}` : " · no access")
                 : ` · carded ${fmtDate(selected.cardedOn)} · ${selected.daysLeft! < 0 ? `expired ${fmtDate(selected.expiresOn)}` : `good to ${fmtDate(selected.expiresOn)}`}`}
             </span>
           </span>
-          <span style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", color: selected.state === "expired" ? RED : selected.state === "expiring" ? AMBER : "#fff" }}>
+          <span style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", color: stateColor(selected) ?? L.muted }}>
             {selected.state === "none" ? "Open ›" : selected.daysLeft! < 0 ? `${-selected.daysLeft!}d over ›` : `${selected.daysLeft}d ›`}
           </span>
         </button>

@@ -3,8 +3,7 @@
 // Shared card look + expiration-state rules for every Cards sub-tab
 // (Terminals, Badges, Credentials) so the three don't drift -- same
 // graphite-gradient tile look as the rest of the dark app theme (Reports
-// page's ReportTile, Admin's header tiles), same 7-day-orange/expired-red/
-// 7+days-inactive rule, same back-of-card field styles.
+// page's ReportTile, Admin's header tiles), same expiration rule (lib/expiry.ts), same back-of-card field styles.
 //
 // 2026-08-19: previously each card rendered in a light "pearl card-wallet"
 // tone (a per-terminal/badge pastel color via toneFor/TONES below) -- a
@@ -20,7 +19,6 @@
 // DARK_EXP_COLOR is the new canonical dark-background version, used by
 // every other consumer of this file.
 
-import { daysUntilISO_ } from "../utils/dates";
 import { GRAPHITE, GRAPHITE_DARKER } from "../theme";
 
 export const CARD_BG = `linear-gradient(135deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`;
@@ -29,21 +27,23 @@ export const CARD_BORDER_SELECTED = "1px solid rgba(255,255,255,0.30)";
 export const CARD_SHADOW = "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)";
 
 // ── Expiration → visual state ───────────────────────────────────────────────
-// Matches the app-wide "expiring within 7 days = orange, expired = red"
-// convention (useExpirations.ts's TERMINAL_WARN_DAYS = 7); expired 7+ days
-// mutes the whole card ("inactive") but it still shows unless filtered out.
-// "not_set" covers items with no expiration on file yet (never blocks use).
+// The rule itself lives in lib/expiry.ts (one rule for the whole app):
+// >30 days white, 8-30 yellow, 0-7 orange, past red. Terminal access times
+// out to "inactive" (no access) 30 days after it expires; badges and
+// credentials stay "expired". "not_set" = nothing on file.
 
-export type CardState = "not_set" | "valid" | "expiring" | "expired" | "inactive";
+import { expiryStateFor, EXPIRY_COLOR, EXPIRY_PRINT_COLOR, type ExpiryState } from "@/lib/expiry";
 
+export type CardState = ExpiryState;
+
+// Badges, credentials, permits: an expired item stays expired.
 export function cardStateFor(expiresISO: string | null | undefined): CardState {
-  if (!expiresISO) return "not_set";
-  const days = daysUntilISO_(expiresISO);
-  if (days === null) return "not_set";
-  if (days > 7) return "valid";
-  if (days >= 0) return "expiring";
-  if (days >= -7) return "expired";
-  return "inactive";
+  return expiryStateFor(expiresISO);
+}
+
+// Terminal access: times out to "inactive" 30 days after it expires.
+export function accessStateFor(expiresISO: string | null | undefined): CardState {
+  return expiryStateFor(expiresISO, { access: true });
 }
 
 export type FilterKey = "all" | "valid" | "expiring" | "expired";
@@ -57,33 +57,16 @@ export const FILTERS: { key: FilterKey; label: string }[] = [
 export function matchesFilter(state: CardState, filter: FilterKey): boolean {
   if (filter === "all") return true;
   if (filter === "valid") return state === "valid";
-  if (filter === "expiring") return state === "expiring";
+  if (filter === "expiring") return state === "expiring" || state === "soon";
   if (filter === "expired") return state === "expired" || state === "inactive";
   return true;
 }
 
-// Light-calibrated -- ONLY for a genuine light/print background
-// (CredentialsReportModal.tsx's white printable page). Everything else in
-// the app should use DARK_EXP_COLOR below.
-export const EXP_COLOR: Record<CardState, string> = {
-  not_set: "rgba(0,0,0,0.4)",
-  valid: "#1a1a1a",
-  expiring: "#b45309",
-  expired: "#b91c1c",
-  inactive: "rgba(0,0,0,0.4)",
-};
+// Printed (white) pages only.
+export const EXP_COLOR: Record<CardState, string> = EXPIRY_PRINT_COLOR;
 
-// Dark-background version -- the canonical one for every consumer that
-// isn't rendering on white paper. Was previously redeclared locally (and
-// separately) in FleetCardsModal.tsx/dispatch/page.tsx/reports/page.tsx;
-// this is now the single source of truth those could migrate to.
-export const DARK_EXP_COLOR: Record<CardState, string> = {
-  not_set: "rgba(255,255,255,0.35)",
-  valid: "rgba(255,255,255,0.85)",
-  expiring: "#f59e0b",
-  expired: "#ef4444",
-  inactive: "rgba(255,255,255,0.35)",
-};
+// Everything on the dark app background.
+export const DARK_EXP_COLOR: Record<CardState, string> = EXPIRY_COLOR;
 
 // ── Shared field styles (back-of-card form, dark graphite card background) ─
 

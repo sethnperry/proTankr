@@ -13,21 +13,10 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { cardStateFor, type CardState } from "@/app/planner/cards/cardTheme";
+import { accessStateFor, DARK_EXP_COLOR } from "@/app/planner/cards/cardTheme";
 import { formatMDYWithCountdown_, addDaysISO_ } from "@/app/planner/utils/dates";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 
-// cardTheme.ts's EXP_COLOR is calibrated for the light/pearl card-wallet
-// background (Cards tab) -- "valid" there is near-black text, which would
-// be unreadable on this modal's dark background. Same state names, colors
-// re-picked for a dark surface instead.
-const DARK_EXP_COLOR: Record<CardState, string> = {
-  not_set: "rgba(255,255,255,0.35)",
-  valid: "rgba(255,255,255,0.85)",
-  expiring: "#f59e0b",
-  expired: "#ef4444",
-  inactive: "rgba(255,255,255,0.35)",
-};
 
 type TerminalOption = { terminal_id: string; terminal_name: string | null; city: string | null; state: string | null; renewal_days?: number | null };
 type DriverStatus = { user_id: string; display_name: string; cardedOn: string | null; expiresISO: string | null };
@@ -137,7 +126,7 @@ export default function FleetCardsModal({ open, onClose, companyId }: Props) {
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textAlign: "center" as const, padding: "24px 0" }}>No drivers in this company.</div>
           ) : (
             drivers.map((d) => {
-              const state = cardStateFor(d.expiresISO);
+              const state = accessStateFor(d.expiresISO);
               return (
                 <div key={d.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", marginBottom: 6 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{d.display_name}</div>

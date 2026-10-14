@@ -24,7 +24,7 @@ import SourcingModal from "../modals/SourcingModal";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import {
-  cardStateFor, matchesFilter, FILTERS, DARK_EXP_COLOR,
+  accessStateFor, matchesFilter, FILTERS, DARK_EXP_COLOR,
   fieldLabel, fieldInput, btnPrimary, btnSecondary, btnDanger,
   CARD_BG, CARD_BORDER, CARD_BORDER_SELECTED, CARD_SHADOW,
   type CardState, type FilterKey,
@@ -72,7 +72,7 @@ function TerminalCard({
         </div>
         {inactive && (
           <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 4, padding: "2px 6px", letterSpacing: 0.4, textTransform: "uppercase", flexShrink: 0 }}>
-            Inactive
+            No access
           </div>
         )}
       </div>
@@ -396,7 +396,7 @@ export default function CardsPage() {
     return (activeTerminals.terminals ?? []).map((t: any) => {
       const tid = String(t.terminal_id);
       const expiresISO = activeTerminals.terminalDisplayInfo(t, tid);
-      return { t, tid, expiresISO, state: cardStateFor(expiresISO) };
+      return { t, tid, expiresISO, state: accessStateFor(expiresISO) };
     });
   }, [activeTerminals.terminals, activeTerminals.terminalDisplayInfo]);
 

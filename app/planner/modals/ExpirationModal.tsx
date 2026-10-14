@@ -46,6 +46,7 @@
 // expiredCount/warningCount/the bell badge -- just no longer wired into
 // this modal's own per-item controls.
 
+import type { ExpiryState } from "@/lib/expiry";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -88,33 +89,21 @@ function SectionLabel({ left, right }: { left: string; right?: string }) {
 // deactivate is only ever passed for an expired terminal card (see ExpGroup
 // below) -- every other item renders with no button at all now.
 function ExpirationCard({
-  label, statusText, expired, urgent, onTap,
+  label, statusText, expired, level, onTap,
   deactivate,
 }: {
   label: string;
   statusText: string;
   expired: boolean;
-  urgent: boolean;
+  level: ExpiryState;
   onTap: () => void;
   deactivate?: DeactivateProps;
 }) {
-  const border = expired
-    ? "1px solid rgba(239,68,68,0.22)"
-    : urgent
-      ? "1px solid rgba(234,179,8,0.22)"
-      : "1px solid rgba(255,255,255,0.07)";
-
-  const bg = expired
-    ? "rgba(239,68,68,0.06)"
-    : urgent
-      ? "rgba(234,179,8,0.05)"
-      : "rgba(255,255,255,0.03)";
-
-  const statusColor = expired
-    ? "rgba(239,68,68,0.88)"
-    : urgent
-      ? "rgba(234,179,8,0.88)"
-      : "rgba(255,255,255,0.38)";
+  // App-wide levels (lib/expiry.ts): red expired, orange 0-7 days, yellow 8-30.
+  const rgb = level === "expired" ? "239,68,68" : level === "expiring" ? "249,115,22" : level === "soon" ? "250,204,21" : null;
+  const border = rgb ? `1px solid rgba(${rgb},0.22)` : "1px solid rgba(255,255,255,0.07)";
+  const bg = rgb ? `rgba(${rgb},0.06)` : "rgba(255,255,255,0.03)";
+  const statusColor = rgb ? `rgba(${rgb},0.9)` : "rgba(255,255,255,0.38)";
 
   if (deactivate?.confirming) {
     return (
@@ -198,7 +187,7 @@ function ExpGroup({
           key={item.id}
           label={labelFor(item)}
           statusText={`${item.expired ? "⛔" : "⚠"} ${formatMDYWithCountdown_(item.expiresISO)}`}
-          expired={item.expired} urgent={!item.expired}
+          expired={item.expired} level={item.level}
           onTap={() => tapAction(item)}
           deactivate={item.expired && deactivateTerminal ? deactivateTerminal(item) : undefined}
         />

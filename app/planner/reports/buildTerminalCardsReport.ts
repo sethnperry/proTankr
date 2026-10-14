@@ -80,7 +80,7 @@ export function buildTerminalCardsReportBody(opts: {
 
   const all = [...starred, ...catalogOnly].sort((a, b) => a.name.localeCompare(b.name));
   const statusLabel: Record<CardState, string> = {
-    valid: "ACTIVE", expiring: "ACTIVE", expired: "EXPIRED", inactive: "EXPIRED", not_set: "NOT CARDED",
+    valid: "ACTIVE", soon: "ACTIVE", expiring: "ACTIVE", expired: "EXPIRED", inactive: "NO ACCESS", not_set: "NOT CARDED",
   };
   const lines = all.map((i) => {
     const status = statusLabel[i.state];

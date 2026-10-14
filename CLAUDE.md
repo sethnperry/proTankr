@@ -11145,3 +11145,24 @@ Qualification strip (`QualificationStrip.tsx`, `lib/terminals/qualification.ts`,
 2 tests): **mock only**. No table holds terminal requirements or progress
 (checked live 2026-10-14; `load_log.trainee_id` is unused). Shown labeled
 "MOCK DATA" with `?mockQual=1` (dev or super admin). Real data needs a schema.
+
+### One expiration rule for the whole app (2026-10-14)
+
+`lib/expiry.ts` (3 tests) is the single rule: more than 30 days white
+(`valid`), 8-30 yellow (`soon`), 0-7 orange (`expiring`), past red
+(`expired`). Terminal access only: 30 days after it expires it becomes
+`inactive` (no access); badges, credentials and permits stay `expired`.
+`cardTheme.ts` re-exports it (`cardStateFor` for badges/credentials,
+`accessStateFor` for terminal cards; `DARK_EXP_COLOR`/`EXP_COLOR` are the
+shared maps). Every local copy was removed (Dispatch, Fleet Cards,
+Reports). The bell lists everything from 30 days out (yellow) and drops
+terminal access 30 days past expiry; its badge still counts only expired +
+0-7 days (`warningCount`), with `soonCount` for the rest.
+
+Dashboard access strip now shows every terminal in the city (from the
+catalog), access first: fill = share of the renewal period left, colored by
+the rule; expired = red hatch; no access = empty box with a grey X. Deleted
+the stray BP Tampa `terminal_access` row on Seth's account (carded
+2026-08-13, never loaded). Not built yet: the new-access step sequence
+(horizontal lines in a no-access box); needs tables for each terminal's
+steps and each driver's progress, design with the user first.
