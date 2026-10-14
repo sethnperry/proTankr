@@ -11062,3 +11062,26 @@ calculator. Display only, no migration. Not click-tested.
   button. New Terminals button opens the shared terminal picker (location
   picker if no city is set). Buttons: Equipment, Terminals, Trips & PTDs,
   Delivery Locations, Cards, Reports.
+
+### Driver Dashboard readout cards (2026-10-14)
+
+No migration. Not click-tested; cards static-rendered with sample data.
+
+- Always shown, under the Expirations card: **Terminal** (the pickup
+  terminal, else the Planner's: active reports in red, tap to open the
+  report detail; expand for each product at the rack with last API colored
+  by age like the Tune line, temp, and OUT) and **Recent Deliveries** (this
+  driver's completed drops, newest first; collapsed shows the latest, tap a
+  row for its PTD). The old Alerts row moved into the Terminal card.
+  Data: `app/planner/hooks/useDashboardCards.ts` (`useTerminalStatus`,
+  `useRecentDeliveries`), straight from the server, fail open.
+- Shown only when non-empty, from `useFleetTrips` (company only):
+  **Headed to {terminal}** (other drivers whose next pickup is this
+  terminal, at rack or en route), **Also going to {delivery}** (other loaded
+  trucks whose next stop is my next delivery, with products and gallons),
+  **Parked preloads** (company parked trailers with product, not the one I
+  hold). Logic in `lib/trips/dashboardCards.ts` (3 tests). Products a truck
+  is heading to load show only for an Add Pickup (`planned_comps`); a
+  driver's plan isn't readable by other drivers. "Nearby" isn't measured:
+  every company parked preload is listed.
+- Components: `app/planner/components/trip/DashboardCards.tsx`.

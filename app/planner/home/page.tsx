@@ -92,6 +92,10 @@ import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPicku
 import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
+import { useFleetTrips } from "@/lib/trips/useFleetTrips";
+import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
+import { useRecentDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
+import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -219,6 +223,29 @@ export default function HomePage() {
   );
   const terminalAlerts = useActiveOutageBanner(alertTerminalId, userId || null, alertProducts);
   const [alertsOpen, setAlertsOpen] = useState(false);
+
+  // ── Readout cards ─────────────────────────────────────────────────────────
+  const statusTerminalName = useMemo(() => {
+    if (!alertTerminalId) return null;
+    const t = terminalCatalog.find((x) => String(x.terminal_id) === alertTerminalId);
+    return t?.terminal_name ? String(t.terminal_name) : terminalName;
+  }, [alertTerminalId, terminalCatalog, terminalName]);
+  const statusRackId = useMemo(() => {
+    const p = snap ? activePickup(snap.pickups) : null;
+    if (p?.rack_id && String(p.terminal_id ?? "") === alertTerminalId) return p.rack_id;
+    return String(location.selectedTerminalId || "") === alertTerminalId ? location.selectedRackId ?? null : null;
+  }, [snap, alertTerminalId, location.selectedTerminalId, location.selectedRackId]);
+  const terminalStatus = useTerminalStatus(alertTerminalId, statusRackId);
+  const fleet = useFleetTrips(companyId);
+  const myDelivery = snap ? plannedDeliveries(snap.deliveries)[0] ?? null : null;
+  const toMyTerminal = useMemo(() => headingToTerminal(fleet.trips, alertTerminalId, userId), [fleet.trips, alertTerminalId, userId]);
+  const toMyDelivery = useMemo(() => headingToDelivery(fleet.trips, myDelivery?.location_id ?? null, userId), [fleet.trips, myDelivery?.location_id, userId]);
+  const nearbyParked = useMemo(() => parkedPreloads(fleet.trips, trailerId), [fleet.trips, trailerId]);
+  const completedDeliveries = useMemo(
+    () => Object.values(state.rows.trip_deliveries ?? {}).filter((d: any) => d.status === "complete").length,
+    [state],
+  );
+  const recent = useRecentDeliveries(userId, completedDeliveries);
 
   // ── Mid-trip equipment change (warning + truck change record) ────────────
   const tripEquip = useTripEquipment({ state, store, syncNow }, userId);
@@ -1067,17 +1094,8 @@ export default function HomePage() {
           value={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring soon` : "All current"}
           valueColor={expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined}
           onClick={() => shell.setExpModalOpen(true)}
-          last={!(pendingCount > 0 || failed.length > 0) && terminalAlerts.reports.length === 0}
+          last={!(pendingCount > 0 || failed.length > 0)}
         />
-        {terminalAlerts.reports.length > 0 && (
-          <InfoRow
-            label="Alerts"
-            value={terminalAlerts.reports.map((r) => r.tickerText).join(" · ")}
-            valueColor="#f87171"
-            onClick={() => setAlertsOpen(true)}
-            last={!(pendingCount > 0 || failed.length > 0)}
-          />
-        )}
         {(pendingCount > 0 || failed.length > 0) && (
           <InfoRow
             label="Sync"
@@ -1088,6 +1106,21 @@ export default function HomePage() {
           />
         )}
       </div>
+
+      {/* Readouts: terminal status and recent deliveries always; the rest
+          only when there's something to show. */}
+      <TerminalStatusCard
+        terminalName={statusTerminalName}
+        rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
+        products={terminalStatus.products}
+        reports={terminalAlerts.reports}
+        onOpenReports={() => setAlertsOpen(true)}
+        onChangeTerminal={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
+      />
+      <HeadingToTerminalCard terminalName={statusTerminalName} items={toMyTerminal} productInfo={productInfo} />
+      <HeadingToDeliveryCard deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo} />
+      <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
+      <RecentDeliveriesCard items={recent.items} productInfo={productInfo} onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
 
       <TerminalOutageDetailModal
         open={alertsOpen}
