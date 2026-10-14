@@ -18,10 +18,12 @@ export type ProductInfoFn = (id: string | null) => { name: string; code: string;
 
 const muted = "rgba(255,255,255,0.5)";
 const red = "#f87171";
+// Surface comes from the dashboard's look (dashLook.tsx sets these CSS
+// variables on the page); the fallbacks are the plain look.
 const cardStyle: React.CSSProperties = {
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.03)",
+  borderRadius: "var(--dash-card-radius, 14px)" as any,
+  border: "var(--dash-card-border, 1px solid rgba(255,255,255,0.10))",
+  background: "var(--dash-card-bg, rgba(255,255,255,0.03))",
   marginTop: 10,
   overflow: "hidden",
 };

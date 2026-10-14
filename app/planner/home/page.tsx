@@ -96,6 +96,10 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
+import { DashLookProvider, DashStyles, LOOKS, SectionLabel, useLookPreference, useScrollBackdrop } from "./dashLook";
+import { LookSwitch, TerminalAccessStrip, ToolTile } from "./DashboardChrome";
+import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
+import { isoToday_ } from "../utils/dates";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
@@ -108,12 +112,6 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
   cancelled: "Cancelled",
 };
 
-const card: React.CSSProperties = {
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.03)",
-  padding: 14,
-};
 const muted = "rgba(255,255,255,0.5)";
 const smallLink: React.CSSProperties = {
   border: "none", background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0,
@@ -858,6 +856,66 @@ export default function HomePage() {
   const warning = expirations.warningCount ?? 0;
   const canCards = canReachDestination("cards", shell.role, shell.isSuperAdmin, shell.isSolo ?? false);
 
+  // ── Look (see dashLook.tsx) ───────────────────────────────────────────────
+  const [lookName, setLookName] = useLookPreference();
+  const L = LOOKS[lookName];
+  const card: React.CSSProperties = { ...L.primary, padding: 14 };
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
+  useScrollBackdrop(wrapEl, L);
+
+  // ── Terminal access readiness ─────────────────────────────────────────────
+  const [mockAccess, setMockAccess] = useState(false);
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    setMockAccess(new URLSearchParams(window.location.search).get("mockAccess") === "1");
+  }, []);
+  // The trip's pickup city when there is one, else the Planner's city.
+  const readinessPlace = (() => {
+    const p = snap ? activePickup(snap.pickups) : null;
+    const t = p?.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(p.terminal_id)) : null;
+    if (t?.city) return { city: String(t.city), state: String(t.state ?? ""), pickupId: String(t.terminal_id) };
+    return { city: location.selectedCity || "", state: location.selectedState || "", pickupId: p?.terminal_id ? String(p.terminal_id) : null };
+  })();
+  const readiness = (() => {
+    const ids = new Set<string>([
+      ...terminals.terminals.map((t) => String(t.terminal_id)),
+      ...Object.keys(terminals.accessDateByTerminalId),
+    ]);
+    if (readinessPlace.pickupId) ids.add(readinessPlace.pickupId);
+    const rows: ReadinessInput[] = [];
+    for (const id of ids) {
+      const mine = terminals.terminals.find((t) => String(t.terminal_id) === id);
+      const cat = terminalCatalog.find((t) => String(t.terminal_id) === id);
+      const name = String(cat?.terminal_name ?? mine?.terminal_name ?? "Terminal");
+      rows.push({
+        terminalId: id, name,
+        city: (cat?.city ?? mine?.city ?? null) as string | null,
+        state: (cat?.state ?? mine?.state ?? null) as string | null,
+        renewalDays: Number((cat as any)?.renewal_days ?? 90) || 90,
+        cardedOn: terminals.accessDateByTerminalId[id] ?? null,
+        starred: !!mine?.starred,
+      });
+    }
+    if (mockAccess) {
+      // Dev only (?mockAccess=1): fake rows covering every state. Never saved.
+      const today = isoToday_();
+      const ago = (n: number) => { const d = new Date(today + "T12:00:00"); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+      const m = (id: string, name: string, cardedAgo: number | null, renewal = 90): ReadinessInput =>
+        ({ terminalId: id, name, city: "Demo", state: "XX", renewalDays: renewal, cardedOn: cardedAgo == null ? null : ago(cardedAgo), starred: true });
+      return terminalReadiness([
+        m("m1", "Buckey North", 2, 273), m("m2", "Chevron", 55, 60), m("m3", "Citgo", 30), m("m4", "Global", 96),
+        m("m5", "Kinder Morgan", 140), m("m6", "Marathon", null), m("m7", "Sunoco", 10), m("m8", "Motiva", 86),
+      ], { city: "Demo", state: "XX", todayIso: today, pickupTerminalId: "m4" });
+    }
+    return terminalReadiness(rows, { city: readinessPlace.city, state: readinessPlace.state, todayIso: isoToday_(), pickupTerminalId: readinessPlace.pickupId });
+  })();
+  const readinessLabel = mockAccess ? "Demo data" : [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
+  const openTerminalList = (terminalId: string | null) => {
+    if (terminalId) shell.setExpandedTerminalId(terminalId);
+    if (location.selectedCity) shell.setTermOpen(true);
+    else shell.setLocOpen(true);
+  };
+
   const pickups = snap?.pickups ?? [];
   const liveDeliveries = (snap?.deliveries ?? []).filter((d) => d.status !== "cancelled");
   const anyDelivered = liveDeliveries.some((d) => d.status === "complete");
@@ -866,8 +924,32 @@ export default function HomePage() {
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 40px", color: "#fff" }}>
-      <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.02, marginBottom: 12 }}>Driver Dashboard</div>
+    <DashLookProvider value={L}>
+    <DashStyles />
+    <div
+      ref={setWrapEl}
+      className="dash-wrap"
+      style={{
+        position: "relative", zIndex: 1, padding: "12px 16px 40px", color: "#fff",
+        // DashboardCards read their surface from these.
+        ["--dash-card-bg" as any]: L.secondary.background,
+        ["--dash-card-border" as any]: L.secondary.border,
+        ["--dash-card-radius" as any]: `${L.secondary.borderRadius}px`,
+      }}
+    >
+      {/* Title. In the glass look it stays pinned under a blurred bar. */}
+      <div className={L.stickyTitle ? "dash-titlebar" : undefined} style={L.stickyTitle ? {
+        position: "sticky", top: 0, zIndex: 5, margin: "-12px -28px 8px", padding: "12px 28px 10px",
+        background: "linear-gradient(180deg, rgba(11,11,11,0.96), rgba(11,11,11,0.62))", backdropFilter: "blur(18px) saturate(150%)", WebkitBackdropFilter: "blur(18px) saturate(150%)",
+        borderBottom: `1px solid ${L.hairline}`,
+      } : { marginBottom: 12 }}>
+        <div style={L.title}>Driver Dashboard</div>
+        <div style={{ fontSize: 13, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{equipmentLabel}</div>
+      </div>
+
+      <div className="dash-cols">
+      <div>
+      <SectionLabel desktopOnly first>Trip</SectionLabel>
 
       {/* Handoff */}
       {handoff && (
@@ -909,7 +991,7 @@ export default function HomePage() {
 
       {/* Trip */}
       {openTrip ? (
-        <div style={{ ...card, marginBottom: 14 }}>
+        <div className={L.animate ? "dash-enter" : undefined} style={{ ...card, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Current trip · {STATUS_LABEL[openTrip.status]}
@@ -1075,9 +1157,9 @@ export default function HomePage() {
       <button
         type="button"
         onClick={onBigButton}
+        className="dash-press"
         style={{
-          width: "100%", padding: "20px 0", borderRadius: 14, border: "none",
-          background: "#fff", color: "#000", fontSize: 20, fontWeight: 800, cursor: "pointer",
+          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
         }}
       >
         {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
@@ -1125,18 +1207,14 @@ export default function HomePage() {
         onClose={() => setParkOpen(false)}
       />
 
-      {/* Info. The equipment numbers label the block; switching is the
-          Equipment button below. */}
-      <div style={{ marginTop: 16, marginBottom: 6, fontSize: 12, fontWeight: 700, color: muted, letterSpacing: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {equipmentLabel}
-      </div>
+      {/* Attention rows: only when something needs it. */}
       {(() => {
         const showGross = tripLoaded && (truckChanged || currentGross != null);
         const showExp = expired > 0 || warning > 0;
         const showSync = pendingCount > 0 || failed.length > 0;
         if (!showGross && !showExp && !showSync) return null;
         return (
-          <div style={{ ...card, marginTop: 0, padding: 0 }}>
+          <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>
             {showGross && (
               <InfoRow
                 label="Gross"
@@ -1168,8 +1246,20 @@ export default function HomePage() {
         );
       })()}
 
+      <SectionLabel>Terminal access</SectionLabel>
+      <TerminalAccessStrip
+        place={readinessLabel}
+        summary={readiness}
+        loading={terminals.termLoading}
+        onOpenTerminal={openTerminalList}
+        onChangeCity={() => shell.setLocOpen(true)}
+      />
+      </div>
+
+      <div className="dash-side">
       {/* Readouts: terminal status and recent deliveries always; the rest
           only when there's something to show. */}
+      <SectionLabel first>Right now</SectionLabel>
       <TerminalStatusCard
         placeLabel={statusPlace}
         terminalName={statusTerminalName}
@@ -1223,15 +1313,23 @@ export default function HomePage() {
         onClose={() => setSyncOpen(false)}
       />
 
-      {/* Tools */}
-      {/* Left: the things on the cards above, top to bottom. Right: records. */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: 10, marginTop: 16 }}>
-        <Tile label="Equipment" onClick={openEquipment} />
-        <Tile label="Terminal" onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
-        <Tile label="Delivery Location" onClick={() => setPicker({ mode: "select" })} />
-        {canCards && <Tile label="Cards" onClick={() => router.push("/planner/cards")} />}
-        <Tile label="Trips" onClick={() => router.push("/planner/trips")} />
-        <Tile label="Reports" onClick={() => router.push("/planner/reports")} />
+      {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
+      <SectionLabel>Tools</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: 10 }}>
+        <ToolTile icon="truck" label="Equipment" sub={equipmentLabel} onClick={openEquipment} delay={40} />
+        <ToolTile icon="terminal" label="Terminal" sub={terminalName ?? "Not set"} onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} delay={70} />
+        <ToolTile icon="store" label="Delivery" sub={selectedLoc ? locationTitle(selectedLoc) : "Not set"} onClick={() => setPicker({ mode: "select" })} delay={100} />
+        {canCards && (
+          <ToolTile icon="card" label="Cards" delay={130}
+            sub={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring` : "All current"}
+            subColor={expired > 0 ? "#f87171" : warning > 0 ? "#fbbf24" : undefined}
+            onClick={() => router.push("/planner/cards")} />
+        )}
+        <ToolTile icon="route" label="Trips" sub={openTrip ? "Trip in progress" : "History & PTDs"} onClick={() => router.push("/planner/trips")} delay={160} />
+        <ToolTile icon="chart" label="Reports" sub="Loads & history" onClick={() => router.push("/planner/reports")} delay={190} />
+      </div>
+      {shell.isSuperAdmin && <LookSwitch value={lookName} onChange={setLookName} />}
+      </div>
       </div>
 
       <StartLoadSheet
@@ -1343,6 +1441,7 @@ export default function HomePage() {
         onManage={() => { setPicker(null); router.push("/planner/locations"); }}
       />
     </div>
+    </DashLookProvider>
   );
 }
 
@@ -1368,17 +1467,6 @@ function InfoRow({ label, value, valueColor, onClick, last }: {
   );
 }
 
-function Tile({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{ ...card, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left", padding: "18px 14px" }}
-    >
-      {label}
-    </button>
-  );
-}
 
 const SYNC_TABLE_LABEL: Record<string, string> = {
   suppliers: "Supplier",

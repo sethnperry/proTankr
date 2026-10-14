@@ -11120,3 +11120,22 @@ Migrations applied 2026-10-14 via the Management API. Not click-tested.
   `deliveryLocations.ts`.
 - Expirations row shows only when something is expired or expiring. Tiles fill
   by column: Equipment, Terminal, Delivery Location | Cards, Trips, Reports.
+
+### Driver Dashboard look + terminal access strip (2026-10-14, local commit, not pushed)
+
+Two looks on `/planner/home` (`app/planner/home/dashLook.tsx`): **mono**
+(solid graphite, uppercase section labels) and **glass** (default: lit
+backdrop painted on the scroll container, blurred primary cards, sticky title,
+short entrance/press motion). Pick with `?look=mono|glass` (remembered per
+phone) or the switch at the bottom (super admins only). At >=960px the page
+goes two columns (trip + access strip left, readouts + tools right).
+
+Terminal access strip (`DashboardChrome.tsx`, logic in
+`lib/terminals/readiness.ts`, 2 tests): one bar per starred or carded terminal
+in the pickup's city (else the Planner's). Fill = renewal period left
+(carded_on + `renewal_days`, default 90); white ready, amber within 7 days,
+red hatched expired, dashed = starred but no carded date; caret marks the
+pickup. Tap a bar for its dates, tap again for the terminal list. Read-only,
+no migration. Dev-only `?mockAccess=1` (ignored in production) shows fake
+"Demo" terminals in every state. Remove the look switch, `?look` and
+`?mockAccess` once a look is settled.
