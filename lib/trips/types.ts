@@ -81,6 +81,9 @@ export type TripPickupRow = Synced & {
   no_load_reason?: string | null; // a TerminalIssueCode, or "other"
   no_load_note?: string | null;
   delay_code?: string | null; // a TerminalIssueCode picked as the delay reason
+  // A second pickup on a partly loaded trailer (20261014000000): the empty
+  // compartments it fills and with what. Null = an ordinary pickup.
+  planned_comps?: { comp_number: number; product_id: string }[] | null;
 };
 
 export type TripDeliveryRow = Synced & {

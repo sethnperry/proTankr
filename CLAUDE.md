@@ -10968,3 +10968,36 @@ with a load attached; Marathon's load had been cancelled. Not click-tested.
   terminal.
 - 2 tests. Data fixed for order 4816492: Marathon restored, Kinder Morgan
   no-load out of allocation (no times), Buckey North added as pickup 3.
+
+### Second pickup on a partly loaded trailer; loaded strip on the dashboard (2026-10-14)
+
+Migration `20261014000000_trip_pickup_planned_comps.sql` (**applied
+2026-10-14** via the Management API): `trip_pickups.planned_comps jsonb`,
+`[{comp_number, product_id}]`, null on an ordinary pickup. Not click-tested.
+
+- Driver Dashboard trip card: a pickup that loaded reads **Loaded** (green
+  label) instead of "Pickup"; the last loaded rack's line carries
+  **+ Another pickup** where the status used to be (no terminal name). The
+  old link in the bottom row is gone, and so is the Planner tile (the
+  Planner stays in the nav menu).
+- New line under the pickups: `CompartmentStrip` (one row, widths in
+  proportion to `trailer_compartments.max_gallons`, C1 on the right like the
+  Planner, product colors, empty = dashed outline) and the live gross in bold
+  on the right, colored like the Planner (at/over 80,000 red, at/over target
+  green). Delivery "Not set" now lines up with the other names.
+- **+ Another pickup** opens `AddPickupSheet`: what's aboard and the gross,
+  then `lib/trips/addPickupCheck.ts` (5 tests) blocks when every compartment
+  is loaded or the gross is at/over legal, warns within 500 lbs of the target
+  or over it. Pick the empty compartments → the shared terminal picker →
+  a product per compartment (that rack's products, or "Show all") → Add
+  Pickup writes the pickup with `planned_comps` (`addPickup` gained
+  `plannedComps`). Doesn't go through the Planner.
+- Arrive at that pickup opens the Planner as usual. With `planned_comps` on
+  the trip's current pickup, the Planner keeps only those compartments
+  planned (others forced empty), seeds the picked products, and adds the
+  product already aboard (logged gallons/API/temp) to the tare, so the plan
+  fills to the target and the gross is the whole trailer. A blue banner says
+  "Loading C2 only · C1 already aboard (N lbs, counted in the weight)".
+  Finish Loading records only those compartments on that pickup
+  (`recordLoadCompleted` is already per pickup). The picked products
+  become the live plan (slot 0) like any Planner edit.

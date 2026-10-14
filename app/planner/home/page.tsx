@@ -85,6 +85,10 @@ import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type Fini
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
+import { CompartmentStrip } from "../components/trip/CompartmentStrip";
+import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
+import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
+import { productColorFor } from "../utils/productColor";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
   draft: "Not loaded yet",
@@ -453,6 +457,82 @@ export default function HomePage() {
     void syncNow();
   };
 
+  // ── Add another pickup (partly loaded trailer) ───────────────────────────
+  // The trailer's compartments, for the loaded strip and the add-pickup check.
+  const tripTrailerId = openTrip?.trailer_id ?? trailerId;
+  const [compSizes, setCompSizes] = useState<Record<number, number>>({});
+  useEffect(() => {
+    setCompSizes({});
+    if (!tripTrailerId) return;
+    let alive = true;
+    void supabase.from("trailer_compartments").select("comp_number, max_gallons").eq("trailer_id", tripTrailerId).then(({ data }) => {
+      if (!alive) return;
+      const m: Record<number, number> = {};
+      for (const r of (data ?? []) as any[]) {
+        const n = Number(r.comp_number);
+        if (Number.isFinite(n) && n > 0) m[n] = Number(r.max_gallons ?? 0);
+      }
+      setCompSizes(m);
+    });
+    return () => { alive = false; };
+  }, [tripTrailerId]);
+  const aboardRows = useMemo(() => (snap ? onBoard(snap.compLoads) : []), [snap]);
+  const aboard = useMemo(() => {
+    const m: Record<number, { product_id: string | null; gallons: number | null }> = {};
+    for (const c of aboardRows) m[c.comp_number] = { product_id: c.product_id, gallons: c.gross_gallons != null ? Number(c.gross_gallons) : null };
+    return m;
+  }, [aboardRows]);
+  const addCheck = useMemo(() => checkAddPickup({
+    compNumbers: Object.keys(compSizes).map(Number),
+    onBoard: aboardRows,
+    gross: currentGross,
+    target: currentTarget,
+  }), [compSizes, aboardRows, currentGross, currentTarget]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDraft, setAddDraft] = useState<AddPickupDraft>({ stage: "comps", comps: [], products: {} });
+  const [addTermPending, setAddTermPending] = useState(false);
+  const addSawPicker = useRef(false);
+  const openAddPickup = () => {
+    setAddDraft({ stage: "comps", comps: addCheck.emptyComps.length === 1 ? [...addCheck.emptyComps] : [], products: {} });
+    setAddOpen(true);
+  };
+  const addPickTerminal = () => {
+    setAddOpen(false);
+    setAddTermPending(true);
+    if (location.selectedCity) shell.setTermOpen(true);
+    else shell.setLocOpen(true);
+  };
+  useEffect(() => {
+    if (!addTermPending) return;
+    const pickerOpen = shell.termOpen || shell.locOpen || shell.rackPickerOpen || shell.rackResolving;
+    if (pickerOpen) { addSawPicker.current = true; return; }
+    if (!addSawPicker.current) return;
+    addSawPicker.current = false;
+    setAddTermPending(false);
+    setAddDraft((d) => ({ ...d, stage: location.selectedTerminalId ? "products" : "comps" }));
+    setAddOpen(true);
+  }, [addTermPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
+  const confirmAddPickup = () => {
+    if (!store || !userId || !openTrip) return;
+    const plannedComps = addDraft.comps
+      .filter((n) => !!addDraft.products[n])
+      .map((n) => ({ comp_number: n, product_id: addDraft.products[n] }));
+    if (!plannedComps.length) return;
+    addPickup(store, {
+      userId, tripId: openTrip.trip_id,
+      terminalId: location.selectedTerminalId || null,
+      rackId: location.selectedRackId || null,
+      name: terminalName,
+      city: location.selectedCity || null,
+      state: location.selectedState || null,
+      plannedComps,
+      ...clock(),
+    });
+    setAddOpen(false);
+    setNotice({ text: `Pickup added at ${terminalName ?? "the terminal"}. Tap Arrive when you get there.`, tripId: null });
+    void syncNow();
+  };
+
   // ── Couldn't load here / next rack ───────────────────────────────────────
   const workingPickup = snap ? activePickup(snap.pickups) : null;
   const canNoLoad = !!workingPickup && (!!workingPickup.arrived_at || !!workingPickup.load_id)
@@ -734,21 +814,54 @@ export default function HomePage() {
             return pickups.map((p, i) => {
               const noLoad = p.outcome === "no_load";
               const n = real.indexOf(p);
-              const label = noLoad ? "Tried" : real.length > 1 ? `Pickup ${n + 1}` : "Pickup";
+              const loaded = p.outcome === "loaded" || (!!p.left_at && !!p.load_id);
+              const label = noLoad ? "Tried" : loaded ? "Loaded" : real.length > 1 ? `Pickup ${n + 1}` : "Pickup";
               const status = noLoad
                 ? `Couldn't load${noLoadReasonLabel(p.no_load_reason) && p.no_load_reason !== "other" ? ` · ${noLoadReasonLabel(p.no_load_reason)}` : ""}`
-                : p.outcome === "loaded" || (p.left_at && p.load_id) ? "Loaded" : p.arrived_at ? "Arrived" : "";
+                : loaded ? "" : p.arrived_at ? "Arrived" : "";
+              // "+ Another pickup" sits on the last loaded rack's line.
+              const lastLoaded = loaded && !real.slice(n + 1).some((q) => q.outcome === "loaded" || (!!q.left_at && !!q.load_id));
               return (
-                <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6 }}>
-                  <span style={{ color: muted, width: 66, flexShrink: 0 }}>{label}</span>
+                <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
+                  <span style={{ color: loaded ? "#4ade80" : muted, width: 66, flexShrink: 0 }}>{label}</span>
                   <span style={{ flex: 1, minWidth: 0, ...(noLoad ? { color: muted, textDecoration: "line-through" } : {}) }}>{p.name ?? "Not set"}</span>
-                  <span style={{ color: noLoad ? "#f87171" : muted, fontSize: 12 }}>{status}</span>
+                  {lastLoaded && canAddPickup ? (
+                    <button type="button" onClick={openAddPickup} style={{ ...smallLink, fontSize: 12 }}>+ Another pickup</button>
+                  ) : (
+                    <span style={{ color: noLoad ? "#f87171" : muted, fontSize: 12 }}>{status}</span>
+                  )}
                 </div>
               );
             });
           })()}
+          {/* What's aboard: the trailer on one line in product colors (C1 on
+              the right, like the Planner), and the live gross. */}
+          {aboardRows.length > 0 && Object.keys(compSizes).length > 0 && (
+            <div style={{ marginTop: 8, marginBottom: 4, display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ width: 66, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <CompartmentStrip slots={Object.keys(compSizes).map(Number).map((n) => {
+                  const a = aboard[n];
+                  const info = a ? productInfo(a.product_id) : null;
+                  return {
+                    comp: n, size: compSizes[n] || 1,
+                    color: info ? info.hex ?? productColorFor(info.name) : null,
+                    title: info ? `C${n} · ${info.name}` : `C${n} · empty`,
+                  };
+                })} />
+              </div>
+              {currentGross != null && (
+                <span style={{ fontSize: 15, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
+                  {currentGross.toLocaleString("en-US")}
+                </span>
+              )}
+            </div>
+          )}
           {liveDeliveries.length === 0 && (
-            <div style={{ fontSize: 14, marginTop: 4 }}><span style={{ color: muted }}>Delivery </span>Not set</div>
+            <div style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6 }}>
+              <span style={{ color: muted, width: 66, flexShrink: 0 }}>Delivery</span>
+              <span style={{ flex: 1, minWidth: 0 }}>Not set</span>
+            </div>
           )}
           {liveDeliveries.map((d, i) => (
             <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
@@ -780,11 +893,6 @@ export default function HomePage() {
             {showPark && (
               <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd" }}>
                 Park preloaded
-              </button>
-            )}
-            {canAddPickup && (
-              <button type="button" onClick={addAnotherPickup} style={{ ...smallLink, color: muted }}>
-                + Another pickup{terminalName ? ` (${terminalName})` : ""}
               </button>
             )}
             {canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0) && (
@@ -830,6 +938,21 @@ export default function HomePage() {
       {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
+
+      <AddPickupSheet
+        open={addOpen}
+        draft={addDraft}
+        setDraft={setAddDraft}
+        check={addCheck}
+        compSizes={compSizes}
+        aboard={aboard}
+        catalog={products.map((p) => { const i = productInfo(p.product_id); return { product_id: p.product_id, name: i.name, code: i.code, hex: i.hex }; })}
+        terminalLabel={pickupLabel}
+        rackId={location.selectedRackId || null}
+        onPickTerminal={addPickTerminal}
+        onConfirm={confirmAddPickup}
+        onClose={() => setAddOpen(false)}
+      />
 
       <ParkSheet
         open={parkOpen}
@@ -899,7 +1022,6 @@ export default function HomePage() {
 
       {/* Tools */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
-        <Tile label="Planner" onClick={() => router.push("/planner")} />
         <Tile label="Equipment" onClick={openEquipment} />
         <Tile label="Trips & PTDs" onClick={() => router.push("/planner/trips")} />
         <Tile label="Delivery Locations" onClick={() => router.push("/planner/locations")} />

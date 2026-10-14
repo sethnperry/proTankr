@@ -99,6 +99,9 @@ import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips
 import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { TripStepBanner } from "./components/trip/TripStepBanner";
 import { openTripForDriver, retagLoadPickup, retargetWaitingPickup } from "@/lib/trips/tripLogic";
+import { readPlannedComps } from "@/lib/trips/addPickupCheck";
+import { productLbsOnBoard } from "@/lib/trips/truckChange";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1127,10 +1130,67 @@ export default function CalculatorPage() {
     });
   }, [plannedProductIds, tempF]);
 
+  // ── Second pickup on a partly loaded trailer ───────────────────────────────
+  // Added from the Driver Dashboard ("+ Another pickup") with the empty
+  // compartments it fills (trip_pickups.planned_comps). Here the Planner
+  // plans only those compartments, and what's already aboard counts as part
+  // of the tare, so the plan fills the rest up to the target and the gross
+  // includes everything on the trailer.
+  const tripStoreHook = useTripStore(effectiveUserId || null);
+  const { data: catalogProducts } = useProductsCatalog();
+  const tripPartial = useMemo(() => {
+    if (!effectiveUserId) return null;
+    const rows = tripStoreHook.state.rows;
+    const trip = openTripForDriver(Object.values(rows.trips ?? {}) as TripRow[], effectiveUserId);
+    if (!trip) return null;
+    const pk = (Object.values(rows.trip_pickups ?? {}) as TripPickupRow[])
+      .filter((p) => p.trip_id === trip.trip_id && !p.left_at)
+      .sort((a, b) => a.seq - b.seq)[0];
+    const planned = pk ? readPlannedComps(pk.planned_comps) : null;
+    if (!pk || !planned) return null;
+    const aboard = (Object.values(rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
+      .filter((c) => c.trip_id === trip.trip_id && c.pickup_id !== pk.pickup_id && c.disposition === "loaded");
+    return { pickup: pk, planned, aboard };
+  }, [effectiveUserId, tripStoreHook.state]);
+  const onBoardLbs = useMemo(() => {
+    if (!tripPartial) return 0;
+    const alpha = (id: string | null) => {
+      const p = id ? catalogProducts.find((x) => x.product_id === id) : null;
+      return p?.alpha_per_f != null ? Number(p.alpha_per_f) : null;
+    };
+    return Math.round(productLbsOnBoard(tripPartial.aboard, alpha).lbs);
+  }, [tripPartial, catalogProducts]);
+
+  // Keep the plan to the picked compartments: those get a product (the one
+  // picked on the dashboard unless the driver changes it), every other
+  // compartment stays empty. Caps are left alone.
+  useEffect(() => {
+    if (!tripPartial || compartments.length === 0) return;
+    const want = new Map(tripPartial.planned.map((p) => [p.comp_number, p.product_id]));
+    setCompPlan((prev: Record<number, CompPlanInput>) => {
+      let changed = false;
+      const next: Record<number, CompPlanInput> = { ...prev };
+      for (const c of compartments) {
+        const n = Number(c.comp_number);
+        if (!Number.isFinite(n)) continue;
+        const cur = prev[n] ?? { empty: true, productId: "" };
+        const pid = want.get(n);
+        if (pid) {
+          if (cur.empty || !cur.productId) { next[n] = { ...cur, empty: false, productId: pid }; changed = true; }
+        } else if (!cur.empty || cur.productId) {
+          next[n] = { ...cur, empty: true, productId: "" };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [tripPartial, compPlan, compartments]);
+
   // ── Weight limits ──────────────────────────────────────────────────────────
   // target_weight = the gross weight the driver is trying to hit (renamed from gross_limit_lbs)
   const targetWeight = Number((equipment.selectedCombo as any)?.target_weight ?? 0);
-  const tare = Number(equipment.selectedCombo?.tare_lbs ?? 0);
+  // On a second pickup, product already aboard rides as tare.
+  const tare = Number(equipment.selectedCombo?.tare_lbs ?? 0) + onBoardLbs;
   const allowedLbs = Math.max(0, targetWeight - tare);  // payload = target - tare
 
   const capacityGallonsActive = useMemo(
@@ -1471,7 +1531,6 @@ export default function CalculatorPage() {
   // also take BOL, supplier and net per compartment, then times and the
   // loading driver's signature, and the report's next step is Arrived at
   // Delivery. No trip -> the Planner works exactly as before.
-  const tripStoreHook = useTripStore(effectiveUserId || null);
   const tripStoreObj = tripStoreHook.store;
   const { settings: tripSettings, reasons: tripReasons } = useTripSettings(shell.companyId || null);
   const tripSignature = useDriverSignature(effectiveUserId || null);
@@ -2958,6 +3017,20 @@ const lastProductInfoById = useMemo(() => {
       )}
       {setupSpotlightEl}
       <TripStepBanner userId={effectiveUserId || null} />
+      {tripPartial && (
+        <div style={{
+          border: "1px solid rgba(147,197,253,0.45)", background: "rgba(147,197,253,0.08)", color: "#fff",
+          borderRadius: 10, padding: "8px 12px", marginTop: 8, fontSize: 14,
+        }}>
+          <b style={{ color: "#93c5fd" }}>Loading C{tripPartial.planned.map((p) => p.comp_number).join(", C")} only</b>
+          {tripPartial.aboard.length > 0 && (
+            <span style={{ color: "rgba(255,255,255,0.6)" }}>
+              {" "}· C{[...new Set(tripPartial.aboard.map((c) => c.comp_number))].sort((a, b) => a - b).join(", C")} already aboard
+              {onBoardLbs > 0 ? ` (${onBoardLbs.toLocaleString("en-US")} lbs, counted in the weight)` : ""}
+            </span>
+          )}
+        </div>
+      )}
       {tripEquip.truckChanged && (
         <button
           type="button"

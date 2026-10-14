@@ -385,6 +385,7 @@ export function addPickup(
     name: string | null;
     city: string | null;
     state: string | null;
+    plannedComps?: { comp_number: number; product_id: string }[] | null;
   } & Clock,
 ): string {
   const pickups = store.list("trip_pickups", (p) => p.trip_id === args.tripId);
@@ -394,11 +395,13 @@ export function addPickup(
     pickup_id: pickupId, trip_id: args.tripId, seq, pickup_type: "terminal",
     terminal_id: args.terminalId, rack_id: args.rackId, name: args.name, city: args.city, state: args.state,
     load_id: null, arrived_at: null, begin_at: null, left_at: null,
+    ...(args.plannedComps?.length ? { planned_comps: args.plannedComps } : {}),
   });
   store.put("trips", { trip_id: args.tripId, status: "loading" });
   logEvent(store, args.newId, {
     trip_id: args.tripId, event_type: "pickup_added", occurred_at: args.now.toISOString(),
-    actor_id: args.userId, pickup_id: pickupId, payload: { seq },
+    actor_id: args.userId, pickup_id: pickupId,
+    payload: { seq, ...(args.plannedComps?.length ? { planned_comps: args.plannedComps } : {}) },
   });
   return pickupId;
 }
