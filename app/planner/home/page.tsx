@@ -868,11 +868,23 @@ export default function HomePage() {
               const n = real.indexOf(p);
               const loaded = p.outcome === "loaded" || (!!p.left_at && !!p.load_id);
               const label = noLoad ? "Tried" : loaded ? "Loaded" : real.length > 1 ? `Pickup ${n + 1}` : "Pickup";
-              const status = noLoad
-                ? `Couldn't load${noLoadReasonLabel(p.no_load_reason) && p.no_load_reason !== "other" ? ` · ${noLoadReasonLabel(p.no_load_reason)}` : ""}`
-                : loaded ? "" : p.arrived_at ? "Arrived" : "";
+              const status = noLoad ? "" : loaded ? "" : p.arrived_at ? "Arrived" : "";
+              const reason = noLoad ? (noLoadReasonLabel(p.no_load_reason) || "Other") : "";
               // "+ Another pickup" sits on the last loaded rack's line.
               const lastLoaded = loaded && !real.slice(n + 1).some((q) => q.outcome === "loaded" || (!!q.left_at && !!q.load_id));
+              if (noLoad) {
+                // Tried rack: terminal struck through, then the reason in red.
+                // One line; a long name scrolls sideways instead of wrapping.
+                return (
+                  <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
+                    <span style={{ color: muted, width: 66, flexShrink: 0 }}>{label}</span>
+                    <div className="pt-tabscroll" style={{ flex: 1, minWidth: 0, overflowX: "auto", whiteSpace: "nowrap" }}>
+                      <span style={{ color: muted, textDecoration: "line-through" }}>{p.name ?? "Not set"}</span>
+                      <span style={{ color: "#f87171", marginLeft: 8, fontSize: 13 }}>{reason}</span>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
                   <span style={{ color: loaded ? "#4ade80" : muted, width: 66, flexShrink: 0 }}>{label}</span>
@@ -1036,9 +1048,12 @@ export default function HomePage() {
         onClose={() => setParkOpen(false)}
       />
 
-      {/* Info */}
-      <div style={{ ...card, marginTop: 16, padding: 0 }}>
-        <InfoRow label="Equipment" value={equipmentLabel} onClick={openEquipment} />
+      {/* Info. The equipment numbers label the block; switching is the
+          Equipment button below. */}
+      <div style={{ marginTop: 16, marginBottom: 6, fontSize: 12, fontWeight: 700, color: muted, letterSpacing: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {equipmentLabel}
+      </div>
+      <div style={{ ...card, marginTop: 0, padding: 0 }}>
         {tripLoaded && (truckChanged || currentGross != null) && (
           <InfoRow
             label="Gross"
@@ -1047,8 +1062,6 @@ export default function HomePage() {
             onClick={() => { if (truckChanged) tripEquip.reopenTruckChange(); }}
           />
         )}
-        <InfoRow label="Terminal" value={pickupLabel ?? "Select a terminal"}
-          onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
         <InfoRow
           label="Expirations"
           value={expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} expiring soon` : "All current"}
@@ -1097,6 +1110,7 @@ export default function HomePage() {
       {/* Tools */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
         <Tile label="Equipment" onClick={openEquipment} />
+        <Tile label="Terminals" onClick={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))} />
         <Tile label="Trips & PTDs" onClick={() => router.push("/planner/trips")} />
         <Tile label="Delivery Locations" onClick={() => router.push("/planner/locations")} />
         {canCards && <Tile label="Cards" onClick={() => router.push("/planner/cards")} />}

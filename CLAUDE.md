@@ -11049,3 +11049,16 @@ code, which compartments, total gross gallons, and net when every
 compartment going into that tank has a net figure. Retained compartments
 aren't counted. For closing the order in the dispatch system without a
 calculator. Display only, no migration. Not click-tested.
+
+### Driver Dashboard cleanup: tried racks, equipment label, Terminals button (2026-10-14)
+
+`app/planner/home/page.tsx`, no migration. Not click-tested.
+
+- A tried rack reads "Tried", the terminal struck through, then the reason in
+  red ("Couldn't load" text dropped). The line doesn't wrap; a long terminal
+  name scrolls sideways (hidden scrollbar) to show the rest.
+- Equipment and Terminal rows removed from the info card. The truck/trailer
+  numbers sit above the card as a plain label; switching is the Equipment
+  button. New Terminals button opens the shared terminal picker (location
+  picker if no city is set). Buttons: Equipment, Terminals, Trips & PTDs,
+  Delivery Locations, Cards, Reports.
