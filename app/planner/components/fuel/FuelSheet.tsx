@@ -6,7 +6,7 @@
 //      Methods that didn't work this stop are marked.
 //   2a. RFID / company account pop-out: only what the pump asks for (truck,
 //      employee ID, the driver's PIN for that method, the account number) and
-//      the steps. Odometer is the only entry. Finished Fueling ends the stop;
+//      the steps. Odometer and diesel gallons are the only entries. Finished Fueling ends the stop;
 //      Pump Down asks where, which pump and what was wrong, then back to the
 //      grid. The PIN is entered once and kept for that driver only.
 //   2b. Card / cash pop-out: driver ID, truck, steps, pump #, odometer,
@@ -21,7 +21,7 @@ import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { openGuide, openStoredFile } from "@/lib/fuel/useFuelSetup";
 import type { useFuelStop } from "@/lib/fuel/useFuelStop";
-import { recentStores, type RecentStore } from "@/lib/fuel/useFuelStop";
+import { devicePosition, nearbyStores, STORE_RANGE_MI, type NearbyStore, type Pos } from "@/lib/fuel/nearbyStores";
 import {
   completeStop, failedKeys, finishFueling, finishQuick, missingForComplete, paymentAmounts, recordFailedTry, recordPumpDown, startPumping,
   type FuelDetails, type PumpEntry,
@@ -65,6 +65,65 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+type StoreVal = { storeName: string; storeNumber: string; city: string; state: string };
+const storeKey = (name: string, num: string | null | undefined) => `${name.trim()}|${num ?? ""}`.toLowerCase();
+
+// Saved stores near the phone as one-tap choices; the store fields only show
+// after "+ Add store".
+function StoreBlock({ title, value, onChange, nearby, locating, located, picked, onPick, adding, onAdd }: {
+  title: string;
+  value: StoreVal;
+  onChange: (v: StoreVal) => void;
+  nearby: NearbyStore[];
+  locating: boolean;
+  located: boolean;
+  picked: string | null;
+  onPick: (s: NearbyStore) => void;
+  adding: boolean;
+  onAdd: () => void;
+}) {
+  const chip = (on: boolean): React.CSSProperties => ({
+    border: `1px solid ${on ? "#fff" : hair}`, background: on ? "#fff" : "rgba(255,255,255,0.05)", color: on ? "#000" : "#fff",
+    padding: "9px 11px", fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left",
+  });
+  return (
+    <div style={box}>
+      <div style={{ ...lab, marginBottom: 8 }}>{title}</div>
+      {nearby.length > 0 ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          {nearby.map((n) => {
+            const on = picked === storeKey(n.store_name, n.store_number);
+            return (
+              <button key={storeKey(n.store_name, n.store_number)} type="button" style={chip(on)} onClick={() => onPick(n)}>
+                {on ? "✓ " : ""}{n.store_name}{n.store_number ? ` #${n.store_number}` : ""}{n.city ? ` · ${n.city}` : ""}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>
+          {locating ? "Finding stores near you…" : located ? `No saved stores within ${STORE_RANGE_MI} mi.` : "Location is off, so nearby stores can't show."}
+        </div>
+      )}
+      {adding ? (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 10 }}>
+            <Field label="Store name"><input style={input} value={value.storeName} placeholder="Love's" onChange={(e) => onChange({ ...value, storeName: e.target.value })} /></Field>
+            <Field label="Store #"><input style={input} value={value.storeNumber} onChange={(e) => onChange({ ...value, storeNumber: e.target.value })} /></Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
+            <Field label="City"><input style={input} value={value.city} onChange={(e) => onChange({ ...value, city: e.target.value })} /></Field>
+            <Field label="ST"><input style={input} value={value.state} maxLength={2} onChange={(e) => onChange({ ...value, state: e.target.value.toUpperCase() })} /></Field>
+          </div>
+          {located && <div style={{ fontSize: 12, color: muted }}>Saved at this spot, so it shows next time you&apos;re here.</div>}
+        </>
+      ) : (
+        <button type="button" style={link} onClick={onAdd}>+ Add store</button>
+      )}
+    </div>
+  );
+}
+
 export default function FuelSheet({
   open, onClose, stop, settings, methods, userId, truckName, onDone,
 }: {
@@ -96,13 +155,20 @@ export default function FuelSheet({
   const [down, setDown] = useState(false);
   const [issue, setIssue] = useState("");
   const [issueNote, setIssueNote] = useState("");
-  const [loc, setLoc] = useState({ storeName: "", city: "", state: "" });
+  const [loc, setLoc] = useState<StoreVal>({ storeName: "", storeNumber: "", city: "", state: "" });
+  const [quickGal, setQuickGal] = useState("");
+  const [quickFull, setQuickFull] = useState(true);
+  // Stores near the phone
+  const [pos, setPos] = useState<Pos | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [nearby, setNearby] = useState<NearbyStore[]>([]);
+  const [picked, setPicked] = useState<NearbyStore | null>(null);
+  const [addingStore, setAddingStore] = useState(false);
 
   // Details
-  const [d, setD] = useState<FuelDetails>({ dieselGallons: "", defGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
+  const [d, setD] = useState<FuelDetails>({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
   const [money, setMoney] = useState({ dieselAmount: "", defAmount: "", total: "", pricePerGallon: "" });
   const [receipt, setReceipt] = useState<string | null>(null);
-  const [stores, setStores] = useState<RecentStore[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,15 +182,56 @@ export default function FuelSheet({
       .then(({ data }) => setDriverNo(((data as { employee_number?: string | null } | null)?.employee_number ?? "").trim() || null));
     void supabase.from("vault_entries").select("id,label,category").eq("user_id", userId).order("label")
       .then(({ data }) => setVault((data ?? []) as { id: string; label: string; category: string | null }[]));
-    void recentStores(userId).then(setStores);
     void supabase.from("driver_fuel_pins").select("method_id,pin").eq("user_id", userId)
       .then(({ data }) => setPins(Object.fromEntries(((data ?? []) as { method_id: string; pin: string }[]).map((r) => [r.method_id, r.pin]))));
   }, [open, userId]);
 
+  // Where the phone is, and the company's saved stores in range.
+  const companyId = p?.company_id ?? null;
+  useEffect(() => {
+    if (!open || !companyId) return;
+    let alive = true;
+    setLocating(true);
+    void devicePosition().then(async (here) => {
+      if (!alive) return;
+      setPos(here);
+      const list = here ? await nearbyStores(companyId, here).catch(() => []) : [];
+      if (!alive) return;
+      setNearby(list);
+      setLocating(false);
+    });
+    return () => { alive = false; };
+  }, [open, companyId]);
+
+  // A store already on the stop (from a pump down): select it if it's nearby,
+  // else show it in the fields.
+  useEffect(() => {
+    if (!p?.store_name || picked) return;
+    const k = storeKey(p.store_name, p.store_number);
+    const hit = nearby.find((n) => storeKey(n.store_name, n.store_number) === k);
+    if (hit) { setPicked(hit); setAddingStore(false); } else setAddingStore(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p?.store_name, nearby]);
+
+  const pickStore = (n: NearbyStore) => {
+    setPicked(n);
+    setAddingStore(false);
+    const v = { storeName: n.store_name, storeNumber: n.store_number ?? "", city: n.city ?? "", state: n.state ?? "" };
+    setLoc(v);
+    setD((x) => ({ ...x, ...v }));
+  };
+  const addStore = () => {
+    setPicked(null);
+    setAddingStore(true);
+    setLoc((x) => ({ ...x, storeName: "", storeNumber: "" }));
+    setD((x) => ({ ...x, storeName: "", storeNumber: "" }));
+  };
+  const storePos = (): Pos | null => (picked ? { lat: picked.lat, lon: picked.lon } : pos);
+
   // Pump down: prefill where from the stop, else the phone's city.
   useEffect(() => {
     if (!down || !p) return;
-    setLoc((x) => ({ storeName: x.storeName || p.store_name || "", city: x.city || p.city || "", state: x.state || p.state || "" }));
+    setLoc((x) => ({ storeName: x.storeName || p.store_name || "", storeNumber: x.storeNumber || p.store_number || "", city: x.city || p.city || "", state: x.state || p.state || "" }));
     if (p.city) return;
     let alive = true;
     void currentCity().then((c) => { if (alive && c) setLoc((x) => (x.city ? x : { ...x, city: c.city, state: c.state ?? x.state })); });
@@ -141,7 +248,6 @@ export default function FuelSheet({
     setD((x) => ({
       ...x,
       dieselGallons: p.diesel_gallons != null ? String(p.diesel_gallons) : x.dieselGallons,
-      defGallons: p.def_gallons != null ? String(p.def_gallons) : x.defGallons,
       filledToFull: p.filled_to_full ?? x.filledToFull,
       storeName: p.store_name ?? x.storeName,
       storeNumber: p.store_number ?? x.storeNumber,
@@ -231,7 +337,8 @@ export default function FuelSheet({
   const finishedQuick = () => run(async () => {
     if (!choice) return;
     if (!odo.trim()) { setErr("Enter the odometer."); return; }
-    const done = finishQuick(p, { payKind: choice.payKind, methodId: choice.method?.id ?? null, odometer: odo }, new Date().toISOString());
+    if (!quickGal.trim()) { setErr("Enter the gallons."); return; }
+    const done = finishQuick(p, { payKind: choice.payKind, methodId: choice.method?.id ?? null, odometer: odo, gallons: quickGal, filledToFull: quickFull, pos }, new Date().toISOString());
     const ok = await stop.complete(done, {
       is_personal: false, price_per_gallon: null, diesel_amount: null, def_amount: null, total_amount: null, vault_entry_id: null, receipt_path: null,
     });
@@ -239,6 +346,8 @@ export default function FuelSheet({
     const mins = Math.max(0, Math.round((Date.parse(done.finished_at!) - Date.parse(done.started_at)) / 60000));
     onDone?.(`Fuel saved · ${mins} min at the pump`);
     closeChoice();
+    setQuickGal("");
+    setQuickFull(true);
     onClose();
   });
 
@@ -247,10 +356,10 @@ export default function FuelSheet({
     if (!pump.trim()) { setErr("Enter the pump number."); return; }
     if (!issue) { setErr("Pick what's wrong."); return; }
     if (issue === "Other" && !issueNote.trim()) { setErr("Say what's wrong."); return; }
-    if (!loc.storeName.trim() && !loc.city.trim()) { setErr("Enter the store or city."); return; }
+    if (!loc.storeName.trim() && !loc.city.trim()) { setErr("Pick the store, or tap Add store."); return; }
     await stop.save(recordPumpDown(p, {
       payKind: choice.payKind, methodId: choice.method?.id ?? null, label: choice.label, pumpNumber: pump,
-      issue: issue === "Other" ? issueNote : issue, storeName: loc.storeName, city: loc.city, state: loc.state,
+      issue: issue === "Other" ? issueNote : issue, storeName: loc.storeName, storeNumber: loc.storeNumber, city: loc.city, state: loc.state, pos: storePos(),
     }, new Date().toISOString()));
     closeChoice();
   });
@@ -268,10 +377,10 @@ export default function FuelSheet({
   const missing = missingForComplete(p, d, !!settings?.require_receipt);
   const save = () => run(async () => {
     if (missing.length) { setErr(`Still needed: ${missing.join(", ")}`); return; }
-    const done = completeStop(p, d, new Date().toISOString());
+    const done = completeStop(p, { ...d, pos: storePos() }, new Date().toISOString());
     const ok = await stop.complete(done, {
       is_personal: personal,
-      ...paymentAmounts({ dieselGallons: d.dieselGallons, defGallons: d.defGallons, ...money }),
+      ...paymentAmounts({ dieselGallons: d.dieselGallons, ...money }),
       vault_entry_id: p.pay_kind === "personal_card" ? vaultId : null,
       receipt_path: receipt,
     });
@@ -281,7 +390,7 @@ export default function FuelSheet({
     setShowDetails(false);
     setReceipt(null);
     setMoney({ dieselAmount: "", defAmount: "", total: "", pricePerGallon: "" });
-    setD({ dieselGallons: "", defGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
+    setD({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
     onClose();
   });
 
@@ -324,36 +433,12 @@ export default function FuelSheet({
           )}
         </div>
 
-        <div style={box}>
-          <div style={{ ...lab, marginBottom: 8 }}>Store</div>
-          {stores.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              {stores.map((s, i) => (
-                <button key={i} type="button" onClick={() => setD((x) => ({ ...x, storeName: s.store_name, storeNumber: s.store_number ?? "", city: s.city ?? x.city, state: s.state ?? x.state }))}
-                  style={{ border: `1px solid ${hair}`, background: "rgba(255,255,255,0.05)", color: "#fff", padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
-                  {s.store_name}{s.store_number ? ` #${s.store_number}` : ""}{s.city ? ` · ${s.city}` : ""}
-                </button>
-              ))}
-            </div>
-          )}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 10 }}>
-            <Field label="Name"><input style={input} value={d.storeName} placeholder="Store name" onChange={(e) => setD({ ...d, storeName: e.target.value })} /></Field>
-            <Field label="Store #"><input style={input} value={d.storeNumber} onChange={(e) => setD({ ...d, storeNumber: e.target.value })} /></Field>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
-            <Field label="City"><input style={input} value={d.city} onChange={(e) => setD({ ...d, city: e.target.value })} /></Field>
-            <Field label="ST"><input style={input} value={d.state} maxLength={2} onChange={(e) => setD({ ...d, state: e.target.value.toUpperCase() })} /></Field>
-          </div>
-        </div>
+        <StoreBlock title="Store" value={d} onChange={(v) => setD({ ...d, ...v })} nearby={nearby} locating={locating} located={!!pos}
+          picked={picked ? storeKey(picked.store_name, picked.store_number) : null} onPick={pickStore} adding={addingStore} onAdd={addStore} />
 
         <div style={box}>
           <div style={{ ...lab, marginBottom: 8 }}>Fuel</div>
-          <div style={{ display: "grid", gridTemplateColumns: p.products === "diesel_def" ? "1fr 1fr" : "1fr", gap: 10 }}>
-            <Field label="Diesel gal"><input style={input} inputMode="decimal" value={d.dieselGallons} onChange={(e) => setD({ ...d, dieselGallons: e.target.value })} /></Field>
-            {p.products === "diesel_def" && (
-              <Field label="DEF gal"><input style={input} inputMode="decimal" value={d.defGallons} onChange={(e) => setD({ ...d, defGallons: e.target.value })} /></Field>
-            )}
-          </div>
+          <Field label="Diesel gallons"><input style={input} inputMode="decimal" value={d.dieselGallons} onChange={(e) => setD({ ...d, dieselGallons: e.target.value })} /></Field>
           <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <span style={{ fontSize: 15, fontWeight: 700 }}>Filled to full</span>
             <input type="checkbox" checked={d.filledToFull} onChange={(e) => setD({ ...d, filledToFull: e.target.checked })} style={{ width: 22, height: 22 }} />
@@ -425,24 +510,8 @@ export default function FuelSheet({
       return (
         <FullscreenModal open={open} title="Pump Down" onClose={() => { setDown(false); setErr(null); }} footer={null}>
           <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>{m.name} didn&apos;t work. Tell us where and why, then pick another way to pay.</div>
-          <div style={box}>
-            <div style={{ ...lab, marginBottom: 8 }}>Where</div>
-            {stores.length > 0 && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                {stores.map((s, i) => (
-                  <button key={i} type="button" style={chip(false)}
-                    onClick={() => setLoc({ storeName: `${s.store_name}${s.store_number ? ` #${s.store_number}` : ""}`, city: s.city ?? "", state: s.state ?? "" })}>
-                    {s.store_name}{s.store_number ? ` #${s.store_number}` : ""}{s.city ? ` · ${s.city}` : ""}
-                  </button>
-                ))}
-              </div>
-            )}
-            <Field label="Store"><input style={input} value={loc.storeName} placeholder="Store name" onChange={(e) => setLoc({ ...loc, storeName: e.target.value })} /></Field>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
-              <Field label="City"><input style={input} value={loc.city} onChange={(e) => setLoc({ ...loc, city: e.target.value })} /></Field>
-              <Field label="ST"><input style={input} value={loc.state} maxLength={2} onChange={(e) => setLoc({ ...loc, state: e.target.value.toUpperCase() })} /></Field>
-            </div>
-          </div>
+          <StoreBlock title="Where" value={loc} onChange={setLoc} nearby={nearby} locating={locating} located={!!pos}
+            picked={picked ? storeKey(picked.store_name, picked.store_number) : null} onPick={pickStore} adding={addingStore} onAdd={addStore} />
           <Field label="Pump #"><input style={{ ...input, maxWidth: 140 }} inputMode="numeric" value={pump} onChange={(e) => setPump(e.target.value)} /></Field>
           <div style={{ ...lab, marginBottom: 8 }}>What&apos;s wrong</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
@@ -509,7 +578,14 @@ export default function FuelSheet({
           <button type="button" style={{ ...link, marginBottom: 14 }} onClick={() => void openGuide(m.guide_path!).catch(() => {})}>📄 {m.guide_name ?? "Detailed steps"}</button>
         )}
 
-        <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
+          <Field label="Diesel gallons"><input style={input} inputMode="decimal" value={quickGal} onChange={(e) => setQuickGal(e.target.value)} /></Field>
+        </div>
+        <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: 14 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Filled to full</span>
+          <input type="checkbox" checked={quickFull} onChange={(e) => setQuickFull(e.target.checked)} style={{ width: 22, height: 22 }} />
+        </label>
 
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
         <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedQuick()}>

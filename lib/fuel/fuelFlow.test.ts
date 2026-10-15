@@ -21,11 +21,11 @@ test("failed try keeps the pump number at that moment, then pumping on another m
   assert.equal(p.finished_at, "2026-10-15T10:20:00Z");
 });
 
-test("complete needs gallons, DEF gallons when DEF was picked, store, and a receipt if required", () => {
+test("complete needs gallons, store, and a receipt if required (no DEF gallons)", () => {
   const p = startPumping(base(), entry(), "2026-10-15T10:01:00Z");
-  const d = { dieselGallons: "", defGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false };
-  assert.deepEqual(missingForComplete(p, d, true), ["Diesel gallons", "DEF gallons", "Store", "Receipt photo"]);
-  const ok = { ...d, dieselGallons: "120.5", defGallons: "5", storeName: "Love's", state: "fl" };
+  const d = { dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false };
+  assert.deepEqual(missingForComplete(p, d, true), ["Diesel gallons", "Store", "Receipt photo"]);
+  const ok = { ...d, dieselGallons: "120.5", storeName: "Love's", state: "fl" };
   assert.deepEqual(missingForComplete(p, ok, true), ["Receipt photo"]);
   const done = completeStop(p, ok, "2026-10-15T10:30:00Z");
   assert.equal(done.status, "complete");
@@ -34,7 +34,7 @@ test("complete needs gallons, DEF gallons when DEF was picked, store, and a rece
 });
 
 test("payment amounts: total from parts, price per gallon from diesel amount", () => {
-  assert.deepEqual(paymentAmounts({ dieselGallons: "100", defGallons: "", dieselAmount: "389.90", defAmount: "20", total: "", pricePerGallon: "" }),
+  assert.deepEqual(paymentAmounts({ dieselGallons: "100", dieselAmount: "389.90", defAmount: "20", total: "", pricePerGallon: "" }),
     { diesel_amount: 389.9, def_amount: 20, total_amount: 409.9, price_per_gallon: 3.899 });
 });
 
@@ -55,9 +55,11 @@ test("RFID: pump down keeps location, pump and issue; finished fueling needs onl
   assert.equal(p.status, "fueling");
   assert.deepEqual([p.attempts[0].pump_number, p.attempts[0].issue, p.attempts[0].state], ["12", "Won't authorize", "FL"]);
   assert.equal(p.store_name, "Love's");
-  p = finishQuick(p, { payKind: "company_account", methodId: "m2", odometer: "310,700" }, "2026-10-15T10:15:00Z");
+  p = finishQuick(p, { payKind: "company_account", methodId: "m2", odometer: "310,700", gallons: "142.3", filledToFull: true, pos: { lat: 29.1, lon: -82.1 } }, "2026-10-15T10:15:00Z");
   assert.equal(p.status, "complete");
   assert.equal(p.odometer, 310700);
   assert.equal(p.finished_at, "2026-10-15T10:15:00Z");
-  assert.equal(p.diesel_gallons, null);
+  assert.equal(p.diesel_gallons, 142.3);
+  assert.equal(p.filled_to_full, true);
+  assert.equal(p.lat, 29.1);
 });

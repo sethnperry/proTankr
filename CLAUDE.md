@@ -11320,3 +11320,20 @@ Migration `20261015010000_driver_fuel_pins.sql` (**applied 2026-10-15** via the 
 **Gap:** RFID and company account stops have no gallons, so they don't count toward fill-to-fill MPG until the fuel network's data is imported.
 
 **Verification:** clicked through with Playwright on real data: RFID with a first-time PIN, then Pump Down (pump 14, Won't authorize), then the company account with the odometer, then Finished Fueling. The rows were checked in the database, then the test methods and the test stop were deleted.
+
+### Fuel: gallons on RFID/account, no DEF gallons, nearby stores only (2026-10-15)
+
+No migration. It uses `fuel_purchases.lat/lon`, which already existed and were never filled in before.
+
+- **RFID / company account** now ask for **diesel gallons** alongside the odometer, plus Filled to full (on by default), so these stops count toward MPG (`finishQuick`). Both odometer and gallons are required.
+- **DEF gallons** are no longer captured anywhere. Cards and cash still have the Diesel / Diesel + DEF toggle and a DEF $ amount.
+- **Stores** (Pump Down "Where" and the card details "Store"): `StoreBlock` in `FuelSheet.tsx`.
+  - It shows only the company's saved stores within 1.5 mi of the phone (`STORE_RANGE_MI`), nearest first, max 5 (`lib/fuel/nearbyStores.ts`, pure math in `nearbyMath.ts`, 1 test).
+  - The fields stay hidden until **+ Add store** is tapped. A new store is saved with the phone's position, and a picked store keeps its own position, so it shows next time anyone in the company is there.
+  - This replaces the old "last 6 stores" chips (`recentStores`, now unused), which weren't location-filtered.
+- Stops saved before this have no position (the real Loves stop from 10/15 included). They won't appear as nearby until a stop is saved there again.
+- Verified with Playwright using simulated phone location:
+  - Pump Down showed no nearby stores; I added a store and saved.
+  - On the company account I finished with an odometer and 142.3 gal, and the row saved with lat/lon.
+  - A second stop's Pump Down then offered that store. I picked it with one tap.
+  - The test rows were then deleted.
