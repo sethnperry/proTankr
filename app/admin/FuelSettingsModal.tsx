@@ -269,13 +269,17 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
       </div>
 
       <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Receipt photo required</div>
+        <div style={{ fontSize: 12, color: muted, marginBottom: 12 }}>RFID and company account stops never ask for one.</div>
+        <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer", marginBottom: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Company cards</span>
+          <input type="checkbox" checked={settings?.require_receipt_company_card ?? true} disabled={busy}
+            onChange={(e) => void saveSettings({ require_receipt_company_card: e.target.checked })} style={{ width: 22, height: 22 }} />
+        </label>
         <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer" }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt photo required</div>
-            <div style={{ fontSize: 12, color: muted }}>For fuel cards and out-of-pocket. RFID and company account stops only ask for the odometer.</div>
-          </div>
-          <input type="checkbox" checked={!!settings?.require_receipt} disabled={busy}
-            onChange={(e) => void saveSettings({ require_receipt: e.target.checked })} style={{ width: 22, height: 22 }} />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Out of pocket (my card, cash)</span>
+          <input type="checkbox" checked={settings?.require_receipt_personal ?? true} disabled={busy}
+            onChange={(e) => void saveSettings({ require_receipt_personal: e.target.checked })} style={{ width: 22, height: 22 }} />
         </label>
       </div>
     </FullscreenModal>

@@ -26,7 +26,7 @@ import { openGuide, openStoredFile } from "@/lib/fuel/useFuelSetup";
 import type { useFuelStop } from "@/lib/fuel/useFuelStop";
 import { devicePosition, nearbyStores, STORE_RANGE_MI, type NearbyStore, type Pos } from "@/lib/fuel/nearbyStores";
 import {
-  completeStop, failedKeys, finishFueling, finishQuick, finishToDetails, missingForComplete, paymentAmounts, recordFailedTry, recordPumpDown, startPumping,
+  completeStop, failedKeys, finishFueling, finishQuick, finishToDetails, missingForComplete, paymentAmounts, receiptRequired, recordFailedTry, recordPumpDown, startPumping,
   type FuelDetails, type PumpEntry,
 } from "@/lib/fuel/fuelFlow";
 import {
@@ -173,7 +173,7 @@ export default function FuelSheet({
 
   // Details
   const [d, setD] = useState<FuelDetails>({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
-  const [money, setMoney] = useState({ dieselAmount: "", defAmount: "", total: "", pricePerGallon: "" });
+  const [total, setTotal] = useState("");
   const [receipt, setReceipt] = useState<string | null>(null);
 
   useEffect(() => {
@@ -397,13 +397,14 @@ export default function FuelSheet({
     setD((x) => ({ ...x, hasReceipt: true }));
   });
 
-  const missing = missingForComplete(p, d, !!settings?.require_receipt);
+  const needReceipt = receiptRequired(p.pay_kind, settings);
+  const missing = missingForComplete(p, d, needReceipt, total);
   const save = () => run(async () => {
     if (missing.length) { setErr(`Still needed: ${missing.join(", ")}`); return; }
     const done = completeStop(p, { ...d, pos: storePos() }, new Date().toISOString());
     const ok = await stop.complete(done, {
       is_personal: personal,
-      ...paymentAmounts({ dieselGallons: d.dieselGallons, ...money }),
+      ...paymentAmounts({ dieselGallons: d.dieselGallons, total }),
       vault_entry_id: cardFor(p.pay_kind)?.id ?? null,
       receipt_path: receipt,
     });
@@ -413,7 +414,7 @@ export default function FuelSheet({
     setShowDetails(false);
     setCardId(null);
     setReceipt(null);
-    setMoney({ dieselAmount: "", defAmount: "", total: "", pricePerGallon: "" });
+    setTotal("");
     setD({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
     onClose();
   });
@@ -471,7 +472,7 @@ export default function FuelSheet({
         </div>
 
         <div style={box}>
-          <div style={{ ...lab, marginBottom: 8 }}>Receipt{settings?.require_receipt ? " (required)" : " (optional)"}</div>
+          <div style={{ ...lab, marginBottom: 8 }}>Receipt{needReceipt ? " (required)" : " (optional)"}</div>
           {receipt ? (
             <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
               <span style={{ color: "#4ade80", fontWeight: 800 }}>✓ Photo saved</span>
@@ -500,15 +501,8 @@ export default function FuelSheet({
         </div>
 
         <div style={box}>
-          <div style={{ ...lab, marginBottom: 8 }}>Amounts{personal ? " · only you and your admin see these" : ""}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Field label="Diesel $"><input style={input} inputMode="decimal" value={money.dieselAmount} onChange={(e) => setMoney({ ...money, dieselAmount: e.target.value })} /></Field>
-            <Field label="Price / gal"><input style={input} inputMode="decimal" value={money.pricePerGallon} onChange={(e) => setMoney({ ...money, pricePerGallon: e.target.value })} /></Field>
-            {p.products === "diesel_def" && (
-              <Field label="DEF $"><input style={input} inputMode="decimal" value={money.defAmount} onChange={(e) => setMoney({ ...money, defAmount: e.target.value })} /></Field>
-            )}
-            <Field label="Total $"><input style={input} inputMode="decimal" value={money.total} onChange={(e) => setMoney({ ...money, total: e.target.value })} /></Field>
-          </div>
+          <div style={{ ...lab, marginBottom: 8 }}>Cost{personal ? " · only you and your admin see this" : ""}</div>
+          <Field label="Total cost $"><input style={input} inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} /></Field>
         </div>
 
         <Field label="Note"><input style={input} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} /></Field>

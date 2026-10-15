@@ -58,7 +58,7 @@ export default function FuelEditSheet({ row, payment, canEditMoney, onClose, onS
     pump: row.pump_number ?? "", storeName: row.store_name ?? "", storeNumber: row.store_number ?? "",
     city: row.city ?? "", state: row.state ?? "", notes: row.notes ?? "",
     payKind: (row.pay_kind ?? "cash") as PayKind,
-    dieselAmount: str(payment?.diesel_amount), defAmount: str(payment?.def_amount), total: str(payment?.total_amount), ppg: str(payment?.price_per_gallon),
+    total: str(payment?.total_amount),
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -81,15 +81,11 @@ export default function FuelEditSheet({ row, payment, canEditMoney, onClose, onS
       }).eq("id", row.id);
       if (error) throw error;
       if (canEditMoney) {
-        const dieselAmount = num(f.dieselAmount);
-        const defAmount = num(f.defAmount);
-        let total = num(f.total);
-        if (total == null && (dieselAmount != null || defAmount != null)) total = (dieselAmount ?? 0) + (defAmount ?? 0);
-        let ppg = num(f.ppg);
+        const total = num(f.total);
         const g = num(f.gallons);
-        if (ppg == null && g && dieselAmount != null) ppg = Math.round((dieselAmount / g) * 1000) / 1000;
+        const ppg = g && total != null ? Math.round((total / g) * 1000) / 1000 : null;
         const personal = f.payKind === "personal_card" || f.payKind === "cash";
-        const money = { diesel_amount: dieselAmount, def_amount: defAmount, total_amount: total, price_per_gallon: ppg, is_personal: personal, updated_at: new Date().toISOString() };
+        const money = { total_amount: total, price_per_gallon: ppg, is_personal: personal, updated_at: new Date().toISOString() };
         const r = payment
           ? await supabase.from("fuel_purchase_payments").update(money).eq("purchase_id", row.id)
           : await supabase.from("fuel_purchase_payments").insert({ purchase_id: row.id, company_id: row.company_id, ...money });
@@ -149,12 +145,7 @@ export default function FuelEditSheet({ row, payment, canEditMoney, onClose, onS
           ))}
         </div>
         {canEditMoney && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
-            <F label="Diesel $"><input style={input} inputMode="decimal" value={f.dieselAmount} onChange={(e) => set({ dieselAmount: e.target.value })} /></F>
-            <F label="Price / gal"><input style={input} inputMode="decimal" value={f.ppg} onChange={(e) => set({ ppg: e.target.value })} /></F>
-            <F label="DEF $"><input style={input} inputMode="decimal" value={f.defAmount} onChange={(e) => set({ defAmount: e.target.value })} /></F>
-            <F label="Total $"><input style={input} inputMode="decimal" value={f.total} onChange={(e) => set({ total: e.target.value })} /></F>
-          </div>
+          <F label="Total cost $"><input style={input} inputMode="decimal" value={f.total} onChange={(e) => set({ total: e.target.value })} /></F>
         )}
       </div>
 

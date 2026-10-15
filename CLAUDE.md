@@ -11382,3 +11382,12 @@ Migration `20261015020000_vault_cards.sql` (**applied 2026-10-15** via the Manag
 - Moved that stop onto Seth's truck: Fuel History → Edit (gallons 120 → 121.5, saved) → Delete (row gone).
 - Vault list and the card edit form screenshot-checked.
 - All test rows deleted. Seth's own open My Card stop (odometer 123456, from his phone) was left untouched.
+
+### Fuel: cards and cash ask only gallons + total; receipt rule split (2026-10-15)
+
+Migration `20261015030000_fuel_receipt_rules.sql` (**applied 2026-10-15**) adds `fuel_settings.require_receipt_company_card` and `require_receipt_personal`, both default **true**. The old `require_receipt` is no longer read.
+- **Details screen** (Company Card / My Card / Cash): gallons and **Total cost $** (required; a "$" is accepted). Diesel $, DEF $ and price/gal inputs are gone. Price/gal is now computed (total ÷ gallons) and stored only for the history line.
+- `receiptRequired(kind, settings)` decides the rule: company card → company-card rule; My Card/Cash → out-of-pocket rule; RFID/company account → never.
+- Company Dashboard → Fuel shows "Receipt photo required" with two checkboxes, Company cards and Out of pocket (my card, cash), both on by default.
+- Fuel History's Edit sheet shows only Total cost.
+- Verified with Playwright: on the demo account (role temporarily set to driver, then restored), My Card → Finished Fueling → details with 90 gal and "$351.90"; Save showed "Still needed: Receipt photo"; the stop was then cancelled. Test card deleted.

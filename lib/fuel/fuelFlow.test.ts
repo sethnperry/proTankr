@@ -33,9 +33,16 @@ test("complete needs gallons, store, and a receipt if required (no DEF gallons)"
   assert.equal(done.state, "FL");
 });
 
-test("payment amounts: total from parts, price per gallon from diesel amount", () => {
-  assert.deepEqual(paymentAmounts({ dieselGallons: "100", dieselAmount: "389.90", defAmount: "20", total: "", pricePerGallon: "" }),
-    { diesel_amount: 389.9, def_amount: 20, total_amount: 409.9, price_per_gallon: 3.899 });
+test("payment: gallons and total only; price per gallon worked out", async () => {
+  assert.deepEqual(paymentAmounts({ dieselGallons: "100", total: "$389.90" }),
+    { diesel_amount: null, def_amount: null, total_amount: 389.9, price_per_gallon: 3.899 });
+  const { receiptRequired } = await import("./fuelFlow.ts");
+  assert.equal(receiptRequired("fuel_card", null), true);
+  assert.equal(receiptRequired("cash", { require_receipt_personal: false }), false);
+  assert.equal(receiptRequired("rfid", null), false);
+  const p = startPumping(base(), entry(), "2026-10-15T10:01:00Z");
+  const d = { dieselGallons: "80", filledToFull: true, storeName: "TA", storeNumber: "", city: "", state: "", notes: "", hasReceipt: true };
+  assert.deepEqual(missingForComplete(p, d, true, ""), ["Total cost"]);
 });
 
 test("fill-to-fill MPG counts partial fills in the window", () => {

@@ -31,7 +31,7 @@ export type PumpEntry = {
 };
 
 const num = (s: string): number | null => {
-  const n = Number(String(s).replace(/,/g, ""));
+  const n = Number(String(s).replace(/[,$]/g, ""));
   return s.trim() !== "" && Number.isFinite(n) ? n : null;
 };
 
@@ -148,10 +148,11 @@ export type FuelDetails = {
 };
 
 // What still has to be filled in before the stop can be completed.
-export function missingForComplete(p: FuelPurchase, d: FuelDetails, requireReceipt: boolean): string[] {
+export function missingForComplete(p: FuelPurchase, d: FuelDetails, requireReceipt: boolean, total?: string): string[] {
   const out: string[] = [];
   if (!p.pay_kind) out.push("How it was paid");
   if (num(d.dieselGallons) == null) out.push("Diesel gallons");
+  if (total != null && num(total) == null) out.push("Total cost");
   if (!d.storeName.trim()) out.push("Store");
   if (requireReceipt && !d.hasReceipt) out.push("Receipt photo");
   return out;
@@ -176,16 +177,21 @@ export function completeStop(p: FuelPurchase, d: FuelDetails, now: string): Fuel
   };
 }
 
-// The money side. Price per gallon is worked out when only the total is known.
-export function paymentAmounts(args: { dieselGallons: string; dieselAmount: string; defAmount: string; total: string; pricePerGallon: string }) {
+// The money side: gallons and the total cost. Price per gallon is worked out
+// from them (total ÷ gallons) for the history, never typed.
+export function paymentAmounts(args: { dieselGallons: string; total: string }) {
   const g = num(args.dieselGallons);
-  const dieselAmount = num(args.dieselAmount);
-  const defAmount = num(args.defAmount);
-  let total = num(args.total);
-  if (total == null && (dieselAmount != null || defAmount != null)) total = (dieselAmount ?? 0) + (defAmount ?? 0);
-  let ppg = num(args.pricePerGallon);
-  if (ppg == null && g && dieselAmount != null) ppg = Math.round((dieselAmount / g) * 1000) / 1000;
-  return { diesel_amount: dieselAmount, def_amount: defAmount, total_amount: total, price_per_gallon: ppg };
+  const total = num(args.total);
+  const ppg = g && total != null ? Math.round((total / g) * 1000) / 1000 : null;
+  return { diesel_amount: null, def_amount: null, total_amount: total, price_per_gallon: ppg };
+}
+
+// Which receipt rule applies: company cards and out-of-pocket each have their
+// own (both default to required). RFID / company account never ask.
+export function receiptRequired(kind: PayKind | null, s: { require_receipt_company_card?: boolean; require_receipt_personal?: boolean } | null): boolean {
+  if (kind === "fuel_card") return s?.require_receipt_company_card ?? true;
+  if (kind === "personal_card" || kind === "cash") return s?.require_receipt_personal ?? true;
+  return false;
 }
 
 // Methods tried and failed on this stop, for marking the grid.

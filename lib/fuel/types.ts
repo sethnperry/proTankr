@@ -9,7 +9,9 @@ export type FuelStatus = "fueling" | "pumping" | "details" | "complete";
 
 export type FuelSettings = {
   company_id: string;
-  require_receipt: boolean;
+  require_receipt: boolean; // unused since 2026-10-15
+  require_receipt_company_card: boolean;
+  require_receipt_personal: boolean;
   def_enabled: boolean;
   guide_path: string | null;
   guide_name: string | null;
@@ -18,6 +20,8 @@ export type FuelSettings = {
 
 export const DEFAULT_FUEL_SETTINGS: Omit<FuelSettings, "company_id"> = {
   require_receipt: false,
+  require_receipt_company_card: true,
+  require_receipt_personal: true,
   def_enabled: true,
   guide_path: null,
   guide_name: null,
