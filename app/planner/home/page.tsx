@@ -106,6 +106,9 @@ import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import { CollapsibleCard, HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
+import FuelSheet from "../components/fuel/FuelSheet";
+import { useFuelStop } from "@/lib/fuel/useFuelStop";
+import { useFuelSetup } from "@/lib/fuel/useFuelSetup";
 import type { UnitAlertSummary } from "@/lib/equipment/unitAlerts";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
@@ -444,6 +447,15 @@ export default function HomePage() {
   const [finishOpen, setFinishOpen] = useState(false);
   const [picker, setPicker] = useState<PickerMode | null>(null);
   const [notice, setNotice] = useState<{ text: string; tripId: string | null } | null>(null);
+
+  // Fuel stop: tapping Fuel stamps the start time right away.
+  const fuel = useFuelStop(userId || null, companyId || null);
+  const [fuelOpen, setFuelOpen] = useState(false);
+  const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
+  const tapFuel = async () => {
+    if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
+    setFuelOpen(true);
+  };
   const clock = () => ({ now: new Date(), newId });
 
   const loadedPickup = step.kind === "loaded" ? step.pickup : null;
@@ -1286,9 +1298,19 @@ export default function HomePage() {
         const showGross = tripLoaded && truckChanged;
         const showExp = expired > 0 || warning > 0;
         const showSync = pendingCount > 0 || failed.length > 0;
-        if (!showGross && !showExp && !showSync) return null;
+        const showFuel = !!fuel.active;
+        if (!showGross && !showExp && !showSync && !showFuel) return null;
         return (
           <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>
+            {showFuel && (
+              <InfoRow
+                label="Fuel stop"
+                value={fuel.active!.status === "details" ? "Finish details" : fuel.active!.status === "pumping" ? "Pumping" : "Choose payment"}
+                valueColor="#fbbf24"
+                onClick={() => setFuelOpen(true)}
+                last={!showGross && !showExp && !showSync}
+              />
+            )}
             {showGross && (
               <InfoRow
                 label="Truck changed"
@@ -1429,6 +1451,17 @@ export default function HomePage() {
         onCleared={terminalAlerts.refresh}
       />
 
+      <FuelSheet
+        open={fuelOpen}
+        onClose={() => setFuelOpen(false)}
+        stop={fuel}
+        settings={fuelSetup.settings}
+        methods={fuelSetup.methods}
+        userId={userId ?? ""}
+        truckName={(truckId && equipment.truckNameById?.[truckId]) || equipment.currentTruckName || null}
+        onDone={(text) => setNotice({ text, tripId: null })}
+      />
+
       <SyncDetailsSheet
         open={syncOpen}
         failed={failed}
@@ -1448,6 +1481,7 @@ export default function HomePage() {
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
             onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
+          { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
             sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} within 7 days` : soonCount > 0 ? `${soonCount} within 30 days` : "All current",
             subColor: expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : soonCount > 0 ? EXPIRY_COLOR.soon : undefined,

@@ -28,6 +28,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { useLoadHistory } from "../hooks/useLoadHistory";
 import MyLoadsModal from "../modals/MyLoadsModal";
 import ScaleHistoryModal from "../modals/ScaleHistoryModal";
+import FuelHistoryModal from "../components/fuel/FuelHistoryModal";
 import RecordHistoryModal from "../modals/RecordHistoryModal";
 import TerminalCardsPickerModal from "../modals/TerminalCardsPickerModal";
 import TerminalCardsReportModal from "../modals/TerminalCardsReportModal";
@@ -224,6 +225,7 @@ export default function ReportsPage() {
   const [scaleHistoryOpen, setScaleHistoryOpen] = useState(false);
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false);
   const [washHistoryOpen, setWashHistoryOpen] = useState(false);
+  const [fuelHistoryOpen, setFuelHistoryOpen] = useState(false);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [terminalReport, setTerminalReport] = useState<{ title: string; body: string } | null>(null);
   const [credentialsReportOpen, setCredentialsReportOpen] = useState(false);
@@ -430,6 +432,12 @@ export default function ReportsPage() {
               disabled={!hasEquipment}
             />
             <ReportTile
+              title="Fuel History"
+              sub="Fuel stops, MPG and time at the pump for this truck"
+              onClick={() => setFuelHistoryOpen(true)}
+              disabled={!resolvedCombo?.truck_id}
+            />
+            <ReportTile
               title="Wash History"
               sub={washSubFinal}
               onClick={() => setWashHistoryOpen(true)}
@@ -479,6 +487,13 @@ export default function ReportsPage() {
         onDeleteLoad={isViewingOther ? undefined : loadHistory.deleteLoad}
         headerOverride={isViewingOther ? `${viewedUserName || "Driver"}'s Loads` : undefined}
         initialExpandLoadId={deepLinkLoadId}
+      />
+
+      <FuelHistoryModal
+        open={fuelHistoryOpen}
+        onClose={() => setFuelHistoryOpen(false)}
+        truckId={resolvedCombo?.truck_id ?? null}
+        truckName={equipment.truckNameById[resolvedCombo?.truck_id ?? ""] ?? null}
       />
 
       {hasEquipment && companyId && (

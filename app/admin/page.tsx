@@ -22,6 +22,7 @@ import FleetCardsModal from "./FleetCardsModal";
 import PayrollReportModal from "./PayrollReportModal";
 import FleetUtilizationModal from "./FleetUtilizationModal";
 import TripSettingsModal from "./TripSettingsModal";
+import FuelSettingsModal from "./FuelSettingsModal";
 import TargetWeightPolicyModal from "./TargetWeightPolicyModal";
 import SettingsModal from "@/lib/ui/driver/SettingsModal";
 import { useCompanySubscription, computeSeatCapacity, wouldExceedCapacity, type SeatCapacity } from "@/lib/billing/useCompanySubscription";
@@ -1243,6 +1244,7 @@ export default function AdminPage() {
   const [payrollReportOpen, setPayrollReportOpen] = useState(false);
   const [fleetUtilOpen, setFleetUtilOpen] = useState(false);
   const [tripSettingsOpen, setTripSettingsOpen] = useState(false);
+  const [fuelSettingsOpen, setFuelSettingsOpen] = useState(false);
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
   const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -2054,6 +2056,11 @@ export default function AdminPage() {
             Trip Settings
           </button>
         )}
+        {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setFuelSettingsOpen(true)}>
+            Fuel
+          </button>
+        )}
         {/* Period Report and Target Weight are both admin-only, rarer
             actions than Fleet Cards/Utilization -- collapsed into one
             "Reports" tile with a small inline menu instead of each getting
@@ -2484,6 +2491,7 @@ export default function AdminPage() {
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />
       <FleetUtilizationModal open={fleetUtilOpen} onClose={() => setFleetUtilOpen(false)} companyId={companyId!} />
+      <FuelSettingsModal open={fuelSettingsOpen} onClose={() => setFuelSettingsOpen(false)} companyId={companyId!} />
       <TripSettingsModal open={tripSettingsOpen} onClose={() => setTripSettingsOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
       <TargetWeightPolicyModal open={targetWeightPolicyOpen} onClose={() => setTargetWeightPolicyOpen(false)} companyId={companyId!} />
       <SettingsModal

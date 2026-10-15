@@ -164,7 +164,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenStep
 
 // ── Tool tiles ──────────────────────────────────────────────────────────────
 
-export type ToolIcon = "truck" | "terminal" | "store" | "card" | "route" | "chart";
+export type ToolIcon = "truck" | "terminal" | "store" | "card" | "route" | "chart" | "fuel";
 
 function Icon({ name, color }: { name: ToolIcon; color: string }) {
   const p = { fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -175,6 +175,7 @@ function Icon({ name, color }: { name: ToolIcon; color: string }) {
       {name === "store" && (<g {...p}><path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" /><circle cx="12" cy="11" r="2.2" /></g>)}
       {name === "card" && (<g {...p}><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></g>)}
       {name === "route" && (<g {...p}><circle cx="6" cy="18" r="2" /><circle cx="18" cy="6" r="2" /><path d="M8 18h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7" /></g>)}
+      {name === "fuel" && (<g {...p}><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16" /><path d="M3 21h12" /><path d="M7 8h4" /><path d="M14 11h2a2 2 0 0 1 2 2v3a1.5 1.5 0 0 0 3 0V9l-3-3" /></g>)}
       {name === "chart" && (<g {...p}><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M21 20H3" /></g>)}
     </svg>
   );
@@ -197,6 +198,7 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
           <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>{t.label}</span>
         </button>
       ))}
+      {Array.from({ length: (3 - (items.length % 3)) % 3 }, (_, i) => <div key={`pad${i}`} style={{ background: "#0f0f10" }} />)}
     </div>
   );
 }

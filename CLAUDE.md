@@ -11248,3 +11248,52 @@ No migration. Screenshot-checked against real data, nothing tapped through.
   - Colors: 0 is gray, 1 is white (usually just me), more than 1 is red.
   - The label reads **To Pump** when the next delivery is a pump off.
 - **While loaded**, the terminal access strip folds into a collapsed "Terminal access" card under Recent Deliveries. This is the new `CollapsibleCard` in `DashboardCards.tsx`. When empty, the strip stays where it was.
+
+### Fuel stops: island flow, company payment setup, fuel history (2026-10-15)
+
+Migration `20261015000000_fuel_purchases.sql` (**applied 2026-10-15** via the Management API).
+
+**Tables**
+- `fuel_settings`: per company. Holds the receipt-required rule, DEF on/off, and a company guide (image or PDF).
+- `fuel_payment_methods`: the RFID program, company account and fuel cards. Each has numbered `steps` and an optional guide file. Only a label and the last 4 digits are stored, never a card number or PIN.
+- `fuel_purchases`: one row per stop, readable by the whole company (equipment history). Holds:
+  - times
+  - odometer
+  - pump number
+  - `attempts` (failed methods, each with its pump number)
+  - gallons and DEF
+  - filled to full
+  - store and city/state
+- `fuel_purchase_payments`: the money side. Company-paid rows are company-readable. Out-of-pocket rows are readable only by the driver and admins. The vault link for a personal card lives here.
+- Bucket `fuel-receipts`: path `{company}/{user}/{company|personal}/file`. The owner and admins can read; staff can read company-paid receipts only.
+- RLS: admins write settings and methods. Drivers write their own stops.
+
+**Driver flow** (`app/planner/components/fuel/FuelSheet.tsx`, `lib/fuel/*`, 4 tests)
+1. The Driver Dashboard's **Fuel** tool stamps the start time right away.
+2. Payment grid: the company's methods in its order, then My Card and Cash.
+3. A method's pop-out shows:
+   - the driver ID (`profiles.employee_number`) and truck number in big type
+   - the account number (also for showing the cashier)
+   - the numbered steps and the guide
+   - Pump # and Odometer fields
+   - Diesel or Diesel + DEF
+   - for My Card, a pick of a card saved in the Vault
+4. **Didn't Work** needs a pump number. It keeps the try on the stop and returns to the grid, with that method struck through.
+5. **Pump Running** starts the timer. **Finish Fueling** is the end time.
+6. Details screen, in order: receipt photo (required only if the company says so), store (recent stores one tap; city prefilled from the phone), gallons, filled to full, amounts.
+7. **Finish later** keeps the stop open. A "Fuel stop" attention row reopens it.
+
+Every step is written to the phone first (`useFuelStop`) and retried on reconnect, so a lost signal never loses the start time.
+
+**Company Dashboard → Fuel** (`app/admin/FuelSettingsModal.tsx`, admin only): add, edit, reorder and hide methods; set steps; upload guides; set the receipt rule; turn DEF on or off.
+
+**Reports → Fuel History** (`FuelHistoryModal.tsx`): the selected truck's stops, with fill-to-fill MPG (`fillToFillMpg`), time at the pump, failed tries, and amounts and receipts where RLS allows.
+
+**Verification:** clicked through end to end on real data with Playwright: admin setup → RFID failed at pump 7 → company account → pumping → details → saved → history. The rows were checked in the database, then the test stop and the test methods were deleted. A real device, a real receipt photo and the phone's location prefill were not tested.
+
+**Not built yet:**
+- fuel time on the PTD
+- the Planner using fuel burned for weight
+- IFTA miles by state
+- the other purchase types (scale, wash, parts, tolls)
+- reimbursement tracking
