@@ -52,6 +52,45 @@ export function recordFailedTry(p: FuelPurchase, e: PumpEntry, now: string): Fue
   };
 }
 
+// RFID / company account: Finished Fueling ends the stop. Odometer and time
+// only; gallons and price come from the fuel network.
+export function finishQuick(p: FuelPurchase, e: { payKind: PayKind; methodId: string | null; odometer: string }, now: string): FuelPurchase {
+  return {
+    ...p,
+    status: "complete",
+    pay_kind: e.payKind,
+    method_id: e.methodId,
+    odometer: num(e.odometer) ?? p.odometer,
+    products: null,
+    finished_at: now,
+    completed_at: now,
+  };
+}
+
+// RFID / company account: the pump is down. Keeps where, which pump and what
+// was wrong, then the driver picks another method.
+export function recordPumpDown(
+  p: FuelPurchase,
+  e: { payKind: PayKind; methodId: string | null; label: string; pumpNumber: string; issue: string; storeName: string; city: string; state: string },
+  now: string,
+): FuelPurchase {
+  const t = (s: string) => s.trim() || null;
+  const attempt: FuelAttempt = {
+    pay_kind: e.payKind, method_id: e.methodId, label: e.label, pump_number: t(e.pumpNumber), at: now,
+    issue: t(e.issue), store_name: t(e.storeName), city: t(e.city), state: t(e.state)?.toUpperCase() ?? null,
+  };
+  return {
+    ...p,
+    attempts: [...(p.attempts ?? []), attempt],
+    pump_number: t(e.pumpNumber) ?? p.pump_number,
+    store_name: p.store_name ?? attempt.store_name ?? null,
+    city: p.city ?? attempt.city ?? null,
+    state: p.state ?? attempt.state ?? null,
+    status: "fueling",
+    pumping_at: null,
+  };
+}
+
 export function startPumping(p: FuelPurchase, e: PumpEntry, now: string): FuelPurchase {
   return {
     ...p,

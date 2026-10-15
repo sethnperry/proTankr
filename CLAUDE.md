@@ -11297,3 +11297,26 @@ Every step is written to the phone first (`useFuelStop`) and retried on reconnec
 - IFTA miles by state
 - the other purchase types (scale, wash, parts, tolls)
 - reimbursement tracking
+
+### Fuel: RFID and company account only ask for the odometer (2026-10-15)
+
+Migration `20261015010000_driver_fuel_pins.sql` (**applied 2026-10-15** via the Management API): `driver_fuel_pins` (user_id, method_id, pin). One PIN per driver per method. RLS: own rows only, so admins can't read it.
+
+**RFID and company account pop-out** (`isQuickKind` in `lib/fuel/types.ts`):
+- It shows Truck, Employee ID and PIN. The type shrinks for long numbers.
+- The PIN is entered the first time and then shown. Tap it to change.
+- A company account also shows its account number. Then come the steps and the guide.
+- The odometer is the only input.
+- **Finished Fueling** completes the stop on the spot (`finishQuick`). Gallons and price are left empty, since the fuel network has them, and no receipt is asked for.
+- **Pump Down** (`recordPumpDown`) asks for the store/city, pump # and what's wrong (`PUMP_ISSUES`, Other needs a note). It saves them as an attempt and returns to the grid.
+
+**Cards, My Card and Cash** keep the full flow: pump #, Diesel / Diesel + DEF (always offered now), Pump Running, then details.
+
+**Company setup:**
+- The "Offer DEF" and "Show to drivers" options are gone. Methods save as active; Delete removes one.
+- The receipt rule now applies only to cards and out-of-pocket.
+- `fuel_settings.def_enabled` is left in the DB, unused.
+
+**Gap:** RFID and company account stops have no gallons, so they don't count toward fill-to-fill MPG until the fuel network's data is imported.
+
+**Verification:** clicked through with Playwright on real data: RFID with a first-time PIN, then Pump Down (pump 14, Won't authorize), then the company account with the odometer, then Finished Fueling. The rows were checked in the database, then the test methods and the test stop were deleted.

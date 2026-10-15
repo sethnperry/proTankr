@@ -4,10 +4,14 @@
 // The fuel island. Tapping Fuel already stamped the start time; this sheet is:
 //   1. Payment grid: the company's methods in its order, then My card, Cash.
 //      Methods that didn't work this stop are marked.
-//   2. Method pop-out: driver ID and truck number to key into the pump, the
-//      company account number (also for the cashier), numbered pump steps, the
-//      guide, pump #, odometer, Diesel / Diesel + DEF. Pump Running, or Didn't
-//      Work (keeps the try and the pump number, back to the grid).
+//   2a. RFID / company account pop-out: only what the pump asks for (truck,
+//      employee ID, the driver's PIN for that method, the account number) and
+//      the steps. Odometer is the only entry. Finished Fueling ends the stop;
+//      Pump Down asks where, which pump and what was wrong, then back to the
+//      grid. The PIN is entered once and kept for that driver only.
+//   2b. Card / cash pop-out: driver ID, truck, steps, pump #, odometer,
+//      Diesel / Diesel + DEF. Pump Running, or Didn't Work (keeps the try and
+//      the pump number, back to the grid).
 //   3. Pumping: the clock and Finish Fueling (end time). Pull forward, then:
 //   4. Details: receipt photo first, then the store, gallons, amounts. Can be
 //      finished later.
@@ -19,11 +23,11 @@ import { openGuide, openStoredFile } from "@/lib/fuel/useFuelSetup";
 import type { useFuelStop } from "@/lib/fuel/useFuelStop";
 import { recentStores, type RecentStore } from "@/lib/fuel/useFuelStop";
 import {
-  completeStop, failedKeys, finishFueling, missingForComplete, paymentAmounts, recordFailedTry, startPumping,
+  completeStop, failedKeys, finishFueling, finishQuick, missingForComplete, paymentAmounts, recordFailedTry, recordPumpDown, startPumping,
   type FuelDetails, type PumpEntry,
 } from "@/lib/fuel/fuelFlow";
 import {
-  KIND_LABEL, RECEIPT_BUCKET, isPersonal, receiptPath,
+  KIND_LABEL, PUMP_ISSUES, RECEIPT_BUCKET, isPersonal, isQuickKind, receiptPath,
   type FuelMethod, type FuelProducts, type FuelSettings, type PayKind,
 } from "@/lib/fuel/types";
 import { currentCity } from "@/lib/trips/startPlace";
@@ -85,6 +89,14 @@ export default function FuelSheet({
   const [driverNo, setDriverNo] = useState<string | null>(null);
   const [vault, setVault] = useState<{ id: string; label: string; category: string | null }[]>([]);
   const [showDetails, setShowDetails] = useState(false);
+  // RFID / company account
+  const [pins, setPins] = useState<Record<string, string>>({});
+  const [pinDraft, setPinDraft] = useState("");
+  const [editPin, setEditPin] = useState(false);
+  const [down, setDown] = useState(false);
+  const [issue, setIssue] = useState("");
+  const [issueNote, setIssueNote] = useState("");
+  const [loc, setLoc] = useState({ storeName: "", city: "", state: "" });
 
   // Details
   const [d, setD] = useState<FuelDetails>({ dieselGallons: "", defGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
@@ -105,7 +117,20 @@ export default function FuelSheet({
     void supabase.from("vault_entries").select("id,label,category").eq("user_id", userId).order("label")
       .then(({ data }) => setVault((data ?? []) as { id: string; label: string; category: string | null }[]));
     void recentStores(userId).then(setStores);
+    void supabase.from("driver_fuel_pins").select("method_id,pin").eq("user_id", userId)
+      .then(({ data }) => setPins(Object.fromEntries(((data ?? []) as { method_id: string; pin: string }[]).map((r) => [r.method_id, r.pin]))));
   }, [open, userId]);
+
+  // Pump down: prefill where from the stop, else the phone's city.
+  useEffect(() => {
+    if (!down || !p) return;
+    setLoc((x) => ({ storeName: x.storeName || p.store_name || "", city: x.city || p.city || "", state: x.state || p.state || "" }));
+    if (p.city) return;
+    let alive = true;
+    void currentCity().then((c) => { if (alive && c) setLoc((x) => (x.city ? x : { ...x, city: c.city, state: c.state ?? x.state })); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [down, p?.id]);
 
   // Seed fields from the row when a stop opens or changes step.
   useEffect(() => {
@@ -189,6 +214,45 @@ export default function FuelSheet({
   const finish = () => run(async () => {
     await stop.save(finishFueling(p, new Date().toISOString()));
     setShowDetails(true);
+  });
+
+  const closeChoice = () => { setChoice(null); setErr(null); setDown(false); setIssue(""); setIssueNote(""); setEditPin(false); setPinDraft(""); };
+
+  const savePin = (methodId: string) => run(async () => {
+    const pin = pinDraft.trim();
+    if (!pin) { setErr("Enter your PIN."); return; }
+    const { error } = await supabase.from("driver_fuel_pins").upsert({ user_id: userId, method_id: methodId, pin, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    setPins((x) => ({ ...x, [methodId]: pin }));
+    setEditPin(false);
+    setPinDraft("");
+  });
+
+  const finishedQuick = () => run(async () => {
+    if (!choice) return;
+    if (!odo.trim()) { setErr("Enter the odometer."); return; }
+    const done = finishQuick(p, { payKind: choice.payKind, methodId: choice.method?.id ?? null, odometer: odo }, new Date().toISOString());
+    const ok = await stop.complete(done, {
+      is_personal: false, price_per_gallon: null, diesel_amount: null, def_amount: null, total_amount: null, vault_entry_id: null, receipt_path: null,
+    });
+    if (!ok) { setErr(stop.error ?? "Couldn't save. Try again when you have signal."); return; }
+    const mins = Math.max(0, Math.round((Date.parse(done.finished_at!) - Date.parse(done.started_at)) / 60000));
+    onDone?.(`Fuel saved · ${mins} min at the pump`);
+    closeChoice();
+    onClose();
+  });
+
+  const pumpDown = () => run(async () => {
+    if (!choice) return;
+    if (!pump.trim()) { setErr("Enter the pump number."); return; }
+    if (!issue) { setErr("Pick what's wrong."); return; }
+    if (issue === "Other" && !issueNote.trim()) { setErr("Say what's wrong."); return; }
+    if (!loc.storeName.trim() && !loc.city.trim()) { setErr("Enter the store or city."); return; }
+    await stop.save(recordPumpDown(p, {
+      payKind: choice.payKind, methodId: choice.method?.id ?? null, label: choice.label, pumpNumber: pump,
+      issue: issue === "Other" ? issueNote : issue, storeName: loc.storeName, city: loc.city, state: loc.state,
+    }, new Date().toISOString()));
+    closeChoice();
   });
 
   const personal = isPersonal(p.pay_kind);
@@ -342,7 +406,124 @@ export default function FuelSheet({
     );
   }
 
-  // ── Method pop-out ────────────────────────────────────────────────────────
+  // ── RFID / company account pop-out ────────────────────────────────────────
+  if (choice && isQuickKind(choice.payKind) && choice.method) {
+    const m = choice.method;
+    const pin = pins[m.id];
+    // Three numbers side by side: shrink the type for long ones so none spill.
+    const big = (v: string | null | undefined): React.CSSProperties => {
+      const n = (v ?? "").length;
+      return { fontSize: n <= 4 ? 28 : n <= 6 ? 22 : n <= 8 ? 18 : 15, fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+    };
+    const cell: React.CSSProperties = { background: "#0f0f10", padding: "12px 10px", minWidth: 0 };
+    const chip = (on: boolean): React.CSSProperties => ({
+      border: `1px solid ${on ? "#fff" : hair}`, background: on ? "#fff" : "transparent", color: on ? "#000" : "#fff",
+      padding: "9px 11px", fontSize: 14, fontWeight: 700, cursor: "pointer",
+    });
+
+    if (down) {
+      return (
+        <FullscreenModal open={open} title="Pump Down" onClose={() => { setDown(false); setErr(null); }} footer={null}>
+          <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>{m.name} didn&apos;t work. Tell us where and why, then pick another way to pay.</div>
+          <div style={box}>
+            <div style={{ ...lab, marginBottom: 8 }}>Where</div>
+            {stores.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                {stores.map((s, i) => (
+                  <button key={i} type="button" style={chip(false)}
+                    onClick={() => setLoc({ storeName: `${s.store_name}${s.store_number ? ` #${s.store_number}` : ""}`, city: s.city ?? "", state: s.state ?? "" })}>
+                    {s.store_name}{s.store_number ? ` #${s.store_number}` : ""}{s.city ? ` · ${s.city}` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+            <Field label="Store"><input style={input} value={loc.storeName} placeholder="Store name" onChange={(e) => setLoc({ ...loc, storeName: e.target.value })} /></Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
+              <Field label="City"><input style={input} value={loc.city} onChange={(e) => setLoc({ ...loc, city: e.target.value })} /></Field>
+              <Field label="ST"><input style={input} value={loc.state} maxLength={2} onChange={(e) => setLoc({ ...loc, state: e.target.value.toUpperCase() })} /></Field>
+            </div>
+          </div>
+          <Field label="Pump #"><input style={{ ...input, maxWidth: 140 }} inputMode="numeric" value={pump} onChange={(e) => setPump(e.target.value)} /></Field>
+          <div style={{ ...lab, marginBottom: 8 }}>What&apos;s wrong</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            {PUMP_ISSUES.map((k) => <button key={k} type="button" style={chip(issue === k)} onClick={() => setIssue(k)}>{k}</button>)}
+          </div>
+          {issue === "Other" && <Field label="Describe it"><input style={input} value={issueNote} onChange={(e) => setIssueNote(e.target.value)} /></Field>}
+          {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
+          <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void pumpDown()}>
+            {busy ? "Saving…" : "SAVE · PICK ANOTHER WAY"}
+          </button>
+        </FullscreenModal>
+      );
+    }
+
+    return (
+      <FullscreenModal open={open} title={m.name} onClose={closeChoice} footer={null}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1, background: hair, border: `1px solid ${hair}`, marginBottom: 12 }}>
+          <div style={cell}>
+            <div style={lab}>Truck</div>
+            <div className="dash-num" style={big(truckName)}>{truckName ?? "—"}</div>
+          </div>
+          <div style={cell}>
+            <div style={lab}>Employee ID</div>
+            <div className="dash-num" style={big(driverNo)}>{driverNo ?? "—"}</div>
+          </div>
+          <button type="button" style={{ ...cell, border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}
+            onClick={() => { setPinDraft(pin ?? ""); setEditPin(true); setErr(null); }}>
+            <div style={lab}>PIN{pin ? " ✎" : ""}</div>
+            <div className="dash-num" style={{ ...big(pin), color: pin ? "#fff" : "#fbbf24", ...(pin ? {} : { fontSize: 15 }) }}>{pin ?? "Add"}</div>
+          </button>
+        </div>
+        {!driverNo && <div style={{ fontSize: 12, color: "#fbbf24", marginBottom: 10 }}>No employee ID on your profile. Add it in Settings → Profile.</div>}
+        {(editPin || !pin) && (
+          <div style={box}>
+            <div style={{ ...lab, marginBottom: 8 }}>Your {m.name} PIN</div>
+            <div style={{ fontSize: 12, color: muted, marginBottom: 10 }}>Entered once, shown here next time. Only you can see it.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...input, flex: 1 }} inputMode="numeric" autoComplete="off" value={pinDraft} onChange={(e) => setPinDraft(e.target.value)} />
+              <button type="button" style={{ ...primary, width: 90, padding: 0 }} disabled={busy} onClick={() => void savePin(m.id)}>Save</button>
+            </div>
+            {pin && <button type="button" style={{ ...link, marginTop: 10 }} onClick={() => { setEditPin(false); setPinDraft(""); }}>Cancel</button>}
+          </div>
+        )}
+
+        {m.kind === "company_account" && m.account_number && (
+          <div style={{ ...box, textAlign: "center" }}>
+            <div style={lab}>Account number</div>
+            <div className="dash-num" style={{ fontSize: 30, fontWeight: 900, letterSpacing: "0.04em", marginTop: 4 }}>{m.account_number}</div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>Or show this screen to the cashier.</div>
+          </div>
+        )}
+
+        {m.steps.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            {m.steps.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, fontSize: 16, lineHeight: 1.4, marginBottom: 8 }}>
+                <span className="dash-num" style={{ width: 22, flexShrink: 0, textAlign: "right", fontWeight: 900, color: muted }}>{i + 1}.</span>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {m.guide_path && (
+          <button type="button" style={{ ...link, marginBottom: 14 }} onClick={() => void openGuide(m.guide_path!).catch(() => {})}>📄 {m.guide_name ?? "Detailed steps"}</button>
+        )}
+
+        <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
+
+        {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
+        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedQuick()}>
+          {busy ? "Saving…" : "FINISHED FUELING"}
+        </button>
+        <button type="button" style={{ ...secondary, marginTop: 10, color: "#fbbf24", borderColor: "rgba(251,191,36,0.5)" }} disabled={busy}
+          onClick={() => { setErr(null); setDown(true); }}>
+          PUMP DOWN
+        </button>
+      </FullscreenModal>
+    );
+  }
+
+  // ── Card / cash pop-out ───────────────────────────────────────────────────
   if (choice) {
     const m = choice.method;
     const steps = m?.steps ?? (choice.payKind === "cash"
@@ -404,7 +585,7 @@ export default function FuelSheet({
           <Field label="Pump #"><input style={input} inputMode="numeric" value={pump} onChange={(e) => setPump(e.target.value)} /></Field>
           <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
         </div>
-        {settings?.def_enabled !== false && (
+        {(
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
             {(["diesel", "diesel_def"] as FuelProducts[]).map((k) => (
               <button key={k} type="button" onClick={() => setProducts(k)}
@@ -450,7 +631,7 @@ export default function FuelSheet({
       )}
       {(p.attempts ?? []).length > 0 && (
         <div style={{ fontSize: 12, color: muted, marginTop: 12 }}>
-          {p.attempts.map((a, i) => <div key={i}>✕ {a.label}{a.pump_number ? ` · pump ${a.pump_number}` : ""}</div>)}
+          {p.attempts.map((a, i) => <div key={i}>✕ {a.label}{a.pump_number ? ` · pump ${a.pump_number}` : ""}{a.issue ? ` · ${a.issue}` : ""}</div>)}
         </div>
       )}
       {companyGuide}

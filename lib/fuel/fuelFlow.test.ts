@@ -48,3 +48,16 @@ test("fill-to-fill MPG counts partial fills in the window", () => {
   assert.equal(byId.b, undefined);
   assert.equal(average, 6);
 });
+
+test("RFID: pump down keeps location, pump and issue; finished fueling needs only odometer", async () => {
+  const { recordPumpDown, finishQuick } = await import("./fuelFlow.ts");
+  let p = recordPumpDown(base(), { payKind: "rfid", methodId: "m1", label: "QuickQ", pumpNumber: "12", issue: "Won't authorize", storeName: "Love's", city: "Ocala", state: "fl" }, "2026-10-15T10:02:00Z");
+  assert.equal(p.status, "fueling");
+  assert.deepEqual([p.attempts[0].pump_number, p.attempts[0].issue, p.attempts[0].state], ["12", "Won't authorize", "FL"]);
+  assert.equal(p.store_name, "Love's");
+  p = finishQuick(p, { payKind: "company_account", methodId: "m2", odometer: "310,700" }, "2026-10-15T10:15:00Z");
+  assert.equal(p.status, "complete");
+  assert.equal(p.odometer, 310700);
+  assert.equal(p.finished_at, "2026-10-15T10:15:00Z");
+  assert.equal(p.diesel_gallons, null);
+});

@@ -43,9 +43,9 @@ const NEW_DRAFT = (kind: MethodKind): Draft => ({
   name: kind === "rfid" ? "Love's QuickQ" : kind === "company_account" ? "Company account" : "Fuel card",
   account_number: "", card_last4: "",
   steps: kind === "rfid"
-    ? ["Pull up to the pump, the RFID tag reads automatically", "Enter driver ID", "Enter truck number", "Enter odometer"]
+    ? ["Pull up to the pump, the RFID tag reads automatically", "Enter employee ID", "Enter truck number", "Enter PIN", "Enter odometer"]
     : kind === "company_account"
-    ? ["Choose company account at the pump (or show this screen to the cashier)", "Enter account number", "Enter driver ID", "Enter truck number", "Enter odometer"]
+    ? ["Choose company account at the pump (or show this screen to the cashier)", "Enter account number", "Enter employee ID", "Enter truck number", "Enter PIN", "Enter odometer"]
     : ["Insert card", "Enter PIN", "Enter driver ID", "Enter truck number", "Enter odometer"],
   guide_path: null, guide_name: null, guide_mime: null, is_active: true,
 });
@@ -116,7 +116,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
       card_last4: draft.kind === "fuel_card" ? last4 || null : null,
       steps: draft.steps.map((s) => s.trim()).filter(Boolean),
       guide_path: draft.guide_path, guide_name: draft.guide_name, guide_mime: draft.guide_mime,
-      is_active: draft.is_active,
+      is_active: true,
       updated_at: new Date().toISOString(),
     };
     setBusy(true); setMsg(null);
@@ -206,11 +206,6 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
             onRemove={() => set({ guide_path: null, guide_name: null, guide_mime: null })} />
         </div>
 
-        <label style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Show to drivers</span>
-          <input type="checkbox" checked={draft.is_active} onChange={(e) => set({ is_active: e.target.checked })} style={{ width: 22, height: 22 }} />
-        </label>
-
         <button type="button" style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void saveDraft()}>
           {busy ? "Saving…" : "Save"}
         </button>
@@ -265,21 +260,13 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
       </div>
 
       <div style={card}>
-        <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, cursor: "pointer" }}>
+        <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer" }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt photo required</div>
-            <div style={{ fontSize: 12, color: muted }}>A fuel stop can't be completed without one.</div>
+            <div style={{ fontSize: 12, color: muted }}>For fuel cards and out-of-pocket. RFID and company account stops only ask for the odometer.</div>
           </div>
           <input type="checkbox" checked={!!settings?.require_receipt} disabled={busy}
             onChange={(e) => void saveSettings({ require_receipt: e.target.checked })} style={{ width: 22, height: 22 }} />
-        </label>
-        <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer" }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Offer DEF</div>
-            <div style={{ fontSize: 12, color: muted }}>Lets drivers pick Diesel + DEF.</div>
-          </div>
-          <input type="checkbox" checked={settings?.def_enabled ?? true} disabled={busy}
-            onChange={(e) => void saveSettings({ def_enabled: e.target.checked })} style={{ width: 22, height: 22 }} />
         </label>
       </div>
     </FullscreenModal>

@@ -46,6 +46,11 @@ export type FuelAttempt = {
   label: string;
   pump_number: string | null;
   at: string;
+  // Pump down report (RFID / company account): what was wrong and where.
+  issue?: string | null;
+  store_name?: string | null;
+  city?: string | null;
+  state?: string | null;
 };
 
 export type FuelPurchase = {
@@ -99,6 +104,12 @@ export const KIND_LABEL: Record<PayKind, string> = {
   personal_card: "My card",
   cash: "Cash",
 };
+
+// RFID and company account: the fuel network records gallons and price, so
+// the driver only gives the odometer (and the time is stamped).
+export const isQuickKind = (k: PayKind | null | undefined) => k === "rfid" || k === "company_account";
+
+export const PUMP_ISSUES = ["Won't authorize", "Tag / account not reading", "Pump out of order", "Out of diesel", "Other"] as const;
 
 export const isPersonal = (k: PayKind | null | undefined) => k === "personal_card" || k === "cash";
 
