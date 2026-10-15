@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { openStoredFile } from "@/lib/fuel/useFuelSetup";
 import { fillToFillMpg } from "@/lib/fuel/fuelFlow";
-import { KIND_LABEL, RECEIPT_BUCKET, minutesBetween, type FuelPayment, type FuelPurchase } from "@/lib/fuel/types";
+import { KIND_LABEL, RECEIPT_BUCKET, minutesBetween, type FuelPayment, type FuelPurchase, fmtStamp, fmtTime } from "@/lib/fuel/types";
 
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.08)";
@@ -76,7 +76,9 @@ export default function FuelHistoryModal({ open, onClose, truckId, truckName }: 
           <div key={r.id} style={{ borderTop: `1px solid ${hair}` }}>
             <button type="button" onClick={() => setOpenId(isOpen ? null : r.id)}
               style={{ width: "100%", display: "flex", gap: 10, alignItems: "baseline", padding: "12px 0", background: "none", border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}>
-              <span style={{ fontSize: 13, color: muted, width: 46, flexShrink: 0 }}>{new Date(r.started_at).toLocaleDateString([], { month: "numeric", day: "numeric" })}</span>
+              <span style={{ fontSize: 12, color: muted, width: 58, flexShrink: 0, lineHeight: 1.3 }}>
+                {new Date(r.started_at).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}<br />{fmtTime(r.finished_at ?? r.started_at)}
+              </span>
               <span style={{ flex: 1, minWidth: 0, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {r.store_name ?? "Fuel"}{r.store_number ? ` #${r.store_number}` : ""}
                 <span style={{ color: muted, fontWeight: 500 }}>{r.city ? ` · ${r.city}${r.state ? `, ${r.state}` : ""}` : ""}</span>
@@ -86,12 +88,17 @@ export default function FuelHistoryModal({ open, onClose, truckId, truckName }: 
             {isOpen && (
               <div style={{ fontSize: 13, paddingBottom: 12, display: "grid", gap: 4 }}>
                 <div><span style={{ color: muted }}>Driver </span>{names[r.driver_id] || "—"}</div>
+                <div><span style={{ color: muted }}>Started </span>{fmtStamp(r.started_at)}<span style={{ color: muted }}> · Finished </span>{fmtTime(r.finished_at)}</div>
                 <div><span style={{ color: muted }}>Odometer </span>{r.odometer != null ? Number(r.odometer).toLocaleString("en-US") : "—"}{mpg.byId[r.id] ? ` · ${mpg.byId[r.id]} mpg` : ""}</div>
                 {r.def_gallons != null && <div><span style={{ color: muted }}>DEF </span>{Number(r.def_gallons).toFixed(1)} gal</div>}
                 <div><span style={{ color: muted }}>Paid </span>{r.pay_kind ? KIND_LABEL[r.pay_kind] : "—"}{r.pump_number ? ` · pump ${r.pump_number}` : ""}{r.filled_to_full ? " · filled to full" : ""}</div>
                 {mins != null && <div><span style={{ color: muted }}>At the pump </span>{mins} min</div>}
                 {r.attempts.length > 0 && (
-                  <div style={{ color: "#fbbf24" }}>Didn&apos;t work: {r.attempts.map((a) => `${a.label}${a.pump_number ? ` (pump ${a.pump_number})` : ""}`).join(", ")}</div>
+                  <div style={{ color: "#fbbf24" }}>
+                    {r.attempts.map((a, i) => (
+                      <div key={i}>✕ {fmtTime(a.at)} · {a.label}{a.pump_number ? ` · pump ${a.pump_number}` : ""}{a.issue ? ` · ${a.issue}` : ""}{a.store_name ? ` · ${a.store_name}` : ""}</div>
+                    ))}
+                  </div>
                 )}
                 {p?.total_amount != null && <div><span style={{ color: muted }}>Total </span>${Number(p.total_amount).toFixed(2)}{p.price_per_gallon != null ? ` · $${Number(p.price_per_gallon).toFixed(3)}/gal` : ""}</div>}
                 {p?.receipt_path && (

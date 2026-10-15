@@ -11337,3 +11337,12 @@ No migration. It uses `fuel_purchases.lat/lon`, which already existed and were n
   - On the company account I finished with an odometer and 142.3 gal, and the row saved with lat/lon.
   - A second stop's Pump Down then offered that store. I picked it with one tap.
   - The test rows were then deleted.
+
+### Fuel: date/time shown for matching; themed confirms (2026-10-15)
+
+No migration. The times were already stored (`started_at`, `finished_at`, each attempt's `at`); now they're shown.
+- `fmtStamp`/`fmtTime` (`lib/fuel/types.ts`) format as "10/15/26 6:25 AM".
+- **Fuel History:** each row shows date + finish time. The expanded row shows "Started {date time} · Finished {time}", and each failed try with its time, pump, issue and store. Admins use this to match the fuel network's statement.
+- **Fuel sheet:** the grid shows "Started {date time}", tries list their time, and the saved notice reads "Fuel saved {date time} · N min at the pump".
+- **Cancel fuel stop** and the admin's **Delete this method** now use in-sheet themed confirms (Keep / Cancel Stop, Keep / Delete) instead of `window.confirm`.
+- Verified with Playwright: Pump Down → Cancel (confirm shown, then Keep) → company account Finished Fueling → history expanded. Test rows deleted.

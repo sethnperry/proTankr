@@ -27,7 +27,7 @@ import {
   type FuelDetails, type PumpEntry,
 } from "@/lib/fuel/fuelFlow";
 import {
-  KIND_LABEL, PUMP_ISSUES, RECEIPT_BUCKET, isPersonal, isQuickKind, receiptPath,
+  KIND_LABEL, PUMP_ISSUES, fmtStamp, fmtTime, RECEIPT_BUCKET, isPersonal, isQuickKind, receiptPath,
   type FuelMethod, type FuelProducts, type FuelSettings, type PayKind,
 } from "@/lib/fuel/types";
 import { currentCity } from "@/lib/trips/startPlace";
@@ -164,6 +164,7 @@ export default function FuelSheet({
   const [nearby, setNearby] = useState<NearbyStore[]>([]);
   const [picked, setPicked] = useState<NearbyStore | null>(null);
   const [addingStore, setAddingStore] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   // Details
   const [d, setD] = useState<FuelDetails>({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
@@ -344,7 +345,7 @@ export default function FuelSheet({
     });
     if (!ok) { setErr(stop.error ?? "Couldn't save. Try again when you have signal."); return; }
     const mins = Math.max(0, Math.round((Date.parse(done.finished_at!) - Date.parse(done.started_at)) / 60000));
-    onDone?.(`Fuel saved · ${mins} min at the pump`);
+    onDone?.(`Fuel saved ${fmtStamp(done.finished_at)} · ${mins} min at the pump`);
     closeChoice();
     setQuickGal("");
     setQuickFull(true);
@@ -386,7 +387,7 @@ export default function FuelSheet({
     });
     if (!ok) { setErr(stop.error ?? "Couldn't save. Try again when you have signal."); return; }
     const mins = Math.max(0, Math.round((Date.parse(done.finished_at!) - Date.parse(done.started_at)) / 60000));
-    onDone?.(`Fuel saved · ${mins} min at the pump`);
+    onDone?.(`Fuel saved ${fmtStamp(done.finished_at)} · ${mins} min at the pump`);
     setShowDetails(false);
     setReceipt(null);
     setMoney({ dieselAmount: "", defAmount: "", total: "", pricePerGallon: "" });
@@ -687,7 +688,10 @@ export default function FuelSheet({
       {unsentNote}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
         <span style={lab}>How are you paying?</span>
-        <span className="dash-num" style={{ fontSize: 15, fontWeight: 800 }}>{clock(p.started_at, now)}</span>
+        <span style={{ textAlign: "right" }}>
+          <span className="dash-num" style={{ fontSize: 15, fontWeight: 800 }}>{clock(p.started_at, now)}</span>
+          <span style={{ display: "block", fontSize: 11, color: muted }}>Started {fmtStamp(p.started_at)}</span>
+        </span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: hair, border: `1px solid ${hair}` }}>
         {choices.map((c) => {
@@ -707,14 +711,28 @@ export default function FuelSheet({
       )}
       {(p.attempts ?? []).length > 0 && (
         <div style={{ fontSize: 12, color: muted, marginTop: 12 }}>
-          {p.attempts.map((a, i) => <div key={i}>✕ {a.label}{a.pump_number ? ` · pump ${a.pump_number}` : ""}{a.issue ? ` · ${a.issue}` : ""}</div>)}
+          {p.attempts.map((a, i) => <div key={i}>✕ {fmtTime(a.at)} · {a.label}{a.pump_number ? ` · pump ${a.pump_number}` : ""}{a.issue ? ` · ${a.issue}` : ""}</div>)}
         </div>
       )}
       {companyGuide}
-      <button type="button" style={{ ...link, display: "block", margin: "24px auto 0", color: "#f87171", fontSize: 13 }}
-        onClick={() => { if (window.confirm("Cancel this fuel stop?")) { void stop.discard(); onClose(); } }}>
-        Cancel fuel stop
-      </button>
+      {confirmCancel ? (
+        <div style={{ ...box, marginTop: 20, borderColor: "rgba(248,113,113,0.45)" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Cancel this fuel stop?</div>
+          <div style={{ fontSize: 13, color: muted, marginBottom: 14 }}>
+            Started {fmtStamp(p.started_at)}. The start time{(p.attempts ?? []).length ? " and the tries above" : ""} will be deleted.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <button type="button" style={{ ...secondary, padding: "13px 0", fontSize: 15 }} onClick={() => setConfirmCancel(false)}>Keep</button>
+            <button type="button" style={{ ...primary, padding: "13px 0", fontSize: 15, background: "#f87171", color: "#000" }}
+              onClick={() => { setConfirmCancel(false); void stop.discard(); onClose(); }}>Cancel Stop</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" style={{ ...link, display: "block", margin: "24px auto 0", color: "#f87171", fontSize: 13 }}
+          onClick={() => setConfirmCancel(true)}>
+          Cancel fuel stop
+        </button>
+      )}
     </FullscreenModal>
   );
 }

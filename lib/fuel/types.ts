@@ -132,3 +132,15 @@ export function minutesBetween(a: string | null, b: string | null): number | nul
   const ms = Date.parse(b) - Date.parse(a);
   return Number.isFinite(ms) ? Math.max(0, Math.round(ms / 60000)) : null;
 }
+
+// "10/15/26 6:25 AM": date and time on fuel records, for matching against the
+// fuel network's statement.
+export function fmtStamp(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" })} ${fmtTime(iso)}`;
+}
+export function fmtTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}

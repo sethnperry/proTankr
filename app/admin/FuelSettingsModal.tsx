@@ -83,6 +83,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const saveSettings = async (patch: Record<string, unknown>) => {
     setBusy(true); setMsg(null);
@@ -131,7 +132,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
 
   const deleteDraft = async () => {
     if (!draft?.id) return;
-    if (!window.confirm(`Delete ${draft.name}? Past fuel stops keep their record.`)) return;
+    setConfirmDelete(false);
     setBusy(true);
     const { error } = await supabase.from("fuel_payment_methods").delete().eq("id", draft.id);
     setBusy(false);
@@ -156,7 +157,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
   if (draft) {
     const set = (p: Partial<Draft>) => setDraft({ ...draft, ...p });
     return (
-      <FullscreenModal open={open} title={draft.id ? "Edit Payment Method" : "New Payment Method"} onClose={() => setDraft(null)} footer={null}>
+      <FullscreenModal open={open} title={draft.id ? "Edit Payment Method" : "New Payment Method"} onClose={() => { setConfirmDelete(false); setDraft(null); }} footer={null}>
         {msg && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{msg}</div>}
         <div style={card}>
           <div style={title}>Type</div>
@@ -209,11 +210,20 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
         <button type="button" style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void saveDraft()}>
           {busy ? "Saving…" : "Save"}
         </button>
-        {draft.id && (
-          <button type="button" style={{ ...link, color: "#f87171", display: "block", margin: "16px auto 0" }} onClick={() => void deleteDraft()}>
+        {draft.id && (confirmDelete ? (
+          <div style={{ ...card, marginTop: 16, borderColor: "rgba(248,113,113,0.45)" }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Delete {draft.name}?</div>
+            <div style={{ fontSize: 12, color: muted, marginBottom: 12 }}>Drivers won&apos;t see it anymore. Past fuel stops keep their record.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <button type="button" style={{ ...btn, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }} onClick={() => setConfirmDelete(false)}>Keep</button>
+              <button type="button" style={{ ...btn, background: "#f87171" }} disabled={busy} onClick={() => void deleteDraft()}>Delete</button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" style={{ ...link, color: "#f87171", display: "block", margin: "16px auto 0" }} onClick={() => setConfirmDelete(true)}>
             Delete this method
           </button>
-        )}
+        ))}
       </FullscreenModal>
     );
   }
