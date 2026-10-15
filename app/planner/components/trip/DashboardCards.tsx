@@ -90,6 +90,19 @@ function CardHeader({ title, summary, summaryColor, open, onToggle }: {
   );
 }
 
+// A card that shows one summary line until tapped, then its content.
+export function CollapsibleCard({ title, summary, summaryColor, children }: {
+  title: string; summary: React.ReactNode; summaryColor?: string; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={cardStyle}>
+      <CardHeader title={title} summary={summary} summaryColor={summaryColor} open={open} onToggle={() => setOpen((o) => !o)} />
+      {open && <div style={{ padding: "0 10px 10px" }}>{children}</div>}
+    </div>
+  );
+}
+
 const rowStyle: React.CSSProperties = {
   padding: "9px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: 14,
 };

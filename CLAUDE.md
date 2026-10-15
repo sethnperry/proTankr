@@ -11234,3 +11234,17 @@ No migration. Screenshot-checked against real data.
   - Trailer-only types can't be by miles: picking Trailer only switches Miles to Duration and clears the number.
   - A "both" miles type counts on the truck only.
   - The live "Inspect & Grease, 500 hours" trailer type still needs changing to a day interval.
+
+### Dashboard layout: squares up top, Arrive under the trip, residue outlines (2026-10-15)
+
+No migration. Screenshot-checked against real data, nothing tapped through.
+
+- **Residue** (`CompartmentStrip.tsx`): the dot pattern is gone. An empty compartment that last held a product is now a solid outline in that product's color.
+- **Equipment numbers** sit under the "Driver Dashboard" label, smaller (18px) and gray.
+- **The 4 squares** (Truck, Trailer, To Rack, To Drop) moved to just under the equipment numbers, above the trip card. The big step button (Arrive, etc.) is back right under the trip card.
+- **To Rack / To Drop count my own truck.**
+  - To Rack adds 1 while my trip's active pickup is that terminal (until I leave the rack).
+  - To Drop adds 1 while I'm loaded and have a delivery set.
+  - Colors: 0 is gray, 1 is white (usually just me), more than 1 is red.
+  - The label reads **To Pump** when the next delivery is a pump off.
+- **While loaded**, the terminal access strip folds into a collapsed "Terminal access" card under Recent Deliveries. This is the new `CollapsibleCard` in `DashboardCards.tsx`. When empty, the strip stays where it was.

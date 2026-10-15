@@ -104,7 +104,7 @@ import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/a
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
-import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
+import { CollapsibleCard, HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
 import type { UnitAlertSummary } from "@/lib/equipment/unitAlerts";
 
@@ -249,6 +249,10 @@ export default function HomePage() {
   const myDelivery = snap ? plannedDeliveries(snap.deliveries)[0] ?? null : null;
   const toMyTerminal = useMemo(() => headingToTerminal(fleet.trips, alertTerminalId, userId), [fleet.trips, alertTerminalId, userId]);
   const toMyDelivery = useMemo(() => headingToDelivery(fleet.trips, myDelivery?.location_id ?? null, userId), [fleet.trips, myDelivery?.location_id, userId]);
+  // My own truck counts too: headed to this rack until I've left it, and
+  // headed to the drop while loaded with a delivery set.
+  const meToRack = !!snap && !!alertTerminalId && String(activePickup(snap.pickups)?.terminal_id ?? "") === alertTerminalId;
+  const rackCount = toMyTerminal.length + (meToRack ? 1 : 0);
   const nearbyParked = useMemo(() => parkedPreloads(fleet.trips, trailerId), [fleet.trips, trailerId]);
   const completedDeliveries = useMemo(
     () => Object.values(state.rows.trip_deliveries ?? {}).filter((d: any) => d.status === "complete").length,
@@ -872,6 +876,10 @@ export default function HomePage() {
     color: s.worst ? EXPIRY_COLOR[s.worst] : LOOK.muted,
     onClick: has ? () => setUnitAlertsOpen(which) : undefined,
   });
+  const meToDrop = !!myDelivery && aboardRows.length > 0;
+  const dropCount = toMyDelivery.length + (meToDrop ? 1 : 0);
+  // 1 (usually just me) is white; more than one truck going there is red.
+  const countColor = (n: number) => (n === 0 ? LOOK.muted : n === 1 ? "#fff" : "#f87171");
   const switchTerminal = () => {
     setTerminalNowOpen(false);
     if (location.selectedCity) shell.setTermOpen(true);
@@ -977,6 +985,19 @@ export default function HomePage() {
     && step.kind !== "next_rack";
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
 
+  // Loaded: access matters less, so it folds into a card under Recent Deliveries.
+  const accessCollapsed = aboardRows.length > 0;
+  const accessStrip = (
+    <TerminalAccessStrip
+      place={readinessLabel}
+      summary={readiness}
+      loading={terminals.termLoading}
+      onOpenTerminal={openTerminalList}
+      onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
+      onChangeCity={() => shell.setLocOpen(true)}
+    />
+  );
+
   return (
     <DashLookProvider value={L}>
     <DashStyles />
@@ -991,12 +1012,24 @@ export default function HomePage() {
         ["--dash-card-radius" as any]: `${L.secondary.borderRadius}px`,
       }}
     >
-      {/* Title: small label, the truck/trailer number large. */}
-      <div style={{ marginBottom: 12 }}>
+      {/* Title: small label, the truck/trailer number under it in gray. */}
+      <div style={{ marginBottom: 10 }}>
         <div style={L.title}>Driver Dashboard</div>
-        <div className="dash-num" style={{ fontSize: 30, fontWeight: 800, marginTop: 4, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div className="dash-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 2, color: LOOK.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {equipmentLabel}
         </div>
+      </div>
+
+      {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
+      <div style={{ marginBottom: 14 }}>
+      <GaugePanel cells={[
+          unitCell("Truck", truckAlerts, "truck", !!truckId),
+          unitCell("Trailer", trailerAlerts, "trailer", !!trailerId),
+          { label: "To Rack", value: String(rackCount), unit: rackCount === 1 ? "trk" : "trks",
+            color: countColor(rackCount), onClick: () => setTerminalNowOpen(true) },
+          { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount), unit: dropCount === 1 ? "load" : "loads",
+            color: countColor(dropCount), onClick: () => setDropNowOpen(true) },
+        ]} />
       </div>
 
       <div className="dash-cols">
@@ -1190,15 +1223,25 @@ export default function HomePage() {
         </div>
       )}
 
-      <GaugePanel cells={[
-          unitCell("Truck", truckAlerts, "truck", !!truckId),
-          unitCell("Trailer", trailerAlerts, "trailer", !!trailerId),
-          // Company trucks headed to my terminal, and loads headed to my delivery.
-          { label: "To Rack", value: String(toMyTerminal.length), unit: toMyTerminal.length === 1 ? "trk" : "trks",
-            color: toMyTerminal.length ? undefined : L.muted, onClick: () => setTerminalNowOpen(true) },
-          { label: "To Drop", value: String(toMyDelivery.length), unit: toMyDelivery.length === 1 ? "load" : "loads",
-            color: toMyDelivery.length ? undefined : L.muted, onClick: () => setDropNowOpen(true) },
-        ]} />
+
+      <div style={{ marginTop: 4, marginBottom: 14 }}>
+      {/* Next step */}
+      <button
+        type="button"
+        onClick={onBigButton}
+        className="dash-press"
+        style={{
+          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
+        }}
+      >
+        {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
+          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
+          : step.label}
+      </button>
+      {step.kind !== "start" && !openingPlanner && (
+        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
+      )}
+      </div>
 
       <AddPickupSheet
         open={addOpen}
@@ -1277,15 +1320,12 @@ export default function HomePage() {
         );
       })()}
 
-      <SectionLabel>Terminal access</SectionLabel>
-      <TerminalAccessStrip
-        place={readinessLabel}
-        summary={readiness}
-        loading={terminals.termLoading}
-        onOpenTerminal={openTerminalList}
-        onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
-        onChangeCity={() => shell.setLocOpen(true)}
-      />
+      {!accessCollapsed && (
+        <>
+          <SectionLabel>Terminal access</SectionLabel>
+          {accessStrip}
+        </>
+      )}
       {stepsByTerminal.size > 0 && (
         <>
           <SectionLabel>Access steps</SectionLabel>
@@ -1375,6 +1415,12 @@ export default function HomePage() {
         onPickStore={() => setPicker({ mode: "select" })}
       />
 
+      {accessCollapsed && (
+        <CollapsibleCard title="Terminal access" summary={readinessLabel ? `${readinessLabel} · ${readiness.access}/${readiness.segments.length}` : "Pick a city"}>
+          {accessStrip}
+        </CollapsibleCard>
+      )}
+
       <TerminalOutageDetailModal
         open={alertsOpen}
         onClose={() => setAlertsOpen(false)}
@@ -1392,25 +1438,6 @@ export default function HomePage() {
         onDiscard={dismissFailed}
         onClose={() => setSyncOpen(false)}
       />
-
-      <div style={{ marginTop: 18 }}>
-      {/* Next step */}
-      <button
-        type="button"
-        onClick={onBigButton}
-        className="dash-press"
-        style={{
-          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
-        }}
-      >
-        {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
-          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
-          : step.label}
-      </button>
-      {step.kind !== "start" && !openingPlanner && (
-        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
-      )}
-      </div>
 
       {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
       <SectionLabel>Tools</SectionLabel>
