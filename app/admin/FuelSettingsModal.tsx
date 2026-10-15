@@ -40,7 +40,7 @@ type Draft = {
 
 const NEW_DRAFT = (kind: MethodKind): Draft => ({
   id: null, kind,
-  name: kind === "rfid" ? "Love's QuickQ" : kind === "company_account" ? "Company account" : "Fuel card",
+  name: kind === "rfid" ? "Love's QuickQ" : kind === "company_account" ? "Company account" : "Company card",
   account_number: "", card_last4: "",
   steps: kind === "rfid"
     ? ["Pull up to the pump, the RFID tag reads automatically", "Enter employee ID", "Enter truck number", "Enter PIN", "Enter odometer"]
@@ -165,7 +165,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
             {(["rfid", "company_account", "fuel_card"] as MethodKind[]).map((k) => (
               <button key={k} type="button" onClick={() => set(draft.id ? { kind: k } : NEW_DRAFT(k))}
                 style={{ ...btn, padding: "8px 12px", background: draft.kind === k ? "#fff" : "rgba(255,255,255,0.08)", color: draft.kind === k ? "#000" : "#fff" }}>
-                {KIND_LABEL[k]}
+                {k === "fuel_card" ? "Company card" : KIND_LABEL[k]}
               </button>
             ))}
           </div>
@@ -178,10 +178,9 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
             </>
           )}
           {draft.kind === "fuel_card" && (
-            <>
-              <div style={{ fontSize: 13, color: muted, margin: "14px 0 6px" }}>Last 4 digits (optional; never the full number)</div>
-              <input style={input} inputMode="numeric" maxLength={4} value={draft.card_last4} onChange={(e) => set({ card_last4: e.target.value.replace(/\D/g, "") })} />
-            </>
+            <div style={{ fontSize: 12, color: muted, marginTop: 12 }}>
+              Drivers keep their company cards in their own Vault (Company Card) and pick one at the pump. These steps show with it.
+            </div>
           )}
         </div>
 
@@ -244,7 +243,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
             <button type="button" onClick={() => setDraft({ ...m, account_number: m.account_number ?? "", card_last4: m.card_last4 ?? "", steps: m.steps ?? [] })}
               style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", color: "#fff", cursor: "pointer", padding: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 700, opacity: m.is_active ? 1 : 0.45 }}>
-                {m.name}{m.card_last4 ? ` ••${m.card_last4}` : ""}
+                {m.name}
               </div>
               <div style={{ fontSize: 12, color: muted }}>
                 {KIND_LABEL[m.kind]} · {m.steps.length} step{m.steps.length === 1 ? "" : "s"}{m.guide_path ? " · guide" : ""}{m.is_active ? "" : " · hidden"}
@@ -257,7 +256,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10 }}>
           <button type="button" style={link} onClick={() => setDraft(NEW_DRAFT("rfid"))}>+ RFID</button>
           <button type="button" style={link} onClick={() => setDraft(NEW_DRAFT("company_account"))}>+ Company account</button>
-          <button type="button" style={link} onClick={() => setDraft(NEW_DRAFT("fuel_card"))}>+ Fuel card</button>
+          <button type="button" style={link} onClick={() => setDraft(NEW_DRAFT("fuel_card"))}>+ Company card steps</button>
         </div>
       </div>
 

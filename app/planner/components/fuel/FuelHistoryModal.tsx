@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { openStoredFile } from "@/lib/fuel/useFuelSetup";
 import { fillToFillMpg } from "@/lib/fuel/fuelFlow";
+import FuelEditSheet from "./FuelEditSheet";
 import { KIND_LABEL, RECEIPT_BUCKET, minutesBetween, type FuelPayment, type FuelPurchase, fmtStamp, fmtTime } from "@/lib/fuel/types";
 
 const muted = "rgba(255,255,255,0.5)";
@@ -23,6 +24,24 @@ export default function FuelHistoryModal({ open, onClose, truckId, truckName }: 
   const [names, setNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [me, setMe] = useState<string | null>(null);
+  const [adminOf, setAdminOf] = useState<Record<string, boolean>>({});
+  const [editId, setEditId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    void supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, [open]);
+
+  // Whether this user is an admin of each company in the list (for edit/delete).
+  useEffect(() => {
+    const ids = [...new Set(rows.map((r) => r.company_id))].filter((c) => !(c in adminOf));
+    if (!ids.length) return;
+    void Promise.all(ids.map((c) => supabase.rpc("is_company_admin", { p_company_id: c }).then(({ data }) => [c, !!data] as const)))
+      .then((pairs) => setAdminOf((x) => ({ ...x, ...Object.fromEntries(pairs) })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   useEffect(() => {
     if (!open || !truckId) return;
@@ -44,7 +63,7 @@ export default function FuelHistoryModal({ open, onClose, truckId, truckName }: 
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [open, truckId]);
+  }, [open, truckId, reloadKey]);
 
   const mpg = useMemo(() => fillToFillMpg(rows), [rows]);
 
@@ -108,11 +127,28 @@ export default function FuelHistoryModal({ open, onClose, truckId, truckName }: 
                   </button>
                 )}
                 {r.notes && <div style={{ color: muted }}>“{r.notes}”</div>}
+                {(r.driver_id === me || adminOf[r.company_id]) && (
+                  <button type="button" onClick={() => setEditId(r.id)}
+                    style={{ justifySelf: "start", marginTop: 6, border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "#fff", padding: "8px 16px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+                    Edit / Delete
+                  </button>
+                )}
               </div>
             )}
           </div>
         );
       })}
+      {(() => {
+        const r = rows.find((x) => x.id === editId);
+        if (!r) return null;
+        const p = pay[r.id] ?? null;
+        return (
+          <FuelEditSheet row={r} payment={p} canEditMoney={r.driver_id === me || (!!p && !!adminOf[r.company_id])}
+            onClose={() => setEditId(null)}
+            onSaved={() => { setEditId(null); setReloadKey((k) => k + 1); }}
+            onDeleted={() => { setEditId(null); setOpenId(null); setReloadKey((k) => k + 1); }} />
+        );
+      })()}
     </FullscreenModal>
   );
 }

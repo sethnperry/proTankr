@@ -102,6 +102,21 @@ export function recordPumpDown(
   };
 }
 
+// Card or cash: Finished Fueling stamps the end time and goes to the details
+// (receipt, store, gallons, amounts). No separate "pump running" step.
+export function finishToDetails(p: FuelPurchase, e: { payKind: PayKind; methodId: string | null; odometer: string; products: FuelProducts }, now: string): FuelPurchase {
+  return {
+    ...p,
+    status: "details",
+    pay_kind: e.payKind,
+    method_id: e.methodId,
+    odometer: num(e.odometer) ?? p.odometer,
+    products: e.products,
+    pumping_at: null,
+    finished_at: now,
+  };
+}
+
 export function startPumping(p: FuelPurchase, e: PumpEntry, now: string): FuelPurchase {
   return {
     ...p,

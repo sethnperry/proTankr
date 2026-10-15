@@ -9,9 +9,12 @@
 //      the steps. Odometer and diesel gallons are the only entries. Finished Fueling ends the stop;
 //      Pump Down asks where, which pump and what was wrong, then back to the
 //      grid. The PIN is entered once and kept for that driver only.
-//   2b. Card / cash pop-out: driver ID, truck, steps, pump #, odometer,
-//      Diesel / Diesel + DEF. Pump Running, or Didn't Work (keeps the try and
-//      the pump number, back to the grid).
+//   2b. Company Card / My Card / Cash pop-out. Cards come from the driver's
+//      Vault (Company Card / Personal Card categories): pick one if there are
+//      several, then name on card, type, dots + last 4 (5 for Amex), PIN.
+//      Odometer, Diesel / Diesel + DEF. Finished Fueling (to details) or Pump
+//      Down (same report as RFID).
+//   Every screen has Cancel fuel stop (themed confirm).
 //   3. Pumping: the clock and Finish Fueling (end time). Pull forward, then:
 //   4. Details: receipt photo first, then the store, gallons, amounts. Can be
 //      finished later.
@@ -23,7 +26,7 @@ import { openGuide, openStoredFile } from "@/lib/fuel/useFuelSetup";
 import type { useFuelStop } from "@/lib/fuel/useFuelStop";
 import { devicePosition, nearbyStores, STORE_RANGE_MI, type NearbyStore, type Pos } from "@/lib/fuel/nearbyStores";
 import {
-  completeStop, failedKeys, finishFueling, finishQuick, missingForComplete, paymentAmounts, recordFailedTry, recordPumpDown, startPumping,
+  completeStop, failedKeys, finishFueling, finishQuick, finishToDetails, missingForComplete, paymentAmounts, recordFailedTry, recordPumpDown, startPumping,
   type FuelDetails, type PumpEntry,
 } from "@/lib/fuel/fuelFlow";
 import {
@@ -31,6 +34,7 @@ import {
   type FuelMethod, type FuelProducts, type FuelSettings, type PayKind,
 } from "@/lib/fuel/types";
 import { currentCity } from "@/lib/trips/startPlace";
+import { COMPANY_CARD, PERSONAL_CARD, maskCard, type VaultCard } from "@/lib/vault/cards";
 
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.10)";
@@ -142,11 +146,12 @@ export default function FuelSheet({
   const [pump, setPump] = useState("");
   const [odo, setOdo] = useState("");
   const [products, setProducts] = useState<FuelProducts>("diesel");
-  const [vaultId, setVaultId] = useState<string | null>(null);
+  const [cardId, setCardIdState] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [driverNo, setDriverNo] = useState<string | null>(null);
-  const [vault, setVault] = useState<{ id: string; label: string; category: string | null }[]>([]);
+  const [cards, setCards] = useState<VaultCard[]>([]);
+  const [choosingCard, setChoosingCard] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   // RFID / company account
   const [pins, setPins] = useState<Record<string, string>>({});
@@ -181,11 +186,29 @@ export default function FuelSheet({
     if (!open || !userId) return;
     void supabase.from("profiles").select("employee_number").eq("user_id", userId).maybeSingle()
       .then(({ data }) => setDriverNo(((data as { employee_number?: string | null } | null)?.employee_number ?? "").trim() || null));
-    void supabase.from("vault_entries").select("id,label,category").eq("user_id", userId).order("label")
-      .then(({ data }) => setVault((data ?? []) as { id: string; label: string; category: string | null }[]));
+    void supabase.from("vault_entries").select("id,label,category,card_name,card_brand,card_number,card_exp,card_pin")
+      .eq("user_id", userId).in("category", [COMPANY_CARD, PERSONAL_CARD]).order("label")
+      .then(({ data }) => setCards((data ?? []) as VaultCard[]));
     void supabase.from("driver_fuel_pins").select("method_id,pin").eq("user_id", userId)
       .then(({ data }) => setPins(Object.fromEntries(((data ?? []) as { method_id: string; pin: string }[]).map((r) => [r.method_id, r.pin]))));
   }, [open, userId]);
+
+  // The card picked for this stop, kept on the phone until the stop is saved.
+  const cardKey = p ? `proTankr:fuelCard:${p.id}` : null;
+  useEffect(() => {
+    if (!cardKey) return;
+    try { setCardIdState(localStorage.getItem(cardKey)); } catch { /* storage off */ }
+  }, [cardKey]);
+  const setCardId = (id: string | null) => {
+    setCardIdState(id);
+    if (!cardKey) return;
+    try { if (id) localStorage.setItem(cardKey, id); else localStorage.removeItem(cardKey); } catch { /* storage off */ }
+  };
+  const cardsFor = (k: PayKind | null) => cards.filter((c) => c.category === (k === "fuel_card" ? COMPANY_CARD : k === "personal_card" ? PERSONAL_CARD : "__none__"));
+  const cardFor = (k: PayKind | null): VaultCard | null => {
+    const list = cardsFor(k);
+    return list.find((c) => c.id === cardId) ?? (list.length === 1 ? list[0] : null);
+  };
 
   // Where the phone is, and the company's saved stores in range.
   const companyId = p?.company_id ?? null;
@@ -269,14 +292,19 @@ export default function FuelSheet({
   }, [detailsShown, d.city]);
 
   const choices: Choice[] = useMemo(() => {
-    const list: Choice[] = methods.filter((m) => m.is_active).map((m) => ({
-      payKind: m.kind, method: m, label: m.name,
-      sub: m.kind === "fuel_card" ? (m.card_last4 ? `Card ••${m.card_last4}` : "Fuel card") : KIND_LABEL[m.kind],
+    const active = methods.filter((m) => m.is_active);
+    const list: Choice[] = active.filter((m) => m.kind !== "fuel_card").map((m) => ({
+      payKind: m.kind, method: m, label: m.name, sub: KIND_LABEL[m.kind],
     }));
-    list.push({ payKind: "personal_card", method: null, label: "My Card", sub: "Out of pocket" });
+    // Company card steps (if the admin set any) ride along with the tile.
+    const cardSteps = active.find((m) => m.kind === "fuel_card") ?? null;
+    const n = (cat: string) => cards.filter((c) => c.category === cat).length;
+    const sub = (k: number) => (k === 0 ? "Add in Vault" : k === 1 ? "1 card" : `${k} cards`);
+    list.push({ payKind: "fuel_card", method: cardSteps, label: "Company Card", sub: sub(n(COMPANY_CARD)) });
+    list.push({ payKind: "personal_card", method: null, label: "My Card", sub: sub(n(PERSONAL_CARD)) });
     list.push({ payKind: "cash", method: null, label: "Cash", sub: "Out of pocket" });
     return list;
-  }, [methods]);
+  }, [methods, cards]);
 
   if (!open) return null;
   if (!p) {
@@ -298,18 +326,12 @@ export default function FuelSheet({
     setBusy(false);
   };
 
-  const pumpRunning = () => run(async () => {
+  const finishedCard = () => run(async () => {
     if (!choice) return;
     if (!odo.trim()) { setErr("Enter the odometer."); return; }
-    await stop.save(startPumping(p, entry(choice), new Date().toISOString()));
-    setChoice(null);
-  });
-
-  const didntWork = () => run(async () => {
-    if (!choice) return;
-    if (!pump.trim()) { setErr("Enter the pump number first."); return; }
-    await stop.save(recordFailedTry(p, entry(choice), new Date().toISOString()));
-    setChoice(null);
+    await stop.save(finishToDetails(p, { payKind: choice.payKind, methodId: choice.method?.id ?? null, odometer: odo, products }, new Date().toISOString()));
+    closeChoice();
+    setShowDetails(true);
   });
 
   const pumpingFailed = () => run(async () => {
@@ -323,7 +345,7 @@ export default function FuelSheet({
     setShowDetails(true);
   });
 
-  const closeChoice = () => { setChoice(null); setErr(null); setDown(false); setIssue(""); setIssueNote(""); setEditPin(false); setPinDraft(""); };
+  const closeChoice = () => { setChoice(null); setErr(null); setDown(false); setIssue(""); setIssueNote(""); setEditPin(false); setPinDraft(""); setChoosingCard(false); };
 
   const savePin = (methodId: string) => run(async () => {
     const pin = pinDraft.trim();
@@ -382,13 +404,14 @@ export default function FuelSheet({
     const ok = await stop.complete(done, {
       is_personal: personal,
       ...paymentAmounts({ dieselGallons: d.dieselGallons, ...money }),
-      vault_entry_id: p.pay_kind === "personal_card" ? vaultId : null,
+      vault_entry_id: cardFor(p.pay_kind)?.id ?? null,
       receipt_path: receipt,
     });
     if (!ok) { setErr(stop.error ?? "Couldn't save. Try again when you have signal."); return; }
     const mins = Math.max(0, Math.round((Date.parse(done.finished_at!) - Date.parse(done.started_at)) / 60000));
     onDone?.(`Fuel saved ${fmtStamp(done.finished_at)} · ${mins} min at the pump`);
     setShowDetails(false);
+    setCardId(null);
     setReceipt(null);
     setMoney({ dieselAmount: "", defAmount: "", total: "", pricePerGallon: "" });
     setD({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
@@ -404,6 +427,36 @@ export default function FuelSheet({
   const unsentNote = stop.unsent ? (
     <div style={{ fontSize: 12, color: "#fbbf24", marginBottom: 10 }}>Saved on this phone · sends when there's signal</div>
   ) : null;
+
+  // Cancel fuel stop, on every screen.
+  const cancelEl = confirmCancel ? (
+    <div style={{ ...box, marginTop: 20, borderColor: "rgba(248,113,113,0.45)" }}>
+      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Cancel this fuel stop?</div>
+      <div style={{ fontSize: 13, color: muted, marginBottom: 14 }}>
+        Started {fmtStamp(p.started_at)}. The start time{(p.attempts ?? []).length ? " and the tries" : ""} will be deleted.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <button type="button" style={{ ...secondary, padding: "13px 0", fontSize: 15 }} onClick={() => setConfirmCancel(false)}>Keep</button>
+        <button type="button" style={{ ...primary, padding: "13px 0", fontSize: 15, background: "#f87171", color: "#000" }}
+          onClick={() => {
+            setConfirmCancel(false); closeChoice(); setShowDetails(false); setCardId(null);
+            if (receipt) void supabase.storage.from(RECEIPT_BUCKET).remove([receipt]);
+            setReceipt(null);
+            void stop.discard(); onClose();
+          }}>Cancel Stop</button>
+      </div>
+    </div>
+  ) : (
+    <button type="button" style={{ ...link, display: "block", margin: "24px auto 0", color: "#f87171", fontSize: 13 }}
+      onClick={() => setConfirmCancel(true)}>
+      Cancel fuel stop
+    </button>
+  );
+
+  const chip = (on: boolean): React.CSSProperties => ({
+    border: `1px solid ${on ? "#fff" : hair}`, background: on ? "#fff" : "transparent", color: on ? "#000" : "#fff",
+    padding: "9px 11px", fontSize: 14, fontWeight: 700, cursor: "pointer",
+  });
 
   // ── Details (after pulling forward) ───────────────────────────────────────
   if (detailsShown) {
@@ -465,6 +518,7 @@ export default function FuelSheet({
           {busy ? "Saving…" : "SAVE FUEL STOP"}
         </button>
         <button type="button" style={{ ...link, display: "block", margin: "16px auto 0" }} onClick={onClose}>Finish later</button>
+        {cancelEl}
       </FullscreenModal>
     );
   }
@@ -488,6 +542,29 @@ export default function FuelSheet({
           Pump stopped working? Try another way
         </button>
         {companyGuide}
+        {cancelEl}
+      </FullscreenModal>
+    );
+  }
+
+  // ── Pump down (any method) ────────────────────────────────────────────────
+  if (choice && down) {
+    return (
+      <FullscreenModal open={open} title="Pump Down" onClose={() => { setDown(false); setErr(null); }} footer={null}>
+        <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>{choice.label} didn&apos;t work. Tell us where and why, then pick another way to pay.</div>
+        <StoreBlock title="Where" value={loc} onChange={setLoc} nearby={nearby} locating={locating} located={!!pos}
+          picked={picked ? storeKey(picked.store_name, picked.store_number) : null} onPick={pickStore} adding={addingStore} onAdd={addStore} />
+        <Field label="Pump #"><input style={{ ...input, maxWidth: 140 }} inputMode="numeric" value={pump} onChange={(e) => setPump(e.target.value)} /></Field>
+        <div style={{ ...lab, marginBottom: 8 }}>What&apos;s wrong</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {PUMP_ISSUES.map((k) => <button key={k} type="button" style={chip(issue === k)} onClick={() => setIssue(k)}>{k}</button>)}
+        </div>
+        {issue === "Other" && <Field label="Describe it"><input style={input} value={issueNote} onChange={(e) => setIssueNote(e.target.value)} /></Field>}
+        {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
+        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void pumpDown()}>
+          {busy ? "Saving…" : "SAVE · PICK ANOTHER WAY"}
+        </button>
+        {cancelEl}
       </FullscreenModal>
     );
   }
@@ -502,31 +579,6 @@ export default function FuelSheet({
       return { fontSize: n <= 4 ? 28 : n <= 6 ? 22 : n <= 8 ? 18 : 15, fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
     };
     const cell: React.CSSProperties = { background: "#0f0f10", padding: "12px 10px", minWidth: 0 };
-    const chip = (on: boolean): React.CSSProperties => ({
-      border: `1px solid ${on ? "#fff" : hair}`, background: on ? "#fff" : "transparent", color: on ? "#000" : "#fff",
-      padding: "9px 11px", fontSize: 14, fontWeight: 700, cursor: "pointer",
-    });
-
-    if (down) {
-      return (
-        <FullscreenModal open={open} title="Pump Down" onClose={() => { setDown(false); setErr(null); }} footer={null}>
-          <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>{m.name} didn&apos;t work. Tell us where and why, then pick another way to pay.</div>
-          <StoreBlock title="Where" value={loc} onChange={setLoc} nearby={nearby} locating={locating} located={!!pos}
-            picked={picked ? storeKey(picked.store_name, picked.store_number) : null} onPick={pickStore} adding={addingStore} onAdd={addStore} />
-          <Field label="Pump #"><input style={{ ...input, maxWidth: 140 }} inputMode="numeric" value={pump} onChange={(e) => setPump(e.target.value)} /></Field>
-          <div style={{ ...lab, marginBottom: 8 }}>What&apos;s wrong</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-            {PUMP_ISSUES.map((k) => <button key={k} type="button" style={chip(issue === k)} onClick={() => setIssue(k)}>{k}</button>)}
-          </div>
-          {issue === "Other" && <Field label="Describe it"><input style={input} value={issueNote} onChange={(e) => setIssueNote(e.target.value)} /></Field>}
-          {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
-          <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void pumpDown()}>
-            {busy ? "Saving…" : "SAVE · PICK ANOTHER WAY"}
-          </button>
-        </FullscreenModal>
-      );
-    }
-
     return (
       <FullscreenModal open={open} title={m.name} onClose={closeChoice} footer={null}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1, background: hair, border: `1px solid ${hair}`, marginBottom: 12 }}>
@@ -596,61 +648,89 @@ export default function FuelSheet({
           onClick={() => { setErr(null); setDown(true); }}>
           PUMP DOWN
         </button>
+        {cancelEl}
       </FullscreenModal>
     );
   }
 
-  // ── Card / cash pop-out ───────────────────────────────────────────────────
+  // ── Company Card / My Card / Cash pop-out ─────────────────────────────────
   if (choice) {
     const m = choice.method;
-    const steps = m?.steps ?? (choice.payKind === "cash"
+    const isCard = choice.payKind === "fuel_card" || choice.payKind === "personal_card";
+    const list = cardsFor(choice.payKind);
+    const card = cardFor(choice.payKind);
+    const catLabel = choice.payKind === "fuel_card" ? "Company Card" : "Personal Card";
+    const steps = m?.steps?.length ? m.steps : (choice.payKind === "cash"
       ? ["Tell the cashier your pump number", "Pay inside, then pump"]
       : ["Pay at the pump or inside with your card"]);
+    const pickList = isCard && (choosingCard || (!card && list.length > 1));
     return (
-      <FullscreenModal open={open} title={choice.label} onClose={() => { setChoice(null); setErr(null); }} footer={null}>
+      <FullscreenModal open={open} title={choice.label} onClose={closeChoice} footer={null}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: hair, border: `1px solid ${hair}`, marginBottom: 12 }}>
-          <div style={{ background: "#0f0f10", padding: 12 }}>
-            <div style={lab}>Driver ID</div>
-            <div className="dash-num" style={{ fontSize: 26, fontWeight: 900, marginTop: 4 }}>{driverNo ?? "—"}</div>
-          </div>
           <div style={{ background: "#0f0f10", padding: 12 }}>
             <div style={lab}>Truck</div>
             <div className="dash-num" style={{ fontSize: 26, fontWeight: 900, marginTop: 4 }}>{truckName ?? "—"}</div>
           </div>
+          <div style={{ background: "#0f0f10", padding: 12 }}>
+            <div style={lab}>Employee ID</div>
+            <div className="dash-num" style={{ fontSize: 26, fontWeight: 900, marginTop: 4 }}>{driverNo ?? "—"}</div>
+          </div>
         </div>
-        {!driverNo && <div style={{ fontSize: 12, color: "#fbbf24", marginBottom: 10 }}>No driver ID on your profile. Add your employee number in Settings → Profile.</div>}
 
-        {m?.kind === "company_account" && m.account_number && (
-          <div style={{ ...box, textAlign: "center" }}>
-            <div style={lab}>Account number</div>
-            <div className="dash-num" style={{ fontSize: 30, fontWeight: 900, letterSpacing: "0.04em", marginTop: 4 }}>{m.account_number}</div>
-            <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>Or show this screen to the cashier.</div>
-          </div>
-        )}
-        {m?.kind === "fuel_card" && (
-          <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>
-            PIN not stored here. Keep it in your <a href="/planner/vault" style={{ color: "#fff" }}>Vault</a>.
-          </div>
-        )}
-        {choice.payKind === "personal_card" && vault.length > 0 && (
+        {isCard && pickList && (
           <div style={box}>
-            <div style={{ ...lab, marginBottom: 8 }}>Card from your Vault (optional)</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {vault.map((v) => (
-                <button key={v.id} type="button" onClick={() => setVaultId(vaultId === v.id ? null : v.id)}
-                  style={{ border: `1px solid ${vaultId === v.id ? "#fff" : hair}`, background: vaultId === v.id ? "rgba(255,255,255,0.15)" : "transparent", color: "#fff", padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
-                  {v.label}
+            <div style={{ ...lab, marginBottom: 8 }}>Which card?</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {list.map((c) => (
+                <button key={c.id} type="button" onClick={() => { setCardId(c.id); setChoosingCard(false); }}
+                  style={{ border: `1px solid ${card?.id === c.id ? "#fff" : hair}`, background: "rgba(255,255,255,0.04)", color: "#fff", padding: "12px", textAlign: "left", cursor: "pointer" }}>
+                  <div style={{ fontWeight: 800, fontSize: 15 }}>{c.label}</div>
+                  <div style={{ fontSize: 13, color: muted }}>{[c.card_brand, maskCard(c.card_number, c.card_brand), c.card_name].filter(Boolean).join(" · ")}</div>
                 </button>
               ))}
             </div>
           </div>
         )}
+        {isCard && !pickList && card && (
+          <div style={{ ...box, background: "linear-gradient(135deg, #2a2a2c, #161618)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontWeight: 800, fontSize: 15 }}>{card.label}</span>
+              <span style={{ ...lab, color: "rgba(255,255,255,0.7)" }}>{card.card_brand ?? ""}</span>
+            </div>
+            <div className="dash-num" style={{ fontSize: 24, fontWeight: 900, letterSpacing: "0.08em", margin: "14px 0 10px" }}>
+              {maskCard(card.card_number, card.card_brand) || "No number saved"}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={lab}>Name on card</div>
+                <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.card_name ?? "—"}</div>
+              </div>
+              {card.card_exp && (
+                <div>
+                  <div style={lab}>Exp</div>
+                  <div className="dash-num" style={{ fontSize: 15, fontWeight: 700 }}>{card.card_exp}</div>
+                </div>
+              )}
+              <div style={{ textAlign: "right" }}>
+                <div style={lab}>PIN</div>
+                <div className="dash-num" style={{ fontSize: 26, fontWeight: 900 }}>{card.card_pin ?? "—"}</div>
+              </div>
+            </div>
+          </div>
+        )}
+        {isCard && (
+          <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 13 }}>
+            {list.length === 0 && <span style={{ color: "#fbbf24" }}>No {catLabel.toLowerCase()}s in your Vault yet.</span>}
+            {list.length > 1 && !pickList && <button type="button" style={link} onClick={() => setChoosingCard(true)}>Change card</button>}
+            <a href="/planner/vault" style={{ color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>{list.length === 0 ? "Add one in the Vault" : `${catLabel}s in Vault ›`}</a>
+          </div>
+        )}
 
         <div style={{ marginBottom: 12 }}>
-          {steps.map((s, i) => (
+          {steps.map((st, i) => (
             <div key={i} style={{ display: "flex", gap: 10, fontSize: 16, lineHeight: 1.4, marginBottom: 8 }}>
               <span className="dash-num" style={{ width: 22, flexShrink: 0, textAlign: "right", fontWeight: 900, color: muted }}>{i + 1}.</span>
-              <span>{s}</span>
+              <span>{st}</span>
             </div>
           ))}
         </div>
@@ -658,26 +738,25 @@ export default function FuelSheet({
           <button type="button" style={{ ...link, marginBottom: 14 }} onClick={() => void openGuide(m.guide_path!).catch(() => {})}>📄 {m.guide_name ?? "Detailed steps"}</button>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 10 }}>
-          <Field label="Pump #"><input style={input} inputMode="numeric" value={pump} onChange={(e) => setPump(e.target.value)} /></Field>
-          <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
+        <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {(["diesel", "diesel_def"] as FuelProducts[]).map((k) => (
+            <button key={k} type="button" onClick={() => setProducts(k)}
+              style={{ padding: "12px 0", fontSize: 15, fontWeight: 800, cursor: "pointer", border: `1px solid ${products === k ? "#fff" : hair}`, background: products === k ? "#fff" : "transparent", color: products === k ? "#000" : "#fff" }}>
+              {k === "diesel" ? "Diesel" : "Diesel + DEF"}
+            </button>
+          ))}
         </div>
-        {(
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-            {(["diesel", "diesel_def"] as FuelProducts[]).map((k) => (
-              <button key={k} type="button" onClick={() => setProducts(k)}
-                style={{ padding: "12px 0", fontSize: 15, fontWeight: 800, cursor: "pointer", border: `1px solid ${products === k ? "#fff" : hair}`, background: products === k ? "#fff" : "transparent", color: products === k ? "#000" : "#fff" }}>
-                {k === "diesel" ? "Diesel" : "Diesel + DEF"}
-              </button>
-            ))}
-          </div>
-        )}
 
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
-        <button type="button" style={primary} disabled={busy} onClick={() => void pumpRunning()}>PUMP RUNNING</button>
-        <button type="button" style={{ ...secondary, marginTop: 10, color: "#fbbf24", borderColor: "rgba(251,191,36,0.5)" }} disabled={busy} onClick={() => void didntWork()}>
-          DIDN&apos;T WORK
+        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedCard()}>
+          {busy ? "Saving…" : "FINISHED FUELING"}
         </button>
+        <button type="button" style={{ ...secondary, marginTop: 10, color: "#fbbf24", borderColor: "rgba(251,191,36,0.5)" }} disabled={busy}
+          onClick={() => { setErr(null); setDown(true); }}>
+          PUMP DOWN
+        </button>
+        {cancelEl}
       </FullscreenModal>
     );
   }
@@ -698,7 +777,7 @@ export default function FuelSheet({
           const tried = failed.has(c.method?.id ?? c.payKind);
           return (
             <button key={c.method?.id ?? c.payKind} type="button" className="dash-press" style={tile}
-              onClick={() => { setErr(null); setVaultId(null); setChoice(c); }}>
+              onClick={() => { setErr(null); setChoosingCard(false); setChoice(c); }}>
               <span style={{ fontSize: 14, fontWeight: 800, textDecoration: tried ? "line-through" : "none", opacity: tried ? 0.5 : 1 }}>{c.label}</span>
               <span style={{ fontSize: 11, color: tried ? "#f87171" : muted }}>{tried ? "Didn't work" : c.sub}</span>
             </button>
@@ -715,24 +794,7 @@ export default function FuelSheet({
         </div>
       )}
       {companyGuide}
-      {confirmCancel ? (
-        <div style={{ ...box, marginTop: 20, borderColor: "rgba(248,113,113,0.45)" }}>
-          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Cancel this fuel stop?</div>
-          <div style={{ fontSize: 13, color: muted, marginBottom: 14 }}>
-            Started {fmtStamp(p.started_at)}. The start time{(p.attempts ?? []).length ? " and the tries above" : ""} will be deleted.
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <button type="button" style={{ ...secondary, padding: "13px 0", fontSize: 15 }} onClick={() => setConfirmCancel(false)}>Keep</button>
-            <button type="button" style={{ ...primary, padding: "13px 0", fontSize: 15, background: "#f87171", color: "#000" }}
-              onClick={() => { setConfirmCancel(false); void stop.discard(); onClose(); }}>Cancel Stop</button>
-          </div>
-        </div>
-      ) : (
-        <button type="button" style={{ ...link, display: "block", margin: "24px auto 0", color: "#f87171", fontSize: 13 }}
-          onClick={() => setConfirmCancel(true)}>
-          Cancel fuel stop
-        </button>
-      )}
+      {cancelEl}
     </FullscreenModal>
   );
 }

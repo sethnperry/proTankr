@@ -35,11 +35,15 @@
 //   grouped by category instead of one flat list.
 // - Fields reordered to read like a real password manager: Label,
 //   Website (new), Username, Password, Category, Notes.
+// - 2026-10-15: two card categories, Company Card and Personal Card, with card
+//   fields (name on card, type, number, exp, PIN) instead of website/username/
+//   password. The fuel screen offers only these as payment options.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
 import PatternLock, { LockIcon } from "./PatternLock";
+import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, groupCard, isCardCategory, maskCard } from "@/lib/vault/cards";
 
 type VaultEntryRow = {
   id: string;
@@ -50,6 +54,11 @@ type VaultEntryRow = {
   secret: string | null;
   notes: string | null;
   updated_at: string;
+  card_name?: string | null;
+  card_brand?: string | null;
+  card_number?: string | null;
+  card_exp?: string | null;
+  card_pin?: string | null;
 };
 
 const UNLOCK_KEY = "protankr_vault_unlocked_v1";
@@ -163,6 +172,11 @@ export default function VaultPage() {
   const [fUsername, setFUsername] = useState("");
   const [fSecret, setFSecret] = useState("");
   const [fNotes, setFNotes] = useState("");
+  const [fCardName, setFCardName] = useState("");
+  const [fCardBrand, setFCardBrand] = useState("");
+  const [fCardNumber, setFCardNumber] = useState("");
+  const [fCardExp, setFCardExp] = useState("");
+  const [fCardPin, setFCardPin] = useState("");
 
   // resetTokenRef mirrors resetToken state but is read (not reacted to) by
   // the lock-resolution effect below -- see that effect's own comment for
@@ -338,6 +352,7 @@ export default function VaultPage() {
     setEditingId(null);
     setFLabel(""); setFWebsite(""); setFCategory(""); setFCategoryCustomOpen(false);
     setFUsername(""); setFSecret(""); setFNotes("");
+    setFCardName(""); setFCardBrand(""); setFCardNumber(""); setFCardExp(""); setFCardPin("");
     setFormError(null);
     setFormOpen(true);
   }
@@ -346,7 +361,9 @@ export default function VaultPage() {
     setFLabel(e.label); setFWebsite(e.website ?? "");
     const cat = e.category ?? "";
     setFCategory(cat);
-    setFCategoryCustomOpen(!!cat && cat !== "Work" && cat !== "Personal");
+    setFCategoryCustomOpen(!!cat && cat !== "Work" && cat !== "Personal" && !isCardCategory(cat));
+    setFCardName(e.card_name ?? ""); setFCardBrand(e.card_brand ?? ""); setFCardNumber(e.card_number ?? "");
+    setFCardExp(e.card_exp ?? ""); setFCardPin(e.card_pin ?? "");
     setFUsername(e.username ?? "");
     setFSecret(e.secret ?? ""); setFNotes(e.notes ?? "");
     setFormError(null);
@@ -358,10 +375,17 @@ export default function VaultPage() {
     setBusy(true);
     setFormError(null);
     try {
+      const isCard = isCardCategory(fCategory);
       const payload = {
-        label: fLabel.trim(), website: fWebsite.trim() || null,
-        category: fCategory.trim() || null, username: fUsername.trim() || null,
-        secret: fSecret || null, notes: fNotes.trim() || null,
+        label: fLabel.trim(), category: fCategory.trim() || null, notes: fNotes.trim() || null,
+        website: isCard ? null : fWebsite.trim() || null,
+        username: isCard ? null : fUsername.trim() || null,
+        secret: isCard ? null : fSecret || null,
+        card_name: isCard ? fCardName.trim() || null : null,
+        card_brand: isCard ? fCardBrand || null : null,
+        card_number: isCard ? fCardNumber.replace(/\D/g, "") || null : null,
+        card_exp: isCard ? fCardExp.trim() || null : null,
+        card_pin: isCard ? fCardPin.trim() || null : null,
       };
       if (editingId) {
         const { error } = await supabase.from("vault_entries").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", editingId);
@@ -400,11 +424,15 @@ export default function VaultPage() {
   const groups = useMemo<EntryGroup[]>(() => {
     const work: VaultEntryRow[] = [];
     const personal: VaultEntryRow[] = [];
+    const companyCards: VaultEntryRow[] = [];
+    const personalCards: VaultEntryRow[] = [];
     const customMap = new Map<string, VaultEntryRow[]>();
     const uncategorized: VaultEntryRow[] = [];
     for (const e of entries) {
       if (e.category === "Work") work.push(e);
       else if (e.category === "Personal") personal.push(e);
+      else if (e.category === COMPANY_CARD) companyCards.push(e);
+      else if (e.category === PERSONAL_CARD) personalCards.push(e);
       else if (e.category) {
         const list = customMap.get(e.category) ?? [];
         list.push(e);
@@ -414,6 +442,8 @@ export default function VaultPage() {
     const out: EntryGroup[] = [];
     if (work.length) out.push({ key: "Work", label: "Work", entries: work });
     if (personal.length) out.push({ key: "Personal", label: "Personal", entries: personal });
+    if (companyCards.length) out.push({ key: COMPANY_CARD, label: "Company Cards", entries: companyCards });
+    if (personalCards.length) out.push({ key: PERSONAL_CARD, label: "Personal Cards", entries: personalCards });
     for (const key of Array.from(customMap.keys()).sort((a, b) => a.localeCompare(b))) {
       out.push({ key, label: key, entries: customMap.get(key)! });
     }
@@ -540,7 +570,11 @@ export default function VaultPage() {
                         <div style={{ fontSize: 14, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                           {e.label}
                         </div>
-                        {e.username && (
+                        {isCardCategory(e.category) ? (
+                          <div style={{ fontSize: 12, color: t.subtext, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                            {[e.card_brand, maskCard(e.card_number, e.card_brand)].filter(Boolean).join(" ")}
+                          </div>
+                        ) : e.username && (
                           <div style={{ fontSize: 12, color: t.subtext, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                             {e.username}
                           </div>
@@ -555,6 +589,30 @@ export default function VaultPage() {
 
                     {isExpanded && (
                       <div style={{ marginTop: 12 }} onClick={(ev) => ev.stopPropagation()}>
+                        {isCardCategory(e.category) && (() => {
+                          const row = (k: string, shown: string, hidden: string | null) => (
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                              <div style={{ fontSize: 13, color: t.secretText, minWidth: 0 }}>
+                                <span style={{ color: t.subtext }}>{k} </span>
+                                <span style={{ fontFamily: "monospace", letterSpacing: 0.5 }}>{isRevealed || hidden == null ? shown : hidden}</span>
+                              </div>
+                            </div>
+                          );
+                          return (
+                            <>
+                              {e.card_name && row("Name", e.card_name, null)}
+                              {e.card_number && row("Number", groupCard(e.card_number, e.card_brand), maskCard(e.card_number, e.card_brand))}
+                              {e.card_exp && row("Exp", e.card_exp, null)}
+                              {e.card_pin && row("PIN", e.card_pin, "•".repeat(e.card_pin.length))}
+                              {(e.card_number || e.card_pin) && (
+                                <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 8, padding: "5px 10px", cursor: "pointer", marginBottom: 10 }}>
+                                  {isRevealed ? "Hide" : "Show number & PIN"}
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                         {e.website && (
                           <div style={{ fontSize: 13, color: t.subtext, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                             {e.website}
@@ -610,8 +668,47 @@ export default function VaultPage() {
             </div>
 
             <label style={labelStyle}>Label</label>
-            <input value={fLabel} onChange={(e) => setFLabel(e.target.value)} placeholder="e.g. ELD Login, Company Slack" style={{ ...inputStyle, marginBottom: 14 }} />
+            <input value={fLabel} onChange={(e) => setFLabel(e.target.value)} placeholder={isCardCategory(fCategory) ? "e.g. Comdata, Chase Visa" : "e.g. ELD Login, Company Slack"} style={{ ...inputStyle, marginBottom: 14 }} />
 
+            <label style={labelStyle}>Category (optional)</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: fCategoryCustomOpen ? 8 : 14 }}>
+              <CategoryChip active={fCategory === "Work"} label="Work" onClick={() => { setFCategory("Work"); setFCategoryCustomOpen(false); }} />
+              <CategoryChip active={fCategory === "Personal"} label="Personal" onClick={() => { setFCategory("Personal"); setFCategoryCustomOpen(false); }} />
+              <CategoryChip
+                active={fCategoryCustomOpen}
+                label="+ Custom"
+                onClick={() => { setFCategoryCustomOpen(true); if (fCategory === "Work" || fCategory === "Personal" || isCardCategory(fCategory)) setFCategory(""); }}
+              />
+              <CategoryChip active={fCategory === COMPANY_CARD} label="Company Card" onClick={() => { setFCategory(COMPANY_CARD); setFCategoryCustomOpen(false); }} />
+              <CategoryChip active={fCategory === PERSONAL_CARD} label="Personal Card" onClick={() => { setFCategory(PERSONAL_CARD); setFCategoryCustomOpen(false); }} />
+            </div>
+            {fCategoryCustomOpen && (
+              <input value={fCategory} onChange={(e) => setFCategory(e.target.value)} placeholder="Custom category name" style={{ ...inputStyle, marginBottom: 14 }} />
+            )}
+
+            {isCardCategory(fCategory) ? (
+              <>
+                <label style={labelStyle}>Name on card</label>
+                <input value={fCardName} onChange={(e) => setFCardName(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
+                <label style={labelStyle}>Card type</label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                  {CARD_BRANDS.map((b) => <CategoryChip key={b} active={fCardBrand === b} label={b} onClick={() => setFCardBrand(b)} />)}
+                </div>
+                <label style={labelStyle}>Card number</label>
+                <input value={fCardNumber} inputMode="numeric" autoComplete="off" onChange={(e) => setFCardNumber(e.target.value)} style={{ ...inputStyle, marginBottom: 14, fontFamily: "monospace" }} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={labelStyle}>Exp (MM/YY)</label>
+                    <input value={fCardExp} inputMode="numeric" placeholder="08/28" maxLength={5} onChange={(e) => setFCardExp(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>PIN</label>
+                    <input value={fCardPin} inputMode="numeric" autoComplete="off" onChange={(e) => setFCardPin(e.target.value)} style={{ ...inputStyle, marginBottom: 14, fontFamily: "monospace" }} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
             <label style={labelStyle}>Website (optional)</label>
             <input value={fWebsite} onChange={(e) => setFWebsite(e.target.value)} placeholder="e.g. transflo.com" style={{ ...inputStyle, marginBottom: 14 }} />
 
@@ -621,18 +718,7 @@ export default function VaultPage() {
             <label style={labelStyle}>Password (optional)</label>
             <input value={fSecret} onChange={(e) => setFSecret(e.target.value)} placeholder="Password, PIN, or account #" style={{ ...inputStyle, marginBottom: 14, fontFamily: "monospace" }} />
 
-            <label style={labelStyle}>Category (optional)</label>
-            <div style={{ display: "flex", gap: 8, marginBottom: fCategoryCustomOpen ? 8 : 14 }}>
-              <CategoryChip active={fCategory === "Work"} label="Work" onClick={() => { setFCategory("Work"); setFCategoryCustomOpen(false); }} />
-              <CategoryChip active={fCategory === "Personal"} label="Personal" onClick={() => { setFCategory("Personal"); setFCategoryCustomOpen(false); }} />
-              <CategoryChip
-                active={fCategoryCustomOpen}
-                label="+ Custom"
-                onClick={() => { setFCategoryCustomOpen(true); if (fCategory === "Work" || fCategory === "Personal") setFCategory(""); }}
-              />
-            </div>
-            {fCategoryCustomOpen && (
-              <input value={fCategory} onChange={(e) => setFCategory(e.target.value)} placeholder="Custom category name" style={{ ...inputStyle, marginBottom: 14 }} />
+              </>
             )}
 
             <label style={labelStyle}>Notes (optional)</label>

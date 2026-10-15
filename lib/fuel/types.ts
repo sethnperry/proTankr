@@ -100,7 +100,7 @@ export type FuelPayment = {
 export const KIND_LABEL: Record<PayKind, string> = {
   rfid: "RFID",
   company_account: "Company account",
-  fuel_card: "Fuel card",
+  fuel_card: "Company card",
   personal_card: "My card",
   cash: "Cash",
 };

@@ -63,3 +63,12 @@ test("RFID: pump down keeps location, pump and issue; finished fueling needs onl
   assert.equal(p.filled_to_full, true);
   assert.equal(p.lat, 29.1);
 });
+
+test("card: Finished Fueling goes straight to details with the end time", async () => {
+  const { finishToDetails } = await import("./fuelFlow.ts");
+  const p = finishToDetails(base(), { payKind: "personal_card", methodId: null, odometer: "311,000", products: "diesel_def" }, "2026-10-15T10:12:00Z");
+  assert.equal(p.status, "details");
+  assert.equal(p.finished_at, "2026-10-15T10:12:00Z");
+  assert.equal(p.odometer, 311000);
+  assert.equal(p.products, "diesel_def");
+});

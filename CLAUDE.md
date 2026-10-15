@@ -11346,3 +11346,39 @@ No migration. The times were already stored (`started_at`, `finished_at`, each a
 - **Fuel sheet:** the grid shows "Started {date time}", tries list their time, and the saved notice reads "Fuel saved {date time} · N min at the pump".
 - **Cancel fuel stop** and the admin's **Delete this method** now use in-sheet themed confirms (Keep / Cancel Stop, Keep / Delete) instead of `window.confirm`.
 - Verified with Playwright: Pump Down → Cancel (confirm shown, then Keep) → company account Finished Fueling → history expanded. Test rows deleted.
+
+### Fuel: Vault cards, Finished Fueling / Pump Down for cards, cancel everywhere, edit/delete after (2026-10-15)
+
+Migration `20261015020000_vault_cards.sql` (**applied 2026-10-15** via the Management API) adds these columns to `vault_entries`: `card_name`, `card_brand`, `card_number`, `card_exp`, `card_pin`. The existing own-only RLS covers them. The Vault's pattern lock is not encryption (its own copy says so), and the fuel screen reads these columns directly.
+
+**Vault:**
+- New categories **Company Card** and **Personal Card** (`lib/vault/cards.ts`).
+- Picking either category swaps website/username/password for: name on card, card type (Visa / Mastercard / Amex / Discover / Fleet card / Other), number, exp and PIN.
+- The list shows "Visa •••• 1234". Expanded, it shows name and exp; the number and PIN stay masked until "Show number & PIN".
+- Amex shows the last 5 digits (`shownDigits`), every other card the last 4. 1 test.
+
+**Fuel grid:**
+- Shows the company's RFID and company-account methods, then **Company Card**, **My Card** and **Cash**.
+- The card tiles read "N cards" or "Add in Vault".
+- Other Vault entries never show here. The old personal-card picker listed every Vault entry; that's gone.
+- Admin "fuel card" methods no longer get their own tiles. In Company Dashboard → Fuel they're now "Company card steps", and their steps and guide show in the Company Card pop-out. The Last 4 field was removed.
+
+**Card pop-out:**
+- If there are several cards, a "Which card?" list comes first. The chosen card shows its label, type, dots plus last 4 (5 for Amex), name, exp and PIN, with Change card and a link to the Vault. With no cards it shows an Add-in-Vault link.
+- The picked card is kept per stop in localStorage `proTankr:fuelCard:<stopId>` and saved as `fuel_purchase_payments.vault_entry_id`, for company cards too now.
+- Odometer and the Diesel / Diesel + DEF choice, then **Finished Fueling** (`finishToDetails`: end time, then details) or **Pump Down**. The pump-down report is now shared by every method.
+- The Pump Running / Didn't Work step is gone. Stops already in `pumping` still show the old screen.
+
+**Cancel fuel stop:** on every screen (grid, both pop-outs, pump down, pumping, details), with the themed confirm. Cancelling also deletes an uploaded receipt.
+
+**Edit / Delete after the fact** (`FuelEditSheet.tsx`, from an expanded Fuel History row):
+- Shown to the driver who logged the stop or a company admin (`is_company_admin` RPC).
+- Editable: start and finish date/time, odometer, gallons, filled to full, store/#, city/ST, pump #, paid with, and note.
+- Amounts edit when the user owns the stop, or when they're an admin and a payment row already exists. An admin can't create a payment row for someone else.
+- Delete uses a themed confirm and also removes the receipt.
+
+**Verified with Playwright.** I seeded test Vault cards on the demo account, temporarily setting its role to driver (restored to admin):
+- grid → Company Card (2 cards) → picked the Amex (•••• 10005, PIN shown) → Finished Fueling → details, where Cancel showed and I kept the stop → saved. `vault_entry_id` was the Amex.
+- Moved that stop onto Seth's truck: Fuel History → Edit (gallons 120 → 121.5, saved) → Delete (row gone).
+- Vault list and the card edit form screenshot-checked.
+- All test rows deleted. Seth's own open My Card stop (odometer 123456, from his phone) was left untouched.
