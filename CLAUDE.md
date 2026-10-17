@@ -11391,3 +11391,9 @@ Migration `20261015030000_fuel_receipt_rules.sql` (**applied 2026-10-15**) adds 
 - Company Dashboard → Fuel shows "Receipt photo required" with two checkboxes, Company cards and Out of pocket (my card, cash), both on by default.
 - Fuel History's Edit sheet shows only Total cost.
 - Verified with Playwright: on the demo account (role temporarily set to driver, then restored), My Card → Finished Fueling → details with 90 gal and "$351.90"; Save showed "Still needed: Receipt photo"; the stop was then cancelled. Test card deleted.
+
+### Terminal access strip moves into the Terminal sheet when loaded; Update status fix (2026-10-17)
+
+`app/planner/home/page.tsx`, no migration.
+- The access strip shows on the dashboard only when the trailer is empty, or when product is aboard and the driver is still headed to load more (a pickup in progress or `next_rack`). Otherwise it sits in the Terminal tool's sheet under Switch Terminal. The collapsed "Terminal access" card under Recent Deliveries is gone.
+- Update status did nothing because `TerminalStatusSheet` rendered before the Terminal sheet, so it opened underneath. Backing out of the terminal picker then revealed it. It now renders after the Terminal sheet. Verified with Playwright: Terminal → Update status opens on top. The loaded case (strip inside the sheet) was not exercised, since the account wasn't loaded.

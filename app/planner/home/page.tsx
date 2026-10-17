@@ -104,7 +104,7 @@ import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/a
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
-import { CollapsibleCard, HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
+import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
 import { useFuelStop } from "@/lib/fuel/useFuelStop";
@@ -997,8 +997,11 @@ export default function HomePage() {
     && step.kind !== "next_rack";
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
 
-  // Loaded: access matters less, so it folds into a card under Recent Deliveries.
-  const accessCollapsed = aboardRows.length > 0;
+  // The access strip shows on the dashboard while empty, or loaded but headed
+  // to load more (an Add Pickup rack not left yet, or Next Rack). Otherwise it
+  // lives in the Terminal sheet, under Switch Terminal.
+  const headingToLoadMore = !!snap && (!!activePickup(snap.pickups) || step.kind === "next_rack");
+  const accessCollapsed = aboardRows.length > 0 && !headingToLoadMore;
   const accessStrip = (
     <TerminalAccessStrip
       place={readinessLabel}
@@ -1367,20 +1370,6 @@ export default function HomePage() {
       {/* Readouts: terminal status and recent deliveries always; the rest
           only when there's something to show. */}
       <SectionLabel first>Right now</SectionLabel>
-      <TerminalStatusSheet
-        open={statusOpen}
-        onClose={() => setStatusOpen(false)}
-        terminalId={alertTerminalId}
-        terminalName={statusTerminalName}
-        rackId={terminalStatus.rackId}
-        rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
-        products={terminalStatus.products}
-        reports={terminalAlerts.reports}
-        companyId={companyId}
-        userId={userId}
-        truckLabel={equipment.currentTruckName ?? ""}
-        onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
-      />
       {/* Terminal: right-now status of the selected terminal + who's headed
           there, with a switch button. Opened from the Terminal tool and the
           To Rack gauge. */}
@@ -1404,7 +1393,29 @@ export default function HomePage() {
           style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>
           Switch Terminal
         </button>
+        {accessCollapsed && (
+          <>
+            <div style={{ marginTop: 18 }}><SectionLabel>Terminal access</SectionLabel></div>
+            {accessStrip}
+          </>
+        )}
       </FullscreenModal>
+      {/* After the Terminal sheet so Update status opens on top of it. */}
+      <TerminalStatusSheet
+        open={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        terminalId={alertTerminalId}
+        terminalName={statusTerminalName}
+        rackId={terminalStatus.rackId}
+        rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
+        products={terminalStatus.products}
+        reports={terminalAlerts.reports}
+        companyId={companyId}
+        userId={userId}
+        truckLabel={equipment.currentTruckName ?? ""}
+        onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
+      />
+
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
           const s = unitAlertsOpen === "trailer" ? trailerAlerts : truckAlerts;
@@ -1436,12 +1447,6 @@ export default function HomePage() {
         onOpenTrip={(id) => router.push(`/planner/trips/${id}`)}
         onPickStore={() => setPicker({ mode: "select" })}
       />
-
-      {accessCollapsed && (
-        <CollapsibleCard title="Terminal access" summary={readinessLabel ? `${readinessLabel} · ${readiness.access}/${readiness.segments.length}` : "Pick a city"}>
-          {accessStrip}
-        </CollapsibleCard>
-      )}
 
       <TerminalOutageDetailModal
         open={alertsOpen}
