@@ -137,6 +137,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       noLoadReason: p.outcome === "no_load"
         ? noLoadText(p.no_load_reason, p.no_load_note)
         : null,
+      supplierSwitches: supplierSwitches(input.events, p.pickup_id),
     }));
 
   // What went where at one delivery: each compartment to its tank, with that
@@ -228,3 +229,22 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
 }
 
 export type Ptd = ReturnType<typeof buildPtd>;
+
+// Supplier switches at one pickup (SupplierPanel's Switch Supplier), oldest
+// first: "Atlas - MO → Sunoco · No allocation".
+const SWITCH_REASON: Record<string, string> = { no_allocation: "No allocation", account: "Account didn't work", other: "Other" };
+export function supplierSwitches(events: TripEventRow[], pickupId: string) {
+  return events
+    .filter((e) => e.event_type === "supplier_switch" && e.pickup_id === pickupId)
+    .sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at))
+    .map((e) => {
+      const p = (e.payload ?? {}) as { from?: string; to?: string; reason?: string; note?: string | null };
+      return {
+        at: e.occurred_at,
+        from: p.from ?? "?",
+        to: p.to ?? "?",
+        reason: SWITCH_REASON[p.reason ?? ""] ?? "Other",
+        note: p.note ?? null,
+      };
+    });
+}

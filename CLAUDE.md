@@ -11435,5 +11435,66 @@ No migration. `tsc`, 248 tests and `next build --webpack` pass. Screenshot-check
 - Finish window: "Enter ending miles" label above the field (new `showLabel` field option), and "Depart" is now "Finished".
 
 **Flagged for later**
-- **Supplier tracking system.** The dropdown should only offer suppliers that apply to the terminal you're at. Needs a design conversation first.
+- ~~**Supplier tracking system.**~~ Built 2026-10-17, see below.
 - **Drop window redesign.** Next up.
+
+### Suppliers at the rack: loading steps, switch supplier, supplier allocation (2026-10-17)
+
+Problem: dispatch (Gravitate) names a supplier exactly ("Atlas - MO") plus an
+account number that's the same on every load, but each terminal's loading
+computer wants it entered its own way (e.g. Kinder Morgan Tampa: Motiva →
+Atlas → the number without its last digit). Only drivers learn this, and
+accounts get retired without notice. Allocation is really per supplier, not
+per product.
+
+Migration `20261017000000_supplier_terminal_steps.sql` (**applied 2026-10-17**
+via the Management API):
+- `supplier_terminal_steps` (PK supplier_id + terminal_id, company-only RLS):
+  numbered `steps` (jsonb array), `notes`, who/when updated, `last_used_at`,
+  `last_loaded_at/_by`, and a "not working" flag (`issue_at/_by/_note`). The
+  row also links a supplier to a terminal, so the picker shows that
+  terminal's suppliers first. Made the first time a driver picks it there.
+- `terminal_notes` (one per terminal, every signed-in user reads/writes): a
+  shared note. A check constraint refuses account-like numbers (5+ digits in
+  a row, or a split number like "2001 4625"; phone numbers allowed). Same
+  rule in the app: `lib/suppliers/noteGuard.ts` (1 test).
+- `terminal_outage_reports.supplier_id/supplier_name`.
+
+App:
+- `app/planner/components/supplier/SupplierPanel.tsx`: card under the
+  location line on the Planner (trip or not). "Supplier from dispatch?" →
+  picker (that terminal's suppliers first, "Other suppliers" collapsed,
+  names typed exactly as on dispatch). One pick covers every planned product;
+  tap a product chip to change just that one. Before any product is planned
+  the pick is stored for any product and later products inherit it
+  (`resolvePicks`). Shows each supplier's numbered steps + notes, "Updated
+  10/17 by …", "Loaded …", and an amber "Reported not working" line. Edit
+  steps sheet is labeled company-only (account numbers go there). Terminal
+  note row is labeled "all companies" and its editor blocks account numbers.
+- **Switch**: what happened (No allocation / Account didn't work / Other,
+  note required for Other), which products, then the new supplier (the one
+  you're leaving isn't offered). No allocation posts a company-only
+  allocation report naming the supplier; the ticker reads
+  "No Allocation - Atlas - MO (ULSD)". Account didn't work sets the flag on
+  that supplier's steps. On a trip it also logs a `supplier_switch`
+  trip_event, printed on the PTD pickup ("Supplier switched A → B · reason").
+- Picks are kept on the phone per terminal for 14h (`lib/suppliers/picks.ts`,
+  4 tests; `useSupplierPicks`). Asked: on a trip when the pickup is arrived
+  (once per pickup), otherwise when LOAD is tapped. Skippable for now
+  ("Skip for now"); a required pick can come later.
+- Finish Loading: each compartment's BOL supplier defaults to its product's
+  pick. After a load is logged the picked suppliers (and BOL suppliers on a
+  trip) are stamped loaded there, which clears any flag, and the picks are
+  cleared.
+- Legacy Out of Allocation (Report Terminal Issue after Finish Loading) now
+  names the picked supplier per product when there is one; per-product
+  reports stay for anyone who didn't pick.
+
+Verified with Playwright on Seth's account against live data: picker, steps
+editor + save, numbered steps on the card, switch with "Account didn't work"
+(flag shows), switch with "No allocation" (report row saved with the
+supplier), note guard blocks "2001 4625". Banner query re-run under Seth's
+real RLS session (200, supplier columns returned). Test rows deleted after.
+Not verified: the trip_event on switch (the test browser had no trip store
+loaded), the arrival auto-prompt, the LOAD-tap prompt, and the BOL default.
+

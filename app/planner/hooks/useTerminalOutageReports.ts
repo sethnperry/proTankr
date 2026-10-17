@@ -62,6 +62,8 @@ type SubmitArgs = {
   companyId: string;
   userId: string;
   truckLabel: string;
+  // Out of Allocation on a named supplier ("No Allocation - Atlas - MO").
+  supplier?: { supplier_id: string | null; name: string } | null;
 };
 
 /**
@@ -75,7 +77,7 @@ type SubmitArgs = {
  * Terminal tab's own per-rack flag.
  */
 export async function submitOutageReport({
-  terminalId, selectedRackId, productIds, reportType, companyId, userId, truckLabel,
+  terminalId, selectedRackId, productIds, reportType, companyId, userId, truckLabel, supplier,
 }: SubmitArgs): Promise<{ error: string | null }> {
   const wide = isTerminalWide(reportType);
   if (!terminalId || !companyId || !userId || (!wide && productIds.length === 0)) {
@@ -105,6 +107,9 @@ export async function submitOutageReport({
     company_id: companyId,
     reporter_user_id: userId,
     truck_label: truckLabel || null,
+    ...(supplier && reportType === "out_of_allocation"
+      ? { supplier_id: supplier.supplier_id, supplier_name: supplier.name }
+      : {}),
   }));
 
   const { error } = await supabase.from("terminal_outage_reports").insert(rows);
@@ -122,6 +127,8 @@ type OutageRow = {
   reporter_user_id: string;
   truck_label: string | null;
   created_at: string;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
 };
 
 export type ComposedOutageReport = {
@@ -140,6 +147,8 @@ export type ComposedOutageReport = {
   createdAtMs: number;
   expiresAtMs: number;
   canClear: boolean;
+  /** The supplier an allocation report names, if any. */
+  supplierName: string | null;
 };
 
 /** Deletes one report early, instead of waiting for its natural checkpoint
@@ -260,7 +269,7 @@ export function useActiveOutageBanner(
 
     const { data, error } = await supabase
       .from("terminal_outage_reports")
-      .select("report_id, product_id, report_type, company_id, reporter_user_id, truck_label, created_at")
+      .select("report_id, product_id, report_type, company_id, reporter_user_id, truck_label, created_at, supplier_id, supplier_name")
       .eq("terminal_id", terminalId)
       .gte("created_at", new Date(cutoffMs).toISOString())
       .order("created_at", { ascending: false });
@@ -275,7 +284,7 @@ export function useActiveOutageBanner(
     const rows: OutageRow[] = [];
     for (const r of data as OutageRow[]) {
       if (!allProducts && !isTerminalWide(r.report_type) && !(r.product_id && planned.has(r.product_id))) continue;
-      const key = `${r.report_type}:${r.product_id ?? ""}`;
+      const key = `${r.report_type}:${r.product_id ?? ""}:${r.supplier_id ?? r.supplier_name ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       rows.push(r);
@@ -305,7 +314,11 @@ export function useActiveOutageBanner(
       const createdAtMs = new Date(r.created_at).getTime();
       const truck = r.truck_label || "?";
       const isProduct = r.report_type === "out_of_product";
-      const tickerText = wide ? shortName : isProduct ? `Out of ${shortName}` : `OOA ${shortName}`;
+      const supplierName = r.report_type === "out_of_allocation" ? (r.supplier_name ?? null) : null;
+      const tickerText = wide ? shortName
+        : isProduct ? `Out of ${shortName}`
+        : supplierName ? `No Allocation - ${supplierName} (${shortName})`
+        : `OOA ${shortName}`;
       const personLabel = r.report_type !== "out_of_allocation"
         ? (companyNameById.get(r.company_id) || "Company")
         : (displayNameByUserId.get(r.reporter_user_id) || "Driver");
@@ -320,6 +333,7 @@ export function useActiveOutageBanner(
         createdAtMs,
         expiresAtMs: nextClearingCheckpoint(createdAtMs, tz),
         canClear: !!effectiveUserId && (r.reporter_user_id === effectiveUserId || r.report_type !== "out_of_allocation"),
+        supplierName,
       };
     });
 

@@ -215,6 +215,11 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
           <div key={p.pickupId} style={box}>
             <div style={{ fontWeight: 800 }}>{p.name}</div>
             {p.odometer != null && <div style={{ color: faint }}>Odometer {p.odometer.toLocaleString("en-US")}</div>}
+            {p.supplierSwitches.map((w, k) => (
+              <div key={k} style={{ marginTop: 2 }}>
+                <Row label="Supplier switched" value={`${w.from} → ${w.to} · ${w.reason}${w.note ? ` (${w.note})` : ""} · ${fmtDateTime(w.at)}`} />
+              </div>
+            ))}
             {p.noLoad ? (
               <>
                 <div style={{ marginTop: 4, fontWeight: 700 }}>Couldn&apos;t load: {p.noLoadReason}</div>

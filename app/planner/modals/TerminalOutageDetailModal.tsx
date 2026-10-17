@@ -43,7 +43,9 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
     : `${report.personLabel} Truck ${report.truckLabel}`;
   const productLine = report.reportType === "out_of_product"
     ? `Terminal Out of ${report.productName}`
-    : report.reportType === "out_of_allocation" ? `OOA ${report.productName}` : report.productName;
+    : report.reportType === "out_of_allocation"
+      ? (report.supplierName ? `No Allocation - ${report.supplierName} (${report.productName})` : `OOA ${report.productName}`)
+      : report.productName;
   const productColor = productColorFor(report.productName);
   const markedHhmm = hhmmInTimeZone(report.createdAtMs, timeZone);
   const clearsHhmm = hhmmInTimeZone(report.expiresAtMs, timeZone);

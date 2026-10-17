@@ -105,6 +105,10 @@ import { readPlannedComps } from "@/lib/trips/addPickupCheck";
 import { productLbsOnBoard } from "@/lib/trips/truckChange";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
+import { SupplierPanel, type PanelProduct, type SupplierSwitchEvent } from "./components/supplier/SupplierPanel";
+import { useSupplierPicks } from "@/lib/suppliers/useSupplierPicks";
+import { resolvePicks } from "@/lib/suppliers/picks";
+import { markSuppliersLoaded } from "@/lib/suppliers/useTerminalSuppliers";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
@@ -1498,6 +1502,14 @@ export default function CalculatorPage() {
     }
   }, [compModalOpen, unavailableComps]);
 
+  // Supplier from dispatch, per planned product, for this terminal visit
+  // (SupplierPanel). Cleared once a load is logged so the next visit asks again.
+  const supplierPicks = useSupplierPicks(effectiveUserId || null, location.selectedTerminalId ? String(location.selectedTerminalId) : null);
+  const supplierPicksRef = useRef(supplierPicks);
+  supplierPicksRef.current = supplierPicks;
+  // Picks resolved against the current plan (set below, once products are known).
+  const resolvedSupplierPicksRef = useRef<{ product_id: string; supplier_id: string | null; name: string }[]>([]);
+
   const loadWorkflow = useLoadWorkflow({
     authUserId: effectiveUserId || null,
     selectedComboId: equipment.selectedComboId,
@@ -1518,6 +1530,14 @@ export default function CalculatorPage() {
     // next plan (route.ts). Clear any earlier manual dial nudge so the fresh
     // anchored prediction is allowed to apply, and refetch it right away.
     onPostLoadComplete: async () => {
+      // The suppliers this load ran on worked here: stamp them and clear any
+      // "not working" flag, then forget the picks for the next visit.
+      const sp = supplierPicksRef.current;
+      const ids = resolvedSupplierPicksRef.current.map((p) => p.supplier_id).filter((x): x is string => !!x);
+      if (ids.length && shell.companyId && location.selectedTerminalId && effectiveUserId) {
+        void markSuppliersLoaded(shell.companyId, String(location.selectedTerminalId), ids, effectiveUserId);
+      }
+      sp.clear();
       userAdjustedTempRef.current = false;
       refreshFuelTemp();
       await planSlots.refreshLastLoad();
@@ -1566,9 +1586,13 @@ export default function CalculatorPage() {
     const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
       .filter((c) => c.pickup_id === tripPickup.pickup_id && c.disposition !== "cancelled");
     const compDefaults: LoadingTripMode["compDefaults"] = {};
+    const compPicks = resolvePicks(supplierPicks.picks, [...plannedProductIds]);
     for (const c of comps) {
+      const picked = !c.supplier && c.product_id ? compPicks.find((p) => p.product_id === c.product_id) : null;
       compDefaults[c.comp_number] = {
-        bol: c.bol_number, supplier: c.supplier, supplierId: (c as any).supplier_id ?? null,
+        bol: c.bol_number,
+        supplier: c.supplier ?? picked?.name ?? null,
+        supplierId: (c as any).supplier_id ?? picked?.supplier_id ?? null,
         net: c.net_gallons,
         netTouched: c.net_gallons != null && c.net_calculated_gallons != null && c.net_gallons !== c.net_calculated_gallons,
       };
@@ -1602,7 +1626,7 @@ export default function CalculatorPage() {
       onBackToDashboard: () => router.push("/planner/home"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save]);
+  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds]);
 
   // Runs right after recordLoadCompleted wrote gross/temp/API for this load.
   const recordTripLoaded = useCallback((extras: TripLoadExtras | undefined, editOnly: boolean) => {
@@ -1652,6 +1676,10 @@ export default function CalculatorPage() {
         now: new Date(),
         newId: newTripId,
       });
+      const bolSupplierIds = edits.map((c) => c.supplier_id).filter((x): x is string => !!x);
+      if (bolSupplierIds.length && pickup.terminal_id) {
+        void markSuppliersLoaded(shell.companyId, String(pickup.terminal_id), bolSupplierIds, effectiveUserId);
+      }
       void reportDelayIssue({
         delayChoice: extras.delayReasonId ?? null,
         terminalId: pickup.terminal_id, rackId: pickup.rack_id,
@@ -1798,15 +1826,33 @@ export default function CalculatorPage() {
     async (reportType: OutageReportType, productIds: string[], overrideTerminalId?: string, overrideRackId?: string | null) => {
       const truckId = equipment.selectedCombo?.truck_id ?? "";
       const truckLabel = equipment.truckNameById[truckId] ?? truckId;
-      return submitOutageReport({
+      const base = {
         terminalId: overrideTerminalId ?? String(location.selectedTerminalId || ""),
         selectedRackId: overrideTerminalId ? (overrideRackId ?? null) : (location.selectedRackId ? String(location.selectedRackId) : null),
-        productIds,
         reportType,
         companyId: shell.companyId || "",
         userId: effectiveUserId || "",
         truckLabel,
-      });
+      };
+      // Allocation at this terminal names the supplier picked for each
+      // product, one report per supplier ("No Allocation - Atlas - MO (D2)").
+      if (reportType === "out_of_allocation" && !overrideTerminalId) {
+        const picks = resolvedSupplierPicksRef.current;
+        const bySupplier = new Map<string, { supplier: { supplier_id: string | null; name: string } | null; ids: string[] }>();
+        for (const pid of productIds) {
+          const pk = picks.find((x) => x.product_id === pid);
+          const key = pk ? (pk.supplier_id ?? pk.name) : "";
+          const g = bySupplier.get(key) ?? { supplier: pk ? { supplier_id: pk.supplier_id, name: pk.name } : null, ids: [] };
+          g.ids.push(pid);
+          bySupplier.set(key, g);
+        }
+        for (const g of bySupplier.values()) {
+          const r = await submitOutageReport({ ...base, productIds: g.ids, supplier: g.supplier });
+          if (r.error) return r;
+        }
+        return { error: null };
+      }
+      return submitOutageReport({ ...base, productIds });
     },
     [equipment.selectedCombo, equipment.truckNameById, location.selectedTerminalId, location.selectedRackId, shell.companyId, effectiveUserId]
   );
@@ -2371,6 +2417,42 @@ const lastProductInfoById = useMemo(() => {
     }
     return rec;
   }, [terminalProducts]);
+
+  // ── Supplier card ─────────────────────────────────────────────────────────
+  const supplierPanelProducts = useMemo<PanelProduct[]>(() => [...plannedProductIds].map((pid) => ({
+    id: pid,
+    code: productCodeById[pid] || (productNameById.get(pid) ?? "Product"),
+    color: productHexCodeById[pid] || productColorFor(productNameById.get(pid) ?? ""),
+  })), [plannedProductIds, productCodeById, productNameById, productHexCodeById]);
+  const resolvedSupplierPicks = useMemo(
+    () => resolvePicks(supplierPicks.picks, supplierPanelProducts.map((p) => p.id)),
+    [supplierPicks.picks, supplierPanelProducts],
+  );
+  resolvedSupplierPicksRef.current = resolvedSupplierPicks;
+  const [supplierPromptToken, setSupplierPromptToken] = useState(0);
+  const beginAfterSupplierRef = useRef(false);
+  const supplierPromptedForRef = useRef<string | null>(null);
+  const needsSupplierPick = !supplierPicks.skipped && resolvedSupplierPicks.length === 0;
+  // Arrived at the rack on a trip: ask which supplier dispatch gave, once per
+  // pickup. Off a trip the ask comes when LOAD is tapped (below).
+  useEffect(() => {
+    const p = tripWaitingPickup;
+    if (!p?.arrived_at || !needsSupplierPick || !location.selectedTerminalId) return;
+    if (p.terminal_id && String(p.terminal_id) !== String(location.selectedTerminalId)) return;
+    if (supplierPromptedForRef.current === p.pickup_id) return;
+    supplierPromptedForRef.current = p.pickup_id;
+    setSupplierPromptToken((n) => n + 1);
+  }, [tripWaitingPickup, needsSupplierPick, location.selectedTerminalId]);
+  const onSupplierSwitched = useCallback((e: SupplierSwitchEvent) => {
+    const pk = tripPickup ?? tripWaitingPickup;
+    if (!pk || !tripStoreObj || !effectiveUserId) return;
+    tripStoreObj.put("trip_events", {
+      event_id: newTripId(), trip_id: pk.trip_id, event_type: "supplier_switch", occurred_at: new Date().toISOString(),
+      actor_id: effectiveUserId, pickup_id: pk.pickup_id, delivery_id: null,
+      payload: { from: e.from, to: e.to, reason: e.reason, note: e.note || null, product_ids: e.productIds },
+    });
+    void tripStoreHook.syncNow();
+  }, [tripPickup, tripWaitingPickup, tripStoreObj, effectiveUserId, tripStoreHook]);
 
   // Confidence -> temp color (same palette as the temp prediction, so the Tune
   // panel's temp keeps the confidence color the driver already knows).
@@ -3094,6 +3176,27 @@ const lastProductInfoById = useMemo(() => {
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
+      <SupplierPanel
+        userId={effectiveUserId || null}
+        companyId={shell.companyId || null}
+        terminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
+        terminalName={terminalLabel ?? null}
+        rackId={location.selectedRackId ? String(location.selectedRackId) : null}
+        truckLabel={equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? ""}
+        products={supplierPanelProducts}
+        picks={resolvedSupplierPicks}
+        onPicks={supplierPicks.setPicks}
+        suppliers={tripSuppliers}
+        onAddSupplier={addTripSupplier}
+        promptToken={supplierPromptToken}
+        onSkip={supplierPicks.skip}
+        onPromptDone={() => {
+          if (!beginAfterSupplierRef.current) return;
+          beginAfterSupplierRef.current = false;
+          requestBegin({});
+        }}
+        onSwitched={onSupplierSwitched}
+      />
       {stabilityBannerEl}
       {actionRowEl}
       <div ref={compartmentsAreaRef}>
@@ -3388,6 +3491,12 @@ const lastProductInfoById = useMemo(() => {
               // the API by confidence, so the interrupting Good/Better/Best
               // overlay is no longer needed -- begin straight into Plan Review.
               if (tripNeedsArrive) { handleArriveAtPickup(); return; }
+              // Ask which supplier dispatch gave before loading (skippable).
+              if (needsSupplierPick && location.selectedTerminalId) {
+                beginAfterSupplierRef.current = true;
+                setSupplierPromptToken((n) => n + 1);
+                return;
+              }
               requestBegin({});
             }}
             disabled={tripNeedsArrive ? !location.selectedTerminalId : loadDisabled}
