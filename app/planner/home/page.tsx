@@ -72,7 +72,8 @@ import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/tri
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
 import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/CancelTripSheet";
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
-import { truckLastDeliveryCity } from "@/lib/trips/startPlace";
+import { truckLastKnownPlace } from "@/lib/trips/startPlace";
+import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
 import { ParkSheet, type ParkSubmit } from "../components/trip/ParkSheet";
@@ -313,6 +314,7 @@ export default function HomePage() {
         beginMiles: openTrip.begin_miles == null ? "" : String(openTrip.begin_miles),
         startCity: openTrip.start_city ?? "",
         startState: openTrip.start_state ?? "",
+        planSlot: getTripPlan(userId, openTrip.trip_id)?.slot ?? null,
       };
     }
     const prev = userId ? lastShipperCustomer(trips, userId) : { shipper: null, customer: null };
@@ -326,6 +328,7 @@ export default function HomePage() {
       beginMiles: miles == null ? "" : String(miles),
       startCity: "",
       startState: "",
+      planSlot: null,
     };
 
     // The delivery the driver used last (this phone's history), else their
@@ -402,6 +405,7 @@ export default function HomePage() {
         },
       );
       applyStartLoad(store, rows);
+      if (v.planSlot !== (getTripPlan(userId, rows.trip.trip_id)?.slot ?? null)) setTripPlan(userId, rows.trip.trip_id, v.planSlot);
       setSheetOpen(false);
       void syncNow();
     } catch (e: any) {
@@ -485,8 +489,9 @@ export default function HomePage() {
     });
     clearDeliveryDraft(finishDeliveryRow.delivery_id);
     setFinishOpen(false);
+    const orderNo = children?.primaryOrder?.order_number;
     setNotice(tripComplete
-      ? { text: "Trip complete.", tripId }
+      ? { text: orderNo ? `Order ${orderNo} · Trip complete.` : "Trip complete.", tripId }
       : v.retained.length
         ? { text: "Delivery finished. Pick where the rest is going, or Park preloaded for another driver.", tripId: null }
         : { text: "Delivery finished.", tripId: null });
@@ -993,6 +998,18 @@ export default function HomePage() {
   const pickups = snap?.pickups ?? [];
   const liveDeliveries = (snap?.deliveries ?? []).filter((d) => d.status !== "cancelled");
   const anyDelivered = liveDeliveries.some((d) => d.status === "complete");
+  // Saved plans for the Begin Trip plan picker, read when the sheet opens.
+  const [sheetPresets, setSheetPresets] = useState<PresetSummary[]>([]);
+  useEffect(() => {
+    if (!sheetOpen) return;
+    let alive = true;
+    void fetchPresets(userId, equipment.selectedComboId ?? null, Object.keys(compSizes).map(Number)).then((p) => { if (alive) setSheetPresets(p); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetOpen, userId, equipment.selectedComboId]);
+
+  // The most recent load on this trip, for the Load Report link.
+  const lastLoadId = [...pickups].filter((p) => p.load_id && (p.outcome === "loaded" || p.left_at)).sort((a, b) => b.seq - a.seq)[0]?.load_id ?? null;
   const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
     && step.kind !== "next_rack";
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
@@ -1030,8 +1047,20 @@ export default function HomePage() {
       {/* Title: small label, the truck/trailer number under it in gray. */}
       <div style={{ marginBottom: 10 }}>
         <div style={L.title}>Driver Dashboard</div>
-        <div className="dash-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 2, color: LOOK.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {equipmentLabel}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 2 }}>
+          <div className="dash-num" style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 700, color: LOOK.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {equipmentLabel}
+          </div>
+          {/* The trip's order number; the whole thing opens the PTD. */}
+          {openTrip && (
+            <button type="button" onClick={() => router.push(`/planner/trips/${openTrip.trip_id}`)} aria-label="Open the PTD"
+              className="dash-num"
+              style={{ flexShrink: 0, background: "none", border: "none", padding: "4px 0 4px 12px", margin: "-4px 0", cursor: "pointer",
+                fontSize: 18, fontWeight: 700, color: LOOK.muted, display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 12, letterSpacing: 0.5 }}>PTD ›</span>
+              <span>{children?.primaryOrder?.order_number ?? "No order #"}{children && children.extraOrders.length > 0 ? ` +${children.extraOrders.length}` : ""}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1102,12 +1131,6 @@ export default function HomePage() {
               <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
             )}
           </div>
-          <div className="dash-num" style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>
-            {children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "No order number"}
-            {children && children.extraOrders.length > 0 && (
-              <span style={{ fontSize: 13, fontWeight: 600, color: muted }}> +{children.extraOrders.length} more</span>
-            )}
-          </div>
           {(openTrip.shipper || openTrip.customer) && (
             <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
               {[openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ")}
@@ -1120,6 +1143,7 @@ export default function HomePage() {
             const real = pickups.filter((p) => p.outcome !== "no_load");
             const orderRows = children?.orders ?? [];
             const multiOrder = orderRows.filter((o) => !!o.order_number).length > 1;
+            const current = snap ? activePickup(snap.pickups) : null;
             const orderNumberFor = (p: TripPickupRow) =>
               (p.order_id ? orderRows.find((o) => o.order_id === p.order_id) : children?.primaryOrder)?.order_number ?? null;
             return pickups.map((p, i) => {
@@ -1144,19 +1168,24 @@ export default function HomePage() {
                   </div>
                 );
               }
+              // Leg tracking: heading to this rack -> city white; at the
+              // rack -> rack white; otherwise both gray.
+              const isCurrent = !loaded && current?.pickup_id === p.pickup_id;
+              const placeColor = isCurrent && !p.arrived_at ? "#fff" : muted;
+              const nameColor = isCurrent && p.arrived_at ? "#fff" : muted;
               return (
-                <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-                  <span style={{ color: loaded ? "#4ade80" : p.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: p.arrived_at && !loaded ? 700 : undefined }}>{label}</span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={noLoad ? { color: muted, textDecoration: "line-through" } : undefined}>{p.name ?? "Not set"}</span>
-                    {!noLoad && (pickups.length > 1 || multiOrder || p.order_id) && (
-                      <button type="button" onClick={() => { setOrderErr(null); setOrderPickup(p); }}
-                        style={{ display: "block", background: "none", border: "none", padding: 0, marginTop: 1, color: muted, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
-                        Order {orderNumberFor(p) ?? "—"} ›
-                      </button>
-                    )}
-                  </span>
-                  <span style={{ color: muted, fontSize: 12, whiteSpace: "nowrap" }}>{place}</span>
+                <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                    <span style={{ color: loaded ? "#4ade80" : p.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: p.arrived_at && !loaded ? 700 : undefined }}>{label}</span>
+                    <span style={{ flex: 1, minWidth: 0, color: placeColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{place || "—"}</span>
+                    <span style={{ color: nameColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "55%" }}>{p.name ?? "Not set"}</span>
+                  </div>
+                  {(pickups.length > 1 || multiOrder || p.order_id) && (
+                    <button type="button" onClick={() => { setOrderErr(null); setOrderPickup(p); }}
+                      style={{ display: "block", background: "none", border: "none", padding: 0, marginTop: 1, marginLeft: 72, color: muted, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                      Order {orderNumberFor(p) ?? "—"} ›
+                    </button>
+                  )}
                 </div>
               );
             });
@@ -1174,29 +1203,42 @@ export default function HomePage() {
               </button>
             </div>
           )}
-          {liveDeliveries.map((d) => {
-            // The label is the stage: Delivery → Arrived → Delivered.
-            const done = d.status === "complete";
-            const label = done ? "Delivered" : d.arrived_at ? "Arrived" : "Delivery";
-            const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null;
-            const place = loc ? locationPlace(loc) : "";
-            return (
-              <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-                <span style={{ color: done ? "#4ade80" : d.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: d.arrived_at && !done ? 700 : undefined }}>{label}</span>
-                {done ? (
-                  <span style={{ flex: 1, minWidth: 0 }}>{deliveryName(d)}</span>
-                ) : (
-                  <button type="button" onClick={() => setPicker({ mode: "reroute", delivery: d })} aria-label={`Change ${deliveryName(d)}`}
-                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, color: "#fff", fontSize: 14, textAlign: "left", cursor: "pointer" }}>
-                    {deliveryName(d)} <span style={{ color: muted }}>›</span>
-                  </button>
-                )}
-                <span style={{ color: muted, fontSize: 12, whiteSpace: "nowrap" }}>{place}</span>
-              </div>
-            );
-          })}
+          {(() => {
+            // The stop the truck is headed to: the next planned delivery,
+            // once nothing is left to load and product is aboard.
+            const headed = snap && !activePickup(snap.pickups) && aboardRows.length > 0 ? plannedDeliveries(snap.deliveries)[0] ?? null : null;
+            return liveDeliveries.map((d) => {
+              // The label is the stage: Delivery → Arrived → Delivered.
+              const done = d.status === "complete";
+              const label = done ? "Delivered" : d.arrived_at ? "Arrived" : "Delivery";
+              const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null;
+              const place = loc ? locationPlace(loc) : "";
+              // Leg tracking: on the way -> city white; at the store -> store white.
+              const isCurrent = !done && (headed?.delivery_id === d.delivery_id || !!d.arrived_at);
+              const placeColor = isCurrent && !d.arrived_at ? "#fff" : muted;
+              const nameColor = isCurrent && d.arrived_at ? "#fff" : muted;
+              const nameStyle: React.CSSProperties = { color: nameColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "55%", fontSize: 14 };
+              return (
+                <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
+                  <span style={{ color: done ? "#4ade80" : d.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: d.arrived_at && !done ? 700 : undefined }}>{label}</span>
+                  <span style={{ flex: 1, minWidth: 0, color: placeColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{place || "—"}</span>
+                  {done ? (
+                    <span style={nameStyle}>{deliveryName(d)}</span>
+                  ) : (
+                    <button type="button" onClick={() => setPicker({ mode: "reroute", delivery: d })} aria-label={`Change ${deliveryName(d)}`}
+                      style={{ ...nameStyle, background: "none", border: "none", padding: 0, textAlign: "right", cursor: "pointer" }}>
+                      {deliveryName(d)} ›
+                    </button>
+                  )}
+                </div>
+              );
+            });
+          })()}
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+            {lastLoadId && (
+              <button type="button" onClick={() => router.push(`/planner?report=${encodeURIComponent(lastLoadId)}`)} style={smallLink}>Load Report ›</button>
+            )}
             {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
               <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
             )}
@@ -1205,19 +1247,16 @@ export default function HomePage() {
                 Couldn&apos;t load here
               </button>
             )}
-            {showPark && (
-              <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd" }}>
-                Park preloaded
-              </button>
-            )}
             {canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0) && (
               <button type="button" onClick={() => { setCancelErr(null); setCancelOpen(true); }} style={{ ...smallLink, color: "#f87171" }}>
                 Cancel load
               </button>
             )}
-            <button type="button" onClick={() => router.push(`/planner/trips/${openTrip.trip_id}`)} style={{ ...smallLink, color: muted }}>
-              PTD ›
-            </button>
+            {showPark && (
+              <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
+                Park preloaded
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -1505,7 +1544,8 @@ export default function HomePage() {
         initial={initialValues}
         pickupLabel={editing && children?.pickup?.load_id ? children.pickup.name ?? pickupLabel : pickupLabel}
         onChangePickup={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
-        planLabel="Set in the Planner when you load"
+        presets={sheetPresets}
+        productColor={(id) => { const p = productInfo(id); return p.hex ?? productColorFor(p.name); }}
         equipmentLabel={equipmentLabel}
         locations={locations}
         tanks={locList.tanks}
@@ -1518,7 +1558,7 @@ export default function HomePage() {
         error={error}
         onClose={() => setSheetOpen(false)}
         onSubmit={submit}
-        suggestStart={() => truckLastDeliveryCity(truckId)}
+        suggestStart={() => truckLastKnownPlace(truckId)}
       />
 
       <TripEquipmentSheets {...tripEquip.sheets} />

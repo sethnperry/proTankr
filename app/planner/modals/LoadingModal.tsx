@@ -618,6 +618,7 @@ export default function LoadingModal(props: {
   const [tripOdometer, setTripOdometer] = useState("");
   const [tripSigned, setTripSigned] = useState(false);
   const [tripStepError, setTripStepError] = useState<string | null>(null);
+  const finishTappedAt = useRef<Date | null>(null);
 
   const seqGroups = useMemo(
     () => buildBolGroups(orderedCompLines.map((l) => ({ comp: l.comp, productId: l.productId, gallons: l.gallons })), bolAssign),
@@ -726,6 +727,8 @@ export default function LoadingModal(props: {
   }, [compSeqIndex, seqGroupKey]);
 
   function startLogSequence() {
+    // The Finish Loading tap ends loading and starts travel to the delivery.
+    finishTappedAt.current = new Date();
     if (orderedCompLines.length === 0) { onLoaded({}); return; }
     setCompEntries({});
     setTripExtras({});
@@ -860,9 +863,9 @@ export default function LoadingModal(props: {
         onEditLoad?.(updated, trip ? { byComp: updatedExtras } : undefined);
         setEditingReport(false);
       } else if (trip) {
-        // On to the times window, then the signature. Begin is the Start
-        // Loading tap; leave is now.
-        setTripTimes(trip.existingTimes ?? defaultStepTimes(new Date(), loadingOffset(trip.settings), trip.arrivedAt, trip.beganAt));
+        // On to the times window, then the signature. Begin is the Begin
+        // Loading tap; depart is the Finish Loading tap.
+        setTripTimes(trip.existingTimes ?? defaultStepTimes(finishTappedAt.current ?? new Date(), loadingOffset(trip.settings), trip.arrivedAt, trip.beganAt));
         setTripReasonId(trip.existingDelayReasonId);
         setTripNote(trip.existingDelayNote ?? "");
         setTripOdometer(trip.existingOdometer != null ? String(trip.existingOdometer) : "");
@@ -995,7 +998,7 @@ export default function LoadingModal(props: {
                   )}
                 </div>
                 {rackName && (
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.45)", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "rgba(255,255,255,0.55)", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                     {rackName}
                   </span>
                 )}

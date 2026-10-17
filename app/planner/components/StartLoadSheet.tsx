@@ -9,7 +9,9 @@
 // Deliveries are picked from the saved location list (the same picker as the
 // dashboard, with "+ New location"), never typed as free text.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { KeypadToggle, keypadInputProps } from "@/lib/ui/KeypadToggle";
+import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
 import { locationPlace, locationTitle, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
@@ -25,6 +27,8 @@ export type StartLoadValues = {
   beginMiles: string;
   startCity: string;
   startState: string;
+  // Preset (1-5) the Planner loads when it opens for this trip. null = leave the Planner as is.
+  planSlot: number | null;
 };
 
 const label: React.CSSProperties = {
@@ -52,7 +56,8 @@ export function StartLoadSheet({
   initial,
   pickupLabel,
   onChangePickup,
-  planLabel,
+  presets,
+  productColor,
   equipmentLabel,
   locations,
   tanks,
@@ -72,7 +77,8 @@ export function StartLoadSheet({
   initial: StartLoadValues;
   pickupLabel: string | null;
   onChangePickup: () => void;
-  planLabel: string;
+  presets: PresetSummary[];
+  productColor: (productId: string) => string;
   equipmentLabel: string;
   locations: DeliveryLocation[];
   tanks: LocationTank[];
@@ -89,6 +95,8 @@ export function StartLoadSheet({
   suggestStart?: () => Promise<StartPlace | null>;
 }) {
   const [v, setV] = useState<StartLoadValues>(initial);
+  const orderRef = useRef<HTMLInputElement | null>(null);
+  const [orderAlpha, setOrderAlpha] = useState(false);
 
   // Re-seed each time the card opens, so a reopen reflects the current trip.
   useEffect(() => {
@@ -161,15 +169,31 @@ export function StartLoadSheet({
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 }}>{equipmentLabel}</div>
 
         <div style={row}>
-          <div style={label}>Order number</div>
+          <div style={label}>Beginning miles</div>
           <input
-            style={input}
-            value={v.orderNumber}
-            onChange={(e) => setV((s) => ({ ...s, orderNumber: e.target.value }))}
-            placeholder="Order #"
-            autoFocus={!editing}
-            inputMode="text"
+            style={{ ...input, borderColor: milesOk ? "rgba(255,255,255,0.14)" : "#f87171" }}
+            value={v.beginMiles}
+            onChange={(e) => setV((s) => ({ ...s, beginMiles: e.target.value }))}
+            placeholder="Odometer"
+            inputMode="decimal"
           />
+        </div>
+
+        <div style={row}>
+          <div style={label}>Order number</div>
+          <div style={{ position: "relative" }}>
+            <input
+              ref={orderRef}
+              style={{ ...input, paddingRight: 64 }}
+              value={v.orderNumber}
+              onChange={(e) => setV((s) => ({ ...s, orderNumber: e.target.value }))}
+              placeholder="Order #"
+              autoFocus={!editing}
+              {...keypadInputProps(orderAlpha)}
+            />
+            <KeypadToggle alpha={orderAlpha} onToggle={setOrderAlpha} inputRef={orderRef}
+              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }} />
+          </div>
         </div>
 
         {v.extraOrderNumbers.map((n, i) => (
@@ -181,6 +205,7 @@ export function StartLoadSheet({
                 value={n}
                 onChange={(e) => setV((s) => ({ ...s, extraOrderNumbers: s.extraOrderNumbers.map((x, j) => (j === i ? e.target.value : x)) }))}
                 placeholder="Order #"
+                {...keypadInputProps(orderAlpha)}
               />
               <button type="button" aria-label="Remove order number" style={removeBtn}
                 onClick={() => setV((s) => ({ ...s, extraOrderNumbers: s.extraOrderNumbers.filter((_, j) => j !== i) }))}>×</button>
@@ -252,19 +277,39 @@ export function StartLoadSheet({
         })}
 
         <div style={row}>
-          <div style={label}>Beginning miles</div>
-          <input
-            style={{ ...input, borderColor: milesOk ? "rgba(255,255,255,0.14)" : "#f87171" }}
-            value={v.beginMiles}
-            onChange={(e) => setV((s) => ({ ...s, beginMiles: e.target.value }))}
-            placeholder="Odometer"
-            inputMode="decimal"
-          />
-        </div>
-
-        <div style={row}>
           <div style={label}>Plan</div>
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)" }}>{planLabel}</div>
+          {presets.length === 0 ? (
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)" }}>No saved plans for this equipment yet. Set it in the Planner.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {presets.map((p) => {
+                const on = v.planSlot === p.slot;
+                return (
+                  <button key={p.slot} type="button"
+                    onClick={() => setV((s) => ({ ...s, planSlot: on ? null : p.slot }))}
+                    style={{
+                      ...input, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left",
+                      borderColor: on ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.14)",
+                      background: on ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)",
+                    }}>
+                    <span style={{ fontWeight: 800, color: on ? "#fff" : "rgba(255,255,255,0.6)", width: 14 }}>{slotLetter(p.slot)}</span>
+                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(255,255,255,0.85)" }}>
+                      {p.name ?? `Plan ${slotLetter(p.slot)}`}
+                    </span>
+                    <span style={{ display: "flex", gap: 5 }}>
+                      {p.comps.map((c, i) => (
+                        <span key={i} style={{ width: 11, height: 11, borderRadius: "50%", background: c ? productColor(c) : "#000", border: "1px solid rgba(255,255,255,0.25)" }} />
+                      ))}
+                    </span>
+                    {on && <span style={{ color: "#fff", fontWeight: 800 }}>✓</span>}
+                  </button>
+                );
+              })}
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+                {v.planSlot ? "The Planner opens with this plan. You can still change it before loading." : "Optional. Tap a plan to have it ready in the Planner."}
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>

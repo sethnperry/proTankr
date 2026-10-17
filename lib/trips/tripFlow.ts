@@ -93,7 +93,7 @@ export function nextStep(
     const logged = s.compLoads.some((c) => c.pickup_id === p.pickup_id && c.disposition !== "cancelled");
     if (logged) return { kind: "loaded", label: "Loaded", detail: `Confirm BOL and times${where}`, pickup: p };
     if (!p.arrived_at && !p.load_id) {
-      return { kind: "arrive_pickup", label: "Arrive", detail: `Tap when you get${where || " to the pickup"}`, pickup: p };
+      return { kind: "arrive_pickup", label: "Arrive", detail: `Tap when you arrive${where || " at the pickup"}`, pickup: p };
     }
     return {
       kind: "planner",
@@ -111,7 +111,7 @@ export function nextStep(
   if (!next) return { kind: "add_delivery", label: "Add Delivery", detail: "Where is this load going?" };
   const name = deliveryName(next);
   if (!next.arrived_at) {
-    return { kind: "arrive_delivery", label: "Arrive", detail: `Tap at ${name}, while still parked`, delivery: next };
+    return { kind: "arrive_delivery", label: "Arrive", detail: `Tap when arrived at ${name}`, delivery: next };
   }
   return { kind: "finish_delivery", label: "Continue Delivery", detail: name, delivery: next };
 }

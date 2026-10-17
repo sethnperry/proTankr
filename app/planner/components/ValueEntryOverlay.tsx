@@ -11,7 +11,8 @@
 // phase (compartment gallons; product API+Temp), and its new Verify
 // Against BOL phase (per-compartment Gallons+Temp+API together).
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { KeypadToggle } from "@/lib/ui/KeypadToggle";
 
 export type ValueEntryField = {
   key: string;
@@ -21,6 +22,8 @@ export type ValueEntryField = {
   suffix?: string;
   /** Digits + at most one decimal point (API/Temp) vs. digits-only (gallons). Default false. */
   decimal?: boolean;
+  /** Show the label even when it's the only field. */
+  showLabel?: boolean;
   /** Free text (a BOL number): no number filtering, text keyboard. */
   text?: boolean;
   /** Shown after this field (e.g. the supplier button between BOL and gross). */
@@ -71,6 +74,8 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
   // smaller input so the card still fits above the keyboard.
   const compact = fields.length > 3;
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // Text fields (BOL #) open on the number pad; the ABC button switches.
+  const [alphaKeys, setAlphaKeys] = useState<Record<string, boolean>>({});
 
   // Re-focus (and re-select) the first field whenever the step changes.
   // `autoFocus` on the input below only fires when that DOM node is newly
@@ -137,7 +142,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: compact ? 8 : 12 }}>
           {fields.map((f, i) => (
             <div key={f.key} style={{ width: "100%" }}>
-              {fields.length > 1 && (
+              {(fields.length > 1 || f.showLabel) && (
                 <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 0.4, textTransform: "uppercase" as const, marginBottom: 2 }}>
                   {f.label}
                 </div>
@@ -146,8 +151,8 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                 <input
                   ref={(el) => { inputRefs.current[f.key] = el; }}
                   type="text"
-                  inputMode={f.text ? "text" : f.decimal ? "decimal" : "numeric"}
-                  pattern={f.text || f.decimal ? undefined : "[0-9]*"}
+                  inputMode={f.text ? (alphaKeys[f.key] ? "text" : "numeric") : f.decimal ? "decimal" : "numeric"}
+                  pattern={(f.text && alphaKeys[f.key]) || f.decimal ? undefined : "[0-9]*"}
                   autoCapitalize={f.text ? "characters" : undefined}
                   autoCorrect={f.text ? "off" : undefined}
                   autoFocus={i === 0 && !focusKey}
@@ -160,8 +165,17 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                     width: "100%", textAlign: "center" as const,
                     background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.20)",
                     color: "#fff", fontSize: compact ? 26 : 40, fontWeight: 700, padding: compact ? "2px 0" : "4px 0",
+                    ...(f.text ? { paddingLeft: 48, paddingRight: 48, boxSizing: "border-box" as const } : {}),
                   }}
                 />
+                {f.text && (
+                  <KeypadToggle
+                    alpha={!!alphaKeys[f.key]}
+                    onToggle={(next) => setAlphaKeys((m) => ({ ...m, [f.key]: next }))}
+                    inputRef={{ get current() { return inputRefs.current[f.key] ?? null; } }}
+                    style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}
+                  />
+                )}
                 {f.suffix && (
                   <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.3)" }}>
                     {f.suffix}

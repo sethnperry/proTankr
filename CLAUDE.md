@@ -11397,3 +11397,43 @@ Migration `20261015030000_fuel_receipt_rules.sql` (**applied 2026-10-15**) adds 
 `app/planner/home/page.tsx`, no migration.
 - The access strip shows on the dashboard only when the trailer is empty, or when product is aboard and the driver is still headed to load more (a pickup in progress or `next_rack`). Otherwise it sits in the Terminal tool's sheet under Switch Terminal. The collapsed "Terminal access" card under Recent Deliveries is gone.
 - Update status did nothing because `TerminalStatusSheet` rendered before the Terminal sheet, so it opened underneath. Backing out of the terminal picker then revealed it. It now renders after the Terminal sheet. Verified with Playwright: Terminal → Update status opens on top. The loaded case (strip inside the sheet) was not exercised, since the account wasn't loaded.
+
+### Test-trip punch list: Begin Trip, trip card legs, loading/delivery clocks (2026-10-17)
+
+No migration. `tsc`, 248 tests and `next build --webpack` pass. Screenshot-checked: the dashboard with no trip, and the Begin Trip sheet. The trip card, loading and delivery changes were not tapped through, because a test trip would write to real data.
+
+**Begin Trip** (`StartLoadSheet.tsx`)
+- Field order is now: beginning miles, order number, shipper/customer, starting from, pickup, deliveries, plan, then the + buttons.
+- Order # opens the number pad. The ABC/123 toggle switches keyboards (`lib/ui/KeypadToggle.tsx`).
+- "Starting from" prefills with `truckLastKnownPlace` (`lib/trips/startPlace.ts`): the newest of the truck's last finished delivery, last fuel stop, and last finished load's terminal.
+- **Plan picker**: presets A-E with their names and colored dots (`lib/trips/tripPlan.ts`, `fetchPresets`). It reads phone storage first, then `user_plan_slots`.
+  - The pick is kept on the phone: `proTankr:u:<uid>:tripPlan:<tripId>`.
+  - The Planner loads it once, the first time it opens for that trip (after presets sync), then leaves it alone.
+- Begin Trip already stamps `trips.started_at`. That's where billing travel time starts.
+
+**Dashboard trip card** (`app/planner/home/page.tsx`)
+- The order number moved out of the card. It now sits gray on the right of the equipment line as "PTD › {order}"; tapping it opens the PTD. The PTD link in the action row is gone.
+- Pickup and delivery lines now read: status, City ST, then the terminal or store on the right, all 14px. They track the legs:
+  - Heading to a stop: city white, name gray.
+  - Arrived: city gray, name white.
+  - Done or not yet reached: both gray.
+- Action row: **Load Report ›** (newest loaded pickup's `load_id`, opens `/planner?report=<id>`) and Park preloaded pushed to the right.
+- Arrive copy: "Tap when you arrive at {terminal}" and "Tap when arrived at {store}".
+- The trip complete notice reads "Order N · Trip complete."
+
+**Loading**
+- `/planner?report=<load_id>` opens that load's report; `openLoadReportAtTerminal` now takes an optional load id.
+- Finish Loading on a trip returns to the Driver Dashboard once it's recorded.
+- The times window's depart defaults to the Finish Loading tap, not the moment the window opened.
+- Plan Review's rack name is now the same size and weight as the terminal.
+- The BOL field (and any `text` field in `ValueEntryOverlay`) opens the number pad with the ABC toggle.
+
+**Delivery** (`DeliveryDashboard.tsx`)
+- **Drop / Pump Off** now only stamps the start time. It doesn't open a window or ask for tank picks.
+- **Finish Delivery** opens the drop recap: per-tank totals, start time, and a delay reason if over the threshold. Its **Continue** button saves and goes straight into the finish window (readings are only forced if the company requires them).
+- The "Drop began" row still edits the start time with Save.
+- Finish window: "Enter ending miles" label above the field (new `showLabel` field option), and "Depart" is now "Finished".
+
+**Flagged for later**
+- **Supplier tracking system.** The dropdown should only offer suppliers that apply to the terminal you're at. Needs a design conversation first.
+- **Drop window redesign.** Next up.

@@ -215,6 +215,9 @@ export function DeliveryDashboard({
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
   const [newTankText, setNewTankText] = useState("");
   const [beginOpen, setBeginOpen] = useState(false);
+  // "recap": opened by Finish Delivery, continues into the finish window.
+  // "edit": the "Drop began" row, just saves.
+  const [beginMode, setBeginMode] = useState<"recap" | "edit">("edit");
   const [beginText, setBeginText] = useState("");
   const [reasonId, setReasonId] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -413,15 +416,22 @@ export function DeliveryDashboard({
     return [...m.values()].sort((a, b) => a.tank.localeCompare(b.tank, undefined, { numeric: true }));
   }, [delivered, choice]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const openBegin = () => {
-    setBeginErr(null);
-    if (!dropped) {
-      if (rows.length === 0) return;
-      if (unpicked.length) {
-        setPickFor(unpicked[0].compartment_load_id);
-        return;
-      }
+  // Drop / Pump Off: tapped before getting out. Stamps the start time and
+  // nothing else; the recap of how it went comes at Finish Delivery.
+  const tapDrop = () => {
+    if (rows.length === 0) return;
+    onSaveProgress({ beginAt: new Date().toISOString(), compTanks: compTanks() });
+  };
+  const openRecap = () => {
+    if (unpicked.length) {
+      setPickFor(unpicked[0].compartment_load_id);
+      return;
     }
+    openBegin("recap");
+  };
+  const openBegin = (mode: "recap" | "edit" = "edit") => {
+    setBeginErr(null);
+    setBeginMode(mode);
     setBeginText(toLocalInput(delivery.begin_at ?? new Date().toISOString()));
     setReasonId(delivery.delay_reason_id ?? null);
     setNote(delivery.delay_note ?? "");
@@ -439,6 +449,7 @@ export function DeliveryDashboard({
       compTanks: compTanks(),
     });
     setBeginOpen(false);
+    if (beginMode === "recap") openFinish();
   };
 
   // ── Tank readings ──────────────────────────────────────────────────────────
@@ -607,10 +618,10 @@ export function DeliveryDashboard({
   const tanksDoneAll = products.length > 0 && products.every(readingsDone);
   const bigLabel = dropped ? "Finish Delivery" : dropWord;
   const bigDetail = dropped
-    ? `${pumpOff ? "Pumping" : "Dropping"} since ${fmtTime(delivery.begin_at)}`
-    : unpicked.length
-      ? `Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}`
-      : `Arrived ${fmtTime(arrivedAt)}`;
+    ? unpicked.length
+      ? `${pumpOff ? "Pumping" : "Dropping"} since ${fmtTime(delivery.begin_at)} · pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}`
+      : `${pumpOff ? "Pumping" : "Dropping"} since ${fmtTime(delivery.begin_at)} · tap when you're done`
+    : `Arrived ${fmtTime(arrivedAt)} · tap before you get out to ${pumpOff ? "pump off" : "drop"}`;
 
   return (
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
@@ -670,7 +681,7 @@ export function DeliveryDashboard({
       {/* Readings + consignee */}
       <div style={{ ...sectionCard, padding: 0 }}>
         {dropped && (
-          <button type="button" onClick={openBegin} style={rowBtn}>
+          <button type="button" onClick={() => openBegin("edit")} style={rowBtn}>
             <span style={{ color: muted, width: 110 }}>{pumpOff ? "Pump off" : "Drop"} began</span>
             <span style={{ flex: 1 }}>{fmtTime(delivery.begin_at)}</span>
             <span style={{ color: muted }}>Edit ›</span>
@@ -718,7 +729,7 @@ export function DeliveryDashboard({
         </button>
       </div>
 
-      <button type="button" onClick={dropped ? openFinish : openBegin} disabled={rows.length === 0}
+      <button type="button" onClick={dropped ? openRecap : tapDrop} disabled={rows.length === 0}
         style={{ ...primaryBtn, fontSize: 20, padding: "20px 0", opacity: rows.length === 0 ? 0.5 : 1 }}>
         {bigLabel}
       </button>
@@ -767,7 +778,7 @@ export function DeliveryDashboard({
       {/* Start time */}
       <ValueEntryOverlay
         open={beginOpen}
-        title={`${dropWord} · start time`}
+        title={beginMode === "recap" ? `${dropWord} recap` : `${dropWord} · start time`}
         fields={[]}
         footer={
           <div style={{ width: "100%" }}>
@@ -798,7 +809,7 @@ export function DeliveryDashboard({
         hint={`Arrived ${fmtTime(arrivedAt)}`}
         error={beginErr}
         onCancel={() => setBeginOpen(false)}
-        submitLabel={dropped ? "Save" : products.length ? "Next: Readings" : "Save"}
+        submitLabel={beginMode === "recap" ? "Continue" : "Save"}
         onSubmit={saveBegin}
       />
 
@@ -852,12 +863,12 @@ export function DeliveryDashboard({
       <ValueEntryOverlay
         open={finishOpen}
         title="Finish Delivery"
-        fields={isLast ? [{ key: "miles", label: "Ending miles", value: endMiles, onChange: setEndMiles, decimal: true }] : []}
+        fields={isLast ? [{ key: "miles", label: "Enter ending miles", value: endMiles, onChange: setEndMiles, decimal: true, showLabel: true }] : []}
         footer={
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
             {isLast && beginMiles != null && <div style={{ fontSize: 12, color: muted, marginTop: -6 }}>Beginning: {beginMiles.toLocaleString("en-US")}</div>}
             <div>
-              <div style={{ ...miniLabel, marginBottom: 4 }}>Depart</div>
+              <div style={{ ...miniLabel, marginBottom: 4 }}>Finished</div>
               <input type="datetime-local" value={departText} onChange={(e) => setDepartText(e.target.value)} style={fieldInput} />
             </div>
             {retained.length > 0 && (

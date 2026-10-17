@@ -56,6 +56,7 @@ import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "./cards/cardTheme";
 import PlannerControls from "./sections/PlannerControls";
 import { useIsLandscape } from "./hooks/useOrientation";
 import PresetActionSheet from "./components/PresetActionSheet";
+import { getTripPlan, markTripPlanApplied } from "@/lib/trips/tripPlan";
 import PresetQuickPick from "./components/PresetQuickPick";
 import { SolidPinIcon } from "./components/PlannerIcons";
 
@@ -1660,6 +1661,12 @@ export default function CalculatorPage() {
       });
     }
     void tripStoreHook.syncNow();
+    // Finished loading on a trip: back to the Driver Dashboard (the report
+    // is a link on the trip card there).
+    if (!editOnly && extras.times) {
+      loadWorkflow.closeLoadReport();
+      router.push("/planner/home");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId]);
 
@@ -1849,12 +1856,14 @@ export default function CalculatorPage() {
   // terminal"), not just this combo's most recent load anywhere.
   const [viewLastLoadMsg, setViewLastLoadMsg] = useState<string | null>(null);
   const [viewLastLoadBusy, setViewLastLoadBusy] = useState(false);
-  const openLoadReportAtTerminal = useCallback(async () => {
-    if (!equipment.selectedComboId || !location.selectedTerminalId) return;
+  const openLoadReportAtTerminal = useCallback(async (byLoadId?: string) => {
+    if (!byLoadId && (!equipment.selectedComboId || !location.selectedTerminalId)) return;
     setViewLastLoadBusy(true);
     setViewLastLoadMsg(null);
     try {
-      const { data: loadRow, error: loadErr } = await supabase
+      const { data: loadRow, error: loadErr } = byLoadId
+        ? await supabase.from("load_log").select("load_id, completed_at, plan_slot").eq("load_id", byLoadId).maybeSingle()
+        : await supabase
         .from("load_log")
         .select("load_id, completed_at, plan_slot")
         .eq("combo_id", equipment.selectedComboId)
@@ -1899,6 +1908,21 @@ export default function CalculatorPage() {
       setViewLastLoadBusy(false);
     }
   }, [equipment.selectedComboId, location.selectedTerminalId, loadWorkflow]);
+
+  // /planner?report=<load_id> (the dashboard's Load Report link) opens that
+  // load's report once.
+  const reportParamDone = useRef(false);
+  useEffect(() => {
+    if (reportParamDone.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("report");
+    if (!id) return;
+    reportParamDone.current = true;
+    params.delete("report");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    void openLoadReportAtTerminal(id);
+  }, [openLoadReportAtTerminal]);
 
   // Deliberately does NOT claim/switch equipment -- per explicit follow-up,
   // someone else could genuinely be running that truck/trailer right now,
@@ -2632,6 +2656,18 @@ const lastProductInfoById = useMemo(() => {
     setCheckAvailabilityNext(true);
     setPresetQuickPickOpen(false);
   };
+  // The plan picked on Begin Trip: loaded the first time the Planner opens
+  // for that trip (once presets have synced), then left alone.
+  const tripPlanTripId = tripWaitingPickup?.trip_id ?? null;
+  useEffect(() => {
+    if (!effectiveUserId || !tripPlanTripId || !planSlots.presetsReady || !equipment.selectedComboId) return;
+    const pending = getTripPlan(effectiveUserId, tripPlanTripId);
+    if (!pending || pending.applied) return;
+    markTripPlanApplied(effectiveUserId, tripPlanTripId);
+    if (!planSlots.peekSlot(pending.slot)) return;
+    handlePresetLoad(pending.slot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveUserId, tripPlanTripId, planSlots.presetsReady, equipment.selectedComboId]);
   const handlePresetSaveEmpty = (n: number) => {
     planSlots.saveToSlot(n);
     setBaselineOverrides(overridesSnapshot(compPlan, cgSlider));
@@ -3317,7 +3353,7 @@ const lastProductInfoById = useMemo(() => {
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <button
               type="button"
-              onClick={openLoadReportAtTerminal}
+              onClick={() => void openLoadReportAtTerminal()}
               disabled={viewLastLoadBusy}
               style={{
                 borderRadius: 6, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
