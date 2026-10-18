@@ -116,7 +116,7 @@ function ExpirationCard({
           <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{deactivate.error}</div>
         )}
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={deactivate.onConfirm} disabled={deactivate.busy} style={{ ...btnDanger, flex: 1, opacity: deactivate.busy ? 0.6 : 1 }}>
+          <button aria-busy={!!(deactivate.busy)} type="button" onClick={deactivate.onConfirm} disabled={deactivate.busy} style={{ ...btnDanger, flex: 1, opacity: deactivate.busy ? 0.6 : 1 }}>
             {deactivate.busy ? "Deactivating…" : "Yes, deactivate"}
           </button>
           <button type="button" onClick={deactivate.onCancel} disabled={deactivate.busy} style={{ ...btnSecondary, flex: 1 }}>Cancel</button>

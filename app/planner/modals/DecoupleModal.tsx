@@ -133,7 +133,7 @@ function LocationField({ value, onChange, onGeoTag, geoLoading, isError }: {
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
         <FieldLabel>Location *</FieldLabel>
-        <button type="button" onClick={onGeoTag} disabled={geoLoading} style={{
+        <button aria-busy={!!(geoLoading)} type="button" onClick={onGeoTag} disabled={geoLoading} style={{
           fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
           color: geoLoading ? "rgba(255,255,255,0.30)" : "#67e8f9",
           background: "none", border: "none", cursor: geoLoading ? "default" : "pointer", padding: 0,

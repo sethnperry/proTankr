@@ -485,7 +485,7 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, lineHeight: 1.5 }}>If the user already has an account they'll be added immediately. New users receive a magic link.</div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
-        <button style={css.btn("primary")} onClick={send} disabled={loading || !email.trim()}>{loading ? "Sending…" : overCapacity ? "Add Seat & Invite" : "Send Invite"}</button>
+        <button aria-busy={!!(loading)} style={css.btn("primary")} onClick={send} disabled={loading || !email.trim()}>{loading ? "Sending…" : overCapacity ? "Add Seat & Invite" : "Send Invite"}</button>
       </div>
     </Modal>
   );
@@ -563,7 +563,7 @@ function ComboModal({ combo, companyId, trucks, trailers, onClose, onDone, onDec
         )}
         <button style={{ ...css.btn("ghost"), flex: 1, justifyContent: "center" as const }}
           onClick={onClose}>Cancel</button>
-        <button style={{ ...css.btn("primary"), flex: 1, justifyContent: "center" as const }}
+        <button aria-busy={!!(saving)} style={{ ...css.btn("primary"), flex: 1, justifyContent: "center" as const }}
           onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Couple" : "Save"}</button>
       </div>
     </Modal>
@@ -659,7 +659,7 @@ function CoupleModal({ companyId, trucks, trailers, onClose, onDone }: {
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
         <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
-        <button style={css.btn("primary")} onClick={couple} disabled={saving || !truckId || !trailerId}>{saving ? "Coupling…" : "Couple"}</button>
+        <button aria-busy={!!(saving)} style={css.btn("primary")} onClick={couple} disabled={saving || !truckId || !trailerId}>{saving ? "Coupling…" : "Couple"}</button>
       </div>
     </Modal>
   );
@@ -1139,7 +1139,7 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
           <button style={{ ...css.btn("ghost"), flex: "1 1 0", textAlign: "center" as const }}
             onClick={onClose}>Cancel</button>
         </div>
-        <button style={{ ...css.btn("primary"), width: "100%", textAlign: "center" as const }}
+        <button aria-busy={!!(saving)} style={{ ...css.btn("primary"), width: "100%", textAlign: "center" as const }}
           onClick={save} disabled={saving}>{saving ? "Saving…" : isNew ? "Add Terminal" : "Save"}</button>
       </div>
     </Modal>

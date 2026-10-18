@@ -303,7 +303,7 @@ export function LocationEditor({
       )}
 
       {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
-      <button type="button" onClick={() => void save()} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
+      <button aria-busy={!!(busy)} type="button" onClick={() => void save()} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
         {busy ? "Saving…" : similar.length > 0 && ackSimilar ? "Save as a new location anyway" : "Save"}
       </button>
 

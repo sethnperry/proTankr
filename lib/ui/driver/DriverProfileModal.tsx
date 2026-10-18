@@ -492,7 +492,7 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
               </button>
             )}
             <button style={{ ...css.btn("ghost"), marginLeft: onRemove ? 0 : "auto" }} onClick={onClose}>Cancel</button>
-            <button style={css.btn("primary")} onClick={save} disabled={saving}>
+            <button aria-busy={!!(saving)} style={css.btn("primary")} onClick={save} disabled={saving}>
               {saving ? "Saving…" : "Save Profile"}
             </button>
           </div>

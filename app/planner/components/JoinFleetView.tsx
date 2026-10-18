@@ -78,7 +78,7 @@ export default function JoinFleetView({ onJoined }: { onJoined: () => void }) {
         />
       </div>
 
-      <button
+      <button aria-busy={!!(busy)}
         type="button"
         onClick={submit}
         disabled={busy}

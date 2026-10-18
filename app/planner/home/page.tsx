@@ -1,4 +1,5 @@
 "use client";
+import { Spinner, busyProps, busyText, usePending } from "@/lib/ui/pending";
 // app/planner/home/page.tsx
 //
 // Driver dashboard (trip workflow phase 2, docs/trip-workflow-design.md §9 and
@@ -142,6 +143,8 @@ type PickerMode =
 export default function HomePage() {
   const shell = useCalculatorShell();
   const router = useRouter();
+  // Tapped links/tools dim with a spinner until the next screen opens.
+  const nav = usePending();
   const { equipment, location, terminals, expirations } = shell;
   const userId = shell.effectiveUserId || null;
   const companyId = shell.companyId || null;
@@ -1093,11 +1096,11 @@ export default function HomePage() {
           </div>
           {/* The trip's order number; the whole thing opens the PTD. */}
           {openTrip && (
-            <button type="button" onClick={() => router.push(`/planner/trips/${openTrip.trip_id}`)} aria-label="Open the PTD"
+            <button type="button" onClick={() => nav.go("ptd", `/planner/trips/${openTrip.trip_id}`)} {...busyProps(nav.is("ptd"))} aria-label="Open the PTD"
               className="dash-num"
               style={{ flexShrink: 0, background: "none", border: "none", padding: "4px 0 4px 12px", margin: "-4px 0", cursor: "pointer",
                 fontSize: 18, fontWeight: 700, color: LOOK.muted, display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
-              <span style={{ fontSize: 12, letterSpacing: 0.5 }}>PTD ›</span>
+              <span style={{ fontSize: 12, letterSpacing: 0.5, display: "inline-flex", alignItems: "center", gap: 6 }}>PTD {nav.is("ptd") ? <Spinner size={10} /> : "›"}</span>
               <span>{children?.primaryOrder?.order_number ?? "No order #"}{children && children.extraOrders.length > 0 ? ` +${children.extraOrders.length}` : ""}</span>
             </button>
           )}
@@ -1277,7 +1280,7 @@ export default function HomePage() {
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
             {lastLoadId && (
-              <button type="button" onClick={() => router.push(`/planner?report=${encodeURIComponent(lastLoadId)}`)} style={smallLink}>Load Report ›</button>
+              <button type="button" onClick={() => nav.go("report", `/planner?report=${encodeURIComponent(lastLoadId)}`)} {...busyProps(nav.is("report"))} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {nav.is("report") ? <Spinner size={11} /> : "›"}</button>
             )}
             {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
               <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
@@ -1311,7 +1314,7 @@ export default function HomePage() {
         <div style={{ ...card, marginBottom: 14, borderColor: "rgba(74,222,128,0.5)", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{notice.text}</span>
           {notice.tripId && (
-            <button type="button" onClick={() => router.push(`/planner/trips/${notice.tripId}`)} style={smallLink}>View PTD ›</button>
+            <button type="button" onClick={() => nav.go("notice-ptd", `/planner/trips/${notice.tripId}`)} {...busyProps(nav.is("notice-ptd"))} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>View PTD {nav.is("notice-ptd") ? <Spinner size={11} /> : "›"}</button>
           )}
           <button type="button" onClick={() => setNotice(null)} style={{ ...smallLink, color: muted }}>✕</button>
         </div>
@@ -1324,11 +1327,12 @@ export default function HomePage() {
         type="button"
         onClick={onBigButton}
         className="dash-press"
+        {...busyProps(openingPlanner)}
         style={{
           width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
         }}
       >
-        {openingPlanner ? "Opening Planner…" : parked && step.kind === "start"
+        {openingPlanner ? busyText(true, "Opening Planner…") : parked && step.kind === "start"
           ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
           : step.label}
       </button>
@@ -1522,12 +1526,12 @@ export default function HomePage() {
         <HeadingToDeliveryCard defaultOpen deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo}
           emptyText={myDelivery ? "No other company loads headed here right now." : "Set a delivery on your trip to see other loads headed there."} />
       </FullscreenModal>
-      <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
+      <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} />
       <RecentDeliveriesCard
         storeName={selectedLoc ? locationTitle(selectedLoc) : null}
         items={recent.items}
         productInfo={productInfo}
-        onOpenTrip={(id) => router.push(`/planner/trips/${id}`)}
+        onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)}
         onPickStore={() => setPicker({ mode: "select" })}
       />
 
@@ -1573,9 +1577,9 @@ export default function HomePage() {
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
             sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} within 7 days` : soonCount > 0 ? `${soonCount} within 30 days` : "All current",
             subColor: expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : soonCount > 0 ? EXPIRY_COLOR.soon : undefined,
-            onClick: () => router.push("/planner/cards") }] : []),
-          { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => router.push("/planner/trips") },
-          { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => router.push("/planner/reports") },
+            onClick: () => nav.go("cards", "/planner/cards"), busy: nav.is("cards") }] : []),
+          { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
+          { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => nav.go("reports", "/planner/reports"), busy: nav.is("reports") },
         ];
         return <ToolPanel items={tools} />;
       })()}
@@ -1692,7 +1696,7 @@ export default function HomePage() {
         onToggleStar={(id, star) => void locList.toggleStar(id, star).catch(() => {})}
         onPick={onPick}
         onClose={() => { setPicker(null); setAutoArrive(false); }}
-        onManage={() => { setPicker(null); router.push("/planner/locations"); }}
+        onManage={() => { setPicker(null); nav.go("locations", "/planner/locations"); }}
       />
     </div>
     </DashLookProvider>

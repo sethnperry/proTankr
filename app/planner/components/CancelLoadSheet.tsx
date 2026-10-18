@@ -282,7 +282,7 @@ export default function CancelLoadSheet({
               This posts a heads-up banner for other drivers heading to this terminal.
             </div>
             {TERMINAL_ISSUES.map((t) => (
-              <button
+              <button aria-busy={!!(submitBusy && reportType === t.code)}
                 key={t.code}
                 type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
                 disabled={submitBusy}
@@ -347,7 +347,7 @@ export default function CancelLoadSheet({
               </div>
             )}
 
-            <button
+            <button aria-busy={!!(submitBusy)}
               type="button"
               onClick={submitReport}
               disabled={selectedProductIds.size === 0 || submitBusy}

@@ -612,7 +612,7 @@ export function DocHubModal({
                 <div style={{ fontSize: 11, color: T.danger, marginBottom: 6 }}>{uploadErr}</div>
               )}
 
-              <button
+              <button aria-busy={!!(uploading)}
                 type="button"
                 onClick={attemptUpload}
                 disabled={uploading || !pendingFile || !pendingCat}
@@ -672,7 +672,7 @@ export function DocHubModal({
                       View
                     </button>
                     {/* Delete */}
-                    <button type="button"
+                    <button aria-busy={!!(deleting === page.id)} type="button"
                       onClick={() => deletePage(page)}
                       disabled={deleting === page.id}
                       style={{ background: "none", border: "none", cursor: "pointer",

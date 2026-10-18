@@ -531,7 +531,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
             <input style={S.input} value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company or business name" autoComplete="organization" />
           </div>
           {error && <div style={S.err}>{error}</div>}
-          <button style={disabledPrimary(busy || !name.trim())} disabled={busy || !name.trim()} onClick={saveIdentity}>{busy ? "Saving…" : "Next"}</button>
+          <button aria-busy={!!(busy)} style={disabledPrimary(busy || !name.trim())} disabled={busy || !name.trim()} onClick={saveIdentity}>{busy ? "Saving…" : "Next"}</button>
         </div>
       )}
 
@@ -545,7 +545,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
             <div style={S.example}>Example: 1234</div>
           </div>
           {error && <div style={S.err}>{error}</div>}
-          <button style={disabledPrimary(busy || !truckNumber.trim())} disabled={busy || !truckNumber.trim()} onClick={saveTruck}>{busy ? "Saving…" : "Next"}</button>
+          <button aria-busy={!!(busy)} style={disabledPrimary(busy || !truckNumber.trim())} disabled={busy || !truckNumber.trim()} onClick={saveTruck}>{busy ? "Saving…" : "Next"}</button>
         </div>
       )}
 
@@ -573,7 +573,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
           {error && <div style={S.err}>{error}</div>}
           <button style={disabledPrimary(!trailerNumber.trim())} disabled={!trailerNumber.trim()} onClick={startTrailer}>Next</button>
           {setCurrentEquipment && (
-            <button style={S.secondary} disabled={busy} onClick={skipTrailerBobtail}>
+            <button aria-busy={!!(busy)} style={S.secondary} disabled={busy} onClick={skipTrailerBobtail}>
               {busy ? "Skipping…" : "Skip — I'm bobtail (no trailer yet)"}
             </button>
           )}
@@ -626,7 +626,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
           </div>
           <div style={S.sub}>You can adjust the safety cap later in Trailer Settings.</div>
           {error && <div style={S.err}>{error}</div>}
-          <button style={disabledPrimary(busy)} disabled={busy} onClick={commitTrailer}>{busy ? "Saving…" : "Next"}</button>
+          <button aria-busy={!!(busy)} style={disabledPrimary(busy)} disabled={busy} onClick={commitTrailer}>{busy ? "Saving…" : "Next"}</button>
           <button style={S.secondary} onClick={() => { setCapIdx(compCount - 1); setCapInput(caps[compCount - 1] != null ? String(caps[compCount - 1]) : ""); setError(null); setStep("caps"); }}>‹ Edit capacities</button>
         </div>
       )}
@@ -674,7 +674,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
           </div>
           {Number(targetInput) > 80000 && <div style={{ ...S.err, color: "#fbbf24" }}>That's above the 80,000 lb federal limit — double-check this is what you want.</div>}
           {error && <div style={S.err}>{error}</div>}
-          <button style={disabledPrimary(busy || !targetInput)} disabled={busy || !targetInput} onClick={coupleAndContinue}>{busy ? "Pairing…" : "Next"}</button>
+          <button aria-busy={!!(busy)} style={disabledPrimary(busy || !targetInput)} disabled={busy || !targetInput} onClick={coupleAndContinue}>{busy ? "Pairing…" : "Next"}</button>
           <button style={S.secondary} onClick={backTo("tare")}>‹ Back</button>
         </div>
       )}

@@ -218,7 +218,7 @@ export default function TerminalSwitchDuringLoadSheet({
               {prevTerminalName} goes on your PTD as couldn&apos;t load, and {newTerminalName} becomes your pickup.
             </div>
             {TERMINAL_ISSUES.map((t) => (
-              <button
+              <button aria-busy={!!(submitBusy && reportType === t.code)}
                 key={t.code}
                 type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
                 disabled={submitBusy}
@@ -297,7 +297,7 @@ export default function TerminalSwitchDuringLoadSheet({
               This warns other drivers headed to {prevTerminalName} and goes on your PTD.
             </div>
             {TERMINAL_ISSUES.map((t) => (
-              <button
+              <button aria-busy={!!(submitBusy && reportType === t.code)}
                 key={t.code}
                 type="button" style={{ ...secondaryRowStyle, opacity: submitBusy ? 0.55 : 1 }}
                 disabled={submitBusy}
@@ -359,7 +359,7 @@ export default function TerminalSwitchDuringLoadSheet({
               </div>
             )}
 
-            <button
+            <button aria-busy={!!(submitBusy)}
               type="button"
               onClick={submitReport}
               disabled={selectedProductIds.size === 0 || submitBusy}

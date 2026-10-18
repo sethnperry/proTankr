@@ -282,7 +282,7 @@ export function LoadedSheet({
       </div>
 
       {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
-      <button type="button" onClick={() => void submit()} disabled={checking} style={{ ...primaryBtn, opacity: checking ? 0.5 : 1 }}>
+      <button aria-busy={!!(checking)} type="button" onClick={() => void submit()} disabled={checking} style={{ ...primaryBtn, opacity: checking ? 0.5 : 1 }}>
         {checking ? "Checking…" : "Confirm Loaded"}
       </button>
       <SupplierPicker

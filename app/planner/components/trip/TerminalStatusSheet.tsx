@@ -110,7 +110,7 @@ export function TerminalStatusSheet({
           </div>
         </div>
         {on ? (
-          <button
+          <button aria-busy={!!(busy === type)}
             type="button"
             disabled={!!busy || !active.every((r) => r.canClear)}
             onClick={() => run(type, async () => {
@@ -125,7 +125,7 @@ export function TerminalStatusSheet({
             {busy === type ? "…" : "Clear"}
           </button>
         ) : (
-          <button
+          <button aria-busy={!!(busy === type)}
             type="button"
             disabled={!!busy || !ready}
             onClick={() => run(type, () => submitOutageReport({
@@ -185,7 +185,7 @@ export function TerminalStatusSheet({
                   <div style={{ fontSize: 12, color: muted }}>{r.personLabel} · {ago(r.createdAtMs)}</div>
                 </div>
                 {r.canClear && (
-                  <button type="button" disabled={!!busy} onClick={() => run(r.reportId, () => clearOutageReport(r.reportId))} style={pill(false)}>
+                  <button aria-busy={!!(busy === r.reportId)} type="button" disabled={!!busy} onClick={() => run(r.reportId, () => clearOutageReport(r.reportId))} style={pill(false)}>
                     {busy === r.reportId ? "…" : "Clear"}
                   </button>
                 )}

@@ -456,7 +456,7 @@ function StepsEditor({
       <div style={{ fontSize: 13, color: MUTED, margin: "12px 0 6px" }}>Notes (anything that doesn't fit a step)</div>
       <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
       {error && <div style={{ marginTop: 8, fontSize: 13, color: "#f87171" }}>{error}</div>}
-      <button type="button" disabled={busy} onClick={async () => {
+      <button aria-busy={!!(busy)} type="button" disabled={busy} onClick={async () => {
         setBusy(true); setError(null);
         const err = await onSave(steps, notes);
         setBusy(false);
@@ -494,7 +494,7 @@ function TerminalNoteEditor({
         </div>
       )}
       {error && <div style={{ marginTop: 8, fontSize: 13, color: "#f87171" }}>{error}</div>}
-      <button type="button" disabled={busy || blocked} onClick={async () => {
+      <button aria-busy={!!(busy)} type="button" disabled={busy || blocked} onClick={async () => {
         setBusy(true); setError(null);
         const err = await onSave(text);
         setBusy(false);

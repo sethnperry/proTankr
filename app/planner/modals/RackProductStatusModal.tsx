@@ -285,7 +285,7 @@ export default function RackProductStatusModal({
           API and temp are optional — supplying both updates this product's known reading for {rack.rack_name}, visible to any driver in any company, the same way completing a real load at this rack does.
         </div>
 
-        <button
+        <button aria-busy={!!(saving)}
           onClick={save}
           disabled={saving || !productId}
           className="w-full rounded-[2px] bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"

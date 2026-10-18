@@ -318,7 +318,7 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
                 <option value="monthly">Monthly</option>
               </select>
               <input type="date" value={anchorDate} onChange={(e) => setAnchorDate(e.target.value)} style={{ ...INPUT, flex: 1, minWidth: 130 }} />
-              <button type="button" onClick={savePeriodSettings} disabled={savingSettings}
+              <button aria-busy={!!(savingSettings)} type="button" onClick={savePeriodSettings} disabled={savingSettings}
                 style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
                 {savingSettings ? "Saving…" : "Save"}
               </button>

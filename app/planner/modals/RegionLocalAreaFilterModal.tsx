@@ -203,7 +203,7 @@ function CatalogList({
                   placeholder={`New ${LABEL[kind].toLowerCase()} name`}
                   style={{ flex: 1, borderRadius: 2, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, boxSizing: "border-box" as const }} />
                 {!isLocalArea && (
-                  <button type="button" onClick={addNew} disabled={busy || !newName.trim()}
+                  <button aria-busy={!!(busy)} type="button" onClick={addNew} disabled={busy || !newName.trim()}
                     style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "0 16px", cursor: "pointer" }}>
                     {busy ? "…" : "Add"}
                   </button>
@@ -219,7 +219,7 @@ function CatalogList({
                       buttonStyle={{ ...selectStyle, fontSize: 13, padding: "9px 11px" }}
                     />
                   </div>
-                  <button type="button" onClick={addNew} disabled={busy || !newName.trim() || !newRegionId}
+                  <button aria-busy={!!(busy)} type="button" onClick={addNew} disabled={busy || !newName.trim() || !newRegionId}
                     style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "0 16px", cursor: "pointer" }}>
                     {busy ? "…" : "Add"}
                   </button>
@@ -250,7 +250,7 @@ function CatalogList({
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setRenaming(null)} disabled={busy}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
-              <button type="button" onClick={saveRename} disabled={busy || !renameVal.trim() || (isLocalArea && !renameRegionId)}
+              <button aria-busy={!!(busy)} type="button" onClick={saveRename} disabled={busy || !renameVal.trim() || (isLocalArea && !renameRegionId)}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Saving…" : "Save"}
               </button>
@@ -270,7 +270,7 @@ function CatalogList({
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setConfirmRemove(null)} disabled={busy}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
-              <button type="button" onClick={doRemove} disabled={busy}
+              <button aria-busy={!!(busy)} type="button" onClick={doRemove} disabled={busy}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Removing…" : "Remove"}
               </button>

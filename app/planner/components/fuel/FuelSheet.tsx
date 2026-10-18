@@ -508,7 +508,7 @@ export default function FuelSheet({
         <Field label="Note"><input style={input} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} /></Field>
 
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
-        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void save()}>
+        <button aria-busy={!!(busy)} type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void save()}>
           {busy ? "Saving…" : "SAVE FUEL STOP"}
         </button>
         <button type="button" style={{ ...link, display: "block", margin: "16px auto 0" }} onClick={onClose}>Finish later</button>
@@ -555,7 +555,7 @@ export default function FuelSheet({
         </div>
         {issue === "Other" && <Field label="Describe it"><input style={input} value={issueNote} onChange={(e) => setIssueNote(e.target.value)} /></Field>}
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
-        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void pumpDown()}>
+        <button aria-busy={!!(busy)} type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void pumpDown()}>
           {busy ? "Saving…" : "SAVE · PICK ANOTHER WAY"}
         </button>
         {cancelEl}
@@ -635,7 +635,7 @@ export default function FuelSheet({
         </label>
 
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
-        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedQuick()}>
+        <button aria-busy={!!(busy)} type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedQuick()}>
           {busy ? "Saving…" : "FINISHED FUELING"}
         </button>
         <button type="button" style={{ ...secondary, marginTop: 10, color: "#fbbf24", borderColor: "rgba(251,191,36,0.5)" }} disabled={busy}
@@ -743,7 +743,7 @@ export default function FuelSheet({
         </div>
 
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
-        <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedCard()}>
+        <button aria-busy={!!(busy)} type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void finishedCard()}>
           {busy ? "Saving…" : "FINISHED FUELING"}
         </button>
         <button type="button" style={{ ...secondary, marginTop: 10, color: "#fbbf24", borderColor: "rgba(251,191,36,0.5)" }} disabled={busy}

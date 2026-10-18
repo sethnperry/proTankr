@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Spinner } from "@/lib/ui/pending";
 import { supabase } from "@/lib/supabase/client";
 import { ROLE_LABELS, isRole, type Role } from "./driver/role";
 import { canReachDestination } from "./driver/navDestinations";
@@ -27,6 +28,9 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
   const [myRole,      setMyRole]      = useState("");
   const [switching,   setSwitching]   = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  // Route links leave the menu open (the tapped row shows a spinner) and it
+  // closes once the new page is showing.
+  useEffect(() => { setOpen(false); }, [pathname]);
 
   const isPlanner = pathname === "/" || pathname === "/planner" || Boolean(pathname?.startsWith("/planner/"));
   // The Planner's own dark-mode toggle only lightens its hamburger icon when
@@ -237,33 +241,33 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
                 Driver (trips), Dispatch (selected driver), Company (/admin),
                 ProTankr (/superadmin). A super admin sees all four. */}
             {canReachDestination("home", role, isSuperAdmin, isSolo) && !isHomePage && (
-              <NavLink href="/planner/home" icon="⌂" label="Driver Dashboard" onClick={() => setOpen(false)} />
+              <NavLink href="/planner/home" icon="⌂" label="Driver Dashboard" />
             )}
             {canReachDestination("dispatch", role, isSuperAdmin, isSolo) && !isDispatchPage && (
-              <NavLink href="/planner/dispatch" icon="◫" label="Dispatch Dashboard" onClick={() => setOpen(false)} />
+              <NavLink href="/planner/dispatch" icon="◫" label="Dispatch Dashboard" />
             )}
             {(isAdmin || isSuperAdmin) && !isAdmin_ && (
-              <NavLink href="/admin" icon="⚙" label="Company Dashboard" onClick={() => setOpen(false)} />
+              <NavLink href="/admin" icon="⚙" label="Company Dashboard" />
             )}
             {isSuperAdmin && !isSuperAdmin_ && (
-              <NavLink href="/superadmin" icon="◈" label="ProTankr Dashboard" onClick={() => setOpen(false)} />
+              <NavLink href="/superadmin" icon="◈" label="ProTankr Dashboard" />
             )}
             {canReachDestination("planner", role, isSuperAdmin, isSolo) && !isPlannerPage && (
-              <NavLink href="/planner" icon="▤" label="Planner" onClick={() => setOpen(false)} />
+              <NavLink href="/planner" icon="▤" label="Planner" />
             )}
             {canReachDestination("cards", role, isSuperAdmin, isSolo) && !isCardsPage && (
-              <NavLink href="/planner/cards" icon="▥" label="Cards" onClick={() => setOpen(false)} />
+              <NavLink href="/planner/cards" icon="▥" label="Cards" />
             )}
             {canReachDestination("vault", role, isSuperAdmin, isSolo) && !isVaultPage && (
-              <NavLink href="/planner/vault" icon="🔒" label="Vault" onClick={() => setOpen(false)} />
+              <NavLink href="/planner/vault" icon="🔒" label="Vault" />
             )}
             {!isPlanner && (
-              <NavLink href="/planner" icon="⟵" label="Back to Planner" onClick={() => setOpen(false)} />
+              <NavLink href="/planner" icon="⟵" label="Back to Planner" />
             )}
             {!isReports_ && (
-              <NavLink href="/planner/reports" icon="▤" label="Reports" onClick={() => setOpen(false)} />
+              <NavLink href="/planner/reports" icon="▤" label="Reports" />
             )}
-            <NavLink href="/learn" icon="?" label="Learn" onClick={() => setOpen(false)} />
+            <NavLink href="/learn" icon="?" label="Learn" />
             {/* Settings used to be its own gear icon in the Planner header's
                 icon strip -- moved here per explicit direction to reduce
                 that strip's icon count. Only rendered when a caller actually
@@ -282,6 +286,20 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
         </div>
       )}
     </div>
+  );
+}
+
+// The tapped row dims and its icon becomes a spinner until the page opens
+// (the menu stays open until then; it closes when the route changes).
+function NavLinkInner({ icon, label }: { icon: string; label: string }) {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      <span style={{ fontSize: 14, opacity: 0.7, width: 18, textAlign: "center" as const, display: "inline-flex", justifyContent: "center" }}>
+        {pending ? <Spinner size={12} /> : icon}
+      </span>
+      <span style={{ opacity: pending ? 0.55 : 1 }}>{label}</span>
+    </>
   );
 }
 
@@ -315,8 +333,7 @@ function NavLink({ href, icon, label, onClick, danger }: {
       onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
     >
-      <span style={{ fontSize: 14, opacity: 0.7, width: 18, textAlign: "center" as const }}>{icon}</span>
-      {label}
+      <NavLinkInner icon={icon} label={label} />
     </Link>
   );
 }

@@ -131,7 +131,7 @@ export default function GetTheAppPage() {
               />
             </label>
 
-            <button type="submit" disabled={sending} className="submit-btn">
+            <button aria-busy={!!(sending)} type="submit" disabled={sending} className="submit-btn">
               {sending ? "Sending…" : "Request Early Access"}
             </button>
           </form>

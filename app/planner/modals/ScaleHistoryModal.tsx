@@ -478,7 +478,7 @@ export default function ScaleHistoryModal({ open, onClose, companyId, comboId, o
                     style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                     Cancel
                   </button>
-                  <button onClick={() => deleteRecord(expandedRow.weight_record_id)} disabled={busy}
+                  <button aria-busy={!!(busy)} onClick={() => deleteRecord(expandedRow.weight_record_id)} disabled={busy}
                     style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                     {busy ? "Deleting…" : "Delete permanently"}
                   </button>
@@ -490,14 +490,14 @@ export default function ScaleHistoryModal({ open, onClose, companyId, comboId, o
                   style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                   Cancel
                 </button>
-                <button onClick={() => saveEdit(expandedRow)} disabled={busy}
+                <button aria-busy={!!(busy)} onClick={() => saveEdit(expandedRow)} disabled={busy}
                   style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}>
                   {busy ? "Saving…" : "Save"}
                 </button>
               </div>
             ) : (
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => printRecord(expandedRow)} disabled={printBusy}
+                <button aria-busy={!!(printBusy)} onClick={() => printRecord(expandedRow)} disabled={printBusy}
                   style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: printBusy ? "wait" : "pointer" }}>
                   {printBusy ? "Generating…" : "Print"}
                 </button>

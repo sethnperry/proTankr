@@ -22,3 +22,39 @@ body {
   color: var(--foreground);
   font-family: var(--font-outfit), Arial, Helvetica, sans-serif;
 }
+
+/* Tap feedback, app-wide (2026-10-18).
+   1. Every button shrinks and darkens slightly while pressed.
+   2. A control that's working (aria-busy="true") dims and stops taking taps,
+      until the next screen opens or the save finishes. See lib/ui/pending.tsx. */
+button, [role="button"], a {
+  -webkit-tap-highlight-color: transparent;
+  transition: scale 120ms ease, filter 120ms ease, opacity 120ms ease;
+}
+button:not(:disabled):active, [role="button"]:active {
+  scale: 0.985;
+  filter: brightness(0.86);
+}
+[aria-busy="true"] {
+  opacity: 0.55 !important;
+  pointer-events: none !important;
+  cursor: progress;
+}
+/* A busy button gets a small spinner before its label, unless it draws its own. */
+button[aria-busy="true"]:not([data-spin="own"])::before {
+  content: ""; display: inline-block; flex-shrink: 0;
+  width: 0.85em; height: 0.85em; margin-right: 0.5em; vertical-align: -0.1em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: pt-spin 0.7s linear infinite;
+}
+@keyframes pt-spin { to { transform: rotate(360deg); } }
+.pt-spin {
+  display: inline-block; flex-shrink: 0;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: pt-spin 0.7s linear infinite; vertical-align: -0.15em;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, [role="button"], a { transition: none; }
+  button:not(:disabled):active, [role="button"]:active { scale: none; }
+  .pt-spin { animation-duration: 1.6s; }
+}

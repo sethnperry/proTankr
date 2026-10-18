@@ -697,7 +697,7 @@ function InviteModal({ companyId, onClose, onDone }: { companyId: string; onClos
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, lineHeight: 1.5 }}>If the user already has an account they'll be added immediately. New users receive a magic link.</div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <button style={css.btn("ghost")} onClick={onClose}>Cancel</button>
-        <button style={css.btn("primary")} onClick={send} disabled={loading || !email.trim()}>{loading ? "Sending…" : "Send Invite"}</button>
+        <button aria-busy={!!(loading)} style={css.btn("primary")} onClick={send} disabled={loading || !email.trim()}>{loading ? "Sending…" : "Send Invite"}</button>
       </div>
     </Modal>
   );
@@ -790,7 +790,7 @@ function SensitiveInfoSection({ unitKind, unitId, companyId }: { unitKind: "truc
           </FieldRow>
           <Field label="Lease Terms"><textarea value={data.lease_terms} onChange={(e) => setData((d) => ({ ...d, lease_terms: e.target.value }))} rows={2} style={{ ...css.input, width: "100%", fontSize: 12, resize: "vertical" as const }} /></Field>
           <Field label="Insurance Claims"><textarea value={data.insurance_claims} onChange={(e) => setData((d) => ({ ...d, insurance_claims: e.target.value }))} rows={2} style={{ ...css.input, width: "100%", fontSize: 12, resize: "vertical" as const }} /></Field>
-          <button type="button" onClick={save} disabled={saving} style={{ ...css.btn("primary"), fontSize: 11, width: "100%" }}>{saving ? "Saving…" : "Save Sensitive Info"}</button>
+          <button aria-busy={!!(saving)} type="button" onClick={save} disabled={saving} style={{ ...css.btn("primary"), fontSize: 11, width: "100%" }}>{saving ? "Saving…" : "Save Sensitive Info"}</button>
         </div>
       )}
     </div>
@@ -963,7 +963,7 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
   );
 
   const saveCloseBtn = canEditRestricted && (
-    <button style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={save} disabled={saving}>
+    <button aria-busy={!!(saving)} style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={save} disabled={saving}>
       {saving ? "Saving…" : "Save & Close"}
     </button>
   );
@@ -1284,7 +1284,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
   // pre-existing inconsistency found while unifying with TruckModal's own
   // already-gated Save button; fixed here since it's the same button now).
   const saveCloseBtn = canEditRestricted && (
-    <button style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={save} disabled={saving}>
+    <button aria-busy={!!(saving)} style={{ ...css.btn("primary"), flex: "1 1 0", minWidth: 80, textAlign: "center" as const }} onClick={save} disabled={saving}>
       {saving ? "Saving…" : "Save & Close"}
     </button>
   );

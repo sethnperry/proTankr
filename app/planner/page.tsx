@@ -110,6 +110,7 @@ import { useSupplierPicks } from "@/lib/suppliers/useSupplierPicks";
 import { resolvePicks, readPicks, groupPicks, type SupplierPick } from "@/lib/suppliers/picks";
 import { getTripSupplier, setTripSupplier, tripSupplierPicks } from "@/lib/trips/tripSupplier";
 import { markSuppliersLoaded } from "@/lib/suppliers/useTerminalSuppliers";
+import { Spinner } from "@/lib/ui/pending";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
@@ -268,6 +269,14 @@ export default function CalculatorPage() {
   const shell = useCalculatorShell();
   const { authUserId, setupSession, effectiveUserId, equipment, location, terminals, expirations } = shell;
   const router = useRouter();
+  // Leaving the Planner for another screen: a plain cover (spinner + text)
+  // goes up in the same render the modal closes, so the Planner never
+  // flashes before the next screen opens.
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const leaveTo = useCallback((href: string, label: string) => {
+    setLeaving(label);
+    router.push(href);
+  }, [router]);
   // Wider-than-tall with enough room for a real two-column layout -- see
   // useOrientation.ts. Computed once here and passed down (to
   // PlannerControls) rather than each consumer calling matchMedia itself.
@@ -1621,10 +1630,10 @@ export default function CalculatorPage() {
       onSaveSignature: tripSignature.save,
       compDefaults,
       onArrivedAtDelivery: () => {
+        leaveTo("/planner/home?arrive=1", "Opening dashboard…");
         loadWorkflow.closeLoadReport();
-        router.push("/planner/home?arrive=1");
       },
-      onBackToDashboard: () => router.push("/planner/home"),
+      onBackToDashboard: () => leaveTo("/planner/home", "Opening dashboard…"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds]);
@@ -1693,8 +1702,8 @@ export default function CalculatorPage() {
     // Finished loading on a trip: back to the Driver Dashboard (the report
     // is a link on the trip card there).
     if (!editOnly && extras.times) {
+      leaveTo("/planner/home", "Opening dashboard…");
       loadWorkflow.closeLoadReport();
-      router.push("/planner/home");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId]);
@@ -1965,9 +1974,23 @@ export default function CalculatorPage() {
   // While that report loads, a plain cover hides the Planner so the driver
   // goes straight from the dashboard to the report. Set before first paint.
   const [reportPending, setReportPending] = useState(false);
+  // Report opened from the dashboard: closing it (any button) goes straight
+  // back there, under the same cover, so the Planner never shows.
+  const reportFromDashboardRef = useRef(false);
+  const reportShownRef = useRef(false);
   useLayoutEffect(() => {
-    if (new URLSearchParams(window.location.search).get("report")) setReportPending(true);
+    if (new URLSearchParams(window.location.search).get("report")) {
+      setReportPending(true);
+      reportFromDashboardRef.current = true;
+    }
   }, []);
+  useLayoutEffect(() => {
+    if (!reportFromDashboardRef.current || reportPending) return;
+    if (loadWorkflow.loadingOpen || loadWorkflow.reportLines) { reportShownRef.current = true; return; }
+    if (!reportShownRef.current) return; // report never opened (error): stay
+    reportFromDashboardRef.current = false;
+    leaveTo("/planner/home", "Opening dashboard…");
+  }, [loadWorkflow.loadingOpen, loadWorkflow.reportLines, reportPending, leaveTo]);
   useEffect(() => {
     if (reportParamDone.current || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -3061,9 +3084,9 @@ const lastProductInfoById = useMemo(() => {
     : styles.page;
   return (
     <div style={pageStyle}>
-      {reportPending && typeof document !== "undefined" && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 49, background: "#0b0b0b", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.55)", fontSize: 15 }}>
-          Opening load report…
+      {(leaving || reportPending) && typeof document !== "undefined" && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 49, background: "#0b0b0b", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: "rgba(255,255,255,0.55)", fontSize: 15 }}>
+          <Spinner size={14} />{leaving ?? "Opening load report…"}
         </div>,
         document.body,
       )}
@@ -3493,7 +3516,7 @@ const lastProductInfoById = useMemo(() => {
         // before.
         const viewLastLoadEl = (equipment.selectedComboId && location.selectedTerminalId) ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <button
+            <button aria-busy={!!(viewLastLoadBusy)}
               type="button"
               onClick={() => void openLoadReportAtTerminal()}
               disabled={viewLastLoadBusy}
@@ -3517,7 +3540,7 @@ const lastProductInfoById = useMemo(() => {
         const perfCard = viewLastLoadEl;
 
         const loadButtonEl = (
-          <button type="button"
+          <button type="button" aria-busy={loadWorkflow.beginLoadBusy}
             onClick={() => {
               if (unavailableComps.length > 0) {
                 setLoadBlockedMsg(`Cannot Load, all planned products are not available at ${terminalLabel || "this terminal"}`);

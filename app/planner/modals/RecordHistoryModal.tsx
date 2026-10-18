@@ -763,7 +763,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                     style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                     Cancel
                   </button>
-                  <button onClick={() => deleteRecord(expandedId!)} disabled={busy}
+                  <button aria-busy={!!(busy)} onClick={() => deleteRecord(expandedId!)} disabled={busy}
                     style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                     {busy ? "Deleting…" : "Delete permanently"}
                   </button>
@@ -775,7 +775,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                   style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                   Cancel
                 </button>
-                <button
+                <button aria-busy={!!(busy)}
                   onClick={() => (expandedServiceRow ? saveServiceEdit(expandedServiceRow) : expandedWashRow ? saveWashEdit(expandedWashRow) : undefined)}
                   disabled={busy}
                   style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}

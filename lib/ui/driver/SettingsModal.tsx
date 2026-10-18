@@ -281,7 +281,7 @@ function CompanySection({ companyId, companyName, isSolo, onRenamed }: {
               onKeyDown={(e) => e.key === "Enter" && save()}
               style={{ ...css.input, flex: 1 }}
             />
-            <button type="button" style={css.btn("primary")} onClick={save} disabled={saving || !name.trim() || name.trim() === companyName}>
+            <button aria-busy={!!(saving)} type="button" style={css.btn("primary")} onClick={save} disabled={saving || !name.trim() || name.trim() === companyName}>
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
@@ -349,7 +349,7 @@ function CompanySection({ companyId, companyName, isSolo, onRenamed }: {
               </div>
             </div>
           )}
-          <button
+          <button aria-busy={!!(openingPortal)}
             type="button"
             disabled={!subscription?.stripe_customer_id || openingPortal}
             title={subscription?.stripe_customer_id ? undefined : "No billing account on file for this company yet."}

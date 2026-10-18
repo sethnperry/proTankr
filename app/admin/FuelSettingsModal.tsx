@@ -206,7 +206,7 @@ export default function FuelSettingsModal({ open, onClose, companyId }: { open: 
             onRemove={() => set({ guide_path: null, guide_name: null, guide_mime: null })} />
         </div>
 
-        <button type="button" style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void saveDraft()}>
+        <button aria-busy={!!(busy)} type="button" style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void saveDraft()}>
           {busy ? "Saving…" : "Save"}
         </button>
         {draft.id && (confirmDelete ? (

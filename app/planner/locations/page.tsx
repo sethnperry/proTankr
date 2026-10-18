@@ -17,9 +17,11 @@ import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { dashedBtn, fieldInput, linkBtn, muted } from "../components/trip/tripUi";
 import { LocationEditor } from "../components/trip/LocationEditor";
 
+import { usePending } from "@/lib/ui/pending";
 export default function LocationsPage() {
   const shell = useCalculatorShell();
   const router = useRouter();
+  const nav = usePending();
   const userId = shell.effectiveUserId || null;
   const companyId = shell.companyId || null;
   const locList = useDeliveryLocationList(companyId, userId);
@@ -61,7 +63,7 @@ export default function LocationsPage() {
   // ── List ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "12px 16px 40px", maxWidth: 640, margin: "0 auto", color: "#fff" }}>
-      <button type="button" onClick={() => router.push("/planner/home")} style={{ ...linkBtn, marginBottom: 12 }}>‹ Driver Dashboard</button>
+      <button type="button" onClick={() => nav.go("back", "/planner/home")} aria-busy={nav.is("back")} style={{ ...linkBtn, marginBottom: 12 }}>‹ Driver Dashboard</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>Delivery Locations</h1>
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search number, name or city" style={{ ...fieldInput, marginBottom: 10 }} />
       <button type="button" onClick={() => open(null)} style={{ ...dashedBtn, marginBottom: 12 }}>+ New location</button>

@@ -293,7 +293,7 @@ export function CatalogPicker({
                 placeholder={placeholder}
                 style={{ ...fieldInput, fontSize: 13, padding: "7px 9px" }}
               />
-              <button type="button" onClick={createNew} disabled={busy || !newName.trim()}
+              <button aria-busy={!!(busy)} type="button" onClick={createNew} disabled={busy || !newName.trim()}
                 style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 12px", cursor: "pointer" }}>
                 {busy ? "…" : "Add"}
               </button>

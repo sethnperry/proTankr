@@ -204,7 +204,7 @@ export default function EquipmentStatusModal({
           />
         </div>
 
-        <button
+        <button aria-busy={!!(busy)}
           type="button"
           onClick={save}
           disabled={busy}

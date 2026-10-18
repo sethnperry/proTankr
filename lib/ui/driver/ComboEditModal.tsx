@@ -185,7 +185,7 @@ export default function ComboEditModal({
           )}
 
           {/* Save */}
-          <button
+          <button aria-busy={!!(saving)}
             type="button"
             style={{ ...S.btn, ...S.btnPrimary, width: "100%", padding: "15px 18px", borderRadius: 2, fontSize: 16, textAlign: "center" as const, marginBottom: 12, opacity: saving ? 0.55 : 1 }}
             onClick={handleSave}

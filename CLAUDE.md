@@ -11591,3 +11591,27 @@ site). Not click-tested beyond `/login` (no Supabase env in this container).
   Destructive confirms (Delete) stay red; equal-weight choices (stale API
   options, rack/preset pickers) aren't primaries and were left alone. The
   Credentials print page (white paper) keeps its dark button.
+
+### Load Report close goes straight to the dashboard; one tap-feedback pattern app-wide (2026-10-18)
+
+No migration. `tsc`, 255 tests and `next build --webpack` pass. The busy look was screenshot-checked on `/login`; nothing was tapped through a real trip.
+
+- **Load Report close.** `page.tsx` now has `leaveTo(href, label)`. It puts up the same full-screen cover the report uses while opening (spinner + "Opening dashboard…") in the same render the modal closes, then navigates. Used for:
+  - Back to Dashboard
+  - Arrive at Delivery
+  - Finish Loading on a trip
+
+  A report opened from the dashboard (`?report=`) returns there whichever way it's closed (`reportFromDashboardRef`). If it never opened (error), it stays put.
+- **The pattern** (`lib/ui/pending.tsx` + `app/globals.css`):
+  1. Every button, `[role=button]` and link shrinks and darkens slightly while pressed (CSS `scale`, so it doesn't fight inline transforms).
+  2. Once tapped, the control dims to 55%, stops taking taps, and shows a small spinner until the next screen opens or the save finishes.
+     - Mark it with `aria-busy`. A plain `aria-busy` button gets a CSS spinner before its label.
+     - `busyProps(on)` (adds `disabled` + `data-spin="own"`) is for controls that draw their own `<Spinner/>`.
+     - `usePending()` provides `go(key, href)` for navigation (ignores repeat taps, clears on route change or after 10s) and `run(key, fn)` for async work.
+- **Applied:**
+  - Dashboard: PTD, Load Report, View PTD, the tool panel (icon becomes a spinner), and the big step button ("Opening Planner…").
+  - Trip banner, Trips list rows and Blank PTD, back links, and the Dispatch board.
+  - Nav menu: `useLinkStatus` spinner on the row; the menu stays open until the route changes.
+  - Planner LOAD, Finish Loading, and the pop-out Next.
+  - A codemod added `aria-busy` to 98 existing buttons across 49 files that already showed "Saving…"/"…ing…" text.
+- Still not covered: navigation from cards without their own button (FleetBoard / parked cards), which only block repeat taps.

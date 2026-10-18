@@ -767,7 +767,7 @@ export default function MyLoadsModal({
                 style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Cancel
               </button>
-              <button type="button" onClick={confirmMode === "delete" ? confirmDelete : confirmRestore} disabled={deleteBusy}
+              <button aria-busy={!!(deleteBusy)} type="button" onClick={confirmMode === "delete" ? confirmDelete : confirmRestore} disabled={deleteBusy}
                 style={{
                   flex: 1, padding: "12px 0", borderRadius: 2, border: "none",
                   background: confirmMode === "delete" ? "#ef4444" : "#fff",

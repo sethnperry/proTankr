@@ -287,7 +287,7 @@ export default function ProTankrDashPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <button style={primaryBtn} disabled={busy} onClick={() => useCompanyAs("/planner")}>Open Planner as this</button>
               <button style={ghostBtn} disabled={busy} onClick={() => useCompanyAs("/admin")}>Company Admin</button>
-              <button style={ghostBtn} disabled={busy}
+              <button aria-busy={!!(busy)} style={ghostBtn} disabled={busy}
                 onClick={() => updateCompany({ is_solo: !selected.is_solo })}
                 title="Toggle Solo/Fleet">
                 {busy ? "…" : selected.is_solo ? "Make Fleet" : "Make Solo"}
@@ -308,7 +308,7 @@ export default function ProTankrDashPage() {
           {selected.is_solo ? (
             <>
               <div style={cardSub}>This is a <b style={{ color: "#fff" }}>Solo</b> company — one driver, no team. To add teammates it has to become a Fleet company first.</div>
-              <button style={primaryBtn} disabled={busy}
+              <button aria-busy={!!(busy)} style={primaryBtn} disabled={busy}
                 onClick={() => updateCompany({ is_solo: false })}>
                 {busy ? "…" : "Make Fleet, then invite"}
               </button>
@@ -324,7 +324,7 @@ export default function ProTankrDashPage() {
                 </div>
                 <input value={fRegion} onChange={(e) => setFRegion(e.target.value)} placeholder="Region (optional)" style={{ ...input, minWidth: 130 }}
                   onKeyDown={(e) => { if (e.key === "Enter") sendFleetInvite(); }} />
-                <button style={primaryBtn} disabled={fBusy} onClick={sendFleetInvite}>{fBusy ? "Sending…" : "Send Invite"}</button>
+                <button aria-busy={!!(fBusy)} style={primaryBtn} disabled={fBusy} onClick={sendFleetInvite}>{fBusy ? "Sending…" : "Send Invite"}</button>
               </div>
               {msgLine(fMsg)}
             </>
@@ -352,7 +352,7 @@ export default function ProTankrDashPage() {
               );
             })}
           </div>
-          <button style={primaryBtn} disabled={sBusy} onClick={sendSoloInvite}>{sBusy ? "Sending…" : "Send Invite"}</button>
+          <button aria-busy={!!(sBusy)} style={primaryBtn} disabled={sBusy} onClick={sendSoloInvite}>{sBusy ? "Sending…" : "Send Invite"}</button>
         </div>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 10 }}>
           {sPaid ? "Paid — starts a trial flagged for billing when checkout is live. Full access today."

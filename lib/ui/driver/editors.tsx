@@ -156,7 +156,7 @@ export function TerminalAccessEditor({ userId, companyId, existing, onReload }: 
             <label style={css.label}>Carded On</label>
             <input type="date" value={addCardedOn} onChange={e => setAddCardedOn(e.target.value)} style={css.input} />
           </div>
-          <button onClick={addAccess} disabled={saving || !addTerminalId}
+          <button aria-busy={!!(saving)} onClick={addAccess} disabled={saving || !addTerminalId}
             style={{ ...css.btn("primary"), marginBottom: 1 }}>
             {saving ? "Adding…" : "Add"}
           </button>

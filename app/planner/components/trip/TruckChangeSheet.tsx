@@ -84,7 +84,7 @@ export function TruckChangeSheet({ open, view, busy, onRecord, onClose }: {
         <input inputMode="decimal" value={toOdo} onChange={(e) => setToOdo(e.target.value)} placeholder="Optional" style={{ ...fieldInput, marginBottom: 6 }} />
         <div style={{ fontSize: 12, color: muted, marginBottom: 14 }}>Both are needed for the PTD's total miles across the two trucks.</div>
 
-        <button type="button" disabled={busy} onClick={() => onRecord(numOrNull(fromOdo), numOrNull(toOdo))} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
+        <button aria-busy={!!(busy)} type="button" disabled={busy} onClick={() => onRecord(numOrNull(fromOdo), numOrNull(toOdo))} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
           {busy ? "Saving…" : "Record Truck Change"}
         </button>
         <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 8, padding: "10px 0", border: "none", background: "transparent", color: muted, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>

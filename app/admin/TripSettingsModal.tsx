@@ -159,7 +159,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           value={settings.require_consignee_signature} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_consignee_signature: v }))} />
         <CheckRow label="Tank readings" help="Before and after readings for every tank of each product delivered."
           value={settings.require_tank_readings} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_tank_readings: v }))} />
-        {isAdmin && <button type="button" onClick={saveSettings} disabled={busy} style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save settings"}</button>}
+        {isAdmin && <button aria-busy={!!(busy)} type="button" onClick={saveSettings} disabled={busy} style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save settings"}</button>}
       </div>
       {msg && <div style={{ color: msg.ok ? "#4ade80" : "#f87171", fontSize: 14, marginBottom: 12 }}>{msg.text}</div>}
       <div style={card}>

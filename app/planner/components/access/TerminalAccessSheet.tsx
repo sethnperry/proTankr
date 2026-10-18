@@ -232,7 +232,7 @@ export function TerminalAccessSheet({
     const nextBtn = (canNext: boolean) => (
       <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
         {q > 0 && <button type="button" onClick={() => setQ(q - 1)} style={{ ...btn, textAlign: "center", width: 110 }}>Back</button>}
-        <button type="button" disabled={!canNext || busy} onClick={() => (q < QUESTIONS - 1 ? setQ(q + 1) : void saveRequirements())}
+        <button aria-busy={!!(busy)} type="button" disabled={!canNext || busy} onClick={() => (q < QUESTIONS - 1 ? setQ(q + 1) : void saveRequirements())}
           style={{ ...primary, flex: 1, opacity: canNext && !busy ? 1 : 0.4 }}>
           {q < QUESTIONS - 1 ? "Next" : busy ? "Saving…" : "Save"}
         </button>
@@ -387,7 +387,7 @@ export function TerminalAccessSheet({
           <div style={{ marginTop: 10, fontSize: 14, color: MUTED }}>Card issued {fmtDate(prog.card_issued_at)}. Access is tracked on your terminal card now.</div>
         )}
         {!prog && (
-          <button type="button" style={{ ...primary, marginTop: 14 }} disabled={busy}
+          <button aria-busy={!!(busy)} type="button" style={{ ...primary, marginTop: 14 }} disabled={busy}
             onClick={() => void run(async () => { await ensureProgress(); })}>
             {busy ? "Starting…" : "Start access steps"}
           </button>
@@ -463,7 +463,7 @@ export function TerminalAccessSheet({
         This finishes the access steps and starts your access here today.
       </div>
       <div style={{ display: "grid", gap: 10 }}>
-        <button type="button" style={primary} disabled={busy} onClick={() => void issueCard()}>{busy ? "Saving…" : "Yes, card issued"}</button>
+        <button aria-busy={!!(busy)} type="button" style={primary} disabled={busy} onClick={() => void issueCard()}>{busy ? "Saving…" : "Yes, card issued"}</button>
         <button type="button" style={{ ...btn, textAlign: "center" }} onClick={() => setMode("steps")}>Cancel</button>
       </div>
     </div>

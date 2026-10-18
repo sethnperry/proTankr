@@ -191,7 +191,7 @@ export default function CompleteLoadModal(props: {
           <button type="button" style={styles.smallBtn} onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="button" style={styles.doneBtn} onClick={onSubmit} disabled={busy}>
+          <button aria-busy={!!(busy)} type="button" style={styles.doneBtn} onClick={onSubmit} disabled={busy}>
             {busy ? "Completing…" : "Complete Load"}
           </button>
         </div>

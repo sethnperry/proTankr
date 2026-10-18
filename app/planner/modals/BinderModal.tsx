@@ -221,7 +221,7 @@ function PermitTypeEditorModal({
               />
             </div>
 
-            <button type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
+            <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
 
             {mode === "edit" && (
               <button type="button" onClick={() => setConfirmingDelete(true)} disabled={busy} style={{ ...dangerBtnStyle, width: "100%" }}>
@@ -237,7 +237,7 @@ function PermitTypeEditorModal({
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setConfirmingDelete(false)} disabled={busy} style={cancelBtnStyle}>Cancel</button>
-              <button type="button" onClick={confirmDelete} disabled={busy} style={{ ...dangerBtnStyle, flex: 1 }}>
+              <button aria-busy={!!(busy)} type="button" onClick={confirmDelete} disabled={busy} style={{ ...dangerBtnStyle, flex: 1 }}>
                 {busy ? "Deleting…" : "Delete"}
               </button>
             </div>
@@ -427,7 +427,7 @@ function RequiredFieldsBlock({
         localArea={localArea} onLocalAreaChange={markDirty(setLocalArea)}
       />
       {dirty && (
-        <button type="button" onClick={save} disabled={busy} style={{ ...saveBtnStyle, marginTop: 12 }}>
+        <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={{ ...saveBtnStyle, marginTop: 12 }}>
           {busy ? "Saving…" : "Save"}
         </button>
       )}
@@ -522,7 +522,7 @@ function UnitInfoRow({
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" onClick={() => setEditing(false)} disabled={busy} style={cancelBtnStyle}>Cancel</button>
-                <button type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
+                <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
               </div>
             </>
           )}
@@ -973,7 +973,7 @@ function PermitRow({
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" onClick={() => setConfirmingDelete(false)} disabled={busy} style={cancelBtnStyle}>Cancel</button>
-                <button type="button" onClick={deleteRecord} disabled={busy} style={{ ...dangerBtnStyle, flex: 1 }}>{busy ? "Deleting…" : "Delete"}</button>
+                <button aria-busy={!!(busy)} type="button" onClick={deleteRecord} disabled={busy} style={{ ...dangerBtnStyle, flex: 1 }}>{busy ? "Deleting…" : "Delete"}</button>
               </div>
             </>
           ) : (
@@ -981,7 +981,7 @@ function PermitRow({
               {row.record && (
                 <button type="button" onClick={() => setConfirmingDelete(true)} disabled={busy} style={dangerBtnStyle}>Delete</button>
               )}
-              <button type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
+              <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
             </div>
           )}
         </div>

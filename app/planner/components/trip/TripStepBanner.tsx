@@ -13,8 +13,10 @@ import { openTripForDriver } from "@/lib/trips/tripLogic";
 import { nextStep, tripSnapshot } from "@/lib/trips/tripFlow";
 import type { TripRow } from "@/lib/trips/types";
 
+import { Spinner, busyProps, usePending } from "@/lib/ui/pending";
 export function TripStepBanner({ userId }: { userId: string | null }) {
   const router = useRouter();
+  const nav = usePending();
   const { state, store } = useTripStore(userId);
   const step = useMemo(() => {
     if (!store || !userId) return null;
@@ -27,7 +29,8 @@ export function TripStepBanner({ userId }: { userId: string | null }) {
   return (
     <button
       type="button"
-      onClick={() => router.push("/planner/home")}
+      onClick={() => nav.go("home", "/planner/home")}
+      {...busyProps(nav.is("home"))}
       style={{
         display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", gap: 10,
         border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff",
@@ -38,7 +41,7 @@ export function TripStepBanner({ userId }: { userId: string | null }) {
         <b>Trip: {step.label}</b>
         {step.detail ? <span style={{ color: "rgba(255,255,255,0.55)" }}> · {step.detail}</span> : null}
       </span>
-      <span style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>›</span>
+      <span style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>{nav.is("home") ? <Spinner size={14} /> : "›"}</span>
     </button>
   );
 }

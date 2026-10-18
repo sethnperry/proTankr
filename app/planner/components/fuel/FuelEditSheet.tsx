@@ -152,7 +152,7 @@ export default function FuelEditSheet({ row, payment, canEditMoney, onClose, onS
       <F label="Note"><input style={input} value={f.notes} onChange={(e) => set({ notes: e.target.value })} /></F>
 
       {err && <div style={{ color: "#f87171", fontSize: 13, margin: "6px 0 10px" }}>{err}</div>}
-      <button type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "SAVE CHANGES"}</button>
+      <button aria-busy={!!(busy)} type="button" style={{ ...primary, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "SAVE CHANGES"}</button>
       <button type="button" style={{ ...secondary, marginTop: 10 }} disabled={busy} onClick={onClose}>Cancel</button>
 
       {confirmDelete ? (

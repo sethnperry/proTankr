@@ -65,7 +65,7 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
           Marked out at {markedHhmm} hrs, clears at {clearsHhmm} hrs
         </div>
         {report.canClear && (
-          <button
+          <button aria-busy={!!(clearing)}
             type="button"
             onClick={() => onClear(report.reportId)}
             disabled={clearing}

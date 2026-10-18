@@ -1703,7 +1703,7 @@ export default function SoloEquipmentModal({
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
                 Cancel
               </button>
-              <button type="button" onClick={confirmRemove} disabled={busy}
+              <button aria-busy={!!(busy)} type="button" onClick={confirmRemove} disabled={busy}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Deleting…" : "Delete"}
               </button>
@@ -1743,7 +1743,7 @@ export default function SoloEquipmentModal({
               >
                 Cancel
               </button>
-              <button type="button" onClick={submitNewTare} disabled={busy}
+              <button aria-busy={!!(busy)} type="button" onClick={submitNewTare} disabled={busy}
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Pairing…" : "Couple & Select"}
               </button>
@@ -1904,7 +1904,7 @@ function SimpleWashModal({
           <label style={S.reportLabel}>Notes</label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: 70, fontFamily: "inherit", resize: "vertical" as const }} />
         </div>
-        <button type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
+        <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
       </div>
     </FullscreenModal>
   );

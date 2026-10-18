@@ -76,7 +76,7 @@ export default function TruckFuelTankField({ truckId }: { truckId: string }) {
           <span style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "rgba(255,255,255,0.35)" }}>gal</span>
         </div>
         {dirty && (
-          <button
+          <button aria-busy={!!(busy)}
             type="button"
             onClick={save}
             disabled={busy}

@@ -56,6 +56,7 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 
+import { usePending } from "@/lib/ui/pending";
 // Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
 // and credentials stay red however long ago they expired; terminal cards
 // time out to "no access" 30 days after expiring.
@@ -145,6 +146,7 @@ function ExpirationLine({ label, iso, access = false }: { label: string; iso: st
 export default function DispatchPage() {
   const shell = useCalculatorShell();
   const router = useRouter();
+  const nav = usePending();
   const { selectedDriverId, setSelectedDriverId, companyId, effectiveUserId, authUserId } = shell;
   const canUseAppAs = shell.role === "admin" || shell.isSuperAdmin;
 
@@ -376,7 +378,7 @@ export default function DispatchPage() {
       <div style={{ paddingTop: 4 }}>
         {fleet.error && <div style={{ fontSize: 13, color: "#f87171", marginBottom: 10 }}>{fleet.error}</div>}
         <FleetBoard cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
-          onOpenTrip={(id) => router.push(`/planner/trips/${id}`)} />
+          onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} />
         <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Drivers</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 10 }}>Select a driver to view.</div>
         <DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} />

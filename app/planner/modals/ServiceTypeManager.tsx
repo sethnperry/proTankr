@@ -219,7 +219,7 @@ export function ServiceTypeEditorModal({
               </div>
             </div>
 
-            <button type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
+            <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
 
             {mode === "edit" && (
               <button
@@ -243,7 +243,7 @@ export function ServiceTypeEditorModal({
                 style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
                 Cancel
               </button>
-              <button type="button" onClick={confirmDelete} disabled={busy}
+              <button aria-busy={!!(busy)} type="button" onClick={confirmDelete} disabled={busy}
                 style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Deleting…" : "Delete"}
               </button>
@@ -635,7 +635,7 @@ export function SimpleServiceModal({
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: 70, fontFamily: "inherit", resize: "vertical" as const }} />
         </div>
 
-        <button type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
+        <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
       </div>
 
       <ServiceTypeEditorModal

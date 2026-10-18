@@ -215,6 +215,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
             type="button"
             onClick={onSubmit}
             disabled={!!busyLabel}
+            aria-busy={!!busyLabel}
             style={{
               flex: 1, padding: "12px 0", borderRadius: 2,
               border: "none", background: "#fff",

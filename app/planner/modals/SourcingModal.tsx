@@ -315,7 +315,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                                 style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                                 Keep
                               </button>
-                              <button type="button"
+                              <button aria-busy={!!(busy)} type="button"
                                 onClick={() => deleteRow(row.id, row.isDraft)}
                                 disabled={busy}
                                 style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.18)", color: "rgba(239,68,68,0.95)", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
@@ -326,7 +326,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
 
                           {/* Save button */}
                           {!isConfirmingDelete && (
-                            <button type="button"
+                            <button aria-busy={!!(busy)} type="button"
                               onClick={() => saveRow(row)}
                               disabled={busy || (!row.account.trim() && !row.number.trim())}
                               style={{

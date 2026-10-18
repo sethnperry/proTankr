@@ -271,7 +271,7 @@ export default function WeightRecordModal({
         </div>
 
         <div style={{ padding: "12px 16px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", background: "#000", flexShrink: 0 }}>
-          <button
+          <button aria-busy={!!(busy)}
             type="button"
             onClick={save}
             disabled={busy}

@@ -166,12 +166,12 @@ export default function LoginPage() {
             placeholder="Code from your email" autoComplete="one-time-code" inputMode="numeric"
             style={{ ...input, letterSpacing: 4, fontWeight: 800, fontSize: 20 }} />
         </label>
-        <button type="submit" disabled={verifying} style={primaryBtn(verifying)}>
+        <button aria-busy={!!(verifying)} type="submit" disabled={verifying} style={primaryBtn(verifying)}>
           {verifying ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      <button type="button" onClick={sendCode} disabled={sendingCode}
+      <button aria-busy={!!(sendingCode)} type="button" onClick={sendCode} disabled={sendingCode}
         style={{ ...linkBtn, marginTop: 12 }}>
         {sendingCode ? "Sending…" : codeSent ? "Resend code" : "Email me a code"}
       </button>
@@ -188,7 +188,7 @@ export default function LoginPage() {
         </div>
       ) : (
         <form onSubmit={sendMagicLink}>
-          <button type="submit" disabled={sendingLink} style={secondaryBtn(sendingLink)}>
+          <button aria-busy={!!(sendingLink)} type="submit" disabled={sendingLink} style={secondaryBtn(sendingLink)}>
             {sendingLink ? "Sending…" : "Email me a magic link instead"}
           </button>
         </form>

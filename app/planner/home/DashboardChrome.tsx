@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import { useDashLook } from "./dashLook";
 import type { ReadinessSegment, ReadinessSummary } from "@/lib/terminals/readiness";
 import { EXPIRY_COLOR } from "@/lib/expiry";
+import { Spinner, busyProps } from "@/lib/ui/pending";
 
 // Shared expiration colors (lib/expiry.ts): white > 30 days, yellow 8-30,
 // orange 0-7, red expired.
@@ -188,7 +189,7 @@ function Icon({ name, color }: { name: ToolIcon; color: string }) {
 
 // ── Tools and gauge panel ───────────────────────────────────────────────────
 
-export type ToolItem = { icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick: () => void };
+export type ToolItem = { icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick: () => void; busy?: boolean };
 
 // Compact three-across icon panel, square, label under the icon.
 export function ToolPanel({ items }: { items: ToolItem[] }) {
@@ -196,10 +197,12 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${L.hairline}`, background: L.hairline, gap: 1 }}>
       {items.map((t) => (
-        <button key={t.label} type="button" onClick={t.onClick} className="dash-press"
+        <button key={t.label} type="button" onClick={t.onClick} className="dash-press" {...busyProps(!!t.busy)}
           style={{ background: "#0f0f10", border: "none", color: "#fff", cursor: "pointer", padding: "14px 6px 12px",
             display: "flex", flexDirection: "column", alignItems: "center", gap: 7, minHeight: 82 }}>
-          <Icon name={t.icon} color={t.subColor ?? "rgba(255,255,255,0.85)"} />
+          {t.busy
+            ? <span style={{ width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner size={16} /></span>
+            : <Icon name={t.icon} color={t.subColor ?? "rgba(255,255,255,0.85)"} />}
           <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>{t.label}</span>
         </button>
       ))}
@@ -209,13 +212,13 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
 }
 
 // A row of big readouts under the main button.
-export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void };
+export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean };
 export function GaugePanel({ cells }: { cells: GaugeCell[] }) {
   const L = useDashLook();
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12 }}>
       {cells.map((c) => (
-        <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick} className={c.onClick ? "dash-press" : undefined}
+        <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
           style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span aria-hidden style={{ width: 6, height: 6, background: c.color ?? "rgba(255,255,255,0.5)", flexShrink: 0 }} />

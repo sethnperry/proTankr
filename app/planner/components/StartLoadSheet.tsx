@@ -254,7 +254,7 @@ export function StartLoadSheet({
         <div style={row}>
           <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
             <span>Starting from</span>
-            <button type="button" onClick={() => void locateMe()} disabled={locating}
+            <button aria-busy={!!(locating)} type="button" onClick={() => void locateMe()} disabled={locating}
               style={{ ...removeBtn, fontSize: 12, padding: 0, color: "rgba(255,255,255,0.75)", fontWeight: 700 }}>
               {locating ? "Locating…" : "Use my location"}
             </button>

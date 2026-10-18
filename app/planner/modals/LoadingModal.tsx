@@ -1371,7 +1371,7 @@ export default function LoadingModal(props: {
                 </button>
                 {confirmDelete ? (
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button
+                    <button aria-busy={!!(deleteBusy)}
                       type="button"
                       onClick={() => onDeleteLoad?.()}
                       disabled={Boolean(deleteBusy)}
@@ -1441,6 +1441,7 @@ export default function LoadingModal(props: {
               type="button"
               onClick={startLogSequence}
               disabled={busy}
+              aria-busy={busy}
               style={{ ...(styles as any).doneBtn, opacity: busy ? 0.55 : 1, width: "100%" }}
             >
               {loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}

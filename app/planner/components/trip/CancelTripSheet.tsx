@@ -114,7 +114,7 @@ export function CancelTripSheet({ open, title, busy, error, onSubmit, onClose }:
         Your manager sees cancelled loads and their reasons. You can hide it from your own Trips list afterward.
       </div>
       {(err || error) && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err || error}</div>}
-      <button type="button" onClick={submit} disabled={busy}
+      <button aria-busy={!!(busy)} type="button" onClick={submit} disabled={busy}
         style={{ ...primaryBtn, background: "#f87171", color: "#000", opacity: busy ? 0.6 : 1 }}>
         {busy ? "Saving…" : "Cancel Load"}
       </button>

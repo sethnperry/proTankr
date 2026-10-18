@@ -126,7 +126,7 @@ export default function TargetWeightPolicyModal({ open, onClose, companyId }: Pr
           onChange={(e) => setDraft((d) => ({ ...d, [row.id]: e.target.value.replace(/[^0-9]/g, "") }))}
           style={{ ...INPUT, width: 110, textAlign: "right" as const }}
         />
-        <button
+        <button aria-busy={!!(savingId === row.id)}
           type="button"
           disabled={savingId === row.id || !dirty || !(Number.isFinite(parsed) && parsed > 0)}
           onClick={() => void saveOverride(kind, row, parsed)}
@@ -165,7 +165,7 @@ export default function TargetWeightPolicyModal({ open, onClose, companyId }: Pr
               onChange={(e) => setCompanyTarget(e.target.value.replace(/[^0-9]/g, ""))}
               style={{ ...INPUT, flex: 1 }}
             />
-            <button type="button" onClick={saveCompanyTarget} disabled={savingCompany}
+            <button aria-busy={!!(savingCompany)} type="button" onClick={saveCompanyTarget} disabled={savingCompany}
               style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
               {savingCompany ? "Saving…" : "Save"}
             </button>

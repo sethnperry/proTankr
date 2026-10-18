@@ -464,11 +464,11 @@ export default function VaultPage() {
           Continuing will let you draw a new unlock pattern. Your saved logins and passwords are never affected either way.
         </div>
         {resetConfirmError && <div style={errorStyle}>{resetConfirmError}</div>}
-        <button onClick={confirmResetTap} disabled={resetConfirmBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
+        <button aria-busy={!!(resetConfirmBusy)} onClick={confirmResetTap} disabled={resetConfirmBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
           {resetConfirmBusy ? "Confirming…" : "Continue"}
         </button>
         {resetConfirmError && (
-          <button onClick={requestReset} disabled={requestBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
+          <button aria-busy={!!(requestBusy)} onClick={requestReset} disabled={requestBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
             {requestBusy ? "Sending…" : "Send another email"}
           </button>
         )}
@@ -517,7 +517,7 @@ export default function VaultPage() {
         <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 20 }}>Vault Locked</div>
         {pinError && <div style={errorStyle}>{pinError}</div>}
         <PatternLock mode="verify" onComplete={handleVerifyAttempt} disabled={busy} />
-        <button onClick={requestReset} disabled={requestBusy} style={{ marginTop: 20, background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+        <button aria-busy={!!(requestBusy)} onClick={requestReset} disabled={requestBusy} style={{ marginTop: 20, background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
           {requestBusy ? "Sending…" : "Forgot Pattern?"}
         </button>
         {requestError && <div style={{ ...errorStyle, marginTop: 10 }}>{requestError}</div>}
@@ -641,7 +641,7 @@ export default function VaultPage() {
                             Edit
                           </button>
                           {confirmDeleteId === e.id ? (
-                            <button onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                            <button aria-busy={!!(busy)} onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                               {busy ? "Deleting…" : "Confirm delete"}
                             </button>
                           ) : (
@@ -730,7 +730,7 @@ export default function VaultPage() {
               <button onClick={() => setFormOpen(false)} disabled={busy} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 Cancel
               </button>
-              <button onClick={saveEntry} disabled={busy || !fLabel.trim()} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: fLabel.trim() ? 1 : 0.5 }}>
+              <button aria-busy={!!(busy)} onClick={saveEntry} disabled={busy || !fLabel.trim()} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: fLabel.trim() ? 1 : 0.5 }}>
                 {busy ? "Saving…" : "Save"}
               </button>
             </div>

@@ -114,7 +114,7 @@ export function NoLoadSheet({ open, rackName, arrivedAt, products, busy, error, 
       </div>
 
       {(err || error) && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err || error}</div>}
-      <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
+      <button aria-busy={!!(busy)} type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
         {busy ? "Saving…" : "Depart for the Next Rack"}
       </button>
     </FullscreenModal>

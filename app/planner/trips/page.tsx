@@ -17,6 +17,7 @@ import { ptdCode } from "@/lib/trips/code39";
 import type { TripOrderRow, TripRow } from "@/lib/trips/types";
 import { fmtDateTime } from "./PtdDocument";
 
+import { usePending } from "@/lib/ui/pending";
 const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
   draft: { label: "Not loaded", color: "rgba(255,255,255,0.5)" },
   loading: { label: "Loading", color: "#fbbf24" },
@@ -34,6 +35,7 @@ const card: React.CSSProperties = {
 
 export default function TripsPage() {
   const router = useRouter();
+  const nav = usePending();
   const shell = useCalculatorShell();
   const userId = shell.effectiveUserId || null;
   const { state, store, syncNow } = useTripStore(userId);
@@ -93,7 +95,7 @@ export default function TripsPage() {
     <div style={{ padding: 16, paddingBottom: 40, maxWidth: 640, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ fontSize: 20, fontWeight: 900 }}>Trips & PTDs</div>
-        <button type="button" onClick={() => router.push("/planner/trips/blank")}
+        <button type="button" onClick={() => nav.go("blank", "/planner/trips/blank")} aria-busy={nav.is("blank")}
           style={{ border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", borderRadius: 2, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
           Blank PTD
         </button>
@@ -108,9 +110,9 @@ export default function TripsPage() {
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
         return (
-          <div key={trip.trip_id} role="button" tabIndex={0}
-            onClick={() => router.push(`/planner/trips/${trip.trip_id}`)}
-            onKeyDown={(e) => { if (e.key === "Enter") router.push(`/planner/trips/${trip.trip_id}`); }}
+          <div key={trip.trip_id} role="button" tabIndex={0} aria-busy={nav.is(trip.trip_id)}
+            onClick={() => nav.go(trip.trip_id, `/planner/trips/${trip.trip_id}`)}
+            onKeyDown={(e) => { if (e.key === "Enter") nav.go(trip.trip_id, `/planner/trips/${trip.trip_id}`); }}
             style={{ ...card, opacity: trip.driver_hidden ? 0.55 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>{order ? `Order ${order}` : ptdCode(trip.trip_id)}</div>
