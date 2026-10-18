@@ -25,7 +25,7 @@ import { useCalculatorShell } from "./CalculatorShellContext";
 
 
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase/client";
 import { defaultLandingPath } from "@/lib/ui/driver/navDestinations";
@@ -1908,6 +1908,13 @@ export default function CalculatorPage() {
     setViewLastLoadBusy(true);
     setViewLastLoadMsg(null);
     try {
+      // A known load id: both reads at once (the dashboard's Load Report link).
+      const linesQuery = (id: string) => supabase
+        .from("load_lines")
+        .select("comp_number, product_id, actual_gallons, actual_lbs, actual_api, temp_f")
+        .eq("load_id", id)
+        .order("comp_number", { ascending: true });
+      const linesEarly = byLoadId ? linesQuery(byLoadId) : null;
       const { data: loadRow, error: loadErr } = byLoadId
         ? await supabase.from("load_log").select("load_id, completed_at, plan_slot").eq("load_id", byLoadId).maybeSingle()
         : await supabase
@@ -1922,11 +1929,7 @@ export default function CalculatorPage() {
       if (loadErr) throw loadErr;
       if (!loadRow) { setViewLastLoadMsg("No completed load at this terminal yet."); return; }
 
-      const { data: lineRows, error: lineErr } = await supabase
-        .from("load_lines")
-        .select("comp_number, product_id, actual_gallons, actual_lbs, actual_api, temp_f")
-        .eq("load_id", loadRow.load_id)
-        .order("comp_number", { ascending: true });
+      const { data: lineRows, error: lineErr } = await (linesEarly ?? linesQuery(String(loadRow.load_id)));
       if (lineErr) throw lineErr;
 
       const lines = (lineRows ?? [])
@@ -1959,6 +1962,12 @@ export default function CalculatorPage() {
   // /planner?report=<load_id> (the dashboard's Load Report link) opens that
   // load's report once.
   const reportParamDone = useRef(false);
+  // While that report loads, a plain cover hides the Planner so the driver
+  // goes straight from the dashboard to the report. Set before first paint.
+  const [reportPending, setReportPending] = useState(false);
+  useLayoutEffect(() => {
+    if (new URLSearchParams(window.location.search).get("report")) setReportPending(true);
+  }, []);
   useEffect(() => {
     if (reportParamDone.current || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -1968,7 +1977,7 @@ export default function CalculatorPage() {
     params.delete("report");
     const qs = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
-    void openLoadReportAtTerminal(id);
+    void openLoadReportAtTerminal(id).finally(() => setReportPending(false));
   }, [openLoadReportAtTerminal]);
 
   // Deliberately does NOT claim/switch equipment -- per explicit follow-up,
@@ -3052,6 +3061,12 @@ const lastProductInfoById = useMemo(() => {
     : styles.page;
   return (
     <div style={pageStyle}>
+      {reportPending && typeof document !== "undefined" && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 49, background: "#0b0b0b", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.55)", fontSize: 15 }}>
+          Opening load report…
+        </div>,
+        document.body,
+      )}
       {/* Admin setup session banner */}
       {setupSession && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", marginBottom: 8, borderRadius: 12, background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.30)" }}>

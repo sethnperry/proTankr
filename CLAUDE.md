@@ -11551,3 +11551,12 @@ No migration. Not click-tested (no Supabase env in this container).
   supplier in the panel (pick or switch) updates the trip supplier when the
   result is one supplier, so the change carries forward.
 - Gap: phone-only, so another device or a handoff driver won't see it.
+
+### Load Report from the dashboard opens straight to the report (2026-10-18)
+
+`/planner?report=<id>` used to show the Planner while the report loaded,
+then switch. `page.tsx` now sets `reportPending` in a layout effect (before
+first paint) and covers the Planner with a plain "Opening load report…"
+screen (portal to body, z-index just under the modal) until the report
+opens or fails. With a known load id, `load_log` and `load_lines` are read
+in parallel. Not click-tested.
