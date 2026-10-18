@@ -74,7 +74,7 @@ function ProductTempList({ groups, onSetProductTemp }: {
           onClick={() => openEdit(g)}
           style={{
             display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-            padding: "9px 12px", borderRadius: 6,
+            padding: "9px 12px", borderRadius: 2,
             border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.04)",
             cursor: "pointer", width: "100%", textAlign: "left" as const,
           }}
@@ -98,7 +98,7 @@ function ProductTempList({ groups, onSetProductTemp }: {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 280, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
+            style={{ width: "100%", maxWidth: 280, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
           >
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const, textAlign: "center" as const }}>
               Set Temp (°F) — {editingGroup.name}
@@ -113,11 +113,11 @@ function ProductTempList({ groups, onSetProductTemp }: {
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>-20° to 140°</div>
             <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 4 }}>
               <button type="button" onClick={() => setEditingId(null)}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={commitEdit}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 Set
               </button>
             </div>
@@ -167,7 +167,7 @@ function PredictionBanner({
   if (loading) {
     return (
       <div style={{
-        borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)",
+        borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
         background: "rgba(255,255,255,0.03)", padding: "12px 14px",
         display: "flex", alignItems: "center", gap: 12,
       }}>
@@ -193,7 +193,7 @@ function PredictionBanner({
 
   return (
     <div style={{
-      borderRadius: 6,
+      borderRadius: 2,
       border: isAccepted ? "1px solid rgba(74,222,128,0.25)" : "1px solid rgba(255,255,255,0.10)",
       background: isAccepted ? "rgba(74,222,128,0.06)" : "rgba(255,255,255,0.03)",
       padding: "12px 16px",
@@ -222,7 +222,7 @@ function PredictionBanner({
       ) : (
         <button type="button" onClick={() => onAccept(predictedTempF)} style={{
           background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)",
-          borderRadius: 6, padding: "8px 16px", color: "rgba(255,255,255,0.85)",
+          borderRadius: 2, padding: "8px 16px", color: "rgba(255,255,255,0.85)",
           fontSize: 12, fontWeight: 800, letterSpacing: 0.4,
           cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
         }}>
@@ -344,7 +344,7 @@ export default function ProductTempModal(props: {
         <button
           type="button"
           onClick={() => { onClose(); router.push("/learn"); }}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "11px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "11px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", cursor: "pointer" }}
         >
           <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.55)" }}>How this prediction works</span>
           <span style={{ fontSize: 13, color: "rgba(255,255,255,0.25)" }}>›</span>

@@ -49,7 +49,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
     footer === null ? null : footer ?? (
       <button
         onClick={onClose}
-        className="w-full rounded-2xl bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
+        className="w-full rounded-[2px] bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
       >
         Done
       </button>
@@ -70,7 +70,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
       {/* Floating panel */}
       <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-6">
         <div
-          className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0b0b] text-white shadow-2xl"
+          className="w-full max-w-2xl rounded-[2px] border border-white/15 bg-[#0b0b0b] text-white shadow-2xl"
           style={{ height: "min(92vh, 900px)" }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
@@ -84,14 +84,14 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
             ) : (
               <button
                 onClick={onClose}
-                className="rounded-xl px-3 py-2 text-sm hover:bg-white/10"
+                className="rounded-[2px] px-3 py-2 text-sm hover:bg-white/10"
                 aria-label="Close"
               >
                 Close
               </button>
             )}
 
-            <div className="text-base font-semibold">{title}</div>
+            <div className="text-[13px] font-extrabold uppercase tracking-[0.16em]">{title}</div>
 
             <div className="min-w-[64px] flex justify-end">{headerRight}</div>
           </div>

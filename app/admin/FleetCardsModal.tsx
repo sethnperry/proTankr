@@ -83,7 +83,7 @@ export default function FleetCardsModal({ open, onClose, companyId }: Props) {
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10200, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", padding: "16px 18px 12px", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           {picked && (
             <button type="button" onClick={() => setPicked(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0, flexShrink: 0 }}>
@@ -104,7 +104,7 @@ export default function FleetCardsModal({ open, onClose, companyId }: Props) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search terminal, city, or state…"
-                style={{ width: "100%", borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, padding: "9px 12px", boxSizing: "border-box", marginBottom: 10 }}
+                style={{ width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, padding: "9px 12px", boxSizing: "border-box", marginBottom: 10 }}
               />
               {search.trim() === "" ? (
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textAlign: "center" as const, padding: "24px 0" }}>Search for a terminal to see who's carded there.</div>
@@ -113,7 +113,7 @@ export default function FleetCardsModal({ open, onClose, companyId }: Props) {
               ) : (
                 filtered.map((t) => (
                   <div key={t.terminal_id} role="button" tabIndex={0} onClick={() => pickTerminal(t)}
-                    style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", marginBottom: 6, cursor: "pointer" }}>
+                    style={{ padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", marginBottom: 6, cursor: "pointer" }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{t.terminal_name}</div>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{t.city}{t.state ? `, ${t.state}` : ""}</div>
                   </div>
@@ -128,7 +128,7 @@ export default function FleetCardsModal({ open, onClose, companyId }: Props) {
             drivers.map((d) => {
               const state = accessStateFor(d.expiresISO);
               return (
-                <div key={d.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", marginBottom: 6 }}>
+                <div key={d.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", marginBottom: 6 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{d.display_name}</div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: DARK_EXP_COLOR[state], textAlign: "right" as const, flexShrink: 0 }}>
                     {d.expiresISO ? formatMDYWithCountdown_(d.expiresISO) : "Not carded"}

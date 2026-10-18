@@ -60,7 +60,7 @@ export default function PlannerControls(props: any) {
         <div style={{ marginTop: 6, marginBottom: 2, position: "relative" as const, opacity: selectedTerminalId ? 1 : 0.45, transition: "opacity 200ms" }}>
           {!selectedTerminalId && (
             <div style={{ position: "absolute" as const, inset: 0, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" as const }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", background: "rgba(0,0,0,0.55)", borderRadius: 8, padding: "4px 10px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", background: "rgba(0,0,0,0.55)", borderRadius: 2, padding: "4px 10px" }}>
                 Select a terminal first
               </div>
             </div>
@@ -289,7 +289,7 @@ export default function PlannerControls(props: any) {
                         <div style={{
                           position: "absolute", left: "50%", transform: "translateX(-50%)",
                           top: `calc(${capLineTopPct}% - 26px)`,
-                          background: "#1c1c1c", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 7,
+                          background: "#1c1c1c", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2,
                           padding: "2px 7px", fontSize: 10, fontWeight: 700, color: "#fff",
                           whiteSpace: "nowrap" as const, boxShadow: "0 4px 12px rgba(0,0,0,0.5)", zIndex: 4,
                         }}>

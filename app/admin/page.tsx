@@ -203,7 +203,7 @@ function AttachmentBtn() {
           onClick={() => setShowPreview(false)}
         >
           <div
-            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 2,
               padding: 16, maxWidth: 480, width: "100%", maxHeight: "80vh", overflow: "auto" }}
             onClick={e => e.stopPropagation()}
           >
@@ -212,7 +212,7 @@ function AttachmentBtn() {
               {file.name}
             </div>
             {preview
-              ? <img src={preview} alt="attachment" style={{ width: "100%", borderRadius: 8, marginBottom: 12 }} />
+              ? <img src={preview} alt="attachment" style={{ width: "100%", borderRadius: 2, marginBottom: 12 }} />
               : <div style={{ color: T.muted, fontSize: 12, marginBottom: 12, padding: "20px 0", textAlign: "center" as const }}>
                   📄 {file.name}
                 </div>
@@ -473,7 +473,7 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
         <div style={{
           fontSize: 12, fontWeight: 500, lineHeight: 1.6, color: "#fdba74",
           background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)",
-          borderLeft: "3px solid #fb923c", borderRadius: "0 8px 8px 0", padding: "10px 12px", marginBottom: 16,
+          borderLeft: "3px solid #fb923c", borderRadius: "0 2px 2px 0", padding: "10px 12px", marginBottom: 16,
         }}>
           <strong style={{ color: "#fb923c" }}>⚠ Over your paid seat limit.</strong>{" "}
           {role === "admin"
@@ -677,7 +677,7 @@ function ProductSwatch({ buttonCode, hexCode, isDyed, size = "sm" }: {
   const fs    = size === "md" ? 13 : 10;
   return (
     <div style={{
-      width: dim, height: dim, borderRadius: 8, flexShrink: 0,
+      width: dim, height: dim, borderRadius: 2, flexShrink: 0,
       background: "#000",
       display: "flex", alignItems: "center", justifyContent: "center",
       border: isDyed ? "2px solid #ef4444" : `2px solid ${color}`,
@@ -704,7 +704,7 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
     <div style={{ borderLeft: `2px solid ${T.border}`, marginLeft: 8, marginBottom: 2 }}>
       <div onClick={() => setOpen(v => !v)}
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "5px 10px", cursor: "pointer", userSelect: "none" as const, borderRadius: 6 }}>
+          padding: "5px 10px", cursor: "pointer", userSelect: "none" as const, borderRadius: 2 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
           <span style={{ fontSize: 12, color: T.text,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
@@ -712,7 +712,7 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
           </span>
           {!terminal.active && (
             <span style={{ fontSize: 9, color: T.muted, fontWeight: 700,
-              background: "rgba(255,255,255,0.06)", borderRadius: 3, padding: "1px 4px" }}>INACTIVE</span>
+              background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px" }}>INACTIVE</span>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -723,7 +723,7 @@ function TerminalRow({ terminal, onEdit }: { terminal: Terminal; onEdit: () => v
             {products.length} product{products.length !== 1 ? "s" : ""}
           </span>
           <button type="button" style={{ background: "none", border: "none", cursor: "pointer",
-            color: T.muted, fontSize: 11, padding: "1px 6px", borderRadius: 4 }}
+            color: T.muted, fontSize: 11, padding: "1px 6px", borderRadius: 2 }}
             onClick={e => { e.stopPropagation(); onEdit(); }}>Edit</button>
           <span style={{ fontSize: 10, color: T.muted, transform: open ? "rotate(90deg)" : "none",
             transition: "transform 150ms", display: "inline-block" }}>›</span>
@@ -1067,7 +1067,7 @@ function TerminalModal({ terminal, companyId, allProducts, onClose, onDone }: {
 
       {/* Catalog picker */}
       {catalogOpen && (
-        <div style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10,
+        <div style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 2,
           padding: "8px 10px", marginBottom: 10 }}>
           <input value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)}
             placeholder="Search products…" style={{ ...css.input, width: "100%", marginBottom: 8, fontSize: 12, padding: "5px 8px" }} />
@@ -1819,7 +1819,7 @@ export default function AdminPage() {
     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
     background: "none", border: "none", cursor: "pointer",
     color: "rgba(255,255,255,0.45)",
-    borderRadius: 10,
+    borderRadius: 2,
   };
   const filterRow: React.CSSProperties = { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" };
 
@@ -1838,7 +1838,7 @@ export default function AdminPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
           {dashboardStats.map(s => (
             <div key={s.key} style={{
-              flex: "1 1 90px", minWidth: 90, borderRadius: 12,
+              flex: "1 1 90px", minWidth: 90, borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
               padding: "12px 14px",
             }}>
@@ -1876,7 +1876,7 @@ export default function AdminPage() {
                   onClick={item.onOpen}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, width: "100%",
-                    padding: "9px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                    padding: "9px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                     border: item.severity === "danger" ? "1px solid rgba(239,68,68,0.25)" : "1px solid rgba(251,146,60,0.22)",
                     background: item.severity === "danger" ? "rgba(239,68,68,0.06)" : "rgba(251,146,60,0.06)",
                   }}
@@ -1921,7 +1921,7 @@ export default function AdminPage() {
         {quickFindVisible && (
           <div style={{
             position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
-            background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
+            background: T.surface, border: `1px solid ${T.border}`, borderRadius: 2,
             boxShadow: "0 10px 24px rgba(0,0,0,0.45)", padding: "6px 0", maxHeight: 360, overflowY: "auto" as const,
           }}>
             {!quickFindHasResults ? (
@@ -1986,7 +1986,7 @@ export default function AdminPage() {
       {hasOwnScope && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 20,
-          padding: "8px 12px", borderRadius: 8,
+          padding: "8px 12px", borderRadius: 2,
           border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
         }}>
           <span style={{ fontSize: 12, color: T.muted }}>
@@ -2113,7 +2113,7 @@ export default function AdminPage() {
           padding: 12px;
           font-size: 13px;
           font-weight: 800;
-          border-radius: 12px;
+          border-radius: 2px;
           border: 1px solid rgba(255,255,255,0.10);
           background: linear-gradient(135deg, #2a2a2c 0%, #1c1c1e 100%);
           box-shadow: 0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -2147,7 +2147,7 @@ export default function AdminPage() {
                   fontSize: 11,
                   fontWeight: 700,
                   padding: "3px 9px",
-                  borderRadius: 999,
+                  borderRadius: 2,
                   color: seats.otherSeatsFull || seats.adminSeatsFull ? "#fb923c" : T.muted,
                   background: seats.otherSeatsFull || seats.adminSeatsFull ? "rgba(251,146,60,0.10)" : "rgba(255,255,255,0.05)",
                   whiteSpace: "nowrap" as const,
@@ -2197,7 +2197,7 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={() => setLoadsModal({ userId: m.user_id, displayName: m.display_name ?? m.email ?? m.user_id })}
-                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", cursor: "pointer", whiteSpace: "nowrap" as const }}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", cursor: "pointer", whiteSpace: "nowrap" as const }}
                     >
                       Loads
                     </button>
@@ -2216,7 +2216,7 @@ export default function AdminPage() {
         <Modal title="Equipment" onClose={() => setEquipOpen(false)} wide>
           {(flaggedTruckCount + flaggedTrailerCount) > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 999, padding: "2px 8px" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 2, padding: "2px 8px" }}>
                 ⚠ {flaggedTruckCount + flaggedTrailerCount} flagged
               </span>
             </div>
@@ -2243,7 +2243,7 @@ export default function AdminPage() {
                       onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
                       style={{
                         display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                         border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
                         background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
                         color: "#f87171", fontSize: 12, fontWeight: 700,
@@ -2259,7 +2259,7 @@ export default function AdminPage() {
                       onClick={() => setTruckFilter(f => f === "expiring" ? "" : "expiring")}
                       style={{
                         display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                         border: truckFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
                         background: truckFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
                         color: "#fdba74", fontSize: 12, fontWeight: 700,
@@ -2303,7 +2303,7 @@ export default function AdminPage() {
                       onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
                       style={{
                         display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                         border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
                         background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
                         color: "#f87171", fontSize: 12, fontWeight: 700,
@@ -2319,7 +2319,7 @@ export default function AdminPage() {
                       onClick={() => setTrailerFilter(f => f === "expiring" ? "" : "expiring")}
                       style={{
                         display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                         border: trailerFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
                         background: trailerFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
                         color: "#fdba74", fontSize: 12, fontWeight: 700,

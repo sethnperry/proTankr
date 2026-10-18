@@ -154,7 +154,7 @@ export default function CompleteLoadModal(props: {
                       value={a.actual_gallons ?? ""}
                       onChange={(e) => setField(r.comp, "actual_gallons", e.target.value)}
                       style={{ width: 110 }}
-                      className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-sm text-white"
+                      className="rounded-[2px] border border-white/10 bg-black/40 px-2 py-1 text-sm text-white"
                       disabled={busy}
                     />
                   </td>
@@ -166,7 +166,7 @@ export default function CompleteLoadModal(props: {
                       value={a.actual_lbs ?? ""}
                       onChange={(e) => setField(r.comp, "actual_lbs", e.target.value)}
                       style={{ width: 110 }}
-                      className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-sm text-white"
+                      className="rounded-[2px] border border-white/10 bg-black/40 px-2 py-1 text-sm text-white"
                       disabled={busy}
                     />
                   </td>
@@ -177,7 +177,7 @@ export default function CompleteLoadModal(props: {
                       value={a.temp_f ?? ""}
                       onChange={(e) => setField(r.comp, "temp_f", e.target.value)}
                       style={{ width: 90 }}
-                      className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-sm text-white"
+                      className="rounded-[2px] border border-white/10 bg-black/40 px-2 py-1 text-sm text-white"
                       disabled={busy}
                     />
                   </td>

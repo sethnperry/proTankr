@@ -119,7 +119,7 @@ const S = {
     textAlign: "center" as const,
   },
   card: {
-    borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)",
     background: "rgba(255,255,255,0.05)", padding: "14px 10px",
     textAlign: "center" as const, cursor: "pointer", userSelect: "none" as const,
     fontWeight: 900, fontSize: 17, color: "rgba(255,255,255,0.85)",
@@ -129,7 +129,7 @@ const S = {
     color: "#fff",
   } as React.CSSProperties,
   selectEquipmentBtn: {
-    width: "100%", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
+    width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)",
     background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 900, fontSize: 14,
     letterSpacing: 0.3, padding: "14px 10px", textAlign: "center" as const, cursor: "pointer",
   } as React.CSSProperties,
@@ -148,7 +148,7 @@ const S = {
     padding: "18px 10px", fontWeight: 600,
   } as React.CSSProperties,
   statusCard: {
-    borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)",
     background: "rgba(255,255,255,0.04)", padding: "14px 16px",
   } as React.CSSProperties,
   statusHeader: {
@@ -167,7 +167,7 @@ const S = {
     fontSize: 11, fontWeight: 700 as const, color: "#fb923c", marginTop: 6,
   } as React.CSSProperties,
   plusCard: {
-    borderRadius: 6, border: "1px dashed rgba(255,255,255,0.18)",
+    borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)",
     background: "transparent", padding: "14px 10px", textAlign: "center" as const,
     cursor: "pointer", fontWeight: 900, fontSize: 20, color: "rgba(255,255,255,0.35)",
   } as React.CSSProperties,
@@ -179,7 +179,7 @@ const S = {
   } as React.CSSProperties,
   reportLabel: { fontSize: 13, fontWeight: 700 as const, color: "rgba(255,255,255,0.45)" },
   actionBtn: (): React.CSSProperties => ({
-    flex: 1, borderRadius: 6, padding: "12px 8px", textAlign: "center" as const,
+    flex: 1, borderRadius: 2, padding: "12px 8px", textAlign: "center" as const,
     background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.16)",
     color: "rgba(255,255,255,0.85)",
     fontWeight: 900, fontSize: 13, letterSpacing: 0.3, cursor: "pointer",
@@ -1191,7 +1191,7 @@ export default function SoloEquipmentModal({
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
           {error && (
-            <div style={{ borderRadius: 6, padding: 12, marginBottom: 10, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: 700 }}>
+            <div style={{ borderRadius: 2, padding: 12, marginBottom: 10, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: 700 }}>
               {error}
             </div>
           )}
@@ -1617,7 +1617,7 @@ export default function SoloEquipmentModal({
           into the away/commandeer chain, same as any other selection). ── */}
       {deadlineConfirmTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 8, padding: 20, width: "100%", maxWidth: 400, boxSizing: "border-box" as const }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 2, padding: 20, width: "100%", maxWidth: 400, boxSizing: "border-box" as const }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>This {deadlineConfirmTarget.kind} is Deadlined</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
               {deadlineConfirmTarget.notes || "No notes on file."} Couple it anyway?
@@ -1627,11 +1627,11 @@ export default function SoloEquipmentModal({
                 both buttons stay identical width AND height. */}
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setDeadlineConfirmTarget(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14, fontWeight: 700 }}>
+                style={{ flex: 1, padding: "10px 8px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14, fontWeight: 700 }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmDeadline} disabled={busy}
-                style={{ flex: 1, padding: "10px 8px", borderRadius: 6, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(180,40,40,0.2)", color: "#fca5a5", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14 }}>
+                style={{ flex: 1, padding: "10px 8px", borderRadius: 2, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(180,40,40,0.2)", color: "#fca5a5", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14 }}>
                 Couple It
               </button>
             </div>
@@ -1646,7 +1646,7 @@ export default function SoloEquipmentModal({
           warnings in sequence. ── */}
       {awayConfirmTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(251,146,60,0.35)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(251,146,60,0.35)", borderRadius: 2, padding: 20, maxWidth: 360 }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Couple this {awayConfirmTarget.kind}?</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
               This {awayConfirmTarget.kind} is home to {awayConfirmTarget.unitRegion}, not your {driverHomeRegion} area.
@@ -1654,11 +1654,11 @@ export default function SoloEquipmentModal({
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setAwayConfirmTarget(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmAway} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(251,146,60,0.5)", background: "rgba(251,146,60,0.18)", color: "#fdba74", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(251,146,60,0.5)", background: "rgba(251,146,60,0.18)", color: "#fdba74", fontWeight: 800, cursor: "pointer" }}>
                 Couple It
               </button>
             </div>
@@ -1671,18 +1671,18 @@ export default function SoloEquipmentModal({
           otherwise silently force-decouple it with no warning at all. ── */}
       {commandeerTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360 }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Take this {commandeerTarget.kind}?</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
               This {commandeerTarget.kind} is currently {commandeerTarget.ownerName}'s. Take it? They'll keep their {commandeerTarget.kind === "truck" ? "trailer" : "truck"}.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setCommandeerTarget(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmCommandeer} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(220,160,60,0.5)", background: "rgba(180,120,40,0.25)", color: "#fde68a", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(220,160,60,0.5)", background: "rgba(180,120,40,0.25)", color: "#fde68a", fontWeight: 800, cursor: "pointer" }}>
                 Take it
               </button>
             </div>
@@ -1693,18 +1693,18 @@ export default function SoloEquipmentModal({
       {/* ── Remove confirmation ── */}
       {removeTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360 }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Delete this unit?</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 18 }}>
               This permanently removes {removeTarget.name} and its full service and wash history. This can't be undone.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setRemoveTarget(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmRemove} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Deleting…" : "Delete"}
               </button>
             </div>
@@ -1715,7 +1715,7 @@ export default function SoloEquipmentModal({
       {/* ── New pairing needs a one-time tare weight (no history for this exact truck+trailer pair) ── */}
       {newTareTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360, width: "100%" }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>New Pairing</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 14 }}>
               This truck and trailer haven't been paired before. Enter the tare weight from a certified scale ticket.
@@ -1723,7 +1723,7 @@ export default function SoloEquipmentModal({
             <input
               type="number" inputMode="numeric" placeholder="e.g. 34800" autoFocus
               value={newTareInput} onChange={(e) => setNewTareInput(e.target.value)}
-              style={{ width: "100%", borderRadius: 6, padding: "12px 14px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 18, fontWeight: 700, boxSizing: "border-box", marginBottom: 16 }}
+              style={{ width: "100%", borderRadius: 2, padding: "12px 14px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 18, fontWeight: 700, boxSizing: "border-box", marginBottom: 16 }}
             />
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -1739,12 +1739,12 @@ export default function SoloEquipmentModal({
                   setSelectedTruckId(current?.truck_id ?? null);
                   setSelectedTrailerId(current?.trailer_id ?? null);
                 }}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}
               >
                 Cancel
               </button>
               <button type="button" onClick={submitNewTare} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Pairing…" : "Couple & Select"}
               </button>
             </div>
@@ -1864,7 +1864,7 @@ function SimpleWashModal({
             <div style={{ display: "flex", gap: 8 }}>
               {(["exterior", "interior"] as const).map((t) => (
                 <button key={t} type="button" onClick={() => setWashType(t)} style={{
-                  flex: 1, padding: "10px 0", borderRadius: 6, fontSize: 14, fontWeight: 800, cursor: "pointer",
+                  flex: 1, padding: "10px 0", borderRadius: 2, fontSize: 14, fontWeight: 800, cursor: "pointer",
                   border: washType === t ? "1px solid #fff" : "1px solid rgba(255,255,255,0.14)",
                   background: washType === t ? "rgba(255,255,255,0.12)" : "transparent", color: washType === t ? "#fff" : "rgba(255,255,255,0.55)",
                 }}>{t === "exterior" ? "Exterior" : "Interior (tanks)"}</button>
@@ -1880,7 +1880,7 @@ function SimpleWashModal({
                       <button key={n} type="button"
                         onClick={() => setPickedComps((p) => { const next = new Set(p); if (on) next.delete(n); else next.add(n); return next; })}
                         style={{
-                          minWidth: 48, padding: "8px 10px", borderRadius: 6, fontSize: 14, fontWeight: 800, cursor: "pointer",
+                          minWidth: 48, padding: "8px 10px", borderRadius: 2, fontSize: 14, fontWeight: 800, cursor: "pointer",
                           border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.14)",
                           background: on ? "rgba(255,255,255,0.12)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,0.45)",
                         }}>C{n}</button>
@@ -1911,10 +1911,10 @@ function SimpleWashModal({
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 6, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.14)",
+  width: "100%", borderRadius: 2, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 15, boxSizing: "border-box",
 };
 const saveBtnStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 18px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
+  width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
 };

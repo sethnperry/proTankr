@@ -14,7 +14,7 @@ import { fieldInput, fieldLabel, fromLocalInput, muted, primaryBtn, sectionCard,
 export type ParkSubmit = { parkFor: ParkFor; where: string | null; note: string | null; parkedAt: string };
 
 const chip = (on: boolean): React.CSSProperties => ({
-  padding: "10px 14px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer",
+  padding: "10px 14px", borderRadius: 2, fontSize: 14, fontWeight: 700, cursor: "pointer",
   border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)",
   background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)",
 });

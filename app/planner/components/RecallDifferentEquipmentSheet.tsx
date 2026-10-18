@@ -22,7 +22,7 @@
 // state touched at all).
 
 import React from "react";
-import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill } from "../theme";
+import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill , SURFACE } from "../theme";
 import { CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 
 export default function RecallDifferentEquipmentSheet({
@@ -47,8 +47,8 @@ export default function RecallDifferentEquipmentSheet({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 480,
-          background: `linear-gradient(180deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`,
-          borderRadius: "16px 16px 0 0", border: "1px solid rgba(255,255,255,0.1)",
+          background: SURFACE,
+          borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)",
           padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
         }}
       >
@@ -65,7 +65,7 @@ export default function RecallDifferentEquipmentSheet({
           type="button"
           onClick={onViewInReports}
           style={{
-            width: "100%", padding: "14px 16px", borderRadius: 10, marginBottom: 8,
+            width: "100%", padding: "14px 16px", borderRadius: 2, marginBottom: 8,
             border: CARD_BORDER, boxShadow: CARD_SHADOW,
             background: themeFill(darkMode, accentColor, "#fff"),
             color: themeTextOnFill(darkMode),
@@ -78,7 +78,7 @@ export default function RecallDifferentEquipmentSheet({
           type="button"
           onClick={onCancel}
           style={{
-            width: "100%", padding: "14px 16px", borderRadius: 10, border: "none",
+            width: "100%", padding: "14px 16px", borderRadius: 2, border: "none",
             background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer",
           }}
         >

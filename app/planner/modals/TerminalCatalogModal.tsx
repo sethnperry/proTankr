@@ -148,7 +148,7 @@ export default function TerminalCatalogModal(props: {
                         setCatalogExpandedId(isExpanded ? null : id);
                       }
                     }}
-                    className="rounded-md border border-white/10 bg-white/5 hover:bg-white/8 cursor-pointer select-none overflow-hidden"
+                    className="rounded-[2px] border border-white/10 bg-white/5 hover:bg-white/8 cursor-pointer select-none overflow-hidden"
                   >
                     <div className="flex items-center gap-0">
                       <div
@@ -193,7 +193,7 @@ export default function TerminalCatalogModal(props: {
 
                               {isEditing ? (
                                 <div
-                                  className="mt-1 rounded-md border border-white/10 bg-black/30 p-2 text-xs text-white/70"
+                                  className="mt-1 rounded-[2px] border border-white/10 bg-black/30 p-2 text-xs text-white/70"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <div className="text-white/80 font-semibold">Set Activation Date</div>
@@ -202,13 +202,13 @@ export default function TerminalCatalogModal(props: {
                                       type="date"
                                       value={activationISO}
                                       onChange={(e) => setAccessDateForTerminal_(tid, e.target.value)}
-                                      className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-white"
+                                      className="rounded-[2px] border border-white/10 bg-black/40 px-2 py-1 text-xs text-white"
                                     />
                                     <button
                                       type="button"
                                       // ✅ FIX: use terminal timezone
                                       onClick={() => setAccessDateForTerminal_(tid, isoToday_(tz))}
-                                      className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/80 hover:bg-white/10"
+                                      className="rounded-[2px] border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/80 hover:bg-white/10"
                                     >
                                       Today
                                     </button>
@@ -253,7 +253,7 @@ export default function TerminalCatalogModal(props: {
                     </div>
 
                     {isExpanded ? (
-                      <div className="mt-0 mx-3 mb-2 rounded-md border border-white/10 bg-black/30 p-2 text-xs text-white/70">
+                      <div className="mt-0 mx-3 mb-2 rounded-[2px] border border-white/10 bg-black/30 p-2 text-xs text-white/70">
                         <div className="text-white/80 font-semibold">Terminal details</div>
                         <div className="mt-1">Business-card placeholder.</div>
                       </div>

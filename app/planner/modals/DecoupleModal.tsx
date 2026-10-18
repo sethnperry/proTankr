@@ -38,7 +38,7 @@ const D = {
     marginBottom: 6, display: "block",
   } as React.CSSProperties,
   input: {
-    width: "100%", borderRadius: 8, padding: "10px 12px",
+    width: "100%", borderRadius: 2, padding: "10px 12px",
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(0,0,0,0.35)", color: "rgba(255,255,255,0.92)",
     fontSize: 14, outline: "none", boxSizing: "border-box",
@@ -48,7 +48,7 @@ const D = {
     backgroundColor: "rgba(180,30,30,0.15)",
   } as React.CSSProperties,
   select: {
-    width: "100%", borderRadius: 8, padding: "10px 12px",
+    width: "100%", borderRadius: 2, padding: "10px 12px",
     border: "1px solid rgba(255,255,255,0.14)",
     backgroundColor: "rgba(0,0,0,0.40)", color: "rgba(255,255,255,0.92)",
     fontSize: 14, outline: "none", boxSizing: "border-box",
@@ -59,14 +59,14 @@ const D = {
     paddingRight: 36,
   } as React.CSSProperties,
   textarea: {
-    width: "100%", borderRadius: 12, padding: "12px 14px",
+    width: "100%", borderRadius: 2, padding: "12px 14px",
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(0,0,0,0.35)", color: "rgba(255,255,255,0.92)",
     fontSize: 14, outline: "none", boxSizing: "border-box",
     resize: "vertical", minHeight: 72,
   } as React.CSSProperties,
   btn: {
-    borderRadius: 8, padding: "10px 16px", fontWeight: 900,
+    borderRadius: 2, padding: "10px 16px", fontWeight: 900,
     fontSize: 13, letterSpacing: 0.5, cursor: "pointer",
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.09)",
@@ -82,7 +82,7 @@ const D = {
     color: "rgba(255,180,140,0.95)",
   } as React.CSSProperties,
   err: {
-    borderRadius: 12, padding: "10px 14px",
+    borderRadius: 2, padding: "10px 14px",
     background: "rgba(180,40,40,0.18)",
     border: "1px solid rgba(180,40,40,0.32)",
     color: "rgba(255,255,255,0.88)", fontSize: 13, marginBottom: 12,
@@ -111,7 +111,7 @@ function ScenarioCard({ emoji, title, sub, onClick }: {
 }) {
   return (
     <button type="button" onClick={onClick} style={{
-      padding: "12px 14px", borderRadius: 10, cursor: "pointer",
+      padding: "12px 14px", borderRadius: 2, cursor: "pointer",
       textAlign: "left" as const, border: "1px solid rgba(255,255,255,0.12)",
       background: "rgba(255,255,255,0.05)", transition: "all 120ms ease", width: "100%",
     }}>
@@ -195,14 +195,14 @@ function StatusPicker<T extends string>({ options, value, onChange }: {
         return (
           <button key={o.code} type="button" onClick={() => onChange(o.code)} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "7px 10px",
-            borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+            borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
             border: sel ? (o.warn ? "1px solid rgba(220,80,40,0.55)" : "1px solid rgba(64,180,255,0.45)") : "1px solid rgba(255,255,255,0.10)",
             background: sel ? (o.warn ? "rgba(180,50,20,0.20)" : "rgba(32,100,200,0.18)") : "rgba(255,255,255,0.04)",
             transition: "all 120ms ease",
           }}>
             <div style={{
               flexShrink: 0, width: 60, textAlign: "center" as const,
-              fontSize: 10, fontWeight: 900, letterSpacing: 1, padding: "3px 0", borderRadius: 5,
+              fontSize: 10, fontWeight: 900, letterSpacing: 1, padding: "3px 0", borderRadius: 2,
               background: sel ? (o.warn ? "rgba(220,80,40,0.25)" : "rgba(64,180,255,0.18)") : "rgba(255,255,255,0.08)",
               color: sel ? (o.warn ? "#fb923c" : "#67e8f9") : "rgba(255,255,255,0.50)",
             }}>{o.code}</div>
@@ -223,12 +223,12 @@ function SummaryRow({ label, code, location, notes }: { label: string; code: str
   const def = allStatuses.find((s) => s.code === code);
   const isWarn = def?.warn;
   return (
-    <div style={{ padding: "9px 11px", borderRadius: 8, marginBottom: 8,
+    <div style={{ padding: "9px 11px", borderRadius: 2, marginBottom: 8,
       border: isWarn ? "1px solid rgba(220,80,40,0.35)" : "1px solid rgba(255,255,255,0.10)",
       background: isWarn ? "rgba(180,50,20,0.12)" : "rgba(255,255,255,0.04)" }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "2px 7px", borderRadius: 5,
+        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "2px 7px", borderRadius: 2,
           background: isWarn ? "rgba(220,80,40,0.20)" : "rgba(255,255,255,0.10)",
           color: isWarn ? "#fb923c" : "rgba(255,255,255,0.75)" }}>{code}</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: isWarn ? "#fb923c" : "rgba(255,255,255,0.75)" }}>{def?.label ?? code}</span>
@@ -749,7 +749,7 @@ export default function DecoupleModal({
         <>
           <SummaryRow label={`Parking — ${truckName}`} code={truckStatus}
             location={truckLocation} notes={truckNotes} />
-          <div style={{ padding: "10px 13px", borderRadius: 12, marginBottom: 8,
+          <div style={{ padding: "10px 13px", borderRadius: 2, marginBottom: 8,
             border: needsTare ? "1px solid rgba(251,191,36,0.40)" : "1px solid rgba(64,180,255,0.25)",
             background: needsTare ? "rgba(180,120,0,0.12)" : "rgba(32,100,200,0.12)" }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>
@@ -775,7 +775,7 @@ export default function DecoupleModal({
                   value={newTareLbs} onChange={(e) => setNewTareLbs(e.target.value)}
                   style={{ ...D.input, fontSize: 16, fontWeight: 700, marginBottom: 8 }}
                   autoFocus />
-                <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,185,0,0.07)", border: "1px solid rgba(255,185,0,0.18)", marginBottom: 6 }}>
+                <div style={{ padding: "8px 10px", borderRadius: 2, background: "rgba(255,185,0,0.07)", border: "1px solid rgba(255,185,0,0.18)", marginBottom: 6 }}>
                   <div style={{ fontSize: 10, fontWeight: 900, color: "#fbbf24", letterSpacing: 0.8, marginBottom: 3 }}>⛽ WEIGH-IN REMINDER</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.60)", lineHeight: 1.5 }}>
                     Ensure saddle tank(s) are <strong style={{ color: "rgba(255,255,255,0.82)" }}>completely full</strong> before weighing. Enter from a <strong style={{ color: "rgba(255,255,255,0.82)" }}>certified scale ticket</strong>.
@@ -791,7 +791,7 @@ export default function DecoupleModal({
         <>
           <SummaryRow label={`Parking — ${trailerName}`} code={trailerStatus}
             location={trailerLocation} notes={trailerNotes} />
-          <div style={{ padding: "10px 13px", borderRadius: 12, marginBottom: 8,
+          <div style={{ padding: "10px 13px", borderRadius: 2, marginBottom: 8,
             border: needsTare ? "1px solid rgba(251,191,36,0.40)" : "1px solid rgba(167,139,250,0.25)",
             background: needsTare ? "rgba(180,120,0,0.12)" : "rgba(100,70,200,0.12)" }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>
@@ -817,7 +817,7 @@ export default function DecoupleModal({
                   value={newTareLbs} onChange={(e) => setNewTareLbs(e.target.value)}
                   style={{ ...D.input, fontSize: 16, fontWeight: 700, marginBottom: 8 }}
                   autoFocus />
-                <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,185,0,0.07)", border: "1px solid rgba(255,185,0,0.18)", marginBottom: 6 }}>
+                <div style={{ padding: "8px 10px", borderRadius: 2, background: "rgba(255,185,0,0.07)", border: "1px solid rgba(255,185,0,0.18)", marginBottom: 6 }}>
                   <div style={{ fontSize: 10, fontWeight: 900, color: "#fbbf24", letterSpacing: 0.8, marginBottom: 3 }}>⛽ WEIGH-IN REMINDER</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.60)", lineHeight: 1.5 }}>
                     Ensure saddle tank(s) are <strong style={{ color: "rgba(255,255,255,0.82)" }}>completely full</strong> before weighing. Enter from a <strong style={{ color: "rgba(255,255,255,0.82)" }}>certified scale ticket</strong>.
@@ -833,11 +833,11 @@ export default function DecoupleModal({
         <>
           <SummaryRow label={`Trailer staying — ${trailerName}`} code={trailerStatus}
             location={trailerLocation} notes={trailerNotes} />
-          <div style={{ padding: "10px 13px", borderRadius: 12, marginBottom: 8,
+          <div style={{ padding: "10px 13px", borderRadius: 2, marginBottom: 8,
             border: "1px solid rgba(103,232,249,0.20)", background: "rgba(0,150,180,0.10)" }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>Truck</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 7px", borderRadius: 5,
+              <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 7px", borderRadius: 2,
                 background: "rgba(103,232,249,0.15)", color: "#67e8f9" }}>IN USE</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>{truckName}</span>
             </div>
@@ -847,7 +847,7 @@ export default function DecoupleModal({
 
       {scenario === "park_both" && (
         <>
-          <div style={{ padding: "10px 13px", borderRadius: 12, marginBottom: 8,
+          <div style={{ padding: "10px 13px", borderRadius: 2, marginBottom: 8,
             border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.04)" }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>Shared location</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.70)" }}>📍 {sharedLocation}</div>

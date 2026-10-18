@@ -33,7 +33,7 @@ type CatalogTargetRow = {
 };
 
 const INPUT: React.CSSProperties = {
-  borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
   color: "#fff", fontSize: 13, padding: "8px 10px", boxSizing: "border-box" as const,
 };
 const LABEL = "rgba(255,255,255,0.4)";
@@ -130,7 +130,7 @@ export default function TargetWeightPolicyModal({ open, onClose, companyId }: Pr
           type="button"
           disabled={savingId === row.id || !dirty || !(Number.isFinite(parsed) && parsed > 0)}
           onClick={() => void saveOverride(kind, row, parsed)}
-          style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, opacity: dirty ? 1 : 0.4 }}
+          style={{ padding: "7px 10px", borderRadius: 2, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, opacity: dirty ? 1 : 0.4 }}
         >
           {savingId === row.id ? "…" : "Save"}
         </button>
@@ -139,7 +139,7 @@ export default function TargetWeightPolicyModal({ open, onClose, companyId }: Pr
           disabled={savingId === row.id || !hasOverride}
           onClick={() => { setDraft((d) => ({ ...d, [row.id]: "" })); void saveOverride(kind, row, null); }}
           title="Reset to company policy"
-          style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, opacity: hasOverride ? 1 : 0.35 }}
+          style={{ padding: "7px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, opacity: hasOverride ? 1 : 0.35 }}
         >
           Reset
         </button>
@@ -149,7 +149,7 @@ export default function TargetWeightPolicyModal({ open, onClose, companyId }: Pr
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10200, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 560, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 560, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", padding: "16px 18px 12px", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>Target Weight</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.85)", fontSize: 20, fontWeight: 900, cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
@@ -166,7 +166,7 @@ export default function TargetWeightPolicyModal({ open, onClose, companyId }: Pr
               style={{ ...INPUT, flex: 1 }}
             />
             <button type="button" onClick={saveCompanyTarget} disabled={savingCompany}
-              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+              style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
               {savingCompany ? "Saving…" : "Save"}
             </button>
           </div>

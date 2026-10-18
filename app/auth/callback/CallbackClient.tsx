@@ -99,7 +99,7 @@ export default function CallbackClient() {
         <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.28)", marginBottom: 28 }}>
           ProTankr
         </div>
-        <div style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "24px 28px", maxWidth: 380, width: "100%", textAlign: "center" as const }}>
+        <div style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2, padding: "24px 28px", maxWidth: 380, width: "100%", textAlign: "center" as const }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 10 }}>
             Link expired or already used
           </div>

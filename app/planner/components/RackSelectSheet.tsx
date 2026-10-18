@@ -17,7 +17,7 @@
 // used here on purpose) -- picking a row is the only way out.
 
 import React from "react";
-import { GRAPHITE, GRAPHITE_DARKER } from "../theme";
+import { GRAPHITE, GRAPHITE_DARKER , SURFACE } from "../theme";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 
 type RackOption = { rack_id: string; rack_name: string };
@@ -38,7 +38,7 @@ type Props = {
 // appears as part of the mid-load terminal-switch flow (page.tsx) where
 // the two would otherwise sit right next to each other looking inconsistent.
 const rowStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 10,
+  width: "100%", padding: "14px 16px", borderRadius: 2,
   border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
   color: "rgba(255,255,255,0.90)", fontSize: 15, fontWeight: 700,
   cursor: "pointer", textAlign: "left" as const, marginBottom: 8,
@@ -54,8 +54,8 @@ export default function RackSelectSheet({ open, terminalLabel, racks, onPick }: 
       <div
         style={{
           width: "100%", maxWidth: 480,
-          background: `linear-gradient(180deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`,
-          borderRadius: "16px 16px 0 0", border: "1px solid rgba(255,255,255,0.1)",
+          background: SURFACE,
+          borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)",
           padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
         }}
       >

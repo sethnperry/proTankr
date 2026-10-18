@@ -59,7 +59,7 @@ type Props = {
 };
 
 const INPUT: React.CSSProperties = {
-  borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
   color: "#fff", fontSize: 13, padding: "8px 10px", boxSizing: "border-box" as const,
 };
 
@@ -264,7 +264,7 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10200, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 640, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 640, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", padding: "16px 18px 12px", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>Period Report</div>
           <button type="button" onClick={() => setSettingsOpen((v) => !v)} aria-label="Period settings"
@@ -295,12 +295,12 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
               proxy for actual member count. */}
           {currentMemberIds.size > 1 && (
             <button type="button" onClick={() => setDriverPickerOpen(true)}
-              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: driverFilter !== null ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+              style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: driverFilter !== null ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
               {driverFilter === null ? "All Drivers" : `${driverFilter.size} of ${currentMemberIds.size} Drivers`}
             </button>
           )}
           <button type="button" onClick={handleExportCsv} disabled={loading || drivers.length === 0}
-            style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+            style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
             Export CSV
           </button>
         </div>
@@ -319,7 +319,7 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
               </select>
               <input type="date" value={anchorDate} onChange={(e) => setAnchorDate(e.target.value)} style={{ ...INPUT, flex: 1, minWidth: 130 }} />
               <button type="button" onClick={savePeriodSettings} disabled={savingSettings}
-                style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+                style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
                 {savingSettings ? "Saving…" : "Save"}
               </button>
             </div>
@@ -345,7 +345,7 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
                 const empId = employeeNumberById[d.driver_id];
                 const notCounted = d.total_loads - d.summary.eligible_loads;
                 return (
-                  <div key={d.driver_id} style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", overflow: "hidden" }}>
+                  <div key={d.driver_id} style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", overflow: "hidden" }}>
                     <div role="button" tabIndex={0} onClick={() => setExpandedDriverId(isExpanded ? null : d.driver_id)}
                       style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", cursor: "pointer" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -370,7 +370,7 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
                         {loadsForDriver.map((l) => {
                           const note = exclusionNote(l);
                           return (
-                            <div key={l.load_id} style={{ padding: "6px 8px", borderRadius: 6, background: "rgba(255,255,255,0.03)" }}>
+                            <div key={l.load_id} style={{ padding: "6px 8px", borderRadius: 2, background: "rgba(255,255,255,0.03)" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}>
                                 <span style={{ color: "rgba(255,255,255,0.6)" }}>
                                   {l.loaded_at ? new Date(l.loaded_at).toLocaleDateString() : "—"}

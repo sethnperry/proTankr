@@ -19,8 +19,8 @@ export const T = {
   success:  "#4caf82",
   warning:  "#f5c623",
   info:     "#5ba8f5",
-  radius:   8,
-  radiusSm: 6,
+  radius:   2,
+  radiusSm: 2,
 } as const;
 
 export const css = {
@@ -118,7 +118,7 @@ export const css = {
   tag: (color: string) => ({
     display: "inline-block" as const,
     padding: "2px 8px",
-    borderRadius: 20,
+    borderRadius: 2,
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 0.4,

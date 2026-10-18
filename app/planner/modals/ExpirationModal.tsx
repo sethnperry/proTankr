@@ -69,7 +69,7 @@ type Props = {
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const BTN: React.CSSProperties = {
-  flex: 1, padding: "11px 0", borderRadius: 6,
+  flex: 1, padding: "11px 0", borderRadius: 2,
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.05)",
   color: "rgba(255,255,255,0.80)",
@@ -107,7 +107,7 @@ function ExpirationCard({
 
   if (deactivate?.confirming) {
     return (
-      <div style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+      <div style={{ padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginBottom: 2 }}>{label}</div>
         <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginBottom: 8 }}>
           Deactivate this terminal card? You'll need to card in again next time you're here -- but nothing stops you from loading there in the future.
@@ -126,7 +126,7 @@ function ExpirationCard({
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, border, background: bg }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 2, border, background: bg }}>
       <div
         role="button" tabIndex={0}
         onClick={onTap}
@@ -147,7 +147,7 @@ function ExpirationCard({
           title="Deactivate this terminal card"
           aria-label="Deactivate"
           style={{
-            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 5,
+            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 2,
             cursor: "pointer", padding: "2px 7px", fontSize: 13, color: "#ef4444", flexShrink: 0, lineHeight: 1.6, fontWeight: 700,
           }}
         >

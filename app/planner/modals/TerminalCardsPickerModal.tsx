@@ -22,13 +22,13 @@ type Props = {
 };
 
 const cityBtn: React.CSSProperties = {
-  padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)",
+  padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.85)",
   fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" as const,
 };
 
 const scopeBtn: React.CSSProperties = {
-  padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)",
+  padding: "14px 16px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.85)",
   fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" as const,
   display: "flex", flexDirection: "column" as const, gap: 2,
@@ -55,7 +55,7 @@ export default function TerminalCardsPickerModal({ open, onClose, cities, onPick
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: "#111518", borderRadius: "20px 20px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "80dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+        style={{ background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "80dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.15)" }} />

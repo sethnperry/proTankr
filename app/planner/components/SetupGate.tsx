@@ -122,7 +122,7 @@ export default function SetupGate(props: SetupGateProps) {
           <div
             key={s}
             style={{
-              width: s === step ? 18 : 6, height: 6, borderRadius: 3,
+              width: s === step ? 18 : 6, height: 6, borderRadius: 2,
               background: s === step ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.15)",
               transition: "all 0.25s ease",
             }}
@@ -140,7 +140,7 @@ export default function SetupGate(props: SetupGateProps) {
           style={{
             background: "rgba(255,255,255,0.06)",
             border: "1px solid rgba(255,255,255,0.18)",
-            borderRadius: 6,
+            borderRadius: 2,
             padding: "22px 36px",
             cursor: "pointer",
             color: "rgba(255,255,255,0.95)",

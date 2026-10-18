@@ -28,7 +28,7 @@ export function EquipmentChangeWarning({ open, trailerName, truckName, loaded, o
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 520, background: "#0b0b0b", borderTop: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: "16px 16px 0 0", padding: "18px 16px calc(env(safe-area-inset-bottom,0px) + 18px)", color: "#fff",
+          borderRadius: "2px 2px 0 0", padding: "18px 16px calc(env(safe-area-inset-bottom,0px) + 18px)", color: "#fff",
         }}
       >
         <div style={{ fontSize: 17, fontWeight: 800, color: "#fbbf24", marginBottom: 10 }}>Trip in progress</div>

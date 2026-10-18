@@ -208,13 +208,13 @@ export default function ProTankrDashPage() {
     padding: "20px 16px 60px", boxSizing: "border-box",
   };
   const shell: React.CSSProperties = { maxWidth: 640, margin: "0 auto", width: "100%" };
-  const card: React.CSSProperties = { borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", padding: 16, marginBottom: 14 };
+  const card: React.CSSProperties = { borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", padding: 16, marginBottom: 14 };
   const cardTitle: React.CSSProperties = { fontSize: 15, fontWeight: 900, marginBottom: 4 };
   const cardSub: React.CSSProperties = { fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 12 };
-  const input: React.CSSProperties = { flex: "1 1 200px", minWidth: 0, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" };
-  const primaryBtn: React.CSSProperties = { padding: "10px 16px", borderRadius: 10, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
-  const ghostBtn: React.CSSProperties = { padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
-  const selectBtn: React.CSSProperties = { width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, textAlign: "left" };
+  const input: React.CSSProperties = { flex: "1 1 200px", minWidth: 0, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" };
+  const primaryBtn: React.CSSProperties = { padding: "10px 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
+  const ghostBtn: React.CSSProperties = { padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+  const selectBtn: React.CSSProperties = { width: "100%", padding: "11px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, textAlign: "left" };
 
   if (checking) return <div style={base}>Checking access…</div>;
 
@@ -250,7 +250,7 @@ export default function ProTankrDashPage() {
           { k: "Solo", v: stats.solo },
           { k: "Fleet", v: stats.fleet },
         ].map((s) => (
-          <div key={s.k} style={{ flex: "1 1 70px", minWidth: 70, borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", padding: "12px 14px" }}>
+          <div key={s.k} style={{ flex: "1 1 70px", minWidth: 70, borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", padding: "12px 14px" }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{loading ? "—" : s.v}</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{s.k}</div>
           </div>
@@ -339,7 +339,7 @@ export default function ProTankrDashPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <input type="email" value={sEmail} onChange={(e) => setSEmail(e.target.value)} placeholder="driver@email.com" autoComplete="email" inputMode="email" style={input}
             onKeyDown={(e) => { if (e.key === "Enter") sendSoloInvite(); }} />
-          <div style={{ display: "flex", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }}>
+          <div style={{ display: "flex", borderRadius: 2, overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }}>
             {[{ paid: false, label: "Free" }, { paid: true, label: "Paid" }].map((opt) => {
               const active = sPaid === opt.paid;
               return (

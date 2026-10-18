@@ -50,7 +50,7 @@ export function KeypadToggle({
       }}
       style={{
         border: "1px solid rgba(255,255,255,0.22)", background: "rgba(255,255,255,0.06)",
-        color: "rgba(255,255,255,0.8)", borderRadius: 6, padding: "4px 8px",
+        color: "rgba(255,255,255,0.8)", borderRadius: 2, padding: "4px 8px",
         fontSize: 11, fontWeight: 800, letterSpacing: 0.5, cursor: "pointer", ...style,
       }}
       aria-label={alpha ? "Number keypad" : "Letter keyboard"}

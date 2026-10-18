@@ -207,7 +207,7 @@ function StatusChip({ status }: { status: string }) {
   };
   const s = map[status] ?? { label: status.toUpperCase(), color: "rgba(255,255,255,0.4)", bg: "rgba(255,255,255,0.06)" };
   return (
-    <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "3px 7px", borderRadius: 4, color: s.color, background: s.bg, whiteSpace: "nowrap", flexShrink: 0 }}>
+    <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "3px 7px", borderRadius: 2, color: s.color, background: s.bg, whiteSpace: "nowrap", flexShrink: 0 }}>
       {s.label}
     </span>
   );
@@ -230,7 +230,7 @@ function LineRows({ lines, loading }: { lines: LoadHistoryLine[] | undefined; lo
       <div style={{ padding: "12px 18px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
         {[85, 70, 85].map((w, i) => (
           <div key={i} style={{
-            height: 13, width: `${w}%`, borderRadius: 4,
+            height: 13, width: `${w}%`, borderRadius: 2,
             background: "linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.09) 50%,rgba(255,255,255,0.04) 75%)",
             backgroundSize: "600px 100%", animation: "_ptShimmer 1.4s ease-in-out infinite",
             animationDelay: `${i * 0.08}s`,
@@ -328,7 +328,7 @@ function shareBtnStyle(color?: string): React.CSSProperties {
   return {
     display: "flex", alignItems: "center", gap: 5,
     background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
-    borderRadius: 6, padding: "5px 10px", cursor: "pointer",
+    borderRadius: 2, padding: "5px 10px", cursor: "pointer",
     fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
     color: color ?? "rgba(255,255,255,0.55)",
     transition: "all 150ms ease", whiteSpace: "nowrap",
@@ -576,7 +576,7 @@ export default function MyLoadsModal({
 
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10100, background: "rgba(0,0,0,0.72)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: "20px 20px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "88dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "88dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Handle */}
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
@@ -610,7 +610,7 @@ export default function MyLoadsModal({
 
         {/* Search */}
         <div style={{ padding: "0 18px 10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "9px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "9px 14px" }}>
             <span style={{ fontSize: 14, color: "rgba(255,255,255,0.3)" }}>🔍</span>
             <input
               ref={searchRef}
@@ -634,7 +634,7 @@ export default function MyLoadsModal({
                 key={label}
                 onClick={() => handleRangeChange(days)}
                 style={{
-                  padding: "5px 10px", borderRadius: 7, border: "1px solid", fontSize: 11, fontWeight: 800,
+                  padding: "5px 10px", borderRadius: 2, border: "1px solid", fontSize: 11, fontWeight: 800,
                   cursor: "pointer", letterSpacing: 0.3, transition: "all 120ms ease", flexShrink: 0,
                   background: active ? "rgba(255,255,255,0.10)" : "transparent",
                   borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
@@ -657,7 +657,7 @@ export default function MyLoadsModal({
                   disabled={!enabled}
                   onClick={type === "copy" ? handleCopy : type === "text" ? handleSMS : handleEmail}
                   style={{
-                    padding: "5px 9px", borderRadius: 7, fontSize: 11, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
+                    padding: "5px 9px", borderRadius: 2, fontSize: 11, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
                     cursor: enabled ? "pointer" : "default", transition: "all 150ms ease",
                     border: enabled ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(255,255,255,0.08)",
                     background: enabled ? "rgba(255,255,255,0.07)" : "transparent",
@@ -673,7 +673,7 @@ export default function MyLoadsModal({
                 disabled={!selectedId}
                 onClick={() => setConfirmMode("restore")}
                 style={{
-                  padding: "5px 9px", borderRadius: 7, fontSize: 11, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
+                  padding: "5px 9px", borderRadius: 2, fontSize: 11, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
                   cursor: selectedId ? "pointer" : "default", transition: "all 150ms ease",
                   border: selectedId ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(255,255,255,0.08)",
                   background: selectedId ? "rgba(255,255,255,0.07)" : "transparent",
@@ -688,7 +688,7 @@ export default function MyLoadsModal({
                 disabled={!selectedId}
                 onClick={() => setConfirmMode("delete")}
                 style={{
-                  padding: "5px 9px", borderRadius: 7, fontSize: 11, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
+                  padding: "5px 9px", borderRadius: 2, fontSize: 11, fontWeight: 800, letterSpacing: 0.3, flexShrink: 0,
                   cursor: selectedId ? "pointer" : "default", transition: "all 150ms ease",
                   border: selectedId ? "1px solid rgba(239,68,68,0.45)" : "1px solid rgba(255,255,255,0.08)",
                   background: selectedId ? "rgba(239,68,68,0.10)" : "transparent",
@@ -709,7 +709,7 @@ export default function MyLoadsModal({
                 <div key={i} style={{ padding: "13px 18px 12px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 8 }}>
                   {[78, 30].map((w, j) => (
                     <div key={j} style={{
-                      height: j === 0 ? 13 : 13, width: `${w}%`, borderRadius: 4,
+                      height: j === 0 ? 13 : 13, width: `${w}%`, borderRadius: 2,
                       background: "linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.09) 50%,rgba(255,255,255,0.04) 75%)",
                       backgroundSize: "600px 100%", animation: "_ptShimmer 1.4s ease-in-out infinite",
                       animationDelay: `${j * 0.07}s`,
@@ -752,7 +752,7 @@ export default function MyLoadsModal({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 320, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}
+            style={{ width: "100%", maxWidth: 320, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}
           >
             <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>
               {confirmMode === "delete" ? "Delete this load?" : "Restore this load?"}
@@ -764,12 +764,12 @@ export default function MyLoadsModal({
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
               <button type="button" onClick={() => setConfirmMode(null)} disabled={deleteBusy}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmMode === "delete" ? confirmDelete : confirmRestore} disabled={deleteBusy}
                 style={{
-                  flex: 1, padding: "12px 0", borderRadius: 6, border: "none",
+                  flex: 1, padding: "12px 0", borderRadius: 2, border: "none",
                   background: confirmMode === "delete" ? "#ef4444" : "#fff",
                   color: confirmMode === "delete" ? "#fff" : "#000",
                   fontSize: 14, fontWeight: 700, cursor: "pointer",

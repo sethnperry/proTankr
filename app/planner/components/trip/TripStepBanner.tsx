@@ -31,7 +31,7 @@ export function TripStepBanner({ userId }: { userId: string | null }) {
       style={{
         display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", gap: 10,
         border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff",
-        borderRadius: 10, padding: "8px 12px", marginTop: 8, cursor: "pointer", textAlign: "left",
+        borderRadius: 2, padding: "8px 12px", marginTop: 8, cursor: "pointer", textAlign: "left",
       }}
     >
       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14 }}>

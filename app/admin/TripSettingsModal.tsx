@@ -16,15 +16,15 @@ import { DEFAULT_TRIP_SETTINGS, deliveryOffset, loadingOffset, type DelayReason,
 import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 
 const muted = "rgba(255,255,255,0.5)";
-const card: React.CSSProperties = { borderRadius: 12, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 };
+const card: React.CSSProperties = { borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 };
 const title: React.CSSProperties = { fontSize: 13, fontWeight: 800, marginBottom: 10, color: "#fff" };
 const input: React.CSSProperties = {
-  width: 80, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)",
+  width: 80, padding: "8px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)",
   background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 16, textAlign: "right",
 };
 const textInput: React.CSSProperties = { ...input, width: "100%", textAlign: "left" };
 const btn: React.CSSProperties = {
-  padding: "10px 14px", borderRadius: 10, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
+  padding: "10px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
 };
 const link: React.CSSProperties = { border: "none", background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 };
 

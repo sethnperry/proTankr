@@ -73,12 +73,12 @@ export function CancelTripSheet({ open, title, busy, error, onSubmit, onClose }:
                 <button key={r.code} type="button" onClick={() => toggle(r.code)}
                   style={{
                     display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-                    padding: "11px 12px", marginBottom: 6, borderRadius: 10, cursor: "pointer", fontSize: 15,
+                    padding: "11px 12px", marginBottom: 6, borderRadius: 2, cursor: "pointer", fontSize: 15,
                     border: on ? "1px solid rgba(248,113,113,0.7)" : "1px solid rgba(255,255,255,0.12)",
                     background: on ? "rgba(248,113,113,0.10)" : "transparent", color: "#fff",
                   }}>
                   <span style={{
-                    width: 24, height: 24, borderRadius: 6, flexShrink: 0, display: "inline-flex",
+                    width: 24, height: 24, borderRadius: 2, flexShrink: 0, display: "inline-flex",
                     alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800,
                     border: on ? "none" : "1px solid rgba(255,255,255,0.3)",
                     background: on ? "#f87171" : "transparent", color: "#000",

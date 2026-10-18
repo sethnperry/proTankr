@@ -34,14 +34,14 @@ export default function UnitPickerSheet({
   if (!open) return null;
 
   const optionStyle: React.CSSProperties = {
-    width: "100%", padding: "16px 18px", borderRadius: 8, marginBottom: 10,
+    width: "100%", padding: "16px 18px", borderRadius: 2, marginBottom: 10,
     border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)",
     color: "#fff", fontSize: 16, fontWeight: 800, textAlign: "left" as const, cursor: "pointer",
   };
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360, width: "100%" }}>
+      <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
         <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 4 }}>{title}</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 16 }}>
           {subtitle}
@@ -61,7 +61,7 @@ export default function UnitPickerSheet({
         <button
           type="button"
           onClick={onCancel}
-          style={{ width: "100%", padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", marginTop: 4 }}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", marginTop: 4 }}
         >
           Cancel
         </button>

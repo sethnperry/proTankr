@@ -229,7 +229,7 @@ export default function MyTerminalsModal(props: {
                   <div
                     key={tid ?? `term-${idx}`}
                     className={[
-                      "rounded-md border transition-all overflow-hidden",
+                      "rounded-[2px] border transition-all overflow-hidden",
                       active ? "border-white/30 bg-white/5" : "border-white/10",
                     ].join(" ")}
                   >
@@ -370,7 +370,7 @@ export default function MyTerminalsModal(props: {
                               disabled={!expandedRackId}
                               onClick={() => setStudOpen(true)}
                               style={{
-                                flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 6,
+                                flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2,
                                 border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
                                 color: "#fff", cursor: expandedRackId ? "pointer" : "not-allowed",
                                 opacity: expandedRackId ? 1 : 0.4,
@@ -383,7 +383,7 @@ export default function MyTerminalsModal(props: {
                                 type="button"
                                 onClick={() => setEditTerminalOpen(true)}
                                 style={{
-                                  flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 6,
+                                  flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2,
                                   border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
                                   color: "#fff", cursor: "pointer",
                                 }}
@@ -396,7 +396,7 @@ export default function MyTerminalsModal(props: {
                             type="button"
                             onClick={() => openAccessSteps({ terminalId: tid })}
                             style={{
-                              width: "100%", marginTop: 8, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 6,
+                              width: "100%", marginTop: 8, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2,
                               border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
                               color: "#fff", cursor: "pointer",
                             }}

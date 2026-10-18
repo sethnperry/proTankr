@@ -212,17 +212,17 @@ const label: React.CSSProperties = {
   letterSpacing: 0.4, textTransform: "uppercase", color: "rgba(255,255,255,0.5)",
 };
 const input: React.CSSProperties = {
-  display: "block", width: "100%", marginTop: 6, padding: "12px 14px", borderRadius: 10,
+  display: "block", width: "100%", marginTop: 6, padding: "12px 14px", borderRadius: 2,
   border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
   color: "#fff", fontSize: 15, boxSizing: "border-box",
 };
 function primaryBtn(disabled: boolean): React.CSSProperties {
-  return { width: "100%", padding: "13px 12px", borderRadius: 10, border: "none",
+  return { width: "100%", padding: "13px 12px", borderRadius: 2, border: "none",
     background: "#fff", color: "#000", fontWeight: 800, fontSize: 15,
     cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 };
 }
 function secondaryBtn(disabled: boolean): React.CSSProperties {
-  return { width: "100%", padding: "12px", borderRadius: 10,
+  return { width: "100%", padding: "12px", borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
     color: "rgba(255,255,255,0.8)", fontWeight: 600, fontSize: 14,
     cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 };
@@ -232,5 +232,5 @@ const linkBtn: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, textDecoration: "underline",
 };
 function banner(bg: string, color: string): React.CSSProperties {
-  return { marginBottom: 14, padding: "10px 12px", borderRadius: 8, background: bg, color, fontSize: 13, lineHeight: 1.5 };
+  return { marginBottom: 14, padding: "10px 12px", borderRadius: 2, background: bg, color, fontSize: 13, lineHeight: 1.5 };
 }

@@ -28,7 +28,7 @@ const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
 };
 
 const card: React.CSSProperties = {
-  display: "block", width: "100%", textAlign: "left", borderRadius: 12, border: "1px solid rgba(255,255,255,0.10)",
+  display: "block", width: "100%", textAlign: "left", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.03)", padding: 12, marginBottom: 10, color: "#fff", cursor: "pointer",
 };
 
@@ -94,7 +94,7 @@ export default function TripsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ fontSize: 20, fontWeight: 900 }}>Trips & PTDs</div>
         <button type="button" onClick={() => router.push("/planner/trips/blank")}
-          style={{ border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          style={{ border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", borderRadius: 2, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
           Blank PTD
         </button>
       </div>

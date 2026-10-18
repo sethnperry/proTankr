@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { shareViaClipboard, shareViaSMS, shareViaEmail } from "../utils/share";
 
 const BTN: React.CSSProperties = {
-  flex: 1, padding: "11px 0", borderRadius: 10,
+  flex: 1, padding: "11px 0", borderRadius: 2,
   border: "1px solid rgba(255,255,255,0.15)",
   background: "rgba(255,255,255,0.07)",
   color: "rgba(255,255,255,0.82)",
@@ -36,7 +36,7 @@ export default function TerminalCardsReportModal({ open, onClose, title, body }:
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: "#111518", borderRadius: "20px 20px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "80dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+        style={{ background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "80dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.15)" }} />

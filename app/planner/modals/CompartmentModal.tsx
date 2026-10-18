@@ -53,7 +53,7 @@ export default function CompartmentModal({
   const notAvailable = !isEmpty && !terminalProducts.some((p: any) => p.product_id === sel?.productId);
 
   const rowStyle = (active: boolean): React.CSSProperties => ({
-    textAlign: "left", padding: "12px 14px", borderRadius: 6,
+    textAlign: "left", padding: "12px 14px", borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.10)",
     background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
     color: "white", cursor: "pointer",
@@ -68,7 +68,7 @@ export default function CompartmentModal({
           Product for Comp {compNumber}
         </div>
         {notAvailable && (
-          <div style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.10)", color: "#fca5a5", fontSize: 13, fontWeight: 700 }}>
+          <div style={{ padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.10)", color: "#fca5a5", fontSize: 13, fontWeight: 700 }}>
             ⚠ Product Not Available at this terminal — choose a replacement below.
           </div>
         )}
@@ -117,7 +117,7 @@ export default function CompartmentModal({
                     {p.is_dyed && (
                       <span style={{
                         fontSize: 9, fontWeight: 800, color: "#ef4444", background: "rgba(239,68,68,0.12)",
-                        borderRadius: 3, padding: "1px 4px", letterSpacing: 0.4, flexShrink: 0,
+                        borderRadius: 2, padding: "1px 4px", letterSpacing: 0.4, flexShrink: 0,
                       }}>
                         DYED
                       </span>
@@ -136,7 +136,7 @@ export default function CompartmentModal({
             type="button"
             onClick={() => setManageOpen(true)}
             style={{
-              marginTop: 4, padding: "10px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)",
+              marginTop: 4, padding: "10px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
               background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.55)",
               fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 0.3,
             }}

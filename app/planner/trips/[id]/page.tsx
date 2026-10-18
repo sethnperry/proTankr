@@ -28,7 +28,7 @@ import type {
 import { PrintPortal, PtdDocument } from "../PtdDocument";
 
 const btn: React.CSSProperties = {
-  padding: "10px 16px", borderRadius: 10, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
+  padding: "10px 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
 };
 const back: React.CSSProperties = { border: "none", background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 };
 

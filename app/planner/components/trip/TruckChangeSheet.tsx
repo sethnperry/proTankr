@@ -46,7 +46,7 @@ export function TruckChangeSheet({ open, view, busy, onRecord, onClose }: {
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", background: "#0b0b0b",
-        borderTop: "1px solid rgba(255,255,255,0.12)", borderRadius: "16px 16px 0 0",
+        borderTop: "1px solid rgba(255,255,255,0.12)", borderRadius: "2px 2px 0 0",
         padding: "18px 16px calc(env(safe-area-inset-bottom,0px) + 18px)", color: "#fff",
       }}>
         <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>Truck changed</div>
@@ -54,7 +54,7 @@ export function TruckChangeSheet({ open, view, busy, onRecord, onClose }: {
           {view.trailerName ? `Trailer ${view.trailerName}` : "The trailer"} is loaded and now behind <b>{to}</b> (was {from}).
         </div>
 
-        <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}>
+        <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 12, marginBottom: 14, fontSize: 14 }}>
           <Line label="Product on board" value={lbs(view.productLbs)} />
           <Line label={`${to} tare`} value={lbs(view.toTare)} />
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", margin: "8px 0" }} />

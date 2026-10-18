@@ -202,7 +202,7 @@ function WebviewScreen() {
       <div style={{
         background: "#1a1a1a",
         border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 14,
+        borderRadius: 2,
         padding: "24px 28px",
         maxWidth: 380,
         width: "100%",
@@ -217,7 +217,7 @@ function WebviewScreen() {
         <div style={{
           background: "rgba(255,255,255,0.05)",
           border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 10,
+          borderRadius: 2,
           padding: "14px 16px",
           textAlign: "left" as const,
         }}>
@@ -254,7 +254,7 @@ function ErrorScreen({ msg, kind }: { msg: string; kind: LinkKind }) {
       <div style={{
         background: "#1a1a1a",
         border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 14,
+        borderRadius: 2,
         padding: "24px 28px",
         maxWidth: 380,
         width: "100%",
@@ -276,7 +276,7 @@ function ErrorScreen({ msg, kind }: { msg: string; kind: LinkKind }) {
               color: "rgba(255,255,255,0.85)",
               textDecoration: "none",
               border: "1px solid rgba(255,255,255,0.16)",
-              borderRadius: 10,
+              borderRadius: 2,
               padding: "10px 18px",
             }}
           >

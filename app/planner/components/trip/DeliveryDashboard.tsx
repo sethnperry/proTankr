@@ -128,13 +128,13 @@ export function clearDeliveryDraft(deliveryId: string) {
 
 const str = (n: number | null | undefined) => (n == null ? "" : String(n));
 const pill = (on: boolean): React.CSSProperties => ({
-  padding: "7px 12px", borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: "pointer",
+  padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
   border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)",
   background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.7)",
 });
 const miniLabel: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 0.4, textTransform: "uppercase" };
 const optionBtn: React.CSSProperties = {
-  width: "100%", textAlign: "left", padding: "14px 14px", borderRadius: 6, fontSize: 16, fontWeight: 700,
+  width: "100%", textAlign: "left", padding: "14px 14px", borderRadius: 2, fontSize: 16, fontWeight: 700,
   border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)", color: "#fff", cursor: "pointer",
 };
 
@@ -157,7 +157,7 @@ function OptionCard({ title, dotColor, children, onClose }: { title: string; dot
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         width: "100%", maxWidth: 320, maxHeight: "calc(100dvh - 48px)", overflowY: "auto", boxSizing: "border-box",
-        background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, padding: 20,
+        background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20,
         display: "flex", flexDirection: "column", gap: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
@@ -165,7 +165,7 @@ function OptionCard({ title, dotColor, children, onClose }: { title: string; dot
           {title}
         </div>
         {children}
-        <button type="button" onClick={onClose} style={{ marginTop: 4, padding: "12px 0", borderRadius: 4, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        <button type="button" onClick={onClose} style={{ marginTop: 4, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
           Cancel
         </button>
       </div>
@@ -655,7 +655,7 @@ export function DeliveryDashboard({
                   {s.here ? (
                     <button type="button" onClick={() => setPickFor(s.here!.compartment_load_id)}
                       style={{
-                        marginTop: 8, width: "100%", minWidth: 0, padding: "8px 2px", borderRadius: 6, cursor: "pointer",
+                        marginTop: 8, width: "100%", minWidth: 0, padding: "8px 2px", borderRadius: 2, cursor: "pointer",
                         fontSize: "clamp(11px, 2.8vw, 13px)", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                         border: ch ? "1px solid rgba(255,255,255,0.25)" : "1px solid #fbbf24",
                         background: ch === RETAIN ? "rgba(147,197,253,0.12)" : "rgba(255,255,255,0.04)",
@@ -783,7 +783,7 @@ export function DeliveryDashboard({
         footer={
           <div style={{ width: "100%" }}>
             {tankTotals.length > 0 && (
-              <div style={{ marginBottom: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "8px 10px" }}>
+              <div style={{ marginBottom: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: "8px 10px" }}>
                 <div style={{ ...miniLabel, marginBottom: 4 }}>Into each tank</div>
                 {tankTotals.map((t) => {
                   const info = productInfo(t.productId);
@@ -894,7 +894,7 @@ export function DeliveryDashboard({
         }}>
           <div onClick={(e) => e.stopPropagation()} style={{
             width: "100%", maxWidth: landscape ? "none" : 420, boxSizing: "border-box",
-            background: "#161616", border: landscape ? "none" : "1px solid rgba(255,255,255,0.12)", borderRadius: landscape ? 0 : 4,
+            background: "#161616", border: landscape ? "none" : "1px solid rgba(255,255,255,0.12)", borderRadius: landscape ? 0 : 2,
             padding: landscape ? "calc(env(safe-area-inset-top, 0px) + 10px) calc(env(safe-area-inset-right, 0px) + 16px) 10px calc(env(safe-area-inset-left, 0px) + 16px)" : 20,
             display: "flex", flexDirection: "column", gap: 10, overflowY: "auto",
           }}>
@@ -907,16 +907,16 @@ export function DeliveryDashboard({
             {!landscape && <div style={{ fontSize: 11, color: muted }}>Turn the phone sideways for a bigger pad.</div>}
             {cErr && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171" }}>{cErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" onClick={() => setConsigneeOpen(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={() => setConsigneeOpen(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Cancel
               </button>
               {consigneeSig && (
                 <button type="button" onClick={() => { setConsigneeName(""); setConsigneeSig(null); setConsigneeOpen(false); }}
-                  style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "1px solid rgba(248,113,113,0.5)", background: "transparent", color: "#f87171", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(248,113,113,0.5)", background: "transparent", color: "#f87171", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                   Remove
                 </button>
               )}
-              <button type="button" onClick={applyConsignee} style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+              <button type="button" onClick={applyConsignee} style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
                 Apply
               </button>
             </div>

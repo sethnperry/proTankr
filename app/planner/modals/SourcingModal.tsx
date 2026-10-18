@@ -183,7 +183,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
             {terminalName}
           </div>
           {error && (
-            <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 10, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700 }}>
+            <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 2, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 700 }}>
               {error}
             </div>
           )}
@@ -217,7 +217,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                       <div
                         style={{
                           display: "flex", alignItems: "center", gap: 8,
-                          padding: "10px 12px", borderRadius: 12,
+                          padding: "10px 12px", borderRadius: 2,
                           border: "1px solid rgba(255,255,255,0.08)",
                           background: "rgba(255,255,255,0.04)",
                           cursor: canEdit ? "pointer" : "default",
@@ -248,7 +248,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                     ) : (
                       /* Expanded edit row */
                       <div style={{
-                        padding: "12px", borderRadius: 14,
+                        padding: "12px", borderRadius: 2,
                         border: "1px solid rgba(255,255,255,0.14)",
                         background: "rgba(255,255,255,0.06)",
                       }}>
@@ -260,7 +260,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                             placeholder="Account"
                             autoFocus
                             style={{
-                              flex: "0 0 33%", minWidth: 0, boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 10,
+                              flex: "0 0 33%", minWidth: 0, boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2,
                               border: "1px solid rgba(255,255,255,0.14)",
                               background: "rgba(0,0,0,0.40)", color: "rgba(255,255,255,0.92)",
                               fontSize: 15, fontWeight: 700, outline: "none",
@@ -272,7 +272,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                             onChange={(e) => updateField(row.id, "number", e.target.value)}
                             placeholder="Number"
                             style={{
-                              flex: "1 1 0", minWidth: 0, boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 10,
+                              flex: "1 1 0", minWidth: 0, boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2,
                               border: "1px solid rgba(255,255,255,0.14)",
                               background: "rgba(0,0,0,0.40)", color: "rgba(255,255,255,0.92)",
                               fontSize: 15, fontWeight: 700, outline: "none",
@@ -282,7 +282,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
 
                         {/* Confirm delete warning */}
                         {isConfirmingDelete && (
-                          <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 10, background: "rgba(180,40,40,0.15)", border: "1px solid rgba(239,68,68,0.25)", fontSize: 13, color: "rgba(255,255,255,0.80)", fontWeight: 600 }}>
+                          <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 2, background: "rgba(180,40,40,0.15)", border: "1px solid rgba(239,68,68,0.25)", fontSize: 13, color: "rgba(255,255,255,0.80)", fontWeight: 600 }}>
                             Delete this row? This cannot be undone.
                           </div>
                         )}
@@ -291,7 +291,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                           {/* Cancel / collapse */}
                           <button type="button"
                             onClick={() => { setExpandedId(null); setConfirmDeleteId(null); if (row.isDraft) setRows(prev => prev.filter(r => r.id !== row.id)); }}
-                            style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                            style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                             Cancel
                           </button>
 
@@ -302,7 +302,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                             <button type="button"
                               onClick={() => setConfirmDeleteId(row.id)}
                               disabled={busy}
-                              style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "rgba(239,68,68,0.80)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+                              style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "rgba(239,68,68,0.80)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
                               Delete
                             </button>
                           )}
@@ -312,13 +312,13 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                             <>
                               <button type="button"
                                 onClick={() => setConfirmDeleteId(null)}
-                                style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                                style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                                 Keep
                               </button>
                               <button type="button"
                                 onClick={() => deleteRow(row.id, row.isDraft)}
                                 disabled={busy}
-                                style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.18)", color: "rgba(239,68,68,0.95)", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
+                                style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.18)", color: "rgba(239,68,68,0.95)", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.5 : 1 }}>
                                 {busy ? "…" : "Yes, delete"}
                               </button>
                             </>
@@ -330,7 +330,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                               onClick={() => saveRow(row)}
                               disabled={busy || (!row.account.trim() && !row.number.trim())}
                               style={{
-                                padding: "8px 20px", borderRadius: 10,
+                                padding: "8px 20px", borderRadius: 2,
                                 border: "1px solid rgba(74,222,128,0.35)",
                                 background: "rgba(74,222,128,0.12)",
                                 color: "rgba(74,222,128,0.95)",
@@ -353,7 +353,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
                   onClick={addDraftRow}
                   style={{
                     width: "100%", marginTop: 6, padding: "12px 0",
-                    borderRadius: 12, border: "1px dashed rgba(255,255,255,0.14)",
+                    borderRadius: 2, border: "1px dashed rgba(255,255,255,0.14)",
                     background: "transparent", color: "rgba(255,255,255,0.35)",
                     fontSize: 14, fontWeight: 700, cursor: "pointer", letterSpacing: 0.2,
                   }}>
@@ -367,7 +367,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
         {/* Footer close button */}
         <div style={{ padding: "12px 16px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", background: "#000", flexShrink: 0 }}>
           <button type="button" onClick={onClose}
-            style={{ width: "100%", borderRadius: 18, padding: "15px 18px", fontWeight: 900, fontSize: 17, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.92)", cursor: "pointer" }}>
+            style={{ width: "100%", borderRadius: 2, padding: "15px 18px", fontWeight: 900, fontSize: 17, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.92)", cursor: "pointer" }}>
             Done
           </button>
         </div>

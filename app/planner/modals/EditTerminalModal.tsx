@@ -248,7 +248,7 @@ function RacksView({
         Racks{terminalName ? <> at <span style={{ color: "rgba(255,255,255,0.75)", fontWeight: 700 }}>{terminalName}</span></> : ""}. Hidden from drivers — lead/dispatch/admin only.
       </div>
 
-      <div style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12, display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12, display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Access Renewal Period</div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
@@ -262,7 +262,7 @@ function RacksView({
             onFocus={(e) => e.currentTarget.select()}
             onBlur={commitRenewalDays}
             style={{
-              width: 52, padding: "6px 4px", borderRadius: 6, textAlign: "center" as const,
+              width: 52, padding: "6px 4px", borderRadius: 2, textAlign: "center" as const,
               border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff",
               fontSize: 14, fontWeight: 800, boxSizing: "border-box" as const,
             }}
@@ -279,14 +279,14 @@ function RacksView({
       )}
 
       {racks.map((r) => (
-        <div key={r.rack_id} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12, display: "grid", gap: 8 }}>
+        <div key={r.rack_id} style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12, display: "grid", gap: 8 }}>
           {renamingId === r.rack_id ? (
             <div style={{ display: "flex", gap: 6 }}>
               <input
                 autoFocus value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
-                style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13 }}
+                style={{ flex: 1, padding: "6px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13 }}
               />
-              <button onClick={() => saveRename(r.rack_id)} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Save</button>
+              <button onClick={() => saveRename(r.rack_id)} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Save</button>
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -303,26 +303,26 @@ function RacksView({
           <button
             type="button"
             onClick={() => onEditProducts(r.rack_id)}
-            style={{ width: "100%", fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "#fff", cursor: "pointer" }}
+            style={{ width: "100%", fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "#fff", cursor: "pointer" }}
           >
             Edit Product List
           </button>
 
           {confirmDeleteId === r.rack_id ? (
-            <div style={{ borderRadius: 8, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", padding: 10, display: "grid", gap: 8 }}>
+            <div style={{ borderRadius: 2, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", padding: 10, display: "grid", gap: 8 }}>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
                 Delete <strong>{r.rack_name}</strong>? This removes its lanes, arms, and product list — cannot be undone.
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button" onClick={() => { onDeleteRack(r.rack_id); setConfirmDeleteId(null); }}
-                  style={{ flex: 1, fontSize: 12, fontWeight: 800, padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.18)", color: "#f87171", cursor: "pointer" }}
+                  style={{ flex: 1, fontSize: 12, fontWeight: 800, padding: "8px 10px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.18)", color: "#f87171", cursor: "pointer" }}
                 >
                   Yes, delete
                 </button>
                 <button
                   type="button" onClick={() => setConfirmDeleteId(null)}
-                  style={{ flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "#fff", cursor: "pointer" }}
+                  style={{ flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "#fff", cursor: "pointer" }}
                 >
                   Cancel
                 </button>
@@ -332,7 +332,7 @@ function RacksView({
             <button
               type="button"
               onClick={() => setConfirmDeleteId(r.rack_id)}
-              style={{ width: "100%", fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 6, border: "none", background: "none", color: "rgba(239,68,68,0.6)", cursor: "pointer" }}
+              style={{ width: "100%", fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 2, border: "none", background: "none", color: "rgba(239,68,68,0.6)", cursor: "pointer" }}
             >
               Delete Rack
             </button>
@@ -344,11 +344,11 @@ function RacksView({
         <input
           type="text" value={newRackName} onChange={(e) => setNewRackName(e.target.value)}
           placeholder="New rack name (e.g. North Rack)"
-          style={{ flex: 1, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13 }}
+          style={{ flex: 1, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13 }}
         />
         <button
           type="button" onClick={onAddRack} disabled={saving || !newRackName.trim()}
-          style={{ fontSize: 13, fontWeight: 700, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", opacity: saving || !newRackName.trim() ? 0.5 : 1 }}
+          style={{ fontSize: 13, fontWeight: 700, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", opacity: saving || !newRackName.trim() ? 0.5 : 1 }}
         >
           + Add
         </button>
@@ -428,7 +428,7 @@ function ProductsView({ rack, onChanged }: { rack: TerminalRack; onChanged: () =
       <input
         type="text" value={search} onChange={(e) => setSearch(e.target.value)}
         placeholder="Search products…"
-        style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13 }}
+        style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13 }}
       />
 
       {(error || productsError) && (
@@ -449,7 +449,7 @@ function ProductsView({ rack, onChanged }: { rack: TerminalRack; onChanged: () =
               <button
                 key={p.product_id} type="button" disabled={saving} onClick={() => toggle(p.product_id)}
                 style={{
-                  display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 6,
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 2,
                   border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)",
                   cursor: "pointer", width: "100%", boxSizing: "border-box" as const, opacity: saving ? 0.5 : 1,
                 }}

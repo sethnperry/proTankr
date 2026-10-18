@@ -354,7 +354,7 @@ function TruckCard({ truck, companyId, onEdit, otherPermits }: {
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const, minWidth: 0 }}>
             <span style={{ fontWeight: 800, fontSize: 16, color: T.text }}>{truck.truck_name}</span>
             {truck.status_code && (
-              <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 6px", borderRadius: 4,
+              <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 6px", borderRadius: 2,
                 background: statusColor === T.danger ? "rgba(220,60,40,0.18)"
                   : statusColor === T.success ? "rgba(40,180,80,0.13)"
                   : statusColor === T.info ? "rgba(91,168,245,0.15)" : "rgba(255,255,255,0.07)",
@@ -371,7 +371,7 @@ function TruckCard({ truck, companyId, onEdit, otherPermits }: {
         {/* Row 2: expiry badge */}
         {warnBadge && (
           <span style={{ display: "inline-block", marginTop: 4, fontSize: 10, fontWeight: 900,
-            padding: "2px 6px", borderRadius: 4, background: "rgba(220,60,40,0.15)",
+            padding: "2px 6px", borderRadius: 2, background: "rgba(220,60,40,0.15)",
             color: badgeColor, letterSpacing: 0.3 }}>
             ⚠ {soonestDays! < 0 ? "EXPIRED" : soonestDays === 0 ? "EXP TODAY" : `EXP ${soonestDays}d`}
           </span>
@@ -414,7 +414,7 @@ function TruckCard({ truck, companyId, onEdit, otherPermits }: {
 
           {truck.notes && (
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", background: "rgba(255,255,255,0.04)",
-              borderRadius: 8, padding: "8px 10px", marginBottom: 8, lineHeight: 1.5,
+              borderRadius: 2, padding: "8px 10px", marginBottom: 8, lineHeight: 1.5,
               borderLeft: `3px solid ${T.accent}40` }}>
               {truck.notes}
             </div>
@@ -527,7 +527,7 @@ function TrailerCard({ trailer, companyId, onEdit }: { trailer: Trailer; company
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const, minWidth: 0 }}>
             <span style={{ fontWeight: 800, fontSize: 16, color: T.text }}>{trailer.trailer_name}</span>
             {trailer.status_code && (
-              <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 6px", borderRadius: 4,
+              <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 6px", borderRadius: 2,
                 background: statusColor === T.danger ? "rgba(220,60,40,0.18)"
                   : statusColor === T.success ? "rgba(40,180,80,0.13)"
                   : statusColor === T.info ? "rgba(91,168,245,0.15)" : "rgba(255,255,255,0.07)",
@@ -544,7 +544,7 @@ function TrailerCard({ trailer, companyId, onEdit }: { trailer: Trailer; company
         {/* Row 2: expiry badge */}
         {warnBadge && (
           <span style={{ display: "inline-block", marginTop: 4, fontSize: 10, fontWeight: 900,
-            padding: "2px 6px", borderRadius: 4, background: "rgba(220,60,40,0.15)",
+            padding: "2px 6px", borderRadius: 2, background: "rgba(220,60,40,0.15)",
             color: badgeColor, letterSpacing: 0.3 }}>
             ⚠ {soonestDays! < 0 ? "EXPIRED" : soonestDays === 0 ? "EXP TODAY" : `EXP ${soonestDays}d`}
           </span>
@@ -596,7 +596,7 @@ function TrailerCard({ trailer, companyId, onEdit }: { trailer: Trailer; company
 
           {trailer.notes && (
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", background: "rgba(255,255,255,0.04)",
-              borderRadius: 8, padding: "8px 10px", marginBottom: 8, lineHeight: 1.5,
+              borderRadius: 2, padding: "8px 10px", marginBottom: 8, lineHeight: 1.5,
               borderLeft: `3px solid ${T.accent}40` }}>
               {trailer.notes}
             </div>
@@ -782,7 +782,7 @@ function SensitiveInfoSection({ unitKind, unitId, companyId }: { unitKind: "truc
         {open ? "▾" : "▸"} Sensitive Info (admin only)
       </button>
       {open && (
-        <div style={{ marginTop: 8, padding: 10, borderRadius: 6, border: `1px solid ${T.border}` }}>
+        <div style={{ marginTop: 8, padding: 10, borderRadius: 2, border: `1px solid ${T.border}` }}>
           {err && <Banner msg={err} type="error" />}
           <FieldRow>
             <Field label="Purchase Price"><input type="number" value={data.purchase_price} onChange={(e) => setData((d) => ({ ...d, purchase_price: e.target.value }))} style={css.input} /></Field>
@@ -1308,7 +1308,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
 
           <div style={{ marginTop: 14 }}>
             <div style={{ ...css.label, fontSize: 10, marginBottom: 6 }}>Compartments (at least 1 required)</div>
-            <div style={{ background: T.surface2, borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ background: T.surface2, borderRadius: 2, padding: "10px 12px" }}>
               <CompartmentEditor comps={comps} onChange={setComps} editable={canEditRestricted} />
             </div>
           </div>

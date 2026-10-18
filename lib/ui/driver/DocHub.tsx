@@ -327,7 +327,7 @@ export function DocPreviewModal({
               disabled={pageIdx === 0}
               style={{ position: "absolute" as const, left: 8, top: "50%", transform: "translateY(-50%)",
                 background: "rgba(0,0,0,0.6)", border: "none", color: pageIdx === 0 ? T.muted : T.text,
-                fontSize: 22, borderRadius: 6, cursor: pageIdx === 0 ? "default" : "pointer",
+                fontSize: 22, borderRadius: 2, cursor: pageIdx === 0 ? "default" : "pointer",
                 padding: "8px 12px", lineHeight: 1 }}
             >‹</button>
             <button
@@ -337,7 +337,7 @@ export function DocPreviewModal({
               style={{ position: "absolute" as const, right: 8, top: "50%", transform: "translateY(-50%)",
                 background: "rgba(0,0,0,0.6)", border: "none",
                 color: pageIdx === pages.length - 1 ? T.muted : T.text,
-                fontSize: 22, borderRadius: 6, cursor: pageIdx === pages.length - 1 ? "default" : "pointer",
+                fontSize: 22, borderRadius: 2, cursor: pageIdx === pages.length - 1 ? "default" : "pointer",
                 padding: "8px 12px", lineHeight: 1 }}
             >›</button>
           </>
@@ -385,7 +385,7 @@ function ActionBtn({ icon, label, onClick, disabled }: {
       disabled={disabled}
       style={{ flex: 1, display: "flex", flexDirection: "column" as const, alignItems: "center",
         justifyContent: "center", gap: 3, background: disabled ? "rgba(255,255,255,0.04)" : T.surface2,
-        border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 6px", cursor: disabled ? "default" : "pointer",
+        border: `1px solid ${T.border}`, borderRadius: 2, padding: "10px 6px", cursor: disabled ? "default" : "pointer",
         color: disabled ? T.muted : T.text, fontSize: 18, lineHeight: 1 }}
     >
       <span style={{ fontSize: 18 }}>{icon}</span>
@@ -551,7 +551,7 @@ export function DocHubModal({
         onClick={onClose}
       >
         <div
-          style={{ background: T.bg, borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 560,
+          style={{ background: T.bg, borderRadius: "2px 2px 0 0", width: "100%", maxWidth: 560,
             maxHeight: "90vh", display: "flex", flexDirection: "column" as const,
             border: `1px solid ${T.border}`, borderBottom: "none" }}
           onClick={e => e.stopPropagation()}
@@ -573,7 +573,7 @@ export function DocHubModal({
 
             {/* ── Upload Section ── */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`,
-              borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+              borderRadius: 2, padding: "12px 14px", marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 10 }}>
                 Add Document
               </div>
@@ -639,7 +639,7 @@ export function DocHubModal({
                   marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{group.label}</span>
                   <span style={{ fontSize: 10, color: T.muted,
-                    background: T.surface2, padding: "1px 7px", borderRadius: 10 }}>
+                    background: T.surface2, padding: "1px 7px", borderRadius: 2 }}>
                     {group.pages.length} {group.pages.length === 1 ? "page" : "pages"}
                   </span>
                 </div>
@@ -649,7 +649,7 @@ export function DocHubModal({
                   <div key={page.id}
                     style={{ display: "flex", alignItems: "center", gap: 8,
                       background: T.surface, border: `1px solid ${T.border}`,
-                      borderRadius: 8, padding: "8px 10px", marginBottom: 4 }}
+                      borderRadius: 2, padding: "8px 10px", marginBottom: 4 }}
                   >
                     <span style={{ fontSize: 18, flexShrink: 0 }}>
                       {page.mime_type?.startsWith("image/") ? "🖼" : "📄"}
@@ -668,7 +668,7 @@ export function DocHubModal({
                       onClick={() => setPreviewGroup(group)}
                       style={{ background: "none", border: "none", cursor: "pointer",
                         color: T.accent, fontSize: 11, padding: "4px 8px", flexShrink: 0,
-                        borderRadius: 6, fontWeight: 600 }}>
+                        borderRadius: 2, fontWeight: 600 }}>
                       View
                     </button>
                     {/* Delete */}
@@ -696,7 +696,7 @@ export function DocHubModal({
           onClick={() => setShowConflict(false)}
         >
           <div
-            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 2,
               padding: 20, maxWidth: 340, width: "100%" }}
             onClick={e => e.stopPropagation()}
           >

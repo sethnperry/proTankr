@@ -228,7 +228,7 @@ export function LocationEditor({
   };
 
   const toggle = (on: boolean): React.CSSProperties => ({
-    flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer",
+    flex: 1, padding: "9px 0", borderRadius: 2, fontSize: 14, fontWeight: 700, cursor: "pointer",
     border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
     background: on ? "rgba(255,255,255,0.12)" : "transparent", color: on ? "#fff" : muted,
   });

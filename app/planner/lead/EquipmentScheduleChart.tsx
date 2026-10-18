@@ -150,7 +150,7 @@ export default function EquipmentScheduleChart({ equipmentLabel, dayDriverName, 
   // the client-side update right after mount.
   if (!nowInfo) {
     return (
-      <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "14px 14px 12px", minHeight: 120 }}>
+      <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "14px 14px 12px", minHeight: 120 }}>
         <div style={{ display: "flex", gap: 20, fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>
           {title}
         </div>
@@ -163,7 +163,7 @@ export default function EquipmentScheduleChart({ equipmentLabel, dayDriverName, 
 
   return (
     <>
-      <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "14px 14px 12px" }}>
+      <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "14px 14px 12px" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ display: "flex", gap: 20, fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>
             {title}
@@ -179,10 +179,10 @@ export default function EquipmentScheduleChart({ equipmentLabel, dayDriverName, 
             just enough to fit the name text, not a full timeline track. */}
         <div style={{ position: "relative", height: 26 }}>
           <div style={{ position: "absolute", inset: 0, display: "flex", gap: 6 }}>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: DAY_SHIFT.bg, borderTop: `2px solid ${DAY_SHIFT.color}`, fontSize: 11, fontWeight: 800, color: DAY_SHIFT.color }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2, background: DAY_SHIFT.bg, borderTop: `2px solid ${DAY_SHIFT.color}`, fontSize: 11, fontWeight: 800, color: DAY_SHIFT.color }}>
               {dayDriverName ?? DAY_SHIFT.driverName}
             </div>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: NIGHT_SHIFT.bg, borderTop: `2px solid ${NIGHT_SHIFT.color}`, fontSize: 11, fontWeight: 800, color: NIGHT_SHIFT.color }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2, background: NIGHT_SHIFT.bg, borderTop: `2px solid ${NIGHT_SHIFT.color}`, fontSize: 11, fontWeight: 800, color: NIGHT_SHIFT.color }}>
               {nightDriverName ?? NIGHT_SHIFT.driverName}
             </div>
           </div>

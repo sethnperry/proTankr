@@ -97,7 +97,7 @@ export default function ActiveCompanySelect() {
   
    style={{
     padding: "6px 10px",
-    borderRadius: 10,
+    borderRadius: 2,
     backgroundColor: "#000",
     color: "#fff",
     border: "1px solid #333",

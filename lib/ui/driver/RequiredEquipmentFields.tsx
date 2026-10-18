@@ -36,7 +36,7 @@ const fieldLabel: React.CSSProperties = {
   textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 4, display: "block",
 };
 const fieldInput: React.CSSProperties = {
-  width: "100%", borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)",
+  width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)",
   background: "rgba(0,0,0,0.3)", padding: "10px 11px", fontSize: 15, fontWeight: 600,
   color: "#fff", boxSizing: "border-box" as const,
 };
@@ -253,14 +253,14 @@ export function CatalogPicker({
         <div
           style={{
             position: "absolute" as const, top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-            background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6,
+            background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 2,
             maxHeight: 240, overflowY: "auto" as const, boxShadow: "0 8px 24px rgba(0,0,0,0.55)", padding: 4,
           }}
         >
           {err && <div style={{ color: "#fca5a5", fontSize: 11, padding: "4px 8px" }}>{err}</div>}
           <div
             onClick={() => { onChange(""); setOpen(false); }}
-            style={{ padding: "9px 10px", fontSize: 13, color: "rgba(255,255,255,0.5)", cursor: "pointer", borderRadius: 6 }}
+            style={{ padding: "9px 10px", fontSize: 13, color: "rgba(255,255,255,0.5)", cursor: "pointer", borderRadius: 2 }}
           >
             — None —
           </div>
@@ -269,7 +269,7 @@ export function CatalogPicker({
               key={r.id}
               onClick={() => { onChange(r.name); setOpen(false); }}
               style={{
-                padding: "9px 10px", fontSize: 13, color: "#fff", cursor: "pointer", borderRadius: 6,
+                padding: "9px 10px", fontSize: 13, color: "#fff", cursor: "pointer", borderRadius: 2,
                 background: r.name === value ? "rgba(255,255,255,0.08)" : "transparent",
               }}
             >
@@ -279,7 +279,7 @@ export function CatalogPicker({
           {!adding ? (
             <div
               onClick={() => setAdding(true)}
-              style={{ padding: "9px 10px", fontSize: 13, color: "rgba(255,255,255,0.65)", cursor: "pointer", borderRadius: 6, borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 2 }}
+              style={{ padding: "9px 10px", fontSize: 13, color: "rgba(255,255,255,0.65)", cursor: "pointer", borderRadius: 2, borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 2 }}
             >
               + Add new
             </div>
@@ -294,7 +294,7 @@ export function CatalogPicker({
                 style={{ ...fieldInput, fontSize: 13, padding: "7px 9px" }}
               />
               <button type="button" onClick={createNew} disabled={busy || !newName.trim()}
-                style={{ borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 12px", cursor: "pointer" }}>
+                style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 12px", cursor: "pointer" }}>
                 {busy ? "…" : "Add"}
               </button>
             </div>

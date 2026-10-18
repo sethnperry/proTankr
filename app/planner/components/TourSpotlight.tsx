@@ -110,7 +110,7 @@ export default function Spotlight({
         style={{
           position: "fixed",
           top: holeTop, left: holeLeft, width: holeW, height: holeH,
-          borderRadius: 12,
+          borderRadius: 2,
           boxShadow: "0 0 0 9999px rgba(0,0,0,0.70)",
           border: "2px solid #4ade80",
           transition: "top 160ms ease, left 160ms ease, width 160ms ease, height 160ms ease",
@@ -126,7 +126,7 @@ export default function Spotlight({
           pointerEvents: "auto",
           background: "#1c1c1e",
           border: "1px solid rgba(255,255,255,0.14)",
-          borderRadius: 12,
+          borderRadius: 2,
           boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
           padding: "12px 14px",
         }}

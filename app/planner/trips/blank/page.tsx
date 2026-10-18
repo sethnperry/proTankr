@@ -19,7 +19,7 @@ export default function BlankPtdPage() {
           ‹ Trips
         </button>
         <button type="button" onClick={() => window.print()}
-          style={{ padding: "10px 16px", borderRadius: 10, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+          style={{ padding: "10px 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
           Print / Save PDF
         </button>
       </div>

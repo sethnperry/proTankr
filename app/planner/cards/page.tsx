@@ -59,7 +59,7 @@ function TerminalCard({
 
   const front = (
     <div style={{
-      height: "100%", borderRadius: 8, padding: "12px 14px", boxSizing: "border-box",
+      height: "100%", borderRadius: 2, padding: "12px 14px", boxSizing: "border-box",
       background: CARD_BG,
       border: isSelected ? CARD_BORDER_SELECTED : CARD_BORDER,
       boxShadow: CARD_SHADOW,
@@ -71,7 +71,7 @@ function TerminalCard({
           {name}
         </div>
         {inactive && (
-          <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 4, padding: "2px 6px", letterSpacing: 0.4, textTransform: "uppercase", flexShrink: 0 }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 2, padding: "2px 6px", letterSpacing: 0.4, textTransform: "uppercase", flexShrink: 0 }}>
             No access
           </div>
         )}
@@ -95,7 +95,7 @@ function TerminalCard({
 
   const back = (
     <div style={{
-      height: "100%", borderRadius: 8, overflow: "hidden", boxSizing: "border-box",
+      height: "100%", borderRadius: 2, overflow: "hidden", boxSizing: "border-box",
       background: CARD_BG,
       border: CARD_BORDER,
       boxShadow: CARD_SHADOW,
@@ -149,7 +149,7 @@ function TerminalCard({
           </div>
         )}
         {confirmAction === "deactivate" && (
-          <div style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+          <div style={{ padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 8 }}>
               Remove last visit date and mark as not carded?
             </div>
@@ -160,7 +160,7 @@ function TerminalCard({
           </div>
         )}
         {confirmAction === "remove" && (
-          <div style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+          <div style={{ padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 8 }}>
               Remove this card from {walletLabel}? Card number, PIN, and notes stay saved if you add it back later.
             </div>
@@ -219,7 +219,7 @@ function AddCardSheet({
           <input
             type="text" value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by terminal, city, or state…"
-            className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30"
+            className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30"
             autoFocus
           />
           <div className="grid grid-cols-1 gap-2">
@@ -230,7 +230,7 @@ function AddCardSheet({
                   key={id}
                   role="button" tabIndex={0}
                   onClick={() => { setPicked(c); setStep("details"); }}
-                  className="rounded-md border border-white/10 bg-white/5 hover:bg-white/8 cursor-pointer px-3 py-2"
+                  className="rounded-[2px] border border-white/10 bg-white/5 hover:bg-white/8 cursor-pointer px-3 py-2"
                 >
                   <div className="text-sm font-semibold text-white truncate">{c.terminal_name ?? "(unnamed terminal)"}</div>
                   <div className="text-xs text-white/45 mt-0.5">{c.city}{c.state ? `, ${c.state}` : ""}</div>
@@ -250,30 +250,30 @@ function AddCardSheet({
           <div>
             <div className="text-xs text-white/40 mb-1 font-medium">Last Visit (optional)</div>
             <div className="flex gap-2">
-              <input type="date" value={lastVisit} onChange={(e) => setLastVisit(e.target.value)} className="flex-1 min-w-0 rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white" />
-              <button type="button" onClick={() => setLastVisit(new Date().toISOString().slice(0, 10))} className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/70 hover:bg-white/10 whitespace-nowrap">Today</button>
+              <input type="date" value={lastVisit} onChange={(e) => setLastVisit(e.target.value)} className="flex-1 min-w-0 rounded-[2px] border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white" />
+              <button type="button" onClick={() => setLastVisit(new Date().toISOString().slice(0, 10))} className="rounded-[2px] border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/70 hover:bg-white/10 whitespace-nowrap">Today</button>
             </div>
           </div>
           <div className="flex gap-2">
             <div className="flex-1 min-w-0">
               <div className="text-xs text-white/40 mb-1 font-medium">Card Number (optional)</div>
-              <input type="text" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/20" />
+              <input type="text" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} className="w-full rounded-[2px] border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/20" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs text-white/40 mb-1 font-medium">PIN (optional)</div>
-              <input type="text" value={pin} onChange={(e) => setPin(e.target.value)} className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/20" />
+              <input type="text" value={pin} onChange={(e) => setPin(e.target.value)} className="w-full rounded-[2px] border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/20" />
             </div>
           </div>
           <div>
             <div className="text-xs text-white/40 mb-1 font-medium">Private Note (optional)</div>
-            <textarea value={privateNote} onChange={(e) => setPrivateNote(e.target.value)} rows={2} className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/20 resize-none" />
+            <textarea value={privateNote} onChange={(e) => setPrivateNote(e.target.value)} rows={2} className="w-full rounded-[2px] border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/20 resize-none" />
           </div>
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={() => setStep("search")} className="flex-1 rounded-md border border-white/10 bg-white/5 py-2.5 text-sm font-semibold text-white/70">Back</button>
+            <button type="button" onClick={() => setStep("search")} className="flex-1 rounded-[2px] border border-white/10 bg-white/5 py-2.5 text-sm font-semibold text-white/70">Back</button>
             <button
               type="button"
               onClick={() => { onAdd(String(picked.terminal_id), { lastVisit, cardNumber, pin, privateNote }); onClose(); reset(); }}
-              className="flex-1 rounded-md border border-white/15 bg-white/90 py-2.5 text-sm font-bold text-black"
+              className="flex-1 rounded-[2px] border border-white/15 bg-white/90 py-2.5 text-sm font-bold text-black"
             >
               Add Card
             </button>
@@ -560,7 +560,7 @@ export default function CardsPage() {
         type="button"
         onClick={() => setAddOpen(true)}
         style={{
-          width: "100%", marginTop: 18, padding: "13px 0", borderRadius: 8,
+          width: "100%", marginTop: 18, padding: "13px 0", borderRadius: 2,
           border: "1px dashed rgba(255,255,255,0.20)", background: "transparent",
           color: "rgba(255,255,255,0.4)", fontSize: 14, fontWeight: 700, cursor: "pointer",
         }}

@@ -130,7 +130,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
           width: "100%", maxWidth: compact ? 320 : 280,
           maxHeight: "calc(100dvh - 48px)", overflowY: "auto" as const, boxSizing: "border-box" as const,
           background: "#161616", border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 4, padding: 20,
+          borderRadius: 2, padding: 20,
           display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
         }}
       >
@@ -204,7 +204,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
             type="button"
             onClick={onCancel}
             style={{
-              flex: 1, padding: "12px 0", borderRadius: 4,
+              flex: 1, padding: "12px 0", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
               color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer",
             }}
@@ -216,7 +216,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
             onClick={onSubmit}
             disabled={!!busyLabel}
             style={{
-              flex: 1, padding: "12px 0", borderRadius: 4,
+              flex: 1, padding: "12px 0", borderRadius: 2,
               border: "none", background: "#fff",
               color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer",
               opacity: busyLabel ? 0.5 : 1,

@@ -31,12 +31,12 @@ function ago(ms: number): string {
 
 const rowBox: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 10, padding: "12px 12px",
-  borderRadius: 10, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
 };
 
 function pill(active: boolean, danger = false): React.CSSProperties {
   return {
-    padding: "7px 12px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+    padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
     border: `1px solid ${active ? (danger ? red : "#fff") : "rgba(255,255,255,0.2)"}`,
     background: active ? (danger ? "rgba(248,113,113,0.15)" : "rgba(255,255,255,0.12)") : "transparent",
     color: active ? (danger ? red : "#fff") : "rgba(255,255,255,0.75)",

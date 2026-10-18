@@ -32,12 +32,12 @@ const BORDER = "1px solid rgba(255,255,255,0.12)";
 const AMBER = "#fbbf24";
 
 const btn: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 4, border: BORDER, background: "rgba(255,255,255,0.05)",
+  width: "100%", padding: "14px 16px", borderRadius: 2, border: BORDER, background: "rgba(255,255,255,0.05)",
   color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left",
 };
 const primary: React.CSSProperties = { ...btn, background: "#fff", color: "#000", textAlign: "center", border: "1px solid #fff" };
 const input: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 4, border: BORDER,
+  width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 2, border: BORDER,
   background: "rgba(0,0,0,0.35)", color: "#fff", fontSize: 16,
 };
 const qText: React.CSSProperties = { fontSize: 18, fontWeight: 800, lineHeight: 1.3, marginBottom: 14 };
@@ -377,7 +377,7 @@ export function TerminalAccessSheet({
           {prog && <div style={{ fontSize: 13, color: MUTED }}>{steps.filter((s) => s.state === "done").length}/{steps.length} steps</div>}
         </div>
         {fromLoad && prog && !prog.completed_at && (
-          <div style={{ marginTop: 10, padding: "10px 12px", border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.08)", borderRadius: 4, fontSize: 14 }}>
+          <div style={{ marginTop: 10, padding: "10px 12px", border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.08)", borderRadius: 2, fontSize: 14 }}>
             {done + 1 >= loadsRequired
               ? "This load counts as the check load. An operator needs to be with you."
               : `This load counts as training load ${done + 1} of ${loadsRequired}.`}
@@ -408,7 +408,7 @@ export function TerminalAccessSheet({
                 </button>
                 {a.link && (
                   <a href={a.link} target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: 13, fontWeight: 700, color: "#fff", border: BORDER, borderRadius: 4, padding: "6px 10px", textDecoration: "none" }}>
+                    style={{ fontSize: 13, fontWeight: 700, color: "#fff", border: BORDER, borderRadius: 2, padding: "6px 10px", textDecoration: "none" }}>
                     Open
                   </a>
                 )}

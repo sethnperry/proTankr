@@ -105,7 +105,7 @@ function ReportLine({ text, color }: { text: string; color?: string }) {
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 const BTN: React.CSSProperties = {
-  flex: 1, padding: "11px 0", borderRadius: 10,
+  flex: 1, padding: "11px 0", borderRadius: 2,
   border: "1px solid rgba(255,255,255,0.15)",
   background: "rgba(255,255,255,0.07)",
   color: "rgba(255,255,255,0.82)",
@@ -149,7 +149,7 @@ export default function LoadReportModal({ open, onClose, row, lines }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: "#111518", borderRadius: "20px 20px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "88dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+        style={{ background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "88dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
         {/* Handle */}
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
@@ -186,7 +186,7 @@ export default function LoadReportModal({ open, onClose, row, lines }: Props) {
                 const apiAs = asOfDate((l as any).planned_api_updated_at);
                 const codeLabel = l.button_code ?? l.product_name ?? "—";
                 return (
-                  <div key={l.comp_number} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", overflow: "hidden" }}>
+                  <div key={l.comp_number} style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", overflow: "hidden" }}>
                     {/* Comp header */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                       <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.85)" }}>
@@ -222,7 +222,7 @@ export default function LoadReportModal({ open, onClose, row, lines }: Props) {
               })}
 
               {/* Totals */}
-              <div style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "10px 12px" }}>
+              <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "10px 12px" }}>
                 {[
                   { label: "Planned", val: fmtLbs(totalPlanned), color: "rgba(255,255,255,0.55)" },
                   { label: "Actual",  val: hasActual ? fmtLbs(totalActual) : "—", color: "rgba(255,255,255,0.88)" },

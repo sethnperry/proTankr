@@ -42,13 +42,13 @@ const label: React.CSSProperties = {
   textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6,
 };
 const input: React.CSSProperties = {
-  width: "100%", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)",
+  width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.04)", padding: "12px 12px", fontSize: 16,
   color: "#fff", boxSizing: "border-box",
 };
 const row: React.CSSProperties = { marginBottom: 16 };
 const addBtn: React.CSSProperties = {
-  flex: 1, padding: "10px 0", borderRadius: 8, border: "1px dashed rgba(255,255,255,0.25)",
+  flex: 1, padding: "10px 0", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.25)",
   background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
 const removeBtn: React.CSSProperties = {
@@ -182,7 +182,7 @@ export function StartLoadSheet({
             disabled={busy || !milesOk}
             onClick={() => onSubmit(v)}
             style={{
-              width: "100%", padding: "16px 0", borderRadius: 12, border: "none",
+              width: "100%", padding: "16px 0", borderRadius: 2, border: "none",
               background: "#fff", color: "#000", fontSize: 17, fontWeight: 800,
               opacity: busy || !milesOk ? 0.5 : 1, cursor: busy ? "default" : "pointer",
             }}

@@ -15,7 +15,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 export const selectStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 6, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.14)",
+  width: "100%", borderRadius: 2, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 15, boxSizing: "border-box",
   appearance: "none" as const,
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.4)' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
@@ -66,7 +66,7 @@ export function CustomSelect({
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-          background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6,
+          background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 2,
           maxHeight: 240, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.55)", padding: 4,
         }}>
           {options.map((o) => (
@@ -76,7 +76,7 @@ export function CustomSelect({
               onMouseEnter={() => setHoverValue(o.value)}
               onMouseLeave={() => setHoverValue((v) => (v === o.value ? null : v))}
               style={{
-                padding: "10px 12px", fontSize: 15, color: "#fff", cursor: "pointer", borderRadius: 6,
+                padding: "10px 12px", fontSize: 15, color: "#fff", cursor: "pointer", borderRadius: 2,
                 background: hoverValue === o.value ? "rgba(255,255,255,0.10)" : o.value === value ? "rgba(255,255,255,0.05)" : "transparent",
               }}
             >

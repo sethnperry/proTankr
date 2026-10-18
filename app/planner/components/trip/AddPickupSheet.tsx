@@ -32,7 +32,7 @@ export type AddPickupDraft = {
 };
 
 const chip = (on: boolean): React.CSSProperties => ({
-  padding: "9px 12px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer",
+  padding: "9px 12px", borderRadius: 2, fontSize: 14, fontWeight: 700, cursor: "pointer",
   border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)",
   background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.85)",
 });

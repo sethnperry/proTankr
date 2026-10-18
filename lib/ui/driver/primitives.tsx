@@ -9,7 +9,7 @@ export function Modal({ title, onClose, children, wide }: {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}
       onClick={onClose}>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius + 4, padding: "22px 20px", width: "100%", maxWidth: wide ? 680 : 480, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: "22px 20px", width: "100%", maxWidth: wide ? 680 : 480, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>{title}</span>

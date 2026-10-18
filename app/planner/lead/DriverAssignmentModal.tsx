@@ -27,7 +27,7 @@ type Props = {
 };
 
 const INPUT: React.CSSProperties = {
-  borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
   color: "#fff", fontSize: 14, padding: "9px 12px", boxSizing: "border-box" as const, width: "100%",
 };
 
@@ -87,7 +87,7 @@ export default function DriverAssignmentModal({ open, onClose, companyId, dayDri
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10200, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 420, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 420, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", padding: "16px 18px 12px", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>Driver Assignment</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.85)", fontSize: 20, fontWeight: 900, cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
@@ -106,7 +106,7 @@ export default function DriverAssignmentModal({ open, onClose, companyId, dayDri
 
         <div style={{ padding: "12px 18px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <button type="button" onClick={handleSave} disabled={loading}
-            style={{ width: "100%", padding: "11px 0", borderRadius: 8, border: "none", background: "rgba(74,222,128,0.15)", color: "#4ade80", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+            style={{ width: "100%", padding: "11px 0", borderRadius: 2, border: "none", background: "rgba(74,222,128,0.15)", color: "#4ade80", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
             Save
           </button>
         </div>

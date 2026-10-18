@@ -103,7 +103,7 @@ export function LocationPicker({
     const active = l.location_id === selectedLocationId;
     return (
       <div key={l.location_id} style={{
-        display: "flex", alignItems: "center", borderRadius: 6, overflow: "hidden",
+        display: "flex", alignItems: "center", borderRadius: 2, overflow: "hidden",
         border: `1px solid ${active ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.10)"}`,
         background: active ? "rgba(255,255,255,0.05)" : "transparent",
       }}>
@@ -158,7 +158,7 @@ export function LocationPicker({
             {cities.map((c) => (
               <button key={c.key} type="button"
                 onClick={() => { setCityKey(c.key); setChoosingCity(false); setShowAll(false); }}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px", borderRadius: 6, cursor: "pointer", textAlign: "left",
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px", borderRadius: 2, cursor: "pointer", textAlign: "left",
                   border: `1px solid ${c.key === cityKey ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.10)"}`,
                   background: c.key === cityKey ? "rgba(255,255,255,0.05)" : "transparent", color: "#fff" }}>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{cityLabel(c)}</span>

@@ -65,7 +65,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function Section({ title, expIso, children }: { title: string; expIso: string | null; children: React.ReactNode }) {
   return (
-    <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 8, padding: "16px 18px", marginBottom: 16, breakInside: "avoid" as const }}>
+    <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 2, padding: "16px 18px", marginBottom: 16, breakInside: "avoid" as const }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: "#111" }}>{title}</div>
         <ExpBadge iso={expIso} />
@@ -77,7 +77,7 @@ function Section({ title, expIso, children }: { title: string; expIso: string | 
   );
 }
 
-const checkboxRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" };
+const checkboxRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" };
 const checkboxRowDisabled: React.CSSProperties = { ...checkboxRow, opacity: 0.4 };
 
 // A driver_licenses/medical_cards/twic_cards row can exist but be entirely
@@ -126,7 +126,7 @@ export default function CredentialsReportModal({ open, onClose, driverName, lice
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          style={{ background: step === "preview" ? "#e9e9ea" : "#111518", margin: "auto 0 0", borderRadius: "20px 20px 0 0", border: "1px solid rgba(255,255,255,0.08)", width: "100%", height: "92dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+          style={{ background: step === "preview" ? "#e9e9ea" : "#111518", margin: "auto 0 0", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.08)", width: "100%", height: "92dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
         >
           {/* Header (hidden on print) */}
           <div style={{ display: "flex", alignItems: "center", padding: "14px 18px 12px", gap: 10, background: step === "preview" ? "#111518" : undefined }}>
@@ -176,7 +176,7 @@ export default function CredentialsReportModal({ open, onClose, driverName, lice
                   disabled={!anySelected}
                   onClick={() => setStep("preview")}
                   style={{
-                    width: "100%", padding: "13px 0", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)",
+                    width: "100%", padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)",
                     background: anySelected ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.06)",
                     color: anySelected ? "#111" : "rgba(255,255,255,0.25)",
                     fontSize: 14, fontWeight: 800, cursor: anySelected ? "pointer" : "default",
@@ -189,7 +189,7 @@ export default function CredentialsReportModal({ open, onClose, driverName, lice
           ) : (
             <>
               <div style={{ flex: 1, overflowY: "auto", padding: "8px 18px 18px" }}>
-                <div className="protankr-credentials-print" style={{ background: "#fff", borderRadius: 8, padding: "24px 22px", color: "#111" }}>
+                <div className="protankr-credentials-print" style={{ background: "#fff", borderRadius: 2, padding: "24px 22px", color: "#111" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 18, paddingBottom: 14, borderBottom: "2px solid #111" }}>
                     <div>
                       <div style={{ fontSize: 20, fontWeight: 900, color: "#111" }}>Driver Credentials Report</div>
@@ -235,7 +235,7 @@ export default function CredentialsReportModal({ open, onClose, driverName, lice
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", background: "#111", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+                  style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "1px solid rgba(0,0,0,0.15)", background: "#111", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
                 >
                   Print / Save PDF
                 </button>

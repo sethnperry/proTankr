@@ -103,20 +103,20 @@ function statusText(row: Row): string {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 6, padding: "9px 11px", border: "1px solid rgba(255,255,255,0.16)",
+  width: "100%", borderRadius: 2, padding: "9px 11px", border: "1px solid rgba(255,255,255,0.16)",
   background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, boxSizing: "border-box",
 };
 const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 4, display: "block" };
 const saveBtnStyle: React.CSSProperties = {
-  flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.20)",
+  flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.20)",
   background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
 };
 const cancelBtnStyle: React.CSSProperties = {
-  flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)",
+  flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
 };
 const dangerBtnStyle: React.CSSProperties = {
-  padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.4)",
+  padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.4)",
   background: "rgba(180,40,40,0.12)", color: "#fca5a5", fontWeight: 800, fontSize: 14, cursor: "pointer",
 };
 // Front-page nav buttons -- matches the Add/Edit Truck/Trailer modal's own
@@ -124,7 +124,7 @@ const dangerBtnStyle: React.CSSProperties = {
 // EquipmentDetails.tsx), reproduced here since this file has its own style
 // constants rather than importing that file's tokens.
 const navBtnStyle: React.CSSProperties = {
-  width: "100%", padding: "13px 14px", borderRadius: 6, marginBottom: 8,
+  width: "100%", padding: "13px 14px", borderRadius: 2, marginBottom: 8,
   border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.05)",
   color: "#fff", fontSize: 14, fontWeight: 700, textAlign: "left" as const, cursor: "pointer",
 };
@@ -273,7 +273,7 @@ function AddPermitTypeModal({
   }, [existingTypes, unit]);
 
   const rowStyle: React.CSSProperties = {
-    textAlign: "left" as const, padding: "12px 14px", borderRadius: 6,
+    textAlign: "left" as const, padding: "12px 14px", borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
     color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", width: "100%",
   };
@@ -293,7 +293,7 @@ function AddPermitTypeModal({
           type="button"
           onClick={() => onPick("")}
           style={{
-            textAlign: "left" as const, padding: "12px 14px", borderRadius: 6,
+            textAlign: "left" as const, padding: "12px 14px", borderRadius: 2,
             border: "1px dashed rgba(255,255,255,0.18)", background: "transparent",
             color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%",
           }}
@@ -752,7 +752,7 @@ function UnitSection({
           <div
             onClick={onAddType}
             style={{
-              borderRadius: 6, border: "1px dashed rgba(255,255,255,0.18)", padding: "10px 12px",
+              borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", padding: "10px 12px",
               textAlign: "center" as const, cursor: "pointer", fontSize: 13, fontWeight: 700,
               color: "rgba(255,255,255,0.35)", marginTop: 4,
             }}
@@ -948,7 +948,7 @@ function PermitRow({
               <div
                 key={p.id}
                 title={p.uploaded_by ? `Uploaded by ${namesByUserId[p.uploaded_by] ?? "…"}` : undefined}
-                style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "6px 10px", marginBottom: 4 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "6px 10px", marginBottom: 4 }}
               >
                 <span style={{ fontSize: 14 }}>{p.mime_type?.startsWith("image/") ? "🖼" : "📄"}</span>
                 <span style={{ flex: 1, fontSize: 12, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{p.original_name}</span>
@@ -956,7 +956,7 @@ function PermitRow({
                 <button type="button" onClick={() => deletePage(p)} disabled={busy} style={{ background: "none", border: "none", color: "#fca5a5", fontSize: 13, cursor: "pointer" }}>✕</button>
               </div>
             ))}
-            <label style={{ display: "block", textAlign: "center" as const, padding: "8px", borderRadius: 6, border: "1px dashed rgba(255,255,255,0.18)", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>
+            <label style={{ display: "block", textAlign: "center" as const, padding: "8px", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>
               {uploading ? "Uploading…" : pages.length ? "+ Add another page" : "+ Add document"}
               <input
                 type="file" accept="image/*,application/pdf,.pdf" style={{ display: "none" }}

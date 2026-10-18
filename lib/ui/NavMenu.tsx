@@ -132,7 +132,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
         aria-label="Open navigation menu"
         style={{
           display: "flex", flexDirection: "column", justifyContent: "center",
-          alignItems: "center", gap: 5, width: 36, height: 36, borderRadius: 6,
+          alignItems: "center", gap: 5, width: 36, height: 36, borderRadius: 2,
           border: isPlanner ? "none" : open ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.08)",
           background: isPlanner ? "none" : open ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
           cursor: "pointer", padding: 0, transition: "background 150ms, border 150ms", flexShrink: 0,
@@ -168,7 +168,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
           // used to rely on); falls back to the route guess otherwise.
           ...((anchor ?? (isPlanner ? "left" : "right")) === "left" ? { left: 0 } : { right: 0 }),
           width: 240, background: "#111",
-          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2,
           boxShadow: "0 16px 48px rgba(0,0,0,0.7)", overflow: "hidden", zIndex: 500,
         }}>
           {/* User */}
@@ -205,7 +205,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
                         disabled={switching}
                         style={{
                           display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
-                          borderRadius: 6,
+                          borderRadius: 2,
                           border: active ? "1px solid rgba(255,255,255,0.20)" : "1px solid transparent",
                           background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
                           cursor: switching ? "wait" : "pointer", textAlign: "left" as const,
@@ -288,7 +288,7 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
 function AdminBadge({ role }: { role: string }) {
   const label = ROLE_LABELS[role as Role] ?? role.toUpperCase();
   return (
-    <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.70)", border: "1px solid rgba(255,255,255,0.20)", flexShrink: 0 }}>
+    <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 2, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.70)", border: "1px solid rgba(255,255,255,0.20)", flexShrink: 0 }}>
       {label.toUpperCase()}
     </span>
   );
@@ -311,7 +311,7 @@ function NavLink({ href, icon, label, onClick, danger }: {
   // remount of CalculatorShellProvider for routes sharing its layout.
   return (
     <Link href={href} onClick={onClick}
-      style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 6, fontSize: 13, fontWeight: 500, color: danger ? "#e05555" : "rgba(255,255,255,0.75)", textDecoration: "none", cursor: "pointer", transition: "background 100ms" }}
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 2, fontSize: 13, fontWeight: 500, color: danger ? "#e05555" : "rgba(255,255,255,0.75)", textDecoration: "none", cursor: "pointer", transition: "background 100ms" }}
       onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
     >

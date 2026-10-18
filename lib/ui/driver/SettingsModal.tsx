@@ -60,7 +60,7 @@ function SettingsRow({ label, sub, right, onClick }: {
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
       style={{
         display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
-        borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)",
+        borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
         background: "rgba(255,255,255,0.03)", cursor: onClick ? "pointer" : "default",
       }}
     >
@@ -262,7 +262,7 @@ function CompanySection({ companyId, companyName, isSolo, onRenamed }: {
       <SectionLabel>Company</SectionLabel>
       {status && (
         <div style={{
-          marginBottom: 10, fontSize: 12, padding: "8px 10px", borderRadius: 6,
+          marginBottom: 10, fontSize: 12, padding: "8px 10px", borderRadius: 2,
           color: status.type === "error" ? T.danger : T.success,
           background: status.type === "error" ? "rgba(239,68,68,0.08)" : "rgba(76,175,130,0.08)",
         }}>
@@ -270,7 +270,7 @@ function CompanySection({ companyId, companyName, isSolo, onRenamed }: {
         </div>
       )}
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
+        <div style={{ padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 8 }}>
             Company Name
           </div>
@@ -287,14 +287,14 @@ function CompanySection({ companyId, companyName, isSolo, onRenamed }: {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
             <span style={{ fontSize: 12, color: T.muted }}>Plan tier</span>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: "rgba(255,255,255,0.06)", color: T.text }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 2, background: "rgba(255,255,255,0.06)", color: T.text }}>
               {isSolo ? "Solo" : "Fleet"}
             </span>
             <span style={{ fontSize: 11, color: T.muted }}>— contact us to change your plan tier</span>
           </div>
         </div>
 
-        <div style={{ padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
+        <div style={{ padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 8 }}>
             Plan &amp; Billing
           </div>
@@ -307,14 +307,14 @@ function CompanySection({ companyId, companyName, isSolo, onRenamed }: {
             <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
+                  fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 2,
                   background: `${STATUS_COLOR[seats.status ?? ""] ?? T.muted}22`,
                   color: STATUS_COLOR[seats.status ?? ""] ?? T.muted,
                 }}>
                   {STATUS_LABEL[seats.status ?? ""] ?? seats.status}
                 </span>
                 {subscription?.comped && (
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: "rgba(76,175,130,0.15)", color: T.success }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 2, background: "rgba(76,175,130,0.15)", color: T.success }}>
                     Complimentary Access
                   </span>
                 )}

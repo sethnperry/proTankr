@@ -227,7 +227,7 @@ function TempDial({ value, min, max, step, onChange }: TempDialProps) {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 280, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
+            style={{ width: "100%", maxWidth: 280, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
           >
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>
               Set Temp (°F) for All Products
@@ -242,11 +242,11 @@ function TempDial({ value, min, max, step, onChange }: TempDialProps) {
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{min}° to {max}°</div>
             <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 4 }}>
               <button type="button" onClick={() => setTyping(false)}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={commitTyped}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 Set
               </button>
             </div>
@@ -2710,14 +2710,14 @@ const lastProductInfoById = useMemo(() => {
   // this file's own git history) so its starBtnClass stays local; nothing
   // else here needs a second copy of the picker-list logic.
   const starBtnClass = (active: boolean) =>
-    ["h-8 w-8 flex items-center justify-center rounded-lg border transition",
+    ["h-8 w-8 flex items-center justify-center rounded-[2px] border transition",
       active ? "border-yellow-400/40 text-yellow-300 hover:bg-yellow-400/10"
         : "border-white/10 text-white/40 hover:bg-white/5 hover:text-white/80"].join(" ");
 
   // ── Plan styles ────────────────────────────────────────────────────────────
   const planStyles = useMemo(() => ({
     ...styles,
-    smallBtn: { ...styles.smallBtn, padding: "10px 14px", minWidth: 112, borderRadius: 14, letterSpacing: "0.4px" },
+    smallBtn: { ...styles.smallBtn, padding: "10px 14px", minWidth: 112, borderRadius: 2, letterSpacing: "0.4px" },
     badge: { ...styles.badge, marginRight: 10 },
   }), []);
 
@@ -3021,7 +3021,7 @@ const lastProductInfoById = useMemo(() => {
           : "No truck coupled — add one to plan a load."}
       </div>
       <button type="button" onClick={openEquipment}
-        style={{ marginTop: 18, background: "#ffffff", color: "#000000", border: "none", borderRadius: 6, padding: "12px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+        style={{ marginTop: 18, background: "#ffffff", color: "#000000", border: "none", borderRadius: 2, padding: "12px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
         Select a {missingUnitWord}
       </button>
     </div>
@@ -3069,7 +3069,7 @@ const lastProductInfoById = useMemo(() => {
       )}
       {/* Admin setup session banner */}
       {setupSession && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", marginBottom: 8, borderRadius: 12, background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.30)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", marginBottom: 8, borderRadius: 2, background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.30)" }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 800, color: "#fb923c", letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Setting up planner for</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginTop: 1 }}>{setupSession.targetDisplayName}</div>
@@ -3087,7 +3087,7 @@ const lastProductInfoById = useMemo(() => {
               // point, applied symmetrically to the exit.
               window.location.href = setupSession.returnTo ?? "/admin";
             }}
-            style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(251,146,60,0.40)", background: "rgba(251,146,60,0.15)", color: "#fb923c", cursor: "pointer", whiteSpace: "nowrap" as const }}>
+            style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 2, border: "1px solid rgba(251,146,60,0.40)", background: "rgba(251,146,60,0.15)", color: "#fb923c", cursor: "pointer", whiteSpace: "nowrap" as const }}>
             ← Return to {setupSession.returnTo === "/planner/dispatch" ? "Dispatch" : "Admin"}
           </button>
         </div>
@@ -3159,7 +3159,7 @@ const lastProductInfoById = useMemo(() => {
           // Learn page's "Guided tours" recap reads the same acknowledged
           // flag this Got it button writes.
           <div style={{
-            marginBottom: 14, borderRadius: 16, padding: "14px 16px",
+            marginBottom: 14, borderRadius: 2, padding: "14px 16px",
             border: "1px solid rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.07)",
           }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 6 }}>✓ Setup guide complete</div>
@@ -3183,7 +3183,7 @@ const lastProductInfoById = useMemo(() => {
       {tripPartial && (
         <div style={{
           border: "1px solid rgba(147,197,253,0.45)", background: "rgba(147,197,253,0.08)", color: "#fff",
-          borderRadius: 10, padding: "8px 12px", marginTop: 8, fontSize: 14,
+          borderRadius: 2, padding: "8px 12px", marginTop: 8, fontSize: 14,
         }}>
           <b style={{ color: "#93c5fd" }}>Loading C{tripPartial.planned.map((p) => p.comp_number).join(", C")} only</b>
           {tripPartial.aboard.length > 0 && (
@@ -3201,7 +3201,7 @@ const lastProductInfoById = useMemo(() => {
           style={{
             display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", gap: 10,
             border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.08)", color: "#fff",
-            borderRadius: 10, padding: "8px 12px", marginTop: 8, cursor: "pointer", textAlign: "left",
+            borderRadius: 2, padding: "8px 12px", marginTop: 8, cursor: "pointer", textAlign: "left",
           }}
         >
           <span style={{ fontSize: 14 }}>
@@ -3459,7 +3459,7 @@ const lastProductInfoById = useMemo(() => {
         // them share width evenly when placed in a row; harmless (and
         // simply unused) when they're stacked in a column instead.
         const recapCard = (
-          <div style={{ borderRadius: 16, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0 }}>
+          <div style={{ borderRadius: 2, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0 }}>
             {/* Plain status text now -- not a button, nothing to tap. See
                 this block's own comment above for why this used to
                 silently overwrite the live plan. */}
@@ -3498,7 +3498,7 @@ const lastProductInfoById = useMemo(() => {
               onClick={() => void openLoadReportAtTerminal()}
               disabled={viewLastLoadBusy}
               style={{
-                borderRadius: 6, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
+                borderRadius: 2, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
                 padding: "10px 14px", width: "100%",
                 cursor: viewLastLoadBusy ? "not-allowed" : "pointer", opacity: viewLastLoadBusy ? 0.6 : 1,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -3544,7 +3544,7 @@ const lastProductInfoById = useMemo(() => {
               // was themeFill/themeTextOnFill (graphite or accent-colored
               // fill with white text in dark mode); this button no longer
               // follows the accent color at all.
-              borderRadius: 6, border: "none", background: "#ffffff",
+              borderRadius: 2, border: "none", background: "#ffffff",
               padding: "10px 14px", width: "100%", height: isUltraWideLandscape ? "100%" : undefined,
               cursor: (tripNeedsArrive ? !location.selectedTerminalId : loadDisabled) ? "not-allowed" : "pointer",
               opacity: (tripNeedsArrive ? !location.selectedTerminalId : loadDisabled) ? 0.5 : 1,

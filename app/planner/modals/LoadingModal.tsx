@@ -83,7 +83,7 @@ function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error
     }}>
       <div style={{
         width: "100%", maxWidth: 380, maxHeight: "calc(100dvh - 48px)", overflowY: "auto" as const, boxSizing: "border-box" as const,
-        background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, padding: 18,
+        background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 18,
         display: "flex", flexDirection: "column", gap: 12, color: "#fff",
       }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const, textAlign: "center" as const }}>
@@ -93,11 +93,11 @@ function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error
         {error && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", textAlign: "center" as const }}>{error}</div>}
         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
           <button type="button" onClick={onBack}
-            style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
             {backLabel}
           </button>
           <button type="button" onClick={onNext}
-            style={{ flex: 1, padding: "12px 0", borderRadius: 4, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             {nextLabel}
           </button>
         </div>
@@ -228,7 +228,7 @@ function TunePanel({ rows, tempColor, onTune, ambientTempF, cityLabel }: {
             onClick={() => openEdit(r)}
             style={{
               display: "flex", flexDirection: "column", gap: 4,
-              padding: "9px 12px", borderRadius: 10,
+              padding: "9px 12px", borderRadius: 2,
               border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
               cursor: "pointer", width: "100%", textAlign: "left" as const,
             }}
@@ -1044,7 +1044,7 @@ export default function LoadingModal(props: {
               const tm = trip.existingTimes;
               return (
                 <div style={{
-                  display: "flex", flexDirection: "column", gap: 3, marginTop: 6, padding: "6px 10px", borderRadius: 6,
+                  display: "flex", flexDirection: "column", gap: 3, marginTop: 6, padding: "6px 10px", borderRadius: 2,
                   border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
                 }}>
                   {groups.map((g) => (
@@ -1074,7 +1074,7 @@ export default function LoadingModal(props: {
                 used for the Actual Weight card further down. */}
             <div style={{
               display: "flex", flexDirection: "column", gap: 2,
-              marginTop: 6, padding: "6px 10px", borderRadius: 6,
+              marginTop: 6, padding: "6px 10px", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
             }}>
               {/* Only meaningful with 2+ distinct products -- with just one,
@@ -1116,7 +1116,7 @@ export default function LoadingModal(props: {
               allPlannedUnavailable ? (
                 <div
                   style={{
-                    borderRadius: 6,
+                    borderRadius: 2,
                     border: "1px solid rgba(255,170,60,0.35)",
                     background: "rgba(255,170,60,0.10)",
                     padding: "10px 12px",
@@ -1140,7 +1140,7 @@ export default function LoadingModal(props: {
                       key={`${x.comp}-${x.productId}`}
                       style={{
                         display: "flex", alignItems: "center", gap: 8,
-                        padding: "10px 12px", borderRadius: 10,
+                        padding: "10px 12px", borderRadius: 2,
                         border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
                       }}
                     >
@@ -1154,7 +1154,7 @@ export default function LoadingModal(props: {
                           <span style={{
                             flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
                             color: "#fb923c", border: "1px solid rgba(251,146,60,0.5)",
-                            borderRadius: 4, padding: "1px 5px",
+                            borderRadius: 2, padding: "1px 5px",
                           }}>
                             CAPPED
                           </span>
@@ -1177,7 +1177,7 @@ export default function LoadingModal(props: {
                     another compartment in the list above. */}
                 <div style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
-                  marginTop: 2, padding: "8px 10px", borderRadius: 6,
+                  marginTop: 2, padding: "8px 10px", borderRadius: 2,
                   border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Total</span>
@@ -1204,7 +1204,7 @@ export default function LoadingModal(props: {
           report.actualGrossLbs != null && (<>
             <div style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "12px 14px", borderRadius: 6,
+              padding: "12px 14px", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
             }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Actual Weight</div>
@@ -1222,7 +1222,7 @@ export default function LoadingModal(props: {
                       onClick={() => setBurnOpen(true)}
                       style={{
                         display: "flex", flexDirection: "column", gap: 4, width: "100%", textAlign: "left" as const,
-                        padding: "12px 14px", borderRadius: 6, cursor: "pointer",
+                        padding: "12px 14px", borderRadius: 2, cursor: "pointer",
                         border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
                       }}
                     >
@@ -1250,7 +1250,7 @@ export default function LoadingModal(props: {
                   onClick={() => setBurnOpen(true)}
                   style={{
                     display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%",
-                    padding: "12px 14px", borderRadius: 6, cursor: "pointer", textAlign: "left" as const,
+                    padding: "12px 14px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                     border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)",
                   }}
                 >
@@ -1286,7 +1286,7 @@ export default function LoadingModal(props: {
           showLivePreview && (
             <div style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "10px 12px", borderRadius: 6,
+              padding: "10px 12px", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
             }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Live Weight</div>
@@ -1300,7 +1300,7 @@ export default function LoadingModal(props: {
         {errorMessage ? (
           <div
             style={{
-              borderRadius: 6,
+              borderRadius: 2,
               border: "1px solid rgba(255,80,80,0.35)",
               background: "rgba(255,80,80,0.10)",
               padding: "10px 12px",
@@ -1316,7 +1316,7 @@ export default function LoadingModal(props: {
         {report ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
             {deleteError ? (
-              <div style={{ borderRadius: 6, border: "1px solid rgba(255,80,80,0.35)", background: "rgba(255,80,80,0.10)", padding: "10px 12px", color: "rgba(255,210,210,0.95)", fontWeight: 700, lineHeight: 1.25 }}>
+              <div style={{ borderRadius: 2, border: "1px solid rgba(255,80,80,0.35)", background: "rgba(255,80,80,0.10)", padding: "10px 12px", color: "rgba(255,210,210,0.95)", fontWeight: 700, lineHeight: 1.25 }}>
                 {deleteError}
               </div>
             ) : null}
@@ -1347,7 +1347,7 @@ export default function LoadingModal(props: {
                 onClick={() => { setEditMenuOpen(true); setConfirmDelete(false); }}
                 disabled={Boolean(deleteBusy)}
                 style={{
-                  width: "100%", padding: "12px 16px", borderRadius: 10,
+                  width: "100%", padding: "12px 16px", borderRadius: 2,
                   border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
                   color: "rgba(255,255,255,0.90)", fontSize: 15, fontWeight: 700, cursor: "pointer",
                   opacity: deleteBusy ? 0.55 : 1,
@@ -1356,13 +1356,13 @@ export default function LoadingModal(props: {
                 Edit Load
               </button>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, borderRadius: 10, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, borderRadius: 2, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW }}>
                 <button
                   type="button"
                   onClick={() => { setEditMenuOpen(false); startEditSequence(); }}
                   disabled={Boolean(deleteBusy)}
                   style={{
-                    width: "100%", padding: "12px 16px", borderRadius: 10,
+                    width: "100%", padding: "12px 16px", borderRadius: 2,
                     border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)",
                     color: "rgba(255,255,255,0.92)", fontSize: 15, fontWeight: 700, cursor: "pointer",
                   }}
@@ -1376,7 +1376,7 @@ export default function LoadingModal(props: {
                       onClick={() => onDeleteLoad?.()}
                       disabled={Boolean(deleteBusy)}
                       style={{
-                        flex: 1, padding: "12px 16px", borderRadius: 10,
+                        flex: 1, padding: "12px 16px", borderRadius: 2,
                         border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.15)",
                         color: "#fca5a5", fontSize: 15, fontWeight: 700, cursor: "pointer",
                         opacity: deleteBusy ? 0.6 : 1,
@@ -1389,7 +1389,7 @@ export default function LoadingModal(props: {
                       onClick={() => setConfirmDelete(false)}
                       disabled={Boolean(deleteBusy)}
                       style={{
-                        flex: 1, padding: "12px 16px", borderRadius: 10,
+                        flex: 1, padding: "12px 16px", borderRadius: 2,
                         border: CARD_BORDER, background: "transparent",
                         color: "rgba(255,255,255,0.75)", fontSize: 15, fontWeight: 700, cursor: "pointer",
                       }}
@@ -1403,7 +1403,7 @@ export default function LoadingModal(props: {
                     onClick={() => setConfirmDelete(true)}
                     disabled={Boolean(deleteBusy)}
                     style={{
-                      width: "100%", padding: "10px 16px", borderRadius: 10,
+                      width: "100%", padding: "10px 16px", borderRadius: 2,
                       border: "1px solid rgba(239,68,68,0.25)", background: "transparent",
                       color: "#f87171", fontSize: 14, fontWeight: 700, cursor: "pointer",
                     }}
@@ -1451,7 +1451,7 @@ export default function LoadingModal(props: {
               onClick={onUpdateCardOnly}
               disabled={busy}
               style={{
-                width: "100%", padding: "12px 16px", borderRadius: 10,
+                width: "100%", padding: "12px 16px", borderRadius: 2,
                 border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
                 color: "rgba(255,255,255,0.90)", fontSize: 15, fontWeight: 700, cursor: "pointer",
                 opacity: busy ? 0.55 : 1,
@@ -1465,7 +1465,7 @@ export default function LoadingModal(props: {
               onClick={onReportTerminalIssue}
               disabled={busy}
               style={{
-                width: "100%", padding: "12px 16px", borderRadius: 10,
+                width: "100%", padding: "12px 16px", borderRadius: 2,
                 border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
                 color: "rgba(255,255,255,0.90)", fontSize: 15, fontWeight: 700, cursor: "pointer",
                 opacity: busy ? 0.55 : 1,
@@ -1480,7 +1480,7 @@ export default function LoadingModal(props: {
               disabled={busy}
               style={{
                 width: "100%", padding: "10px 0",
-                borderRadius: 6, border: "none", background: "transparent",
+                borderRadius: 2, border: "none", background: "transparent",
                 color: "rgba(255,255,255,0.40)", fontSize: 13, fontWeight: 700, cursor: "pointer",
                 opacity: busy ? 0.55 : 1,
               }}
@@ -1520,7 +1520,7 @@ export default function LoadingModal(props: {
             after: (
               <button type="button" onClick={() => setPickingSupplier(true)}
                 style={{
-                  width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 4, cursor: "pointer",
+                  width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 2, cursor: "pointer",
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                   border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)",
                   color: seqSupplier ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 15, fontWeight: 700,
@@ -1538,7 +1538,7 @@ export default function LoadingModal(props: {
         footer={seqProductCompCount > 1 ? (
           <button type="button" onClick={openSplit}
             style={{
-              width: "100%", padding: "9px 10px", borderRadius: 4, cursor: "pointer",
+              width: "100%", padding: "9px 10px", borderRadius: 2, cursor: "pointer",
               border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
               color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 700,
             }}>
@@ -1590,7 +1590,7 @@ export default function LoadingModal(props: {
                   return (
                     <button key={n} type="button" onClick={() => setSplitDraft((d) => ({ ...d, [l.comp]: n }))}
                       style={{
-                        padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                        padding: "6px 10px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 700,
                         border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
                         background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.7)",
                       }}>

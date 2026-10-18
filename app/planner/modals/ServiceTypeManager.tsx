@@ -35,11 +35,11 @@ export type ServiceType = {
 
 const fieldLabel: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.45)" };
 const inputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 6, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.14)",
+  width: "100%", borderRadius: 2, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 15, boxSizing: "border-box",
 };
 const saveBtnStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 18px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
+  width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
 };
 const selectStyle: React.CSSProperties = {
@@ -226,7 +226,7 @@ export function ServiceTypeEditorModal({
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
                 disabled={busy}
-                style={{ width: "100%", padding: "12px 18px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.4)", background: "rgba(180,40,40,0.12)", color: "#fca5a5", fontWeight: 800, fontSize: 14, cursor: "pointer" }}
+                style={{ width: "100%", padding: "12px 18px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.4)", background: "rgba(180,40,40,0.12)", color: "#fca5a5", fontWeight: 800, fontSize: 14, cursor: "pointer" }}
               >
                 Delete type
               </button>
@@ -240,11 +240,11 @@ export function ServiceTypeEditorModal({
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setConfirmingDelete(false)} disabled={busy}
-                style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>
                 Cancel
               </button>
               <button type="button" onClick={confirmDelete} disabled={busy}
-                style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Deleting…" : "Delete"}
               </button>
             </div>
@@ -286,7 +286,7 @@ export function ServiceTypeListModal({
 
   const rowStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-    padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)",
+    padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.03)", cursor: "pointer",
   };
 
@@ -311,7 +311,7 @@ export function ServiceTypeListModal({
           type="button"
           onClick={() => setTypeEditor({ mode: "new", type: null })}
           style={{
-            textAlign: "left" as const, padding: "12px 14px", borderRadius: 6,
+            textAlign: "left" as const, padding: "12px 14px", borderRadius: 2,
             border: "1px dashed rgba(255,255,255,0.18)", background: "transparent",
             color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 700, cursor: "pointer",
           }}
@@ -375,14 +375,14 @@ export function ServiceTypeSelect({
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-          background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6,
+          background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 2,
           maxHeight: 280, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.55)", padding: 4,
         }}>
           <div
             onClick={() => { onChange(""); setOpen(false); }}
             onMouseEnter={() => setHoverValue("")}
             onMouseLeave={() => setHoverValue((v) => (v === "" ? null : v))}
-            style={{ padding: "10px 12px", fontSize: 15, color: "#fff", cursor: "pointer", borderRadius: 6, background: hoverValue === "" ? "rgba(255,255,255,0.10)" : "transparent" }}
+            style={{ padding: "10px 12px", fontSize: 15, color: "#fff", cursor: "pointer", borderRadius: 2, background: hoverValue === "" ? "rgba(255,255,255,0.10)" : "transparent" }}
           >
             Select…
           </div>
@@ -390,7 +390,7 @@ export function ServiceTypeSelect({
             <div
               key={t.service_type_id}
               style={{
-                display: "flex", alignItems: "center", gap: 6, borderRadius: 6,
+                display: "flex", alignItems: "center", gap: 6, borderRadius: 2,
                 background: hoverValue === t.service_type_id ? "rgba(255,255,255,0.10)" : t.service_type_id === value ? "rgba(255,255,255,0.05)" : "transparent",
               }}
               onMouseEnter={() => setHoverValue(t.service_type_id)}
@@ -421,7 +421,7 @@ export function ServiceTypeSelect({
             onClick={() => { setOpen(false); onNewType(); }}
             onMouseEnter={() => setHoverValue("__new__")}
             onMouseLeave={() => setHoverValue((v) => (v === "__new__" ? null : v))}
-            style={{ padding: "10px 12px", fontSize: 15, color: "rgba(255,255,255,0.65)", cursor: "pointer", borderRadius: 6, background: hoverValue === "__new__" ? "rgba(255,255,255,0.10)" : "transparent" }}
+            style={{ padding: "10px 12px", fontSize: 15, color: "rgba(255,255,255,0.65)", cursor: "pointer", borderRadius: 2, background: hoverValue === "__new__" ? "rgba(255,255,255,0.10)" : "transparent" }}
           >
             + New type
           </div>

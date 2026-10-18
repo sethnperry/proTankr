@@ -10,7 +10,7 @@ import { isSetupGuideAcknowledged } from "@/app/planner/utils/tourProgress";
 
 function Section({ emoji, title, children }: { emoji: string; title: string; children: React.ReactNode }) {
   return (
-    <div style={{ padding: "14px 16px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+    <div style={{ padding: "14px 16px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
       <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.80)", marginBottom: 6 }}>
         <Icon value={emoji} size={14} />&nbsp;&nbsp;{title}
       </div>
@@ -31,7 +31,7 @@ function Divider({ label }: { label: string }) {
 
 function Callout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.65, color: "#fdba74", background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)", borderLeft: "3px solid #fb923c", borderRadius: "0 10px 10px 0", padding: "10px 14px" }} className="lt-callout">
+    <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.65, color: "#fdba74", background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)", borderLeft: "3px solid #fb923c", borderRadius: "0 2px 2px 0", padding: "10px 14px" }} className="lt-callout">
       {children}
     </div>
   );
@@ -40,7 +40,7 @@ function Callout({ children }: { children: React.ReactNode }) {
 function Accordion({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", overflow: "hidden" }}>
+    <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", overflow: "hidden" }}>
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -164,7 +164,7 @@ export default function LearnPage() {
                     controls
                     preload="metadata"
                     playsInline
-                    style={{ width: "100%", borderRadius: 10, background: "#000", display: "block" }}
+                    style={{ width: "100%", borderRadius: 2, background: "#000", display: "block" }}
                   />
                 </div>
               ))

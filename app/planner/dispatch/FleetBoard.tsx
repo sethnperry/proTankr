@@ -22,7 +22,7 @@ export type BoardProduct = { name: string; code: string; hex: string | null };
 
 const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = {
-  borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)",
   padding: "12px 14px", marginBottom: 10, cursor: "pointer", textAlign: "left", width: "100%", color: "#fff",
   display: "block",
 };
@@ -176,7 +176,7 @@ function CancelledSection({ cancelled, days, onOpenTrip }: {
       {counts.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
           {counts.map((c) => (
-            <span key={c.code} style={{ fontSize: 12, fontWeight: 700, padding: "4px 8px", borderRadius: 999, border: "1px solid rgba(248,113,113,0.35)", color: "rgba(255,255,255,0.85)" }}>
+            <span key={c.code} style={{ fontSize: 12, fontWeight: 700, padding: "4px 8px", borderRadius: 2, border: "1px solid rgba(248,113,113,0.35)", color: "rgba(255,255,255,0.85)" }}>
               {cancelReasonLabel(c.code)} ×{c.count}
             </span>
           ))}

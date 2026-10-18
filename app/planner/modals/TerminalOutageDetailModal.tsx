@@ -53,7 +53,7 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
   return (
     <div
       style={{
-        padding: "12px 14px", borderRadius: 10,
+        padding: "12px 14px", borderRadius: 2,
         background: CARD_BG, border: CARD_BORDER, boxShadow: CARD_SHADOW,
         display: "flex", flexDirection: "column", gap: 6,
       }}
@@ -71,7 +71,7 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
             disabled={clearing}
             style={{
               flexShrink: 0,
-              padding: "6px 12px", borderRadius: 8,
+              padding: "6px 12px", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)",
               color: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700, cursor: "pointer",
               opacity: clearing ? 0.6 : 1,

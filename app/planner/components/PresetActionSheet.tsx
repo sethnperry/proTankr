@@ -20,13 +20,13 @@ type Props = {
 };
 
 const rowStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)",
+  width: "100%", padding: "14px 16px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.90)", fontSize: 15, fontWeight: 700,
   cursor: "pointer", textAlign: "left" as const, marginBottom: 8,
 };
 const dangerRowStyle: React.CSSProperties = { ...rowStyle, color: "#f87171", borderColor: "rgba(248,113,113,0.25)" };
 const cancelStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 10, border: "none",
+  width: "100%", padding: "14px 16px", borderRadius: 2, border: "none",
   background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer",
 };
 
@@ -39,7 +39,7 @@ export default function PresetActionSheet({ open, letter, summary, onLoad, onCon
 
   return (
     <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 10300, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#111518", borderRadius: "16px 16px 0 0", border: "1px solid rgba(255,255,255,0.1)", padding: "18px 16px calc(18px + env(safe-area-inset-bottom))" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)", padding: "18px 16px calc(18px + env(safe-area-inset-bottom))" }}>
         {mode === "menu" && (
           <>
             <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 12 }}>

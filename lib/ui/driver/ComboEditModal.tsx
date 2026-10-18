@@ -31,25 +31,25 @@ const S = {
     color: "rgba(255,255,255,0.55)", marginBottom: 6, display: "block",
   },
   input: {
-    width: "100%", borderRadius: 14, padding: "12px 14px",
+    width: "100%", borderRadius: 2, padding: "12px 14px",
     border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)",
     color: "rgba(255,255,255,0.92)", fontSize: 18, fontWeight: 700 as const,
     outline: "none", boxSizing: "border-box" as const,
   } as React.CSSProperties,
   err: {
-    borderRadius: 16, padding: 14,
+    borderRadius: 2, padding: 14,
     background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)",
     color: "rgba(255,255,255,0.92)", fontWeight: 700, marginBottom: 16,
     fontSize: 13, lineHeight: 1.5,
   } as React.CSSProperties,
   info: {
-    borderRadius: 16, padding: 14,
+    borderRadius: 2, padding: 14,
     background: "rgba(40,80,180,0.14)", border: "1px solid rgba(64,140,255,0.22)",
     color: "rgba(200,220,255,0.88)", fontSize: 14, lineHeight: 1.5,
     marginBottom: 16, fontWeight: 700 as const,
   } as React.CSSProperties,
   btn: {
-    borderRadius: 10, padding: "8px 14px", fontWeight: 900 as const,
+    borderRadius: 2, padding: "8px 14px", fontWeight: 900 as const,
     fontSize: 13, letterSpacing: 0.5,
     border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.09)",
     color: "rgba(255,255,255,0.92)", cursor: "pointer",
@@ -136,7 +136,7 @@ export default function ComboEditModal({
 
           {/* Combo identity header */}
           <div style={{
-            borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
             background: "rgba(255,255,255,0.04)", padding: "14px 16px",
             marginTop: 6, marginBottom: 20,
           }}>
@@ -175,7 +175,7 @@ export default function ComboEditModal({
             />
           </div>
           {tooClose && (
-            <div style={{ padding: "8px 12px", borderRadius: 10, marginBottom: 24,
+            <div style={{ padding: "8px 12px", borderRadius: 2, marginBottom: 24,
               background: "rgba(180,50,20,0.12)", border: "1px solid rgba(220,80,40,0.35)" }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: "#fb923c", letterSpacing: 0.8, marginBottom: 2 }}>⚠ CUTTING IT CLOSE</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
@@ -187,7 +187,7 @@ export default function ComboEditModal({
           {/* Save */}
           <button
             type="button"
-            style={{ ...S.btn, ...S.btnPrimary, width: "100%", padding: "15px 18px", borderRadius: 16, fontSize: 16, textAlign: "center" as const, marginBottom: 12, opacity: saving ? 0.55 : 1 }}
+            style={{ ...S.btn, ...S.btnPrimary, width: "100%", padding: "15px 18px", borderRadius: 2, fontSize: 16, textAlign: "center" as const, marginBottom: 12, opacity: saving ? 0.55 : 1 }}
             onClick={handleSave}
             disabled={saving}
           >
@@ -197,7 +197,7 @@ export default function ComboEditModal({
           {/* Decouple */}
           <button
             type="button"
-            style={{ ...S.btn, ...S.btnDecouple, width: "100%", padding: "13px 18px", borderRadius: 16, fontSize: 15, textAlign: "center" as const, opacity: saving ? 0.55 : 1 }}
+            style={{ ...S.btn, ...S.btnDecouple, width: "100%", padding: "13px 18px", borderRadius: 2, fontSize: 15, textAlign: "center" as const, opacity: saving ? 0.55 : 1 }}
             onClick={() => { onClose(); onDecouple(); }}
             disabled={saving}
           >
@@ -215,7 +215,7 @@ export default function ComboEditModal({
             type="button"
             onClick={onClose}
             style={{
-              width: "100%", borderRadius: 18, padding: "15px 18px",
+              width: "100%", borderRadius: 2, padding: "15px 18px",
               fontWeight: 900, fontSize: 17,
               border: "1px solid rgba(255,255,255,0.14)",
               background: "rgba(255,255,255,0.09)",

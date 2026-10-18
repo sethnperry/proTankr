@@ -16,18 +16,18 @@ export const fieldLabel: React.CSSProperties = {
   textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6,
 };
 export const fieldInput: React.CSSProperties = {
-  width: "100%", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)",
+  width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.04)", padding: "11px 12px", fontSize: 16,
   color: "#fff", boxSizing: "border-box", colorScheme: "dark",
 };
 export const smallInput: React.CSSProperties = { ...fieldInput, padding: "9px 8px", fontSize: 15 };
 export const sectionCard: React.CSSProperties = {
-  borderRadius: 12, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
   padding: 12, marginBottom: 14,
 };
 export const sectionTitle: React.CSSProperties = { fontSize: 13, fontWeight: 800, marginBottom: 10 };
 export const primaryBtn: React.CSSProperties = {
-  width: "100%", padding: "16px 0", borderRadius: 12, border: "none",
+  width: "100%", padding: "16px 0", borderRadius: 2, border: "none",
   background: "#fff", color: "#000", fontSize: 17, fontWeight: 800, cursor: "pointer",
 };
 export const linkBtn: React.CSSProperties = {
@@ -35,7 +35,7 @@ export const linkBtn: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0,
 };
 export const dashedBtn: React.CSSProperties = {
-  width: "100%", padding: "10px 0", borderRadius: 8, border: "1px dashed rgba(255,255,255,0.25)",
+  width: "100%", padding: "10px 0", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.25)",
   background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
 
@@ -171,8 +171,8 @@ export function SignaturePad({ onChange, fill, initial }: { onChange: (path: str
         ref={ref}
         viewBox={`0 0 ${SIG_W} ${SIG_H}`}
         style={fill
-          ? { width: "min(100%, calc((100dvh - 130px) * 3))", aspectRatio: "3 / 1", height: "auto", margin: "0 auto", background: "#fff", borderRadius: 8, touchAction: "none", display: "block", color: "#000" }
-          : { width: "100%", height: 120, background: "#fff", borderRadius: 8, touchAction: "none", display: "block", color: "#000" }}
+          ? { width: "min(100%, calc((100dvh - 130px) * 3))", aspectRatio: "3 / 1", height: "auto", margin: "0 auto", background: "#fff", borderRadius: 2, touchAction: "none", display: "block", color: "#000" }
+          : { width: "100%", height: 120, background: "#fff", borderRadius: 2, touchAction: "none", display: "block", color: "#000" }}
         onPointerDown={(e) => {
           (e.target as Element).setPointerCapture?.(e.pointerId);
           drawing.current = true;
@@ -231,7 +231,7 @@ export function SignatureAccept({ savedPath, onSave, accepted, onAccept, who }: 
   }
   return (
     <div>
-      <div style={{ color: "#fff", background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: 6 }}>
+      <div style={{ color: "#fff", background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: 6 }}>
         <SignatureView path={savedPath} />
       </div>
       <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontSize: 15, cursor: "pointer" }}>

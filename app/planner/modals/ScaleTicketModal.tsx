@@ -28,13 +28,13 @@ const S = {
     color: "rgba(255,255,255,0.55)", marginBottom: 6, display: "block",
   },
   input: {
-    width: "100%", borderRadius: 6, padding: "12px 14px",
+    width: "100%", borderRadius: 2, padding: "12px 14px",
     border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)",
     color: "rgba(255,255,255,0.92)", fontSize: 18, fontWeight: 700 as const,
     outline: "none", boxSizing: "border-box" as const,
   } as React.CSSProperties,
   err: {
-    borderRadius: 6, padding: 14,
+    borderRadius: 2, padding: 14,
     background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)",
     color: "rgba(255,255,255,0.92)", fontWeight: 700, marginBottom: 16,
     fontSize: 13, lineHeight: 1.5,
@@ -164,7 +164,7 @@ export default function ScaleTicketModal({
         <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 8px" }}>
 
           <div style={{
-            borderRadius: 6, border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
             background: "rgba(255,255,255,0.04)", padding: "14px 16px",
             marginTop: 6, marginBottom: 20,
           }}>
@@ -202,7 +202,7 @@ export default function ScaleTicketModal({
             )}
           </div>
           {tooClose && (
-            <div style={{ padding: "8px 12px", borderRadius: 6, marginBottom: 24,
+            <div style={{ padding: "8px 12px", borderRadius: 2, marginBottom: 24,
               background: "rgba(180,50,20,0.12)", border: "1px solid rgba(220,80,40,0.35)" }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: "#fb923c", letterSpacing: 0.8, marginBottom: 2 }}>⚠ CUTTING IT CLOSE</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
@@ -222,7 +222,7 @@ export default function ScaleTicketModal({
             type="button"
             onClick={() => setWeightRecordOpen(true)}
             style={{
-              width: "100%", borderRadius: 6, padding: "15px 18px",
+              width: "100%", borderRadius: 2, padding: "15px 18px",
               fontWeight: 900, fontSize: 17,
               border: "1px solid rgba(255,255,255,0.14)",
               background: "rgba(255,255,255,0.06)",
@@ -235,7 +235,7 @@ export default function ScaleTicketModal({
             type="button"
             onClick={handleClose}
             style={{
-              width: "100%", borderRadius: 6, padding: "15px 18px",
+              width: "100%", borderRadius: 2, padding: "15px 18px",
               fontWeight: 900, fontSize: 17,
               border: "1px solid rgba(255,255,255,0.14)",
               background: "rgba(255,255,255,0.09)",

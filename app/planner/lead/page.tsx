@@ -39,7 +39,7 @@ const SUBTABS: CenteredSubTab[] = [
 
 function PlaceholderPanel({ title, note }: { title: string; note: string }) {
   return (
-    <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "28px 18px", textAlign: "center" as const }}>
+    <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: "28px 18px", textAlign: "center" as const }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", lineHeight: 1.5 }}>{note}</div>
     </div>
@@ -47,7 +47,7 @@ function PlaceholderPanel({ title, note }: { title: string; note: string }) {
 }
 
 const infoCard: React.CSSProperties = {
-  borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.03)", padding: "10px 14px",
 };
 const chevron: React.CSSProperties = { fontSize: 16, color: "rgba(255,255,255,0.25)", flexShrink: 0 };

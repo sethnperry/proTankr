@@ -75,7 +75,7 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 10, padding: "12px 14px",
+  width: "100%", borderRadius: 2, padding: "12px 14px",
   border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)",
   color: "#fff", fontSize: 15, outline: "none", boxSizing: "border-box",
 };
@@ -122,7 +122,7 @@ function CategoryChip({ active, label, onClick }: { active: boolean; label: stri
     <button
       type="button" onClick={onClick}
       style={{
-        flex: 1, fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 8, padding: "9px 0",
+        flex: 1, fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 2, padding: "9px 0",
         color: active ? "#000" : "rgba(255,255,255,0.6)",
         background: active ? "#fff" : "rgba(255,255,255,0.06)",
         border: "1px solid rgba(255,255,255,0.12)",
@@ -464,11 +464,11 @@ export default function VaultPage() {
           Continuing will let you draw a new unlock pattern. Your saved logins and passwords are never affected either way.
         </div>
         {resetConfirmError && <div style={errorStyle}>{resetConfirmError}</div>}
-        <button onClick={confirmResetTap} disabled={resetConfirmBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
+        <button onClick={confirmResetTap} disabled={resetConfirmBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
           {resetConfirmBusy ? "Confirming…" : "Continue"}
         </button>
         {resetConfirmError && (
-          <button onClick={requestReset} disabled={requestBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
+          <button onClick={requestReset} disabled={requestBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
             {requestBusy ? "Sending…" : "Send another email"}
           </button>
         )}
@@ -487,7 +487,7 @@ export default function VaultPage() {
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 24, lineHeight: 1.5 }}>
           We sent a reset link to {maskedEmail ?? "your email"}. Open it on this device to set a new pattern.
         </div>
-        <button onClick={() => setPhase("locked")} style={{ background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", padding: "12px 0", width: "100%" }}>
+        <button onClick={() => setPhase("locked")} style={{ background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 2, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", padding: "12px 0", width: "100%" }}>
           Back
         </button>
       </div>
@@ -539,7 +539,7 @@ export default function VaultPage() {
 
       <button
         onClick={openAddForm}
-        style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "1px dashed rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}
+        style={{ width: "100%", padding: "12px 0", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}
       >
         + Add entry
       </button>
@@ -563,7 +563,7 @@ export default function VaultPage() {
               const isRevealed = !!revealed[e.id];
               const t = themeFor(e.category);
               return (
-                <div key={e.id} style={{ borderRadius: 14, border: t.cardBorder, background: t.cardBg, overflow: "hidden" }}>
+                <div key={e.id} style={{ borderRadius: 2, border: t.cardBorder, background: t.cardBg, overflow: "hidden" }}>
                   <div onClick={() => setExpandedId(isExpanded ? null : e.id)} style={{ padding: 14, cursor: "pointer" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <div style={{ minWidth: 0 }}>
@@ -581,7 +581,7 @@ export default function VaultPage() {
                         )}
                       </div>
                       {e.category && (
-                        <div style={{ fontSize: 10, fontWeight: 700, color: t.pillText, background: t.pillBg, borderRadius: 999, padding: "3px 9px", flexShrink: 0, whiteSpace: "nowrap" as const }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: t.pillText, background: t.pillBg, borderRadius: 2, padding: "3px 9px", flexShrink: 0, whiteSpace: "nowrap" as const }}>
                           {e.category}
                         </div>
                       )}
@@ -606,7 +606,7 @@ export default function VaultPage() {
                               {e.card_pin && row("PIN", e.card_pin, "•".repeat(e.card_pin.length))}
                               {(e.card_number || e.card_pin) && (
                                 <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                                  style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 8, padding: "5px 10px", cursor: "pointer", marginBottom: 10 }}>
+                                  style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", marginBottom: 10 }}>
                                   {isRevealed ? "Hide" : "Show number & PIN"}
                                 </button>
                               )}
@@ -625,7 +625,7 @@ export default function VaultPage() {
                             </div>
                             <button
                               onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                              style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 8, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}
+                              style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}
                             >
                               {isRevealed ? "Hide" : "Show"}
                             </button>
@@ -637,15 +637,15 @@ export default function VaultPage() {
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 8 }}>
-                          <button onClick={() => openEditForm(e)} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: t.btnBorder, background: t.btnBg, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          <button onClick={() => openEditForm(e)} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.btnBorder, background: t.btnBg, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                             Edit
                           </button>
                           {confirmDeleteId === e.id ? (
-                            <button onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                            <button onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                               {busy ? "Deleting…" : "Confirm delete"}
                             </button>
                           ) : (
-                            <button onClick={() => setConfirmDeleteId(e.id)} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: t.dangerBorder, background: t.dangerBg, color: t.dangerText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                            <button onClick={() => setConfirmDeleteId(e.id)} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerBorder, background: t.dangerBg, color: t.dangerText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                               Delete
                             </button>
                           )}
@@ -662,7 +662,7 @@ export default function VaultPage() {
 
       {formOpen && (
         <div onClick={() => setFormOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div onClick={(ev) => ev.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#111518", borderRadius: "18px 18px 0 0", border: "1px solid rgba(255,255,255,0.10)", borderBottom: "none", padding: "20px 18px 28px", maxHeight: "85dvh", overflowY: "auto" }}>
+          <div onClick={(ev) => ev.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.10)", borderBottom: "none", padding: "20px 18px 28px", maxHeight: "85dvh", overflowY: "auto" }}>
             <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 16 }}>
               {editingId ? "Edit Entry" : "New Entry"}
             </div>
@@ -727,10 +727,10 @@ export default function VaultPage() {
             {formError && <div style={{ ...errorStyle, marginBottom: 14 }}>{formError}</div>}
 
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setFormOpen(false)} disabled={busy} style={{ flex: 1, padding: "13px 0", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => setFormOpen(false)} disabled={busy} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 Cancel
               </button>
-              <button onClick={saveEntry} disabled={busy || !fLabel.trim()} style={{ flex: 1, padding: "13px 0", borderRadius: 10, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: fLabel.trim() ? 1 : 0.5 }}>
+              <button onClick={saveEntry} disabled={busy || !fLabel.trim()} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: fLabel.trim() ? 1 : 0.5 }}>
                 {busy ? "Saving…" : "Save"}
               </button>
             </div>

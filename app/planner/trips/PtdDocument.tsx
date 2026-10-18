@@ -19,7 +19,7 @@ const line = "1px solid #999";
 
 const page: React.CSSProperties = {
   background: "#fff", color: ink, fontFamily: "Arial, Helvetica, sans-serif", fontSize: 11,
-  padding: 18, borderRadius: 6, maxWidth: 820, margin: "0 auto", lineHeight: 1.35,
+  padding: 18, borderRadius: 2, maxWidth: 820, margin: "0 auto", lineHeight: 1.35,
 };
 const h2: React.CSSProperties = { fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, margin: "14px 0 4px" };
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
@@ -169,7 +169,7 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
       </div>
 
       {ptd.cancellation && (
-        <div style={{ border: "1px solid #b91c1c", borderRadius: 6, padding: "6px 8px", marginTop: 10 }}>
+        <div style={{ border: "1px solid #b91c1c", borderRadius: 2, padding: "6px 8px", marginTop: 10 }}>
           <div style={{ fontWeight: 800 }}>Load cancelled{ptd.cancellation.at ? ` ${fmtDateTime(ptd.cancellation.at)}` : ""}{ptd.cancellation.by ? ` by ${ptd.cancellation.by}` : ""}</div>
           <div>{ptd.cancellation.reasons.length ? ptd.cancellation.reasons.join(" → ") : "No reason given"}</div>
           {ptd.cancellation.note && <div>&ldquo;{ptd.cancellation.note}&rdquo;</div>}

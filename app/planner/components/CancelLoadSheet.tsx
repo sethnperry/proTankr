@@ -78,7 +78,7 @@
 // report types now go straight to the cardRenewal question and end there.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill } from "../theme";
+import { GRAPHITE, GRAPHITE_DARKER, themeFill, themeTextOnFill , SURFACE } from "../theme";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 import { isTerminalWide, type OutageReportType } from "../hooks/useTerminalOutageReports";
 import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
@@ -114,13 +114,13 @@ type Props = {
 };
 
 const secondaryRowStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 10,
+  width: "100%", padding: "14px 16px", borderRadius: 2,
   border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
   color: "rgba(255,255,255,0.90)", fontSize: 15, fontWeight: 700,
   cursor: "pointer", textAlign: "left" as const, marginBottom: 8,
 };
 const cancelStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 10, border: "none",
+  width: "100%", padding: "14px 16px", borderRadius: 2, border: "none",
   background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer",
 };
 
@@ -237,7 +237,7 @@ export default function CancelLoadSheet({
   }
 
   const primaryRowStyle: React.CSSProperties = {
-    width: "100%", padding: "14px 16px", borderRadius: 10,
+    width: "100%", padding: "14px 16px", borderRadius: 2,
     border: CARD_BORDER, boxShadow: CARD_SHADOW,
     background: themeFill(darkMode, accentColor, "#fff"),
     color: themeTextOnFill(darkMode),
@@ -253,8 +253,8 @@ export default function CancelLoadSheet({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 480,
-          background: `linear-gradient(180deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`,
-          borderRadius: "16px 16px 0 0", border: "1px solid rgba(255,255,255,0.1)",
+          background: SURFACE,
+          borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)",
           padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
         }}
       >
@@ -326,7 +326,7 @@ export default function CancelLoadSheet({
                       onClick={() => toggleProduct(p.productId)}
                       style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-                        width: "100%", padding: "12px 14px", borderRadius: 10, cursor: "pointer",
+                        width: "100%", padding: "12px 14px", borderRadius: 2, cursor: "pointer",
                         border: checked ? "1px solid rgba(255,255,255,0.35)" : CARD_BORDER,
                         background: CARD_BG, boxShadow: CARD_SHADOW,
                         color: "rgba(255,255,255,0.90)", fontSize: 14, fontWeight: 600, textAlign: "left" as const,
@@ -334,7 +334,7 @@ export default function CancelLoadSheet({
                     >
                       <span>{p.name}</span>
                       <span style={{
-                        width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                        width: 18, height: 18, borderRadius: 2, flexShrink: 0,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         border: "1px solid rgba(255,255,255,0.35)",
                         background: checked ? themeFill(darkMode, accentColor, "#fff") : "transparent",
@@ -352,7 +352,7 @@ export default function CancelLoadSheet({
               onClick={submitReport}
               disabled={selectedProductIds.size === 0 || submitBusy}
               style={{
-                width: "100%", padding: "14px 16px", borderRadius: 10, marginBottom: 8,
+                width: "100%", padding: "14px 16px", borderRadius: 2, marginBottom: 8,
                 border: CARD_BORDER, boxShadow: CARD_SHADOW,
                 background: themeFill(darkMode, accentColor, "#fff"),
                 color: themeTextOnFill(darkMode),

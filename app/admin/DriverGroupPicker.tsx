@@ -104,7 +104,7 @@ export default function DriverGroupPicker({
       footer={
         <button
           onClick={commit}
-          className="w-full rounded-2xl bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
+          className="w-full rounded-[2px] bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
         >
           Done — {selectedCount} of {members.length} included
         </button>
@@ -130,7 +130,7 @@ export default function DriverGroupPicker({
                   type="button"
                   onClick={() => toggleRegion(drivers)}
                   style={{
-                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6,
+                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 2,
                     border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", cursor: "pointer", width: "100%", textAlign: "left" as const,
                   }}
                 >
@@ -146,7 +146,7 @@ export default function DriverGroupPicker({
                     type="button"
                     onClick={() => toggleDriver(m.user_id)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 8, padding: "9px 12px 9px 24px", borderRadius: 6,
+                      display: "flex", alignItems: "center", gap: 8, padding: "9px 12px 9px 24px", borderRadius: 2,
                       border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left" as const,
                     }}
                   >
@@ -166,7 +166,7 @@ export default function DriverGroupPicker({
 function Checkbox({ checked, indeterminate }: { checked: boolean; indeterminate?: boolean }) {
   return (
     <span style={{
-      width: 18, height: 18, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      width: 18, height: 18, borderRadius: 2, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
       border: `1px solid ${checked || indeterminate ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.2)"}`,
       background: checked ? "rgba(255,255,255,0.85)" : "transparent",
     }}>
@@ -177,6 +177,6 @@ function Checkbox({ checked, indeterminate }: { checked: boolean; indeterminate?
 }
 
 const pillStyle: React.CSSProperties = {
-  padding: "6px 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.14)",
+  padding: "6px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 700, cursor: "pointer",
 };

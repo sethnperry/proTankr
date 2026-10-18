@@ -115,7 +115,7 @@ export default function EquipmentStatusModal({
     <FullscreenModal open={open} onClose={onClose} title={`Status · ${unitName}`} footer={null}>
       <div style={{ display: "grid", gap: 16 }}>
         {err && (
-          <div style={{ borderRadius: 6, padding: 12, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: 700 }}>
+          <div style={{ borderRadius: 2, padding: 12, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: 700 }}>
             {err}
           </div>
         )}
@@ -140,7 +140,7 @@ export default function EquipmentStatusModal({
                   }}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
-                    borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                    borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
                     border: sel ? `1px solid ${o.color}` : "1px solid rgba(255,255,255,0.12)",
                     background: sel ? `${o.color}22` : "rgba(255,255,255,0.04)",
                   }}
@@ -197,7 +197,7 @@ export default function EquipmentStatusModal({
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Repair ticket #, contact, ETA…"
             style={{
-              width: "100%", borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)",
+              width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)",
               background: "rgba(0,0,0,0.3)", padding: "10px 11px", fontSize: 14, color: "#fff",
               boxSizing: "border-box" as const, minHeight: 72, resize: "vertical" as const, fontFamily: "inherit",
             }}
@@ -209,7 +209,7 @@ export default function EquipmentStatusModal({
           onClick={save}
           disabled={busy}
           style={{
-            width: "100%", padding: "14px 18px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)",
+            width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)",
             background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
           }}
         >

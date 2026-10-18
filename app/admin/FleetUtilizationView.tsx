@@ -33,7 +33,7 @@ export const RANGES = [
 
 function chipStyle(active: boolean): React.CSSProperties {
   return {
-    padding: "5px 12px", borderRadius: 7, border: "1px solid",
+    padding: "5px 12px", borderRadius: 2, border: "1px solid",
     fontSize: 12, fontWeight: 800, cursor: "pointer", letterSpacing: 0.3, flexShrink: 0,
     background: active ? "rgba(255,255,255,0.10)" : "transparent",
     borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
@@ -98,7 +98,7 @@ export function FleetUtilizationView({
   const showHeadroom = headroom != null && headroom.loads > 0 && headroom.headroom_gallons >= 1;
 
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 640, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 640, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", padding: "16px 18px 12px", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>Fleet {UTILIZATION_METRIC_LABEL}</div>
         <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.85)", fontSize: 20, fontWeight: 900, cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
@@ -162,7 +162,7 @@ export function FleetUtilizationView({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {drivers.map((d) => (
-              <div key={d.driver_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <div key={d.driver_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{d.display_name}</div>
                   <div style={{ fontSize: 11, color: LABEL, marginTop: 1 }}>

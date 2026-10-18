@@ -137,7 +137,7 @@ export function SupplierPanel({
     : (groups.length === 1 ? groups[0].name : null);
 
   return (
-    <div style={{ marginTop: 6, marginBottom: 12, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 12px", background: "rgba(255,255,255,0.02)" }}>
+    <div style={{ marginTop: 6, marginBottom: 12, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "10px 12px", background: "rgba(255,255,255,0.02)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <button type="button" onClick={() => setCollapsed((v) => !v)}
           style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", color: MUTED, fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>
@@ -153,7 +153,7 @@ export function SupplierPanel({
 
       {groups.length === 0 ? (
         <button type="button" onClick={() => setPicker({})}
-          style={{ marginTop: 8, width: "100%", textAlign: "left", padding: "12px", borderRadius: 10, border: "1px dashed rgba(255,255,255,0.35)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
+          style={{ marginTop: 8, width: "100%", textAlign: "left", padding: "12px", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.35)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
           <span>Supplier from dispatch?</span><span style={{ color: MUTED }}>Pick ›</span>
         </button>
       ) : groups.map((g) => {
@@ -284,13 +284,13 @@ function SupplierGroup({
           <span style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{name}</span>
           {products.map((p) => (
             <button key={p.id} type="button" onClick={() => onProduct(p.id)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 999, background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700, padding: "2px 8px", cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2, background: "transparent", color: "#fff", fontSize: 12, fontWeight: 700, padding: "2px 8px", cursor: "pointer" }}>
               <span style={{ width: 8, height: 8, borderRadius: 999, background: p.color }} />{p.code}
             </button>
           ))}
         </div>
         <button type="button" onClick={onSwitch}
-          style={{ flexShrink: 0, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, background: "transparent", color: "#fff", fontSize: 13, fontWeight: 700, padding: "6px 10px", cursor: "pointer" }}>
+          style={{ flexShrink: 0, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2, background: "transparent", color: "#fff", fontSize: 13, fontWeight: 700, padding: "6px 10px", cursor: "pointer" }}>
           Switch
         </button>
       </div>
@@ -339,7 +339,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     <div onClick={onClose}
       style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "48px 16px 16px" }}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 440, maxHeight: "85vh", overflowY: "auto", background: "#0b0b0b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 14 }}>
+        style={{ width: "100%", maxWidth: 440, maxHeight: "85vh", overflowY: "auto", background: "#0b0b0b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{title}</div>
           <button type="button" onClick={onClose} style={{ border: "none", background: "transparent", color: MUTED, fontSize: 14, cursor: "pointer" }}>Close</button>
@@ -351,11 +351,11 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)",
+  width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)",
   padding: "10px 12px", fontSize: 16, color: "#fff", boxSizing: "border-box",
 };
 const primaryBtn: React.CSSProperties = {
-  width: "100%", marginTop: 12, padding: "12px", borderRadius: 8, border: "none", background: "#fff", color: "#000",
+  width: "100%", marginTop: 12, padding: "12px", borderRadius: 2, border: "none", background: "#fff", color: "#000",
   fontSize: 16, fontWeight: 800, cursor: "pointer",
 };
 
@@ -377,7 +377,7 @@ function SwitchSheet({
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {REASONS.map((r) => (
           <button key={r.code} type="button" onClick={() => setReason(r.code)}
-            style={{ textAlign: "left", padding: "12px", borderRadius: 10, border: `1px solid ${reason === r.code ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.12)"}`, background: reason === r.code ? "rgba(255,255,255,0.08)" : "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            style={{ textAlign: "left", padding: "12px", borderRadius: 2, border: `1px solid ${reason === r.code ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.12)"}`, background: reason === r.code ? "rgba(255,255,255,0.08)" : "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
             {r.label}
           </button>
         ))}
@@ -404,7 +404,7 @@ function SwitchSheet({
               return (
                 <button key={p.id} type="button"
                   onClick={() => setChosen((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 999, border: `1px solid ${on ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)"}`, background: on ? "rgba(255,255,255,0.08)" : "transparent", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 2, border: `1px solid ${on ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)"}`, background: on ? "rgba(255,255,255,0.08)" : "transparent", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                   <span style={{ width: 9, height: 9, borderRadius: 999, background: p.color }} />{p.code}{on ? " ✓" : ""}
                 </button>
               );
@@ -450,7 +450,7 @@ function StepsEditor({
         </div>
       ))}
       <button type="button" onClick={() => setSteps((a) => [...a, ""])}
-        style={{ border: "1px dashed rgba(255,255,255,0.3)", borderRadius: 8, background: "transparent", color: "#fff", fontSize: 14, fontWeight: 700, padding: "8px 12px", cursor: "pointer", marginTop: 2 }}>
+        style={{ border: "1px dashed rgba(255,255,255,0.3)", borderRadius: 2, background: "transparent", color: "#fff", fontSize: 14, fontWeight: 700, padding: "8px 12px", cursor: "pointer", marginTop: 2 }}>
         + Add screen
       </button>
       <div style={{ fontSize: 13, color: MUTED, margin: "12px 0 6px" }}>Notes (anything that doesn't fit a step)</div>

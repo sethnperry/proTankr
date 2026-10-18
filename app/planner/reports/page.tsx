@@ -44,7 +44,7 @@ import { fetchServiceTypes } from "../modals/ServiceTypeManager";
 import { computeUnitServiceDue } from "../modals/SoloEquipmentModal";
 import { cardStateFor, accessStateFor, DARK_EXP_COLOR } from "../cards/cardTheme";
 import { daysUntilISO_ } from "../utils/dates";
-import { GRAPHITE, GRAPHITE_DARKER } from "../theme";
+import { GRAPHITE, GRAPHITE_DARKER , SURFACE } from "../theme";
 import { buildTerminalCardsReportBody, type TerminalCardsScope, type TerminalStatusItem } from "./buildTerminalCardsReport";
 
 type EquipRow = { truck_id?: string; trailer_id?: string; truck_name?: string; trailer_name?: string; active: boolean | null };
@@ -70,7 +70,7 @@ function SwitcherPill({ label, onClick }: { label: string; onClick: () => void }
       type="button"
       onClick={onClick}
       style={{
-        display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 999,
+        display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 2,
         border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)",
         color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 10,
       }}
@@ -90,8 +90,8 @@ function ReportTile({ title, sub, stat, statColor, onClick, disabled }: {
       onClick={disabled ? undefined : onClick}
       onKeyDown={disabled ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       style={{
-        display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 8,
-        background: disabled ? "rgba(255,255,255,0.03)" : `linear-gradient(135deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`,
+        display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 2,
+        background: disabled ? "rgba(255,255,255,0.03)" : SURFACE,
         border: disabled ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255,255,255,0.10)",
         boxShadow: disabled ? "none" : "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
         cursor: disabled ? "default" : "pointer", userSelect: "none" as const,

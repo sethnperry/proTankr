@@ -54,7 +54,7 @@ export default function JoinFleetView({ onJoined }: { onJoined: () => void }) {
       </div>
 
       {err && (
-        <div style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.10)", color: "#fca5a5", fontSize: 13, fontWeight: 700 }}>
+        <div style={{ padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.10)", color: "#fca5a5", fontSize: 13, fontWeight: 700 }}>
           {err}
         </div>
       )}
@@ -71,7 +71,7 @@ export default function JoinFleetView({ onJoined }: { onJoined: () => void }) {
           autoCapitalize="characters"
           disabled={busy}
           style={{
-            width: "100%", boxSizing: "border-box" as const, padding: "12px 14px", borderRadius: 6,
+            width: "100%", boxSizing: "border-box" as const, padding: "12px 14px", borderRadius: 2,
             border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)",
             color: "#fff", fontSize: 15, letterSpacing: 1,
           }}
@@ -83,7 +83,7 @@ export default function JoinFleetView({ onJoined }: { onJoined: () => void }) {
         onClick={submit}
         disabled={busy}
         style={{
-          padding: "13px 0", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)",
+          padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)",
           background: busy ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.92)",
           color: busy ? "rgba(255,255,255,0.35)" : "#111",
           fontSize: 14, fontWeight: 800, cursor: busy ? "default" : "pointer",

@@ -15,7 +15,7 @@
 // Same graphite bottom-sheet treatment as CancelLoadSheet, for continuity.
 
 import React from "react";
-import { GRAPHITE, GRAPHITE_DARKER } from "../theme";
+import { GRAPHITE, GRAPHITE_DARKER , SURFACE } from "../theme";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 
 export type StaleProduct = { productId: string; name: string; dotColor: string };
@@ -30,7 +30,7 @@ type Props = {
 };
 
 const choiceStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 16px", borderRadius: 10,
+  width: "100%", padding: "14px 16px", borderRadius: 2,
   border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
   color: "rgba(255,255,255,0.92)", cursor: "pointer", textAlign: "left" as const, marginBottom: 8,
 };
@@ -51,8 +51,8 @@ export default function StaleApiOverlay({ open, products, onSafest, onSafe, onIg
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 480,
-          background: `linear-gradient(180deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`,
-          borderRadius: "16px 16px 0 0", border: "1px solid rgba(255,255,255,0.1)",
+          background: SURFACE,
+          borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)",
           padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
         }}
       >

@@ -73,7 +73,7 @@ export default function LocationsPage() {
         {list.map((l) => {
           const tankCount = locList.tanks.filter((t) => t.location_id === l.location_id).length;
           return (
-            <div key={l.location_id} style={{ display: "flex", alignItems: "center", borderRadius: 10, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
+            <div key={l.location_id} style={{ display: "flex", alignItems: "center", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
               <button type="button" aria-label={l.starred ? "Unstar" : "Star"}
                 onClick={() => void locList.toggleStar(l.location_id, !l.starred).catch(() => undefined)}
                 style={{ border: "none", background: "transparent", color: l.starred ? "#fbbf24" : "rgba(255,255,255,0.3)", fontSize: 20, cursor: "pointer", padding: "0 4px 0 10px" }}>

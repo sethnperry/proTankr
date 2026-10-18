@@ -226,7 +226,7 @@ export default function RackProductStatusModal({
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
             style={{
-              width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 6,
+              width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.12)", background: "#111", color: "white", fontSize: 14,
             }}
           >
@@ -242,7 +242,7 @@ export default function RackProductStatusModal({
           </select>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 10, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>
             Status: {isOut ? "Product Out" : "Available"}
             {product && <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}> · {rack.rack_name} Only</span>}
@@ -251,7 +251,7 @@ export default function RackProductStatusModal({
             type="button"
             onClick={() => setIsOut((v) => !v)}
             style={{
-              padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 800, cursor: "pointer",
+              padding: "6px 12px", borderRadius: 2, fontSize: 12, fontWeight: 800, cursor: "pointer",
               border: "1px solid rgba(255,255,255,0.15)",
               background: isOut ? "rgba(239,68,68,0.18)" : "rgba(34,197,94,0.15)",
               color: isOut ? "#f87171" : "#4ade80",
@@ -268,7 +268,7 @@ export default function RackProductStatusModal({
               type="text" inputMode="decimal" value={api} onChange={(e) => setApi(e.target.value)}
               onFocus={(e) => e.currentTarget.select()}
               placeholder="50.6"
-              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 14 }}
+              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 14 }}
             />
           </div>
           <div>
@@ -277,7 +277,7 @@ export default function RackProductStatusModal({
               type="text" inputMode="decimal" value={tempF} onChange={(e) => setTempF(e.target.value)}
               onFocus={(e) => e.currentTarget.select()}
               placeholder="75.6"
-              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 14 }}
+              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 14 }}
             />
           </div>
         </div>
@@ -288,7 +288,7 @@ export default function RackProductStatusModal({
         <button
           onClick={save}
           disabled={saving || !productId}
-          className="w-full rounded-2xl bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
+          className="w-full rounded-[2px] bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
           style={{ opacity: saving || !productId ? 0.6 : 1 }}
         >
           {saving ? "Saving…" : "Done"}

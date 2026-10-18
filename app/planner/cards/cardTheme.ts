@@ -19,12 +19,13 @@
 // DARK_EXP_COLOR is the new canonical dark-background version, used by
 // every other consumer of this file.
 
-import { GRAPHITE, GRAPHITE_DARKER } from "../theme";
+import { SURFACE } from "../theme";
 
-export const CARD_BG = `linear-gradient(135deg, ${GRAPHITE} 0%, ${GRAPHITE_DARKER} 100%)`;
-export const CARD_BORDER = "1px solid rgba(255,255,255,0.10)";
-export const CARD_BORDER_SELECTED = "1px solid rgba(255,255,255,0.30)";
-export const CARD_SHADOW = "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)";
+// 2026-10-18: flat instrument-look surface (see lib/ui/look.ts), was a graphite gradient.
+export const CARD_BG = SURFACE;
+export const CARD_BORDER = "1px solid rgba(255,255,255,0.14)";
+export const CARD_BORDER_SELECTED = "1px solid rgba(255,255,255,0.6)";
+export const CARD_SHADOW = "none";
 
 // ── Expiration → visual state ───────────────────────────────────────────────
 // The rule itself lives in lib/expiry.ts (one rule for the whole app):
@@ -71,7 +72,7 @@ export const DARK_EXP_COLOR: Record<CardState, string> = EXPIRY_COLOR;
 // ── Shared field styles (back-of-card form, dark graphite card background) ─
 
 export const fieldLabel: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 };
-export const fieldInput: React.CSSProperties = { width: "100%", borderRadius: 6, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", padding: "7px 9px", fontSize: 13, color: "#fff", boxSizing: "border-box" };
-export const btnPrimary: React.CSSProperties = { flex: 1, padding: "11px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.92)", color: "#111", fontSize: 13, fontWeight: 700, cursor: "pointer" };
-export const btnSecondary: React.CSSProperties = { padding: "11px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
-export const btnDanger: React.CSSProperties = { padding: "11px 14px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.10)", color: "#ef4444", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+export const fieldInput: React.CSSProperties = { width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", padding: "7px 9px", fontSize: 13, color: "#fff", boxSizing: "border-box" };
+export const btnPrimary: React.CSSProperties = { flex: 1, padding: "11px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "#fff", color: "#000", fontSize: 13, fontWeight: 800, cursor: "pointer" };
+export const btnSecondary: React.CSSProperties = { padding: "11px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+export const btnDanger: React.CSSProperties = { padding: "11px 14px", borderRadius: 2, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.10)", color: "#ef4444", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };

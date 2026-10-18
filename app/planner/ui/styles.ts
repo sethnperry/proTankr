@@ -13,7 +13,7 @@ export const styles = {
     marginTop: 18,
     padding: 14,
     border: "1px solid #333",
-    borderRadius: 10,
+    borderRadius: 2,
     background: "#0b0b0b",
   } as React.CSSProperties,
 
@@ -32,7 +32,7 @@ export const styles = {
 
   input: {
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 2,
     border: "1px solid #444",
     background: "#111",
     color: "#fff",
@@ -41,7 +41,7 @@ export const styles = {
 
   select: {
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 2,
     border: "1px solid #444",
     background: "#111",
     color: "#fff",
@@ -83,7 +83,7 @@ export const styles = {
   badge: {
     display: "inline-block",
     padding: "4px 8px",
-    borderRadius: 999,
+    borderRadius: 2,
     border: "1px solid #444",
     background: "#111",
     fontSize: 12,
@@ -92,7 +92,7 @@ export const styles = {
 
   smallBtn: {
     padding: "10px 12px",
-    borderRadius: 10,
+    borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.06)",
     color: "white",
@@ -102,16 +102,18 @@ export const styles = {
     whiteSpace: "nowrap",
   } as React.CSSProperties,
 
+  // The next step in a workflow window: white, black text (lib/ui/look.ts).
   doneBtn: {
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.06)",
-    color: "white",
+    padding: "14px 14px",
+    borderRadius: 2,
+    border: "none",
+    background: "#fff",
+    color: "#000",
     cursor: "pointer",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 800,
-    letterSpacing: 0.2,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
   } as React.CSSProperties,
 
   chip: {
@@ -119,7 +121,7 @@ export const styles = {
     alignItems: "center",
     gap: 8,
     padding: "10px 12px",
-    borderRadius: 999,
+    borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.06)",
     color: "white",
@@ -137,7 +139,7 @@ export const styles = {
 
   tile: {
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.04)",
     cursor: "pointer",
@@ -203,7 +205,7 @@ export const styles = {
 
   // Generic card surface used in modals
   card: {
-    borderRadius: 16,
+    borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.05)",
     padding: 12,
@@ -212,7 +214,7 @@ export const styles = {
   // terminal “carded date” button style
   cardedBtn: {
     padding: "10px 12px",
-    borderRadius: 12,
+    borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(0,0,0,0.55)",
     color: "rgba(255,255,255,0.92)",

@@ -47,7 +47,7 @@ const emptyTwic: TwicRow = { card_number: "", issue_date: null, expiration_date:
 function LandscapeFrame({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{
-      height: "100%", borderRadius: 10, padding: 16, boxSizing: "border-box",
+      height: "100%", borderRadius: 2, padding: 16, boxSizing: "border-box",
       background: CARD_BG,
       border: CARD_BORDER,
       boxShadow: "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
@@ -64,7 +64,7 @@ function LandscapeFrame({ title, children }: { title: string; children: React.Re
 function BackFrame({ title, onDone, children }: { title: string; onDone: () => void; children: React.ReactNode }) {
   return (
     <div style={{
-      height: "100%", borderRadius: 10, overflow: "hidden", boxSizing: "border-box",
+      height: "100%", borderRadius: 2, overflow: "hidden", boxSizing: "border-box",
       background: CARD_BG,
       border: CARD_BORDER,
       boxShadow: "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
@@ -111,7 +111,7 @@ function LicenseCard({ value, onSave, onRemove }: { value: LicenseRow | null; on
             </div>
           </div>
           {value.hazmat_linked_to_license && (
-            <div style={{ marginTop: 8, fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "2px 8px", display: "inline-block", textTransform: "uppercase" as const }}>
+            <div style={{ marginTop: 8, fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 2, padding: "2px 8px", display: "inline-block", textTransform: "uppercase" as const }}>
               Hazmat endorsed
             </div>
           )}
@@ -148,11 +148,11 @@ function LicenseCard({ value, onSave, onRemove }: { value: LicenseRow | null; on
       {value && (!confirmRemove ? (
         <button type="button" onClick={() => setConfirmRemove(true)} style={btnDanger}>Remove</button>
       ) : (
-        <div style={{ padding: 8, borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+        <div style={{ padding: 8, borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>Remove this license record?</div>
           <div style={{ display: "flex", gap: 6 }}>
             <button type="button" onClick={() => { onRemove(); setFlipped(false); }} style={{ ...btnDanger, flex: 1 }}>Yes</button>
-            <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+            <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       ))}
@@ -207,11 +207,11 @@ function MedicalCard({ value, onSave, onRemove }: { value: MedicalRow | null; on
       {value && (!confirmRemove ? (
         <button type="button" onClick={() => setConfirmRemove(true)} style={btnDanger}>Remove</button>
       ) : (
-        <div style={{ padding: 8, borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+        <div style={{ padding: 8, borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>Remove this medical card record?</div>
           <div style={{ display: "flex", gap: 6 }}>
             <button type="button" onClick={() => { onRemove(); setFlipped(false); }} style={{ ...btnDanger, flex: 1 }}>Yes</button>
-            <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+            <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       ))}
@@ -259,11 +259,11 @@ function TwicCard({ value, onSave, onRemove }: { value: TwicRow | null; onSave: 
       {value && (!confirmRemove ? (
         <button type="button" onClick={() => setConfirmRemove(true)} style={btnDanger}>Remove</button>
       ) : (
-        <div style={{ padding: 8, borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+        <div style={{ padding: 8, borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>Remove this TWIC record?</div>
           <div style={{ display: "flex", gap: 6 }}>
             <button type="button" onClick={() => { onRemove(); setFlipped(false); }} style={{ ...btnDanger, flex: 1 }}>Yes</button>
-            <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+            <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       ))}

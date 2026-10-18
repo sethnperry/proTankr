@@ -86,7 +86,7 @@ export default function DemoEndedPage() {
     <Screen>
       <Logo size={48} />
       <div style={{
-        background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+        background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2,
         padding: "24px 28px", maxWidth: 380, width: "100%", textAlign: "center" as const,
       }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginBottom: 12 }}>
@@ -98,7 +98,7 @@ export default function DemoEndedPage() {
         <a
           href={`/api/demo/start?persona=${query.persona}`}
           style={{
-            display: "block", padding: "13px 18px", borderRadius: 8, textDecoration: "none",
+            display: "block", padding: "13px 18px", borderRadius: 2, textDecoration: "none",
             background: "#fff", color: "#000", fontSize: 14, fontWeight: 700,
           }}
         >

@@ -138,7 +138,7 @@ export default function ManageTerminalProductsModal({
 
   const rowStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", gap: 12,
-    padding: "10px 12px", borderRadius: 6,
+    padding: "10px 12px", borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.08)",
     background: "rgba(255,255,255,0.02)",
     cursor: "pointer", width: "100%", boxSizing: "border-box" as const,
@@ -169,7 +169,7 @@ export default function ManageTerminalProductsModal({
           type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Search products…"
           style={{
-            width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 6,
+            width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2,
             border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)",
             color: "white", fontSize: 13,
           }}
@@ -214,7 +214,7 @@ export default function ManageTerminalProductsModal({
                       {p.is_dyed && (
                         <span style={{
                           fontSize: 9, fontWeight: 800, color: "#ef4444", background: "rgba(239,68,68,0.12)",
-                          borderRadius: 3, padding: "1px 4px", letterSpacing: 0.4, flexShrink: 0,
+                          borderRadius: 2, padding: "1px 4px", letterSpacing: 0.4, flexShrink: 0,
                         }}>
                           DYED
                         </span>

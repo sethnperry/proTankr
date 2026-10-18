@@ -54,7 +54,7 @@ export function SupplierPicker({
     const on = current != null && s.name === current;
     return (
       <button key={s.supplier_id} type="button" onClick={() => onPick({ supplier_id: s.supplier_id, name: s.name })}
-        style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 10, border: `1px solid ${on ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.1)"}`, background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)", color: "#fff", fontSize: 15, cursor: "pointer" }}>
+        style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 2, border: `1px solid ${on ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.1)"}`, background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)", color: "#fff", fontSize: 15, cursor: "pointer" }}>
         {s.name}
       </button>
     );
@@ -71,7 +71,7 @@ export function SupplierPicker({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 420, maxHeight: "80vh", display: "flex", flexDirection: "column", background: "#0b0b0b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 14 }}
+        style={{ width: "100%", maxWidth: 420, maxHeight: "80vh", display: "flex", flexDirection: "column", background: "#0b0b0b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 14 }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{title}</div>
@@ -83,12 +83,12 @@ export function SupplierPicker({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search, or type it exactly as on dispatch"
-          style={{ width: "100%", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)", padding: "12px", fontSize: 16, color: "#fff", boxSizing: "border-box", marginBottom: 10 }}
+          style={{ width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)", padding: "12px", fontSize: 16, color: "#fff", boxSizing: "border-box", marginBottom: 10 }}
         />
         <div style={{ overflowY: "auto", flex: 1 }}>
           {typed && !exact && (
             <button type="button" onClick={add}
-              style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 10, border: "1px dashed rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 2, border: "1px dashed rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
               + Add “{typed}”
             </button>
           )}

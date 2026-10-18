@@ -45,7 +45,7 @@ function BellIcon({ count, onClick, stroke }: { count: number; onClick: () => vo
         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
       </svg>
       {count > 0 && (
-        <span style={{ position: "absolute", top: -4, right: -8, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 8, background: "#ef4444", font: "500 9px Outfit", lineHeight: "15px", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ position: "absolute", top: -4, right: -8, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 2, background: "#ef4444", font: "500 9px Outfit", lineHeight: "15px", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {count}
         </span>
       )}

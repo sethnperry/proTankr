@@ -42,11 +42,11 @@ const LABEL: Record<Kind, string> = { region: "Region", localArea: "Local Area" 
 
 const rowStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-  padding: "13px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)",
+  padding: "13px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.04)", cursor: "pointer", marginBottom: 8,
 };
 const bigOptionStyle: React.CSSProperties = {
-  width: "100%", padding: "18px 18px", borderRadius: 8, marginBottom: 10,
+  width: "100%", padding: "18px 18px", borderRadius: 2, marginBottom: 10,
   border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.05)",
   color: "#fff", cursor: "pointer", textAlign: "left" as const,
   display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -193,7 +193,7 @@ function CatalogList({
         {canManage && (
           !adding ? (
             <button type="button" onClick={() => setAdding(true)}
-              style={{ textAlign: "left" as const, padding: "12px 14px", borderRadius: 8, border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              style={{ textAlign: "left" as const, padding: "12px 14px", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
               + Add {LABEL[kind]}
             </button>
           ) : (
@@ -201,10 +201,10 @@ function CatalogList({
               <div style={{ display: "flex", gap: 6 }}>
                 <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !isLocalArea) void addNew(); }}
                   placeholder={`New ${LABEL[kind].toLowerCase()} name`}
-                  style={{ flex: 1, borderRadius: 6, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, boxSizing: "border-box" as const }} />
+                  style={{ flex: 1, borderRadius: 2, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, boxSizing: "border-box" as const }} />
                 {!isLocalArea && (
                   <button type="button" onClick={addNew} disabled={busy || !newName.trim()}
-                    style={{ borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "0 16px", cursor: "pointer" }}>
+                    style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "0 16px", cursor: "pointer" }}>
                     {busy ? "…" : "Add"}
                   </button>
                 )}
@@ -220,7 +220,7 @@ function CatalogList({
                     />
                   </div>
                   <button type="button" onClick={addNew} disabled={busy || !newName.trim() || !newRegionId}
-                    style={{ borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "0 16px", cursor: "pointer" }}>
+                    style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "0 16px", cursor: "pointer" }}>
                     {busy ? "…" : "Add"}
                   </button>
                 </div>
@@ -233,10 +233,10 @@ function CatalogList({
       {/* ── Rename prompt ── */}
       {renaming && (
         <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360, width: "100%" }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 12 }}>Rename &quot;{renaming.name}&quot;</div>
             <input autoFocus value={renameVal} onChange={(e) => setRenameVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !isLocalArea) void saveRename(); }}
-              style={{ width: "100%", borderRadius: 6, padding: "12px 14px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 16, boxSizing: "border-box" as const, marginBottom: isLocalArea ? 10 : 16 }} />
+              style={{ width: "100%", borderRadius: 2, padding: "12px 14px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 16, boxSizing: "border-box" as const, marginBottom: isLocalArea ? 10 : 16 }} />
             {isLocalArea && (
               <div style={{ marginBottom: 16 }}>
                 <CustomSelect
@@ -249,9 +249,9 @@ function CatalogList({
             )}
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setRenaming(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
               <button type="button" onClick={saveRename} disabled={busy || !renameVal.trim() || (isLocalArea && !renameRegionId)}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Saving…" : "Save"}
               </button>
             </div>
@@ -262,16 +262,16 @@ function CatalogList({
       {/* ── Remove confirmation ── */}
       {confirmRemove && (
         <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: 20, maxWidth: 360, width: "100%" }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 8 }}>Remove &quot;{confirmRemove.name}&quot;?</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 16 }}>
               This only affects future selections -- equipment already using it keeps that value on file.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={() => setConfirmRemove(null)} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
               <button type="button" onClick={doRemove} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Removing…" : "Remove"}
               </button>
             </div>

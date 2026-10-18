@@ -82,7 +82,7 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
       type="button"
       onClick={() => setMode(m)}
       style={{
-        flex: 1, padding: "9px 0", borderRadius: 4, cursor: "pointer",
+        flex: 1, padding: "9px 0", borderRadius: 2, cursor: "pointer",
         border: mode === m ? "1px solid rgba(255,255,255,0.55)" : "1px solid rgba(255,255,255,0.12)",
         background: mode === m ? "rgba(255,255,255,0.10)" : "transparent",
         color: mode === m ? "#fff" : "rgba(255,255,255,0.55)",
@@ -109,7 +109,7 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
         style={{
           width: "100%", maxWidth: 320,
           background: "#161616", border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 4, padding: 20,
+          borderRadius: 2, padding: 20,
           display: "flex", flexDirection: "column", gap: 14,
         }}
       >
@@ -161,7 +161,7 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
                       type="button"
                       onClick={() => setGaugeFraction(s.fraction)}
                       style={{
-                        padding: "12px 0", borderRadius: 4, cursor: "pointer",
+                        padding: "12px 0", borderRadius: 2, cursor: "pointer",
                         border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.12)",
                         background: on ? "#fff" : "rgba(255,255,255,0.03)",
                         color: on ? "#000" : "rgba(255,255,255,0.85)",
@@ -214,7 +214,7 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
             type="button"
             onClick={onCancel}
             style={{
-              flex: 1, padding: "12px 0", borderRadius: 4,
+              flex: 1, padding: "12px 0", borderRadius: 2,
               border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
               color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer",
             }}
@@ -226,7 +226,7 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
             onClick={apply}
             disabled={!canApply}
             style={{
-              flex: 1, padding: "12px 0", borderRadius: 4, border: "none",
+              flex: 1, padding: "12px 0", borderRadius: 2, border: "none",
               background: "#fff", color: "#000", fontSize: 14, fontWeight: 700,
               cursor: canApply ? "pointer" : "default", opacity: canApply ? 1 : 0.4,
             }}

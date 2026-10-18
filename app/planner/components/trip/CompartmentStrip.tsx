@@ -30,7 +30,7 @@ export function CompartmentStrip({ slots, height = 12, gap = 3 }: { slots: Strip
         const style: React.CSSProperties = {
           flex: `0 0 calc(${w.toFixed(4)}% - ${(((ordered.length - 1) * gap) / ordered.length).toFixed(2)}px)`,
           height,
-          borderRadius: 3,
+          borderRadius: 2,
           background: s.color ?? "transparent",
           border: s.selected
             ? "2px solid #fff"

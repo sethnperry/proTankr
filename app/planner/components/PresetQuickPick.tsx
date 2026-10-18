@@ -99,7 +99,7 @@ export default function PresetQuickPick({
       <div onClick={(e) => e.stopPropagation()} style={{
         width: "100%", maxWidth: 480,
         background: "#0b0b0b",
-        borderRadius: "16px 16px 0 0", border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)",
         padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
       }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 12 }}>
@@ -138,7 +138,7 @@ export default function PresetQuickPick({
 
             return (
               <div key={slot} style={{
-                borderRadius: 10, border: isActive ? ROW_BORDER_ACTIVE : ROW_BORDER,
+                borderRadius: 2, border: isActive ? ROW_BORDER_ACTIVE : ROW_BORDER,
                 background: isActive ? ROW_BG_ACTIVE : ROW_BG,
                 padding: "10px 12px", display: "flex", alignItems: "center", gap: 12,
               }}>
@@ -168,7 +168,7 @@ export default function PresetQuickPick({
                         onKeyDown={(e) => { if (e.key === "Enter") commitRename(slot); if (e.key === "Escape") setRenamingSlot(null); }}
                         onBlur={() => commitRename(slot)}
                         placeholder="Name this preset"
-                        style={{ width: "100%", boxSizing: "border-box" as const, padding: "4px 6px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontWeight: 600 }}
+                        style={{ width: "100%", boxSizing: "border-box" as const, padding: "4px 6px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontWeight: 600 }}
                       />
                     ) : (
                       // Name and dots share one row now (was name, then a
@@ -222,7 +222,7 @@ export default function PresetQuickPick({
             disabled={disabled}
             onClick={() => { onClose(); onRecallLastLoad(); }}
             style={{
-              width: "100%", marginTop: 14, padding: "12px 16px", borderRadius: 10,
+              width: "100%", marginTop: 14, padding: "12px 16px", borderRadius: 2,
               border: ROW_BORDER, background: ROW_BG, color: "rgba(255,255,255,0.75)",
               fontSize: 14, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
               opacity: disabled ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -232,7 +232,7 @@ export default function PresetQuickPick({
           </button>
         )}
 
-        <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+        <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 2, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           Close
         </button>
       </div>

@@ -11,6 +11,11 @@
 export const GRAPHITE = "#2a2a2c";
 export const GRAPHITE_DARKER = "#1c1c1e";
 
+// The "instrument" look (Driver Dashboard, lib/ui/look.ts): flat near-black
+// surfaces with a thin border, square corners. Sheets and cards use these.
+export const SURFACE = "#121213";
+export const SURFACE_BORDER = "1px solid rgba(255,255,255,0.14)";
+
 // Solid fill for the Load button, compartment handles, and CG puck. Each
 // caller passes its OWN current light-mode color (they aren't all the same
 // shade today -- e.g. the CG puck is "#d9d9d9", not pure white) so light

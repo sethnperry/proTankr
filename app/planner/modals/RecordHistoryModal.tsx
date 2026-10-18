@@ -152,7 +152,7 @@ function shareViaEmail(subject: string, text: string) {
 }
 
 const editInputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 6, padding: "8px 10px", border: "1px solid rgba(255,255,255,0.16)",
+  width: "100%", borderRadius: 2, padding: "8px 10px", border: "1px solid rgba(255,255,255,0.16)",
   background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 13, boxSizing: "border-box",
 };
 const editLabelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 4, display: "block" };
@@ -498,7 +498,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
 
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10100, background: "rgba(0,0,0,0.72)", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: "8px 8px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "88dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", width: "100%", maxHeight: "88dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.15)" }} />
@@ -513,7 +513,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
         </div>
 
         <div style={{ padding: "0 18px 10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "9px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "9px 14px" }}>
             <span style={{ fontSize: 14, color: "rgba(255,255,255,0.3)" }}>🔍</span>
             <input
               ref={searchRef}
@@ -538,7 +538,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                   onClick={() => setActiveDays(days)}
                   title={days === null ? "All dates, all equipment" : undefined}
                   style={{
-                    padding: "5px 10px", borderRadius: 6, border: "1px solid", fontSize: 11, fontWeight: 800,
+                    padding: "5px 10px", borderRadius: 2, border: "1px solid", fontSize: 11, fontWeight: 800,
                     cursor: "pointer", letterSpacing: 0.3, transition: "all 120ms ease", flexShrink: 0,
                     background: active ? "rgba(255,255,255,0.10)" : "transparent",
                     borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
@@ -556,7 +556,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
               disabled={!hasAny}
               onClick={() => setReportMenuOpen((o) => !o)}
               style={{
-                padding: "7px 12px", borderRadius: 6, fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
+                padding: "7px 12px", borderRadius: 2, fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
                 cursor: hasAny ? "pointer" : "default",
                 border: hasAny ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(255,255,255,0.08)",
                 background: hasAny ? "rgba(255,255,255,0.07)" : "transparent",
@@ -568,14 +568,14 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
             {reportMenuOpen && (
               <div style={{
                 position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 60, minWidth: 140,
-                background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6,
+                background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 2,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.55)", padding: 4,
               }}>
                 {[{ label: "Copy", fn: handleCopy }, { label: "Text", fn: handleSMS }, { label: "Email", fn: handleEmail }].map((o) => (
                   <div
                     key={o.label}
                     onClick={o.fn}
-                    style={{ padding: "10px 14px", fontSize: 14, color: "#fff", cursor: "pointer", borderRadius: 6 }}
+                    style={{ padding: "10px 14px", fontSize: 14, color: "#fff", cursor: "pointer", borderRadius: 2 }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.10)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
@@ -611,7 +611,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                   <div key={row.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                     <div onClick={() => openRow(row.id)} style={{ padding: "11px 18px 12px", cursor: "pointer" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 2, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
                           {row.unit.label}
                         </span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", flexShrink: 0 }}>{row.unit.name}</span>
@@ -695,7 +695,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                   <div key={row.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                     <div onClick={() => openRow(row.id)} style={{ padding: "11px 18px 12px", cursor: "pointer" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 2, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
                           {row.unit.label}
                         </span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", flexShrink: 0 }}>{row.unit.name}</span>
@@ -760,11 +760,11 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setConfirmingDelete(false)} disabled={busy}
-                    style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                    style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                     Cancel
                   </button>
                   <button onClick={() => deleteRecord(expandedId!)} disabled={busy}
-                    style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                    style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.5)", background: "rgba(180,40,40,0.25)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
                     {busy ? "Deleting…" : "Delete permanently"}
                   </button>
                 </div>
@@ -772,13 +772,13 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
             ) : editing ? (
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={closeExpanded} disabled={busy}
-                  style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                  style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                   Cancel
                 </button>
                 <button
                   onClick={() => (expandedServiceRow ? saveServiceEdit(expandedServiceRow) : expandedWashRow ? saveWashEdit(expandedWashRow) : undefined)}
                   disabled={busy}
-                  style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.20)", background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.20)", background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, cursor: "pointer" }}
                 >
                   {busy ? "Saving…" : "Save"}
                 </button>
@@ -787,13 +787,13 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => (expandedServiceRow ? startEditService(expandedServiceRow) : expandedWashRow ? startEditWash(expandedWashRow) : undefined)}
-                  style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, cursor: "pointer" }}
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => setConfirmingDelete(true)}
-                  style={{ flex: 1, padding: "12px 14px", borderRadius: 6, border: "1px solid rgba(220,60,60,0.4)", background: "rgba(180,40,40,0.12)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(220,60,60,0.4)", background: "rgba(180,40,40,0.12)", color: "#fca5a5", fontWeight: 800, cursor: "pointer" }}
                 >
                   Delete
                 </button>
@@ -805,9 +805,9 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
 
       {noteOverlay && (
         <div onClick={() => setNoteOverlay(null)} style={{ position: "fixed", inset: 0, zIndex: 10300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#181c20", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 6, padding: 18, maxWidth: 320, maxHeight: "60vh", overflowY: "auto" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#181c20", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 2, padding: 18, maxWidth: 320, maxHeight: "60vh", overflowY: "auto" }}>
             <div style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", lineHeight: 1.6, whiteSpace: "pre-wrap" as const }}>{noteOverlay}</div>
-            <button onClick={() => setNoteOverlay(null)} style={{ marginTop: 14, width: "100%", padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer" }}>
+            <button onClick={() => setNoteOverlay(null)} style={{ marginTop: 14, width: "100%", padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer" }}>
               Close
             </button>
           </div>

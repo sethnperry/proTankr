@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabase/client";
 
 const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 4, display: "block" };
 const inputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 6, padding: "9px 40px 9px 11px", border: "1px solid rgba(255,255,255,0.16)",
+  width: "100%", borderRadius: 2, padding: "9px 40px 9px 11px", border: "1px solid rgba(255,255,255,0.16)",
   background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 14, boxSizing: "border-box",
 };
 
@@ -81,7 +81,7 @@ export default function TruckFuelTankField({ truckId }: { truckId: string }) {
             onClick={save}
             disabled={busy}
             style={{
-              padding: "9px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.20)",
+              padding: "9px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.20)",
               background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer",
             }}
           >

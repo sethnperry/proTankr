@@ -123,7 +123,7 @@ function collectExpiringPermits(unitLabel: string, rows: EquipmentPermitRow[]): 
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 }}>
+    <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 }}>
       <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 10 }}>{title}</div>
       {children}
     </div>
@@ -420,7 +420,7 @@ export default function DispatchPage() {
             window.location.href = "/planner";
           }}
           style={{
-            width: "100%", textAlign: "left" as const, padding: "12px 14px", borderRadius: 10, marginBottom: 14,
+            width: "100%", textAlign: "left" as const, padding: "12px 14px", borderRadius: 2, marginBottom: 14,
             border: "1px solid rgba(251,146,60,0.35)", background: "rgba(251,146,60,0.10)",
             color: "#fb923c", fontSize: 13, fontWeight: 800, cursor: "pointer",
           }}
@@ -464,13 +464,13 @@ export default function DispatchPage() {
               <input
                 type="time" value={schedule.start}
                 onChange={(e) => saveSchedule({ ...schedule, start: e.target.value })}
-                style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 12 }}
+                style={{ width: 90, padding: "4px 6px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 12 }}
               />
               <span style={{ color: "rgba(255,255,255,0.3)", alignSelf: "center" }}>–</span>
               <input
                 type="time" value={schedule.end}
                 onChange={(e) => saveSchedule({ ...schedule, end: e.target.value })}
-                style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 12 }}
+                style={{ width: 90, padding: "4px 6px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 12 }}
               />
             </div>
           </SectionCard>
@@ -512,7 +512,7 @@ export default function DispatchPage() {
             <input
               type="text" value={cardSearch} onChange={(e) => setCardSearch(e.target.value)}
               placeholder="All Terminals — search…"
-              style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13, marginBottom: 10 }}
+              style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13, marginBottom: 10 }}
             />
             {cardsByCity.length === 0 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>No terminal cards on file.</div>}
             <div style={{ display: "grid", gap: 14 }}>
@@ -562,7 +562,7 @@ export default function DispatchPage() {
               value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={saveNotes}
               placeholder="Internal notes for dispatch/lead/admin — not visible to the driver…"
               rows={3}
-              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13, resize: "vertical" as const }}
+              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 13, resize: "vertical" as const }}
             />
             {notesSaving && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>Saving…</div>}
           </SectionCard>

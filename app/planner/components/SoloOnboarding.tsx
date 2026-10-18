@@ -102,15 +102,15 @@ const S = {
   input: {
     width: "100%", padding: "14px 14px", fontSize: 20, fontWeight: 700,
     color: "#fff", background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2,
   } as React.CSSProperties,
   example: { fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 6 },
   primary: {
-    width: "100%", padding: "15px 0", borderRadius: 10, border: "none",
+    width: "100%", padding: "15px 0", borderRadius: 2, border: "none",
     background: "#fff", color: "#000", fontSize: 16, fontWeight: 800, cursor: "pointer",
   } as React.CSSProperties,
   secondary: {
-    width: "100%", padding: "13px 0", borderRadius: 10,
+    width: "100%", padding: "13px 0", borderRadius: 2,
     border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
     color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 600, cursor: "pointer",
   } as React.CSSProperties,
@@ -123,7 +123,7 @@ const S = {
   warn: {
     fontSize: 13, color: "#fbbf24", lineHeight: 1.5,
     background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)",
-    borderRadius: 10, padding: "12px 14px",
+    borderRadius: 2, padding: "12px 14px",
   } as React.CSSProperties,
 };
 
@@ -500,7 +500,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
         <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top,0px) + 18px)", left: 0, right: 0, display: "flex", gap: 5, justifyContent: "center" }}>
           {DOT_STEPS.map((s, i) => (
             <div key={s} style={{
-              width: i === dotIndex ? 16 : 5, height: 5, borderRadius: 3,
+              width: i === dotIndex ? 16 : 5, height: 5, borderRadius: 2,
               background: i <= dotIndex ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.15)",
               transition: "all 0.25s ease",
             }} />
@@ -561,7 +561,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {[1, 2, 3, 4, 5, 6].map((n) => (
                 <button key={n} onClick={() => setCompCount(n)} style={{
-                  width: 52, height: 52, borderRadius: 10, fontSize: 18, fontWeight: 800, cursor: "pointer",
+                  width: 52, height: 52, borderRadius: 2, fontSize: 18, fontWeight: 800, cursor: "pointer",
                   border: compCount === n ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
                   background: compCount === n ? "#fff" : "rgba(255,255,255,0.06)",
                   color: compCount === n ? "#000" : "#fff",
@@ -608,7 +608,7 @@ export default function SoloOnboarding(props: SoloOnboardingProps) {
         <div style={S.card}>
           <h2 style={S.h2}>Your safety caps</h2>
           <div style={S.sub}>We recommend keeping the product level below the overfill-prevention probes. We've set each compartment {SAFETY_BUFFER_GAL} gallons below its total capacity as a starting point.</div>
-          <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: 0.3, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
               <div>Comp</div><div style={{ textAlign: "right" }}>Total Capacity</div><div style={{ textAlign: "right" }}>Safety Cap</div>
             </div>

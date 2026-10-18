@@ -77,7 +77,7 @@ function BadgeCard({
 
   const front = (
     <div style={{
-      height: "100%", borderRadius: 10, padding: 14, boxSizing: "border-box",
+      height: "100%", borderRadius: 2, padding: 14, boxSizing: "border-box",
       background: CARD_BG, border: CARD_BORDER,
       boxShadow: "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
       display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" as const,
@@ -95,13 +95,13 @@ function BadgeCard({
         {badge.port_name}
       </div>
       {badge.category && (
-        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.08)", borderRadius: 999, padding: "2px 8px", marginTop: 6, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.08)", borderRadius: 2, padding: "2px 8px", marginTop: 6, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>
           {badge.category}
         </div>
       )}
       <div style={{ flex: 1 }} />
       {inactive && (
-        <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 4, padding: "2px 6px", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 6 }}>
+        <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 2, padding: "2px 6px", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 6 }}>
           Inactive
         </div>
       )}
@@ -113,7 +113,7 @@ function BadgeCard({
 
   const back = (
     <div style={{
-      height: "100%", borderRadius: 10, overflow: "hidden", boxSizing: "border-box",
+      height: "100%", borderRadius: 2, overflow: "hidden", boxSizing: "border-box",
       background: CARD_BG, border: CARD_BORDER,
       boxShadow: "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
     }}>
@@ -131,7 +131,7 @@ function BadgeCard({
           <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Port, Rail Yard…" style={fieldInput} />
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const, marginTop: 5 }}>
             {CATEGORY_SUGGESTIONS.map((c) => (
-              <button key={c} type="button" onClick={() => setCategory(c)} style={{ fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.15)", background: category === c ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>
+              <button key={c} type="button" onClick={() => setCategory(c)} style={{ fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: category === c ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>
                 {c}
               </button>
             ))}
@@ -144,11 +144,11 @@ function BadgeCard({
         {!confirmRemove ? (
           <button type="button" onClick={() => setConfirmRemove(true)} style={{ ...btnDanger, width: "100%", marginTop: 2 }}>Remove</button>
         ) : (
-          <div style={{ padding: 8, borderRadius: 6, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
+          <div style={{ padding: 8, borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>Remove this badge?</div>
             <div style={{ display: "flex", gap: 6 }}>
               <button type="button" onClick={onRemove} style={{ ...btnDanger, flex: 1, padding: "8px 0" }}>Yes</button>
-              <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
             </div>
           </div>
         )}
@@ -173,11 +173,11 @@ function AddBadgeSheet({ open, onClose, onAdd }: { open: boolean; onClose: () =>
       <div className="space-y-3">
         <div>
           <div className="text-xs text-white/40 mb-1 font-medium">Name</div>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Port Everglades" className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30" autoFocus />
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Port Everglades" className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30" autoFocus />
         </div>
         <div>
           <div className="text-xs text-white/40 mb-1 font-medium">Category (optional)</div>
-          <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Port, Rail Yard, Refinery…" className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30" />
+          <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Port, Rail Yard, Refinery…" className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30" />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, marginTop: 6 }}>
             {CATEGORY_SUGGESTIONS.map((c) => (
               <button key={c} type="button" onClick={() => setCategory(c)} className="text-xs font-semibold px-2.5 py-1 rounded-full border border-white/15 text-white/60" style={{ background: category === c ? "rgba(255,255,255,0.12)" : "transparent" }}>
@@ -188,13 +188,13 @@ function AddBadgeSheet({ open, onClose, onAdd }: { open: boolean; onClose: () =>
         </div>
         <div>
           <div className="text-xs text-white/40 mb-1 font-medium">Expiration (optional)</div>
-          <input type="date" value={expiration} onChange={(e) => setExpiration(e.target.value)} className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white" />
+          <input type="date" value={expiration} onChange={(e) => setExpiration(e.target.value)} className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm text-white" />
         </div>
         <button
           type="button"
           disabled={!name.trim()}
           onClick={() => { onAdd({ port_name: name.trim(), category: category.trim() || null, expiration_date: expiration || null }); onClose(); reset(); }}
-          className="w-full rounded-md border border-white/15 bg-white/90 py-2.5 text-sm font-bold text-black disabled:opacity-40"
+          className="w-full rounded-[2px] border border-white/15 bg-white/90 py-2.5 text-sm font-bold text-black disabled:opacity-40"
         >
           Add Badge
         </button>
@@ -326,7 +326,7 @@ export default function BadgesPage() {
         type="button"
         onClick={() => setAddOpen(true)}
         style={{
-          width: "100%", marginTop: 18, padding: "13px 0", borderRadius: 8,
+          width: "100%", marginTop: 18, padding: "13px 0", borderRadius: 2,
           border: "1px dashed rgba(255,255,255,0.20)", background: "transparent",
           color: "rgba(255,255,255,0.4)", fontSize: 14, fontWeight: 700, cursor: "pointer",
         }}

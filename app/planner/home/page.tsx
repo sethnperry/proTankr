@@ -1130,7 +1130,7 @@ export default function HomePage() {
             Take it over to finish the deliveries.
           </div>
           <button type="button" onClick={doTakeOver}
-            style={{ marginTop: 10, borderRadius: 10, border: "none", background: "#fbbf24", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+            style={{ marginTop: 10, borderRadius: 2, border: "none", background: "#fbbf24", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
             Take Over Trip
           </button>
         </div>
@@ -1758,7 +1758,7 @@ function SyncDetailsSheet({ open, failed, queue, pendingCount, onRetry, onDiscar
             {pendingCount} change{pendingCount === 1 ? "" : "s"} waiting to send. They go up on their own.
           </div>
           {queue.map((q) => (
-            <div key={`${q.table}|${q.key}`} style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, marginBottom: 6 }}>
+            <div key={`${q.table}|${q.key}`} style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2, marginBottom: 6 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>
                 {SYNC_TABLE_LABEL[q.table] ?? q.table}
                 {q.attempts > 0 && <span style={{ fontSize: 12, color: muted, fontWeight: 500 }}> · tried {q.attempts}×</span>}
@@ -1774,13 +1774,13 @@ function SyncDetailsSheet({ open, failed, queue, pendingCount, onRetry, onDiscar
             The server turned these down. They&apos;re still on this phone. Retry sends them again.
           </div>
           <button type="button" onClick={onRetry}
-            style={{ width: "100%", padding: "14px 0", borderRadius: 6, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 800, cursor: "pointer", marginBottom: 14 }}>
+            style={{ width: "100%", padding: "14px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 800, cursor: "pointer", marginBottom: 14 }}>
             Retry {failed.length === 1 ? "" : `all ${failed.length}`}
           </button>
           {failed.map((f) => {
             const id = `${f.table}|${f.key}`;
             return (
-              <div key={id} style={{ padding: "10px 12px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, marginBottom: 8 }}>
+              <div key={id} style={{ padding: "10px 12px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2, marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{SYNC_TABLE_LABEL[f.table] ?? f.table}</span>
                   <span style={{ fontSize: 12, color: muted }}>
@@ -1792,9 +1792,9 @@ function SyncDetailsSheet({ open, failed, queue, pendingCount, onRetry, onDiscar
                   <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
                     <span style={{ fontSize: 12, color: muted, flex: 1 }}>Discard this change for good?</span>
                     <button type="button" onClick={() => { onDiscard(f.table, f.key); setConfirmKey(null); }}
-                      style={{ background: "#f87171", color: "#000", border: "none", borderRadius: 4, padding: "6px 10px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Discard</button>
+                      style={{ background: "#f87171", color: "#000", border: "none", borderRadius: 2, padding: "6px 10px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Discard</button>
                     <button type="button" onClick={() => setConfirmKey(null)}
-                      style={{ background: "transparent", color: muted, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Keep</button>
+                      style={{ background: "transparent", color: muted, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Keep</button>
                   </div>
                 ) : (
                   <button type="button" onClick={() => setConfirmKey(id)}
