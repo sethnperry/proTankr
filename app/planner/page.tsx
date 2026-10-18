@@ -1978,10 +1978,12 @@ export default function CalculatorPage() {
   // back there, under the same cover, so the Planner never shows.
   const reportFromDashboardRef = useRef(false);
   const reportShownRef = useRef(false);
+  const [reportFromDashboard, setReportFromDashboard] = useState(false);
   useLayoutEffect(() => {
     if (new URLSearchParams(window.location.search).get("report")) {
       setReportPending(true);
       reportFromDashboardRef.current = true;
+      setReportFromDashboard(true);
     }
   }, []);
   useLayoutEffect(() => {
@@ -1989,6 +1991,7 @@ export default function CalculatorPage() {
     if (loadWorkflow.loadingOpen || loadWorkflow.reportLines) { reportShownRef.current = true; return; }
     if (!reportShownRef.current) return; // report never opened (error): stay
     reportFromDashboardRef.current = false;
+    setReportFromDashboard(false);
     leaveTo("/planner/home", "Opening dashboard…");
   }, [loadWorkflow.loadingOpen, loadWorkflow.reportLines, reportPending, leaveTo]);
   useEffect(() => {
@@ -3716,6 +3719,7 @@ const lastProductInfoById = useMemo(() => {
         onBackToPlanner={handleBackToPlannerNoUpdate}
         loadedDisabled={loadWorkflow.completeBusy}
         loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Finish Loading"}
+        returnLabel={reportFromDashboard ? "Back to Dashboard" : undefined}
         errorMessage={loadWorkflow.completeError}
         allPlannedUnavailable={unavailableComps.length > 0}
         tuneRows={tuneRows}

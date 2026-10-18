@@ -401,6 +401,8 @@ export default function LoadingModal(props: {
   // Disables the action buttons + relabels Log the Load while completing.
   loadedDisabled?: boolean;
   loadedLabel?: string;
+  /** Label for the report's exit button off a trip (default "Return to Planner"). */
+  returnLabel?: string;
 
   // Optional: styled warning block (if you wire it from page.tsx)
   errorMessage?: string | null;
@@ -471,6 +473,7 @@ export default function LoadingModal(props: {
     onBackToPlanner,
     loadedDisabled,
     loadedLabel,
+    returnLabel,
     errorMessage,
     equipmentLabel,
     terminalLabel,
@@ -1335,7 +1338,7 @@ export default function LoadingModal(props: {
                 onClick={() => { onClose(); onNewLoad?.(); }}
                 style={{ ...(styles as any).doneBtn, width: "100%" }}
               >
-                Return to Planner
+                {returnLabel ?? "Return to Planner"}
               </button>
             )}
 

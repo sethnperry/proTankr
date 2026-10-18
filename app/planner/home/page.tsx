@@ -1526,12 +1526,12 @@ export default function HomePage() {
         <HeadingToDeliveryCard defaultOpen deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo}
           emptyText={myDelivery ? "No other company loads headed here right now." : "Set a delivery on your trip to see other loads headed there."} />
       </FullscreenModal>
-      <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} />
+      <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")} />
       <RecentDeliveriesCard
         storeName={selectedLoc ? locationTitle(selectedLoc) : null}
         items={recent.items}
         productInfo={productInfo}
-        onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)}
+        onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")}
         onPickStore={() => setPicker({ mode: "select" })}
       />
 

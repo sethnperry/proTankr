@@ -8,6 +8,7 @@
 // Each card is collapsed to a line or two; tap the header to expand.
 
 import React, { useState } from "react";
+import { CardBusy, Spinner, busyProps } from "@/lib/ui/pending";
 import { apiTierColor, type ApiTier } from "../../utils/apiBasis";
 import type { TerminalProductStatus, StoreDelivery } from "../../hooks/useDashboardCards";
 import type { HeadingToDelivery, HeadingToTerminal, FleetTripLike } from "@/lib/trips/dashboardCards";
@@ -196,7 +197,8 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
 // For the selected delivery location, every carrier. Collapsed shows the
 // latest drop; tap a drop for the store's tank levels after it.
 
-export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore }: {
+export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore, openingId }: {
+  openingId?: string | null;
   storeName: string | null;
   items: StoreDelivery[];
   productInfo: ProductInfoFn;
@@ -263,8 +265,8 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
                   </>
                 )}
                 {d.tripId && (
-                  <button type="button" onClick={() => onOpenTrip(d.tripId!)} style={{ marginTop: 6, padding: 0, border: "none", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    Open PTD ›
+                  <button type="button" onClick={() => onOpenTrip(d.tripId!)} {...busyProps(openingId === d.tripId)} style={{ marginTop: 6, padding: 0, border: "none", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    Open PTD {openingId === d.tripId ? <Spinner size={11} /> : "›"}
                   </button>
                 )}
               </div>
@@ -356,7 +358,8 @@ export function HeadingToDeliveryCard({ deliveryName, items, productInfo, defaul
   );
 }
 
-export function ParkedPreloadsCard({ items, productInfo, onOpenTrip }: {
+export function ParkedPreloadsCard({ items, productInfo, onOpenTrip, openingId }: {
+  openingId?: string | null;
   items: FleetTripLike[];
   productInfo: ProductInfoFn;
   onOpenTrip: (tripId: string) => void;
@@ -380,8 +383,10 @@ export function ParkedPreloadsCard({ items, productInfo, onOpenTrip }: {
             key={f.trip.trip_id}
             type="button"
             onClick={() => onOpenTrip(f.trip.trip_id)}
-            style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: "#fff", textAlign: "left", cursor: "pointer" }}
+            {...busyProps(openingId === f.trip.trip_id)}
+            style={{ ...rowStyle, width: "100%", display: "block", position: "relative", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: "#fff", textAlign: "left", cursor: "pointer" }}
           >
+            <CardBusy on={openingId === f.trip.trip_id} />
             <div style={{ display: "flex", gap: 8 }}>
               <span style={{ flex: 1, minWidth: 0, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 Trailer {f.trailerName ?? "—"}{f.trip.parked_where ? <span style={{ color: muted, fontWeight: 400 }}> · {f.trip.parked_where}</span> : null}

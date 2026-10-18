@@ -19,6 +19,12 @@ export function Spinner({ size = 12, style }: { size?: number; style?: React.CSS
   return <span className="pt-spin" aria-hidden style={{ width: size, height: size, ...style }} />;
 }
 
+/** Spinner pinned to the top-right of a tappable card (card needs position: relative). */
+export function CardBusy({ on }: { on: boolean }) {
+  if (!on) return null;
+  return <span style={{ position: "absolute", top: 10, right: 10, color: "#fff" }}><Spinner size={14} /></span>;
+}
+
 /** aria-busy plus disabled, so a second tap does nothing. Use with your own
  *  <Spinner/>; a plain aria-busy={x} button gets a CSS spinner instead. */
 export function busyProps(on: boolean): { "aria-busy": boolean; disabled?: boolean; "data-spin": "own" } {
@@ -80,6 +86,8 @@ export function usePending() {
   }, [set]);
 
   const is = useCallback((k: string) => key === k, [key]);
+  /** The id after "prefix:" while that kind of key is busy, e.g. openingId("trip"). */
+  const openingId = useCallback((prefix: string) => (key?.startsWith(prefix + ":") ? key.slice(prefix.length + 1) : null), [key]);
 
-  return { pending: key, is, any: key != null, go, run, start, clear: () => set(null) };
+  return { pending: key, is, openingId, any: key != null, go, run, start, clear: () => set(null) };
 }

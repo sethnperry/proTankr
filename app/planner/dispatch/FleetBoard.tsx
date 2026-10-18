@@ -10,6 +10,7 @@
 // deliveries, last delivery under the start. A dot shows where the truck is.
 
 import React, { useState } from "react";
+import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
 import { PARK_FOR_LABEL } from "@/lib/trips/tripFlow";
@@ -24,7 +25,7 @@ const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = {
   borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)",
   padding: "12px 14px", marginBottom: 10, cursor: "pointer", textAlign: "left", width: "100%", color: "#fff",
-  display: "block",
+  display: "block", position: "relative",
 };
 const sectionLabel: React.CSSProperties = {
   fontSize: 12, fontWeight: 800, color: muted, textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px",
@@ -161,7 +162,8 @@ const fmtSpan = (from: string | null | undefined, to: string | null | undefined)
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 };
 
-function CancelledSection({ cancelled, days, onOpenTrip }: {
+function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
+  openingId?: string | null;
   cancelled: CancelledTrip[];
   days: number;
   onOpenTrip: (tripId: string) => void;
@@ -188,7 +190,8 @@ function CancelledSection({ cancelled, days, onOpenTrip }: {
         const racks = ct.pickups.filter((p) => p.arrived_at || p.outcome);
         const span = fmtSpan(t.started_at, t.cancelled_at);
         return (
-          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)" }} onClick={() => onOpenTrip(t.trip_id)}>
+          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)" }} onClick={() => onOpenTrip(t.trip_id)} {...busyProps(openingId === t.trip_id)}>
+            <CardBusy on={openingId === t.trip_id} />
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {ct.driverName ?? "Driver"}
@@ -231,7 +234,8 @@ function CancelledSection({ cancelled, days, onOpenTrip }: {
   );
 }
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30 }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId }: {
+  openingId?: string | null; // trip whose PTD is opening (card dims + spinner)
   cancelled?: CancelledTrip[];
   cancelledDays?: number;
   trips: FleetTrip[];
@@ -251,7 +255,8 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const route = buildTripRoute(ft.trip, ft.pickups, ft.deliveries, locations, ft.start);
         const since = elapsed(route.since, now);
         return (
-          <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onOpenTrip(ft.trip.trip_id)}>
+          <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onOpenTrip(ft.trip.trip_id)} {...busyProps(openingId === ft.trip.trip_id)}>
+            <CardBusy on={openingId === ft.trip.trip_id} />
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {ft.driverName ?? "Driver"}
@@ -275,7 +280,8 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const t = ft.trip;
         const since = elapsed(t.parked_at ?? null, now);
         return (
-          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(147,197,253,0.35)" }} onClick={() => onOpenTrip(t.trip_id)}>
+          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(147,197,253,0.35)" }} onClick={() => onOpenTrip(t.trip_id)} {...busyProps(openingId === t.trip_id)}>
+            <CardBusy on={openingId === t.trip_id} />
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800 }}>{ft.trailerName ? `Trailer ${ft.trailerName}` : "Trailer"}</span>
               <span style={{ fontSize: 12, color: PARKED, fontWeight: 700, whiteSpace: "nowrap" }}>
@@ -296,7 +302,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         );
       })}
 
-      {cancelled && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} />}
+      {cancelled && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} />}
     </div>
   );
 }

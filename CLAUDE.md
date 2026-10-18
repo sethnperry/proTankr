@@ -11615,3 +11615,4 @@ No migration. `tsc`, 255 tests and `next build --webpack` pass. The busy look wa
   - Planner LOAD, Finish Loading, and the pop-out Next.
   - A codemod added `aria-busy` to 98 existing buttons across 49 files that already showed "Saving…"/"…ing…" text.
 - Still not covered: navigation from cards without their own button (FleetBoard / parked cards), which only block repeat taps.
+- Follow-up same day: cards that open a PTD now show the busy state too. FleetBoard (in progress / parked / cancelled), the dashboard's Parked preloads rows and Recent Deliveries "Open PTD" dim, block taps and show a spinner (`openingId` prop from `usePending().openingId("trip")`, `CardBusy` for the corner spinner). A report opened from the dashboard off a trip now labels its exit "Back to Dashboard" (`LoadingModal` `returnLabel`).
