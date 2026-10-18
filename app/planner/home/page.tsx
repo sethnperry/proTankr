@@ -995,6 +995,16 @@ export default function HomePage() {
     return terminalReadiness(rows, { city: readinessPlace.city, state: readinessPlace.state, todayIso: isoToday_(), pickupTerminalId: readinessPlace.pickupId });
   })();
   const readinessLabel = [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
+  // Terminal access alerts in cities other than the one the strip shows.
+  const otherCityAccess = (() => {
+    const norm = (v: string | null | undefined) => String(v ?? "").trim().toLowerCase();
+    const items = expirations.activeItems.filter((i) =>
+      i.entityType === "terminal" &&
+      !(norm(i.city) === norm(readinessPlace.city) && norm(i.state) === norm(readinessPlace.state)));
+    if (items.length === 0) return null;
+    const worst = items.some((i) => i.level === "expired") ? "expired" : items.some((i) => i.level === "expiring") ? "expiring" : "soon";
+    return { count: items.length, color: EXPIRY_COLOR[worst], onOpen: () => shell.setExpModalOpen(true) };
+  })();
   const openTerminalList = (terminalId: string | null) => {
     if (terminalId) shell.setExpandedTerminalId(terminalId);
     setTerminalNowOpen(false);
@@ -1034,6 +1044,7 @@ export default function HomePage() {
       onOpenTerminal={openTerminalList}
       onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
       onChangeCity={() => { setTerminalNowOpen(false); shell.setLocOpen(true); }}
+      otherCities={otherCityAccess}
     />
   );
 
@@ -1345,7 +1356,7 @@ export default function HomePage() {
       {(() => {
         // Gross already shows on the trip card; only the truck-change prompt stays here.
         const showGross = tripLoaded && truckChanged;
-        const showExp = expired > 0 || warning > 0;
+        const showExp = expired > 0 || warning > 0 || soonCount > 0;
         const showSync = pendingCount > 0 || failed.length > 0;
         const showFuel = !!fuel.active;
         if (!showGross && !showExp && !showSync && !showFuel) return null;
@@ -1372,8 +1383,12 @@ export default function HomePage() {
             {showExp && (
               <InfoRow
                 label="Expirations"
-                value={expired > 0 ? `${expired} expired` : `${warning} within 7 days`}
-                valueColor={expired > 0 ? EXPIRY_COLOR.expired : EXPIRY_COLOR.expiring}
+                value={[
+                  expired > 0 ? `${expired} expired` : null,
+                  warning > 0 ? `${warning} within 7 days` : null,
+                  soonCount > 0 ? `${soonCount} within 30 days` : null,
+                ].filter(Boolean).join(" · ")}
+                valueColor={expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : EXPIRY_COLOR.soon}
                 onClick={() => shell.setExpModalOpen(true)}
                 last={!showSync}
               />

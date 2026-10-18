@@ -31,8 +31,11 @@ const stateColor = (s: ReadinessSegment) =>
 // horizontal line per step, filled from the bottom as steps are done. The
 // trip's pickup terminal gets a marker. Tap a box for its details; tap again
 // to open the terminal, or the access steps for no-access/training boxes.
-export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenSteps, onChangeCity, loading }: {
+export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenSteps, onChangeCity, loading, otherCities }: {
   place: string | null;
+  // Terminal access expiring or expired in cities other than the one shown.
+  // Tapping opens the expirations list, so no terminal switch is needed.
+  otherCities?: { count: number; color: string; onOpen: () => void } | null;
   summary: ReadinessSummary;
   onOpenTerminal: (terminalId: string | null) => void;
   // No access or steps underway: tap again opens the access steps.
@@ -60,10 +63,12 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenStep
           <span style={{ fontSize: 15, fontWeight: 800 }}>{place ?? "Pick a city"}</span>
           <span style={{ color: L.faint, fontSize: 13 }}> ›</span>
         </button>
-        {total > 0 && (
-          <span style={{ fontSize: 13, color: L.muted, whiteSpace: "nowrap" }}>
-            <span className="dash-num" style={{ color: "#fff", fontWeight: 800, fontSize: 17 }}>{summary.access}</span><span className="dash-num">/{total}</span> access
-          </span>
+        {otherCities && otherCities.count > 0 && (
+          <button type="button" onClick={otherCities.onOpen} className="dash-press"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, fontWeight: 700, color: otherCities.color, whiteSpace: "nowrap" }}>
+            <span aria-hidden style={{ width: 8, height: 8, background: otherCities.color }} />
+            {otherCities.count} in other {otherCities.count === 1 ? "city" : "cities"} ›
+          </button>
         )}
       </div>
 

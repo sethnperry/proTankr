@@ -11515,3 +11515,18 @@ Follow-up same day: picking a city in the shared `LocationModal` now opens
 the terminal list right after (new optional `onCityPicked` prop, wired in
 `CalculatorLayoutClient.tsx` to `shell.setTermOpen(true)`). Applies wherever
 that modal opens (dashboard, Planner, setup). Not click-tested.
+
+### Access strip: other-city alert; dashboard owns expirations, bell retired there (2026-10-18)
+
+- `TerminalAccessStrip`: the "N/M access" count is gone. In its place, when
+  terminal access in another city is expired or within 30 days, it shows
+  "N in other cities ›" colored by the worst one (`otherCities` prop, built
+  in `home/page.tsx` from `expirations.activeItems`). Tapping opens the
+  shared Expirations modal, which already groups terminal cards by city, so
+  no terminal switch is needed.
+- Dashboard Expirations row now also shows for 8-30 day items (yellow),
+  reading e.g. "1 expired · 2 within 30 days".
+- The header bell is hidden on `/planner/home` (`showBell` in
+  `CalculatorLayoutClient.tsx`); it stays on every other planner route.
+Not click-tested (no Supabase env in this container; build compiled with
+placeholder env vars).

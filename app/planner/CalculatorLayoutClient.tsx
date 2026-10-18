@@ -68,6 +68,9 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
   const { darkMode } = shell.theme;
   const iconStroke = themeIconStroke(darkMode);
   const pathname = usePathname();
+  // The Driver Dashboard shows every expiration alert itself (Expirations
+  // row, Truck/Trailer squares, the access strip), so the bell is retired there.
+  const showBell = !pathname?.startsWith("/planner/home");
 
   // The OS status bar / PWA chrome strip above this header is drawn by the
   // browser from <meta name="theme-color">, not from any CSS on the page --
@@ -134,7 +137,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
         height: "100%",
       }}>
         <NavMenu darkMode={darkMode} onOpenSettings={onOpenSettings} />
-        <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />
+        {showBell && <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />}
         <div id="planner-header-icons-slot" style={{ display: "contents" }} />
       </div>
     );
@@ -179,7 +182,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
         padding: "0 calc(env(safe-area-inset-right, 0px) + 16px) 0 calc(env(safe-area-inset-left, 0px) + 16px)",
       }}>
         <NavMenu darkMode={darkMode} onOpenSettings={onOpenSettings} />
-        <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />
+        {showBell && <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />}
         {/* Portal target for the Planner page's own plan-letter/Equipment/
             Location/Temperature cluster -- per explicit direction to try
             it merged into this shared header row for a few days ("I think
