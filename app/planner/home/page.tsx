@@ -74,6 +74,9 @@ import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/Cance
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
+import { getTripSupplier, sameSupplier, seedTerminalPicks, setTripSupplier, type TripSupplier } from "@/lib/trips/tripSupplier";
+import { readPicks, groupPicks } from "@/lib/suppliers/picks";
+import { linkSupplierToTerminal } from "@/lib/suppliers/useTerminalSuppliers";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
 import { ParkSheet, type ParkSubmit } from "../components/trip/ParkSheet";
@@ -319,6 +322,7 @@ export default function HomePage() {
         startCity: openTrip.start_city ?? "",
         startState: openTrip.start_state ?? "",
         planSlot: getTripPlan(userId, openTrip.trip_id)?.slot ?? null,
+        supplier: getTripSupplier(userId, openTrip.trip_id),
       };
     }
     const prev = userId ? lastShipperCustomer(trips, userId) : { shipper: null, customer: null };
@@ -333,7 +337,15 @@ export default function HomePage() {
       startCity: "",
       startState: "",
       planSlot: null,
+      supplier: currentTerminalSupplier(),
     };
+
+    // A supplier already picked at the Planner's terminal this visit, if it's one supplier.
+    function currentTerminalSupplier(): TripSupplier | null {
+      const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+      const groups = groupPicks(readPicks(userId, tid)?.picks ?? []);
+      return groups.length === 1 ? { supplier_id: groups[0].supplier_id, name: groups[0].name } : null;
+    }
 
     // The delivery the driver used last (this phone's history), else their
     // first starred location, else a blank one-off.
@@ -352,7 +364,7 @@ export default function HomePage() {
       if (star) return { locationId: star.location_id, oneOffName: null, deliveryType: star.delivery_type };
       return { locationId: null, oneOffName: "", deliveryType: "drop" };
     }
-  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId]);
+  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId]);
 
   const submit = async (v: StartLoadValues) => {
     if (!store || !userId || !companyId) {
@@ -410,6 +422,16 @@ export default function HomePage() {
       );
       applyStartLoad(store, rows);
       if (v.planSlot !== (getTripPlan(userId, rows.trip.trip_id)?.slot ?? null)) setTripPlan(userId, rows.trip.trip_id, v.planSlot);
+      // Supplier: kept on the trip, and preset at the pickup rack now (the
+      // Planner presets it at any later rack on the trip too).
+      const prevSupplier = getTripSupplier(userId, rows.trip.trip_id);
+      setTripSupplier(userId, rows.trip.trip_id, v.supplier);
+      const pickupTid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+      const pickupLoaded = !!(editing && children?.pickup?.load_id);
+      if (v.supplier && pickupTid && !pickupLoaded && (!editing || !sameSupplier(prevSupplier, v.supplier))) {
+        seedTerminalPicks(userId, pickupTid, v.supplier);
+        if (v.supplier.supplier_id) void linkSupplierToTerminal({ companyId, supplierId: v.supplier.supplier_id, terminalId: pickupTid });
+      }
       setSheetOpen(false);
       void syncNow();
     } catch (e: any) {
@@ -1565,7 +1587,10 @@ export default function HomePage() {
         editing={editing}
         initial={initialValues}
         pickupLabel={editing && children?.pickup?.load_id ? children.pickup.name ?? pickupLabel : pickupLabel}
+        pickupTerminalId={editing && children?.pickup?.load_id ? (children.pickup.terminal_id ? String(children.pickup.terminal_id) : null) : (location.selectedTerminalId ? String(location.selectedTerminalId) : null)}
         onChangePickup={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
+        suppliers={suppliers}
+        onAddSupplier={addSupplier}
         presets={sheetPresets}
         productColor={(id) => { const p = productInfo(id); return p.hex ?? productColorFor(p.name); }}
         equipmentLabel={equipmentLabel}

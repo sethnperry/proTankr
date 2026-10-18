@@ -17,6 +17,10 @@ import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
 import { locationPlace, locationTitle, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
 import { LocationPicker } from "./trip/LocationPicker";
 import { currentCity, type StartPlace } from "@/lib/trips/startPlace";
+import { SupplierPicker } from "./trip/SupplierPicker";
+import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
+import type { SupplierRow } from "@/lib/trips/types";
+import type { TripSupplier } from "@/lib/trips/tripSupplier";
 
 export type StartLoadValues = {
   orderNumber: string;
@@ -29,6 +33,8 @@ export type StartLoadValues = {
   startState: string;
   // Preset (1-5) the Planner loads when it opens for this trip. null = leave the Planner as is.
   planSlot: number | null;
+  // Supplier dispatch named. Preset at every rack on the trip; changeable there.
+  supplier: TripSupplier | null;
 };
 
 const label: React.CSSProperties = {
@@ -55,7 +61,10 @@ export function StartLoadSheet({
   editing,
   initial,
   pickupLabel,
+  pickupTerminalId,
   onChangePickup,
+  suppliers,
+  onAddSupplier,
   presets,
   productColor,
   equipmentLabel,
@@ -76,7 +85,10 @@ export function StartLoadSheet({
   editing: boolean;
   initial: StartLoadValues;
   pickupLabel: string | null;
+  pickupTerminalId: string | null;
   onChangePickup: () => void;
+  suppliers: SupplierRow[];
+  onAddSupplier: (name: string) => SupplierRow | null;
   presets: PresetSummary[];
   productColor: (productId: string) => string;
   equipmentLabel: string;
@@ -138,6 +150,21 @@ export function StartLoadSheet({
 
   const setDelivery = (i: number, patch: Partial<StartLoadDelivery>) =>
     setV((s) => ({ ...s, deliveries: s.deliveries.map((d, j) => (j === i ? { ...d, ...patch } : d)) }));
+
+  // Supplier: asked right after a pickup terminal is picked, and tappable any
+  // time. That terminal's suppliers are listed first.
+  const [supplierOpen, setSupplierOpen] = useState(false);
+  const termSuppliers = useTerminalSuppliers(companyId, pickupTerminalId);
+  const terminalSupplierIds = useMemo(() => new Set(termSuppliers.bySupplier.keys()), [termSuppliers.bySupplier]);
+  const lastPickupRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) { lastPickupRef.current = null; return; }
+    if (lastPickupRef.current === null) { lastPickupRef.current = pickupTerminalId ?? ""; return; }
+    if ((pickupTerminalId ?? "") !== lastPickupRef.current) {
+      lastPickupRef.current = pickupTerminalId ?? "";
+      if (pickupTerminalId) setSupplierOpen(true);
+    }
+  }, [open, pickupTerminalId]);
 
   const milesOk = v.beginMiles.trim() === "" || Number.isFinite(Number(v.beginMiles));
 
@@ -249,6 +276,18 @@ export function StartLoadSheet({
           </button>
         </div>
 
+        <div style={row}>
+          <div style={label}>Supplier</div>
+          <button type="button" onClick={() => setSupplierOpen(true)}
+            style={{ ...input, textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: v.supplier ? "#fff" : "rgba(255,255,255,0.45)" }}>{v.supplier?.name ?? "Supplier from dispatch"}</span>
+            <span style={{ color: "rgba(255,255,255,0.4)" }}>›</span>
+          </button>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 6 }}>
+            {v.supplier ? "Preset at the rack for the whole trip. You can change it there." : "Optional. Type it exactly as dispatch shows it."}
+          </div>
+        </div>
+
         {v.deliveries.map((d, i) => {
           const loc = d.locationId ? byId.get(d.locationId) : null;
           const text = loc ? locationTitle(loc) : d.locationId ? "Saved location" : d.oneOffName?.trim() ? `${d.oneOffName.trim()} (not saved)` : null;
@@ -320,6 +359,19 @@ export function StartLoadSheet({
         </div>
       </div>
     </FullscreenModal>
+    <SupplierPicker
+      open={open && supplierOpen}
+      title="Supplier from dispatch"
+      subtitle={pickupLabel ? `At ${pickupLabel}` : undefined}
+      suppliers={suppliers}
+      current={v.supplier?.name ?? null}
+      onAdd={onAddSupplier}
+      terminalSupplierIds={pickupTerminalId ? terminalSupplierIds : undefined}
+      terminalName={pickupLabel}
+      onPick={(sp) => { setV((st) => ({ ...st, supplier: sp })); setSupplierOpen(false); }}
+      onClose={() => setSupplierOpen(false)}
+      onSkip={v.supplier ? () => { setV((st) => ({ ...st, supplier: null })); setSupplierOpen(false); } : undefined}
+    />
     <LocationPicker
       open={open && picking != null}
       title={picking != null && v.deliveries.length > 1 ? `Delivery ${picking + 1}` : "Delivery"}

@@ -11530,3 +11530,24 @@ that modal opens (dashboard, Planner, setup). Not click-tested.
   `CalculatorLayoutClient.tsx`); it stays on every other planner route.
 Not click-tested (no Supabase env in this container; build compiled with
 placeholder env vars).
+
+### Supplier picked on Begin Trip, preset for the whole trip (2026-10-18)
+
+No migration. Not click-tested (no Supabase env in this container).
+- Begin Trip (`StartLoadSheet.tsx`) has a **Supplier** row right under
+  Pickup. Picking a pickup terminal opens the supplier picker next (that
+  terminal's suppliers first, current one highlighted). Tappable any time;
+  "Skip" clears it. New trips prefill from a single supplier already picked
+  at the Planner's terminal this visit.
+- `lib/trips/tripSupplier.ts` (2 tests): kept on the phone per trip
+  (`proTankr:u:<uid>:tripSupplier:<tripId>`), like the trip's plan. On save
+  it's also written as the pickup terminal's pick (`seedTerminalPicks`, any
+  product) and linked to that terminal, unless that pickup is already loaded.
+- Planner: on an open trip, any terminal with no saved pick or skip gets the
+  trip supplier as its preset (`openTripIdForSupplier` effect in
+  `page.tsx`), so rack hops, a reload after the 14h pick expiry, and the
+  next pickup all start with it, and the arrival prompt doesn't ask again.
+  Finish Loading's BOL supplier defaults from it as before. Changing the
+  supplier in the panel (pick or switch) updates the trip supplier when the
+  result is one supplier, so the change carries forward.
+- Gap: phone-only, so another device or a handoff driver won't see it.

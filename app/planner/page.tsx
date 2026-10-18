@@ -107,7 +107,8 @@ import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
 import { SupplierPanel, type PanelProduct, type SupplierSwitchEvent } from "./components/supplier/SupplierPanel";
 import { useSupplierPicks } from "@/lib/suppliers/useSupplierPicks";
-import { resolvePicks } from "@/lib/suppliers/picks";
+import { resolvePicks, readPicks, groupPicks, type SupplierPick } from "@/lib/suppliers/picks";
+import { getTripSupplier, setTripSupplier, tripSupplierPicks } from "@/lib/trips/tripSupplier";
 import { markSuppliersLoaded } from "@/lib/suppliers/useTerminalSuppliers";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -2443,6 +2444,29 @@ const lastProductInfoById = useMemo(() => {
     supplierPromptedForRef.current = p.pickup_id;
     setSupplierPromptToken((n) => n + 1);
   }, [tripWaitingPickup, needsSupplierPick, location.selectedTerminalId]);
+  // The supplier picked on Begin Trip is preset at every rack on the trip
+  // (rack hops, a later visit). Reads storage directly so it never overwrites
+  // a pick or a skip already saved for this terminal.
+  const openTripIdForSupplier = useMemo(() => {
+    if (!effectiveUserId) return null;
+    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
+    return trip && trip.status !== "complete" && trip.status !== "cancelled" ? trip.trip_id : null;
+  }, [effectiveUserId, tripStoreHook.state]);
+  useEffect(() => {
+    const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    if (!openTripIdForSupplier || !tid || !effectiveUserId) return;
+    if (readPicks(effectiveUserId, tid)) return;
+    const ts = getTripSupplier(effectiveUserId, openTripIdForSupplier);
+    if (ts) supplierPicks.setPicks(tripSupplierPicks(ts));
+  }, [openTripIdForSupplier, location.selectedTerminalId, effectiveUserId, supplierPicks.picks, supplierPicks.setPicks]);
+  // A change at the rack carries forward on the trip when it's one supplier.
+  const onSupplierPicks = useCallback((next: SupplierPick[]) => {
+    supplierPicks.setPicks(next);
+    const groups = groupPicks(next);
+    if (openTripIdForSupplier && effectiveUserId && groups.length === 1) {
+      setTripSupplier(effectiveUserId, openTripIdForSupplier, { supplier_id: groups[0].supplier_id, name: groups[0].name });
+    }
+  }, [supplierPicks.setPicks, openTripIdForSupplier, effectiveUserId]);
   const onSupplierSwitched = useCallback((e: SupplierSwitchEvent) => {
     const pk = tripPickup ?? tripWaitingPickup;
     if (!pk || !tripStoreObj || !effectiveUserId) return;
@@ -3185,7 +3209,7 @@ const lastProductInfoById = useMemo(() => {
         truckLabel={equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? ""}
         products={supplierPanelProducts}
         picks={resolvedSupplierPicks}
-        onPicks={supplierPicks.setPicks}
+        onPicks={onSupplierPicks}
         suppliers={tripSuppliers}
         onAddSupplier={addTripSupplier}
         promptToken={supplierPromptToken}
