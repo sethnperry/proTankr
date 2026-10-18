@@ -227,8 +227,12 @@ export default function HomePage() {
   // Same reports as the header ticker, but for the trip's pickup terminal,
   // and every product's reports when no plan has been made yet this session.
   const alertTerminalId = useMemo(() => {
+    // The driver's own pick (Switch Terminal, the terminal list) wins; the
+    // trip's pickup is only the fallback. Picking a terminal follows the
+    // pickup on arrival anyway, so the two normally agree.
+    if (location.selectedTerminalId) return String(location.selectedTerminalId);
     const p = snap ? activePickup(snap.pickups) ?? [...snap.pickups].reverse().find((x) => x.terminal_id) : null;
-    return String(p?.terminal_id || location.selectedTerminalId || "") || null;
+    return String(p?.terminal_id || "") || null;
   }, [snap, location.selectedTerminalId]);
   const alertProducts = useMemo<Set<string> | "all">(
     () => (shell.plannedProductIds.size > 0 ? shell.plannedProductIds : "all"),
@@ -952,12 +956,14 @@ export default function HomePage() {
     }
     return m;
   })();
-  // The trip's pickup city when there is one, else the Planner's city.
+  // The city the driver picked (Planner/terminal list), else the trip's
+  // pickup city. The pickup keeps its caret when it's in the shown city.
   const readinessPlace = (() => {
     const p = snap ? activePickup(snap.pickups) : null;
-    const t = p?.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(p.terminal_id)) : null;
-    if (t?.city) return { city: String(t.city), state: String(t.state ?? ""), pickupId: String(t.terminal_id) };
-    return { city: location.selectedCity || "", state: location.selectedState || "", pickupId: p?.terminal_id ? String(p.terminal_id) : null };
+    const pickupId = p?.terminal_id ? String(p.terminal_id) : null;
+    if (location.selectedCity) return { city: location.selectedCity, state: location.selectedState || "", pickupId };
+    const t = pickupId ? terminalCatalog.find((x) => String(x.terminal_id) === pickupId) : null;
+    return { city: String(t?.city ?? ""), state: String(t?.state ?? ""), pickupId };
   })();
   // Every terminal in the city, with this driver's last carded date if any.
   const readiness = (() => {
@@ -991,6 +997,7 @@ export default function HomePage() {
   const readinessLabel = [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
   const openTerminalList = (terminalId: string | null) => {
     if (terminalId) shell.setExpandedTerminalId(terminalId);
+    setTerminalNowOpen(false);
     if (location.selectedCity) shell.setTermOpen(true);
     else shell.setLocOpen(true);
   };
@@ -1026,7 +1033,7 @@ export default function HomePage() {
       loading={terminals.termLoading}
       onOpenTerminal={openTerminalList}
       onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
-      onChangeCity={() => shell.setLocOpen(true)}
+      onChangeCity={() => { setTerminalNowOpen(false); shell.setLocOpen(true); }}
     />
   );
 

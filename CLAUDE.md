@@ -11498,3 +11498,16 @@ real RLS session (200, supplier columns returned). Test rows deleted after.
 Not verified: the trip_event on switch (the test browser had no trip store
 loaded), the arrival auto-prompt, the LOAD-tap prompt, and the BOL default.
 
+
+### Dashboard: changing terminal city now sticks (2026-10-18)
+
+Changing city (access strip label) or terminal (Terminal sheet → Switch
+Terminal) on the Driver Dashboard did nothing visible during a trip: the
+access strip and Terminal card both followed the trip's pickup terminal,
+which never changes from the dashboard. Now the driver's own pick
+(`location.selectedCity` / `selectedTerminalId`) wins and the pickup is the
+fallback; the pickup keeps its caret on the strip when it's in the shown
+city. Opening the city or terminal picker from inside the Terminal sheet now
+closes the sheet first so the picker isn't hidden under it. After a city
+change with no terminal picked yet, the Terminal card falls back to the
+pickup. Not click-tested.
