@@ -11511,3 +11511,7 @@ city. Opening the city or terminal picker from inside the Terminal sheet now
 closes the sheet first so the picker isn't hidden under it. After a city
 change with no terminal picked yet, the Terminal card falls back to the
 pickup. Not click-tested.
+Follow-up same day: picking a city in the shared `LocationModal` now opens
+the terminal list right after (new optional `onCityPicked` prop, wired in
+`CalculatorLayoutClient.tsx` to `shell.setTermOpen(true)`). Applies wherever
+that modal opens (dashboard, Planner, setup). Not click-tested.

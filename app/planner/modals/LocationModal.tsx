@@ -40,6 +40,10 @@ export default function LocationModal(props: {
 
   // to preserve existing behavior (modal closes on city select)
   setLocOpen: (open: boolean) => void;
+  // Called after a city is picked (the modal has already closed). The shell
+  // uses it to open the terminal list so a city pick goes straight on to
+  // picking a terminal there.
+  onCityPicked?: () => void;
 }) {
   const {
     open,
@@ -70,6 +74,7 @@ export default function LocationModal(props: {
     isCityStarred,
 
     setLocOpen,
+    onCityPicked,
   } = props;
 
   // Non-favorited cities start collapsed -- unless the currently selected
@@ -86,12 +91,13 @@ export default function LocationModal(props: {
         key={c}
         role="button"
         tabIndex={0}
-        onClick={() => { setSelectedCity(c); setLocOpen(false); }}
+        onClick={() => { setSelectedCity(c); setLocOpen(false); onCityPicked?.(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             setSelectedCity(c);
             setLocOpen(false);
+            onCityPicked?.();
           }
         }}
         className={[

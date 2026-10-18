@@ -359,6 +359,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         toggleCityStar={shell.toggleCityStar}
         isCityStarred={shell.isCityStarred}
         setLocOpen={shell.setLocOpen}
+        onCityPicked={() => shell.setTermOpen(true)}
       />
 
       <MyTerminalsModal
