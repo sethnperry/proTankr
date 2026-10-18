@@ -778,7 +778,7 @@ export default function RecordHistoryModal({ open, onClose, kind, title, company
                 <button
                   onClick={() => (expandedServiceRow ? saveServiceEdit(expandedServiceRow) : expandedWashRow ? saveWashEdit(expandedWashRow) : undefined)}
                   disabled={busy}
-                  style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.20)", background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "12px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}
                 >
                   {busy ? "Saving…" : "Save"}
                 </button>

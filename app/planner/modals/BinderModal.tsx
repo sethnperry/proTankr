@@ -108,8 +108,8 @@ const inputStyle: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 4, display: "block" };
 const saveBtnStyle: React.CSSProperties = {
-  flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.20)",
-  background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
+  flex: 1, padding: "12px 14px", borderRadius: 2, border: "none",
+  background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
 };
 const cancelBtnStyle: React.CSSProperties = {
   flex: 1, padding: "12px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)",

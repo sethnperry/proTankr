@@ -108,6 +108,7 @@ const S = {
   primary: {
     width: "100%", padding: "15px 0", borderRadius: 2, border: "none",
     background: "#fff", color: "#000", fontSize: 16, fontWeight: 800, cursor: "pointer",
+    letterSpacing: "0.06em", textTransform: "uppercase",
   } as React.CSSProperties,
   secondary: {
     width: "100%", padding: "13px 0", borderRadius: 2,

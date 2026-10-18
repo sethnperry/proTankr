@@ -11560,3 +11560,34 @@ first paint) and covers the Planner with a plain "Opening load report…"
 screen (portal to body, z-index just under the modal) until the report
 opens or fails. With a known load id, `load_log` and `load_lines` are read
 in parallel. Not click-tested.
+
+### App-wide instrument look + white next-step buttons (2026-10-18)
+
+Matches the Driver Dashboard look everywhere in the app (not the marketing
+site). Not click-tested beyond `/login` (no Supabase env in this container).
+- Shared tokens: `lib/ui/look.ts` (RADIUS 2, SURFACE `#121213`, BORDER,
+  PRIMARY_BTN/SECONDARY_BTN). `app/planner/theme.ts` gained `SURFACE` /
+  `SURFACE_BORDER`.
+- Corners: a one-off codemod set every `borderRadius` 3+ to 2 and Tailwind
+  `rounded-*` to `rounded-[2px]` across `app/` and `lib/` (112 files).
+  Excluded: marketing pages (`/`, about, pricing, get-the-app, for-drivers,
+  for-fleets, marketing, studio, opengraph) and `lib/content`. Kept round:
+  dots and knobs (width/height on the line with radius >= half), `50%`, and
+  the CG slider track. Pills became square. `lib/ui/driver/tokens.ts`
+  radius/radiusSm are 2.
+- Surfaces: the graphite gradients (`cardTheme` CARD_BG, sheets) are now flat
+  `SURFACE` with a 0.14 border and no shadow; selected border is 0.6.
+  FullscreenModal: square panel, uppercase letter-spaced title, and its
+  default footer Done is now white.
+- Workflow rule: the next-step button in a workflow window is white with
+  black text. Fixed: `themeFill` primaries (always graphite since dark mode
+  is permanent) in CancelLoadSheet (Finish Loading), TerminalSwitchDuringLoad
+  sheet, Recall sheet; `styles.doneBtn` (Confirm Temp, Plan Review Complete,
+  CompleteLoad); Take Over Trip (was amber); preset Save; equipment Done,
+  Couple It, Take it, Couple & Select; Binder Save; Scale Ticket Save &
+  Close; Sourcing Done; Region filter Save; record/scale history Save;
+  Weight Record & Close; Save Status; ComboEdit Done; fuel tank Save.
+  `tripUi.primaryBtn` and onboarding primary are uppercase letter-spaced.
+  Destructive confirms (Delete) stay red; equal-weight choices (stale API
+  options, rack/preset pickers) aren't primaries and were left alone. The
+  Credentials print page (white paper) keeps its dark button.

@@ -192,8 +192,8 @@ export default function TerminalSwitchDuringLoadSheet({
   const primaryRowStyle: React.CSSProperties = {
     width: "100%", padding: "14px 16px", borderRadius: 2,
     border: CARD_BORDER, boxShadow: CARD_SHADOW,
-    background: themeFill(darkMode, accentColor, "#fff"),
-    color: themeTextOnFill(darkMode),
+    background: "#fff",
+    color: "#000",
     fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left" as const, marginBottom: 8,
   };
 
@@ -349,7 +349,7 @@ export default function TerminalSwitchDuringLoadSheet({
                         width: 18, height: 18, borderRadius: 2, flexShrink: 0,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         border: "1px solid rgba(255,255,255,0.35)",
-                        background: checked ? themeFill(darkMode, accentColor, "#fff") : "transparent",
+                        background: checked ? "#fff" : "transparent",
                       }}>
                         {checked && <span style={{ color: "#00c2ff", fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                       </span>
@@ -366,8 +366,8 @@ export default function TerminalSwitchDuringLoadSheet({
               style={{
                 width: "100%", padding: "14px 16px", borderRadius: 2, marginBottom: 8,
                 border: CARD_BORDER, boxShadow: CARD_SHADOW,
-                background: themeFill(darkMode, accentColor, "#fff"),
-                color: themeTextOnFill(darkMode),
+                background: "#fff",
+                color: "#000",
                 fontSize: 15, fontWeight: 700, cursor: "pointer",
                 opacity: selectedProductIds.size === 0 || submitBusy ? 0.55 : 1,
               }}

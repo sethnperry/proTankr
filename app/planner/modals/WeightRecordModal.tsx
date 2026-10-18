@@ -277,8 +277,8 @@ export default function WeightRecordModal({
             disabled={busy}
             style={{
               width: "100%", borderRadius: 2, padding: "15px 18px", fontWeight: 900, fontSize: 17,
-              border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.12)",
-              color: "rgba(255,255,255,0.95)", cursor: "pointer",
+              border: "none", background: "#fff",
+              color: "#000", cursor: "pointer",
             }}
           >
             {busy ? "Saving…" : "Record & Close"}

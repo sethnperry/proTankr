@@ -60,7 +60,7 @@ export default function PresetActionSheet({ open, letter, summary, onLoad, onCon
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
               This replaces what's currently saved there ({summary}).
             </div>
-            <button type="button" style={rowStyle} onClick={() => { setMode("menu"); onConfirmEdit(); }}>Save</button>
+            <button type="button" style={{ ...rowStyle, background: "#fff", color: "#000", border: "none", textAlign: "center" }} onClick={() => { setMode("menu"); onConfirmEdit(); }}>Save</button>
             <button type="button" style={cancelStyle} onClick={() => setMode("menu")}>Back</button>
           </>
         )}

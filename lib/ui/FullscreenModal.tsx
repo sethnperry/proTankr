@@ -49,7 +49,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
     footer === null ? null : footer ?? (
       <button
         onClick={onClose}
-        className="w-full rounded-[2px] bg-[#111] px-4 py-3 font-semibold text-white border border-white/15 hover:bg-[#151515]"
+        className="w-full rounded-[2px] bg-white px-4 py-3 font-extrabold uppercase tracking-[0.06em] text-black hover:bg-white/90"
       >
         Done
       </button>

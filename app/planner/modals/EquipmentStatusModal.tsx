@@ -209,8 +209,8 @@ export default function EquipmentStatusModal({
           onClick={save}
           disabled={busy}
           style={{
-            width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)",
-            background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
+            width: "100%", padding: "14px 18px", borderRadius: 2, border: "none",
+            background: "#fff", color: "#000", fontWeight: 900, fontSize: 15, cursor: "pointer",
           }}
         >
           {busy ? "Saving…" : "Save Status"}

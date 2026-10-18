@@ -81,8 +81,8 @@ export default function TruckFuelTankField({ truckId }: { truckId: string }) {
             onClick={save}
             disabled={busy}
             style={{
-              padding: "9px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.20)",
-              background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer",
+              padding: "9px 14px", borderRadius: 2, border: "none",
+              background: "#fff", color: "#000", fontWeight: 800, fontSize: 13, cursor: "pointer",
             }}
           >
             {busy ? "Saving…" : "Save"}

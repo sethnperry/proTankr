@@ -367,7 +367,7 @@ export default function SourcingModal({ open, onClose, terminalId, terminalName,
         {/* Footer close button */}
         <div style={{ padding: "12px 16px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", background: "#000", flexShrink: 0 }}>
           <button type="button" onClick={onClose}
-            style={{ width: "100%", borderRadius: 2, padding: "15px 18px", fontWeight: 900, fontSize: 17, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.92)", cursor: "pointer" }}>
+            style={{ width: "100%", borderRadius: 2, padding: "15px 18px", fontWeight: 900, fontSize: 17, border: "none", background: "#fff", color: "#000", cursor: "pointer" }}>
             Done
           </button>
         </div>

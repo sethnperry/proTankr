@@ -1631,7 +1631,7 @@ export default function SoloEquipmentModal({
                 Cancel
               </button>
               <button type="button" onClick={confirmDeadline} disabled={busy}
-                style={{ flex: 1, padding: "10px 8px", borderRadius: 2, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(180,40,40,0.2)", color: "#fca5a5", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14 }}>
+                style={{ flex: 1, padding: "10px 8px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" as const, fontSize: 14 }}>
                 Couple It
               </button>
             </div>
@@ -1658,7 +1658,7 @@ export default function SoloEquipmentModal({
                 Cancel
               </button>
               <button type="button" onClick={confirmAway} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(251,146,60,0.5)", background: "rgba(251,146,60,0.18)", color: "#fdba74", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}>
                 Couple It
               </button>
             </div>
@@ -1682,7 +1682,7 @@ export default function SoloEquipmentModal({
                 Cancel
               </button>
               <button type="button" onClick={confirmCommandeer} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(220,160,60,0.5)", background: "rgba(180,120,40,0.25)", color: "#fde68a", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}>
                 Take it
               </button>
             </div>
@@ -1744,7 +1744,7 @@ export default function SoloEquipmentModal({
                 Cancel
               </button>
               <button type="button" onClick={submitNewTare} disabled={busy}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer" }}>
                 {busy ? "Pairing…" : "Couple & Select"}
               </button>
             </div>
@@ -1915,6 +1915,6 @@ const inputStyle: React.CSSProperties = {
   background: "rgba(0,0,0,0.28)", color: "#fff", fontSize: 15, boxSizing: "border-box",
 };
 const saveBtnStyle: React.CSSProperties = {
-  width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer",
+  width: "100%", padding: "14px 18px", borderRadius: 2, border: "none",
+  background: "#fff", color: "#000", fontWeight: 900, fontSize: 15, cursor: "pointer",
 };

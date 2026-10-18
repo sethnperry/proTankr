@@ -1130,7 +1130,7 @@ export default function HomePage() {
             Take it over to finish the deliveries.
           </div>
           <button type="button" onClick={doTakeOver}
-            style={{ marginTop: 10, borderRadius: 2, border: "none", background: "#fbbf24", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+            style={{ marginTop: 10, borderRadius: 2, border: "none", background: "#fff", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
             Take Over Trip
           </button>
         </div>

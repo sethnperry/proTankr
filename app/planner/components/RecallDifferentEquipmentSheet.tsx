@@ -67,8 +67,8 @@ export default function RecallDifferentEquipmentSheet({
           style={{
             width: "100%", padding: "14px 16px", borderRadius: 2, marginBottom: 8,
             border: CARD_BORDER, boxShadow: CARD_SHADOW,
-            background: themeFill(darkMode, accentColor, "#fff"),
-            color: themeTextOnFill(darkMode),
+            background: "#fff",
+            color: "#000",
             fontSize: 15, fontWeight: 700, cursor: "pointer",
           }}
         >

@@ -28,7 +28,8 @@ export const sectionCard: React.CSSProperties = {
 export const sectionTitle: React.CSSProperties = { fontSize: 13, fontWeight: 800, marginBottom: 10 };
 export const primaryBtn: React.CSSProperties = {
   width: "100%", padding: "16px 0", borderRadius: 2, border: "none",
-  background: "#fff", color: "#000", fontSize: 17, fontWeight: 800, cursor: "pointer",
+  background: "#fff", color: "#000", fontSize: 16, fontWeight: 800, cursor: "pointer",
+  letterSpacing: "0.06em", textTransform: "uppercase",
 };
 export const linkBtn: React.CSSProperties = {
   border: "none", background: "transparent", color: "rgba(255,255,255,0.75)",

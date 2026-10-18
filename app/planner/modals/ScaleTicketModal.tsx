@@ -237,9 +237,9 @@ export default function ScaleTicketModal({
             style={{
               width: "100%", borderRadius: 2, padding: "15px 18px",
               fontWeight: 900, fontSize: 17,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: "rgba(255,255,255,0.09)",
-              color: "rgba(255,255,255,0.92)", cursor: "pointer",
+              border: "none",
+              background: "#fff",
+              color: "#000", cursor: "pointer",
             }}
           >
             Save & Close
