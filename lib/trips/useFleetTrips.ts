@@ -32,6 +32,7 @@ export function useFleetTrips(companyId: string | null) {
   const [trips, setTrips] = useState<FleetTrip[]>([]);
   const [locations, setLocations] = useState<Map<string, Place>>(new Map());
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false); // first poll finished (either way)
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -123,6 +124,7 @@ export function useFleetTrips(companyId: string | null) {
       setError(e?.message ?? "Couldn't load trips.");
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, [companyId]);
 
@@ -137,5 +139,5 @@ export function useFleetTrips(companyId: string | null) {
     };
   }, [load]);
 
-  return { trips, locations, loading, error, reload: load };
+  return { trips, locations, loading, loaded, error, reload: load };
 }

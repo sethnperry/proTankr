@@ -13,11 +13,14 @@
 //
 // It doesn't replace the dispatch system; it sits beside it.
 
-import React from "react";
+import React, { useState } from "react";
 import { DashStyles, SectionLabel, useDashLook } from "../home/dashLook";
-import { GaugePanel, type GaugeCell } from "../home/DashboardChrome";
+import { GaugePanel, ToolPanel, type GaugeCell, type ToolItem } from "../home/DashboardChrome";
 import { EXPIRY_COLOR } from "@/lib/expiry";
-import type { Conflict, LiveCounts, ActiveReport } from "@/lib/dispatch/conflicts";
+import type { LiveCounts, ActiveReport } from "@/lib/dispatch/conflicts";
+import type { ConflictWithAck } from "@/lib/dispatch/acks";
+import type { WatchTerminal } from "@/lib/dispatch/watch";
+import type { NotifyState } from "@/lib/dispatch/useConflictNotifier";
 import type { PlanAlert, PlanCounts } from "@/lib/dispatch/planAlerts";
 import { groupBySubject } from "@/lib/dispatch/planAlerts";
 import type { BoardProduct } from "./FleetBoard";
@@ -76,22 +79,41 @@ function ModeSwitch({ mode, onMode }: { mode: DispatchMode; onMode: (m: Dispatch
   );
 }
 
-function ConflictCard({ c, terminal, product, onOpenTrip, openingId }: {
-  c: Conflict;
+function ConflictCard({ c, terminal, product, onOpenTrip, openingId, isNew, onSeen, onAck }: {
+  c: ConflictWithAck;
   terminal: (id: string) => { name: string; place: string | null };
   product: (id: string | null) => BoardProduct;
   onOpenTrip: (tripId: string) => void;
   openingId?: string | null;
+  isNew: boolean;
+  onSeen: (terminalId: string) => void;
+  onAck: (terminalId: string, reportIds: string[], note: string) => Promise<boolean>;
 }) {
   const L = useDashLook();
+  const [handling, setHandling] = useState(false);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
   const t = terminal(c.terminalId);
-  const color = c.severity === "hit" ? RED : ORANGE;
+  const handled = c.handled;
+  const color = handled ? GREY : c.severity === "hit" ? RED : ORANGE;
+  const save = async () => {
+    setSaving(true);
+    const ok = await onAck(c.terminalId, c.reports.map((r) => r.reportId), note);
+    setSaving(false);
+    if (ok) { setHandling(false); setNote(""); onSeen(c.terminalId); }
+  };
   return (
-    <div style={{ ...L.primary, borderColor: `${color}66`, marginBottom: 10 }}>
+    <div style={{ ...L.primary, borderColor: `${color}66`, marginBottom: 10, opacity: handled ? 0.65 : 1 }}>
       <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${L.hairline}` }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span aria-hidden style={{ width: 8, height: 8, background: color, flexShrink: 0, alignSelf: "center" }} />
           <span style={{ fontSize: 15, fontWeight: 800, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+          {isNew && (
+            <button type="button" onClick={() => onSeen(c.terminalId)} className="dash-press" aria-label="Mark as seen"
+              style={{ border: "none", background: RED, color: "#000", fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", padding: "2px 6px", cursor: "pointer" }}>
+              NEW
+            </button>
+          )}
           {t.place && <span style={{ fontSize: 12, color: L.muted, whiteSpace: "nowrap" }}>{t.place}</span>}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
@@ -101,6 +123,32 @@ function ConflictCard({ c, terminal, product, onOpenTrip, openingId }: {
             </span>
           ))}
         </div>
+        {handled ? (
+          <div style={{ marginTop: 8, fontSize: 12, color: L.muted }}>
+            <span style={{ color: "#4ade80", fontWeight: 800 }}>✓ Handled</span>
+            {handled.by ? ` by ${handled.by}` : ""} · {clock(handled.at)}
+            {handled.note ? <span style={{ color: "rgba(255,255,255,0.8)" }}> — {handled.note}</span> : null}
+          </div>
+        ) : handling ? (
+          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional): rerouted, called terminal…" maxLength={200}
+              onKeyDown={(e) => { if (e.key === "Enter") void save(); }} autoFocus
+              style={{ flex: "1 1 180px", minWidth: 0, background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 14, padding: "7px 9px", borderRadius: 2 }} />
+            <button type="button" onClick={() => void save()} className="dash-press" {...busyProps(saving)}
+              style={{ border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "7px 12px", cursor: "pointer" }}>
+              Mark handled
+            </button>
+            <button type="button" onClick={() => setHandling(false)} className="dash-press"
+              style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "7px 10px", cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => { setHandling(true); onSeen(c.terminalId); }} className="dash-press"
+            style={{ marginTop: 8, border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "5px 10px", cursor: "pointer" }}>
+            Handle…
+          </button>
+        )}
       </div>
       {c.trucks.map((tr) => (
         <button key={tr.tripId} type="button" onClick={() => onOpenTrip(tr.tripId)} className="dash-press" {...busyProps(openingId === tr.tripId)}
@@ -116,6 +164,28 @@ function ConflictCard({ c, terminal, product, onOpenTrip, openingId }: {
           </span>
         </button>
       ))}
+    </div>
+  );
+}
+
+function WatchRow({ w, terminal, product }: {
+  w: WatchTerminal;
+  terminal: (id: string) => { name: string; place: string | null };
+  product: (id: string | null) => BoardProduct;
+}) {
+  const L = useDashLook();
+  const t = terminal(w.terminalId);
+  return (
+    <div style={{ ...L.secondary, padding: "9px 14px", marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+        {t.place && <span style={{ fontSize: 12, color: L.muted, whiteSpace: "nowrap" }}>{t.place}</span>}
+      </div>
+      <div style={{ marginTop: 4, fontSize: 12, color: L.muted }}>
+        {w.reports.map((r, i) => (
+          <span key={r.reportId}>{i > 0 ? " · " : ""}{reportText(r, product)} <span style={{ color: L.faint }}>{clock(r.createdAt)}</span></span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -137,8 +207,14 @@ function AlertGroup({ subject, isEquipment, items, onOpen }: {
       {items.map((a) => (
         <div key={a.key} className="dash-num" style={{ display: "flex", gap: 8, fontSize: 13, marginTop: 5 }}>
           <span style={{ flex: 1, minWidth: 0, color: "rgba(255,255,255,0.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</span>
-          <span style={{ color: L.muted }}>{mdy(a.iso)}</span>
-          <span style={{ fontWeight: 800, color: EXPIRY_COLOR[a.state], minWidth: 58, textAlign: "right" }}>{daysText(a.days)}</span>
+          {a.detail ? (
+            <span style={{ fontWeight: 800, color: EXPIRY_COLOR[a.state], textAlign: "right" }}>{a.detail}</span>
+          ) : (
+            <>
+              <span style={{ color: L.muted }}>{mdy(a.iso)}</span>
+              <span style={{ fontWeight: 800, color: EXPIRY_COLOR[a.state], minWidth: 58, textAlign: "right" }}>{daysText(a.days)}</span>
+            </>
+          )}
         </div>
       ))}
     </Wrap>
@@ -151,7 +227,15 @@ export function DispatchDashboardView(props: {
   companyName: string | null;
   error?: string | null;
   // LIVE
-  conflicts: Conflict[];
+  conflicts: ConflictWithAck[];
+  watch: WatchTerminal[];
+  unseen: Set<string>;
+  onSeen: (terminalId: string) => void;
+  onSeenAll: () => void;
+  notify: NotifyState;
+  onEnableNotify: () => void;
+  onAck: (terminalId: string, reportIds: string[], note: string) => Promise<boolean>;
+  ackError?: string | null;
   counts: LiveCounts;
   reportCount: number;
   terminal: (id: string) => { name: string; place: string | null };
@@ -169,14 +253,16 @@ export function DispatchDashboardView(props: {
   liveBoard: React.ReactNode; // loads in progress
   planBoard: React.ReactNode; // parked + cancelled
   drivers: React.ReactNode;   // driver picker
+  tools: ToolItem[];
 }) {
   const L = useDashLook();
   const p = props;
   const live = p.mode === "live";
 
+  const open = p.conflicts.filter((c) => !c.handled).length;
   const cells: GaugeCell[] = live
     ? [
-        { label: "Conflicts", value: String(p.conflicts.length), color: p.conflicts.length ? RED : GREY, wide: true },
+        { label: "Conflicts", value: String(open), color: open ? RED : GREY, wide: true },
         { label: "At Rack", value: String(p.counts.atRack), color: p.counts.atRack ? "#fff" : GREY },
         { label: "To Rack", value: String(p.counts.enRouteToRack), color: p.counts.enRouteToRack ? "#fff" : GREY },
         { label: "Rolling", value: String(p.counts.loadedRolling), color: p.counts.loadedRolling ? "#4ade80" : GREY },
@@ -213,16 +299,42 @@ export function DispatchDashboardView(props: {
         <div>
           {live ? (
             <>
-              <SectionLabel first right={<span style={{ color: L.faint, letterSpacing: 0 }}>{p.reportCount} active report{p.reportCount === 1 ? "" : "s"}</span>}>
+              <SectionLabel first right={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, letterSpacing: 0 }}>
+                  {p.unseen.size > 0 && (
+                    <button type="button" onClick={p.onSeenAll} className="dash-press"
+                      style={{ border: "none", background: "transparent", color: RED, fontSize: 10, fontWeight: 800, cursor: "pointer", padding: 0, letterSpacing: 0 }}>
+                      {p.unseen.size} new · mark seen
+                    </button>
+                  )}
+                  {p.notify === "default" && (
+                    <button type="button" onClick={p.onEnableNotify} className="dash-press"
+                      style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 10, fontWeight: 800, padding: "2px 7px", cursor: "pointer", letterSpacing: 0 }}>
+                      Enable alerts
+                    </button>
+                  )}
+                  {p.notify === "granted" && <span style={{ color: "#4ade80", fontSize: 10, fontWeight: 800 }}>Alerts on</span>}
+                  {p.notify === "denied" && <span style={{ color: L.faint, fontSize: 10, fontWeight: 800 }}>Alerts blocked</span>}
+                  <span style={{ color: L.faint }}>{p.reportCount} report{p.reportCount === 1 ? "" : "s"}</span>
+                </span>
+              }>
                 Conflicts
               </SectionLabel>
+              {p.ackError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>Couldn't save: {p.ackError}</div>}
               {p.conflicts.length === 0 ? (
                 <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
                   No conflicts. Nothing reported at a rack your trucks are headed to.
                 </div>
               ) : p.conflicts.map((c) => (
-                <ConflictCard key={c.terminalId} c={c} terminal={p.terminal} product={p.product} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
+                <ConflictCard key={c.terminalId} c={c} terminal={p.terminal} product={p.product} onOpenTrip={p.onOpenTrip} openingId={p.openingId}
+                  isNew={p.unseen.has(c.terminalId)} onSeen={p.onSeen} onAck={p.onAck} />
               ))}
+              {p.watch.length > 0 && (
+                <>
+                  <SectionLabel right={<span style={{ color: L.faint, letterSpacing: 0 }}>no truck headed there</span>}>Watch</SectionLabel>
+                  {p.watch.map((w) => <WatchRow key={w.terminalId} w={w} terminal={p.terminal} product={p.product} />)}
+                </>
+              )}
             </>
           ) : (
             <>
@@ -259,6 +371,8 @@ export function DispatchDashboardView(props: {
           {p.drivers}
         </div>
       </div>
+      <SectionLabel>Tools</SectionLabel>
+      <ToolPanel items={p.tools} />
     </div>
   );
 }

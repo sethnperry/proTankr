@@ -57,8 +57,14 @@ import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
 import { findConflicts, liveCounts } from "@/lib/dispatch/conflicts";
+import { applyAcks } from "@/lib/dispatch/acks";
+import { watchList, companyTerminalSet } from "@/lib/dispatch/watch";
+import { useConflictNotifier } from "@/lib/dispatch/useConflictNotifier";
+import { reportText } from "./DispatchDashboardView";
+import FleetCardsModal from "@/app/admin/FleetCardsModal";
+import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
-import { useFleetReports, usePlanData } from "@/lib/dispatch/useDispatchData";
+import { useFleetReports, usePlanData, useConflictAcks } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -212,12 +218,20 @@ export default function DispatchPage() {
       .then(({ data }) => { if (!off) setCompanyName((data as any)?.company_name ?? null); });
     return () => { off = true; };
   }, [companyId]);
-  const fleetReports = useFleetReports(fleet.trips);
   const plan = usePlanData(companyId || null);
-  const conflicts = useMemo(
+  const fleetReports = useFleetReports(fleet.trips, plan.usedTerminalIds);
+  const rawConflicts = useMemo(
     () => findConflicts(fleet.trips, fleetReports.reports, fleetReports.plannedByLoad),
     [fleet.trips, fleetReports.reports, fleetReports.plannedByLoad],
   );
+  const reportIds = useMemo(() => [...new Set(rawConflicts.flatMap((c) => c.reports.map((r) => r.reportId)))], [rawConflicts]);
+  const acks = useConflictAcks(companyId || null, reportIds, authUserId || null);
+  const conflicts = useMemo(() => applyAcks(rawConflicts, acks.acks), [rawConflicts, acks.acks]);
+  const watch = useMemo(
+    () => watchList(fleetReports.reports, new Set(fleetReports.headedTerminalIds)),
+    [fleetReports.reports, fleetReports.headedTerminalIds],
+  );
+  const [fleetCardsOpen, setFleetCardsOpen] = useState(false);
   const counts = useMemo(
     () => liveCounts(fleet.trips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
     [fleet.trips],
@@ -228,6 +242,17 @@ export default function DispatchPage() {
     const t = terminalsCatalog.find((x) => String(x.terminal_id) === id);
     return { name: t?.terminal_name ?? "Terminal", place: t?.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null };
   };
+
+  const notifier = useConflictNotifier({
+    userId: authUserId || null,
+    conflicts: rawConflicts,
+    ready: fleet.loaded && fleetReports.loaded,
+    terminalName: (id) => terminalInfo(id).name,
+    reportLabel: (c, rid) => {
+      const r = c.reports.find((x) => x.reportId === rid);
+      return r ? reportText(r, boardProduct) : "Problem reported";
+    },
+  });
 
   const [identity, setIdentity] = useState<DriverIdentity | null>(null);
   const [schedule, setSchedule] = useState<{ days: number[]; start: string; end: string }>({ days: [], start: "", end: "" });
@@ -419,11 +444,23 @@ export default function DispatchPage() {
 
   if (!selectedDriverId) {
     const openTrip = (id: string) => nav.go(`trip:${id}`, `/planner/trips/${id}`);
+    const dashTools: ToolItem[] = [
+      { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
+      { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
+      { icon: "chart", label: "Reports", busy: nav.is("reports"), onClick: () => nav.go("reports", "/planner/reports") },
+      ...(shell.role === "admin" || shell.isSuperAdmin
+        ? [{ icon: "terminal" as const, label: "Company", busy: nav.is("company"), onClick: () => nav.go("company", "/admin") }]
+        : []),
+    ];
     return (
+      <>
       <DispatchDashboardView
         mode={mode} onMode={setMode} companyName={companyName}
         error={fleet.error ?? fleetReports.error ?? (mode === "plan" ? plan.error : null)}
         conflicts={conflicts} counts={counts} reportCount={fleetReports.reports.length}
+        watch={watch} unseen={notifier.unseen} onSeen={notifier.markSeen} onSeenAll={notifier.markAllSeen}
+        notify={notifier.permission} onEnableNotify={notifier.enable}
+        onAck={acks.ack} ackError={acks.error}
         terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
         alerts={alerts} planCounts={pCounts} horizon={horizon} onHorizon={setHorizon} planLoading={plan.loading}
         onOpenDriver={(id) => setSelectedDriverId(id)}
@@ -432,8 +469,11 @@ export default function DispatchPage() {
         planBoard={<FleetBoard sections={["parked", "cancelled"]} cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS}
           trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
-        drivers={<DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} />}
+        drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} /></div>}
+        tools={dashTools}
       />
+      {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}
+      </>
     );
   }
 

@@ -8,7 +8,7 @@
 
 import { daysUntilIso, expiryStateForDays, type ExpiryState } from "../expiry.ts";
 
-export type AlertKind = "access" | "license" | "medical" | "twic" | "badge" | "permit";
+export type AlertKind = "access" | "no_access" | "license" | "medical" | "twic" | "badge" | "permit" | "service";
 
 export type PlanAlert = {
   key: string;
@@ -21,6 +21,8 @@ export type PlanAlert = {
   iso: string;
   days: number;
   state: ExpiryState;
+  // When set, shown instead of the date and countdown ("12 loads in 90 days").
+  detail?: string;
 };
 
 export type PlanInputs = {
@@ -32,7 +34,15 @@ export type PlanInputs = {
   permits: { truck_id: string | null; trailer_id: string | null; expiration_date: string | null; permit_name: string | null }[];
   trucks: Map<string, string>;
   trailers: Map<string, string>;
+  // Alerts built elsewhere (service due), filtered by the horizon here.
+  extra?: PlanAlert[];
+  // Loads per driver per terminal over the last 90 days (see accessGaps).
+  loads?: { user_id: string; terminal_id: string }[];
 };
+
+// "Often sent": this many loads at one terminal inside the window.
+export const OFTEN_LOADS = 3;
+export const OFTEN_WINDOW_DAYS = 90;
 
 const CRED_LABEL = { license: "License", medical: "Medical card", twic: "TWIC" } as const;
 
@@ -82,7 +92,40 @@ export function planAlerts(input: PlanInputs, horizonDays = 30, todayIso?: strin
       label: p.permit_name ?? "Permit", iso: p.expiration_date });
   });
 
+  for (const e of input.extra ?? []) if (e.days <= horizonDays) out.push(e);
+  out.push(...accessGaps(input, todayIso));
+
   return out.sort((a, b) => a.days - b.days || a.subject.localeCompare(b.subject));
+}
+
+// Drivers with NO access at a terminal they're often sent to: loaded there
+// OFTEN_LOADS+ times in the window, but never carded, or access timed out
+// (30+ days past). Access that is merely expired or expiring is already an
+// alert above, so it isn't repeated here. Shown whatever the horizon is.
+export function accessGaps(input: PlanInputs, todayIso?: string): PlanAlert[] {
+  const counts = new Map<string, number>();
+  for (const l of input.loads ?? []) {
+    if (!l.terminal_id || !input.names.has(l.user_id)) continue;
+    const k = `${l.user_id}|${l.terminal_id}`;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const carded = new Map<string, string | null>();
+  for (const r of input.access) carded.set(`${r.user_id}|${r.terminal_id}`, r.carded_on);
+  const out: PlanAlert[] = [];
+  for (const [k, n] of counts) {
+    if (n < OFTEN_LOADS) continue;
+    const [userId, terminalId] = k.split("|");
+    const t = input.terminals.get(terminalId);
+    const cardedOn = carded.get(k) ?? null;
+    if (cardedOn) {
+      const days = daysUntilIso(addDays(cardedOn, t?.renewal_days ?? 90), todayIso);
+      if (days != null && expiryStateForDays(days, { access: true }) !== "inactive") continue;
+    }
+    out.push({ key: `g:${k}`, kind: "no_access", subject: input.names.get(userId) ?? "Driver", subjectId: userId, isEquipment: false,
+      label: `${t?.name ?? "Terminal"} · no access`, iso: "", days: -1, state: "expired",
+      detail: `${n} loads in ${OFTEN_WINDOW_DAYS}d` });
+  }
+  return out;
 }
 
 export type PlanCounts = { expired: number; week: number; month: number; driversAffected: number; unitsAffected: number };

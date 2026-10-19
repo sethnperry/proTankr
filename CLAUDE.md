@@ -11700,3 +11700,60 @@ through live.
 - Not built yet: alerts/notifications, outage reports at terminals no truck is
   headed to, service-due in PLAN, acknowledging a conflict, driver
   availability/hours.
+
+### Dispatch Dashboard, second pass: new-conflict alerts, Watch list, acks, PLAN gaps, tools (2026-10-19)
+
+Built on the first pass above. Decisions asked of the operator: alerts are
+**browser notification + NEW marker** (no sound/vibration), "often sent" =
+**3+ loads at a terminal in 90 days**. Not live-tested (see Verification).
+
+- **New-conflict alerts** (`lib/dispatch/conflictAlerts.ts`, `useConflictNotifier.ts`).
+  A "pair" is one report touching one truck (`terminal|trip|report`); a pair not
+  seen before is new (a report landing on a truck already headed there, or a
+  truck pointed at a rack with a report). The first look is a baseline, so
+  opening the dashboard never announces what was already there. New terminals
+  get a red NEW tag on the card until tapped (or Handle…, or "mark seen"), the
+  tab title shows "(n)", and a `Notification` fires if permission is granted
+  (an "Enable alerts" button asks; it's a user gesture). Known/unseen sets are
+  kept per user in localStorage (`proTankr:u:<uid>:dispatchKnown` / `…Unseen`).
+  Needs the page open: no push to a closed tab.
+- **Watch list** (`lib/dispatch/watch.ts`). `useFleetReports` now also reads
+  reports at terminals the company uses (`usePlanData().usedTerminalIds`: cards
+  held + terminals loaded at in the last 90 days), not just headed ones.
+  Reports at terminals no truck is headed to show as a quiet "Watch" section.
+  Out of product / long line / terminal issue are cross-company by RLS; allocation
+  is company-only.
+- **Acknowledge / note a conflict** (`lib/dispatch/acks.ts`, `useConflictAcks`).
+  Handle… → optional note → Mark handled. Stored one row per report in
+  `dispatch_conflict_acks` (migration `20261019000000_dispatch_conflict_acks.sql`,
+  **NOT APPLIED**: no Management API token in this session; run it in the SQL
+  editor). A conflict reads handled only while every report in it is acked, so
+  a new report re-opens it; handled cards dim, show who/when/note and sink below
+  open ones; the Conflicts square counts open ones only. Staff-only RLS
+  (`is_company_staff`), insert/update need `acked_by = auth.uid()`. The hook fails
+  open: until the table exists nothing is marked handled and saving shows the error.
+- **PLAN**: service due on active trucks/trailers (`lib/dispatch/serviceAlerts.ts`
+  wraps `unitAlerts`, same math as the Driver Dashboard squares; horizon-filtered
+  via `PlanInputs.extra`), and **no-access gaps** (`accessGaps` in `planAlerts.ts`):
+  a driver with 3+ loads at a terminal in 90 days but no access there (never
+  carded, or timed out 30+ days). Merely expired access is already an alert, so
+  it isn't repeated. Gaps show whatever the horizon, as "N loads in 90d", and
+  count under Expired. Loads come from `load_log` (status `loaded`, last 90 days,
+  capped at 5000 rows, refreshed every 10 min).
+- **Tools panel** at the bottom (Drivers scrolls to the picker, Fleet Cards opens
+  `FleetCardsModal`, Reports, Company for admin/super admin). New `people` icon.
+- `useFleetTrips` and `useFleetReports` gained `loaded` (first poll done).
+
+**Verification.** 9 new pure tests (`lib/dispatch/dispatchLogic.test.ts`); `npm test`
+274 pass, `tsc` and `next build --webpack` clean. The view was rendered with
+`renderToStaticMarkup` + Playwright screenshots (phone 400px and desktop 1150px,
+both modes, no horizontal overflow). **Not live-tested:** production blocks the
+fleet demo persona (alpha) and beta is solo, and this container has no service
+key. From the migrations only (not queried): dispatch/admin can read
+terminal_access, the four credential tables, `load_lines` (company-scoped
+policies) and equipment_permits (company-wide). Still worth checking with a real
+dispatch login: that `load_log` and `service_records` reads return company rows,
+and that the notification actually fires.
+
+**Not built:** sound/vibration alerts, push to a closed tab, "company top
+terminals" as an access-gap source, driver availability/hours.
