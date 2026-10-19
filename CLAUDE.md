@@ -11667,3 +11667,36 @@ list again.
   yet. `tripModeForLoading` now fills a default from the pick for every
   planned compartment. With a supplier filled, Next on the BOL goes to API.
 Not click-tested.
+
+### Dispatch Dashboard: PLAN / LIVE modes, conflicts (2026-10-19, first pass)
+
+`/planner/dispatch` with no driver picked is now a dashboard laid out like the
+Driver Dashboard (same `dashLook` instrument look, `GaugePanel`, two columns on
+desktop). No migration. Render-checked with sample data at phone and desktop
+width (esbuild + `renderToStaticMarkup` + Playwright screenshot); not tapped
+through live.
+- **Mode switch** (PLAN | LIVE, remembered per device:
+  `proTankr:dispatchMode`). It sits beside the dispatch system, it doesn't
+  replace it.
+- **LIVE (firefighting)**: squares Conflicts (wide, red) / At Rack / To Rack /
+  Rolling. A **conflict** = an active terminal report at a rack where a company
+  truck's active pickup still points (`lib/dispatch/conflicts.ts`, 4 tests).
+  Product reports hit trucks going for that product (pickup `planned_comps`,
+  else the planned load's `load_lines`); with no known plan it's "maybe" (shown
+  as "plan unknown"). Long line / terminal issue / allocation hit every truck
+  there. One card per terminal: report chips with time, then affected trucks
+  (at rack / en route), tap opens the PTD. Then loads in progress.
+- **PLAN (fire prevention)**: squares Expired / 7 Days / 30 Days / Parked, and
+  "Expiring · next N days" (7/14/30 chips, `proTankr:dispatchHorizon`) grouped
+  by driver or unit (`lib/dispatch/planAlerts.ts`, 2 tests): terminal access
+  (carded_on + renewal_days; timed-out access is "no access", not an alert),
+  license/medical/TWIC, port badges, equipment permits (active units only).
+  Tap a driver opens their dispatch view. Then parked + cancelled loads.
+- Data: `lib/dispatch/useDispatchData.ts` (`useFleetReports` reads
+  `terminal_outage_reports` for terminals trucks are headed to, kept per
+  terminal's 6h checkpoint; `usePlanData` reads the roster's access /
+  credentials / badges and the company's trucks, trailers and permits). Polls
+  every 60s and on tab focus. `FleetBoard` gained a `sections` prop.
+- Not built yet: alerts/notifications, outage reports at terminals no truck is
+  headed to, service-due in PLAN, acknowledging a conflict, driver
+  availability/hours.

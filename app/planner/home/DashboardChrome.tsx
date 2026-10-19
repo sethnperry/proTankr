@@ -212,11 +212,11 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
 }
 
 // A row of big readouts under the main button.
-export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean };
+export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean; wide?: boolean };
 export function GaugePanel({ cells }: { cells: GaugeCell[] }) {
   const L = useDashLook();
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length}, 1fr)`, gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "), gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12 }}>
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
           style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>

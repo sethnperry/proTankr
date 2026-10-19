@@ -234,7 +234,12 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
   );
 }
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId }: {
+export type BoardSection = "live" | "parked" | "cancelled";
+
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections }: {
+  // Which lists to show (default all). The Dispatch Dashboard shows loads in
+  // progress in LIVE mode and parked + cancelled in PLAN mode.
+  sections?: BoardSection[];
   openingId?: string | null; // trip whose PTD is opening (card dims + spinner)
   cancelled?: CancelledTrip[];
   cancelledDays?: number;
@@ -246,9 +251,11 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
 }) {
   const live = trips.filter((t) => t.trip.status !== "parked");
   const parked = trips.filter((t) => t.trip.status === "parked");
+  const show = (x: BoardSection) => !sections || sections.includes(x);
 
   return (
     <div style={{ marginBottom: 18 }}>
+      {show("live") && <>
       <div style={sectionLabel}>Loads in progress ({live.length})</div>
       {live.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No loads in progress.</div>}
       {live.map((ft) => {
@@ -274,7 +281,10 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         );
       })}
 
-      <div style={{ ...sectionLabel, marginTop: 14 }}>Parked loads ({parked.length})</div>
+      </>}
+
+      {show("parked") && <>
+      <div style={{ ...sectionLabel, marginTop: show("live") ? 14 : 4 }}>Parked loads ({parked.length})</div>
       {parked.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No parked loads.</div>}
       {parked.map((ft) => {
         const t = ft.trip;
@@ -302,7 +312,9 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         );
       })}
 
-      {cancelled && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} />}
+      </>}
+
+      {cancelled && show("cancelled") && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} />}
     </div>
   );
 }

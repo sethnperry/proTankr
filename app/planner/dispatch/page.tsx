@@ -55,6 +55,11 @@ import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
+import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
+import { findConflicts, liveCounts } from "@/lib/dispatch/conflicts";
+import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
+import { useFleetReports, usePlanData } from "@/lib/dispatch/useDispatchData";
+import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
 // Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
@@ -184,6 +189,45 @@ export default function DispatchPage() {
   // lookup below -- the full catalog is already cached, so this is a
   // client-side filter instead of a round trip.
   const { data: terminalsCatalog = [] } = useTerminalsCatalog();
+
+  // ── Dispatch Dashboard (no driver picked) ─────────────────────────────────
+  // Mode and horizon are remembered on this device.
+  const [mode, setModeState] = useState<DispatchMode>("live");
+  const [horizon, setHorizonState] = useState<number>(30);
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem("proTankr:dispatchMode");
+      if (m === "plan" || m === "live") setModeState(m);
+      const h = Number(localStorage.getItem("proTankr:dispatchHorizon"));
+      if ([7, 14, 30].includes(h)) setHorizonState(h);
+    } catch { /* storage blocked */ }
+  }, []);
+  const setMode = (m: DispatchMode) => { setModeState(m); try { localStorage.setItem("proTankr:dispatchMode", m); } catch {} };
+  const setHorizon = (h: number) => { setHorizonState(h); try { localStorage.setItem("proTankr:dispatchHorizon", String(h)); } catch {} };
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!companyId) return;
+    let off = false;
+    supabase.from("companies").select("company_name").eq("company_id", companyId).maybeSingle()
+      .then(({ data }) => { if (!off) setCompanyName((data as any)?.company_name ?? null); });
+    return () => { off = true; };
+  }, [companyId]);
+  const fleetReports = useFleetReports(fleet.trips);
+  const plan = usePlanData(companyId || null);
+  const conflicts = useMemo(
+    () => findConflicts(fleet.trips, fleetReports.reports, fleetReports.plannedByLoad),
+    [fleet.trips, fleetReports.reports, fleetReports.plannedByLoad],
+  );
+  const counts = useMemo(
+    () => liveCounts(fleet.trips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
+    [fleet.trips],
+  );
+  const alerts = useMemo(() => (plan.input ? planAlerts(plan.input, horizon) : []), [plan.input, horizon]);
+  const pCounts = useMemo(() => planCounts(alerts), [alerts]);
+  const terminalInfo = (id: string) => {
+    const t = terminalsCatalog.find((x) => String(x.terminal_id) === id);
+    return { name: t?.terminal_name ?? "Terminal", place: t?.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null };
+  };
 
   const [identity, setIdentity] = useState<DriverIdentity | null>(null);
   const [schedule, setSchedule] = useState<{ days: number[]; start: string; end: string }>({ days: [], start: "", end: "" });
@@ -374,15 +418,22 @@ export default function DispatchPage() {
   }, [filteredCards]);
 
   if (!selectedDriverId) {
+    const openTrip = (id: string) => nav.go(`trip:${id}`, `/planner/trips/${id}`);
     return (
-      <div style={{ paddingTop: 4 }}>
-        {fleet.error && <div style={{ fontSize: 13, color: "#f87171", marginBottom: 10 }}>{fleet.error}</div>}
-        <FleetBoard cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
-          onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")} />
-        <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Drivers</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 10 }}>Select a driver to view.</div>
-        <DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} />
-      </div>
+      <DispatchDashboardView
+        mode={mode} onMode={setMode} companyName={companyName}
+        error={fleet.error ?? fleetReports.error ?? (mode === "plan" ? plan.error : null)}
+        conflicts={conflicts} counts={counts} reportCount={fleetReports.reports.length}
+        terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
+        alerts={alerts} planCounts={pCounts} horizon={horizon} onHorizon={setHorizon} planLoading={plan.loading}
+        onOpenDriver={(id) => setSelectedDriverId(id)}
+        liveBoard={<FleetBoard sections={["live"]} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
+          onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
+        planBoard={<FleetBoard sections={["parked", "cancelled"]} cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS}
+          trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
+          onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
+        drivers={<DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} />}
+      />
     );
   }
 
