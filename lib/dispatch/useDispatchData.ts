@@ -252,3 +252,32 @@ export function usePlanData(companyId: string | null) {
 
   return { input, usedTerminalIds, roster: roster.members, error, loading: roster.loading || (!raw && !error), reload: load };
 }
+
+// Completed deliveries at one drop location, newest data for ranking drivers
+// by how often they have delivered there. The driver is whoever finished the
+// drop (a handoff driver), else the trip's driver.
+export function useLocationDeliveries(companyId: string | null, locationId: string | null) {
+  const [rows, setRows] = useState<{ driver_id: string; finished_at: string | null }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!companyId || !locationId) { setRows([]); setError(null); return; }
+    let off = false;
+    setLoading(true);
+    supabase.from("trip_deliveries")
+      .select("delivering_driver_id, left_at, trips!inner(driver_id, company_id)")
+      .eq("location_id", locationId).eq("status", "complete").eq("trips.company_id", companyId)
+      .order("left_at", { ascending: false }).limit(1000)
+      .then(({ data, error: e }) => {
+        if (off) return;
+        setLoading(false);
+        if (e) { setError(e.message); setRows([]); return; }
+        setError(null);
+        setRows(((data ?? []) as any[]).map((d) => ({
+          driver_id: d.delivering_driver_id ?? d.trips?.driver_id ?? "", finished_at: d.left_at ?? null,
+        })).filter((d) => d.driver_id));
+      });
+    return () => { off = true; };
+  }, [companyId, locationId]);
+  return { rows, loading, error };
+}

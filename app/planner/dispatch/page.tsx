@@ -64,7 +64,11 @@ import { reportText } from "./DispatchDashboardView";
 import FleetCardsModal from "@/app/admin/FleetCardsModal";
 import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
-import { useFleetReports, usePlanData, useConflictAcks } from "@/lib/dispatch/useDispatchData";
+import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
+import { PlanLoadCard, type TerminalOption } from "./PlanLoadCard";
+import { LocationPicker } from "../components/trip/LocationPicker";
+import { useDeliveryLocationList } from "@/lib/trips/useTripData";
+import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -232,7 +236,40 @@ export default function DispatchPage() {
     () => liveCounts(fleet.trips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
     [fleet.trips],
   );
-  const alerts = useMemo(() => (plan.input ? planAlerts(plan.input, 30) : []), [plan.input]);
+  // ── Planning a load: drop location -> terminal -> drivers ───────────────
+  const [planLocationId, setPlanLocationId] = useState<string | null>(null);
+  const [planTerminalId, setPlanTerminalId] = useState<string | null>(null);
+  const [showNotCarded, setShowNotCarded] = useState(false);
+  const [locPickerOpen, setLocPickerOpen] = useState(false);
+  const locList = useDeliveryLocationList(companyId || null, authUserId || null);
+  const history = useLocationDeliveries(companyId || null, planLocationId);
+  const planLocation = locList.locations.find((l) => l.location_id === planLocationId) ?? null;
+  const planTerminal = useMemo<TerminalOption | null>(() => {
+    const t = planTerminalId ? terminalsCatalog.find((x) => String(x.terminal_id) === planTerminalId) : null;
+    return t ? { id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null, used: false } : null;
+  }, [planTerminalId, terminalsCatalog]);
+  const terminalOptions = useMemo<TerminalOption[]>(() => {
+    const used = new Set(plan.usedTerminalIds);
+    return terminalsCatalog.map((t) => ({
+      id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", used: used.has(String(t.terminal_id)),
+      place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null,
+    }));
+  }, [terminalsCatalog, plan.usedTerminalIds]);
+  const busyByDriver = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of fleet.trips) m.set(f.trip.driver_id, f.trip.status === "parked" ? "Parked" : "On a load");
+    return m;
+  }, [fleet.trips]);
+  const planning = !!planLocationId || !!planTerminalId;
+  const ranked = useMemo(() => rankDrivers({
+    roster: plan.roster, deliveries: history.rows, access: plan.input?.access,
+    terminalId: planTerminalId, renewalDays: planTerminalId ? plan.input?.terminals.get(planTerminalId)?.renewal_days ?? null : null,
+    busy: busyByDriver,
+  }), [plan.roster, history.rows, plan.input, planTerminalId, busyByDriver]);
+
+  const alerts = useMemo(
+    () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], planning ? ranked.focusIds : null),
+    [plan.input, planning, ranked.focusIds]);
   const pCounts = useMemo(() => planCounts(alerts), [alerts]);
   const terminalInfo = (id: string) => {
     const t = terminalsCatalog.find((x) => String(x.terminal_id) === id);
@@ -459,6 +496,16 @@ export default function DispatchPage() {
         onAck={acks.ack} ackError={acks.error}
         terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
         alerts={alerts} planCounts={pCounts} planLoading={plan.loading}
+        focusCount={planning ? ranked.focusIds.size : null}
+        notCarded={planTerminalId && planLocationId ? { count: ranked.notCarded.length, shown: showNotCarded, onToggle: () => setShowNotCarded((v) => !v) } : null}
+        planner={
+          <PlanLoadCard location={planLocation} terminal={planTerminal} terminals={terminalOptions} result={ranked}
+            historyLoading={history.loading} historyError={history.error} showNotCarded={showNotCarded && !!planTerminalId}
+            onPickLocation={() => setLocPickerOpen(true)}
+            onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
+            onPickTerminal={(id) => { setPlanTerminalId(id); if (!id) setShowNotCarded(false); }}
+            onOpenDriver={(id) => setSelectedDriverId(id)} />
+        }
         onOpenDriver={(id) => setSelectedDriverId(id)}
         liveBoard={<FleetBoard sections={["live"]} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
@@ -468,6 +515,10 @@ export default function DispatchPage() {
         drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} /></div>}
         tools={dashTools}
       />
+      <LocationPicker open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
+        companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
+        onToggleStar={locList.toggleStar} onLocationAdded={locList.reload}
+        onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}
       </>
     );

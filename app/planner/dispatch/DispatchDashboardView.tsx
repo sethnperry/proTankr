@@ -246,6 +246,10 @@ export function DispatchDashboardView(props: {
   alerts: PlanAlert[];
   planCounts: PlanCounts;
   planLoading?: boolean;
+  // Planning a load: the picker card, how many drivers the expirations are narrowed to, and the not-carded chip.
+  planner?: React.ReactNode;
+  focusCount?: number | null;
+  notCarded?: { count: number; shown: boolean; onToggle: () => void } | null;
   onOpenDriver: (userId: string) => void;
   // Slots
   liveBoard: React.ReactNode; // loads in progress
@@ -262,13 +266,17 @@ export function DispatchDashboardView(props: {
   // (orange), then 30 days (yellow). Counts only that tier, so resolving the
   // reds moves the tile down to the oranges.
   const pc = p.planCounts;
-  const expTile = pc.expired
+  const scope = p.focusCount != null ? ` · ${p.focusCount} driver${p.focusCount === 1 ? "" : "s"}` : "";
+  const expTile0 = pc.expired
     ? { label: "Expired", count: pc.expired, color: RED }
     : pc.week
       ? { label: "Expiring · 7 days", count: pc.week, color: ORANGE }
       : pc.month
         ? { label: "Expiring · 30 days", count: pc.month, color: YELLOW }
         : { label: "Expirations", count: 0, color: GREY };
+  const expTile = p.focusCount != null && pc.expired + pc.week + pc.month === 0
+    ? { ...expTile0, label: `Expirations${scope}` }
+    : { ...expTile0, label: `${expTile0.label}${p.focusCount != null ? scope : ""}` };
 
   const open = p.conflicts.filter((c) => !c.handled).length;
   const cells: GaugeCell[] = live
@@ -281,6 +289,9 @@ export function DispatchDashboardView(props: {
     : [
         { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true), wide: true },
         { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY },
+        ...(p.notCarded
+          ? [{ label: p.notCarded.shown ? "Not carded ✓" : "Not carded", value: String(p.notCarded.count), color: p.notCarded.count ? ORANGE : GREY, onClick: p.notCarded.onToggle }]
+          : []),
       ];
 
   const groups = groupBySubject(p.alerts);
@@ -347,7 +358,9 @@ export function DispatchDashboardView(props: {
             </>
           ) : (
             <>
-              <SectionLabel first>Parked &amp; cancelled</SectionLabel>
+              <SectionLabel first>Plan a load</SectionLabel>
+              {p.planner}
+              <SectionLabel>Parked &amp; cancelled</SectionLabel>
               {p.planBoard}
             </>
           )}
@@ -360,7 +373,7 @@ export function DispatchDashboardView(props: {
       </div>
       <SectionLabel>Tools</SectionLabel>
       <ToolPanel items={p.tools} />
-      <FullscreenModal open={expOpen} title="Expirations · next 30 days" onClose={() => setExpOpen(false)}>
+      <FullscreenModal open={expOpen} title={`Expirations · next 30 days${scope}`} onClose={() => setExpOpen(false)}>
         {p.planLoading && groups.length === 0 ? (
           <div style={{ fontSize: 14, color: L.muted }}>Loading…</div>
         ) : groups.length === 0 ? (
