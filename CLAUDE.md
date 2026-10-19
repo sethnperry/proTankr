@@ -11616,3 +11616,35 @@ No migration. `tsc`, 255 tests and `next build --webpack` pass. The busy look wa
   - A codemod added `aria-busy` to 98 existing buttons across 49 files that already showed "Saving…"/"…ing…" text.
 - Still not covered: navigation from cards without their own button (FleetBoard / parked cards), which only block repeat taps.
 - Follow-up same day: cards that open a PTD now show the busy state too. FleetBoard (in progress / parked / cancelled), the dashboard's Parked preloads rows and Recent Deliveries "Open PTD" dim, block taps and show a spinner (`openingId` prop from `usePending().openingId("trip")`, `CardBusy` for the corner spinner). A report opened from the dashboard off a trip now labels its exit "Back to Dashboard" (`LoadingModal` `returnLabel`).
+
+### Drop sequence reworked: arrival screen, Begin, reconcile after, one-tap Finish (2026-10-19)
+
+`DeliveryDashboard.tsx` rewritten. Not click-tested; `tsc`, 259 tests and
+`next build --webpack` pass.
+- **Arrive** opens the drop screen with a running clock from `arrived_at`
+  (amber + "Delay reason needed" past `delivery_delay_threshold_minutes`) and
+  a "Before you get out" card: hours since the last drop here, hose length,
+  the location's saved notes, and the last load of each product aboard (who:
+  our driver or the outside carrier, gallons, tank after-readings), from
+  `recent_deliveries_at_location`. The only entry is ending miles (required
+  on the last stop). **Begin Delivery / Begin Pump Off** stamps `begin_at`
+  (over the threshold it asks the start time + delay reason first).
+- After Begin the clock times the drop, and "How it went · all optional"
+  holds collapsed sections: compartments → tanks (and Retain), tank readings
+  + water (shows estimated gal/hr sold since the last drop's after-reading),
+  bio blended per diesel compartment (B5/B10/B20/other →
+  `trip_compartment_loads.bio_blend`), additives (biocide, anti-microbial,
+  anti-gel, conductivity, other + note), issues (vapor, leak, gasket, hose,
+  spill, overfill, other + note), times, signature.
+- **Finish** stamps `left_at` now, saves, and returns to the dashboard. If
+  something required is missing (tank picks, readings the company requires,
+  consignee signature, ending miles on the last stop) it opens that section
+  instead of blocking with a message.
+- Additives/issues/odometer are one `delivery_details` trip event
+  (`lib/trips/deliveryDetails.ts`, 3 tests; no schema change). The PTD prints
+  odometer, bio blended, additives and issues per delivery.
+- Hose length: migration `20261019000000_delivery_location_hose_length.sql`
+  (`delivery_locations.hose_length_ft`), **not applied** (no DB access from
+  that session). Until it runs, the location editor saves without it and the
+  drop screen just doesn't show hose length.
+- Not built: sell rate / turnover beyond the gal/hr estimate.

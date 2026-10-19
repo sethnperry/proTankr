@@ -44,6 +44,7 @@ type Draft = {
   lon: number | null;
   delivery_type: DeliveryType;
   notes: string;
+  hose: string;
   tanks: TankDraft[];
   removedTankIds: string[];
 };
@@ -52,13 +53,14 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   if (!l) {
     return {
       location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "",
-      lat: null, lon: null, delivery_type: "drop", notes: "", tanks: [], removedTankIds: [],
+      lat: null, lon: null, delivery_type: "drop", notes: "", hose: "", tanks: [], removedTankIds: [],
     };
   }
   return {
     location_id: l.location_id, name: l.name, location_number: l.location_number ?? "", address: l.address ?? "",
     city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", lat: l.lat, lon: l.lon,
     delivery_type: l.delivery_type, notes: l.notes ?? "",
+    hose: l.hose_length_ft == null ? "" : String(l.hose_length_ft),
     tanks: tanks
       .filter((t) => t.location_id === l.location_id)
       .sort((a, b) => a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }))
@@ -172,14 +174,23 @@ export function LocationEditor({
         lat, lon,
         delivery_type: draft.delivery_type,
         notes: draft.notes.trim() || null,
+        hose_length_ft: draft.hose.trim() && Number.isFinite(Number(draft.hose)) ? Number(draft.hose) : null,
         client_updated_at: now,
       };
       const write = (r: Partial<typeof row>) => draft.location_id
         ? supabase.from("delivery_locations").update(r).eq("location_id", draft.location_id).select("location_id").single()
         : supabase.from("delivery_locations").insert({ ...r, created_by: userId }).select("location_id").single();
       let res = await write(row);
-      // Before the 2026-10-11 migration there is no zip column; save without it.
-      if (res.error && /zip/i.test(res.error.message)) {
+      // Older databases lack hose_length_ft (2026-10-19) or zip (2026-10-11);
+      // save without whichever is missing.
+      if (res.error && /hose_length_ft/i.test(res.error.message)) {
+        const { hose_length_ft: _h, ...noHose } = row;
+        res = await write(noHose);
+        if (res.error && /zip/i.test(res.error.message)) {
+          const { zip: _zip, ...noZip } = noHose;
+          res = await write(noZip);
+        }
+      } else if (res.error && /zip/i.test(res.error.message)) {
         const { zip: _zip, ...noZip } = row;
         res = await write(noZip);
       }
@@ -260,9 +271,12 @@ export function LocationEditor({
           <button type="button" style={toggle(draft.delivery_type === "drop")} onClick={() => patch({ delivery_type: "drop" })}>Drop</button>
           <button type="button" style={toggle(draft.delivery_type === "pump_off")} onClick={() => patch({ delivery_type: "pump_off" })}>Pump off</button>
         </div>
+        <div style={{ ...fieldLabel, marginTop: 12 }}>Hose length needed (ft)</div>
+        <input value={draft.hose} onChange={(e) => patch({ hose: e.target.value.replace(/[^0-9.]/g, "") })} inputMode="decimal"
+          placeholder="e.g. 50" style={fieldInput} />
         <div style={{ ...fieldLabel, marginTop: 12 }}>Notes</div>
         <textarea value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} rows={3}
-          placeholder="Gate code, hose length, where the fills are…" style={{ ...fieldInput, resize: "vertical", fontFamily: "inherit" }} />
+          placeholder="Gate code, where the fills are, anything to know before you get out…" style={{ ...fieldInput, resize: "vertical", fontFamily: "inherit" }} />
       </div>
 
       <div style={sectionCard}>

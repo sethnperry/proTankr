@@ -323,6 +323,15 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
               </div>
             )}
 
+            {(d.odometer != null || d.bioBlends.length > 0 || d.additives.length > 0 || d.issues.length > 0) && (
+              <div style={{ marginTop: 4 }}>
+                {d.odometer != null && <div><Item label="Odometer" value={d.odometer.toLocaleString("en-US")} /></div>}
+                {d.bioBlends.length > 0 && <div><Item label="Bio blended" value={d.bioBlends.join(", ")} /></div>}
+                {d.additives.length > 0 && <div><Item label="Additives" value={d.additives.join(" · ")} /></div>}
+                {d.issues.length > 0 && <div><Item label="Issues" value={d.issues.join(" · ")} /></div>}
+              </div>
+            )}
+
             <StopTimes stop={d} beginLabel={pump ? "Began pumping" : "Began delivering"} />
 
             <div style={sigLabel}>Delivering driver</div>

@@ -147,15 +147,17 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
       const cols = "location_id,company_id,name,location_number,address,city,state,lat,lon,delivery_type,notes,is_active";
       const query = (c: string) => supabase.from("delivery_locations").select(c).eq("company_id", companyId).eq("is_active", true).order("name");
       const [first, s] = await Promise.all([
-        query(`${cols},zip`),
+        query(`${cols},zip,hose_length_ft`),
         supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId),
       ]);
-      // Before the 2026-10-11 migration there is no zip column; read without it.
-      const l = first.error ? await query(cols) : first;
+      // Older databases lack zip (2026-10-11) or hose_length_ft (2026-10-19);
+      // read without the missing one.
+      const l = !first.error ? first : await query(`${cols},zip`).then((r) => (r.error ? query(cols) : r));
       if (l.error) return;
       const starred = new Set(((s.data ?? []) as { location_id: string }[]).map((r) => r.location_id));
       const locs = ((l.data ?? []) as unknown as Omit<DeliveryLocation, "starred">[]).map((r) => ({
         ...r, lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon), starred: starred.has(r.location_id),
+        hose_length_ft: r.hose_length_ft == null ? null : Number(r.hose_length_ft),
       }));
       let tankRows: LocationTank[] = [];
       const ids = locs.map((x) => x.location_id);

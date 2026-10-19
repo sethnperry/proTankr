@@ -416,3 +416,24 @@ test("park stays open at a delivery until the drop begins, and after a partial d
   assert.equal(step.kind, "finish_delivery");
   assert.equal(canPark(begun, step, true), false, "drop begun: no park");
 });
+
+test("finish delivery: bio blend goes on the compartment, details become one event", () => {
+  const { s, newId, snap } = setup();
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000)], now: NOW, newId });
+  const [c1] = snap().compLoads;
+  const d = snap().deliveries[0];
+  finishDelivery(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", delivery: d, times: defaultStepTimes(NOW, 0, null),
+    delayReasonId: null, delayNote: null,
+    delivered: [{ compartment_load_id: c1.compartment_load_id, comp_number: 1, product_id: "d2", tank_number: "1" }],
+    tanks: [], consigneeName: null, consigneeSignature: null, signed: false, endMiles: 1234, now: NOW, newId,
+    bioBlends: [{ compartment_load_id: c1.compartment_load_id, bio_blend: "B20" }],
+    details: { odometer: 1234, additives: ["biocide"], additiveNote: null, issues: ["vapor"], issueNote: "Bucket leaked" },
+  });
+  assert.equal(snap().compLoads[0].bio_blend, "B20");
+  const ev = s.list("trip_events").filter((e) => e.event_type === "delivery_details");
+  assert.equal(ev.length, 1);
+  assert.deepEqual((ev[0].payload as any).issues, ["vapor"]);
+  assert.equal((ev[0].payload as any).odometer, 1234);
+});

@@ -851,7 +851,7 @@ export default function HomePage() {
         setPicker({ mode: "add" });
         break;
       case "arrive_delivery":
-        // Arrived: straight into Finish Delivery.
+        // Arrived: the drop clock starts and the delivery screen opens.
         arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
         void syncNow();
         setFinishOpen(true);
@@ -1663,6 +1663,7 @@ export default function HomePage() {
             open={finishOpen}
             title={deliveryName(finishDeliveryRow)}
             delivery={finishDeliveryRow}
+            location={finishDeliveryRow.location_id ? locations.find((l) => l.location_id === finishDeliveryRow.location_id) ?? null : null}
             compartments={here}
             laterAboard={onBoard(snap.compLoads).filter((c) => !hereIds.has(c.compartment_load_id))}
             trailerId={openTrip?.trailer_id ?? trailerId}

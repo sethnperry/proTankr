@@ -21,6 +21,8 @@ export type DeliveryLocation = {
   lon: number | null;
   delivery_type: DeliveryType;
   notes: string | null;
+  // Feet (20261019000000). Optional: missing before that migration.
+  hose_length_ft?: number | null;
   is_active?: boolean;
   starred: boolean;
 };

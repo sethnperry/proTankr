@@ -2,32 +2,44 @@
 // app/planner/components/trip/DeliveryDashboard.tsx
 //
 // The delivery screen (docs/trip-workflow-design.md §8, §9), opened when the
-// driver arrives at a delivery. Laid out like the Planner: the trailer's
-// compartments as bars, each with a drop-into picker underneath (a store tank
-// for that product, or Retain to keep it aboard for the next leg). Then one
-// big button that walks the drop:
+// driver arrives at a delivery. Two halves:
 //
-//   Drop / Pump Off   → start time (now, editable; delay reason if late)
-//   Tank readings     → optional, from each product's readings row: before
-//                       for every store tank of that product, then after
-//                       (prefilled before + what went in, when in gallons).
-//                       If the company requires them, Finish opens the first
-//                       missing product instead of the finish form.
-//   Finish Delivery   → depart time, ending miles on the last stop, driver
-//                       signature → Complete (or Complete · Next Leg when
-//                       anything is retained or another stop is planned)
+//   Arrived    → the drop clock is running from arrival (delay timer). Shows
+//                what to know before getting out: hose length and notes saved
+//                for this store, hours since the last drop here, and the last
+//                load of each product being dropped (our driver, or the
+//                carrier's company). The only entry is ending miles.
+//                Begin Delivery / Begin Pump Off stamps the start time (asks
+//                for a delay reason if over the company threshold).
+//   Delivering → back in the truck, reconcile how it went. Everything is
+//                optional and collapsed unless needed: which compartment went
+//                into which tank (or Retain), tank readings and water, bio
+//                blended, additives, issues at the drop, consignee signature.
+//                Finish stops the clock (left_at = now), signs with the saved
+//                driver signature and returns to the dashboard.
 //
-// The consignee signature is its own button (optional unless the company
-// requires it); its pop-out fills the screen when the phone is turned
-// sideways. Progress (start time, tank picks, readings) is saved to the trip
-// as the driver goes; Retain and the consignee signature are kept on the
-// phone until Finish.
+// Progress (start time, tank picks, readings) is saved to the trip as the
+// driver goes; the rest is kept on the phone until Finish.
 
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { useIsLandscape } from "@/app/planner/hooks/useOrientation";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { busyProps } from "@/lib/ui/pending";
+import { useStoreDeliveries, type StoreDelivery } from "@/app/planner/hooks/useDashboardCards";
+import {
+  ADDITIVES,
+  BIO_BLENDS,
+  DELIVERY_ISSUES,
+  additiveLabel,
+  fmtAgo,
+  fmtClock,
+  isDieselLike,
+  issueLabel,
+  soldPerHour,
+  type DeliveryDetails,
+} from "@/lib/trips/deliveryDetails";
 import { supabase } from "@/lib/supabase/client";
 import {
   delayMinutes,
@@ -47,7 +59,7 @@ import {
   type Discrepancy,
   type ReadingUnit,
 } from "@/lib/trips/tankReadings";
-import type { LocationTank } from "@/lib/trips/deliveryLocations";
+import type { DeliveryLocation, LocationTank } from "@/lib/trips/deliveryLocations";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripDeliveryTankRow } from "@/lib/trips/types";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
 import {
@@ -76,6 +88,8 @@ export type FinishDeliverySubmit = {
   consigneeSignature: string | null;
   signed: boolean;
   endMiles: number | null;
+  bioBlends: { compartment_load_id: string; bio_blend: string | null }[];
+  details: DeliveryDetails;
 };
 
 export type DeliveryProgress = {
@@ -100,6 +114,13 @@ type Draft = {
   waterTanks: string[];
   consigneeName: string;
   consigneeSig: string | null;
+  odometer?: string;
+  bio?: Record<string, string>;
+  additives?: string[];
+  additiveNote?: string;
+  issues?: string[];
+  issueNote?: string;
+  signedMine?: boolean;
 };
 
 const draftKey = (deliveryId: string) => `proTankr:delivery:${deliveryId}`;
@@ -173,15 +194,50 @@ function OptionCard({ title, dotColor, children, onClose }: { title: string; dot
   );
 }
 
+// A collapsed row that opens in place. Collapsed unless needed.
+function Section({ title, summary, summaryColor, open, onToggle, children, last }: {
+  title: string; summary?: React.ReactNode; summaryColor?: string; open: boolean; onToggle: () => void; children: React.ReactNode; last?: boolean;
+}) {
+  return (
+    <div style={{ borderBottom: last ? "none" : "1px solid rgba(255,255,255,0.06)" }}>
+      <button type="button" onClick={onToggle} style={{ ...rowBtn, borderBottom: "none" }}>
+        <span style={{ fontWeight: 700, flexShrink: 0 }}>{title}</span>
+        <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13, color: summaryColor ?? muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {summary}
+        </span>
+        <span style={{ color: muted, flexShrink: 0, width: 12, textAlign: "center" }}>{open ? "▾" : "›"}</span>
+      </button>
+      {open && <div style={{ padding: "0 14px 14px" }}>{children}</div>}
+    </div>
+  );
+}
+
+function Chips({ options, picked, onToggle }: { options: readonly { code: string; label: string }[]; picked: string[]; onToggle: (code: string) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {options.map((o) => (
+        <button key={o.code} type="button" style={pill(picked.includes(o.code))} onClick={() => onToggle(o.code)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+const fmtDayTime = (iso: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+};
+
 export function DeliveryDashboard({
-  open, title, delivery, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
+  open, title, delivery, location, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
   otherPlanned, beginMiles, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
 }: {
-  // Park Preloaded, offered until Drop / Pump Off begins.
+  // Park Preloaded, offered until the delivery begins.
   onPark?: () => void;
   open: boolean;
   title: string;
   delivery: TripDeliveryRow;
+  location: DeliveryLocation | null; // hose length and notes
   compartments: TripCompartmentLoadRow[]; // aboard and headed here (or unassigned)
   laterAboard: TripCompartmentLoadRow[]; // aboard, headed to another stop
   trailerId: string | null;
@@ -208,16 +264,25 @@ export function DeliveryDashboard({
   const [waterTanks, setWaterTanks] = useState<string[]>([]);
   const [consigneeName, setConsigneeName] = useState("");
   const [consigneeSig, setConsigneeSig] = useState<string | null>(null);
+  const [odometer, setOdometer] = useState("");
+  const [bio, setBio] = useState<Record<string, string>>({});
+  const [additives, setAdditives] = useState<string[]>([]);
+  const [additiveNote, setAdditiveNote] = useState("");
+  const [issues, setIssues] = useState<string[]>([]);
+  const [issueNote, setIssueNote] = useState("");
+  const [signedMine, setSignedMine] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
-  // Pop-outs
+  // Pop-outs and sections
+  const [section, setSection] = useState<string | null>(null);
   const [pickFor, setPickFor] = useState<string | null>(null); // compartment_load_id
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
   const [newTankText, setNewTankText] = useState("");
   const [beginOpen, setBeginOpen] = useState(false);
-  // "recap": opened by Finish Delivery, continues into the finish window.
-  // "edit": the "Drop began" row, just saves.
-  const [beginMode, setBeginMode] = useState<"recap" | "edit">("edit");
+  // "start": Begin tapped over the delay threshold, asks why, then begins.
+  // "edit": the Times row, fixes the start time.
+  const [beginMode, setBeginMode] = useState<"start" | "edit">("edit");
   const [beginText, setBeginText] = useState("");
   const [reasonId, setReasonId] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -225,16 +290,24 @@ export function DeliveryDashboard({
   const [step, setStep] = useState<Step | null>(null);
   const [stepErr, setStepErr] = useState<string | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
-  const [finishOpen, setFinishOpen] = useState(false);
-  const [departText, setDepartText] = useState("");
-  const [endMiles, setEndMiles] = useState("");
-  const [signed, setSigned] = useState(false);
-  const [finishErr, setFinishErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
   const [consigneeOpen, setConsigneeOpen] = useState(false);
   const [cName, setCName] = useState("");
   const [cSig, setCSig] = useState<string | null>(null);
   const [cErr, setCErr] = useState<string | null>(null);
   const onCSig = React.useCallback((p: string | null) => setCSig(p), []);
+
+  // The clock.
+  useEffect(() => {
+    if (!open) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [open]);
+
+  // Every carrier's recent drops at this store.
+  const store = useStoreDeliveries(open ? delivery.location_id : null, open, 10);
 
   // Trailer compartment sizes, for the bar widths.
   useEffect(() => {
@@ -275,17 +348,28 @@ export function DeliveryDashboard({
     setExtraTanks(extra);
     setConsigneeName(d?.consigneeName ?? delivery.consignee_name ?? "");
     setConsigneeSig(d?.consigneeSig ?? delivery.consignee_signature ?? null);
+    setOdometer(d?.odometer ?? "");
+    const b: Record<string, string> = { ...(d?.bio ?? {}) };
+    for (const c of compartments) if (b[c.compartment_load_id] == null && c.bio_blend) b[c.compartment_load_id] = c.bio_blend;
+    setBio(b);
+    setAdditives(d?.additives ?? []);
+    setAdditiveNote(d?.additiveNote ?? "");
+    setIssues(d?.issues ?? []);
+    setIssueNote(d?.issueNote ?? "");
+    setSignedMine(!!d?.signedMine);
     const ch: Record<string, string> = {};
     for (const c of compartments) {
       ch[c.compartment_load_id] = d?.choice?.[c.compartment_load_id]
         ?? c.tank_number ?? suggestTank(c.product_id, locationTanks) ?? "";
     }
     setChoice(ch);
+    setSection(null);
     setPickFor(null);
     setStep(null);
-    setFinishOpen(false);
     setBeginOpen(false);
     setConsigneeOpen(false);
+    setErr(null);
+    setFinishing(false);
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, delivery.delivery_id]);
@@ -309,20 +393,25 @@ export function DeliveryDashboard({
   // Keep the phone-only parts of the draft.
   useEffect(() => {
     if (!open || !hydrated) return;
-    writeDraft(delivery.delivery_id, { choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig });
-  }, [open, hydrated, delivery.delivery_id, choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig]);
+    writeDraft(delivery.delivery_id, {
+      choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig,
+      odometer, bio, additives, additiveNote, issues, issueNote, signedMine,
+    });
+  }, [open, hydrated, delivery.delivery_id, choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig,
+    odometer, bio, additives, additiveNote, issues, issueNote, signedMine]);
 
   const rows = useMemo(() => [...compartments].sort((a, b) => a.comp_number - b.comp_number), [compartments]);
   const gross = (c: TripCompartmentLoadRow) => Number(c.gross_gallons ?? c.net_gallons ?? 0);
   const delivered = rows.filter((c) => choice[c.compartment_load_id] && choice[c.compartment_load_id] !== RETAIN);
   const retained = rows.filter((c) => choice[c.compartment_load_id] === RETAIN);
   const unpicked = rows.filter((c) => !choice[c.compartment_load_id]);
-  const dropped = !!delivery.begin_at;
+  const begun = !!delivery.begin_at;
   const pumpOff = delivery.delivery_type === "pump_off";
-  const dropWord = pumpOff ? "Pump Off" : "Drop";
   const nextLeg = retained.length > 0 || otherPlanned > 0;
   const isLast = !nextLeg;
   const unitSuffix = unit === "gallons" ? "gal" : "in";
+  const arrivedAt = delivery.arrived_at ?? delivery.begin_at ?? new Date().toISOString();
+  const miles = numOrNull(odometer);
 
   // Products dropped here, each with every store tank that holds it plus any
   // tank a compartment was sent into.
@@ -371,6 +460,30 @@ export function DeliveryDashboard({
     return { compartment_load_id: c.compartment_load_id, tank_number: v && v !== RETAIN ? v : null };
   });
 
+  // ── What to know before getting out ───────────────────────────────────────
+  // Store drops other than this one, newest first.
+  const pastDrops = useMemo(
+    () => store.items.filter((x) => x.deliveryId !== delivery.delivery_id && x.leftAt)
+      .sort((a, b) => (b.leftAt ?? "").localeCompare(a.leftAt ?? "")),
+    [store.items, delivery.delivery_id],
+  );
+  const lastDropAt = pastDrops[0]?.leftAt ?? null;
+  const productIdsHere = useMemo(() => {
+    const ids: (string | null)[] = [];
+    for (const c of rows) if (!ids.includes(c.product_id)) ids.push(c.product_id);
+    return ids;
+  }, [rows]);
+  const lastFor = (pid: string | null): StoreDelivery | null =>
+    pid ? pastDrops.find((x) => x.products.some((p) => p.productId === pid)) ?? null : null;
+  // The last drop's after reading for a tank, for gallons sold since.
+  const lastTankAfter = (tank: string) => {
+    for (const x of pastDrops) {
+      const t = x.tanks.find((y) => y.tankNumber === tank);
+      if (t) return t.unit === "gallons" ? { after: t.after, at: x.leftAt } : null;
+    }
+    return null;
+  };
+
   // ── Drop-into picker ───────────────────────────────────────────────────────
   const pickRow = pickFor ? rows.find((c) => c.compartment_load_id === pickFor) ?? null : null;
   const pickInfo = pickRow ? productInfo(pickRow.product_id) : null;
@@ -385,7 +498,8 @@ export function DeliveryDashboard({
   const choose = (id: string, v: string) => {
     setChoice((m) => ({ ...m, [id]: v }));
     setPickFor(null);
-    if (dropped) onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: v === RETAIN ? null : v }] });
+    setErr(null);
+    if (begun) onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: v === RETAIN ? null : v }] });
   };
   const addNewTank = () => {
     const n = newTankText.trim();
@@ -397,42 +511,27 @@ export function DeliveryDashboard({
     setNewTankText("");
   };
 
-  // ── Drop / Pump Off: start time ────────────────────────────────────────────
-  const arrivedAt = delivery.arrived_at ?? delivery.begin_at ?? new Date().toISOString();
+  // ── Begin ──────────────────────────────────────────────────────────────────
   const beginIso = fromLocalInput(beginText) || "";
   const beginTimes: StepTimes = { arrivedAt, beginAt: beginIso || arrivedAt, leftAt: beginIso || arrivedAt };
-  // Gallons going into each tank (for closing the order in dispatch), in tank order.
-  const tankTotals = useMemo(() => {
-    const m = new Map<string, { tank: string; productId: string | null; comps: number[]; gross: number; net: number; netAll: boolean }>();
-    for (const c of delivered) {
-      const t = choice[c.compartment_load_id];
-      const e = m.get(t) ?? { tank: t, productId: c.product_id, comps: [], gross: 0, net: 0, netAll: true };
-      e.comps.push(c.comp_number);
-      e.gross += gross(c);
-      const n = c.net_gallons == null ? NaN : Number(c.net_gallons);
-      if (Number.isFinite(n)) e.net += n; else e.netAll = false;
-      m.set(t, e);
-    }
-    return [...m.values()].sort((a, b) => a.tank.localeCompare(b.tank, undefined, { numeric: true }));
-  }, [delivered, choice]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Drop / Pump Off: tapped before getting out. Stamps the start time and
-  // nothing else; the recap of how it went comes at Finish Delivery.
-  const tapDrop = () => {
+  const overThreshold = needsDelayReason(delayMinutes(arrivedAt, new Date(now).toISOString()), settings.delivery_delay_threshold_minutes);
+  const milesProblem = (): string | null => {
+    if (miles == null) return otherPlanned === 0 ? "Enter ending miles." : null;
+    if (beginMiles != null && miles < beginMiles) return `Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`;
+    return null;
+  };
+  const tapBegin = () => {
     if (rows.length === 0) return;
+    const mp = milesProblem();
+    if (mp) return setErr(mp);
+    setErr(null);
+    if (overThreshold) return openBegin("start");
     onSaveProgress({ beginAt: new Date().toISOString(), compTanks: compTanks() });
   };
-  const openRecap = () => {
-    if (unpicked.length) {
-      setPickFor(unpicked[0].compartment_load_id);
-      return;
-    }
-    openBegin("recap");
-  };
-  const openBegin = (mode: "recap" | "edit" = "edit") => {
+  const openBegin = (mode: "start" | "edit") => {
     setBeginErr(null);
     setBeginMode(mode);
-    setBeginText(toLocalInput(delivery.begin_at ?? new Date().toISOString()));
+    setBeginText(toLocalInput(mode === "start" ? new Date().toISOString() : delivery.begin_at ?? new Date().toISOString()));
     setReasonId(delivery.delay_reason_id ?? null);
     setNote(delivery.delay_note ?? "");
     setBeginOpen(true);
@@ -449,7 +548,6 @@ export function DeliveryDashboard({
       compTanks: compTanks(),
     });
     setBeginOpen(false);
-    if (beginMode === "recap") openFinish();
   };
 
   // ── Tank readings ──────────────────────────────────────────────────────────
@@ -500,6 +598,14 @@ export function DeliveryDashboard({
       }))
     : [];
   const curDisc = cur ? discrepancyFor(cur) : null;
+  // Gallons each tank sold per hour since the last drop (gallons only).
+  const soldLines = cur && step?.phase === "before" && unit === "gallons"
+    ? cur.tanks.flatMap((n) => {
+        const last = lastTankAfter(n);
+        const rate = last ? soldPerHour(last.after, last.at, numOrNull(readings[n]?.before ?? ""), delivery.begin_at ?? arrivedAt) : null;
+        return rate == null ? [] : [`Tank ${n} sold about ${Math.round(rate).toLocaleString("en-US")} gal/hr since the last drop`];
+      })
+    : [];
   const stepFooter = cur && step ? (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
       {step.phase === "before" && (
@@ -511,6 +617,7 @@ export function DeliveryDashboard({
           </div>
         </div>
       )}
+      {soldLines.map((l) => <div key={l} style={{ fontSize: 12, color: muted }}>{l}</div>)}
       {step.phase === "after" && (curDisc
         ? <DiscrepancyLine d={curDisc} big />
         : unit === "inches"
@@ -546,9 +653,18 @@ export function DeliveryDashboard({
   };
 
   // ── Finish ─────────────────────────────────────────────────────────────────
-  const openFinish = () => {
-    // Company requires readings: Finish opens the first product still missing
-    // them instead of the finish form.
+  // One tap: stops the clock and goes back to the dashboard. Anything still
+  // needed opens instead, with a line saying why.
+  const finish = () => {
+    if (finishing) return;
+    if (unpicked.length) {
+      setSection("tanks");
+      return setErr(`Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}.`);
+    }
+    if (delivered.length === 0 && retained.length === 0) {
+      setSection("tanks");
+      return setErr("Pick a tank for at least one compartment.");
+    }
     if (settings.require_tank_readings) {
       const missing = products.findIndex((p) => !readingsDone(p));
       if (missing >= 0) {
@@ -557,31 +673,27 @@ export function DeliveryDashboard({
         return;
       }
     }
-    setFinishErr(null);
-    setDepartText(toLocalInput(new Date().toISOString()));
-    setEndMiles("");
-    setSigned(false);
-    setFinishOpen(true);
-  };
-  const departIso = fromLocalInput(departText) || "";
-  const submit = () => {
-    const times: StepTimes = { arrivedAt, beginAt: delivery.begin_at ?? arrivedAt, leftAt: departIso };
-    const tp = timesProblem(times);
-    if (tp) return setFinishErr(tp);
-    if (delivered.length === 0) return setFinishErr(`Pick a tank for at least one compartment. Nothing was dropped here.`);
-    if (unpicked.length) return setFinishErr(`Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}.`);
-    if (settings.require_tank_readings && products.some((p) => !readingsDone(p))) return setFinishErr("Enter before and after readings for every tank.");
-    if (settings.require_consignee_signature && !consigneeSig) return setFinishErr("Get the consignee's signature first.");
-    let miles: number | null = null;
-    if (isLast) {
-      miles = numOrNull(endMiles);
-      if (miles == null) return setFinishErr("Enter ending miles.");
-      if (beginMiles != null && miles < beginMiles) return setFinishErr(`Ending miles can't be less than beginning (${beginMiles}).`);
+    if (settings.require_consignee_signature && !consigneeSig) {
+      setErr("Get the consignee's signature first.");
+      return openConsignee();
     }
-    if (!signed) return setFinishErr("Accept your signature to finish.");
+    if (isLast && miles == null) {
+      setSection("miles");
+      return setErr("Enter ending miles.");
+    }
+    if (miles != null && beginMiles != null && miles < beginMiles) {
+      setSection("miles");
+      return setErr(`Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`);
+    }
+    const leftAt = new Date().toISOString();
+    const times: StepTimes = { arrivedAt, beginAt: delivery.begin_at ?? arrivedAt, leftAt };
+    const tp = timesProblem(times);
+    if (tp) return setErr(tp);
     const toDc = (c: TripCompartmentLoadRow, tank: string | null): DeliveredCompartment => ({
       compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: tank,
     });
+    setErr(null);
+    setFinishing(true);
     onSubmit({
       times,
       delayReasonId: delivery.delay_reason_id ?? null,
@@ -591,8 +703,18 @@ export function DeliveryDashboard({
       tanks: buildTanks(),
       consigneeName: consigneeName.trim() || null,
       consigneeSignature: consigneeSig,
-      signed,
+      // The saved driver signature signs automatically.
+      signed: !!signature || signedMine,
       endMiles: miles,
+      bioBlends: delivered.filter((c) => bio[c.compartment_load_id] != null)
+        .map((c) => ({ compartment_load_id: c.compartment_load_id, bio_blend: bio[c.compartment_load_id]?.trim() || null })),
+      details: {
+        odometer: miles,
+        additives,
+        additiveNote: additiveNote.trim() || null,
+        issues,
+        issueNote: issueNote.trim() || null,
+      },
     });
   };
 
@@ -600,148 +722,323 @@ export function DeliveryDashboard({
   const barSlots = useMemo(() => {
     const nums = new Set<number>(trailerComps.map((c) => c.comp_number));
     for (const c of [...rows, ...laterAboard]) nums.add(c.comp_number);
-    const list = [...nums].sort((a, b) => b - a).map((n) => {
+    return [...nums].sort((a, b) => b - a).map((n) => {
       const here = rows.find((c) => c.comp_number === n) ?? null;
       const later = here ? null : laterAboard.find((c) => c.comp_number === n) ?? null;
       const row = here ?? later;
       const max = trailerComps.find((c) => c.comp_number === n)?.max_gallons || (row ? gross(row) : 0) || 1;
       return { n, here, later, max };
     });
-    return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerComps, rows, laterAboard]);
   const totalMax = barSlots.reduce((t, s) => t + s.max, 0) || 1;
   const nBars = barSlots.length || 1;
   const gap = landscape ? 12 : nBars >= 5 ? 10 : 16;
-  const barH = landscape ? "100px" : nBars >= 5 ? "min(110px, 20vw)" : nBars >= 4 ? "min(120px, 22vw)" : "min(130px, 25vw)";
+  const barH = begun
+    ? (landscape ? "70px" : nBars >= 5 ? "min(80px, 16vw)" : "min(90px, 18vw)")
+    : (landscape ? "80px" : nBars >= 5 ? "min(96px, 18vw)" : "min(110px, 22vw)");
 
-  const tanksDoneAll = products.length > 0 && products.every(readingsDone);
-  const bigLabel = dropped ? "Finish Delivery" : dropWord;
-  const bigDetail = dropped
-    ? unpicked.length
-      ? `${pumpOff ? "Pumping" : "Dropping"} since ${fmtTime(delivery.begin_at)} · pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}`
-      : `${pumpOff ? "Pumping" : "Dropping"} since ${fmtTime(delivery.begin_at)} · tap when you're done`
-    : `Arrived ${fmtTime(arrivedAt)} · tap before you get out to ${pumpOff ? "pump off" : "drop"}`;
+  const bars = (withPickers: boolean) => barSlots.length === 0 ? (
+    <div style={{ fontSize: 14, color: muted }}>Nothing aboard for this delivery.</div>
+  ) : (
+    <div style={{ display: "flex", justifyContent: "center", gap, alignItems: "flex-start", width: "100%" }}>
+      {barSlots.map((s) => {
+        const row = s.here ?? s.later;
+        const info = row ? productInfo(row.product_id) : null;
+        const color = info ? info.hex ?? productColorFor(info.name) : "rgba(255,255,255,0.08)";
+        const g = row ? gross(row) : 0;
+        const fill = row ? Math.max(0, Math.min(1, g / s.max)) * 0.96 : 0;
+        const w = `calc(${((s.max / totalMax) * 100).toFixed(4)}% - ${(((nBars - 1) * gap) / nBars).toFixed(2)}px)`;
+        const ch = s.here ? choice[s.here.compartment_load_id] ?? "" : "";
+        return (
+          <div key={s.n} style={{ width: w, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", opacity: s.here ? 1 : 0.4 }}>
+            <div style={{ fontSize: "clamp(11px, 2.4vw, 13px)", fontWeight: 700, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>{s.n}</div>
+            <div style={{ width: "100%", height: barH, background: "rgba(255,255,255,0.06)", position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: `${fill * 100}%`, background: color }} />
+            </div>
+            <div style={{ marginTop: 5, fontSize: "clamp(11px, 2.8vw, 14px)", fontWeight: 800, color: info ? info.hex ?? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.3)", letterSpacing: 0.3 }}>
+              {info ? info.code : "MT"}
+            </div>
+            <div style={{ marginTop: 2, fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 600, color: g > 0 ? "rgba(140,140,140,0.9)" : "rgba(255,255,255,0.12)" }}>
+              {g > 0 ? Math.round(g).toLocaleString("en-US") : "—"}
+            </div>
+            {withPickers && (s.here ? (
+              <button type="button" onClick={() => setPickFor(s.here!.compartment_load_id)}
+                style={{
+                  marginTop: 8, width: "100%", minWidth: 0, padding: "8px 2px", borderRadius: 2, cursor: "pointer",
+                  fontSize: "clamp(11px, 2.8vw, 13px)", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  border: ch ? "1px solid rgba(255,255,255,0.25)" : "1px solid #fbbf24",
+                  background: ch === RETAIN ? "rgba(147,197,253,0.12)" : "rgba(255,255,255,0.04)",
+                  color: ch === RETAIN ? "#93c5fd" : ch ? "#fff" : "#fbbf24",
+                }}>
+                {ch === RETAIN ? "Retain" : ch ? `Tank ${ch}` : "Tank ▾"}
+              </button>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 11, color: muted, padding: "8px 0" }}>{s.later ? "Next stop" : ""}</div>
+            ))}
+            {!withPickers && s.later && <div style={{ marginTop: 4, fontSize: 11, color: muted }}>Next stop</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ── Clock ──────────────────────────────────────────────────────────────────
+  const clockFrom = begun ? delivery.begin_at! : arrivedAt;
+  const clockColor = !begun && overThreshold ? "#fbbf24" : "#fff";
+  const clockCard = (
+    <div style={{ ...sectionCard, display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={miniLabel}>{begun ? (pumpOff ? "Pumping off" : "Delivering") : "On site"}</div>
+        <div className="dash-num" style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.05, color: clockColor, fontVariantNumeric: "tabular-nums" }}>
+          {fmtClock(now - Date.parse(clockFrom))}
+        </div>
+      </div>
+      <div style={{ textAlign: "right", fontSize: 13, color: muted, lineHeight: 1.5 }}>
+        <div>Arrived {fmtTime(arrivedAt)}</div>
+        {begun
+          ? <div>Began {fmtTime(delivery.begin_at)}</div>
+          : overThreshold
+            ? <div style={{ color: "#fbbf24", fontWeight: 700 }}>Delay reason needed</div>
+            : <div>Delay after {settings.delivery_delay_threshold_minutes} min</div>}
+      </div>
+    </div>
+  );
+
+  // ── Before getting out ─────────────────────────────────────────────────────
+  const hose = location?.hose_length_ft ?? null;
+  const notes = location?.notes?.trim() || null;
+  const knowCard = (
+    <div style={{ ...sectionCard, padding: 0 }}>
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <div style={miniLabel}>Last drop here</div>
+            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2 }}>
+              {store.loading && !pastDrops.length ? "…" : fmtAgo(lastDropAt, now) ?? "None on record"}
+            </div>
+          </div>
+          <div>
+            <div style={miniLabel}>Hose</div>
+            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: hose == null ? muted : "#fff" }}>
+              {hose == null ? "Not saved" : `${hose.toLocaleString("en-US")} ft`}
+            </div>
+          </div>
+        </div>
+        {notes
+          ? <div style={{ marginTop: 10, fontSize: 14, whiteSpace: "pre-wrap", lineHeight: 1.4 }}>{notes}</div>
+          : hose == null && <div style={{ marginTop: 8, fontSize: 12, color: muted }}>Save hose length and notes in Delivery Locations.</div>}
+      </div>
+      <div style={{ padding: "8px 14px 12px" }}>
+        <div style={{ ...miniLabel, marginBottom: 4 }}>Last load of each product</div>
+        {productIdsHere.map((pid) => {
+          const info = productInfo(pid);
+          const x = lastFor(pid);
+          const gal = x?.products.filter((p) => p.productId === pid).reduce((t, p) => t + p.gallons, 0) ?? 0;
+          const tanks = x?.tanks.filter((t) => t.productId === pid) ?? [];
+          return (
+            <div key={pid ?? "none"} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: info.hex ?? productColorFor(info.name), alignSelf: "center" }} />
+              <span style={{ fontWeight: 800, width: 44, flexShrink: 0 }}>{info.code}</span>
+              {x ? (
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{x.who}</span>
+                  <span style={{ color: muted }}> · {fmtDayTime(x.leftAt)} · {Math.round(gal).toLocaleString("en-US")} gal</span>
+                  {tanks.length > 0 && (
+                    <span style={{ color: muted }}>
+                      {" · "}{tanks.map((t) => `Tank ${t.tankNumber} ${Math.round(t.after).toLocaleString("en-US")}${t.unit === "inches" ? " in" : ""}`).join(", ")} after
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span style={{ flex: 1, fontSize: 13, color: muted }}>No drop on record</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const milesInput = (
+    <div>
+      <div style={{ ...miniLabel, marginBottom: 6 }}>Ending miles{otherPlanned > 0 ? " (optional)" : ""}</div>
+      <input value={odometer} onChange={(e) => { setOdometer(e.target.value.replace(/[^0-9.]/g, "")); setErr(null); }}
+        inputMode="decimal" placeholder="Odometer" style={{ ...fieldInput, fontSize: 20, fontWeight: 700 }} />
+      {beginMiles != null && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Beginning: {beginMiles.toLocaleString("en-US")}</div>}
+    </div>
+  );
+
+  // ── Reconcile summaries ────────────────────────────────────────────────────
+  const tanksSummary = unpicked.length
+    ? { text: `Pick a tank for C${unpicked.map((c) => c.comp_number).join(", C")}`, color: "#fbbf24" }
+    : { text: rows.map((c) => `C${c.comp_number}→${choice[c.compartment_load_id] === RETAIN ? "Retain" : `T${choice[c.compartment_load_id]}`}`).join(" · "), color: undefined };
+  const readingsCount = products.filter(readingsDone).length;
+  const readingsSummary = products.length === 0
+    ? "—"
+    : readingsCount === products.length
+      ? `Entered ✓${waterEntered.length ? " · water" : ""}`
+      : settings.require_tank_readings ? "Required" : readingsCount ? `${readingsCount} of ${products.length}` : "Optional";
+  const bioComps = delivered.filter((c) => isDieselLike(productInfo(c.product_id).name));
+  const bioSummary = bioComps.filter((c) => bio[c.compartment_load_id]).map((c) => `C${c.comp_number} ${bio[c.compartment_load_id]}`).join(" · ") || "None";
+  const additiveSummary = additives.map(additiveLabel).join(", ") || "None";
+  const issueSummary = issues.map(issueLabel).join(", ") || "None";
+  const toggle = (id: string) => setSection((s) => (s === id ? null : id));
+  const toggleIn = (list: string[], set: (v: string[]) => void, code: string) => set(list.includes(code) ? list.filter((x) => x !== code) : [...list, code]);
 
   return (
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
-      {/* Compartments */}
-      <div style={{ ...sectionCard, padding: "14px 10px" }}>
-        {barSlots.length === 0 ? (
-          <div style={{ fontSize: 14, color: muted }}>Nothing aboard for this delivery.</div>
-        ) : (
-          <div style={{ display: "flex", justifyContent: "center", gap, alignItems: "flex-start", width: "100%" }}>
-            {barSlots.map((s) => {
-              const row = s.here ?? s.later;
-              const info = row ? productInfo(row.product_id) : null;
-              const color = info ? info.hex ?? productColorFor(info.name) : "rgba(255,255,255,0.08)";
-              const g = row ? gross(row) : 0;
-              const fill = row ? Math.max(0, Math.min(1, g / s.max)) * 0.96 : 0;
-              const w = `calc(${((s.max / totalMax) * 100).toFixed(4)}% - ${(((nBars - 1) * gap) / nBars).toFixed(2)}px)`;
-              const ch = s.here ? choice[s.here.compartment_load_id] ?? "" : "";
-              const dim = !s.here;
-              return (
-                <div key={s.n} style={{ width: w, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", opacity: dim ? 0.4 : 1 }}>
-                  <div style={{ fontSize: "clamp(11px, 2.4vw, 13px)", fontWeight: 700, color: "rgba(255,255,255,0.45)", marginBottom: 8 }}>{s.n}</div>
-                  <div style={{ width: "100%", height: barH, background: "rgba(255,255,255,0.06)", position: "relative", overflow: "hidden" }}>
-                    <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: `${fill * 100}%`, background: color }} />
-                  </div>
-                  <div style={{ marginTop: 5, fontSize: "clamp(11px, 2.8vw, 14px)", fontWeight: 800, color: info ? info.hex ?? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.3)", letterSpacing: 0.3 }}>
-                    {info ? info.code : "MT"}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 600, color: g > 0 ? "rgba(140,140,140,0.9)" : "rgba(255,255,255,0.12)" }}>
-                    {g > 0 ? Math.round(g).toLocaleString("en-US") : "—"}
-                  </div>
-                  {s.here ? (
-                    <button type="button" onClick={() => setPickFor(s.here!.compartment_load_id)}
-                      style={{
-                        marginTop: 8, width: "100%", minWidth: 0, padding: "8px 2px", borderRadius: 2, cursor: "pointer",
-                        fontSize: "clamp(11px, 2.8vw, 13px)", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                        border: ch ? "1px solid rgba(255,255,255,0.25)" : "1px solid #fbbf24",
-                        background: ch === RETAIN ? "rgba(147,197,253,0.12)" : "rgba(255,255,255,0.04)",
-                        color: ch === RETAIN ? "#93c5fd" : ch ? "#fff" : "#fbbf24",
-                      }}>
-                      {ch === RETAIN ? "Retain" : ch ? `Tank ${ch}` : "Tank ▾"}
-                    </button>
-                  ) : (
-                    <div style={{ marginTop: 8, fontSize: 11, color: muted, padding: "8px 0" }}>{s.later ? "Next stop" : ""}</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {retained.length > 0 && (
-          <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 12, textAlign: "center" }}>
-            Retained compartments stay aboard. Complete, then pick the next delivery or Park preloaded for another driver.
-          </div>
-        )}
-      </div>
+      {clockCard}
 
-      {/* Readings + consignee */}
-      <div style={{ ...sectionCard, padding: 0 }}>
-        {dropped && (
-          <button type="button" onClick={() => openBegin("edit")} style={rowBtn}>
-            <span style={{ color: muted, width: 110 }}>{pumpOff ? "Pump off" : "Drop"} began</span>
-            <span style={{ flex: 1 }}>{fmtTime(delivery.begin_at)}</span>
-            <span style={{ color: muted }}>Edit ›</span>
+      {!begun ? (
+        <>
+          {knowCard}
+          <div style={{ ...sectionCard, padding: "14px 10px" }}>{bars(false)}</div>
+          <div style={{ ...sectionCard }}>{milesInput}</div>
+          {err && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{err}</div>}
+          <button type="button" onClick={tapBegin} disabled={rows.length === 0}
+            style={{ ...primaryBtn, fontSize: 20, padding: "20px 0", opacity: rows.length === 0 ? 0.5 : 1 }}>
+            {pumpOff ? "Begin Pump Off" : "Begin Delivery"}
           </button>
-        )}
-        {products.map((p, i) => {
-          const info = productInfo(p.productId);
-          const d = discrepancyFor(p);
-          const done = readingsDone(p);
-          return (
-            <button key={p.productId ?? `none${i}`} type="button" onClick={() => { setStepErr(null); setStep({ productIdx: i, phase: "before" }); }}
-              style={{ ...rowBtn, display: "block" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: info.hex ?? productColorFor(info.name), flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 700, flex: 1, minWidth: 0 }}>{info.name} readings</span>
-                <span style={{ fontSize: 13, color: done ? muted : dropped ? "#fbbf24" : muted, fontWeight: done ? 500 : 700 }}>
-                  {done ? `${p.tanks.length} tank${p.tanks.length === 1 ? "" : "s"}${unit === "inches" ? " · in" : ""} ✓` : settings.require_tank_readings ? "Enter ›" : "Optional ›"}
-                </span>
-              </div>
-              {d && <div style={{ marginTop: 4, paddingLeft: 18 }}><DiscrepancyLine d={d} /></div>}
+          <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
+            Tap before you get out. Note how it went when you&apos;re back in the truck.
+          </div>
+          {onPark && (
+            <button type="button" onClick={onPark}
+              style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", color: "#93c5fd", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              Not dropping here? Park preloaded
             </button>
-          );
-        })}
-        {products.length > 0 && (
-          <button type="button" onClick={() => { if (waterTanks.length === 0 && allTanks.length === 1) setWaterTanks(allTanks); setWaterOpen(true); }}
-            style={{ ...rowBtn, color: waterEntered.length ? "#60a5fa" : muted, fontSize: 13, fontWeight: 700 }}>
-            {waterEntered.length ? `Water: ${waterEntered.map((n) => `Tank ${n} ${water[n]} in`).join(", ")} ›` : "Water present? Tap to record"}
-          </button>
-        )}
-        <button type="button" onClick={openConsignee} style={{ ...rowBtn, borderBottom: "none" }}>
-          <span style={{
-            width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
-            fontSize: 13, fontWeight: 900,
-            background: consigneeSig ? "#22c55e" : "transparent", color: "#000",
-            border: consigneeSig ? "none" : "1.5px solid rgba(255,255,255,0.3)",
-          }}>
-            {consigneeSig ? "✓" : ""}
-          </span>
-          <span style={{ flex: 1, fontWeight: 700 }}>
-            Consignee signature{consigneeSig && consigneeName ? ` · ${consigneeName}` : ""}
-          </span>
-          <span style={{ color: settings.require_consignee_signature && !consigneeSig ? "#fbbf24" : muted, fontSize: 13 }}>
-            {consigneeSig ? "Redo ›" : settings.require_consignee_signature ? "Required ›" : "Optional ›"}
-          </span>
-        </button>
-      </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ ...miniLabel, margin: "2px 2px 8px" }}>How it went · all optional</div>
+          <div style={{ ...sectionCard, padding: 0 }}>
+            <Section title="Compartments → tanks" summary={tanksSummary.text} summaryColor={tanksSummary.color}
+              open={section === "tanks"} onToggle={() => toggle("tanks")}>
+              {bars(true)}
+              {retained.length > 0 && (
+                <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 12, textAlign: "center" }}>
+                  Retained compartments stay aboard. Finish, then pick the next delivery or Park preloaded.
+                </div>
+              )}
+            </Section>
 
-      <button type="button" onClick={dropped ? openRecap : tapDrop} disabled={rows.length === 0}
-        style={{ ...primaryBtn, fontSize: 20, padding: "20px 0", opacity: rows.length === 0 ? 0.5 : 1 }}>
-        {bigLabel}
-      </button>
-      <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
-        {bigDetail}
-        {dropped && products.length > 0 && !tanksDoneAll && settings.require_tank_readings ? " · tank readings required" : ""}
-      </div>
-      {!dropped && onPark && (
-        <button type="button" onClick={onPark}
-          style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", color: "#93c5fd", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-          Not dropping here? Park preloaded
-        </button>
+            <Section title="Tank readings" summary={readingsSummary}
+              summaryColor={settings.require_tank_readings && readingsCount < products.length ? "#fbbf24" : undefined}
+              open={section === "readings"} onToggle={() => toggle("readings")}>
+              {products.length === 0 && <div style={{ fontSize: 13, color: muted }}>Pick tanks for the compartments first.</div>}
+              {products.map((p, i) => {
+                const info = productInfo(p.productId);
+                const d = discrepancyFor(p);
+                const done = readingsDone(p);
+                return (
+                  <button key={p.productId ?? `none${i}`} type="button" onClick={() => { setStepErr(null); setStep({ productIdx: i, phase: "before" }); }}
+                    style={{ ...rowBtn, display: "block", padding: "10px 0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: info.hex ?? productColorFor(info.name), flexShrink: 0 }} />
+                      <span style={{ fontSize: 14, fontWeight: 700, flex: 1, minWidth: 0 }}>{info.name}</span>
+                      <span style={{ fontSize: 13, color: muted }}>
+                        {done ? `${p.tanks.length} tank${p.tanks.length === 1 ? "" : "s"}${unit === "inches" ? " · in" : ""} ✓` : "Enter ›"}
+                      </span>
+                    </div>
+                    {d && <div style={{ marginTop: 4, paddingLeft: 18 }}><DiscrepancyLine d={d} /></div>}
+                  </button>
+                );
+              })}
+              {products.length > 0 && (
+                <button type="button" onClick={() => { if (waterTanks.length === 0 && allTanks.length === 1) setWaterTanks(allTanks); setWaterOpen(true); }}
+                  style={{ ...rowBtn, padding: "10px 0", borderBottom: "none", color: waterEntered.length ? "#60a5fa" : muted, fontSize: 13, fontWeight: 700 }}>
+                  {waterEntered.length ? `Water: ${waterEntered.map((n) => `Tank ${n} ${water[n]} in`).join(", ")} ›` : "Water present? Tap to record"}
+                </button>
+              )}
+            </Section>
+
+            {bioComps.length > 0 && (
+              <Section title="Bio blended" summary={bioSummary} open={section === "bio"} onToggle={() => toggle("bio")}>
+                {bioComps.map((c) => {
+                  const v = bio[c.compartment_load_id] ?? "";
+                  const other = !!v && !(BIO_BLENDS as readonly string[]).includes(v);
+                  const set = (x: string) => setBio((m) => ({ ...m, [c.compartment_load_id]: x }));
+                  return (
+                    <div key={c.compartment_load_id} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>C{c.comp_number} · {productInfo(c.product_id).code}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button type="button" style={pill(!v)} onClick={() => set("")}>None</button>
+                        {BIO_BLENDS.map((b) => <button key={b} type="button" style={pill(v === b)} onClick={() => set(b)}>{b}</button>)}
+                        <button type="button" style={pill(other)} onClick={() => set(other ? v : "B")}>Other</button>
+                      </div>
+                      {other && (
+                        <input value={v} onChange={(e) => set(e.target.value)} placeholder="e.g. B15" style={{ ...fieldInput, marginTop: 6 }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </Section>
+            )}
+
+            <Section title="Additives" summary={additiveSummary} open={section === "add"} onToggle={() => toggle("add")}>
+              <Chips options={ADDITIVES} picked={additives} onToggle={(c) => toggleIn(additives, setAdditives, c)} />
+              <input value={additiveNote} onChange={(e) => setAdditiveNote(e.target.value)} placeholder="Amount, which tank, product name…"
+                style={{ ...fieldInput, marginTop: 8 }} />
+            </Section>
+
+            <Section title="Issues at the drop" summary={issueSummary} summaryColor={issues.length ? "#fbbf24" : undefined}
+              open={section === "issues"} onToggle={() => toggle("issues")}>
+              <Chips options={DELIVERY_ISSUES} picked={issues} onToggle={(c) => toggleIn(issues, setIssues, c)} />
+              <textarea value={issueNote} onChange={(e) => setIssueNote(e.target.value)} rows={3} placeholder="What happened"
+                style={{ ...fieldInput, marginTop: 8, resize: "vertical", fontFamily: "inherit" }} />
+            </Section>
+
+            <Section title="Ending miles" summary={miles != null ? miles.toLocaleString("en-US") : isLast ? "Required" : "—"}
+              summaryColor={miles == null && isLast ? "#fbbf24" : undefined}
+              open={section === "miles"} onToggle={() => toggle("miles")}>
+              {milesInput}
+            </Section>
+
+            <Section title="Times" summary={`${fmtTime(arrivedAt)} → ${fmtTime(delivery.begin_at)}`}
+              open={section === "times"} onToggle={() => toggle("times")}>
+              <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+                <div>Arrived {fmtTime(arrivedAt)}</div>
+                <div>{pumpOff ? "Pump off" : "Delivery"} began {fmtTime(delivery.begin_at)}</div>
+                <div style={{ color: muted }}>Finished: when you tap Finish</div>
+              </div>
+              <button type="button" onClick={() => openBegin("edit")} style={{ ...pill(false), marginTop: 8 }}>Fix start time</button>
+            </Section>
+
+            {!signature && (
+              <Section title="Your signature" summary={signedMine ? "Signed ✓" : "Not saved"} open={section === "mysig"} onToggle={() => toggle("mysig")}>
+                <SignatureAccept savedPath={signature} onSave={onSaveSignature} accepted={signedMine} onAccept={setSignedMine} who="the delivering driver" />
+              </Section>
+            )}
+
+            <button type="button" onClick={openConsignee} style={{ ...rowBtn, borderBottom: "none" }}>
+              <span style={{
+                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 900,
+                background: consigneeSig ? "#22c55e" : "transparent", color: "#000",
+                border: consigneeSig ? "none" : "1.5px solid rgba(255,255,255,0.3)",
+              }}>
+                {consigneeSig ? "✓" : ""}
+              </span>
+              <span style={{ flex: 1, fontWeight: 700 }}>
+                Consignee signature{consigneeSig && consigneeName ? ` · ${consigneeName}` : ""}
+              </span>
+              <span style={{ color: settings.require_consignee_signature && !consigneeSig ? "#fbbf24" : muted, fontSize: 13 }}>
+                {consigneeSig ? "Redo ›" : settings.require_consignee_signature ? "Required ›" : "Optional ›"}
+              </span>
+            </button>
+          </div>
+
+          {err && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{err}</div>}
+          <button type="button" onClick={finish} {...busyProps(finishing)}
+            style={{ ...primaryBtn, fontSize: 20, padding: "20px 0" }}>
+            {finishing ? "Finishing…" : nextLeg ? "Finish · Next Leg" : "Finish"}
+          </button>
+          <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
+            Stops the clock and goes back to the dashboard.
+          </div>
+        </>
       )}
 
       {/* Drop-into picker */}
@@ -775,32 +1072,13 @@ export function DeliveryDashboard({
         onSubmit={addNewTank}
       />
 
-      {/* Start time */}
+      {/* Start time: Begin over the delay threshold, or fixing it later */}
       <ValueEntryOverlay
         open={beginOpen}
-        title={beginMode === "recap" ? `${dropWord} recap` : `${dropWord} · start time`}
+        title={beginMode === "start" ? `Begin ${pumpOff ? "pump off" : "delivery"} · delayed` : "Start time"}
         fields={[]}
         footer={
           <div style={{ width: "100%" }}>
-            {tankTotals.length > 0 && (
-              <div style={{ marginBottom: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: "8px 10px" }}>
-                <div style={{ ...miniLabel, marginBottom: 4 }}>Into each tank</div>
-                {tankTotals.map((t) => {
-                  const info = productInfo(t.productId);
-                  return (
-                    <div key={t.tank} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "4px 0", fontSize: 14 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: info.hex ?? productColorFor(info.name) }} />
-                      <span style={{ fontWeight: 800 }}>Tank {t.tank}</span>
-                      <span style={{ color: muted, fontSize: 12, flex: 1, minWidth: 0 }}>{info.code} · C{[...t.comps].sort((a, b) => a - b).join(", C")}</span>
-                      <span style={{ fontWeight: 800, whiteSpace: "nowrap" }}>
-                        {Math.round(t.gross).toLocaleString("en-US")} gal
-                        {t.netAll && t.net > 0 && <span style={{ color: muted, fontWeight: 600, fontSize: 12 }}> · net {Math.round(t.net).toLocaleString("en-US")}</span>}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
             <input type="datetime-local" value={beginText} onChange={(e) => setBeginText(e.target.value)} style={{ ...fieldInput, marginBottom: 10 }} />
             <DelayReasonField times={beginTimes} threshold={settings.delivery_delay_threshold_minutes} reasons={reasons} kind="delivery"
               reasonId={reasonId} note={note} onChange={(id, n) => { setReasonId(id); setNote(n); }} />
@@ -809,7 +1087,7 @@ export function DeliveryDashboard({
         hint={`Arrived ${fmtTime(arrivedAt)}`}
         error={beginErr}
         onCancel={() => setBeginOpen(false)}
-        submitLabel={beginMode === "recap" ? "Continue" : "Save"}
+        submitLabel={beginMode === "start" ? "Begin" : "Save"}
         onSubmit={saveBegin}
       />
 
@@ -857,32 +1135,6 @@ export function DeliveryDashboard({
         onCancel={() => setWaterOpen(false)}
         submitLabel="Done"
         onSubmit={() => { setWaterOpen(false); onSaveProgress({ tanks: buildTanks() }); }}
-      />
-
-      {/* Finish */}
-      <ValueEntryOverlay
-        open={finishOpen}
-        title="Finish Delivery"
-        fields={isLast ? [{ key: "miles", label: "Enter ending miles", value: endMiles, onChange: setEndMiles, decimal: true, showLabel: true }] : []}
-        footer={
-          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
-            {isLast && beginMiles != null && <div style={{ fontSize: 12, color: muted, marginTop: -6 }}>Beginning: {beginMiles.toLocaleString("en-US")}</div>}
-            <div>
-              <div style={{ ...miniLabel, marginBottom: 4 }}>Finished</div>
-              <input type="datetime-local" value={departText} onChange={(e) => setDepartText(e.target.value)} style={fieldInput} />
-            </div>
-            {retained.length > 0 && (
-              <div style={{ fontSize: 12, color: "#93c5fd" }}>
-                C{retained.map((c) => c.comp_number).join(", C")} stay aboard. You&apos;ll pick the next delivery after this.
-              </div>
-            )}
-            <SignatureAccept savedPath={signature} onSave={onSaveSignature} accepted={signed} onAccept={setSigned} who="the delivering driver" />
-          </div>
-        }
-        error={finishErr}
-        onCancel={() => setFinishOpen(false)}
-        submitLabel={nextLeg ? "Complete · Next Leg" : "Complete"}
-        onSubmit={submit}
       />
 
       {/* Consignee signature: a card in portrait, the whole screen sideways */}

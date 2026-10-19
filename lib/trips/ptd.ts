@@ -17,6 +17,7 @@ function noLoadText(reason: string | null | undefined, note: string | null | und
 }
 import { cancelReasonLabel } from "./cancelReasons.ts";
 import { tripMiles, truckChanges } from "./truckChange.ts";
+import { additiveLabel, deliveryDetailsFor, issueLabel } from "./deliveryDetails.ts";
 import type {
   TripCompartmentLoadRow,
   TripDeliveryRow,
@@ -165,6 +166,21 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     return { compartments: here.map((c) => c.comp), drops, tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
   };
 
+  // Noted after the drop: odometer, bio blended, additives, issues.
+  const deliveryNotes = (d: TripDeliveryRow) => {
+    const det = deliveryDetailsFor(input.events, d.delivery_id);
+    const bio = input.compLoads
+      .filter((c) => c.delivery_id === d.delivery_id && c.bio_blend)
+      .sort((a, b) => a.comp_number - b.comp_number)
+      .map((c) => `C${c.comp_number} ${c.bio_blend}`);
+    return {
+      odometer: det?.odometer ?? null,
+      bioBlends: bio,
+      additives: det ? [...det.additives.map(additiveLabel), ...(det.additiveNote ? [det.additiveNote] : [])] : [],
+      issues: det ? [...det.issues.map(issueLabel), ...(det.issueNote ? [det.issueNote] : [])] : [],
+    };
+  };
+
   const deliveries = input.deliveries
     .filter((d) => d.status !== "cancelled")
     .sort((a, b) => a.seq - b.seq)
@@ -179,6 +195,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       consigneeName: d.consignee_name,
       consigneeSignature: d.consignee_signature,
       ...deliveryDrops(d),
+      ...deliveryNotes(d),
     }));
 
   // Loading drivers, with when they accepted (signature_accepted events).

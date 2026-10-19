@@ -20,6 +20,7 @@ import type {
   TripRow,
 } from "./types.ts";
 import { splitDelayChoice } from "./terminalIssues.ts";
+import { DELIVERY_DETAILS_EVENT, detailsPayload, hasDetails, type DeliveryDetails } from "./deliveryDetails.ts";
 
 type Clock = { now: Date; newId: () => string };
 
@@ -585,6 +586,10 @@ export function finishDelivery(
     // Kept aboard for the next leg of this same trip (Retain on the delivery
     // screen). They come off this delivery and the trip stays open.
     retained?: DeliveredCompartment[];
+    // Noted after the drop: bio blended per compartment, additives, issues,
+    // the odometer at this stop.
+    bioBlends?: { compartment_load_id: string; bio_blend: string | null }[];
+    details?: DeliveryDetails;
   } & Clock,
 ): { tripComplete: boolean } {
   const d = args.delivery;
@@ -634,6 +639,10 @@ export function finishDelivery(
     });
   }
 
+  for (const b of args.bioBlends ?? []) {
+    store.put("trip_compartment_loads", { compartment_load_id: b.compartment_load_id, bio_blend: b.bio_blend });
+  }
+
   const remaining = store.list(
     "trip_deliveries",
     (x) => x.trip_id === d.trip_id && x.status === "planned" && x.delivery_id !== d.delivery_id,
@@ -670,6 +679,12 @@ export function finishDelivery(
       trip_complete: tripComplete,
     },
   });
+  if (args.details && hasDetails(args.details)) {
+    logEvent(store, args.newId, {
+      trip_id: d.trip_id, event_type: DELIVERY_DETAILS_EVENT, occurred_at: at, actor_id: args.userId,
+      delivery_id: d.delivery_id, payload: detailsPayload(args.details),
+    });
+  }
   if (args.signed) {
     logEvent(store, args.newId, {
       trip_id: d.trip_id, event_type: "signature_accepted", occurred_at: at, actor_id: args.userId,
