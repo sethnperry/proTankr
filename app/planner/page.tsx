@@ -1607,6 +1607,14 @@ export default function CalculatorPage() {
         netTouched: c.net_gallons != null && c.net_calculated_gallons != null && c.net_gallons !== c.net_calculated_gallons,
       };
     }
+    // Compartments with no trip row yet still default to the rack's pick, so
+    // Finish Loading doesn't ask for a supplier already chosen.
+    for (const [k, v] of Object.entries(compPlan)) {
+      const n = Number(k);
+      if (compDefaults[n] || !v || v.empty || !v.productId) continue;
+      const picked = compPicks.find((p) => p.product_id === String(v.productId));
+      if (picked) compDefaults[n] = { bol: null, supplier: picked.name, supplierId: picked.supplier_id, net: null, netTouched: false };
+    }
     const snap = tripSnapshot(tripStoreObj, tripPickup.trip_id);
     const allComps = Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[];
     const trips = Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[];
@@ -1636,7 +1644,7 @@ export default function CalculatorPage() {
       onBackToDashboard: () => leaveTo("/planner/home", "Opening dashboard…"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds]);
+  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds, compPlan]);
 
   // Runs right after recordLoadCompleted wrote gross/temp/API for this load.
   const recordTripLoaded = useCallback((extras: TripLoadExtras | undefined, editOnly: boolean) => {
@@ -2468,17 +2476,7 @@ const lastProductInfoById = useMemo(() => {
   const [supplierPromptToken, setSupplierPromptToken] = useState(0);
   const beginAfterSupplierRef = useRef(false);
   const supplierPromptedForRef = useRef<string | null>(null);
-  const needsSupplierPick = !supplierPicks.skipped && resolvedSupplierPicks.length === 0;
-  // Arrived at the rack on a trip: ask which supplier dispatch gave, once per
-  // pickup. Off a trip the ask comes when LOAD is tapped (below).
-  useEffect(() => {
-    const p = tripWaitingPickup;
-    if (!p?.arrived_at || !needsSupplierPick || !location.selectedTerminalId) return;
-    if (p.terminal_id && String(p.terminal_id) !== String(location.selectedTerminalId)) return;
-    if (supplierPromptedForRef.current === p.pickup_id) return;
-    supplierPromptedForRef.current = p.pickup_id;
-    setSupplierPromptToken((n) => n + 1);
-  }, [tripWaitingPickup, needsSupplierPick, location.selectedTerminalId]);
+  const needsSupplierPick = supplierPicks.loaded && !supplierPicks.skipped && resolvedSupplierPicks.length === 0;
   // The supplier picked on Begin Trip is preset at every rack on the trip
   // (rack hops, a later visit). Reads storage directly so it never overwrites
   // a pick or a skip already saved for this terminal.
@@ -2487,6 +2485,21 @@ const lastProductInfoById = useMemo(() => {
     const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
     return trip && trip.status !== "complete" && trip.status !== "cancelled" ? trip.trip_id : null;
   }, [effectiveUserId, tripStoreHook.state]);
+  // Arrived at the rack on a trip: ask which supplier dispatch gave, once per
+  // pickup. Off a trip the ask comes when LOAD is tapped (below).
+  useEffect(() => {
+    const p = tripWaitingPickup;
+    if (!p?.arrived_at || !needsSupplierPick || !location.selectedTerminalId) return;
+    if (p.terminal_id && String(p.terminal_id) !== String(location.selectedTerminalId)) return;
+    if (supplierPromptedForRef.current === p.pickup_id) return;
+    // A pick (or skip) already saved for this rack, or the trip's supplier
+    // about to be preset below: nothing to ask.
+    const tid = String(location.selectedTerminalId);
+    if (readPicks(effectiveUserId, tid)) return;
+    if (openTripIdForSupplier && effectiveUserId && getTripSupplier(effectiveUserId, openTripIdForSupplier)) return;
+    supplierPromptedForRef.current = p.pickup_id;
+    setSupplierPromptToken((n) => n + 1);
+  }, [tripWaitingPickup, needsSupplierPick, location.selectedTerminalId, effectiveUserId, openTripIdForSupplier]);
   useEffect(() => {
     const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
     if (!openTripIdForSupplier || !tid || !effectiveUserId) return;

@@ -10,12 +10,17 @@ import { readPicks, writePicks, type SupplierPick } from "./picks";
 export function useSupplierPicks(userId: string | null, terminalId: string | null) {
   const [picks, setPicksState] = useState<SupplierPick[]>([]);
   const [skipped, setSkippedState] = useState(false);
+  // Which terminal the state above was read for. Until it matches, the picks
+  // aren't known yet, so callers must not treat them as "none picked".
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   useEffect(() => {
     const v = readPicks(userId, terminalId);
     setPicksState(v?.picks ?? []);
     setSkippedState(!!v?.skipped);
+    setLoadedFor(`${userId}|${terminalId}`);
   }, [userId, terminalId]);
+  const loaded = loadedFor === `${userId}|${terminalId}`;
 
   const setPicks = useCallback((next: SupplierPick[]) => {
     setPicksState(next);
@@ -34,5 +39,5 @@ export function useSupplierPicks(userId: string | null, terminalId: string | nul
     writePicks(userId, terminalId, null);
   }, [userId, terminalId]);
 
-  return { picks, skipped, setPicks, skip, clear };
+  return { picks, skipped, loaded, setPicks, skip, clear };
 }

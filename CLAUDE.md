@@ -11648,3 +11648,19 @@ No migration. `tsc`, 255 tests and `next build --webpack` pass. The busy look wa
   that session). Until it runs, the location editor saves without it and the
   drop screen just doesn't show hose length.
 - Not built: sell rate / turnover beyond the gal/hr estimate.
+
+### Supplier no longer re-asked on arrival or at Finish Loading (2026-10-19)
+
+Reported at Buckey North: with a supplier already picked, arriving asked again
+before the Planner opened, and Finish Loading's BOL Next opened the supplier
+list again.
+- Arrival: `useSupplierPicks` starts empty and reads the phone's saved pick in
+  an effect, so on the Planner's first render after Arrive it looked like
+  "nothing picked" and the prompt fired. The hook now returns `loaded`, and
+  `needsSupplierPick` waits for it. The arrival prompt also checks storage and
+  the trip's supplier directly before asking.
+- Finish Loading: the BOL supplier only defaulted from the pick for
+  compartments that already had a trip row, which a first load doesn't have
+  yet. `tripModeForLoading` now fills a default from the pick for every
+  planned compartment. With a supplier filled, Next on the BOL goes to API.
+Not click-tested.
