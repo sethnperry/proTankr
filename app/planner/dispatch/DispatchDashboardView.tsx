@@ -14,6 +14,7 @@
 // It doesn't replace the dispatch system; it sits beside it.
 
 import React, { useState } from "react";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { DashStyles, SectionLabel, useDashLook } from "../home/dashLook";
 import { GaugePanel, ToolPanel, type GaugeCell, type ToolItem } from "../home/DashboardChrome";
 import { EXPIRY_COLOR } from "@/lib/expiry";
@@ -28,7 +29,6 @@ import { CardBusy, busyProps } from "@/lib/ui/pending";
 
 export type DispatchMode = "plan" | "live";
 
-export const HORIZONS = [7, 14, 30] as const;
 
 const RED = EXPIRY_COLOR.expired;
 const ORANGE = EXPIRY_COLOR.expiring;
@@ -245,8 +245,6 @@ export function DispatchDashboardView(props: {
   // PLAN
   alerts: PlanAlert[];
   planCounts: PlanCounts;
-  horizon: number;
-  onHorizon: (d: number) => void;
   planLoading?: boolean;
   onOpenDriver: (userId: string) => void;
   // Slots
@@ -259,6 +257,19 @@ export function DispatchDashboardView(props: {
   const p = props;
   const live = p.mode === "live";
 
+  const [expOpen, setExpOpen] = useState(false);
+  // One expirations tile, worst tier first: expired (red), then 7 days
+  // (orange), then 30 days (yellow). Counts only that tier, so resolving the
+  // reds moves the tile down to the oranges.
+  const pc = p.planCounts;
+  const expTile = pc.expired
+    ? { label: "Expired", count: pc.expired, color: RED }
+    : pc.week
+      ? { label: "Expiring · 7 days", count: pc.week, color: ORANGE }
+      : pc.month
+        ? { label: "Expiring · 30 days", count: pc.month, color: YELLOW }
+        : { label: "Expirations", count: 0, color: GREY };
+
   const open = p.conflicts.filter((c) => !c.handled).length;
   const cells: GaugeCell[] = live
     ? [
@@ -268,9 +279,7 @@ export function DispatchDashboardView(props: {
         { label: "Rolling", value: String(p.counts.loadedRolling), color: p.counts.loadedRolling ? "#4ade80" : GREY },
       ]
     : [
-        { label: "Expired", value: String(p.planCounts.expired), color: p.planCounts.expired ? RED : GREY },
-        { label: "7 Days", value: String(p.planCounts.week), color: p.planCounts.week ? ORANGE : GREY, onClick: () => p.onHorizon(7) },
-        { label: `${p.horizon > 7 ? p.horizon : 30} Days`, value: String(p.planCounts.month), color: p.planCounts.month ? YELLOW : GREY, onClick: () => p.onHorizon(30) },
+        { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true), wide: true },
         { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY },
       ];
 
@@ -338,41 +347,29 @@ export function DispatchDashboardView(props: {
             </>
           ) : (
             <>
-              <SectionLabel first right={
-                <span style={{ display: "inline-flex", gap: 4 }}>
-                  {HORIZONS.map((d) => (
-                    <button key={d} type="button" onClick={() => p.onHorizon(d)} className="dash-press"
-                      style={{ border: `1px solid ${p.horizon === d ? "#fff" : L.hairline}`, background: p.horizon === d ? "#fff" : "transparent",
-                        color: p.horizon === d ? "#000" : L.muted, fontSize: 10, fontWeight: 800, padding: "2px 7px", cursor: "pointer", letterSpacing: 0 }}>
-                      {d}d
-                    </button>
-                  ))}
-                </span>
-              }>
-                Expiring · next {p.horizon} days
-              </SectionLabel>
-              {p.planLoading && groups.length === 0 ? (
-                <div style={{ fontSize: 14, color: L.muted }}>Loading…</div>
-              ) : groups.length === 0 ? (
-                <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
-                  Nothing expires in the next {p.horizon} days.
-                </div>
-              ) : groups.map((g) => (
-                <AlertGroup key={g.subjectId} subject={g.subject} isEquipment={g.isEquipment} items={g.items}
-                  onOpen={g.isEquipment ? undefined : () => p.onOpenDriver(g.subjectId)} />
-              ))}
+              <SectionLabel first>Parked &amp; cancelled</SectionLabel>
+              {p.planBoard}
             </>
           )}
         </div>
         <div className="dash-side">
-          <SectionLabel first>{live ? "Loads" : "Parked & cancelled"}</SectionLabel>
-          {live ? p.liveBoard : p.planBoard}
-          <SectionLabel>Drivers</SectionLabel>
+          {live && (<><SectionLabel first>Loads</SectionLabel>{p.liveBoard}</>)}
+          <SectionLabel first={!live}>Drivers</SectionLabel>
           {p.drivers}
         </div>
       </div>
       <SectionLabel>Tools</SectionLabel>
       <ToolPanel items={p.tools} />
+      <FullscreenModal open={expOpen} title="Expirations · next 30 days" onClose={() => setExpOpen(false)}>
+        {p.planLoading && groups.length === 0 ? (
+          <div style={{ fontSize: 14, color: L.muted }}>Loading…</div>
+        ) : groups.length === 0 ? (
+          <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Nothing expired or expiring in the next 30 days.</div>
+        ) : groups.map((g) => (
+          <AlertGroup key={g.subjectId} subject={g.subject} isEquipment={g.isEquipment} items={g.items}
+            onOpen={g.isEquipment ? undefined : () => { setExpOpen(false); p.onOpenDriver(g.subjectId); }} />
+        ))}
+      </FullscreenModal>
     </div>
   );
 }

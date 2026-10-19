@@ -199,17 +199,13 @@ export default function DispatchPage() {
   // ── Dispatch Dashboard (no driver picked) ─────────────────────────────────
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
-  const [horizon, setHorizonState] = useState<number>(30);
   useEffect(() => {
     try {
       const m = localStorage.getItem("proTankr:dispatchMode");
       if (m === "plan" || m === "live") setModeState(m);
-      const h = Number(localStorage.getItem("proTankr:dispatchHorizon"));
-      if ([7, 14, 30].includes(h)) setHorizonState(h);
     } catch { /* storage blocked */ }
   }, []);
   const setMode = (m: DispatchMode) => { setModeState(m); try { localStorage.setItem("proTankr:dispatchMode", m); } catch {} };
-  const setHorizon = (h: number) => { setHorizonState(h); try { localStorage.setItem("proTankr:dispatchHorizon", String(h)); } catch {} };
   const [companyName, setCompanyName] = useState<string | null>(null);
   useEffect(() => {
     if (!companyId) return;
@@ -236,7 +232,7 @@ export default function DispatchPage() {
     () => liveCounts(fleet.trips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
     [fleet.trips],
   );
-  const alerts = useMemo(() => (plan.input ? planAlerts(plan.input, horizon) : []), [plan.input, horizon]);
+  const alerts = useMemo(() => (plan.input ? planAlerts(plan.input, 30) : []), [plan.input]);
   const pCounts = useMemo(() => planCounts(alerts), [alerts]);
   const terminalInfo = (id: string) => {
     const t = terminalsCatalog.find((x) => String(x.terminal_id) === id);
@@ -462,7 +458,7 @@ export default function DispatchPage() {
         notify={notifier.permission} onEnableNotify={notifier.enable}
         onAck={acks.ack} ackError={acks.error}
         terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
-        alerts={alerts} planCounts={pCounts} horizon={horizon} onHorizon={setHorizon} planLoading={plan.loading}
+        alerts={alerts} planCounts={pCounts} planLoading={plan.loading}
         onOpenDriver={(id) => setSelectedDriverId(id)}
         liveBoard={<FleetBoard sections={["live"]} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
