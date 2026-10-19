@@ -5,7 +5,7 @@
 // driver arrives at a delivery. Two halves:
 //
 //   Arrived    → the drop clock is running from arrival (delay timer). Shows
-//                what to know before getting out: hose length and notes saved
+//                what to know before getting out: hose length per tank and notes saved
 //                for this store, hours since the last drop here, and the last
 //                load of each product being dropped (our driver, or the
 //                carrier's company). The only entry is ending miles.
@@ -237,7 +237,7 @@ export function DeliveryDashboard({
   open: boolean;
   title: string;
   delivery: TripDeliveryRow;
-  location: DeliveryLocation | null; // hose length and notes
+  location: DeliveryLocation | null; // notes (hose length is per tank)
   compartments: TripCompartmentLoadRow[]; // aboard and headed here (or unassigned)
   laterAboard: TripCompartmentLoadRow[]; // aboard, headed to another stop
   trailerId: string | null;
@@ -806,7 +806,13 @@ export function DeliveryDashboard({
   );
 
   // ── Before getting out ─────────────────────────────────────────────────────
-  const hose = location?.hose_length_ft ?? null;
+  // Hose length is per tank (fills sit at different distances). Tanks for
+  // the products aboard first, then any other tank with a length saved.
+  const hoseTanks = locationTanks
+    .filter((t) => t.location_id === delivery.location_id && (t.hose_length_ft != null || productIdsHere.includes(t.product_id)))
+    .sort((a, b) => Number(!productIdsHere.includes(a.product_id)) - Number(!productIdsHere.includes(b.product_id))
+      || a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }));
+  const anyHose = hoseTanks.some((t) => t.hose_length_ft != null);
   const notes = location?.notes?.trim() || null;
   const knowCard = (
     <div style={{ ...sectionCard, padding: 0 }}>
@@ -818,16 +824,30 @@ export function DeliveryDashboard({
               {store.loading && !pastDrops.length ? "…" : fmtAgo(lastDropAt, now) ?? "None on record"}
             </div>
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={miniLabel}>Hose</div>
-            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: hose == null ? muted : "#fff" }}>
-              {hose == null ? "Not saved" : `${hose.toLocaleString("en-US")} ft`}
-            </div>
+            {!anyHose ? (
+              <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: muted }}>Not saved</div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 2 }}>
+                {hoseTanks.map((t) => {
+                  const info = productInfo(t.product_id);
+                  return (
+                    <span key={t.tank_id} style={{ fontSize: 14, whiteSpace: "nowrap" }}>
+                      <span style={{ color: muted }}>T{t.tank_number}{t.product_id ? ` ${info.code}` : ""} </span>
+                      <span style={{ fontWeight: 800, color: t.hose_length_ft == null ? muted : "#fff" }}>
+                        {t.hose_length_ft == null ? "–" : `${t.hose_length_ft.toLocaleString("en-US")} ft`}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
         {notes
           ? <div style={{ marginTop: 10, fontSize: 14, whiteSpace: "pre-wrap", lineHeight: 1.4 }}>{notes}</div>
-          : hose == null && <div style={{ marginTop: 8, fontSize: 12, color: muted }}>Save hose length and notes in Delivery Locations.</div>}
+          : !anyHose && <div style={{ marginTop: 8, fontSize: 12, color: muted }}>Save hose length per tank and notes in Delivery Locations.</div>}
       </div>
       <div style={{ padding: "8px 14px 12px" }}>
         <div style={{ ...miniLabel, marginBottom: 4 }}>Last load of each product</div>

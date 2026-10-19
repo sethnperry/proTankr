@@ -147,25 +147,30 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
       const cols = "location_id,company_id,name,location_number,address,city,state,lat,lon,delivery_type,notes,is_active";
       const query = (c: string) => supabase.from("delivery_locations").select(c).eq("company_id", companyId).eq("is_active", true).order("name");
       const [first, s] = await Promise.all([
-        query(`${cols},zip,hose_length_ft`),
+        query(`${cols},zip`),
         supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId),
       ]);
-      // Older databases lack zip (2026-10-11) or hose_length_ft (2026-10-19);
-      // read without the missing one.
-      const l = !first.error ? first : await query(`${cols},zip`).then((r) => (r.error ? query(cols) : r));
+      // Before the 2026-10-11 migration there is no zip column; read without it.
+      const l = first.error ? await query(cols) : first;
       if (l.error) return;
       const starred = new Set(((s.data ?? []) as { location_id: string }[]).map((r) => r.location_id));
       const locs = ((l.data ?? []) as unknown as Omit<DeliveryLocation, "starred">[]).map((r) => ({
         ...r, lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon), starred: starred.has(r.location_id),
-        hose_length_ft: r.hose_length_ft == null ? null : Number(r.hose_length_ft),
       }));
       let tankRows: LocationTank[] = [];
       const ids = locs.map((x) => x.location_id);
       for (let i = 0; i < ids.length; i += 200) {
-        const t = await supabase.from("delivery_location_tanks")
-          .select("tank_id,location_id,tank_number,product_id,capacity_gallons,is_active")
-          .in("location_id", ids.slice(i, i + 200)).eq("is_active", true);
-        tankRows = tankRows.concat(((t.data ?? []) as LocationTank[]).map((x) => ({ ...x, capacity_gallons: x.capacity_gallons == null ? null : Number(x.capacity_gallons) })));
+        // hose_length_ft (2026-10-19) may not exist yet; read without it then.
+        const tq = (c: string) => supabase.from("delivery_location_tanks")
+          .select(c).in("location_id", ids.slice(i, i + 200)).eq("is_active", true);
+        const base = "tank_id,location_id,tank_number,product_id,capacity_gallons,is_active";
+        let t = await tq(`${base},hose_length_ft`);
+        if (t.error) t = await tq(base);
+        tankRows = tankRows.concat(((t.data ?? []) as unknown as LocationTank[]).map((x) => ({
+          ...x,
+          capacity_gallons: x.capacity_gallons == null ? null : Number(x.capacity_gallons),
+          hose_length_ft: x.hose_length_ft == null ? null : Number(x.hose_length_ft),
+        })));
       }
       setLocations(locs);
       setTanks(tankRows);

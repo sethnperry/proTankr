@@ -31,7 +31,7 @@ import {
   smallInput,
 } from "./tripUi";
 
-type TankDraft = { tank_id: string | null; tank_number: string; product_id: string; capacity: string };
+type TankDraft = { tank_id: string | null; tank_number: string; product_id: string; capacity: string; hose: string };
 type Draft = {
   location_id: string | null;
   name: string;
@@ -44,7 +44,6 @@ type Draft = {
   lon: number | null;
   delivery_type: DeliveryType;
   notes: string;
-  hose: string;
   tanks: TankDraft[];
   removedTankIds: string[];
 };
@@ -53,18 +52,17 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   if (!l) {
     return {
       location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "",
-      lat: null, lon: null, delivery_type: "drop", notes: "", hose: "", tanks: [], removedTankIds: [],
+      lat: null, lon: null, delivery_type: "drop", notes: "", tanks: [], removedTankIds: [],
     };
   }
   return {
     location_id: l.location_id, name: l.name, location_number: l.location_number ?? "", address: l.address ?? "",
     city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", lat: l.lat, lon: l.lon,
     delivery_type: l.delivery_type, notes: l.notes ?? "",
-    hose: l.hose_length_ft == null ? "" : String(l.hose_length_ft),
     tanks: tanks
       .filter((t) => t.location_id === l.location_id)
       .sort((a, b) => a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }))
-      .map((t) => ({ tank_id: t.tank_id, tank_number: t.tank_number, product_id: t.product_id ?? "", capacity: t.capacity_gallons == null ? "" : String(t.capacity_gallons) })),
+      .map((t) => ({ tank_id: t.tank_id, tank_number: t.tank_number, product_id: t.product_id ?? "", capacity: t.capacity_gallons == null ? "" : String(t.capacity_gallons), hose: t.hose_length_ft == null ? "" : String(t.hose_length_ft) })),
     removedTankIds: [],
   };
 }
@@ -174,23 +172,14 @@ export function LocationEditor({
         lat, lon,
         delivery_type: draft.delivery_type,
         notes: draft.notes.trim() || null,
-        hose_length_ft: draft.hose.trim() && Number.isFinite(Number(draft.hose)) ? Number(draft.hose) : null,
         client_updated_at: now,
       };
       const write = (r: Partial<typeof row>) => draft.location_id
         ? supabase.from("delivery_locations").update(r).eq("location_id", draft.location_id).select("location_id").single()
         : supabase.from("delivery_locations").insert({ ...r, created_by: userId }).select("location_id").single();
       let res = await write(row);
-      // Older databases lack hose_length_ft (2026-10-19) or zip (2026-10-11);
-      // save without whichever is missing.
-      if (res.error && /hose_length_ft/i.test(res.error.message)) {
-        const { hose_length_ft: _h, ...noHose } = row;
-        res = await write(noHose);
-        if (res.error && /zip/i.test(res.error.message)) {
-          const { zip: _zip, ...noZip } = noHose;
-          res = await write(noZip);
-        }
-      } else if (res.error && /zip/i.test(res.error.message)) {
+      // Before the 2026-10-11 migration there is no zip column; save without it.
+      if (res.error && /zip/i.test(res.error.message)) {
         const { zip: _zip, ...noZip } = row;
         res = await write(noZip);
       }
@@ -201,24 +190,28 @@ export function LocationEditor({
       const keep = draft.tanks.filter((t) => t.tank_number.trim());
       const kept = keep.filter((t) => t.tank_id).map((t) => ({
         tank_id: t.tank_id, location_id: locationId, tank_number: t.tank_number.trim(), product_id: t.product_id || null,
-        capacity_gallons: numOrNull(t.capacity), is_active: true, client_updated_at: now,
+        capacity_gallons: numOrNull(t.capacity), hose_length_ft: numOrNull(t.hose), is_active: true, client_updated_at: now,
       }));
       const added = keep.filter((t) => !t.tank_id).map((t) => ({
         location_id: locationId, tank_number: t.tank_number.trim(), product_id: t.product_id || null,
-        capacity_gallons: numOrNull(t.capacity), is_active: true, client_updated_at: now,
+        capacity_gallons: numOrNull(t.capacity), hose_length_ft: numOrNull(t.hose), is_active: true, client_updated_at: now,
       }));
+      // Before the 2026-10-19 migration tanks have no hose_length_ft column.
+      const upsertTanks = async (rows: Record<string, unknown>[], onConflict: string) => {
+        let r = await supabase.from("delivery_location_tanks").upsert(rows, { onConflict });
+        if (r.error && /hose_length_ft/i.test(r.error.message)) {
+          r = await supabase.from("delivery_location_tanks").upsert(rows.map(({ hose_length_ft: _h, ...x }) => x), { onConflict });
+        }
+        if (r.error) throw new Error(r.error.message);
+      };
       if (draft.removedTankIds.length) {
         const r = await supabase.from("delivery_location_tanks").update({ is_active: false, client_updated_at: now }).in("tank_id", draft.removedTankIds);
         if (r.error) throw new Error(r.error.message);
       }
-      if (kept.length) {
-        const r = await supabase.from("delivery_location_tanks").upsert(kept, { onConflict: "tank_id" });
-        if (r.error) throw new Error(r.error.message);
-      }
+      if (kept.length) await upsertTanks(kept, "tank_id");
       if (added.length) {
         // A number that was retired earlier comes back to life on the same row.
-        const r = await supabase.from("delivery_location_tanks").upsert(added, { onConflict: "location_id,tank_number" });
-        if (r.error) throw new Error(r.error.message);
+        await upsertTanks(added, "location_id,tank_number");
       }
       onSaved({ ...row, location_id: locationId, is_active: true, starred: location?.starred ?? false });
     } catch (e) {
@@ -271,9 +264,6 @@ export function LocationEditor({
           <button type="button" style={toggle(draft.delivery_type === "drop")} onClick={() => patch({ delivery_type: "drop" })}>Drop</button>
           <button type="button" style={toggle(draft.delivery_type === "pump_off")} onClick={() => patch({ delivery_type: "pump_off" })}>Pump off</button>
         </div>
-        <div style={{ ...fieldLabel, marginTop: 12 }}>Hose length needed (ft)</div>
-        <input value={draft.hose} onChange={(e) => patch({ hose: e.target.value.replace(/[^0-9.]/g, "") })} inputMode="decimal"
-          placeholder="e.g. 50" style={fieldInput} />
         <div style={{ ...fieldLabel, marginTop: 12 }}>Notes</div>
         <textarea value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} rows={3}
           placeholder="Gate code, where the fills are, anything to know before you get out…" style={{ ...fieldInput, resize: "vertical", fontFamily: "inherit" }} />
@@ -283,16 +273,17 @@ export function LocationEditor({
         <div style={sectionTitle}>Tanks</div>
         {draft.tanks.length === 0 && <div style={{ fontSize: 14, color: muted, marginBottom: 8 }}>None yet. Tanks are also remembered as you deliver.</div>}
         {draft.tanks.map((t, i) => (
-          <div key={t.tank_id ?? `new-${i}`} style={{ display: "grid", gridTemplateColumns: "70px 1fr 90px 28px", gap: 6, alignItems: "center", marginBottom: 8 }}>
+          <div key={t.tank_id ?? `new-${i}`} style={{ display: "grid", gridTemplateColumns: "56px 1fr 70px 62px 24px", gap: 6, alignItems: "center", marginBottom: 8 }}>
             <input value={t.tank_number} onChange={(e) => patchTank(i, { tank_number: e.target.value })} placeholder="Tank" style={smallInput} />
             <CustomSelect value={t.product_id} onChange={(v) => patchTank(i, { product_id: v })} options={productOptions} buttonStyle={smallInput} />
             <input value={t.capacity} onChange={(e) => patchTank(i, { capacity: e.target.value })} placeholder="Gal" inputMode="numeric" style={smallInput} />
+            <input value={t.hose} onChange={(e) => patchTank(i, { hose: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="Hose ft" inputMode="decimal" style={smallInput} />
             <button type="button" aria-label="Remove tank"
               onClick={() => setDraft((d) => ({ ...d, tanks: d.tanks.filter((_, j) => j !== i), removedTankIds: t.tank_id ? [...d.removedTankIds, t.tank_id] : d.removedTankIds }))}
               style={{ border: "none", background: "transparent", color: muted, fontSize: 18, cursor: "pointer" }}>×</button>
           </div>
         ))}
-        <button type="button" onClick={() => setDraft((d) => ({ ...d, tanks: [...d.tanks, { tank_id: null, tank_number: "", product_id: "", capacity: "" }] }))} style={dashedBtn}>
+        <button type="button" onClick={() => setDraft((d) => ({ ...d, tanks: [...d.tanks, { tank_id: null, tank_number: "", product_id: "", capacity: "", hose: "" }] }))} style={dashedBtn}>
           + Tank
         </button>
       </div>

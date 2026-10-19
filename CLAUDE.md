@@ -11643,10 +11643,13 @@ No migration. `tsc`, 255 tests and `next build --webpack` pass. The busy look wa
 - Additives/issues/odometer are one `delivery_details` trip event
   (`lib/trips/deliveryDetails.ts`, 3 tests; no schema change). The PTD prints
   odometer, bio blended, additives and issues per delivery.
-- Hose length: migration `20261019000000_delivery_location_hose_length.sql`
-  (`delivery_locations.hose_length_ft`), **not applied** (no DB access from
-  that session). Until it runs, the location editor saves without it and the
-  drop screen just doesn't show hose length.
+- Hose length is **per tank** (fills sit at different distances):
+  migration `20261019000000_delivery_location_hose_length.sql` adds
+  `delivery_location_tanks.hose_length_ft` (first written per location, moved
+  to tanks before it was applied). Edited in Delivery Locations' tank rows;
+  the drop screen lists each tank's length (tanks for products aboard first).
+  **Not applied yet** (no DB access from that session); until it runs, tanks
+  save and load without it.
 - Not built: sell rate / turnover beyond the gal/hr estimate.
 
 ### Supplier no longer re-asked on arrival or at Finish Loading (2026-10-19)
