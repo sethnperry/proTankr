@@ -2486,8 +2486,6 @@ const lastProductInfoById = useMemo(() => {
   );
   resolvedSupplierPicksRef.current = resolvedSupplierPicks;
   const [supplierPromptToken, setSupplierPromptToken] = useState(0);
-  const beginAfterSupplierRef = useRef(false);
-  const supplierPromptedForRef = useRef<string | null>(null);
   const needsSupplierPick = supplierPicks.loaded && !supplierPicks.skipped && resolvedSupplierPicks.length === 0;
   // The supplier picked on Begin Trip is preset at every rack on the trip
   // (rack hops, a later visit). Reads storage directly so it never overwrites
@@ -2497,21 +2495,15 @@ const lastProductInfoById = useMemo(() => {
     const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
     return trip && trip.status !== "complete" && trip.status !== "cancelled" ? trip.trip_id : null;
   }, [effectiveUserId, tripStoreHook.state]);
-  // Arrived at the rack on a trip: ask which supplier dispatch gave, once per
-  // pickup. Off a trip the ask comes when LOAD is tapped (below).
+  // Which supplier is asked once loading begins (Plan Review), not while
+  // planning: open the picker then if none is set yet. The token resets when
+  // Plan Review closes so the next load asks fresh.
   useEffect(() => {
-    const p = tripWaitingPickup;
-    if (!p?.arrived_at || !needsSupplierPick || !location.selectedTerminalId) return;
-    if (p.terminal_id && String(p.terminal_id) !== String(location.selectedTerminalId)) return;
-    if (supplierPromptedForRef.current === p.pickup_id) return;
-    // A pick (or skip) already saved for this rack, or the trip's supplier
-    // about to be preset below: nothing to ask.
-    const tid = String(location.selectedTerminalId);
-    if (readPicks(effectiveUserId, tid)) return;
-    if (openTripIdForSupplier && effectiveUserId && getTripSupplier(effectiveUserId, openTripIdForSupplier)) return;
-    supplierPromptedForRef.current = p.pickup_id;
+    if (!loadWorkflow.loadingOpen) { setSupplierPromptToken(0); return; }
+    if (loadWorkflow.reportLines || !needsSupplierPick || !location.selectedTerminalId) return;
     setSupplierPromptToken((n) => n + 1);
-  }, [tripWaitingPickup, needsSupplierPick, location.selectedTerminalId, effectiveUserId, openTripIdForSupplier]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadWorkflow.loadingOpen]);
   useEffect(() => {
     const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
     if (!openTripIdForSupplier || !tid || !effectiveUserId) return;
@@ -3110,6 +3102,26 @@ const lastProductInfoById = useMemo(() => {
   const pageStyle = isLandscape
     ? { ...styles.page, padding: 6, maxWidth: 1800 }
     : styles.page;
+  // Shown in Plan Review once loading begins (not while planning).
+  const supplierPanelEl = (
+    <SupplierPanel
+        userId={effectiveUserId || null}
+        companyId={shell.companyId || null}
+        terminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
+        terminalName={terminalLabel ?? null}
+        rackId={location.selectedRackId ? String(location.selectedRackId) : null}
+        truckLabel={equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? ""}
+        products={supplierPanelProducts}
+        picks={resolvedSupplierPicks}
+        onPicks={onSupplierPicks}
+        suppliers={tripSuppliers}
+        onAddSupplier={addTripSupplier}
+        promptToken={supplierPromptToken}
+        onSkip={supplierPicks.skip}
+        onSwitched={onSupplierSwitched}
+    />
+  );
+
   return (
     <div style={pageStyle}>
       {(leaving || reportPending) && typeof document !== "undefined" && createPortal(
@@ -3266,27 +3278,6 @@ const lastProductInfoById = useMemo(() => {
       {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
-      <SupplierPanel
-        userId={effectiveUserId || null}
-        companyId={shell.companyId || null}
-        terminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
-        terminalName={terminalLabel ?? null}
-        rackId={location.selectedRackId ? String(location.selectedRackId) : null}
-        truckLabel={equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? ""}
-        products={supplierPanelProducts}
-        picks={resolvedSupplierPicks}
-        onPicks={onSupplierPicks}
-        suppliers={tripSuppliers}
-        onAddSupplier={addTripSupplier}
-        promptToken={supplierPromptToken}
-        onSkip={supplierPicks.skip}
-        onPromptDone={() => {
-          if (!beginAfterSupplierRef.current) return;
-          beginAfterSupplierRef.current = false;
-          requestBegin({});
-        }}
-        onSwitched={onSupplierSwitched}
-      />
       {stabilityBannerEl}
       {actionRowEl}
       <div ref={compartmentsAreaRef}>
@@ -3581,12 +3572,6 @@ const lastProductInfoById = useMemo(() => {
               // the API by confidence, so the interrupting Good/Better/Best
               // overlay is no longer needed -- begin straight into Plan Review.
               if (tripNeedsArrive) { handleArriveAtPickup(); return; }
-              // Ask which supplier dispatch gave before loading (skippable).
-              if (needsSupplierPick && location.selectedTerminalId) {
-                beginAfterSupplierRef.current = true;
-                setSupplierPromptToken((n) => n + 1);
-                return;
-              }
               requestBegin({});
             }}
             disabled={tripNeedsArrive ? !location.selectedTerminalId : loadDisabled}
@@ -3700,6 +3685,7 @@ const lastProductInfoById = useMemo(() => {
 
       {/* ── Modals ── */}
       <LoadingModal
+        supplierSection={supplierPanelEl}
         open={loadWorkflow.loadingOpen} onClose={() => { /* no accidental dismissal -- exits are the explicit buttons */ }}
         userId={effectiveUserId}
         styles={styles}

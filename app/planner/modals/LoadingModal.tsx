@@ -411,6 +411,8 @@ export default function LoadingModal(props: {
   // before a driver commits to a load.
   equipmentLabel?: string | null;
   terminalLabel?: string | null;
+  // The supplier and its loading steps, shown once loading has begun.
+  supplierSection?: React.ReactNode;
   // "City, State" -- rendered next to terminalLabel ("Terminal · City,
   // State"), same pairing the main Planner page's own location line uses.
   locationLabel?: string | null;
@@ -477,6 +479,7 @@ export default function LoadingModal(props: {
     errorMessage,
     equipmentLabel,
     terminalLabel,
+    supplierSection,
     locationLabel,
     rackName,
     onTapTerminal,
@@ -1113,6 +1116,7 @@ export default function LoadingModal(props: {
         ) : (
           // ── Plan Review -- editable, per compartment ─────────────────────
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {supplierSection}
             <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.2, opacity: 0.7, textTransform: "uppercase" }}>Planned compartments</div>
 
             {plannedLines.length === 0 ? (
