@@ -12,7 +12,7 @@
 // Coordinates feed Near Me: "Use my location" takes the phone's GPS while
 // standing at the site; otherwise the city/state is looked up on save.
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { locationPlace, locationTitle, type DeliveryLocation, type LocationTank } from "@/lib/trips/deliveryLocations";
@@ -40,6 +40,7 @@ type Draft = {
   city: string;
   state: string;
   zip: string;
+  region: string;
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
@@ -51,13 +52,13 @@ type Draft = {
 function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: string): Draft {
   if (!l) {
     return {
-      location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "",
+      location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "", region: "",
       lat: null, lon: null, delivery_type: "drop", notes: "", tanks: [], removedTankIds: [],
     };
   }
   return {
     location_id: l.location_id, name: l.name, location_number: l.location_number ?? "", address: l.address ?? "",
-    city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", lat: l.lat, lon: l.lon,
+    city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", region: l.region ?? "", lat: l.lat, lon: l.lon,
     delivery_type: l.delivery_type, notes: l.notes ?? "",
     tanks: tanks
       .filter((t) => t.location_id === l.location_id)
@@ -112,6 +113,13 @@ export function LocationEditor({
   const [err, setErr] = useState<string | null>(null);
   const [confirmRetire, setConfirmRetire] = useState(false);
   const [ackSimilar, setAckSimilar] = useState(false);
+  const [regionOptions, setRegionOptions] = useState<string[]>([]);
+  useEffect(() => {
+    let off = false;
+    supabase.from("equipment_regions").select("name").eq("company_id", companyId).eq("is_active", true).order("name")
+      .then(({ data }) => { if (!off) setRegionOptions(((data ?? []) as { name: string }[]).map((r) => r.name)); });
+    return () => { off = true; };
+  }, [companyId]);
 
   const productOptions = useMemo(() => [
     { value: "", label: "Product (optional)" },
@@ -169,6 +177,7 @@ export function LocationEditor({
         city: draft.city.trim() || null,
         state: draft.state.trim().toUpperCase() || null,
         zip: draft.zip.trim() || null,
+        region: draft.region.trim() || null,
         lat, lon,
         delivery_type: draft.delivery_type,
         notes: draft.notes.trim() || null,
@@ -179,9 +188,9 @@ export function LocationEditor({
         : supabase.from("delivery_locations").insert({ ...r, created_by: userId }).select("location_id").single();
       let res = await write(row);
       // Before the 2026-10-11 migration there is no zip column; save without it.
-      if (res.error && /zip/i.test(res.error.message)) {
-        const { zip: _zip, ...noZip } = row;
-        res = await write(noZip);
+      if (res.error && /zip|region/i.test(res.error.message)) {
+        const { zip: _zip, region: _region, ...older } = row;
+        res = await write(older);
       }
       if (res.error) throw new Error(res.error.message);
       const locationId = (res.data as { location_id: string }).location_id;
@@ -251,6 +260,22 @@ export function LocationEditor({
           <div><div style={fieldLabel}>State</div><input value={draft.state} maxLength={2} onChange={(e) => { patch({ state: e.target.value }); setGeoPinned(false); }} style={fieldInput} placeholder="FL" /></div>
           <div><div style={fieldLabel}>Zip</div><input value={draft.zip} maxLength={10} inputMode="numeric" onChange={(e) => patch({ zip: e.target.value })} style={fieldInput} /></div>
         </div>
+        {regionOptions.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={fieldLabel}>Region</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {regionOptions.map((r) => {
+                const on = draft.region === r;
+                return (
+                  <button key={r} type="button" onClick={() => patch({ region: on ? "" : r })}
+                    style={{ padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)", background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)" }}>{r}</button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Used when a load headed here is parked.</div>
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: muted }}>
           <span>{draft.lat != null && draft.lon != null ? `${draft.lat.toFixed(3)}, ${draft.lon.toFixed(3)}${geoPinned ? " (GPS)" : ""}` : "No coordinates yet"}</span>
           <button type="button" onClick={useMyLocation} style={linkBtn}>Use my location</button>

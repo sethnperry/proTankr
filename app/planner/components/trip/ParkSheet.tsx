@@ -79,7 +79,7 @@ export function ParkSheet({ open, trailerLabel, onBoard, regions = [], defaultRe
         </div>
         {regions.length > 0 && (
           <div style={{ marginTop: 10 }}>
-            <div style={fieldLabel}>Region it&apos;s parked in</div>
+            <div style={fieldLabel}>Region it&apos;s parked in (defaults to where it&apos;s headed)</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {regions.map((r) => (
                 <button key={r} type="button" style={chip(region === r)} onClick={() => setRegion(region === r ? null : r)}>{r}</button>

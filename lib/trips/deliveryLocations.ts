@@ -17,6 +17,8 @@ export type DeliveryLocation = {
   city: string | null;
   state: string | null;
   zip?: string | null;
+  // One of the company's regions (20261022010000). Optional: missing before that migration.
+  region?: string | null;
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
@@ -155,4 +157,20 @@ export function defaultLocationCity(
     if (best) return cityKeyOf(best.l);
   }
   return cityKeyOf(active.find((l) => l.starred) ?? active[0]);
+}
+
+/** The region a delivery location is in: the one set on it, else the region
+ *  most of the company's other locations in the same city (then state) have. */
+export function destinationRegion(loc: DeliveryLocation | null | undefined, all: DeliveryLocation[]): string | null {
+  if (!loc) return null;
+  const own = loc.region?.trim();
+  if (own) return own;
+  const norm = (x: string | null | undefined) => (x ?? "").trim().toLowerCase();
+  const pick = (pool: DeliveryLocation[]) => {
+    const n = new Map<string, number>();
+    for (const l of pool) { const r = l.region?.trim(); if (r) n.set(r, (n.get(r) ?? 0) + 1); }
+    return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  };
+  const others = all.filter((l) => l.location_id !== loc.location_id && norm(l.state) === norm(loc.state));
+  return pick(others.filter((l) => norm(l.city) === norm(loc.city))) ?? pick(others);
 }

@@ -150,11 +150,13 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
     try {
       const cols = "location_id,company_id,name,location_number,address,city,state,lat,lon,delivery_type,notes,is_active";
       const query = (c: string) => supabase.from("delivery_locations").select(c).eq("company_id", companyId).eq("is_active", true).order("name");
-      const [first, s] = await Promise.all([
-        query(`${cols},zip`),
+      const [withRegion, s] = await Promise.all([
+        query(`${cols},zip,region`),
         supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId),
       ]);
       // Before the 2026-10-11 migration there is no zip column; read without it.
+      // region (2026-10-22) and zip (2026-10-11) may not exist yet.
+      const first = withRegion.error ? await query(`${cols},zip`) : withRegion;
       const l = first.error ? await query(cols) : first;
       if (l.error) return;
       const starred = new Set(((s.data ?? []) as { location_id: string }[]).map((r) => r.location_id));

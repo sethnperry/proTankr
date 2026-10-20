@@ -1,7 +1,7 @@
 // lib/trips/deliveryLocations.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { airMiles, byNumberThenName, defaultLocationCity, filterLocations, locationCities, locationsInCity, type DeliveryLocation } from "./deliveryLocations.ts";
+import { destinationRegion, airMiles, byNumberThenName, defaultLocationCity, filterLocations, locationCities, locationsInCity, type DeliveryLocation } from "./deliveryLocations.ts";
 
 const base = (o: Partial<DeliveryLocation>): DeliveryLocation => ({
   location_id: o.name ?? "x", name: "x", location_number: null, address: null, city: null, state: null,
@@ -71,4 +71,15 @@ test("locationCities groups and counts, no-city last; default city follows the s
   assert.deepEqual(cities.map((c) => [c.city, c.count]), [["orlando", 1], ["Tampa", 2], ["", 1]]);
   assert.equal(defaultLocationCity(ls, { selectedId: "b" }), "orlando|FL");
   assert.equal(defaultLocationCity([], {}), null);
+});
+
+test("destinationRegion: own, then same city, then same state", () => {
+  const L = (id: string, city: string, state: string, region: string | null): DeliveryLocation => ({
+    location_id: id, name: id, location_number: null, address: null, city, state, lat: null, lon: null, delivery_type: "drop", notes: null, starred: false, region,
+  });
+  const all = [L("a", "Seattle", "WA", "West"), L("b", "Tacoma", "WA", "West"), L("c", "Spokane", "WA", "East"), L("d", "Seattle", "WA", null), L("e", "Miami", "FL", null)];
+  assert.equal(destinationRegion(all[0], all), "West");
+  assert.equal(destinationRegion(all[3], all), "West"); // same city
+  assert.equal(destinationRegion(L("f", "Olympia", "WA", null), all), "West"); // state majority
+  assert.equal(destinationRegion(all[4], all), null);
 });

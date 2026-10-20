@@ -84,6 +84,7 @@ import { readPicks, groupPicks } from "@/lib/suppliers/picks";
 import { linkSupplierToTerminal } from "@/lib/suppliers/useTerminalSuppliers";
 import { LoadedSheet, type LoadedSubmit } from "../components/trip/LoadedSheet";
 import { NoLoadSheet, type NoLoadSubmit } from "../components/trip/NoLoadSheet";
+import { destinationRegion } from "@/lib/trips/deliveryLocations";
 import { ParkSheet, type ParkSubmit } from "../components/trip/ParkSheet";
 import { TripEquipmentSheets, useTripEquipment } from "../hooks/useTripEquipment";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
@@ -1513,7 +1514,12 @@ export default function HomePage() {
         trailerLabel={(() => { const n = (trailerId && equipment.trailerNameById?.[trailerId]) || equipment.currentTrailerName; return n ? `Trailer ${n}` : "The trailer"; })()}
         onBoard={onBoardLines(snap?.compLoads)}
         regions={parkRegions}
-        defaultRegion={myRegion}
+        defaultRegion={(() => {
+          // The destination's region, so a far-away park still lands with whoever delivers it.
+          const next = (snap?.deliveries ?? []).filter((d) => d.status === "planned" && d.location_id).sort((a, b) => a.seq - b.seq)[0];
+          const loc = next ? locations.find((l) => l.location_id === next.location_id) : null;
+          return destinationRegion(loc, locations) ?? myRegion;
+        })()}
         onSubmit={doPark}
         onClose={() => setParkOpen(false)}
       />
