@@ -1454,7 +1454,7 @@ export default function HomePage() {
       >
         {openingPlanner ? busyText(true, "Opening Planner…") : parked && step.kind === "start"
           ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
-          : dispatchedList.length && step.kind === "start" ? "Begin Dispatched Load"
+          : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
           : step.label}
       </button>
       {step.kind !== "start" && !openingPlanner && (
