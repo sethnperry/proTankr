@@ -315,6 +315,12 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editing = !!openTrip;
+  // Begin Dispatched Load starts the trip, then opens this same sheet so the
+  // driver taps through what dispatch planned. While verifying, the pickup is
+  // the one dispatch chose, unless the driver changes the terminal here.
+  const [verifyTripId, setVerifyTripId] = useState<string | null>(null);
+  const verifyBaseTerminal = useRef<string | null>(null);
+  const [verifyActive, setVerifyActive] = useState(false);
 
   // Terminals picked on the dashboard are ahead of time: the rack is asked on Arrive.
   useEffect(() => {
@@ -385,7 +391,23 @@ export default function HomePage() {
       if (picks.length) writePicks(userId, String(pk.terminal_id), { at: Date.now(), picks });
     }
     void syncNow();
+    verifyBaseTerminal.current = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    setVerifyActive(true);
+    setVerifyTripId(trip.trip_id);
   };
+  useEffect(() => {
+    if (verifyTripId && openTrip?.trip_id === verifyTripId) {
+      setVerifyTripId(null);
+      setSheetOpen(true);
+    }
+  }, [verifyTripId, openTrip?.trip_id]);
+  // The dispatched pickup, used while the driver hasn't changed the terminal.
+  const dispatchedPickup = (() => {
+    const pk = editing ? children?.pickup : null;
+    if (!verifyActive || !pk || pk.load_id || pk.arrived_at || !pk.terminal_id) return null;
+    const cur = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    return cur === verifyBaseTerminal.current || cur === null ? pk : null;
+  })();
 
   const initialValues = useMemo<StartLoadValues>(() => {
     if (openTrip && children && snap) {
@@ -480,13 +502,15 @@ export default function HomePage() {
           extraOrderNumbers: v.extraOrderNumbers,
           shipper: v.shipper,
           customer: v.customer,
-          pickup: {
-            terminalId: location.selectedTerminalId || null,
-            rackId: location.selectedRackId || null,
-            name: terminalName,
-            city: location.selectedCity || null,
-            state: location.selectedState || null,
-          },
+          pickup: dispatchedPickup
+            ? { terminalId: String(dispatchedPickup.terminal_id), rackId: dispatchedPickup.rack_id ?? null, name: dispatchedPickup.name ?? null, city: dispatchedPickup.city ?? null, state: dispatchedPickup.state ?? null }
+            : {
+                terminalId: location.selectedTerminalId || null,
+                rackId: location.selectedRackId || null,
+                name: terminalName,
+                city: location.selectedCity || null,
+                state: location.selectedState || null,
+              },
           deliveries: v.deliveries,
           beginMiles: miles != null && Number.isFinite(miles) ? miles : null,
           startCity: v.startCity,
@@ -506,13 +530,14 @@ export default function HomePage() {
       // Planner presets it at any later rack on the trip too).
       const prevSupplier = getTripSupplier(userId, rows.trip.trip_id);
       setTripSupplier(userId, rows.trip.trip_id, v.supplier);
-      const pickupTid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+      const pickupTid = dispatchedPickup ? String(dispatchedPickup.terminal_id) : location.selectedTerminalId ? String(location.selectedTerminalId) : null;
       const pickupLoaded = !!(editing && children?.pickup?.load_id);
       if (v.supplier && pickupTid && !pickupLoaded && (!editing || !sameSupplier(prevSupplier, v.supplier))) {
         seedTerminalPicks(userId, pickupTid, v.supplier);
         if (v.supplier.supplier_id) void linkSupplierToTerminal({ companyId, supplierId: v.supplier.supplier_id, terminalId: pickupTid });
       }
       setSheetOpen(false);
+      setVerifyActive(false);
       void syncNow();
     } catch (e: any) {
       setError(e?.message ?? "Couldn't save the load.");
@@ -1686,8 +1711,8 @@ export default function HomePage() {
         open={sheetOpen}
         editing={editing}
         initial={initialValues}
-        pickupLabel={editing && children?.pickup?.load_id ? children.pickup.name ?? pickupLabel : pickupLabel}
-        pickupTerminalId={editing && children?.pickup?.load_id ? (children.pickup.terminal_id ? String(children.pickup.terminal_id) : null) : (location.selectedTerminalId ? String(location.selectedTerminalId) : null)}
+        pickupLabel={dispatchedPickup ? [dispatchedPickup.name, [dispatchedPickup.city, dispatchedPickup.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") : editing && children?.pickup?.load_id ? children.pickup.name ?? pickupLabel : pickupLabel}
+        pickupTerminalId={dispatchedPickup ? String(dispatchedPickup.terminal_id) : editing && children?.pickup?.load_id ? (children.pickup.terminal_id ? String(children.pickup.terminal_id) : null) : (location.selectedTerminalId ? String(location.selectedTerminalId) : null)}
         onChangePickup={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
         suppliers={suppliers}
         onAddSupplier={addSupplier}
@@ -1703,7 +1728,7 @@ export default function HomePage() {
         onLocationAdded={() => void locList.reload()}
         busy={busy}
         error={error}
-        onClose={() => setSheetOpen(false)}
+        onClose={() => { setSheetOpen(false); setVerifyActive(false); }}
         onSubmit={submit}
         suggestStart={() => truckLastKnownPlace(truckId)}
       />
