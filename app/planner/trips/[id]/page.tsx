@@ -26,6 +26,7 @@ import type {
   TripRow,
 } from "@/lib/trips/types";
 import { PrintPortal, PtdDocument } from "../PtdDocument";
+import { DispatchedPreview } from "./DispatchedPreview";
 
 const btn: React.CSSProperties = {
   padding: "10px 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
@@ -178,6 +179,13 @@ export default function TripPtdPage() {
       delayReason: (id) => (id ? reasons.find((r) => r.reason_id === id)?.label ?? null : null),
     });
   }, [data, products, locNames, names, reasons]);
+
+  if (data && data.trip.status === "dispatched") {
+    return (
+      <DispatchedPreview trip={data.trip} pickups={data.pickups} deliveries={data.deliveries} locNames={locNames} products={products}
+        onBack={() => (window.history.length > 1 ? router.back() : router.push("/planner/trips"))} />
+    );
+  }
 
   return (
     <div style={{ padding: 16, paddingBottom: 40 }}>

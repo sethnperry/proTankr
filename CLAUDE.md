@@ -11906,3 +11906,7 @@ Migrations applied live via the Management API: `20261021000000_terminal_gauging
 - **Write path:** `DispatchLeg.groups` → one `trip_orders` row per distinct number (first primary), `planned_comps` per compartment `{comp_number, product_id, order_id, supplier_id}`, pickup supplier = first group's. Per-group suppliers are also checked against contract limits (warn only).
 - **Driver side:** the Planner already plans only `planned_comps`; the "Loading C… only" banner now hides when the plan covers the whole trailer. `recordLoadCompleted` uses the planned per-compartment order; Begin Dispatched Load seeds a supplier pick per product.
 - Not built: gallons/weight for the dispatcher, driver decline, multiple pickups per dispatched load.
+
+### Dispatched load preview (2026-10-21)
+
+Tapping a dispatched load in Trips & PTDs now opens a read-only preview instead of a PTD (`app/planner/trips/[id]/DispatchedPreview.tsx`, chosen by `status === "dispatched"` in the same route). It copies the dashboard trip recap -- planned start, planned truck/trailer, pickup terminal, compartment strip with planned products, delivery -- and deliberately omits order numbers and suppliers (confirmed or corrected after Begin). No begin button, so a driver mid-trip can look but not start it. Render-checked only; no migration.
