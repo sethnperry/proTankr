@@ -12,6 +12,8 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { pruneMissingTrips } from "@/lib/trips/pruneTrips";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { setTripHidden } from "@/lib/trips/tripFlow";
+import { dispatchedForDriver } from "@/lib/trips/tripLogic";
+import { swapRunOrder } from "@/lib/dispatch/dispatchTrip";
 import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
 import type { TripOrderRow, TripRow } from "@/lib/trips/types";
@@ -74,8 +76,10 @@ export default function TripsPage() {
     if (!store || !userId) return [];
     const trips = store.list("trips", (t) => t.driver_id === userId);
     const when = (t: TripRow) => t.completed_at ?? t.started_at ?? "";
-    return trips
-      .sort((a, b) => (when(b) || "9999").localeCompare(when(a) || "9999"))
+    // Loads dispatch planned come first, in the order they will run.
+    const queued = dispatchedForDriver(trips, userId);
+    const rest = trips.filter((t) => t.status !== "dispatched").sort((a, b) => (when(b) || "9999").localeCompare(when(a) || "9999"));
+    return [...queued, ...rest]
       .map((t) => {
         const orders = store.list("trip_orders", (o) => o.trip_id === t.trip_id);
         const primary = orders.find((o) => o.is_primary);
@@ -90,6 +94,17 @@ export default function TripsPage() {
   const setHidden = (tripId: string, hidden: boolean) => {
     if (!store) return;
     setTripHidden(store, tripId, hidden);
+    void syncNow();
+  };
+
+  // Moving a not-begun load swaps run order with its neighbour. Once begun it can't move.
+  const queue = visible.filter((r) => r.trip.status === "dispatched").map((r) => r.trip);
+  const moveQueued = (tripId: string, dir: -1 | 1) => {
+    if (!store) return;
+    const i = queue.findIndex((t) => t.trip_id === tripId);
+    const other = queue[i + dir];
+    if (i < 0 || !other) return;
+    for (const pt of swapRunOrder(queue[i], other)) store.put("trips", pt);
     void syncNow();
   };
 
@@ -133,6 +148,21 @@ export default function TripsPage() {
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
                 {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
               </div>
+              {trip.status === "dispatched" && queue.length > 1 && (
+                <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginRight: 4 }}>Run order</span>
+                  {([-1, 1] as const).map((dir) => {
+                    const ok = !!queue[queue.findIndex((t) => t.trip_id === trip.trip_id) + dir];
+                    return (
+                      <button key={dir} type="button" aria-label={dir === -1 ? "Run earlier" : "Run later"} disabled={!ok}
+                        onClick={() => moveQueued(trip.trip_id, dir)}
+                        style={{ border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: ok ? "#fff" : "rgba(255,255,255,0.2)", borderRadius: 2, padding: "4px 10px", fontSize: 13, cursor: ok ? "pointer" : "default" }}>
+                        {dir === -1 ? "▲" : "▼"}
+                      </button>
+                    );
+                  })}
+                </span>
+              )}
               {cancelled && (
                 <button type="button"
                   onClick={(e) => { e.stopPropagation(); setHidden(trip.trip_id, !trip.driver_hidden); }}

@@ -116,7 +116,6 @@ import { EXPIRY_COLOR } from "@/lib/expiry";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
-import { swapRunOrder } from "@/lib/dispatch/dispatchTrip";
 import { DispatchedCard, type DispatchedItem } from "./DispatchedCard";
 import { useFuelStop } from "@/lib/fuel/useFuelStop";
 import { useFuelSetup } from "@/lib/fuel/useFuelSetup";
@@ -369,16 +368,6 @@ export default function HomePage() {
       };
     });
   }, [dispatchedList, store, suppliers, truckId, trailerId, state, plannedNames]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Swap two not-begun loads' run order. Both stay 'dispatched' until begun.
-  const swapDispatchedLoads = (aId: string, bId: string) => {
-    if (!store) return;
-    const a = dispatchedList.find((t) => t.trip_id === aId);
-    const b = dispatchedList.find((t) => t.trip_id === bId);
-    if (!a || !b) return;
-    for (const pt of swapRunOrder(a, b)) store.put("trips", pt);
-    void syncNow();
-  };
 
   const beginDispatchedLoad = () => {
     const trip = dispatchedList[0];
@@ -1252,7 +1241,7 @@ export default function HomePage() {
       <div>
       <SectionLabel desktopOnly first>Trip</SectionLabel>
 
-      <DispatchedCard items={dispatchedItems} onSwap={swapDispatchedLoads} />
+      <DispatchedCard items={dispatchedItems} />
 
       {/* Handoff */}
       {handoff && (
