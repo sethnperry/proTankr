@@ -72,6 +72,10 @@ export function PlanLoadCard(props: {
   onClearLocation: () => void;
   onPickTerminal: (id: string | null) => void;
   onOpenDriver: (userId: string) => void;
+  // Picked from the terminal's supplier list. A paused contract only warns.
+  supplier?: { name: string; account: string | null; warning: string | null } | null;
+  onPickSupplier?: () => void;
+  onClearSupplier?: () => void;
 }) {
   const L = useDashLook();
   const p = props;
@@ -92,6 +96,14 @@ export function PlanLoadCard(props: {
         onPick={p.onPickLocation} onClear={p.onClearLocation} />
       <PickRow label="Terminal" value={p.terminal?.name ?? null} sub={p.terminal?.place ?? null}
         onPick={() => { setQ(""); setTermOpen(true); }} onClear={() => p.onPickTerminal(null)} />
+
+      {p.terminal && p.onPickSupplier && (
+        <>
+          <PickRow label="Supplier" value={p.supplier?.name ?? null} sub={p.supplier?.account ? `Acct ${p.supplier.account}` : null}
+            onPick={p.onPickSupplier} onClear={p.onClearSupplier} />
+          {p.supplier?.warning && <div style={{ fontSize: 12, color: "#fb923c", margin: "-2px 0 6px" }}>⚠ {p.supplier.warning}</div>}
+        </>
+      )}
 
       {planning && (
         <>

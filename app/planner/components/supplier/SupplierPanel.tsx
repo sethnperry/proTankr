@@ -304,6 +304,11 @@ function SupplierGroup({
 
       {!collapsed && (
         <div style={{ marginTop: 6 }}>
+          {steps?.account_number && (
+            <div style={{ fontSize: 15, color: "#fff", marginBottom: 4 }}>
+              <span style={{ color: MUTED }}>Account </span><span style={{ fontWeight: 800 }}>{steps.account_number}</span>
+            </div>
+          )}
           {list.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {list.map((s, i) => (
@@ -430,6 +435,7 @@ function StepsEditor({
   onSave: (steps: string[], notes: string) => Promise<string | null>;
 }) {
   const [steps, setSteps] = useState<string[]>(() => (initial?.steps?.length ? [...initial.steps] : [""]));
+  const locks = initial?.step_locks ?? [];
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -438,15 +444,25 @@ function StepsEditor({
       <div style={{ fontSize: 13, color: "#86efac", marginBottom: 10 }}>
         🔒 Your company only. Account numbers go here.
       </div>
+      {initial?.account_number && (
+        <div style={{ fontSize: 14, color: "#fff", marginBottom: 10 }}>
+          <span style={{ color: MUTED }}>Account </span><span style={{ fontWeight: 800 }}>{initial.account_number}</span>
+          {initial.account_locked && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 800, letterSpacing: "0.1em", color: MUTED }}>LOCKED</span>}
+        </div>
+      )}
       <div style={{ fontSize: 13, color: MUTED, marginBottom: 6 }}>Each screen on the loading computer, in order</div>
       {steps.map((s, i) => (
         <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
           <span style={{ width: 22, textAlign: "right", color: MUTED, fontSize: 14, flexShrink: 0 }}>{i + 1}</span>
-          <input value={s} onChange={(e) => setSteps((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
+          <input value={s} disabled={locks[i] === true} onChange={(e) => setSteps((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
             placeholder={i === 0 ? "e.g. Motiva — 123456" : i === 1 ? "e.g. Atlas — 789012" : "e.g. Load # 2001462 (leave off last digit)"}
-            style={inputStyle} />
-          <button type="button" aria-label="Remove step" onClick={() => setSteps((a) => (a.length > 1 ? a.filter((_, j) => j !== i) : [""]))}
-            style={{ flexShrink: 0, border: "none", background: "transparent", color: MUTED, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</button>
+            style={{ ...inputStyle, opacity: locks[i] === true ? 0.55 : 1 }} />
+          {locks[i] === true ? (
+            <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 800, letterSpacing: "0.1em", color: MUTED, padding: "0 4px" }}>LOCKED</span>
+          ) : (
+            <button type="button" aria-label="Remove step" onClick={() => setSteps((a) => (a.length > 1 ? a.filter((_, j) => j !== i) : [""]))}
+              style={{ flexShrink: 0, border: "none", background: "transparent", color: MUTED, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</button>
+          )}
         </div>
       ))}
       <button type="button" onClick={() => setSteps((a) => [...a, ""])}

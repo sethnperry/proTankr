@@ -66,6 +66,9 @@ import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
 import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
 import { PlanLoadCard, type TerminalOption } from "./PlanLoadCard";
+import { SuppliersModal } from "./SuppliersModal";
+import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
+import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries } from "@/lib/dispatch/useDispatchData";
@@ -255,6 +258,21 @@ export default function DispatchPage() {
       place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null,
     }));
   }, [terminalsCatalog, plan.usedTerminalIds]);
+  // Supplier at the chosen terminal (warn-only: a paused contract never blocks).
+  const [planSupplierId, setPlanSupplierId] = useState<string | null>(null);
+  const [suppliersOpen, setSuppliersOpen] = useState<null | "pick" | "manage">(null);
+  const canManageSuppliers = shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin;
+  const termSuppliers = useTerminalSuppliers(companyId || null, planTerminalId);
+  const companySuppliers = useCompanySuppliers(companyId || null);
+  const termContracts = useSupplierContracts(companyId || null, planTerminalId);
+  const planSupplier = useMemo(() => {
+    const s = planSupplierId ? companySuppliers.all.find((x) => x.supplier_id === planSupplierId) : null;
+    if (!s) return null;
+    const row = termSuppliers.bySupplier.get(s.supplier_id);
+    const con = termContracts.contracts.get(s.supplier_id);
+    const warning = con?.paused ? `Contract paused${con.paused_note ? `: ${con.paused_note}` : ""}` : row?.issue_at ? "Reported not working" : null;
+    return { name: s.name, account: row?.account_number ?? null, warning };
+  }, [planSupplierId, companySuppliers.all, termSuppliers.bySupplier, termContracts.contracts]);
   const busyByDriver = useMemo(() => {
     const m = new Map<string, string>();
     for (const f of fleet.trips) m.set(f.trip.driver_id, f.trip.status === "parked" ? "Parked" : "On a load");
@@ -480,6 +498,7 @@ export default function DispatchPage() {
     const dashTools: ToolItem[] = [
       { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
+      { icon: "terminal" as const, label: "Suppliers", onClick: () => setSuppliersOpen("manage") },
       { icon: "chart", label: "Reports", busy: nav.is("reports"), onClick: () => nav.go("reports", "/planner/reports") },
       ...(shell.role === "admin" || shell.isSuperAdmin
         ? [{ icon: "terminal" as const, label: "Company", busy: nav.is("company"), onClick: () => nav.go("company", "/admin") }]
@@ -503,7 +522,8 @@ export default function DispatchPage() {
             historyLoading={history.loading} historyError={history.error} showNotCarded={showNotCarded && !!planTerminalId}
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
-            onPickTerminal={(id) => { setPlanTerminalId(id); if (!id) setShowNotCarded(false); }}
+            onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
+            supplier={planSupplier} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
@@ -519,6 +539,11 @@ export default function DispatchPage() {
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
         onToggleStar={locList.toggleStar} onLocationAdded={locList.reload}
         onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />
+      {companyId && authUserId && (
+        <SuppliersModal open={suppliersOpen !== null} onClose={() => setSuppliersOpen(null)} companyId={companyId} userId={authUserId}
+          canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={planTerminalId}
+          onSelect={suppliersOpen === "pick" ? (sid) => setPlanSupplierId(sid) : undefined} selectedSupplierId={planSupplierId} />
+      )}
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}
       </>
     );

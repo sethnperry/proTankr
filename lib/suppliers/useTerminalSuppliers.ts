@@ -17,6 +17,9 @@ export type SupplierSteps = {
   supplier_id: string;
   terminal_id: string;
   steps: string[];
+  account_number: string | null;
+  account_locked: boolean;
+  step_locks: boolean[]; // one per step
   notes: string | null;
   updated_by: string | null;
   steps_updated_at: string | null;
@@ -31,7 +34,7 @@ export type SupplierSteps = {
 export type TerminalNote = { note: string; updated_by: string | null; updated_at: string | null };
 
 const COLS =
-  "company_id,supplier_id,terminal_id,steps,notes,updated_by,steps_updated_at,last_used_at,last_loaded_at,last_loaded_by,issue_at,issue_by,issue_note";
+  "company_id,supplier_id,terminal_id,steps,account_number,account_locked,step_locks,notes,updated_by,steps_updated_at,last_used_at,last_loaded_at,last_loaded_by,issue_at,issue_by,issue_note";
 
 async function namesFor(ids: (string | null)[]): Promise<Record<string, string>> {
   const uniq = [...new Set(ids.filter((x): x is string => !!x))];
@@ -63,6 +66,8 @@ export function useTerminalSuppliers(companyId: string | null, terminalId: strin
       const rows = ((data ?? []) as any[]).map((r) => ({
         ...r,
         steps: Array.isArray(r.steps) ? r.steps.map((s: unknown) => String(s ?? "")) : [],
+        account_locked: !!r.account_locked,
+        step_locks: Array.isArray(r.step_locks) ? r.step_locks.map((x: unknown) => x === true) : [],
       })) as SupplierSteps[];
       const names = await namesFor(rows.flatMap((r) => [r.updated_by, r.last_loaded_by, r.issue_by]));
       return { rows, names };
