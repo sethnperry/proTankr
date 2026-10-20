@@ -775,6 +775,7 @@ export default function DispatchPage() {
             timeline={tlDriverId && planLocation && planTerminalId ? (
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={dayLegs.length > 0 && tlStart == null} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
+                terminalPlace={planTerminal?.place ?? null} locationPlace={[planLocation?.city, planLocation?.state].filter(Boolean).join(", ") || null}
                 dayLegs={dayLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
                 onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i) }))}
                 onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))}

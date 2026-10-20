@@ -153,3 +153,22 @@ test("dispatch: product groups give per-product orders and planned_comps", () =>
   assert.equal(pc[2].supplier_id, "s2");
   assert.equal(pc[2].order_id, (rows.orders[1] as any).order_id);
 });
+
+import { dutyBlocks, dutyFor, dutyRange, pct } from "./dutyGraph.ts";
+test("duty graph: drive legs are Driving, the rest On Duty, range in whole hours", () => {
+  assert.equal(dutyFor("to_terminal"), "driving");
+  assert.equal(dutyFor("loading"), "on");
+  assert.equal(dutyFor("gauging"), "on");
+  const H = 3600000, base = Date.UTC(2026, 9, 20, 15, 12);
+  const segs: any[] = [
+    { key: "to_terminal", startMs: base, endMs: base + 2 * H, minutes: 120, label: "", basis: null },
+    { key: "loading", startMs: base + 2 * H, endMs: base + 2.5 * H, minutes: 30, label: "", basis: null },
+    { key: "to_delivery", startMs: base + 2.5 * H, endMs: base + 5 * H, minutes: 150, label: "", basis: null },
+  ];
+  const blocks = dutyBlocks(segs);
+  assert.deepEqual(blocks.map((b) => b.status), ["driving", "on", "driving"]);
+  const r = dutyRange(blocks);
+  assert.equal((r.t1 - r.t0) % H, 0);
+  assert.ok(r.t0 <= base && r.t1 >= base + 5 * H);
+  assert.ok(pct(r.t0, r) === 0 && pct(r.t1, r) === 100);
+});

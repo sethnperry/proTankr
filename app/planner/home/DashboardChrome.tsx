@@ -226,7 +226,7 @@ export function GaugePanel({ cells, equal }: { cells: GaugeCell[]; equal?: boole
       display: "grid",
       gridTemplateColumns: equal ? `repeat(${cells.length}, minmax(0, 1fr))` : cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "),
       gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12,
-      ...(equal ? { containerType: "inline-size" as const, maxWidth: "100vh" } : {}),
+      ...(equal ? { containerType: "inline-size" as const, maxWidth: "100vh", width: "100%", boxSizing: "border-box" as const, minWidth: 0, overflow: "hidden" } : {}),
     }}>
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}

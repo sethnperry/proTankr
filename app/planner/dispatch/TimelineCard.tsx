@@ -7,7 +7,10 @@
 // load starts when this one is forecast to end. The day plan lives on this
 // screen only; nothing is sent to the driver yet.
 
-import React from "react";
+import React, { useState } from "react";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { DutyGraph } from "./DutyGraph";
+import { dutyBlocks } from "@/lib/dispatch/dutyGraph";
 import { useDashLook } from "../home/dashLook";
 import { PRIMARY_BTN, SECONDARY_BTN } from "@/lib/ui/look";
 import { clock, durationText, type Flag, type Forecast } from "@/lib/dispatch/forecast";
@@ -43,6 +46,8 @@ export function TimelineCard(p: {
   onClearDay: () => void;
   // Dispatch
   compartments?: React.ReactNode;
+  terminalPlace?: string | null;   // abbreviated, "Tampa, FL"
+  locationPlace?: string | null;
   orderNumber: string;
   onOrder: (v: string) => void;
   warnings: string[];                 // everything shown above that is a problem; never blocks
@@ -51,6 +56,7 @@ export function TimelineCard(p: {
   onDispatch: () => void;
 }) {
   const L = useDashLook();
+  const [detailOpen, setDetailOpen] = useState(false);
   const f = p.forecast;
   const shiftH = f ? (f.endMs - (p.dayLegs[0]?.startMs ?? p.startMs)) / 3600000 : 0;
   return (
@@ -84,22 +90,36 @@ export function TimelineCard(p: {
         <div style={{ fontSize: 13, color: L.muted, marginTop: 10 }}>{p.historyLoading ? "Loading trip history…" : "Pick a drop location and a terminal."}</div>
       ) : (
         <>
-          <div style={{ marginTop: 10 }}>
+          <button type="button" onClick={() => setDetailOpen(true)} className="dash-press" aria-label="Open timeline detail"
+            style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", color: "#fff", cursor: "pointer", padding: 0, marginTop: 10 }}>
+            <DutyGraph blocks={dutyBlocks(f.segments, p.dayLegs)}
+              terminalPlace={p.terminalPlace ?? null} terminalAtMs={f.segments.find((s) => s.key === "to_terminal")?.endMs ?? null}
+              locationPlace={p.locationPlace ?? null} locationAtMs={f.segments.find((s) => s.key === "to_delivery")?.endMs ?? null} />
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${L.hairline}` }}>
+              <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>Delivery complete about {clock(f.endMs)}</span>
+              <span className="dash-num" style={{ fontSize: 12, color: L.muted }}>{shiftH.toFixed(1)} h into the day · details ›</span>
+            </div>
+          </button>
+          <FullscreenModal open={detailOpen} title="Timeline" onClose={() => setDetailOpen(false)}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{p.driverName}</div>
             {f.segments.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "5px 0", borderTop: i ? `1px solid ${L.hairline}` : undefined, color: s.key === "gauging" ? "#fb923c" : "#fff" }}>
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "8px 0", borderTop: i ? `1px solid ${L.hairline}` : undefined, color: s.key === "gauging" ? "#fb923c" : "#fff" }}>
                 <span className="dash-num" style={{ width: 66, fontSize: 12, color: L.muted, flexShrink: 0 }}>{clock(s.startMs)}</span>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{s.label}</span>
-                  {s.basis && <div style={{ fontSize: 11, color: L.faint }}>{s.basis.note}</div>}
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{s.label}</span>
+                  {s.basis && <div style={{ fontSize: 12, color: L.faint }}>{s.basis.note}</div>}
                 </span>
-                <span className="dash-num" style={{ fontSize: 12, color: L.muted }}>{durationText(s.minutes)}</span>
+                <span className="dash-num" style={{ fontSize: 13, color: L.muted }}>{durationText(s.minutes)}</span>
               </div>
             ))}
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${L.hairline}` }}>
-            <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>Delivery complete about {clock(f.endMs)}</span>
-            <span className="dash-num" style={{ fontSize: 12, color: L.muted }}>{shiftH.toFixed(1)} h into the day</span>
-          </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${L.hairline}` }}>
+              <span style={{ fontSize: 14, fontWeight: 800, flex: 1 }}>Delivery complete about {clock(f.endMs)}</span>
+              <span className="dash-num" style={{ fontSize: 12, color: L.muted }}>{shiftH.toFixed(1)} h into the day</span>
+            </div>
+            {f.flags.map((x, i) => (
+              <div key={i} style={{ fontSize: 13, color: FLAG_COLOR[x.severity], marginTop: 8 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
+            ))}
+          </FullscreenModal>
           {f.flags.map((x, i) => (
             <div key={i} style={{ fontSize: 12, color: FLAG_COLOR[x.severity], marginTop: 6 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
           ))}
