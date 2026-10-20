@@ -54,11 +54,6 @@ const link: React.CSSProperties = { border: "none", background: "transparent", c
 
 type Choice = { payKind: PayKind; method: FuelMethod | null; label: string; sub: string | null };
 
-function clock(fromIso: string, now: number): string {
-  const s = Math.max(0, Math.floor((now - Date.parse(fromIso)) / 1000));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -178,7 +173,7 @@ export default function FuelSheet({
 
   useEffect(() => {
     if (!open) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    const t = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(t);
   }, [open]);
 
@@ -525,7 +520,7 @@ export default function FuelSheet({
         {unsentNote}
         <div style={{ textAlign: "center", padding: "26px 0 18px" }}>
           <div style={lab}>At the pump</div>
-          <div className="dash-num" style={{ fontSize: 56, fontWeight: 900, lineHeight: 1.1, marginTop: 6 }}>{clock(p.started_at, now)}</div>
+          <div className="dash-num" style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1, marginTop: 6 }}>{fmtStamp(p.started_at)}</div>
           <div style={{ color: muted, fontSize: 14, marginTop: 8 }}>
             {m?.name ?? KIND_LABEL[p.pay_kind ?? "cash"]}{p.pump_number ? ` · Pump ${p.pump_number}` : ""}{p.odometer != null ? ` · ${Number(p.odometer).toLocaleString("en-US")} mi` : ""}
           </div>
@@ -762,7 +757,6 @@ export default function FuelSheet({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
         <span style={lab}>How are you paying?</span>
         <span style={{ textAlign: "right" }}>
-          <span className="dash-num" style={{ fontSize: 15, fontWeight: 800 }}>{clock(p.started_at, now)}</span>
           <span style={{ display: "block", fontSize: 11, color: muted }}>Started {fmtStamp(p.started_at)}</span>
         </span>
       </div>

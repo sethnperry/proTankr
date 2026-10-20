@@ -34,7 +34,6 @@ import {
   DELIVERY_ISSUES,
   additiveLabel,
   fmtAgo,
-  fmtClock,
   isDieselLike,
   issueLabel,
   soldPerHour,
@@ -302,7 +301,7 @@ export function DeliveryDashboard({
   useEffect(() => {
     if (!open) return;
     setNow(Date.now());
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const id = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(id);
   }, [open]);
 
@@ -789,15 +788,14 @@ export function DeliveryDashboard({
   const clockCard = (
     <div style={{ ...sectionCard, display: "flex", alignItems: "center", gap: 14 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={miniLabel}>{begun ? (pumpOff ? "Pumping off" : "Delivering") : "On site"}</div>
+        <div style={miniLabel}>{begun ? (pumpOff ? "Pumping off since" : "Delivering since") : "On site since"}</div>
         <div className="dash-num" style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.05, color: clockColor, fontVariantNumeric: "tabular-nums" }}>
-          {fmtClock(now - Date.parse(clockFrom))}
+          {fmtTime(clockFrom)}
         </div>
       </div>
       <div style={{ textAlign: "right", fontSize: 13, color: muted, lineHeight: 1.5 }}>
-        <div>Arrived {fmtTime(arrivedAt)}</div>
         {begun
-          ? <div>Began {fmtTime(delivery.begin_at)}</div>
+          ? <div>Arrived {fmtTime(arrivedAt)}</div>
           : overThreshold
             ? <div style={{ color: "#fbbf24", fontWeight: 700 }}>Delay reason needed</div>
             : <div>Delay after {settings.delivery_delay_threshold_minutes} min</div>}
