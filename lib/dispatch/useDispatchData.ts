@@ -25,6 +25,7 @@ import { OFTEN_WINDOW_DAYS } from "./planAlerts";
 import { serviceAlerts } from "./serviceAlerts";
 import type { Ack } from "./acks";
 import type { CertType, CertRecord } from "./certs";
+import { buildUsageItems, type AllocContract, type UsageItem } from "./allocation";
 import { DEFAULT_TIMELINE_SETTINGS, type HistTrip, type TimelineSettings } from "./forecast";
 
 const POLL_MS = 60_000;
@@ -437,4 +438,41 @@ export async function cancelDispatched(tripId: string, userId: string): Promise<
     status: "cancelled", cancelled_at: now, cancelled_by: userId, cancel_reasons: ["dispatch_cancelled"], client_updated_at: now,
   }).eq("trip_id", tripId).eq("status", "dispatched");
   return error ? error.message : null;
+}
+
+// Loads and bookings per supplier and terminal over the last two weeks, for
+// counting against contract limits.
+export function useSupplierUsage(companyId: string | null) {
+  const [items, setItems] = useState<UsageItem[]>([]);
+  const load = useCallback(async () => {
+    if (!companyId) return;
+    const since = new Date(Date.now() - 16 * 86400000).toISOString();
+    const { data } = await supabase.from("trips")
+      .select("status, planned_start_at, started_at, trip_pickups(pickup_id, terminal_id, supplier_id, arrived_at, left_at, outcome, seq), trip_compartment_loads(pickup_id, supplier_id, gross_gallons, disposition)")
+      .eq("company_id", companyId).neq("status", "cancelled")
+      .or(`started_at.gte.${since},planned_start_at.gte.${since}`).limit(1500);
+    setItems(buildUsageItems(((data ?? []) as any[]).map((t) => ({
+      status: t.status, planned_start_at: t.planned_start_at, started_at: t.started_at,
+      pickups: t.trip_pickups ?? [], compLoads: (t.trip_compartment_loads ?? []).map((c: any) => ({ ...c, gross_gallons: c.gross_gallons == null ? null : Number(c.gross_gallons) })),
+    }))));
+  }, [companyId]);
+  usePoll(load, [load]);
+  return items;
+}
+
+// Every contract with a limit, company-wide.
+export function useCompanyContracts(companyId: string | null) {
+  const [contracts, setContracts] = useState<AllocContract[]>([]);
+  const load = useCallback(async () => {
+    if (!companyId) return;
+    const { data, error } = await supabase.from("supplier_contracts")
+      .select("supplier_id,terminal_id,limit_basis,per_day,per_week,reset_dow,reset_time,paused").eq("company_id", companyId);
+    if (error) return; // before the migration: no limits
+    setContracts(((data ?? []) as any[]).map((r) => ({
+      ...r, per_day: r.per_day == null ? null : Number(r.per_day), per_week: r.per_week == null ? null : Number(r.per_week),
+      reset_time: String(r.reset_time ?? "00:00").slice(0, 5),
+    })));
+  }, [companyId]);
+  usePoll(load, [load]);
+  return contracts;
 }

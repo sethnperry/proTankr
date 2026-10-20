@@ -70,6 +70,8 @@ import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
 import { TimelineCard, type DayLeg } from "./TimelineCard";
 import { DispatchedBoard } from "./DispatchedBoard";
+import { AllocationModal, LEVEL_COLOR, type AllocRow } from "./AllocationModal";
+import { contractUsage, typicalGallons, wouldExceed, type Level } from "@/lib/dispatch/allocation";
 import { buildDispatchedTrip } from "@/lib/dispatch/dispatchTrip";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { forecastLoad, typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
@@ -78,7 +80,7 @@ import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSu
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
-import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched } from "@/lib/dispatch/useDispatchData";
+import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -349,6 +351,35 @@ export default function DispatchPage() {
   const [dispatching, setDispatching] = useState(false);
   const [dispatchMsg, setDispatchMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const dispatched = useDispatchedTrips(companyId || null);
+  // ── Supplier allocation (contract limits vs loaded + booked) ──────────────
+  const usageItems = useSupplierUsage(companyId || null);
+  const allContracts = useCompanyContracts(companyId || null);
+  const [allocOpen, setAllocOpen] = useState(false);
+  const tzOfTerminal = (id: string) => (terminalsCatalog.find((t) => String(t.terminal_id) === id) as any)?.timezone ?? null;
+  const allocRows = useMemo<AllocRow[]>(() => {
+    const order: Record<Level, number> = { over: 0, full: 1, near: 2, ok: 3, none: 4 };
+    return allContracts.filter((c) => c.per_day != null || c.per_week != null).map((c) => ({
+      key: `${c.supplier_id}|${c.terminal_id}`,
+      supplier: companySuppliers.all.find((s) => s.supplier_id === c.supplier_id)?.name ?? "Supplier",
+      terminal: terminalsCatalog.find((t) => String(t.terminal_id) === c.terminal_id)?.terminal_name ?? "Terminal",
+      paused: c.paused, usage: contractUsage(c, usageItems, Date.now(), tzOfTerminal(c.terminal_id)),
+    })).sort((a, b) => Number(a.paused) - Number(b.paused) || order[a.usage.level] - order[b.usage.level] || a.supplier.localeCompare(b.supplier));
+  }, [allContracts, usageItems, companySuppliers.all, terminalsCatalog]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allocChip = useMemo(() => {
+    const live = allocRows.filter((r) => !r.paused && ["near", "full", "over"].includes(r.usage.level));
+    const worstLevel = (["over", "full", "near"] as Level[]).find((l) => live.some((r) => r.usage.level === l)) ?? "none";
+    return { count: live.length, color: LEVEL_COLOR[worstLevel as Level] };
+  }, [allocRows]);
+  // The load being planned, against the chosen supplier's limits at its start time.
+  const allocWarning = useMemo(() => {
+    if (!planSupplierId || !planTerminalId) return null;
+    const c = allContracts.find((x) => x.supplier_id === planSupplierId && x.terminal_id === planTerminalId);
+    if (!c || c.paused) return null;
+    const u = contractUsage(c, usageItems, startMs, tzOfTerminal(planTerminalId));
+    const add = c.limit_basis === "loads" ? 1 : typicalGallons(usageItems, planSupplierId, planTerminalId);
+    return wouldExceed(u, planSupplier?.name ?? "This supplier", add);
+  }, [planSupplierId, planTerminalId, allContracts, usageItems, startMs, planSupplier]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const warnings = useMemo(() => {
     const w: string[] = [];
     for (const f of forecast?.flags ?? []) if (f.severity !== "info") w.push(f.text);
@@ -357,8 +388,9 @@ export default function DispatchPage() {
       if (h && certBlocks(trailerCert(certs.types, certs.records, h.trailerId))) w.push("The driver's trailer has no current certification for this terminal.");
     }
     if (planSupplier?.warning) w.push(planSupplier.warning);
+    if (allocWarning) w.push(allocWarning);
     return w;
-  }, [forecast, tlDriverId, planTerminalId, certs, heldEquipment, planSupplier]);
+  }, [forecast, tlDriverId, planTerminalId, certs, heldEquipment, planSupplier, allocWarning]);
   const buildLeg = (): DayLeg | null => {
     if (!tlDriverId || !forecast || !planLocation || !termRow) return null;
     const h = heldEquipment.get(tlDriverId);
@@ -635,6 +667,7 @@ export default function DispatchPage() {
         onAck={acks.ack} ackError={acks.error}
         terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
         alerts={alerts} planCounts={pCounts} planLoading={plan.loading}
+        allocation={allContracts.some((c) => c.per_day != null || c.per_week != null) ? { ...allocChip, onOpen: () => setAllocOpen(true) } : null}
         focusCount={planning ? ranked.focusIds.size : null}
         notCarded={planTerminalId && planLocationId ? { count: ranked.notCarded.length, shown: showNotCarded, onToggle: () => setShowNotCarded((v) => !v) } : null}
         planner={
@@ -653,7 +686,7 @@ export default function DispatchPage() {
                 orderNumber={orderNumber} onOrder={setOrderNumber} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
-            supplier={planSupplier} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
+            supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
@@ -674,6 +707,7 @@ export default function DispatchPage() {
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
         onToggleStar={locList.toggleStar} onLocationAdded={locList.reload}
         onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />
+      <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} rows={allocRows} />
       {companyId && authUserId && (
         <SuppliersModal open={suppliersOpen !== null} onClose={() => setSuppliersOpen(null)} companyId={companyId} userId={authUserId}
           canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={planTerminalId}

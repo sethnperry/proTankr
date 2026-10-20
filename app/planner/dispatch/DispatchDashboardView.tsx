@@ -250,6 +250,8 @@ export function DispatchDashboardView(props: {
   planner?: React.ReactNode;
   focusCount?: number | null;
   notCarded?: { count: number; shown: boolean; onToggle: () => void } | null;
+  // Supplier contracts at or near their limit (count, worst level color) and how to open the list.
+  allocation?: { count: number; color: string; onOpen: () => void } | null;
   onOpenDriver: (userId: string) => void;
   // Slots
   liveBoard: React.ReactNode; // loads in progress
@@ -290,6 +292,7 @@ export function DispatchDashboardView(props: {
     : [
         { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true), wide: true },
         { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY },
+        ...(p.allocation ? [{ label: "Allocation", value: String(p.allocation.count), color: p.allocation.color, onClick: p.allocation.onOpen }] : []),
         ...(p.notCarded
           ? [{ label: p.notCarded.shown ? "Not carded ✓" : "Not carded", value: String(p.notCarded.count), color: p.notCarded.count ? ORANGE : GREY, onClick: p.notCarded.onToggle }]
           : []),
