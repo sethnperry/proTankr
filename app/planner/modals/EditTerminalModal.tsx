@@ -79,6 +79,7 @@ export default function EditTerminalModal({
   // the old /admin terminal editor; this is the same column, surfaced here
   // too since fleet staff manage terminals from here now.
   const [renewalDays, setRenewalDays] = useState<number | null>(null);
+  const [gauging, setGauging] = useState<{ cutoff: string | null; minutes: number | null }>({ cutoff: null, minutes: null });
   const queryClient = useQueryClient();
 
   async function loadRacks() {
@@ -97,10 +98,22 @@ export default function EditTerminalModal({
   async function loadTerminalInfo() {
     const { data } = await supabase
       .from("terminals")
-      .select("renewal_days")
+      .select("renewal_days, gauging_cutoff, gauging_minutes")
       .eq("terminal_id", terminalId)
       .maybeSingle();
-    setRenewalDays((data as { renewal_days: number | null } | null)?.renewal_days ?? 90);
+    const row = data as { renewal_days: number | null; gauging_cutoff: string | null; gauging_minutes: number | null } | null;
+    setRenewalDays(row?.renewal_days ?? 90);
+    setGauging({ cutoff: row?.gauging_cutoff ?? null, minutes: row?.gauging_minutes ?? null });
+  }
+
+  async function saveGauging(next: { cutoff: string | null; minutes: number | null }) {
+    setError(null);
+    const { error: err } = await supabase.from("terminals")
+      .update({ gauging_cutoff: next.cutoff, gauging_minutes: next.minutes }).eq("terminal_id", terminalId);
+    if (err) { setError(err.message); return; }
+    setGauging(next);
+    await queryClient.invalidateQueries({ queryKey: TERMINALS_CATALOG_QUERY_KEY });
+    onChanged();
   }
 
   async function saveRenewalDays(days: number) {
@@ -190,6 +203,8 @@ export default function EditTerminalModal({
           onDeleteRack={deleteRack}
           renewalDays={renewalDays}
           onSaveRenewalDays={saveRenewalDays}
+          gauging={gauging}
+          onSaveGauging={saveGauging}
         />
       )}
 
@@ -206,7 +221,7 @@ export default function EditTerminalModal({
 function RacksView({
   terminalName, racks, loading, error, newRackName, setNewRackName, onAddRack, saving,
   onEditProducts, onRenamed, onDeleteRack,
-  renewalDays, onSaveRenewalDays,
+  renewalDays, onSaveRenewalDays, gauging, onSaveGauging,
 }: {
   terminalName?: string;
   racks: TerminalRack[];
@@ -221,7 +236,11 @@ function RacksView({
   onDeleteRack: (rackId: string) => void;
   renewalDays: number | null;
   onSaveRenewalDays: (days: number) => void;
+  gauging: { cutoff: string | null; minutes: number | null };
+  onSaveGauging: (next: { cutoff: string | null; minutes: number | null }) => void;
 }) {
+  const [gMinDraft, setGMinDraft] = useState(gauging.minutes == null ? "" : String(gauging.minutes));
+  useEffect(() => { setGMinDraft(gauging.minutes == null ? "" : String(gauging.minutes)); }, [gauging.minutes]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -268,6 +287,36 @@ function RacksView({
             }}
           />
           <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>days</span>
+        </div>
+      </div>
+
+      <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12, display: "grid", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Gauging</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+            When this terminal shuts down to gauge (terminal time) and for how long. Dispatch uses it to flag late arrivals. Blank = company default.
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="time" value={gauging.cutoff ?? ""}
+            onChange={(e) => onSaveGauging({ cutoff: e.target.value || null, minutes: gauging.minutes })}
+            style={{ padding: "6px 6px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, colorScheme: "dark" }}
+          />
+          <input
+            type="text" inputMode="numeric" placeholder="min" value={gMinDraft}
+            onChange={(e) => setGMinDraft(e.target.value.replace(/[^0-9]/g, ""))}
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={() => {
+              const n = gMinDraft === "" ? null : Math.min(720, parseInt(gMinDraft, 10));
+              onSaveGauging({ cutoff: gauging.cutoff, minutes: n });
+            }}
+            style={{ width: 56, padding: "6px 4px", borderRadius: 2, textAlign: "center" as const, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontWeight: 800, boxSizing: "border-box" as const }}
+          />
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>min</span>
+          {(gauging.cutoff || gauging.minutes != null) && (
+            <button onClick={() => onSaveGauging({ cutoff: null, minutes: null })} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>Use default</button>
+          )}
         </div>
       </div>
 

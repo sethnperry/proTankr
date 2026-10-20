@@ -104,3 +104,12 @@ test("service alerts: duration type due soon becomes a plan alert", () => {
   assert.equal(out[0].days, 4);
   assert.equal(out[0].iso, "2026-10-23");
 });
+
+import { settingsForTerminal, DEFAULT_TIMELINE_SETTINGS as _D } from "./forecast.ts";
+test("settingsForTerminal: terminal override wins, null falls back", () => {
+  assert.deepEqual(settingsForTerminal(_D, null), _D);
+  const a = settingsForTerminal(_D, { gauging_cutoff: "23:30", gauging_minutes: 90 });
+  assert.equal(a.gaugingCutoff, "23:30"); assert.equal(a.gaugingMinutes, 90);
+  const b = settingsForTerminal(_D, { gauging_cutoff: null, gauging_minutes: 0 });
+  assert.equal(b.gaugingCutoff, _D.gaugingCutoff); assert.equal(b.gaugingMinutes, 0);
+});

@@ -21,6 +21,17 @@ export type Seg = { key: SegKey; label: string; startMs: number; endMs: number; 
 export type Flag = { kind: "gauging" | "shift" | "dot14" | "driving" | "estimate"; severity: "info" | "warn" | "bad"; text: string };
 
 export type TimelineSettings = { maxShiftHours: number; gaugingCutoff: string; gaugingMinutes: number };
+/** A terminal's own gauging time wins over the company default; null/blank falls back. */
+export function settingsForTerminal(
+  base: TimelineSettings,
+  t: { gauging_cutoff?: string | null; gauging_minutes?: number | null } | null | undefined,
+): TimelineSettings {
+  if (!t) return base;
+  const cutoff = t.gauging_cutoff && /^\d{2}:\d{2}$/.test(t.gauging_cutoff) ? t.gauging_cutoff : base.gaugingCutoff;
+  const mins = t.gauging_minutes != null && Number.isFinite(Number(t.gauging_minutes)) ? Number(t.gauging_minutes) : base.gaugingMinutes;
+  return { ...base, gaugingCutoff: cutoff, gaugingMinutes: mins };
+}
+
 export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = { maxShiftHours: 12, gaugingCutoff: "00:00", gaugingMinutes: 60 };
 
 const MIN = 60000;

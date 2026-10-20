@@ -80,6 +80,7 @@ import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSu
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
+import { settingsForTerminal } from "@/lib/dispatch/forecast";
 import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
@@ -342,7 +343,7 @@ export default function DispatchPage() {
       startMs, startFrom: dayLegs.length ? dayLegs[dayLegs.length - 1].locationLL : null,
       terminal: { id: String(termRow.terminal_id), name: termRow.terminal_name ?? "Terminal", tz: tlTz, ll: ll(termRow as any) },
       location: { id: planLocation.location_id, name: locationTitle(planLocation), ll: ll(planLocation) },
-      history: tripHistory.trips, settings: tlSettings,
+      history: tripHistory.trips, settings: settingsForTerminal(tlSettings, termRow as any),
       dutyStartMs: dayLegs[0]?.startMs ?? startMs, drivingMinSoFar: dayLegs.reduce((a, l) => a + l.driveMin, 0),
     });
   }, [tlDriverId, planLocation, termRow, startMs, dayLegs, tripHistory.trips, tlSettings, tlTz]);

@@ -31,6 +31,8 @@ export type CatalogTerminal = TerminalCatalogRow & {
   city_id: string | null;
   lat: number | null;
   lon: number | null;
+  gauging_cutoff: string | null;
+  gauging_minutes: number | null;
 };
 
 export const TERMINALS_CATALOG_QUERY_KEY = ["terminalsCatalog"] as const;
@@ -53,7 +55,7 @@ export async function fetchTerminalsCatalog(): Promise<CatalogTerminal[]> {
   for (;;) {
     const { data, error } = await supabase
       .from("terminals")
-      .select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon")
+      .select("terminal_id, terminal_name, city, state, city_id, timezone, active, renewal_days, lat, lon, gauging_cutoff, gauging_minutes")
       .order("state", { ascending: true })
       .order("city", { ascending: true })
       .order("terminal_name", { ascending: true })
