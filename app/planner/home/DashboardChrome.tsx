@@ -214,18 +214,28 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
 
 // A row of big readouts under the main button.
 export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean; wide?: boolean };
-export function GaugePanel({ cells }: { cells: GaugeCell[] }) {
+export function GaugePanel({ cells, equal }: { cells: GaugeCell[]; equal?: boolean }) {
   const L = useDashLook();
+  // equal: every cell the same width, the whole set scaling with its width
+  // (text sized from the panel via container units) up to the screen height,
+  // and labels truncating once they no longer fit.
+  const labelSize = equal ? "clamp(8px, 2.6cqw, 11px)" : 9;
+  const valueSize = equal ? "clamp(16px, 7cqw, 30px)" : 24;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "), gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12 }}>
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: equal ? `repeat(${cells.length}, minmax(0, 1fr))` : cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "),
+      gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: 12,
+      ...(equal ? { containerType: "inline-size" as const, maxWidth: "100vh" } : {}),
+    }}>
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
           style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
             <span aria-hidden style={{ width: 6, height: 6, background: c.color ?? "rgba(255,255,255,0.5)", flexShrink: 0 }} />
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+            <span style={{ fontSize: labelSize, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.label}</span>
           </div>
-          <div className="dash-num" style={{ marginTop: 6, fontSize: 24, fontWeight: 800, lineHeight: 1, color: c.color ?? "#fff", whiteSpace: "nowrap" }}>
+          <div className="dash-num" style={{ marginTop: 6, fontSize: valueSize, fontWeight: 800, lineHeight: 1, color: c.color ?? "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {c.value}{c.unit && <span style={{ fontSize: 11, fontWeight: 700, color: L.muted, marginLeft: 2 }}>{c.unit}</span>}
           </div>
         </button>

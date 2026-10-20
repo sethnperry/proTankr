@@ -14,11 +14,13 @@ import { useCompanyRoster } from "../hooks/useCompanyRoster";
 export default function DriverPicker({
   companyId,
   excludeUserId,
+  onlyUserIds,
   onPick,
   emptyLabel = "No drivers found.",
 }: {
   companyId: string | null;
   excludeUserId?: string;
+  onlyUserIds?: Set<string>; // limit the list (the dashboard's region filter)
   onPick: (userId: string, displayName: string) => void;
   emptyLabel?: string;
 }) {
@@ -27,9 +29,10 @@ export default function DriverPicker({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) => m.display_name.toLowerCase().includes(q));
-  }, [members, search]);
+    const base = onlyUserIds ? members.filter((m) => onlyUserIds.has(m.user_id)) : members;
+    if (!q) return base;
+    return base.filter((m) => m.display_name.toLowerCase().includes(q));
+  }, [members, search, onlyUserIds]);
 
   return (
     <div style={{ display: "grid", gap: 10 }}>

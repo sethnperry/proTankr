@@ -187,6 +187,8 @@ export function usePlanData(companyId: string | null) {
   const [raw, setRaw] = useState<Omit<PlanInputs, "names" | "terminals" | "loads"> | null>(null);
   const loads = useTerminalUse(roster.members.map((m) => m.user_id));
   const [error, setError] = useState<string | null>(null);
+  // Region of each truck and trailer, for the dashboard's region filter.
+  const [unitRegions, setUnitRegions] = useState<Map<string, string | null>>(new Map());
   const userIds = useMemo(() => roster.members.map((m) => m.user_id).sort(), [roster.members]);
   const ukey = userIds.join(",");
 
@@ -199,8 +201,8 @@ export function usePlanData(companyId: string | null) {
         supabase.from("driver_medical_cards").select("user_id, expiration_date").in("user_id", userIds),
         supabase.from("driver_twic_cards").select("user_id, expiration_date").in("user_id", userIds),
         supabase.from("driver_port_ids").select("user_id, port_name, expiration_date").in("user_id", userIds),
-        supabase.from("trucks").select("truck_id, truck_name, active").eq("company_id", companyId),
-        supabase.from("trailers").select("trailer_id, trailer_name, active").eq("company_id", companyId),
+        supabase.from("trucks").select("truck_id, truck_name, active, region").eq("company_id", companyId),
+        supabase.from("trailers").select("trailer_id, trailer_name, active, region").eq("company_id", companyId),
         supabase.from("equipment_permits").select("truck_id, trailer_id, expiration_date, permit_types(name)").eq("company_id", companyId),
         // Service due. Non-fatal: a failure here only hides service alerts.
         supabase.from("service_types").select("service_type_id, name, interval_kind, interval_value, applies_to, is_active").eq("company_id", companyId),
@@ -212,6 +214,10 @@ export function usePlanData(companyId: string | null) {
       if (firstErr) throw firstErr;
       const cred = (rows: any, kind: "license" | "medical" | "twic") =>
         ((rows.data ?? []) as any[]).map((r) => ({ user_id: r.user_id, kind, expiration_date: r.expiration_date ?? null }));
+      setUnitRegions(new Map([
+        ...((trk.data ?? []) as any[]).map((t) => [t.truck_id, (t.region ?? null) as string | null] as const),
+        ...((trl.data ?? []) as any[]).map((t) => [t.trailer_id, (t.region ?? null) as string | null] as const),
+      ]));
       const trucks = new Map(((trk.data ?? []) as any[]).filter((t) => t.active !== false).map((t) => [t.truck_id, t.truck_name ?? "—"]));
       const trailers = new Map(((trl.data ?? []) as any[]).filter((t) => t.active !== false).map((t) => [t.trailer_id, t.trailer_name ?? "—"]));
       const extra = (sty.error || srec.error) ? [] : serviceAlerts({
@@ -254,7 +260,7 @@ export function usePlanData(companyId: string | null) {
     () => [...new Set([...(raw?.access ?? []).map((a) => String(a.terminal_id)), ...loads.map((l) => l.terminal_id)])].sort(),
     [raw, loads]);
 
-  return { input, usedTerminalIds, roster: roster.members, error, loading: roster.loading || (!raw && !error), reload: load };
+  return { input, usedTerminalIds, unitRegions, roster: roster.members, error, loading: roster.loading || (!raw && !error), reload: load };
 }
 
 // Completed deliveries at one drop location, newest data for ranking drivers

@@ -79,6 +79,53 @@ function ModeSwitch({ mode, onMode }: { mode: DispatchMode; onMode: (m: Dispatch
   );
 }
 
+export type RegionFilter = {
+  options: string[];            // every region seen (drivers and units)
+  selected: Set<string>;        // empty = all regions
+  onChange: (next: Set<string>) => void;
+};
+
+function RegionButton({ r }: { r: RegionFilter }) {
+  const L = useDashLook();
+  const [open, setOpen] = useState(false);
+  const n = r.selected.size;
+  const label = n === 0 ? "All regions" : n === 1 ? [...r.selected][0] : `${n} regions`;
+  const toggle = (name: string) => {
+    const next = new Set(r.selected);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    r.onChange(next);
+  };
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="dash-press" aria-label="Choose regions"
+        style={{ border: `1px solid ${n ? "#fff" : L.hairline}`, background: "#0f0f10", color: n ? "#fff" : L.muted, cursor: "pointer", padding: "8px 10px", fontSize: 11, fontWeight: 800,
+          letterSpacing: "0.12em", textTransform: "uppercase", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0 }}>
+        {label} ▾
+      </button>
+      <FullscreenModal open={open} title="Region" onClose={() => setOpen(false)}>
+        <div style={{ fontSize: 13, color: L.muted, marginBottom: 10 }}>
+          Show only drivers, equipment and loads in the regions you pick. None picked shows everything.
+        </div>
+        <button type="button" onClick={() => r.onChange(new Set())} className="dash-press"
+          style={{ ...L.secondary, display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "12px 14px", marginBottom: 8, color: "#fff", cursor: "pointer", textAlign: "left", fontWeight: 800, fontSize: 14 }}>
+          <span aria-hidden style={{ width: 16, height: 16, border: `1px solid ${L.muted}`, background: n === 0 ? "#fff" : "transparent", flexShrink: 0 }} />
+          All regions
+        </button>
+        {r.options.map((name) => {
+          const on = r.selected.has(name);
+          return (
+            <button key={name} type="button" onClick={() => toggle(name)} className="dash-press" aria-pressed={on}
+              style={{ ...L.secondary, display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "12px 14px", marginBottom: 8, color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14 }}>
+              <span aria-hidden style={{ width: 16, height: 16, border: `1px solid ${L.muted}`, background: on ? "#fff" : "transparent", flexShrink: 0 }} />
+              {name}
+            </button>
+          );
+        })}
+      </FullscreenModal>
+    </>
+  );
+}
+
 function ConflictCard({ c, terminal, product, onOpenTrip, openingId, isNew, onSeen, onAck }: {
   c: ConflictWithAck;
   terminal: (id: string) => { name: string; place: string | null };
@@ -255,7 +302,10 @@ export function DispatchDashboardView(props: {
   onOpenDriver: (userId: string) => void;
   // Slots
   liveBoard: React.ReactNode; // loads in progress
-  planBoard: React.ReactNode; // parked + cancelled
+  parkedBoard: React.ReactNode; // parked preloads, opened from the Parked chip
+  cancelledBoard: React.ReactNode; // cancelled loads (renders nothing when there are none)
+  dispatchedCount: number;
+  regions: RegionFilter;
   dispatchedBoard?: React.ReactNode; // loads sent to drivers, not begun yet
   drivers: React.ReactNode;   // driver picker
   tools: ToolItem[];
@@ -265,6 +315,7 @@ export function DispatchDashboardView(props: {
   const live = p.mode === "live";
 
   const [expOpen, setExpOpen] = useState(false);
+  const [parkedOpen, setParkedOpen] = useState(false);
   // One expirations tile, worst tier first: expired (red), then 7 days
   // (orange), then 30 days (yellow). Counts only that tier, so resolving the
   // reds moves the tile down to the oranges.
@@ -284,18 +335,21 @@ export function DispatchDashboardView(props: {
   const open = p.conflicts.filter((c) => !c.handled).length;
   const cells: GaugeCell[] = live
     ? [
-        { label: "Conflicts", value: String(open), color: open ? RED : GREY, wide: true },
+        { label: "Conflicts", value: String(open), color: open ? RED : GREY },
         { label: "At Rack", value: String(p.counts.atRack), color: p.counts.atRack ? "#fff" : GREY },
         { label: "To Rack", value: String(p.counts.enRouteToRack), color: p.counts.enRouteToRack ? "#fff" : GREY },
         { label: "Rolling", value: String(p.counts.loadedRolling), color: p.counts.loadedRolling ? "#4ade80" : GREY },
       ]
     : [
-        { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true), wide: true },
-        { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY },
-        ...(p.allocation ? [{ label: "Allocation", value: String(p.allocation.count), color: p.allocation.color, onClick: p.allocation.onOpen }] : []),
-        ...(p.notCarded
-          ? [{ label: p.notCarded.shown ? "Not carded ✓" : "Not carded", value: String(p.notCarded.count), color: p.notCarded.count ? ORANGE : GREY, onClick: p.notCarded.onToggle }]
-          : []),
+        { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true) },
+        { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
+        p.allocation
+          ? { label: "Allocation", value: String(p.allocation.count), color: p.allocation.color, onClick: p.allocation.onOpen }
+          : { label: "Allocation", value: "0", color: GREY },
+        // While planning a load this is the not-carded count; otherwise loads sent and not begun.
+        p.notCarded
+          ? { label: p.notCarded.shown ? "Not carded ✓" : "Not carded", value: String(p.notCarded.count), color: p.notCarded.count ? ORANGE : GREY, onClick: p.notCarded.onToggle }
+          : { label: "Dispatched", value: String(p.dispatchedCount), color: p.dispatchedCount ? "#93c5fd" : GREY },
       ];
 
   const groups = groupBySubject(p.alerts);
@@ -310,13 +364,16 @@ export function DispatchDashboardView(props: {
             {p.companyName ?? "Fleet"}
           </div>
         </div>
-        <ModeSwitch mode={p.mode} onMode={p.onMode} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 1, minWidth: 0 }}>
+          <RegionButton r={p.regions} />
+          <ModeSwitch mode={p.mode} onMode={p.onMode} />
+        </div>
       </div>
       <div style={{ fontSize: 13, color: L.faint, marginTop: 6 }}>
         {live ? "What's going wrong right now, where trucks are headed." : "What runs out before the next load does."}
       </div>
 
-      <GaugePanel cells={cells} />
+      <GaugePanel cells={cells} equal />
       {p.error && <div style={{ fontSize: 13, color: "#f87171", marginTop: 10 }}>{p.error}</div>}
 
       <div className="dash-cols" style={{ marginTop: 4 }}>
@@ -366,8 +423,7 @@ export function DispatchDashboardView(props: {
               {p.planner}
               {p.dispatchedBoard && <SectionLabel>Dispatched · not begun</SectionLabel>}
               {p.dispatchedBoard}
-              <SectionLabel>Parked &amp; cancelled</SectionLabel>
-              {p.planBoard}
+              {p.cancelledBoard}
             </>
           )}
         </div>
@@ -379,6 +435,9 @@ export function DispatchDashboardView(props: {
       </div>
       <SectionLabel>Tools</SectionLabel>
       <ToolPanel items={p.tools} />
+      <FullscreenModal open={parkedOpen} title={`Parked loads (${p.counts.parked})`} onClose={() => setParkedOpen(false)}>
+        {p.parkedBoard}
+      </FullscreenModal>
       <FullscreenModal open={expOpen} title={`Expirations · next 30 days${scope}`} onClose={() => setExpOpen(false)}>
         {p.planLoading && groups.length === 0 ? (
           <div style={{ fontSize: 14, color: L.muted }}>Loading…</div>

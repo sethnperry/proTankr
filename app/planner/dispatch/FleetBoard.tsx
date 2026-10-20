@@ -162,7 +162,9 @@ const fmtSpan = (from: string | null | undefined, to: string | null | undefined)
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 };
 
-function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
+function CancelledSection({ cancelled, days, onOpenTrip, openingId, onDismiss, onDismissAll }: {
+  onDismiss?: (tripId: string) => void;
+  onDismissAll?: () => void;
   openingId?: string | null;
   cancelled: CancelledTrip[];
   days: number;
@@ -171,10 +173,19 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
   const [all, setAll] = useState(false);
   const counts = reasonCounts(cancelled);
   const shown = all ? cancelled : cancelled.slice(0, 5);
+  // Nothing left (all dismissed): the section goes away.
+  if (cancelled.length === 0) return null;
   return (
     <>
-      <div style={{ ...sectionLabel, marginTop: 14 }}>Cancelled loads · last {days} days ({cancelled.length})</div>
-      {cancelled.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No cancelled loads.</div>}
+      <div style={{ ...sectionLabel, marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ flex: 1 }}>Cancelled loads · last {days} days ({cancelled.length})</span>
+        {onDismissAll && (
+          <button type="button" onClick={onDismissAll}
+            style={{ border: "none", background: "transparent", color: muted, fontSize: 11, fontWeight: 800, cursor: "pointer", padding: 0, textTransform: "none", letterSpacing: 0 }}>
+            Dismiss all
+          </button>
+        )}
+      </div>
       {counts.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
           {counts.map((c) => (
@@ -190,7 +201,8 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
         const racks = ct.pickups.filter((p) => p.arrived_at || p.outcome);
         const span = fmtSpan(t.started_at, t.cancelled_at);
         return (
-          <button key={t.trip_id} type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)" }} onClick={() => onOpenTrip(t.trip_id)} {...busyProps(openingId === t.trip_id)}>
+          <div key={t.trip_id}>
+          <button type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)", marginBottom: onDismiss ? 0 : card.marginBottom }} onClick={() => onOpenTrip(t.trip_id)} {...busyProps(openingId === t.trip_id)}>
             <CardBusy on={openingId === t.trip_id} />
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -222,6 +234,15 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
             {t.cancel_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{t.cancel_note}&rdquo;</div>}
             {t.cancel_returned_to && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Headed to {t.cancel_returned_to}</div>}
           </button>
+          {onDismiss && (
+            <div style={{ textAlign: "right", marginBottom: 10 }}>
+              <button type="button" onClick={() => onDismiss(t.trip_id)}
+                style={{ border: "none", background: "transparent", color: muted, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "4px 0" }}>
+                Dismiss
+              </button>
+            </div>
+          )}
+          </div>
         );
       })}
       {cancelled.length > 5 && (
@@ -236,7 +257,9 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId }: {
 
 export type BoardSection = "live" | "parked" | "cancelled";
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled }: {
+  onDismissCancelled?: (tripId: string) => void;
+  onDismissAllCancelled?: () => void;
   // Which lists to show (default all). The Dispatch Dashboard shows loads in
   // progress in LIVE mode and parked + cancelled in PLAN mode.
   sections?: BoardSection[];
@@ -314,7 +337,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
 
       </>}
 
-      {cancelled && show("cancelled") && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} />}
+      {cancelled && show("cancelled") && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} onDismiss={onDismissCancelled} onDismissAll={onDismissAllCancelled} />}
     </div>
   );
 }

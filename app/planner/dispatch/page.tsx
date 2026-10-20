@@ -235,10 +235,53 @@ export default function DispatchPage() {
     return () => { off = true; };
   }, [companyId]);
   const plan = usePlanData(companyId || null);
-  const fleetReports = useFleetReports(fleet.trips, plan.usedTerminalIds);
+
+  // Region filter: drivers, equipment and loads in the picked regions only.
+  // Empty = everything. Remembered on this device.
+  const [regionSel, setRegionSel] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("proTankr:dispatchRegions");
+      if (raw) setRegionSel(new Set(JSON.parse(raw) as string[]));
+    } catch { /* storage blocked */ }
+  }, []);
+  const changeRegions = (next: Set<string>) => {
+    setRegionSel(next);
+    try { localStorage.setItem("proTankr:dispatchRegions", JSON.stringify([...next])); } catch {}
+  };
+  const NO_REGION = "No region";
+  const regionOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of plan.roster) set.add(m.region?.trim() || NO_REGION);
+    for (const r of plan.unitRegions.values()) set.add(r?.trim() || NO_REGION);
+    const named = [...set].filter((x) => x !== NO_REGION).sort((a, b) => a.localeCompare(b));
+    return set.has(NO_REGION) ? [...named, NO_REGION] : named;
+  }, [plan.roster, plan.unitRegions]);
+  const regionOn = regionSel.size > 0;
+  const regionDriverIds = useMemo(
+    () => new Set(plan.roster.filter((m) => regionSel.has(m.region?.trim() || NO_REGION)).map((m) => m.user_id)),
+    [plan.roster, regionSel]);
+  const driverInRegion = (id: string | null | undefined) => !regionOn || (!!id && regionDriverIds.has(id));
+  const fleetTrips = useMemo(() => fleet.trips.filter((f) => driverInRegion(f.trip.driver_id)), [fleet.trips, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const regionRoster = useMemo(() => plan.roster.filter((m) => driverInRegion(m.user_id)), [plan.roster, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cancelled loads the dispatcher has dismissed (this device).
+  const dismissKey = `proTankr:u:${authUserId || "anon"}:dismissedCancelled`;
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try { setDismissed(new Set(JSON.parse(localStorage.getItem(dismissKey) ?? "[]") as string[])); } catch { /* storage blocked */ }
+  }, [dismissKey]);
+  const saveDismissed = (next: Set<string>) => {
+    setDismissed(next);
+    try { localStorage.setItem(dismissKey, JSON.stringify([...next])); } catch {}
+  };
+  const visibleCancelled = useMemo(
+    () => cancelledTrips.trips.filter((c) => !dismissed.has(c.trip.trip_id) && driverInRegion(c.trip.driver_id)),
+    [cancelledTrips.trips, dismissed, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fleetReports = useFleetReports(fleetTrips, plan.usedTerminalIds);
   const rawConflicts = useMemo(
-    () => findConflicts(fleet.trips, fleetReports.reports, fleetReports.plannedByLoad),
-    [fleet.trips, fleetReports.reports, fleetReports.plannedByLoad],
+    () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad),
+    [fleetTrips, fleetReports.reports, fleetReports.plannedByLoad],
   );
   const reportIds = useMemo(() => [...new Set(rawConflicts.flatMap((c) => c.reports.map((r) => r.reportId)))], [rawConflicts]);
   const acks = useConflictAcks(companyId || null, reportIds, authUserId || null);
@@ -249,8 +292,8 @@ export default function DispatchPage() {
   );
   const [fleetCardsOpen, setFleetCardsOpen] = useState(false);
   const counts = useMemo(
-    () => liveCounts(fleet.trips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
-    [fleet.trips],
+    () => liveCounts(fleetTrips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
+    [fleetTrips],
   );
   // ── Planning a load: drop location -> terminal -> drivers ───────────────
   const [planLocationId, setPlanLocationId] = useState<string | null>(null);
@@ -288,15 +331,15 @@ export default function DispatchPage() {
   }, [planSupplierId, companySuppliers.all, termSuppliers.bySupplier, termContracts.contracts]);
   const busyByDriver = useMemo(() => {
     const m = new Map<string, string>();
-    for (const f of fleet.trips) m.set(f.trip.driver_id, f.trip.status === "parked" ? "Parked" : "On a load");
+    for (const f of fleetTrips) m.set(f.trip.driver_id, f.trip.status === "parked" ? "Parked" : "On a load");
     return m;
-  }, [fleet.trips]);
+  }, [fleetTrips]);
   const planning = !!planLocationId || !!planTerminalId;
   const ranked = useMemo(() => rankDrivers({
-    roster: plan.roster, deliveries: history.rows, access: plan.input?.access,
+    roster: regionRoster, deliveries: history.rows, access: plan.input?.access,
     terminalId: planTerminalId, renewalDays: planTerminalId ? plan.input?.terminals.get(planTerminalId)?.renewal_days ?? null : null,
     busy: busyByDriver,
-  }), [plan.roster, history.rows, plan.input, planTerminalId, busyByDriver]);
+  }), [regionRoster, history.rows, plan.input, planTerminalId, busyByDriver]);
 
   // Equipment each driver holds, and the terminal's trailer-certification check.
   const heldEquipment = useDriverEquipment(companyId || null);
@@ -355,6 +398,7 @@ export default function DispatchPage() {
   const [dispatching, setDispatching] = useState(false);
   const [dispatchMsg, setDispatchMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const dispatched = useDispatchedTrips(companyId || null);
+  const dispatchedShown = useMemo(() => dispatched.trips.filter((t) => driverInRegion(t.driver_id)), [dispatched.trips, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
   // ── Supplier allocation (contract limits vs loaded + booked) ──────────────
   const usageItems = useSupplierUsage(companyId || null);
   const allContracts = useCompanyContracts(companyId || null);
@@ -478,8 +522,13 @@ export default function DispatchPage() {
   };
 
   const alerts = useMemo(
-    () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], planning ? ranked.focusIds : null),
-    [plan.input, planning, ranked.focusIds]);
+    () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], planning ? ranked.focusIds : null)
+      .filter((a) => {
+        if (!regionOn) return true;
+        if (!a.isEquipment) return regionDriverIds.has(a.subjectId);
+        return regionSel.has(plan.unitRegions.get(a.subjectId)?.trim() || NO_REGION);
+      }),
+    [plan.input, planning, ranked.focusIds, regionOn, regionDriverIds, regionSel, plan.unitRegions]);
   const pCounts = useMemo(() => planCounts(alerts), [alerts]);
   const terminalInfo = (id: string) => {
     const t = terminalsCatalog.find((x) => String(x.terminal_id) === id);
@@ -744,18 +793,24 @@ export default function DispatchPage() {
             onOpenDriver={(id) => setSelectedDriverId(id)} />
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
-        liveBoard={<FleetBoard sections={["live"]} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
+        liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
-        dispatchedBoard={!dispatched.trips.length ? undefined : <DispatchedBoard trips={dispatched.trips}
+        dispatchedBoard={!dispatchedShown.length ? undefined : <DispatchedBoard trips={dispatchedShown}
           driverName={(id) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver"}
           locationName={(id) => (id ? locList.locations.find((l) => l.location_id === id) : null) ? locationTitle(locList.locations.find((l) => l.location_id === id)!) : "Delivery"}
           supplierName={(id) => (id ? companySuppliers.all.find((x) => x.supplier_id === id)?.name ?? null : null)}
           onCancel={async (tid) => { const e = await cancelDispatched(tid, authUserId || ""); if (!e) dispatched.reload(); return e; }}
           onSwap={async (a, b) => { const e = await swapDispatched(a, b); dispatched.reload(); return e; }} />}
-        planBoard={<FleetBoard sections={["parked", "cancelled"]} cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS}
-          trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
+        parkedBoard={<FleetBoard sections={["parked"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
-        drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onPick={(id) => setSelectedDriverId(id)} /></div>}
+        cancelledBoard={<FleetBoard sections={["cancelled"]} cancelled={visibleCancelled} cancelledDays={CANCELLED_DAYS}
+          trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
+          onOpenTrip={openTrip} openingId={nav.openingId("trip")}
+          onDismissCancelled={(id) => saveDismissed(new Set([...dismissed, id]))}
+          onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
+        dispatchedCount={dispatchedShown.length}
+        regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
+        drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onlyUserIds={regionOn ? regionDriverIds : undefined} onPick={(id) => setSelectedDriverId(id)} /></div>}
         tools={dashTools}
       />
       <LocationPicker open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
