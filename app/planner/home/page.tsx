@@ -314,6 +314,13 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const editing = !!openTrip;
 
+  // Terminals picked on the dashboard are ahead of time: the rack is asked on Arrive.
+  useEffect(() => {
+    shell.setDeferRackPick(true);
+    return () => shell.setDeferRackPick(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Loads dispatch planned for this driver ───────────────────────────────
   const dispatchedList = useMemo(() => (userId && !openTrip ? dispatchedForDriver(trips, userId) : []), [trips, userId, openTrip]);
   const [plannedNames, setPlannedNames] = useState<Record<string, string>>({});
@@ -886,6 +893,7 @@ export default function HomePage() {
       case "arrive_pickup": {
         // Arrived: straight to the Planner to build the load, on this
         // pickup's terminal (the Planner may still be on an earlier one).
+        // Which rack isn't known until the driver is there, so it's asked now.
         setOpeningPlanner(true);
         arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
         const loc = shell.location;
@@ -898,8 +906,19 @@ export default function HomePage() {
           loc.setSelectedRackId(pk.rack_id ?? "");
           setTimeout(() => { loc.skipResetRef.current = false; }, 50);
         }
-        void syncNow();
-        router.push("/planner");
+        void (async () => {
+          try {
+            if (pk.terminal_id && !pk.rack_id) {
+              const rackId = await shell.askRack(String(pk.terminal_id));
+              if (rackId) store.put("trip_pickups", { pickup_id: pk.pickup_id, rack_id: rackId });
+            } else if (pk.rack_id) {
+              loc.setSelectedRackId(pk.rack_id);
+            }
+          } finally {
+            void syncNow();
+            router.push("/planner");
+          }
+        })();
         break;
       }
       case "loaded":

@@ -1590,6 +1590,12 @@ export default function CalculatorPage() {
   }, [effectiveUserId, tripStoreHook.state]);
   const tripAwaitingLoad = !!tripWaitingPickup;
   const tripNeedsArrive = !!tripWaitingPickup && !tripWaitingPickup.arrived_at;
+  // Before the driver has arrived, the rack isn't known; it's asked on Arrive.
+  useEffect(() => {
+    shell.setDeferRackPick(tripNeedsArrive);
+    return () => shell.setDeferRackPick(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripNeedsArrive]);
 
   const tripModeForLoading = useMemo<LoadingTripMode | null>(() => {
     if (!tripPickup || !tripStoreObj || !shell.companyId) return null;
@@ -2366,10 +2372,16 @@ export default function CalculatorPage() {
       const fresh = store.list("trip_pickups", (x) => x.pickup_id === p.pickup_id)[0] ?? p;
       arrivePickup(store, { userId: effectiveUserId, pickup: fresh, now: new Date(), newId: newTripId });
       void tripStoreHook.syncNow();
+      // Which rack isn't known until the driver is here: ask now, record it on the pickup.
+      if (!fresh.rack_id) {
+        void shell.askRack(cur).then((rackId) => {
+          if (rackId) { store.put("trip_pickups", { pickup_id: p.pickup_id, rack_id: rackId }); void tripStoreHook.syncNow(); }
+        });
+      }
     } catch (e) {
       console.warn("[trips] arrive failed:", e);
     }
-  }, [tripWaitingPickup, effectiveUserId, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, tripStoreHook]);
+  }, [tripWaitingPickup, effectiveUserId, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, tripStoreHook, shell]);
 
   // Same-city silent refresh: waits for useFuelTempPrediction's own refetch
   // (already triggered automatically -- its signature includes terminalId,
