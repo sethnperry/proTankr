@@ -11757,3 +11757,142 @@ and that the notification actually fires.
 
 **Not built:** sound/vibration alerts, push to a closed tab, "company top
 terminals" as an access-gap source, driver availability/hours.
+
+### Dispatch Dashboard, PLAN mode build-out (2026-10-20)
+
+Built in order on top of the 2026-10-19 PLAN/LIVE first and second passes, all
+merged to `main` (last commit `e146a0d`). Migrations were applied live via the
+Supabase Management API (`api.supabase.com/v1/projects/<ref>/database/query`,
+credentials injected by the proxy). None of this has been click-tested with a
+real dispatch login; the write path was run as a real company member under RLS
+in rolled-back transactions, and the UI pieces were render-checked with sample
+data only.
+
+**Expirations tile.** The three PLAN tiles (Expired / 7 Days / 30 Days) became
+ONE tiered tile: red with the expired count while anything is expired, then
+orange with only the 7-day count, then yellow with only the 8-30-day count,
+else grey. Tapping it opens a full-screen list of everything due in 30 days,
+grouped by driver or unit. The 7/14/30 chips and inline list are gone; parked
+and cancelled loads moved to the main column. The other two tiles were benched.
+
+**Plan a load** (`lib/dispatch/planLoad.ts`, `app/planner/dispatch/PlanLoadCard.tsx`).
+Pick a drop location (the shared `LocationPicker`) and drivers who delivered
+there are ranked by HOW OFTEN (recency only breaks a tie), never-delivered
+drivers dimmed below. Pick a terminal and the list narrows to usable access
+(valid/yellow/orange); a "Not carded" tile counts drivers who delivered there
+but have no usable access (expired counts as not carded). The expirations tile
+and modal narrow to the shortlist ("Expired · 4 drivers"; equipment alerts are
+dropped while a shortlist is active). Tapping a driver row SELECTS them (opens
+the timeline); the small arrow opens their dispatch view.
+
+**Suppliers screen** (`app/planner/dispatch/SuppliersModal.tsx`,
+`lib/suppliers/useSupplierAdmin.ts`, `lib/suppliers/locks.ts`). Opened from the
+Tools "Suppliers" tile or the plan card's Supplier row (pick mode). Condensed
+list per terminal: name + account number, tags PAUSED / NOT WORKING / LOCKED.
+Tap picks (pick mode) or expands; arrow always expands. Expanded editor:
+rename, account number, numbered loading steps, notes, contract terms, pause,
+remove from terminal, retire supplier. Migration
+`20261020010000_supplier_contracts_and_locks.sql`: `supplier_terminal_steps`
+gained `account_number`, `account_locked`, `step_locks jsonb` (one boolean per
+step, same order); new `supplier_contracts` (basis loads/gallons, per_day,
+per_week, reset_dow, reset_time, paused + note); `can_manage_suppliers()`
+(admin/owner/super admin/dispatch). **Locks are enforced in the database**: a
+BEFORE UPDATE trigger (`enforce_supplier_locks`) refuses a non-manager change to
+a locked account, a locked step, or to the locks themselves (service role and
+managers bypass). Field notes can never be locked. Verified in a rolled-back
+transaction as a plain driver. The driver-side supplier panel shows the account
+number and greys out locked steps. **Contract limits are warn-only.**
+
+**Equipment and certification.** `permit_types.terminal_id` (migration
+`20261020000000_dispatch_planning_foundation.sql`) ties a trailer certification
+to one terminal; set in the Binder's permit-type editor ("Only needed at one
+terminal"). Dispatch (`lib/dispatch/certs.ts`, `useDriverEquipment`,
+`useTerminalCerts`) shows each listed driver's current truck/trailer (from the
+active claimed `equipment_combos`, "since" date) and, when the terminal requires
+a cert, the trailer's cert expiry and a thumbnail of the uploaded image (signed
+URL; PDFs show a PDF tag). Missing or expired = red + warning; a terminal with
+no cert type defined requires nothing. Limit: a driver holding only a truck or
+only a trailer (bobtail) shows no equipment line.
+
+**Timeline** (`lib/dispatch/forecast.ts`, `TimelineCard.tsx`). For the selected
+driver: drive to terminal, gauging hold, loading, drive to store, drop. Each leg
+is the median of the company's own completed trips (last 6 months) at a similar
+hour (+-2h) AND weekday/weekend AND season (+-1 month) with >= 3 samples,
+widening to: drop the season, then all times, then whatever few exist, then
+distance (air miles x 1.25 / 45 mph), then a standard allowance (30/60/60/45
+min). Each line states its basis. Gauging: if arrival falls within loading-time
+before the cutoff or inside the gauging window (company-wide cutoff, default
+midnight terminal-local, 60 min), loading is held and delivery slides. Flags
+(never block): over the company max shift, 14-hour window, 11 hours driving,
+estimates. "+ Then another load" stacks a day plan (next load starts when the
+last ends, starting from the last drop's coordinates); the day plan is
+in-memory only. Migration `20261020020000_dispatch_timeline_settings.sql` added
+`trip_settings.max_shift_hours` (12), `gauging_cutoff` ('00:00'),
+`gauging_minutes` (60), editable in Trip Settings. Known limits: gauging time is
+company-wide not per terminal; segment times show in the dispatcher's local time
+zone; DST edges can drift an hour; no live traffic, only own history.
+
+**Dispatch (commit).** Migration `20261020000000` added the `dispatched` trip
+status and `trips.dispatched_by / planned_start_at / planned_truck_id /
+planned_trailer_id / dispatch_seq`; `20261020030000` added
+`trip_pickups.supplier_id`. The "Dispatch N loads to <driver>" button writes one
+`dispatched` trip per stacked load (`lib/dispatch/dispatchTrip.ts`: trip + primary
+order + pickup with supplier + planned delivery + `dispatched` event carrying the
+warnings the dispatcher went ahead with). truck_id/trailer_id stay null until
+the driver begins; the plan is a comparison only. Warnings turn the button into
+"Dispatch anyway". A duplicate order number (on two legs, or already on another
+live trip) is the one hard refusal. If a later row fails the trip is deleted so
+no half-written load is left. "Dispatched · not begun" lists them with Cancel.
+**Driver side:** `dispatched` is deliberately NOT in `OPEN_STATUSES`; hydration
+pulls it. The Driver Dashboard shows a blue "Dispatched" card (time, terminal,
+store, order, supplier, planned equipment, amber if different) and the big
+button reads "Begin Dispatched Load" (`beginDispatched` in `tripLogic.ts`):
+status -> draft, started_at now, truck/trailer from what the driver holds, begin
+miles from the truck's last trip, supplier seeded onto the trip and rack. After
+that it is an ordinary open trip (Edit works). Several dispatched loads run in
+planned-start order. Not built: driver decline, push notification, dispatched
+loads in the live "Loads in progress" board.
+
+**Allocation chip** (`lib/dispatch/allocation.ts`, `AllocationModal.tsx`).
+Contract limits against loaded + booked, per supplier and terminal. Loaded = a
+completed pickup's compartment loads grouped by supplier (gross gallons);
+booked = a dispatched load or a pickup in progress not yet loaded (gallons
+basis: the pair's median past load, else 8000). Day window starts at the
+contract's reset time in the terminal time zone; week window at the reset day.
+Levels: near >= 75%, full = limit, over > limit. The PLAN "Allocation" tile
+counts near/full/over (paused excluded), coloured by the worst; tapping lists
+each contract (today + week, booked in brackets). Planning a load also warns
+when this load would go past a limit at its planned start time (feeds the
+Dispatch button's warnings). Counts only come from loads with a recorded
+supplier, so it reads low until suppliers are in use.
+
+**Trip workflow fixes, same day.**
+- **Rack is asked on Arrive, not when the terminal is picked.** Shell:
+  `setDeferRackPick(bool)` makes `chooseTerminal` leave the rack blank;
+  `askRack(terminalId)` returns a Promise of the rack id (sets 0/1-rack
+  terminals directly, opens the picker for several). The Driver Dashboard
+  defers always; the Planner defers while the trip's waiting pickup has not been
+  arrived at. Arrive (dashboard big button, and the Planner's "ARRIVE AT ..."
+  button) calls `askRack` when the pickup has no rack and writes `rack_id` onto
+  the pickup. A rack hop or terminal switch AFTER arrival still asks at once, and
+  the Planner with no trip is unchanged.
+- **Supplier moved out of the planning phase.** `SupplierPanel` (with its steps)
+  now renders only inside Plan Review (`LoadingModal` `supplierSection` slot),
+  i.e. after Begin Loading. The arrival prompt and the prompt on tapping LOAD
+  were removed; the picker opens when Plan Review opens and no supplier is set
+  (the token resets when it closes). Pick state (`useSupplierPicks`) still lives
+  in the Planner page, so the BOL-supplier default and allocation are unaffected.
+
+**Tooling notes learned today.** The Management API is reachable from cloud
+sessions and is the way to apply and verify migrations. Rolled-back transactions
+with `set_config('request.jwt.claims', ...)` + `set local role authenticated`
+prove RLS and trigger behaviour without leaving data (a super admin bypasses
+`can_manage_suppliers`, so pick a non-super-admin test user). A UI component can
+be render-checked without a browser by bundling it with esbuild
+(`--alias:@=<repo>`, `NODE_PATH=<repo>/node_modules`) and calling
+`renderToStaticMarkup`. `npm ci` is needed in a fresh container before `tsc`.
+
+**Next up.** A real dispatch-login pass on live data (check `load_log` /
+`service_records` reads, the notification, thumbnails, the dispatch write);
+per-terminal gauging times; driver availability/hours; decline/notify for
+dispatched loads; planned-equipment for tomorrow.
