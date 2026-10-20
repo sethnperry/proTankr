@@ -49,7 +49,7 @@ export function CompartmentPlanCard(p: {
   slotError: string | null;
 }) {
   const L = useDashLook();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [pickComp, setPickComp] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [trailerPick, setTrailerPick] = useState(false);
@@ -64,7 +64,7 @@ export function CompartmentPlanCard(p: {
 
   const filled = Object.keys(p.plan).length;
   const slots = p.comps.map((c) => ({
-    comp: c.n, size: c.size, color: colorOf(p.plan[c.n]), selected: pickComp === c.n,
+    comp: c.n, size: c.size, color: colorOf(p.plan[c.n]), crossed: !p.plan[c.n], selected: pickComp === c.n,
     title: `C${c.n}${p.plan[c.n] ? ` · ${byId.get(p.plan[c.n])?.name ?? ""}` : " · empty"}`,
     onClick: () => setPickComp(pickComp === c.n ? null : c.n),
   }));
@@ -75,7 +75,7 @@ export function CompartmentPlanCard(p: {
   };
   const dots = (payload: any) => {
     const pl = planFromSlotPayload(payload);
-    return [...p.comps].sort((a, b) => b.n - a.n).map((c) => colorOf(pl[c.n]) ?? "#000");
+    return [...p.comps].sort((a, b) => b.n - a.n).map((c) => colorOf(pl[c.n]));
   };
   const loadSlot = (s: number) => {
     const t = p.slots[s];
@@ -122,7 +122,7 @@ export function CompartmentPlanCard(p: {
                   return (
                     <button key={s} type="button" onClick={() => loadSlot(s)} style={{ ...chip(p.activeSlot === s), display: "flex", alignItems: "center", gap: 6 }}>
                       {ltr}
-                      {t && <span style={{ display: "flex", gap: 2 }}>{dots(t.payload).map((c, j) => <span key={j} style={{ width: 8, height: 8, borderRadius: "50%", background: c, border: "1px solid rgba(255,255,255,0.3)" }} />)}</span>}
+                      {t && <span style={{ display: "flex", gap: 2 }}>{dots(t.payload).map((c, j) => <span key={j} title={c ? undefined : "Empty"} style={{ width: 8, height: 8, borderRadius: "50%", background: c ?? "linear-gradient(to top right, #000 calc(50% - 1px), #f87171 calc(50% - 1px), #f87171 calc(50% + 1px), #000 calc(50% + 1px))", border: "1px solid rgba(255,255,255,0.3)" }} />)}</span>}
                     </button>
                   );
                 })}
@@ -152,7 +152,7 @@ export function CompartmentPlanCard(p: {
 
               {p.groups.length > 0 && (
                 <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order and supplier per product</div>
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order and supplier · the first sets them for the rest</div>
                   {p.groups.map((g) => {
                     const prod = byId.get(g.productId);
                     return (

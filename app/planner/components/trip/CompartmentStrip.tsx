@@ -16,6 +16,7 @@ export type StripSlot = {
   color: string | null;  // product color, null = empty
   residue?: string | null; // empty but last held this product (its color)
   title?: string;        // tooltip
+  crossed?: boolean;     // empty on purpose: drawn with a line through it
   selected?: boolean;    // outlined in white (picking compartments)
   onClick?: () => void;
 };
@@ -31,7 +32,7 @@ export function CompartmentStrip({ slots, height = 12, gap = 3 }: { slots: Strip
           flex: `0 0 calc(${w.toFixed(4)}% - ${(((ordered.length - 1) * gap) / ordered.length).toFixed(2)}px)`,
           height,
           borderRadius: 2,
-          background: s.color ?? "transparent",
+          background: s.color ?? (s.crossed ? "linear-gradient(to top right, transparent calc(50% - 1px), rgba(248,113,113,0.85) calc(50% - 1px), rgba(248,113,113,0.85) calc(50% + 1px), transparent calc(50% + 1px))" : "transparent"),
           border: s.selected
             ? "2px solid #fff"
             : s.color ? "1px solid rgba(0,0,0,0.25)"

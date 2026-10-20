@@ -790,13 +790,17 @@ export default function DispatchPage() {
                     onSaveSlot={(slot, name) => trailerPlan.saveSlot(slot, name, slotPayloadFromPlan(compPlan, trailerPlan.comps.map((c) => c.n)), authUserId || "")}
                     onClearSlot={trailerPlan.clearSlot}
                     groups={planGroups} supplierName={supplierNameOf} defaultOrder={orderNumber} slotError={trailerPlan.error}
-                    onGroupOrder={(pid, v) => setGroupOverrides((m) => ({ ...m, [pid]: { ...m[pid], orderNumber: v } }))}
+                    onGroupOrder={(pid, v) => {
+                      // The first product's order is the default for the rest.
+                      if (pid === planGroups[0]?.productId) { setOrderNumber(v); setGroupOverrides((m) => ({ ...m, [pid]: { ...m[pid], orderNumber: undefined } })); }
+                      else setGroupOverrides((m) => ({ ...m, [pid]: { ...m[pid], orderNumber: v } }));
+                    }}
                     onPickSupplier={(pid) => { setSupPickFor(pid); setSuppliersOpen("pick"); }} />
                 )}
-                orderNumber={orderNumber} onOrder={setOrderNumber} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
+                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
-            supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
+            supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
@@ -828,7 +832,7 @@ export default function DispatchPage() {
       {companyId && authUserId && (
         <SuppliersModal open={suppliersOpen !== null} onClose={() => { setSuppliersOpen(null); setSupPickFor(null); }} companyId={companyId} userId={authUserId}
           canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={planTerminalId}
-          onSelect={suppliersOpen === "pick" ? (sid) => { if (supPickFor) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: sid } })); else setPlanSupplierId(sid); setSupPickFor(null); } : undefined}
+          onSelect={suppliersOpen === "pick" ? (sid) => { if (supPickFor && supPickFor !== planGroups[0]?.productId) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: sid } })); else { setPlanSupplierId(sid); if (supPickFor) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: undefined } })); } setSupPickFor(null); } : undefined}
           selectedSupplierId={supPickFor ? groupOverrides[supPickFor]?.supplierId ?? planSupplierId : planSupplierId} />
       )}
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}

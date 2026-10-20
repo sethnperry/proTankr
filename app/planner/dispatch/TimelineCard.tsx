@@ -49,6 +49,7 @@ export function TimelineCard(p: {
   terminalPlace?: string | null;   // abbreviated, "Tampa, FL"
   locationPlace?: string | null;
   orderNumber: string;
+  hideOrder?: boolean; // the per-product order lives in the compartment plan
   onOrder: (v: string) => void;
   warnings: string[];                 // everything shown above that is a problem; never blocks
   dispatching?: boolean;
@@ -124,10 +125,12 @@ export function TimelineCard(p: {
             <div key={i} style={{ fontSize: 12, color: FLAG_COLOR[x.severity], marginTop: 6 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
           ))}
           <div style={{ marginTop: 12 }}>{p.compartments}</div>
-          <div style={{ marginTop: 4 }}>
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order number (optional)</div>
-            <input value={p.orderNumber} onChange={(e) => p.onOrder(e.target.value)} placeholder="Saves the driver typing it" style={fieldInput} />
-          </div>
+          {!p.hideOrder && (
+            <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order number (optional)</div>
+              <input value={p.orderNumber} onChange={(e) => p.onOrder(e.target.value)} placeholder="Saves the driver typing it" style={fieldInput} />
+            </div>
+          )}
           <button type="button" className="dash-press" onClick={p.onAdd} style={{ ...SECONDARY_BTN, marginTop: 10, padding: "10px 0", fontSize: 12 }}>
             + Then another load after this one
           </button>
