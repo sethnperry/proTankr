@@ -124,8 +124,9 @@ function StoreBlock({ title, value, onChange, nearby, locating, located, picked,
 }
 
 export default function FuelSheet({
-  open, onClose, stop, settings, methods, userId, truckName, onDone,
+  open, onClose, stop, settings, methods, userId, truckName, onDone, liveOdometer,
 }: {
+  liveOdometer?: number | null; // from the truck's telematics, when connected
   open: boolean;
   onClose: () => void;
   stop: ReturnType<typeof useFuelStop>;
@@ -339,6 +340,11 @@ export default function FuelSheet({
     await stop.save(finishFueling(p, new Date().toISOString()));
     setShowDetails(true);
   });
+
+  // The truck's own odometer fills the field when it's empty. Never overwrites a typed value.
+  useEffect(() => {
+    if (liveOdometer != null) setOdo((o) => (o.trim() ? o : String(liveOdometer)));
+  }, [liveOdometer, p?.id, p?.status, p?.odometer, choice]);
 
   const closeChoice = () => { setChoice(null); setErr(null); setDown(false); setIssue(""); setIssueNote(""); setEditPin(false); setPinDraft(""); setChoosingCard(false); };
 

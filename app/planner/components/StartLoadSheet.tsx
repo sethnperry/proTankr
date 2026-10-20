@@ -80,7 +80,10 @@ export function StartLoadSheet({
   onClose,
   onSubmit,
   suggestStart,
+  liveMiles,
 }: {
+  // The truck's odometer from telematics. Fills beginning miles unless one was typed.
+  liveMiles?: number | null;
   open: boolean;
   editing: boolean;
   initial: StartLoadValues;
@@ -115,6 +118,13 @@ export function StartLoadSheet({
     if (open) setV(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  const initialMiles = initial.beginMiles;
+  useEffect(() => {
+    if (!open || liveMiles == null || editing) return;
+    setV((s) => (s.beginMiles === initialMiles ? { ...s, beginMiles: String(liveMiles) } : s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, liveMiles]);
 
   // "Starting from": the truck's last delivery city, else the phone's city if
   // location is already allowed (no surprise permission prompt). Never

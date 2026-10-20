@@ -76,6 +76,7 @@ import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadShe
 import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/CancelTripSheet";
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
+import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
@@ -587,6 +588,8 @@ export default function HomePage() {
   // Fuel stop: tapping Fuel stamps the start time right away.
   const fuel = useFuelStop(userId || null, companyId || null);
   const [fuelOpen, setFuelOpen] = useState(false);
+  // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
+  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
   const tapFuel = async () => {
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
@@ -1693,6 +1696,7 @@ export default function HomePage() {
         open={fuelOpen}
         onClose={() => setFuelOpen(false)}
         stop={fuel}
+        liveOdometer={truckReading?.odometerMi ?? null}
         settings={fuelSetup.settings}
         methods={fuelSetup.methods}
         userId={userId ?? ""}
@@ -1755,7 +1759,8 @@ export default function HomePage() {
         error={error}
         onClose={() => { setSheetOpen(false); setVerifyActive(false); }}
         onSubmit={submit}
-        suggestStart={() => truckLastKnownPlace(truckId)}
+        liveMiles={truckReading?.odometerMi ?? null}
+        suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
       />
 
       <TripEquipmentSheets {...tripEquip.sheets} />
@@ -1819,6 +1824,7 @@ export default function HomePage() {
             reasons={reasons.filter((r) => r.kind === "delivery" && r.is_active)}
             otherPlanned={Math.max(0, plannedCount - 1)}
             beginMiles={openTrip?.begin_miles ?? null}
+            liveOdometer={truckReading?.odometerMi ?? null}
             productInfo={productInfo}
             signature={signature.svg}
             onSaveSignature={signature.save}

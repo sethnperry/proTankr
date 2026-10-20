@@ -229,7 +229,7 @@ const fmtDayTime = (iso: string | null) => {
 
 export function DeliveryDashboard({
   open, title, delivery, location, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
-  otherPlanned, beginMiles, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
+  otherPlanned, beginMiles, liveOdometer, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
 }: {
   // Park Preloaded, offered until the delivery begins.
   onPark?: () => void;
@@ -246,6 +246,7 @@ export function DeliveryDashboard({
   reasons: DelayReason[];
   otherPlanned: number; // planned deliveries after this one
   beginMiles: number | null;
+  liveOdometer?: number | null; // from the truck's telematics, when connected
   productInfo: (id: string | null) => ProductInfo;
   signature: string | null;
   onSaveSignature: (path: string) => Promise<void>;
@@ -304,6 +305,11 @@ export function DeliveryDashboard({
     const id = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(id);
   }, [open]);
+
+  // The truck's own odometer fills ending miles when empty. Never overwrites a typed value.
+  useEffect(() => {
+    if (open && liveOdometer != null) setOdometer((o) => (o.trim() ? o : String(liveOdometer)));
+  }, [open, liveOdometer, delivery.delivery_id]);
 
   // Every carrier's recent drops at this store.
   const store = useStoreDeliveries(open ? delivery.location_id : null, open, 10);
