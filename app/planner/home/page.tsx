@@ -1054,6 +1054,23 @@ export default function HomePage() {
   const onBoardLines = (compLoads: TripCompartmentLoadRow[] | undefined) =>
     onBoard(compLoads ?? []).sort((a, b) => a.comp_number - b.comp_number).map(loadLine);
   const showPark = !!snap && canPark(openTrip, step, onBoard(snap.compLoads).length > 0);
+  // Regions for Park Preloaded: the company's list, defaulting to the driver's own.
+  const [parkRegions, setParkRegions] = useState<string[]>([]);
+  const [myRegion, setMyRegion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!parkOpen || !companyId || !userId) return;
+    let off = false;
+    (async () => {
+      const [r, me] = await Promise.all([
+        supabase.from("equipment_regions").select("name").eq("company_id", companyId).eq("is_active", true).order("name"),
+        supabase.from("profiles").select("region").eq("user_id", userId).maybeSingle(),
+      ]);
+      if (off) return;
+      setParkRegions(((r.data ?? []) as any[]).map((x) => String(x.name)));
+      setMyRegion(((me.data as any)?.region as string | null) ?? null);
+    })();
+    return () => { off = true; };
+  }, [parkOpen, companyId, userId]);
   const doPark = (v: ParkSubmit) => {
     if (!store || !userId || !openTrip) return;
     for (const d of snap?.deliveries ?? []) {
@@ -1495,6 +1512,8 @@ export default function HomePage() {
         open={parkOpen}
         trailerLabel={(() => { const n = (trailerId && equipment.trailerNameById?.[trailerId]) || equipment.currentTrailerName; return n ? `Trailer ${n}` : "The trailer"; })()}
         onBoard={onBoardLines(snap?.compLoads)}
+        regions={parkRegions}
+        defaultRegion={myRegion}
         onSubmit={doPark}
         onClose={() => setParkOpen(false)}
       />

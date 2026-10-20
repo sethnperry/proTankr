@@ -812,7 +812,7 @@ export function canPark(trip: TripRow | null, step: TripStep, hasLoadOnBoard: bo
 
 export function parkTrip(
   store: TripStoreLike,
-  args: { trip: TripRow; userId: string; parkFor: ParkFor; where: string | null; note: string | null; parkedAt: string } & Clock,
+  args: { trip: TripRow; userId: string; parkFor: ParkFor; where: string | null; region?: string | null; note: string | null; parkedAt: string } & Clock,
 ) {
   const where = args.where?.trim() || null;
   const note = args.note?.trim() || null;
@@ -840,12 +840,13 @@ export function parkTrip(
     parked_by: args.userId,
     parked_for: args.parkFor,
     parked_where: where,
+    parked_region: args.region?.trim() || null,
     parked_note: note,
   });
   logEvent(store, args.newId, {
     trip_id: args.trip.trip_id, event_type: PARK_EVENT, occurred_at: args.parkedAt, actor_id: args.userId,
     payload: {
-      parked_for: args.parkFor, where, note, from_status: args.trip.status,
+      parked_for: args.parkFor, where, region: args.region?.trim() || null, note, from_status: args.trip.status,
       reset_deliveries: undone.map((d) => d.delivery_id),
     },
   });
@@ -876,6 +877,7 @@ export function resumeTrip(
     parked_by: null,
     parked_for: null,
     parked_where: null,
+    parked_region: null,
     parked_note: null,
   });
   logEvent(store, args.newId, {

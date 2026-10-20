@@ -262,7 +262,13 @@ export default function DispatchPage() {
     () => new Set(plan.roster.filter((m) => regionSel.has(m.region?.trim() || NO_REGION)).map((m) => m.user_id)),
     [plan.roster, regionSel]);
   const driverInRegion = (id: string | null | undefined) => !regionOn || (!!id && regionDriverIds.has(id));
-  const fleetTrips = useMemo(() => fleet.trips.filter((f) => driverInRegion(f.trip.driver_id)), [fleet.trips, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A parked load belongs to the region it's parked in, whoever's driver or
+  // equipment it is. Older ones without a region fall back to the driver's.
+  const fleetTrips = useMemo(() => fleet.trips.filter((f) => {
+    if (!regionOn) return true;
+    if (f.trip.status === "parked" && f.trip.parked_region?.trim()) return regionSel.has(f.trip.parked_region.trim());
+    return driverInRegion(f.trip.driver_id);
+  }), [fleet.trips, regionOn, regionDriverIds, regionSel]); // eslint-disable-line react-hooks/exhaustive-deps
   const regionRoster = useMemo(() => plan.roster.filter((m) => driverInRegion(m.user_id)), [plan.roster, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cancelled loads the dispatcher has dismissed (this device).

@@ -11,7 +11,7 @@ import { PARK_FOR_LABEL } from "@/lib/trips/tripFlow";
 import type { ParkFor } from "@/lib/trips/types";
 import { fieldInput, fieldLabel, fromLocalInput, muted, primaryBtn, sectionCard, sectionTitle, toLocalInput } from "./tripUi";
 
-export type ParkSubmit = { parkFor: ParkFor; where: string | null; note: string | null; parkedAt: string };
+export type ParkSubmit = { parkFor: ParkFor; where: string | null; region: string | null; note: string | null; parkedAt: string };
 
 const chip = (on: boolean): React.CSSProperties => ({
   padding: "10px 14px", borderRadius: 2, fontSize: 14, fontWeight: 700, cursor: "pointer",
@@ -19,7 +19,9 @@ const chip = (on: boolean): React.CSSProperties => ({
   background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)",
 });
 
-export function ParkSheet({ open, trailerLabel, onBoard, onSubmit, onClose }: {
+export function ParkSheet({ open, trailerLabel, onBoard, regions = [], defaultRegion = null, onSubmit, onClose }: {
+  regions?: string[]; // the company's regions
+  defaultRegion?: string | null; // the driver's own region
   open: boolean;
   trailerLabel: string;
   onBoard: string[]; // e.g. "C1 · D2 · 3,000 gal"
@@ -28,6 +30,7 @@ export function ParkSheet({ open, trailerLabel, onBoard, onSubmit, onClose }: {
 }) {
   const [parkFor, setParkFor] = useState<ParkFor | null>(null);
   const [where, setWhere] = useState("");
+  const [region, setRegion] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [at, setAt] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -36,16 +39,17 @@ export function ParkSheet({ open, trailerLabel, onBoard, onSubmit, onClose }: {
     if (!open) return;
     setParkFor(null);
     setWhere("");
+    setRegion(defaultRegion);
     setNote("");
     setAt(toLocalInput(new Date().toISOString()));
     setErr(null);
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = () => {
     if (!parkFor) return setErr("Pick who it's for.");
     const parkedAt = fromLocalInput(at);
     if (!parkedAt) return setErr("Enter the time.");
-    onSubmit({ parkFor, where: where.trim() || null, note: note.trim() || null, parkedAt });
+    onSubmit({ parkFor, where: where.trim() || null, region, note: note.trim() || null, parkedAt });
   };
 
   return (
@@ -73,6 +77,16 @@ export function ParkSheet({ open, trailerLabel, onBoard, onSubmit, onClose }: {
           <div style={fieldLabel}>Where it&apos;s parked (optional)</div>
           <input value={where} onChange={(e) => setWhere(e.target.value)} placeholder="Yard, terminal lot, row…" style={fieldInput} />
         </div>
+        {regions.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={fieldLabel}>Region it&apos;s parked in</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {regions.map((r) => (
+                <button key={r} type="button" style={chip(region === r)} onClick={() => setRegion(region === r ? null : r)}>{r}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ marginTop: 10 }}>
           <div style={fieldLabel}>Note for the next driver (optional)</div>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Keys, seals, delivery window…" style={fieldInput} />
