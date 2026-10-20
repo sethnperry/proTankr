@@ -66,12 +66,12 @@ function accessText(d: PlanDriver): { text: string; color: string } | null {
   return { text: `Access ${days}d`, color: EXPIRY_COLOR[state] };
 }
 
-function DriverRow({ d, onOpen, equip, terminal }: { d: PlanDriver; onOpen: (id: string) => void; equip?: DriverEquip | null; terminal: string | null }) {
+function DriverRow({ d, onOpen, onSelect, selected, equip, terminal }: { d: PlanDriver; onOpen: (id: string) => void; onSelect: (id: string) => void; selected: boolean; equip?: DriverEquip | null; terminal: string | null }) {
   const L = useDashLook();
   const acc = accessText(d);
   return (
-    <div role="button" tabIndex={0} onClick={() => onOpen(d.userId)} onKeyDown={(e) => { if (e.key === "Enter") onOpen(d.userId); }} className="dash-press"
-      style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "9px 12px", marginBottom: 6,
+    <div role="button" tabIndex={0} onClick={() => onSelect(d.userId)} onKeyDown={(e) => { if (e.key === "Enter") onSelect(d.userId); }} className="dash-press"
+      style={{ ...L.secondary, borderColor: selected ? "#fff" : undefined, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "9px 12px", marginBottom: 6,
         cursor: "pointer", opacity: d.count === 0 ? 0.65 : 1 }}>
      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
       <span style={{ fontSize: 14, fontWeight: 800, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -81,6 +81,8 @@ function DriverRow({ d, onOpen, equip, terminal }: { d: PlanDriver; onOpen: (id:
       <span className="dash-num" style={{ fontSize: 12, color: L.muted, minWidth: 74, textAlign: "right" }}>
         {d.count > 0 ? `${d.count} here` : "not here yet"}
       </span>
+      <button type="button" aria-label={`Open ${d.name}`} onClick={(e) => { e.stopPropagation(); onOpen(d.userId); }}
+        style={{ border: "none", background: "transparent", color: L.faint, cursor: "pointer", fontSize: 14, padding: "0 2px" }}>›</button>
      </div>
      {equip && <EquipLine e={equip} terminal={terminal} />}
     </div>
@@ -126,6 +128,9 @@ export function PlanLoadCard(props: {
   equipFor?: (userId: string) => DriverEquip | null;
   certNames?: string[]; // certificate(s) the chosen terminal requires on the trailer
   certProblems?: number; // listed drivers whose trailer can't load there
+  selectedDriverId?: string | null;
+  onSelectDriver?: (userId: string) => void;
+  timeline?: React.ReactNode; // the selected driver's timeline
 }) {
   const L = useDashLook();
   const p = props;
@@ -162,6 +167,8 @@ export function PlanLoadCard(props: {
         </div>
       )}
 
+      {p.timeline}
+
       {planning && (
         <>
           <div style={{ fontSize: 11, color: L.faint, margin: "10px 0 6px" }}>
@@ -175,7 +182,7 @@ export function PlanLoadCard(props: {
             <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
               {p.showNotCarded ? "Everyone who delivers here is carded at this terminal." : "No drivers to show."}
             </div>
-          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} equip={p.equipFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} />)}
+          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} onSelect={p.onSelectDriver ?? p.onOpenDriver} selected={p.selectedDriverId === d.userId} equip={p.equipFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} />)}
         </>
       )}
 

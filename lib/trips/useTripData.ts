@@ -20,6 +20,10 @@ export type TripSettings = {
   delivery_delay_threshold_minutes: number;
   require_consignee_signature: boolean;
   require_tank_readings: boolean;
+  // Dispatch timeline rules (20261020020000). Absent before that migration.
+  max_shift_hours?: number;
+  gauging_cutoff?: string;
+  gauging_minutes?: number;
 };
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {

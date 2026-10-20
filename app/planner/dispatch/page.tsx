@@ -68,11 +68,14 @@ import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
 import { PlanLoadCard, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
 import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
+import { TimelineCard, type DayLeg } from "./TimelineCard";
+import { forecastLoad, typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
 import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
-import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts } from "@/lib/dispatch/useDispatchData";
+import { locationTitle } from "@/lib/trips/deliveryLocations";
+import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -306,6 +309,47 @@ export default function DispatchPage() {
     const list = showNotCarded ? ranked.notCarded : ranked.ready;
     return list.filter((d) => { const h = heldEquipment.get(d.userId); return !!h && certBlocks(trailerCert(certs.types, certs.records, h.trailerId)); }).length;
   }, [planTerminalId, certs.types, certs.records, showNotCarded, ranked, heldEquipment]);
+
+  // ── Timeline for the driver being considered ──────────────────────────────
+  const [tlDriverId, setTlDriverId] = useState<string | null>(null);
+  const [tlStart, setTlStart] = useState<number | null>(null);          // dispatcher's own start time
+  const [dayPlan, setDayPlan] = useState<Record<string, DayLeg[]>>({});  // planning only, this screen
+  const tripHistory = useTripHistory(companyId || null);
+  const tlSettings = useTimelineSettings(companyId || null);
+  const tlTz = (terminalsCatalog.find((t) => String(t.terminal_id) === planTerminalId) as any)?.timezone ?? null;
+  const dayLegs = (tlDriverId && dayPlan[tlDriverId]) || [];
+  const typicalMin = useMemo(() => (tlDriverId ? typicalStartMinutes(tripHistory.trips, tlDriverId) : null), [tripHistory.trips, tlDriverId]);
+  const defaultStartMs = useMemo(() => {
+    const now = Date.now();
+    const next = Math.ceil(now / 900000) * 900000;
+    if (typicalMin == null) return next;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    const typical = d.getTime() + typicalMin * 60000;
+    return typical > now ? typical : next;
+  }, [typicalMin, tlDriverId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chainedStart = dayLegs.length ? dayLegs[dayLegs.length - 1].endMs : null;
+  const startMs = tlStart ?? chainedStart ?? defaultStartMs;
+  const termRow = planTerminalId ? terminalsCatalog.find((t) => String(t.terminal_id) === planTerminalId) : null;
+  const forecast = useMemo(() => {
+    if (!tlDriverId || !planLocation || !termRow) return null;
+    const ll = (o: { lat?: number | null; lon?: number | null }) => (o.lat != null && o.lon != null ? { lat: Number(o.lat), lon: Number(o.lon) } : null);
+    return forecastLoad({
+      startMs, startFrom: dayLegs.length ? dayLegs[dayLegs.length - 1].locationLL : null,
+      terminal: { id: String(termRow.terminal_id), name: termRow.terminal_name ?? "Terminal", tz: tlTz, ll: ll(termRow as any) },
+      location: { id: planLocation.location_id, name: locationTitle(planLocation), ll: ll(planLocation) },
+      history: tripHistory.trips, settings: tlSettings,
+      dutyStartMs: dayLegs[0]?.startMs ?? startMs, drivingMinSoFar: dayLegs.reduce((a, l) => a + l.driveMin, 0),
+    });
+  }, [tlDriverId, planLocation, termRow, startMs, dayLegs, tripHistory.trips, tlSettings, tlTz]);
+  const addLeg = () => {
+    if (!tlDriverId || !forecast || !planLocation || !termRow) return;
+    const leg: DayLeg = {
+      startMs, endMs: forecast.endMs, driveMin: forecast.driveMinutes, terminal: termRow.terminal_name ?? "Terminal", location: locationTitle(planLocation),
+      locationLL: planLocation.lat != null && planLocation.lon != null ? { lat: planLocation.lat, lon: planLocation.lon } : null,
+    };
+    setDayPlan((m) => ({ ...m, [tlDriverId]: [...(m[tlDriverId] ?? []), leg] }));
+    setTlStart(null); // the next load starts when this one ends
+  };
 
   const alerts = useMemo(
     () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], planning ? ranked.focusIds : null),
@@ -545,6 +589,14 @@ export default function DispatchPage() {
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
             onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
+            selectedDriverId={tlDriverId} onSelectDriver={(id) => { setTlDriverId(id); setTlStart(null); }}
+            timeline={tlDriverId && planLocation && planTerminalId ? (
+              <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
+                chained={dayLegs.length > 0 && tlStart == null} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
+                dayLegs={dayLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
+                onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i) }))}
+                onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))} />
+            ) : null}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
             onOpenDriver={(id) => setSelectedDriverId(id)} />

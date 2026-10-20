@@ -25,6 +25,7 @@ import { OFTEN_WINDOW_DAYS } from "./planAlerts";
 import { serviceAlerts } from "./serviceAlerts";
 import type { Ack } from "./acks";
 import type { CertType, CertRecord } from "./certs";
+import { DEFAULT_TIMELINE_SETTINGS, type HistTrip, type TimelineSettings } from "./forecast";
 
 const POLL_MS = 60_000;
 
@@ -343,4 +344,51 @@ export function useTerminalCerts(companyId: string | null, terminalId: string | 
     return () => { off = true; };
   }, [companyId, terminalId]);
   return { ...state, loading };
+}
+
+// Finished trips from the last 6 months, used to forecast how long each leg
+// takes at a given time of day. Read once (history, not live).
+export function useTripHistory(companyId: string | null) {
+  const [trips, setTrips] = useState<HistTrip[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!companyId) return;
+    let off = false;
+    setLoading(true);
+    const since = new Date(Date.now() - 183 * 86400000).toISOString();
+    supabase.from("trips")
+      .select("driver_id, started_at, trip_pickups(terminal_id, arrived_at, left_at, outcome, seq), trip_deliveries(location_id, arrived_at, left_at, seq)")
+      .eq("company_id", companyId).eq("status", "complete").gte("started_at", since)
+      .order("started_at", { ascending: false }).limit(1500)
+      .then(({ data }) => {
+        if (off) return;
+        setLoading(false);
+        setTrips(((data ?? []) as any[]).map((t) => ({
+          driver_id: t.driver_id, started_at: t.started_at, pickups: t.trip_pickups ?? [], deliveries: t.trip_deliveries ?? [],
+        })));
+      });
+    return () => { off = true; };
+  }, [companyId]);
+  return { trips, loading };
+}
+
+// Company rules the forecast flags against (trip_settings), with defaults.
+export function useTimelineSettings(companyId: string | null): TimelineSettings {
+  const [s, setS] = useState<TimelineSettings>(DEFAULT_TIMELINE_SETTINGS);
+  useEffect(() => {
+    if (!companyId) return;
+    let off = false;
+    supabase.from("trip_settings").select("max_shift_hours, gauging_cutoff, gauging_minutes").eq("company_id", companyId).maybeSingle()
+      .then(({ data, error }) => {
+        if (off || error || !data) return;
+        const d = data as any;
+        setS({
+          maxShiftHours: Number(d.max_shift_hours ?? 12),
+          gaugingCutoff: String(d.gauging_cutoff ?? "00:00").slice(0, 5),
+          gaugingMinutes: Number(d.gauging_minutes ?? 60),
+        });
+      });
+    return () => { off = true; };
+  }, [companyId]);
+  return s;
 }
