@@ -79,7 +79,8 @@ export default function TripsPage() {
       .map((t) => {
         const orders = store.list("trip_orders", (o) => o.trip_id === t.trip_id);
         const primary = orders.find((o) => o.is_primary);
-        return { trip: t, order: primary?.order_number ?? orders.find((o) => o.order_number)?.order_number ?? null };
+        const numbered = orders.filter((o) => o.order_number);
+        return { trip: t, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1) };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, state]);
@@ -106,7 +107,7 @@ export default function TripsPage() {
           {loading ? "Loading…" : rows.length ? "Nothing to show." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {visible.map(({ trip, order }) => {
+      {visible.map(({ trip, order, more }) => {
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
@@ -116,8 +117,13 @@ export default function TripsPage() {
             onKeyDown={(e) => { if (e.key === "Enter") nav.go(trip.trip_id, `/planner/trips/${trip.trip_id}`); }}
             style={{ ...card, opacity: trip.driver_hidden ? 0.55 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{order ? `Order ${order}` : ptdCode(trip.trip_id)}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.label}</div>
+              <div style={{ display: "flex", gap: 6, minWidth: 0, fontSize: 16, fontWeight: 800 }}>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {order ? `Order ${order}` : ptdCode(trip.trip_id)}
+                </span>
+                {more > 0 && <span style={{ flexShrink: 0, color: "rgba(255,255,255,0.55)" }}>+{more}</span>}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: s.color, flexShrink: 0 }}>{s.label}</div>
             </div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
               {[trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
