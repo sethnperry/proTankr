@@ -22,6 +22,7 @@ import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import type { ActiveReport, ReportType } from "./conflicts";
 import type { PlanInputs } from "./planAlerts";
 import { OFTEN_WINDOW_DAYS } from "./planAlerts";
+import { swapRunOrder } from "./dispatchTrip";
 import { serviceAlerts } from "./serviceAlerts";
 import type { Ack } from "./acks";
 import type { CertType, CertRecord } from "./certs";
@@ -438,6 +439,20 @@ export async function cancelDispatched(tripId: string, userId: string): Promise<
     status: "cancelled", cancelled_at: now, cancelled_by: userId, cancel_reasons: ["dispatch_cancelled"], client_updated_at: now,
   }).eq("trip_id", tripId).eq("status", "dispatched");
   return error ? error.message : null;
+}
+
+/** Swaps the run order of two not-begun loads. Only works while both are still 'dispatched'. */
+export async function swapDispatched(a: DispatchedTrip, b: DispatchedTrip): Promise<string | null> {
+  const [pa, pb] = swapRunOrder(a, b);
+  const now = new Date().toISOString();
+  for (const pt of [pa, pb]) {
+    const { error, data } = await supabase.from("trips")
+      .update({ planned_start_at: pt.planned_start_at, dispatch_seq: pt.dispatch_seq, client_updated_at: now })
+      .eq("trip_id", pt.trip_id).eq("status", "dispatched").select("trip_id");
+    if (error) return error.message;
+    if (!data?.length) return "That load was already begun, so it can't be moved.";
+  }
+  return null;
 }
 
 // Loads and bookings per supplier and terminal over the last two weeks, for

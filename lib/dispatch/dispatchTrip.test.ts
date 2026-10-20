@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDispatchedTrip, runOrder, type DispatchLeg } from "./dispatchTrip.ts";
+import { buildDispatchedTrip, runOrder, swapRunOrder, type DispatchLeg } from "./dispatchTrip.ts";
 
 let n = 0;
 const newId = () => `id${++n}`;
@@ -36,4 +36,15 @@ test("run order: planned start, then sequence", () => {
     { dispatch_seq: 1, planned_start_at: "2026-10-21T10:00:00Z" },
   ]);
   assert.deepEqual(out.map((t) => t.dispatch_seq), [1, 2]);
+});
+
+test("swapRunOrder trades time and sequence", () => {
+  const [x, y] = swapRunOrder(
+    { trip_id: "a", planned_start_at: "2026-10-21T10:00:00Z", dispatch_seq: 1 },
+    { trip_id: "b", planned_start_at: "2026-10-21T15:00:00Z", dispatch_seq: 2 },
+  );
+  assert.equal(x.planned_start_at, "2026-10-21T15:00:00Z");
+  assert.equal(x.dispatch_seq, 2);
+  assert.equal(y.planned_start_at, "2026-10-21T10:00:00Z");
+  assert.equal(y.dispatch_seq, 1);
 });

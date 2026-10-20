@@ -26,7 +26,7 @@ const when = (iso: string | null | undefined) => {
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
 
-export function DispatchedCard({ items }: { items: DispatchedItem[] }) {
+export function DispatchedCard({ items, onSwap }: { items: DispatchedItem[]; onSwap?: (a: string, b: string) => void }) {
   const L = useDashLook();
   if (items.length === 0) return null;
   return (
@@ -37,7 +37,21 @@ export function DispatchedCard({ items }: { items: DispatchedItem[] }) {
             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#93c5fd" }}>
               Dispatched{items.length > 1 ? ` · load ${i + 1}` : ""}
             </span>
-            <span className="dash-num" style={{ marginLeft: "auto", fontSize: 12, color: L.muted }}>{when(it.trip.planned_start_at)}</span>
+            {onSwap && items.length > 1 && (
+              <span style={{ marginLeft: "auto" }}>
+                {(["Run earlier", "Run later"] as const).map((lab) => {
+                  const other = lab === "Run earlier" ? items[i - 1] : items[i + 1];
+                  return (
+                    <button key={lab} type="button" aria-label={lab} disabled={!other}
+                      onClick={() => other && onSwap(it.trip.trip_id, other.trip.trip_id)}
+                      style={{ border: "none", background: "transparent", color: other ? "#fff" : "rgba(255,255,255,0.2)", cursor: other ? "pointer" : "default", fontSize: 14, padding: "0 6px" }}>
+                      {lab === "Run earlier" ? "▲" : "▼"}
+                    </button>
+                  );
+                })}
+              </span>
+            )}
+            <span className="dash-num" style={{ marginLeft: onSwap && items.length > 1 ? 0 : "auto", fontSize: 12, color: L.muted }}>{when(it.trip.planned_start_at)}</span>
           </div>
           <div style={{ fontSize: 16, fontWeight: 800, marginTop: 6 }}>
             {it.terminal ?? "Terminal"}{it.place && <span style={{ fontWeight: 600, color: L.muted }}> · {it.place}</span>}

@@ -84,7 +84,7 @@ import { settingsForTerminal } from "@/lib/dispatch/forecast";
 import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, type GroupOverride } from "@/lib/dispatch/compPlan";
 import { useTrailerPlan } from "@/lib/dispatch/useTrailerPlan";
 import { CompartmentPlanCard } from "./CompartmentPlanCard";
-import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
+import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, swapDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -750,7 +750,8 @@ export default function DispatchPage() {
           driverName={(id) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver"}
           locationName={(id) => (id ? locList.locations.find((l) => l.location_id === id) : null) ? locationTitle(locList.locations.find((l) => l.location_id === id)!) : "Delivery"}
           supplierName={(id) => (id ? companySuppliers.all.find((x) => x.supplier_id === id)?.name ?? null : null)}
-          onCancel={async (tid) => { const e = await cancelDispatched(tid, authUserId || ""); if (!e) dispatched.reload(); return e; }} />}
+          onCancel={async (tid) => { const e = await cancelDispatched(tid, authUserId || ""); if (!e) dispatched.reload(); return e; }}
+          onSwap={async (a, b) => { const e = await swapDispatched(a, b); dispatched.reload(); return e; }} />}
         planBoard={<FleetBoard sections={["parked", "cancelled"]} cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS}
           trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}

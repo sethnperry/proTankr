@@ -83,3 +83,19 @@ export function runOrder<T extends { dispatch_seq?: number | null; planned_start
   return [...trips].sort((a, b) =>
     (a.planned_start_at ?? "").localeCompare(b.planned_start_at ?? "") || (a.dispatch_seq ?? 0) - (b.dispatch_seq ?? 0));
 }
+
+/** Swapping two not-begun loads trades their start times and sequence, so
+ *  each keeps its own details and only the run order changes. */
+export function swapRunOrder(
+  a: { trip_id: string; planned_start_at?: string | null; dispatch_seq?: number | null },
+  b: { trip_id: string; planned_start_at?: string | null; dispatch_seq?: number | null },
+): [{ trip_id: string; planned_start_at: string | null; dispatch_seq: number | null }, { trip_id: string; planned_start_at: string | null; dispatch_seq: number | null }] {
+  let seqA = b.dispatch_seq ?? null;
+  const seqB = a.dispatch_seq ?? null;
+  // Same time and same sequence would not move anything.
+  if ((a.planned_start_at ?? null) === (b.planned_start_at ?? null) && seqA === seqB) seqA = (seqA ?? 0) - 1;
+  return [
+    { trip_id: a.trip_id, planned_start_at: b.planned_start_at ?? null, dispatch_seq: seqA },
+    { trip_id: b.trip_id, planned_start_at: a.planned_start_at ?? null, dispatch_seq: seqB },
+  ];
+}
