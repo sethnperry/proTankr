@@ -12,6 +12,49 @@ import { EXPIRY_COLOR } from "@/lib/expiry";
 import type { PlanDriver, PlanLoadResult } from "@/lib/dispatch/planLoad";
 import { locationPlace, locationTitle, type DeliveryLocation } from "@/lib/trips/deliveryLocations";
 import { fieldInput } from "../components/trip/tripUi";
+import type { TrailerCert } from "@/lib/dispatch/certs";
+import { certBlocks } from "@/lib/dispatch/certs";
+
+// What a driver holds, and (when the terminal requires one) the trailer's certificate.
+export type DriverEquip = {
+  truck: string; trailer: string; since: string | null;
+  cert: TrailerCert | null;
+  thumb: { url: string | null; isPdf: boolean } | null;
+};
+
+const mdy = (iso: string) => { const [y, m, d] = iso.slice(0, 10).split("-"); return `${m}/${d}/${y.slice(2)}`; };
+
+function EquipLine({ e, terminal }: { e: DriverEquip; terminal: string | null }) {
+  const L = useDashLook();
+  const c = e.cert;
+  const bad = certBlocks(c);
+  const color = !c ? L.muted : c.kind === "missing" ? EXPIRY_COLOR.expired : EXPIRY_COLOR[c.state];
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: 12 }}>
+      <span className="dash-num" style={{ color: L.muted, flexShrink: 0 }}>
+        Truck {e.truck} · Trailer {e.trailer}{e.since ? ` · since ${mdy(e.since)}` : ""}
+      </span>
+      {c && (
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          {e.thumb && (
+            e.thumb.url ? (
+              <span role="button" tabIndex={0} aria-label="Open certificate" onClick={(ev) => { ev.stopPropagation(); window.open(e.thumb!.url!, "_blank"); }}
+                style={{ width: 26, height: 26, flexShrink: 0, border: `1px solid ${L.hairline}`, background: `center / cover url(${e.thumb.url})`, cursor: "pointer" }} />
+            ) : (
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", color: L.muted, border: `1px solid ${L.hairline}`, padding: "3px 4px" }}>{e.thumb.isPdf ? "PDF" : "DOC"}</span>
+            )
+          )}
+          <span className="dash-num" style={{ fontWeight: 800, color, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {c.kind === "missing"
+              ? `No ${terminal ?? "terminal"} cert`
+              : c.days < 0 ? `Cert expired ${mdy(c.iso)}` : `Cert ${mdy(c.iso)} · ${c.days}d`}
+            {bad ? " ⚠" : ""}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
 
 export type TerminalOption = { id: string; name: string; place: string | null; used: boolean };
 
@@ -23,13 +66,14 @@ function accessText(d: PlanDriver): { text: string; color: string } | null {
   return { text: `Access ${days}d`, color: EXPIRY_COLOR[state] };
 }
 
-function DriverRow({ d, onOpen }: { d: PlanDriver; onOpen: (id: string) => void }) {
+function DriverRow({ d, onOpen, equip, terminal }: { d: PlanDriver; onOpen: (id: string) => void; equip?: DriverEquip | null; terminal: string | null }) {
   const L = useDashLook();
   const acc = accessText(d);
   return (
-    <button type="button" onClick={() => onOpen(d.userId)} className="dash-press"
+    <div role="button" tabIndex={0} onClick={() => onOpen(d.userId)} onKeyDown={(e) => { if (e.key === "Enter") onOpen(d.userId); }} className="dash-press"
       style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "9px 12px", marginBottom: 6,
-        cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, opacity: d.count === 0 ? 0.65 : 1 }}>
+        cursor: "pointer", opacity: d.count === 0 ? 0.65 : 1 }}>
+     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
       <span style={{ fontSize: 14, fontWeight: 800, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {d.name}{d.busy && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "#93c5fd" }}>{d.busy}</span>}
       </span>
@@ -37,7 +81,9 @@ function DriverRow({ d, onOpen }: { d: PlanDriver; onOpen: (id: string) => void 
       <span className="dash-num" style={{ fontSize: 12, color: L.muted, minWidth: 74, textAlign: "right" }}>
         {d.count > 0 ? `${d.count} here` : "not here yet"}
       </span>
-    </button>
+     </div>
+     {equip && <EquipLine e={equip} terminal={terminal} />}
+    </div>
   );
 }
 
@@ -76,6 +122,10 @@ export function PlanLoadCard(props: {
   supplier?: { name: string; account: string | null; warning: string | null } | null;
   onPickSupplier?: () => void;
   onClearSupplier?: () => void;
+  // Equipment each driver holds and the terminal's trailer-certification check.
+  equipFor?: (userId: string) => DriverEquip | null;
+  certNames?: string[]; // certificate(s) the chosen terminal requires on the trailer
+  certProblems?: number; // listed drivers whose trailer can't load there
 }) {
   const L = useDashLook();
   const p = props;
@@ -105,6 +155,13 @@ export function PlanLoadCard(props: {
         </>
       )}
 
+      {p.terminal && p.certNames && p.certNames.length > 0 && (
+        <div style={{ fontSize: 12, color: (p.certProblems ?? 0) > 0 ? "#fb923c" : L.muted, margin: "2px 0 4px" }}>
+          Trailer certification required here: {p.certNames.join(", ")}.
+          {(p.certProblems ?? 0) > 0 && ` ${p.certProblems} listed driver${p.certProblems === 1 ? "'s" : "s'"} trailer can't load as it stands.`}
+        </div>
+      )}
+
       {planning && (
         <>
           <div style={{ fontSize: 11, color: L.faint, margin: "10px 0 6px" }}>
@@ -118,7 +175,7 @@ export function PlanLoadCard(props: {
             <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
               {p.showNotCarded ? "Everyone who delivers here is carded at this terminal." : "No drivers to show."}
             </div>
-          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} />)}
+          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} equip={p.equipFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} />)}
         </>
       )}
 

@@ -65,13 +65,14 @@ import FleetCardsModal from "@/app/admin/FleetCardsModal";
 import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
 import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
-import { PlanLoadCard, type TerminalOption } from "./PlanLoadCard";
+import { PlanLoadCard, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
+import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
 import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
-import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries } from "@/lib/dispatch/useDispatchData";
+import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -284,6 +285,27 @@ export default function DispatchPage() {
     terminalId: planTerminalId, renewalDays: planTerminalId ? plan.input?.terminals.get(planTerminalId)?.renewal_days ?? null : null,
     busy: busyByDriver,
   }), [plan.roster, history.rows, plan.input, planTerminalId, busyByDriver]);
+
+  // Equipment each driver holds, and the terminal's trailer-certification check.
+  const heldEquipment = useDriverEquipment(companyId || null);
+  const certs = useTerminalCerts(companyId || null, planTerminalId);
+  const equipFor = useMemo(() => {
+    const trucks = plan.input?.trucks, trailers = plan.input?.trailers;
+    return (userId: string): DriverEquip | null => {
+      const h = heldEquipment.get(userId);
+      if (!h) return null;
+      return {
+        truck: trucks?.get(h.truckId) ?? "—", trailer: trailers?.get(h.trailerId) ?? "—", since: h.since,
+        cert: planTerminalId ? trailerCert(certs.types, certs.records, h.trailerId) : null,
+        thumb: certs.thumbs.get(h.trailerId) ?? null,
+      };
+    };
+  }, [heldEquipment, plan.input, certs.types, certs.records, certs.thumbs, planTerminalId]);
+  const certProblems = useMemo(() => {
+    if (!planTerminalId || certs.types.length === 0) return 0;
+    const list = showNotCarded ? ranked.notCarded : ranked.ready;
+    return list.filter((d) => { const h = heldEquipment.get(d.userId); return !!h && certBlocks(trailerCert(certs.types, certs.records, h.trailerId)); }).length;
+  }, [planTerminalId, certs.types, certs.records, showNotCarded, ranked, heldEquipment]);
 
   const alerts = useMemo(
     () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], planning ? ranked.focusIds : null),
@@ -523,6 +545,7 @@ export default function DispatchPage() {
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
             onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
+            equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
         }

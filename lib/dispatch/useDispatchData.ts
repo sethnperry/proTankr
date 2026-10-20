@@ -24,6 +24,7 @@ import type { PlanInputs } from "./planAlerts";
 import { OFTEN_WINDOW_DAYS } from "./planAlerts";
 import { serviceAlerts } from "./serviceAlerts";
 import type { Ack } from "./acks";
+import type { CertType, CertRecord } from "./certs";
 
 const POLL_MS = 60_000;
 
@@ -280,4 +281,66 @@ export function useLocationDeliveries(companyId: string | null, locationId: stri
     return () => { off = true; };
   }, [companyId, locationId]);
   return { rows, loading, error };
+}
+
+// What each driver holds right now: the active combo they've claimed. A
+// spare truck or trailer swapped in shows up as soon as they pick it.
+export type HeldEquipment = { truckId: string; trailerId: string; since: string | null };
+export function useDriverEquipment(companyId: string | null) {
+  const [held, setHeld] = useState<Map<string, HeldEquipment>>(new Map());
+  const load = useCallback(async () => {
+    if (!companyId) return;
+    const { data } = await supabase.from("equipment_combos").select("truck_id, trailer_id, claimed_by, claimed_at")
+      .eq("company_id", companyId).eq("active", true).not("claimed_by", "is", null);
+    const m = new Map<string, HeldEquipment>();
+    for (const r of (data ?? []) as any[]) {
+      const prev = m.get(r.claimed_by);
+      if (!prev || (r.claimed_at ?? "") > (prev.since ?? "")) m.set(r.claimed_by, { truckId: r.truck_id, trailerId: r.trailer_id, since: r.claimed_at ?? null });
+    }
+    setHeld(m);
+  }, [companyId]);
+  usePoll(load, [load]);
+  return held;
+}
+
+// Trailer certifications required at one terminal, who has one, and a
+// thumbnail of the uploaded certificate (a signed link to the first page).
+export type CertThumb = { url: string | null; isPdf: boolean };
+export function useTerminalCerts(companyId: string | null, terminalId: string | null) {
+  const [state, setState] = useState<{ types: CertType[]; records: CertRecord[]; thumbs: Map<string, CertThumb> }>({ types: [], records: [], thumbs: new Map() });
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!companyId || !terminalId) { setState({ types: [], records: [], thumbs: new Map() }); return; }
+    let off = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const t = await supabase.from("permit_types").select("permit_type_id, name, applies_to")
+          .eq("company_id", companyId).eq("terminal_id", terminalId).eq("is_active", true);
+        const types = ((t.data ?? []) as any[]).filter((x) => x.applies_to !== "truck").map((x) => ({ permit_type_id: x.permit_type_id, name: x.name })) as CertType[];
+        if (types.length === 0) { if (!off) setState({ types: [], records: [], thumbs: new Map() }); return; }
+        const ids = types.map((x) => x.permit_type_id);
+        const [r, a] = await Promise.all([
+          supabase.from("equipment_permits").select("trailer_id, permit_type_id, expiration_date").in("permit_type_id", ids).not("trailer_id", "is", null),
+          supabase.from("equipment_attachments").select("equipment_id, equipment_type, file_path, mime_type, page_order").in("permit_type_id", ids).order("page_order"),
+        ]);
+        const first = new Map<string, { path: string; mime: string }>();
+        for (const x of (a.data ?? []) as any[]) if (x.equipment_type === "trailer" && !first.has(x.equipment_id)) first.set(x.equipment_id, { path: x.file_path, mime: x.mime_type ?? "" });
+        const thumbs = new Map<string, CertThumb>();
+        await Promise.all([...first].map(async ([trailerId, f]) => {
+          const isPdf = f.mime.includes("pdf");
+          if (isPdf || !f.mime.startsWith("image/")) { thumbs.set(trailerId, { url: null, isPdf }); return; }
+          const { data } = await supabase.storage.from("equipment-docs").createSignedUrl(f.path, 3600);
+          thumbs.set(trailerId, { url: data?.signedUrl ?? null, isPdf: false });
+        }));
+        if (!off) setState({ types, records: ((r.data ?? []) as CertRecord[]), thumbs });
+      } catch {
+        if (!off) setState({ types: [], records: [], thumbs: new Map() });
+      } finally {
+        if (!off) setLoading(false);
+      }
+    })();
+    return () => { off = true; };
+  }, [companyId, terminalId]);
+  return { ...state, loading };
 }

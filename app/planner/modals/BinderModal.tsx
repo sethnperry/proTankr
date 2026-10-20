@@ -20,6 +20,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
+import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { RequiredEquipmentFields } from "@/lib/ui/driver/RequiredEquipmentFields";
 import { ServiceTypeListModal } from "./ServiceTypeManager";
 import {
@@ -32,6 +33,8 @@ type PermitType = {
   name: string;
   applies_to: "truck" | "trailer" | "both";
   is_active: boolean;
+  // Set for a certification that only matters at one terminal (dispatch checks it).
+  terminal_id?: string | null;
 };
 type PermitRecord = {
   equipment_permit_id: string;
@@ -146,6 +149,9 @@ function PermitTypeEditorModal({
 }) {
   const [name, setName] = useState("");
   const [appliesTo, setAppliesTo] = useState<PermitType["applies_to"]>("both");
+  const [terminalId, setTerminalId] = useState<string | null>(null);
+  const [termQuery, setTermQuery] = useState("");
+  const { data: terminalCatalog } = useTerminalsCatalog();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -157,10 +163,13 @@ function PermitTypeEditorModal({
     if (mode === "edit" && type) {
       setName(type.name);
       setAppliesTo(type.applies_to);
+      setTerminalId(type.terminal_id ?? null);
     } else {
       setName(initialName ?? "");
       setAppliesTo(unit);
+      setTerminalId(null);
     }
+    setTermQuery("");
   }, [open, mode, type, unit, initialName]);
 
   async function save() {
@@ -169,10 +178,10 @@ function PermitTypeEditorModal({
     setErr(null);
     try {
       if (mode === "edit" && type) {
-        const { error } = await supabase.from("permit_types").update({ name: name.trim(), applies_to: appliesTo }).eq("permit_type_id", type.permit_type_id);
+        const { error } = await supabase.from("permit_types").update({ name: name.trim(), applies_to: appliesTo, terminal_id: appliesTo === "truck" ? null : terminalId }).eq("permit_type_id", type.permit_type_id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("permit_types").insert({ company_id: companyId, name: name.trim(), applies_to: appliesTo });
+        const { error } = await supabase.from("permit_types").insert({ company_id: companyId, name: name.trim(), applies_to: appliesTo, terminal_id: appliesTo === "truck" ? null : terminalId });
         if (error) throw error;
       }
       onSaved();
@@ -220,6 +229,35 @@ function PermitTypeEditorModal({
                 ]}
               />
             </div>
+
+            {appliesTo !== "truck" && (
+              <div>
+                <label style={labelStyle}>Only needed at one terminal (optional)</label>
+                {terminalId ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ ...inputStyle, flex: 1 }}>{terminalCatalog.find((t) => String(t.terminal_id) === terminalId)?.terminal_name ?? "Terminal"}</div>
+                    <button type="button" onClick={() => setTerminalId(null)} style={cancelBtnStyle}>Clear</button>
+                  </div>
+                ) : (
+                  <>
+                    <input placeholder="Search terminals" value={termQuery} onChange={(e) => setTermQuery(e.target.value)} style={inputStyle} />
+                    {termQuery.trim() && terminalCatalog
+                      .filter((t) => `${t.terminal_name ?? ""} ${t.city ?? ""}`.toLowerCase().includes(termQuery.trim().toLowerCase()))
+                      .slice(0, 6).map((t) => (
+                        <button key={String(t.terminal_id)} type="button" onClick={() => {
+                          setTerminalId(String(t.terminal_id)); setTermQuery("");
+                          if (!name.trim()) setName(`${t.terminal_name} certification`);
+                        }} style={{ ...cancelBtnStyle, width: "100%", textAlign: "left" as const, marginTop: 6 }}>
+                          {t.terminal_name}{t.city ? ` · ${t.city}${t.state ? `, ${t.state}` : ""}` : ""}
+                        </button>
+                      ))}
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 6, lineHeight: 1.5 }}>
+                      Dispatch checks this on the trailer before sending a driver to that terminal. Add the certificate image in the permit's documents.
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <button aria-busy={!!(busy)} type="button" onClick={save} disabled={busy} style={saveBtnStyle}>{busy ? "Saving…" : "Save"}</button>
 
@@ -1020,7 +1058,7 @@ export default function BinderModal({
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: t }, { data: r }, { data: td }, { data: trd }] = await Promise.all([
-      supabase.from("permit_types").select("permit_type_id, name, applies_to, is_active").eq("company_id", companyId).order("name"),
+      supabase.from("permit_types").select("permit_type_id, name, applies_to, is_active, terminal_id").eq("company_id", companyId).order("name"),
       (async () => {
         if (!truckId && !trailerId) return { data: [] as PermitRecord[] };
         const [{ data: tr }, { data: trr }] = await Promise.all([
