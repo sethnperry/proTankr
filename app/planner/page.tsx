@@ -3243,7 +3243,7 @@ const lastProductInfoById = useMemo(() => {
       )}
       {setupSpotlightEl}
       <TripStepBanner userId={effectiveUserId || null} />
-      {tripPartial && (
+      {tripPartial && (tripPartial.aboard.length > 0 || tripPartial.planned.length < compartments.length) && (
         <div style={{
           border: "1px solid rgba(147,197,253,0.45)", background: "rgba(147,197,253,0.08)", color: "#fff",
           borderRadius: 2, padding: "8px 12px", marginTop: 8, fontSize: 14,

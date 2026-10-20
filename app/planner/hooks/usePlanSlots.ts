@@ -801,6 +801,36 @@ export function usePlanSlots({
           pullInto(legacyPresetKey(s), legacy[s]);
         }
 
+        // Plan slots dispatch set on this trailer fill any preset slot the
+        // driver hasn't used. A driver's own save replaces it; one still
+        // marked fromTrailer is refreshed when dispatch changes it.
+        try {
+          const { data: comboRow } = await supabase.from("equipment_combos").select("trailer_id").eq("combo_id", selectedComboId).maybeSingle();
+          const tid = (comboRow as any)?.trailer_id;
+          if (tid) {
+            const { data: trows } = await supabase.from("trailer_plan_slots").select("slot,name,payload,updated_at").eq("trailer_id", tid);
+            for (const t of (trows ?? []) as any[]) {
+              const slot = Number(t.slot);
+              if (!(slot >= 1 && slot <= 5) || !hasRealCompPlan(t.payload)) continue;
+              const key = planStoreKey(slot);
+              const raw = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+              let flagged: any = null;
+              try { flagged = raw ? JSON.parse(raw) : null; } catch {}
+              const own = parsePlanPayload(raw, selectedTerminalId, selectedComboId);
+              const legacyOwn = parsePlanPayload(typeof window !== "undefined" ? localStorage.getItem(legacyPresetKey(slot)) : null, selectedTerminalId, selectedComboId);
+              const hasOwn = (own && hasRealCompPlan(own) && !flagged?.fromTrailer) || (legacyOwn && hasRealCompPlan(legacyOwn));
+              const at = Date.parse(String(t.updated_at)) || Date.now();
+              if (hasOwn) continue;
+              if (flagged?.fromTrailer && Number(flagged.trailerAt) >= at) continue;
+              localStorage.setItem(key, JSON.stringify({
+                v: 1, savedAt: at, terminalId: selectedTerminalId, tempF: 60, compPlan: t.payload.compPlan,
+                ...(t.name ? { name: t.name } : {}), activeSlot: null, fromTrailer: true, trailerAt: at,
+              }));
+              setSlotBump((v) => v + 1);
+            }
+          }
+        } catch (e) { console.warn("trailer plan slots:", e); }
+
         const local0 = parsePlanPayload(
           typeof window !== "undefined" ? localStorage.getItem(planStoreKey(0)) : null,
           selectedTerminalId, selectedComboId

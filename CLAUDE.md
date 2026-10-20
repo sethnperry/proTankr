@@ -11896,3 +11896,13 @@ be render-checked without a browser by bundling it with esbuild
 `service_records` reads, the notification, thumbnails, the dispatch write);
 per-terminal gauging times; driver availability/hours; decline/notify for
 dispatched loads; planned-equipment for tomorrow.
+
+### Dispatcher compartment plan + trailer plan slots (2026-10-21)
+
+Migrations applied live via the Management API: `20261021000000_terminal_gauging.sql` (per-terminal gauging override) and `20261021010000_trailer_plan_slots.sql` (`trailer_plan_slots`: company read, staff write). Not click-tested; `tsc`, 311 tests and `next build --webpack` pass, card render-checked.
+
+- **Trailer plan slots (A-E).** Dispatch/lead/admin set them per trailer, regardless of driver. In `usePlanSlots`' server pull, a driver's empty preset slot is filled from the trailer's slot (marked `fromTrailer`, refreshed when dispatch changes it until the driver saves their own). Fleet onboarding win: a new driver gets the trailer's plans without building any. A cleared slot comes back on the next pull.
+- **Dispatch → Compartments card** (`CompartmentPlanCard`, in the Timeline card): trailer defaults to the driver's, changeable; tap a compartment for its product (terminal's products, "Show all"); load/save/clear a trailer slot; per-product-group order # and supplier (blank = the load's default order/supplier). Pure logic in `lib/dispatch/compPlan.ts`.
+- **Write path:** `DispatchLeg.groups` → one `trip_orders` row per distinct number (first primary), `planned_comps` per compartment `{comp_number, product_id, order_id, supplier_id}`, pickup supplier = first group's. Per-group suppliers are also checked against contract limits (warn only).
+- **Driver side:** the Planner already plans only `planned_comps`; the "Loading C… only" banner now hides when the plan covers the whole trailer. `recordLoadCompleted` uses the planned per-compartment order; Begin Dispatched Load seeds a supplier pick per product.
+- Not built: gallons/weight for the dispatcher, driver decline, multiple pickups per dispatched load.

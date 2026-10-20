@@ -77,6 +77,8 @@ import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/Cance
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
+import { readPlannedMeta } from "@/lib/dispatch/compPlan";
+import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
 import { getTripSupplier, sameSupplier, seedTerminalPicks, setTripSupplier, type TripSupplier } from "@/lib/trips/tripSupplier";
 import { readPicks, groupPicks } from "@/lib/suppliers/picks";
 import { linkSupplierToTerminal } from "@/lib/suppliers/useTerminalSuppliers";
@@ -372,6 +374,15 @@ export default function HomePage() {
     if (sup) {
       setTripSupplier(userId, trip.trip_id, { supplier_id: sup.supplier_id, name: sup.name });
       if (pk?.terminal_id) seedTerminalPicks(userId, String(pk.terminal_id), { supplier_id: sup.supplier_id, name: sup.name });
+    }
+    // A compartment plan can name a different supplier per product.
+    if (pk?.terminal_id) {
+      const picks: SupplierPick[] = [];
+      for (const m of readPlannedMeta(pk.planned_comps).values()) {
+        const s2 = m.supplier_id ? suppliers.find((x) => x.supplier_id === m.supplier_id) : null;
+        if (s2 && !picks.some((x) => x.product_id === m.product_id)) picks.push({ product_id: m.product_id, supplier_id: s2.supplier_id, name: s2.name });
+      }
+      if (picks.length) writePicks(userId, String(pk.terminal_id), { at: Date.now(), picks });
     }
     void syncNow();
   };

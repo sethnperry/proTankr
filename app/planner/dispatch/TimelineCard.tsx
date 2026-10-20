@@ -12,12 +12,14 @@ import { useDashLook } from "../home/dashLook";
 import { PRIMARY_BTN, SECONDARY_BTN } from "@/lib/ui/look";
 import { clock, durationText, type Flag, type Forecast } from "@/lib/dispatch/forecast";
 import { fieldInput } from "../components/trip/tripUi";
+import type { PlanGroup } from "@/lib/dispatch/compPlan";
 
 export type DayLeg = {
   startMs: number; endMs: number; driveMin: number; terminal: string; location: string; locationLL: { lat: number; lon: number } | null;
   // What a dispatch of this leg writes.
   terminalId: string; city: string | null; state: string | null; locationId: string; deliveryType: "drop" | "pump_off";
   supplierId: string | null; orderNumber: string; truckId: string | null; trailerId: string | null; warnings: string[];
+  groups?: PlanGroup[];
 };
 
 const FLAG_COLOR: Record<Flag["severity"], string> = { info: "rgba(255,255,255,0.5)", warn: "#fb923c", bad: "#f87171" };
@@ -40,6 +42,7 @@ export function TimelineCard(p: {
   onRemoveLeg: (index: number) => void;
   onClearDay: () => void;
   // Dispatch
+  compartments?: React.ReactNode;
   orderNumber: string;
   onOrder: (v: string) => void;
   warnings: string[];                 // everything shown above that is a problem; never blocks
@@ -100,7 +103,8 @@ export function TimelineCard(p: {
           {f.flags.map((x, i) => (
             <div key={i} style={{ fontSize: 12, color: FLAG_COLOR[x.severity], marginTop: 6 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
           ))}
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12 }}>{p.compartments}</div>
+          <div style={{ marginTop: 4 }}>
             <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order number (optional)</div>
             <input value={p.orderNumber} onChange={(e) => p.onOrder(e.target.value)} placeholder="Saves the driver typing it" style={fieldInput} />
           </div>

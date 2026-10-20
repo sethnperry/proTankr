@@ -19,6 +19,7 @@ import type {
   TripPickupRow,
   TripRow,
 } from "./types.ts";
+import { readPlannedMeta } from "../dispatch/compPlan.ts";
 import { splitDelayChoice } from "./terminalIssues.ts";
 import { DELIVERY_DETAILS_EVENT, detailsPayload, hasDetails, type DeliveryDetails } from "./deliveryDetails.ts";
 
@@ -237,6 +238,7 @@ export function recordLoadCompleted(
   const existing = store.list("trip_compartment_loads", (c) => c.pickup_id === pickup.pickup_id);
   const byComp = new Map(existing.map((c) => [c.comp_number, c]));
   const primary = store.list("trip_orders", (o) => o.trip_id === tripId && o.is_primary)[0] ?? null;
+  const plannedMeta = readPlannedMeta(pickup.planned_comps);
   const filled = new Set<number>();
 
   for (const r of args.readings) {
@@ -248,7 +250,7 @@ export function recordLoadCompleted(
       compartment_load_id: old?.compartment_load_id ?? args.newId(),
       trip_id: tripId,
       pickup_id: pickup.pickup_id,
-      order_id: old?.order_id ?? pickup.order_id ?? primary?.order_id ?? null,
+      order_id: old?.order_id ?? plannedMeta.get(r.comp)?.order_id ?? pickup.order_id ?? primary?.order_id ?? null,
       comp_number: r.comp,
       product_id: r.productId,
       gross_gallons: r.gallons,

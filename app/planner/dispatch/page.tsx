@@ -81,6 +81,9 @@ import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
 import { settingsForTerminal } from "@/lib/dispatch/forecast";
+import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, type GroupOverride } from "@/lib/dispatch/compPlan";
+import { useTrailerPlan } from "@/lib/dispatch/useTrailerPlan";
+import { CompartmentPlanCard } from "./CompartmentPlanCard";
 import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
@@ -381,6 +384,40 @@ export default function DispatchPage() {
     return wouldExceed(u, planSupplier?.name ?? "This supplier", add);
   }, [planSupplierId, planTerminalId, allContracts, usageItems, startMs, planSupplier]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Compartment plan (optional): products per compartment, order and supplier per product ──
+  const [planTrailerOverride, setPlanTrailerOverride] = useState<string | null>(null);
+  const [compPlan, setCompPlan] = useState<CompPlan>({});
+  const [groupOverrides, setGroupOverrides] = useState<Record<string, GroupOverride>>({});
+  const [activeTrailerSlot, setActiveTrailerSlot] = useState<number | null>(null);
+  const [supPickFor, setSupPickFor] = useState<string | null>(null);
+  const driverTrailerId = tlDriverId ? heldEquipment.get(tlDriverId)?.trailerId ?? null : null;
+  const effectiveTrailerId = planTrailerOverride ?? driverTrailerId;
+  const trailerPlan = useTrailerPlan(companyId || null, effectiveTrailerId, planTerminalId);
+  useEffect(() => { setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null); }, [effectiveTrailerId]);
+  useEffect(() => { setPlanTrailerOverride(null); }, [tlDriverId]);
+  const planCatalog = useMemo(() => (catalog ?? []).filter((x) => x.active !== false).map((x) => ({
+    product_id: x.product_id, name: x.display_name || x.product_name, code: x.button_code || (x.display_name || x.product_name).split(" ")[0], hex: x.hex_code,
+  })), [catalog]);
+  const planGroups = useMemo(
+    () => groupsFromPlan(compPlan, groupOverrides, { orderNumber, supplierId: planSupplierId }),
+    [compPlan, groupOverrides, orderNumber, planSupplierId]);
+  const supplierNameOf = (id: string | null) => (id ? companySuppliers.all.find((x) => x.supplier_id === id)?.name ?? null : null);
+  // Each group that has its own supplier is checked against that supplier's limits too.
+  const groupAllocWarnings = useMemo(() => {
+    if (!planTerminalId) return [] as string[];
+    const out: string[] = [];
+    for (const g of planGroups) {
+      if (!g.supplierId || g.supplierId === planSupplierId) continue;
+      const c = allContracts.find((x) => x.supplier_id === g.supplierId && x.terminal_id === planTerminalId);
+      if (!c || c.paused) continue;
+      const u = contractUsage(c, usageItems, startMs, tzOfTerminal(planTerminalId));
+      const add = c.limit_basis === "loads" ? 1 : typicalGallons(usageItems, g.supplierId, planTerminalId);
+      const w = wouldExceed(u, supplierNameOf(g.supplierId) ?? "This supplier", add);
+      if (w) out.push(w);
+    }
+    return out;
+  }, [planGroups, planTerminalId, planSupplierId, allContracts, usageItems, startMs]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const warnings = useMemo(() => {
     const w: string[] = [];
     for (const f of forecast?.flags ?? []) if (f.severity !== "info") w.push(f.text);
@@ -390,8 +427,9 @@ export default function DispatchPage() {
     }
     if (planSupplier?.warning) w.push(planSupplier.warning);
     if (allocWarning) w.push(allocWarning);
+    for (const x of groupAllocWarnings) w.push(x);
     return w;
-  }, [forecast, tlDriverId, planTerminalId, certs, heldEquipment, planSupplier, allocWarning]);
+  }, [forecast, tlDriverId, planTerminalId, certs, heldEquipment, planSupplier, allocWarning, groupAllocWarnings]);
   const buildLeg = (): DayLeg | null => {
     if (!tlDriverId || !forecast || !planLocation || !termRow) return null;
     const h = heldEquipment.get(tlDriverId);
@@ -400,7 +438,8 @@ export default function DispatchPage() {
       locationLL: planLocation.lat != null && planLocation.lon != null ? { lat: planLocation.lat, lon: planLocation.lon } : null,
       terminalId: String(termRow.terminal_id), city: termRow.city ?? null, state: termRow.state ?? null,
       locationId: planLocation.location_id, deliveryType: planLocation.delivery_type,
-      supplierId: planSupplierId, orderNumber: orderNumber.trim(), truckId: h?.truckId ?? null, trailerId: h?.trailerId ?? null, warnings,
+      supplierId: planSupplierId, orderNumber: orderNumber.trim(), truckId: h?.truckId ?? null, trailerId: effectiveTrailerId ?? h?.trailerId ?? null, warnings,
+      groups: planGroups.length ? planGroups : undefined,
     };
   };
   const addLeg = () => {
@@ -408,7 +447,7 @@ export default function DispatchPage() {
     if (!leg || !tlDriverId) return;
     setDayPlan((m) => ({ ...m, [tlDriverId]: [...(m[tlDriverId] ?? []), leg] }));
     setTlStart(null); // the next load starts when this one ends
-    setOrderNumber("");
+    setOrderNumber(""); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
   };
   const dispatchNow = async () => {
     const leg = buildLeg();
@@ -416,7 +455,7 @@ export default function DispatchPage() {
     const legs = [...dayLegs, leg];
     setDispatching(true); setDispatchMsg(null);
     try {
-      const nums = legs.map((l) => l.orderNumber).filter(Boolean);
+      const nums = legs.flatMap((l) => (l.groups?.length ? distinctOrders(l.groups) : [l.orderNumber])).filter(Boolean);
       const dup = nums.find((n, i) => nums.findIndex((m) => m.toLowerCase() === n.toLowerCase()) !== i);
       if (dup) { setDispatchMsg({ ok: false, text: `Order ${dup} is on two of these loads.` }); return; }
       const taken = nums.length ? await serverOrderConflicts(companyId, nums, null) : [];
@@ -431,7 +470,7 @@ export default function DispatchPage() {
       const name = plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "the driver";
       setDispatchMsg({ ok: true, text: `Dispatched ${legs.length} load${legs.length === 1 ? "" : "s"} to ${name}.` });
       setDayPlan((m) => ({ ...m, [tlDriverId]: [] }));
-      setTlStart(null); setOrderNumber(""); setPlanSupplierId(null);
+      setTlStart(null); setOrderNumber(""); setPlanSupplierId(null); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
       dispatched.reload();
     } finally {
       setDispatching(false);
@@ -684,6 +723,20 @@ export default function DispatchPage() {
                 dayLegs={dayLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
                 onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i) }))}
                 onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))}
+                compartments={(
+                  <CompartmentPlanCard
+                    trailerName={plan.input?.trailers.get(effectiveTrailerId ?? "") ?? ""}
+                    trailerOptions={[...(plan.input?.trailers ?? new Map<string, string>()).entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))}
+                    onTrailer={setPlanTrailerOverride} usingDriversTrailer={planTrailerOverride == null}
+                    comps={trailerPlan.comps} catalog={planCatalog} terminalProductIds={trailerPlan.terminalProductIds}
+                    plan={compPlan} onPlan={setCompPlan} slots={trailerPlan.slots}
+                    activeSlot={activeTrailerSlot} onActiveSlot={setActiveTrailerSlot}
+                    onSaveSlot={(slot, name) => trailerPlan.saveSlot(slot, name, slotPayloadFromPlan(compPlan, trailerPlan.comps.map((c) => c.n)), authUserId || "")}
+                    onClearSlot={trailerPlan.clearSlot}
+                    groups={planGroups} supplierName={supplierNameOf} defaultOrder={orderNumber} slotError={trailerPlan.error}
+                    onGroupOrder={(pid, v) => setGroupOverrides((m) => ({ ...m, [pid]: { ...m[pid], orderNumber: v } }))}
+                    onPickSupplier={(pid) => { setSupPickFor(pid); setSuppliersOpen("pick"); }} />
+                )}
                 orderNumber={orderNumber} onOrder={setOrderNumber} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
@@ -710,9 +763,10 @@ export default function DispatchPage() {
         onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />
       <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} rows={allocRows} />
       {companyId && authUserId && (
-        <SuppliersModal open={suppliersOpen !== null} onClose={() => setSuppliersOpen(null)} companyId={companyId} userId={authUserId}
+        <SuppliersModal open={suppliersOpen !== null} onClose={() => { setSuppliersOpen(null); setSupPickFor(null); }} companyId={companyId} userId={authUserId}
           canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={planTerminalId}
-          onSelect={suppliersOpen === "pick" ? (sid) => setPlanSupplierId(sid) : undefined} selectedSupplierId={planSupplierId} />
+          onSelect={suppliersOpen === "pick" ? (sid) => { if (supPickFor) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: sid } })); else setPlanSupplierId(sid); setSupPickFor(null); } : undefined}
+          selectedSupplierId={supPickFor ? groupOverrides[supPickFor]?.supplierId ?? planSupplierId : planSupplierId} />
       )}
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}
       </>

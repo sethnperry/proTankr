@@ -113,3 +113,43 @@ test("settingsForTerminal: terminal override wins, null falls back", () => {
   const b = settingsForTerminal(_D, { gauging_cutoff: null, gauging_minutes: 0 });
   assert.equal(b.gaugingCutoff, _D.gaugingCutoff); assert.equal(b.gaugingMinutes, 0);
 });
+
+import { groupsFromPlan, distinctOrders, plannedCompsFor, readPlannedMeta, planFromSlotPayload, slotPayloadFromPlan } from "./compPlan.ts";
+test("compPlan: groups by product, defaults fill blanks, overrides win", () => {
+  const g = groupsFromPlan({ 1: "D2", 2: "D2", 3: "87" }, { "87": { orderNumber: "B", supplierId: "s2" } }, { orderNumber: "A", supplierId: "s1" });
+  assert.equal(g.length, 2);
+  assert.deepEqual(g[0], { productId: "D2", comps: [1, 2], orderNumber: "A", supplierId: "s1" });
+  assert.deepEqual(g[1], { productId: "87", comps: [3], orderNumber: "B", supplierId: "s2" });
+  assert.deepEqual(distinctOrders(g), ["A", "B"]);
+  assert.deepEqual(distinctOrders(groupsFromPlan({ 1: "x", 2: "y" }, {}, { orderNumber: "a", supplierId: null })), ["a"]);
+});
+test("compPlan: planned_comps round trip", () => {
+  const g = groupsFromPlan({ 1: "D2", 2: "87" }, { "87": { orderNumber: "B" } }, { orderNumber: "A", supplierId: "s1" });
+  const pc = plannedCompsFor(g, (n) => `id-${n}`);
+  assert.deepEqual(pc.map((x) => [x.comp_number, x.order_id, x.supplier_id]), [[1, "id-A", "s1"], [2, "id-B", "s1"]]);
+  const m = readPlannedMeta(pc);
+  assert.equal(m.get(2)?.order_id, "id-B");
+  assert.equal(readPlannedMeta("junk").size, 0);
+});
+test("compPlan: slot payload round trip", () => {
+  const p = slotPayloadFromPlan({ 1: "D2" }, [1, 2]);
+  assert.equal(p.compPlan[2].empty, true);
+  assert.deepEqual(planFromSlotPayload(p), { 1: "D2" });
+});
+
+import { buildDispatchedTrip } from "./dispatchTrip.ts";
+test("dispatch: product groups give per-product orders and planned_comps", () => {
+  let n = 0;
+  const rows = buildDispatchedTrip({
+    companyId: "c", dispatcherId: "d", driverId: "u", seq: 1,
+    leg: { terminalId: "t", terminalName: "T", city: null, state: null, locationId: "l", deliveryType: "drop", supplierId: null, orderNumber: "", startMs: 0, endMs: 1, truckId: null, trailerId: "tr", warnings: [],
+      groups: [{ productId: "D2", comps: [1, 2], orderNumber: "A", supplierId: "s1" }, { productId: "87", comps: [3], orderNumber: "B", supplierId: "s2" }] },
+  }, { now: new Date(0), newId: () => `id${++n}` });
+  assert.equal(rows.orders.length, 2);
+  assert.equal((rows.orders[0] as any).is_primary, true);
+  assert.equal((rows.pickups[0] as any).supplier_id, "s1");
+  const pc = (rows.pickups[0] as any).planned_comps;
+  assert.equal(pc.length, 3);
+  assert.equal(pc[2].supplier_id, "s2");
+  assert.equal(pc[2].order_id, (rows.orders[1] as any).order_id);
+});
