@@ -359,3 +359,32 @@ function pickupFields(p: LoadPickupInfo): Partial<TripPickupRow> {
   if (p.state !== undefined) out.state = blank(p.state);
   return out;
 }
+
+// ── Dispatched loads ─────────────────────────────────────────────────────────
+// A dispatcher plans a load for a driver (status 'dispatched'). It isn't the
+// driver's open trip until they begin it.
+
+export function dispatchedForDriver(trips: TripRow[], userId: string): TripRow[] {
+  return trips
+    .filter((t) => t.driver_id === userId && t.status === "dispatched")
+    .sort((a, b) => (a.planned_start_at ?? "").localeCompare(b.planned_start_at ?? "") || (a.dispatch_seq ?? 0) - (b.dispatch_seq ?? 0));
+}
+
+/** The driver begins a dispatched load: it becomes an ordinary trip on the
+ *  equipment they're holding, starting now. */
+export function beginDispatched(
+  store: TripStoreLike,
+  i: { trip: TripRow; userId: string; truckId: string | null; trailerId: string | null; beginMiles: number | null; now: Date; newId: () => string },
+) {
+  const nowIso = i.now.toISOString();
+  const first = store.list("trip_pickups", (p) => p.trip_id === i.trip.trip_id).sort((a, b) => a.seq - b.seq)[0];
+  store.put("trips", {
+    trip_id: i.trip.trip_id, status: "draft", started_at: nowIso,
+    truck_id: i.truckId, trailer_id: i.trailerId, begin_miles: i.beginMiles,
+  });
+  store.put("trip_events", {
+    event_id: i.newId(), trip_id: i.trip.trip_id, event_type: "trip_started", occurred_at: nowIso, actor_id: i.userId,
+    pickup_id: first?.pickup_id ?? null, delivery_id: null,
+    payload: { dispatched: true, planned_start_at: i.trip.planned_start_at ?? null, planned_truck_id: i.trip.planned_truck_id ?? null, planned_trailer_id: i.trip.planned_trailer_id ?? null },
+  });
+}

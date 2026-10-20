@@ -69,13 +69,16 @@ import { PlanLoadCard, type TerminalOption, type DriverEquip } from "./PlanLoadC
 import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
 import { TimelineCard, type DayLeg } from "./TimelineCard";
+import { DispatchedBoard } from "./DispatchedBoard";
+import { buildDispatchedTrip } from "@/lib/dispatch/dispatchTrip";
+import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { forecastLoad, typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
 import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
-import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings } from "@/lib/dispatch/useDispatchData";
+import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched } from "@/lib/dispatch/useDispatchData";
 import { onBoard } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -341,14 +344,65 @@ export default function DispatchPage() {
       dutyStartMs: dayLegs[0]?.startMs ?? startMs, drivingMinSoFar: dayLegs.reduce((a, l) => a + l.driveMin, 0),
     });
   }, [tlDriverId, planLocation, termRow, startMs, dayLegs, tripHistory.trips, tlSettings, tlTz]);
-  const addLeg = () => {
-    if (!tlDriverId || !forecast || !planLocation || !termRow) return;
-    const leg: DayLeg = {
+  // The load as planned right now, ready to stack or dispatch.
+  const [orderNumber, setOrderNumber] = useState("");
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchMsg, setDispatchMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const dispatched = useDispatchedTrips(companyId || null);
+  const warnings = useMemo(() => {
+    const w: string[] = [];
+    for (const f of forecast?.flags ?? []) if (f.severity !== "info") w.push(f.text);
+    if (tlDriverId && planTerminalId && certs.types.length) {
+      const h = heldEquipment.get(tlDriverId);
+      if (h && certBlocks(trailerCert(certs.types, certs.records, h.trailerId))) w.push("The driver's trailer has no current certification for this terminal.");
+    }
+    if (planSupplier?.warning) w.push(planSupplier.warning);
+    return w;
+  }, [forecast, tlDriverId, planTerminalId, certs, heldEquipment, planSupplier]);
+  const buildLeg = (): DayLeg | null => {
+    if (!tlDriverId || !forecast || !planLocation || !termRow) return null;
+    const h = heldEquipment.get(tlDriverId);
+    return {
       startMs, endMs: forecast.endMs, driveMin: forecast.driveMinutes, terminal: termRow.terminal_name ?? "Terminal", location: locationTitle(planLocation),
       locationLL: planLocation.lat != null && planLocation.lon != null ? { lat: planLocation.lat, lon: planLocation.lon } : null,
+      terminalId: String(termRow.terminal_id), city: termRow.city ?? null, state: termRow.state ?? null,
+      locationId: planLocation.location_id, deliveryType: planLocation.delivery_type,
+      supplierId: planSupplierId, orderNumber: orderNumber.trim(), truckId: h?.truckId ?? null, trailerId: h?.trailerId ?? null, warnings,
     };
+  };
+  const addLeg = () => {
+    const leg = buildLeg();
+    if (!leg || !tlDriverId) return;
     setDayPlan((m) => ({ ...m, [tlDriverId]: [...(m[tlDriverId] ?? []), leg] }));
     setTlStart(null); // the next load starts when this one ends
+    setOrderNumber("");
+  };
+  const dispatchNow = async () => {
+    const leg = buildLeg();
+    if (!leg || !tlDriverId || !companyId || !authUserId) return;
+    const legs = [...dayLegs, leg];
+    setDispatching(true); setDispatchMsg(null);
+    try {
+      const nums = legs.map((l) => l.orderNumber).filter(Boolean);
+      const dup = nums.find((n, i) => nums.findIndex((m) => m.toLowerCase() === n.toLowerCase()) !== i);
+      if (dup) { setDispatchMsg({ ok: false, text: `Order ${dup} is on two of these loads.` }); return; }
+      const taken = nums.length ? await serverOrderConflicts(companyId, nums, null) : [];
+      if (taken.length) { setDispatchMsg({ ok: false, text: `Order ${taken[0]} is already on another trip.` }); return; }
+      let seq = 0;
+      for (const l of legs) {
+        seq++;
+        const rows = buildDispatchedTrip({ companyId, dispatcherId: authUserId, driverId: tlDriverId, leg: { ...l, terminalName: l.terminal }, seq }, { now: new Date(), newId: () => crypto.randomUUID() });
+        const err = await writeDispatched(rows as any);
+        if (err) { setDispatchMsg({ ok: false, text: seq > 1 ? `Sent ${seq - 1} of ${legs.length}. Then: ${err}` : err }); dispatched.reload(); return; }
+      }
+      const name = plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "the driver";
+      setDispatchMsg({ ok: true, text: `Dispatched ${legs.length} load${legs.length === 1 ? "" : "s"} to ${name}.` });
+      setDayPlan((m) => ({ ...m, [tlDriverId]: [] }));
+      setTlStart(null); setOrderNumber(""); setPlanSupplierId(null);
+      dispatched.reload();
+    } finally {
+      setDispatching(false);
+    }
   };
 
   const alerts = useMemo(
@@ -595,7 +649,8 @@ export default function DispatchPage() {
                 chained={dayLegs.length > 0 && tlStart == null} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
                 dayLegs={dayLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
                 onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i) }))}
-                onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))} />
+                onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))}
+                orderNumber={orderNumber} onOrder={setOrderNumber} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier} onPickSupplier={() => setSuppliersOpen("pick")} onClearSupplier={() => setPlanSupplierId(null)}
@@ -604,6 +659,11 @@ export default function DispatchPage() {
         onOpenDriver={(id) => setSelectedDriverId(id)}
         liveBoard={<FleetBoard sections={["live"]} trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
+        dispatchedBoard={!dispatched.trips.length ? undefined : <DispatchedBoard trips={dispatched.trips}
+          driverName={(id) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver"}
+          locationName={(id) => (id ? locList.locations.find((l) => l.location_id === id) : null) ? locationTitle(locList.locations.find((l) => l.location_id === id)!) : "Delivery"}
+          supplierName={(id) => (id ? companySuppliers.all.find((x) => x.supplier_id === id)?.name ?? null : null)}
+          onCancel={async (tid) => { const e = await cancelDispatched(tid, authUserId || ""); if (!e) dispatched.reload(); return e; }} />}
         planBoard={<FleetBoard sections={["parked", "cancelled"]} cancelled={cancelledTrips.trips} cancelledDays={CANCELLED_DAYS}
           trips={fleet.trips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}

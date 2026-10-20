@@ -19,6 +19,7 @@ import { fmtDateTime } from "./PtdDocument";
 
 import { usePending } from "@/lib/ui/pending";
 const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
+  dispatched: { label: "Dispatched", color: "#93c5fd" },
   draft: { label: "Not loaded", color: "rgba(255,255,255,0.5)" },
   loading: { label: "Loading", color: "#fbbf24" },
   in_transit: { label: "In transit", color: "#60a5fa" },

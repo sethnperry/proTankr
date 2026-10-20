@@ -35,6 +35,8 @@ import {
   buildStartLoad,
   lastShipperCustomer,
   openTripForDriver,
+  dispatchedForDriver,
+  beginDispatched,
   truckBeginMiles,
   tripChildren,
   type StartLoadDelivery,
@@ -112,11 +114,13 @@ import { EXPIRY_COLOR } from "@/lib/expiry";
 import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
+import { DispatchedCard, type DispatchedItem } from "./DispatchedCard";
 import { useFuelStop } from "@/lib/fuel/useFuelStop";
 import { useFuelSetup } from "@/lib/fuel/useFuelSetup";
 import type { UnitAlertSummary } from "@/lib/equipment/unitAlerts";
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
+  dispatched: "Dispatched",
   draft: "Not loaded yet",
   loading: "Loading",
   in_transit: "In transit",
@@ -309,6 +313,61 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editing = !!openTrip;
+
+  // ── Loads dispatch planned for this driver ───────────────────────────────
+  const dispatchedList = useMemo(() => (userId && !openTrip ? dispatchedForDriver(trips, userId) : []), [trips, userId, openTrip]);
+  const [plannedNames, setPlannedNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const truckIds = [...new Set(dispatchedList.map((t) => t.planned_truck_id).filter(Boolean))] as string[];
+    const trailerIds = [...new Set(dispatchedList.map((t) => t.planned_trailer_id).filter(Boolean))] as string[];
+    if (!truckIds.length && !trailerIds.length) return;
+    let off = false;
+    (async () => {
+      const [a, b] = await Promise.all([
+        truckIds.length ? supabase.from("trucks").select("truck_id, truck_name").in("truck_id", truckIds) : Promise.resolve({ data: [] as any[] }),
+        trailerIds.length ? supabase.from("trailers").select("trailer_id, trailer_name").in("trailer_id", trailerIds) : Promise.resolve({ data: [] as any[] }),
+      ]);
+      if (off) return;
+      const m: Record<string, string> = {};
+      for (const r of (a.data ?? []) as any[]) m[r.truck_id] = r.truck_name;
+      for (const r of (b.data ?? []) as any[]) m[r.trailer_id] = r.trailer_name;
+      setPlannedNames(m);
+    })();
+    return () => { off = true; };
+  }, [dispatchedList]);
+  const dispatchedItems = useMemo<DispatchedItem[]>(() => {
+    if (!store) return [];
+    return dispatchedList.map((t) => {
+      const ch = tripChildren(store, t.trip_id);
+      const pk = ch.pickup;
+      const del = ch.deliveries[0];
+      const sup = pk?.supplier_id ? suppliers.find((x) => x.supplier_id === pk.supplier_id)?.name ?? null : null;
+      const planned = [t.planned_truck_id, t.planned_trailer_id].some(Boolean);
+      const eq = [t.planned_truck_id ? `Truck ${plannedNames[t.planned_truck_id] ?? "—"}` : null, t.planned_trailer_id ? `Trailer ${plannedNames[t.planned_trailer_id] ?? "—"}` : null].filter(Boolean).join(" · ");
+      return {
+        trip: t, order: ch.primaryOrder?.order_number ?? null, terminal: pk?.name ?? null,
+        place: [pk?.city, pk?.state].filter(Boolean).join(", ") || null,
+        supplier: sup, delivery: del ? deliveryName(del) : null,
+        plannedEquipment: planned ? eq : null,
+        equipmentDiffers: planned && ((t.planned_truck_id && truckId && t.planned_truck_id !== truckId) || (t.planned_trailer_id && trailerId && t.planned_trailer_id !== trailerId)) as boolean,
+      };
+    });
+  }, [dispatchedList, store, suppliers, truckId, trailerId, state, plannedNames]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const beginDispatchedLoad = () => {
+    const trip = dispatchedList[0];
+    if (!store || !userId || !trip) return;
+    const miles = truckBeginMiles(trips, truckId);
+    beginDispatched(store, { trip, userId, truckId: truckId ?? null, trailerId: trailerId ?? null, beginMiles: miles, now: new Date(), newId });
+    // The supplier dispatch picked: kept on the trip and preset at the rack.
+    const pk = tripChildren(store, trip.trip_id).pickup;
+    const sup = pk?.supplier_id ? suppliers.find((x) => x.supplier_id === pk.supplier_id) : null;
+    if (sup) {
+      setTripSupplier(userId, trip.trip_id, { supplier_id: sup.supplier_id, name: sup.name });
+      if (pk?.terminal_id) seedTerminalPicks(userId, String(pk.terminal_id), { supplier_id: sup.supplier_id, name: sup.name });
+    }
+    void syncNow();
+  };
 
   const initialValues = useMemo<StartLoadValues>(() => {
     if (openTrip && children && snap) {
@@ -813,6 +872,10 @@ export default function HomePage() {
           doResume();
           break;
         }
+        if (dispatchedList.length) {
+          beginDispatchedLoad();
+          break;
+        }
         setError(null);
         setSheetOpen(true);
         break;
@@ -1123,6 +1186,8 @@ export default function HomePage() {
       <div>
       <SectionLabel desktopOnly first>Trip</SectionLabel>
 
+      <DispatchedCard items={dispatchedItems} />
+
       {/* Handoff */}
       {handoff && (
         <div style={{ ...card, marginBottom: 14, borderColor: "rgba(251,191,36,0.5)" }}>
@@ -1334,6 +1399,7 @@ export default function HomePage() {
       >
         {openingPlanner ? busyText(true, "Opening Planner…") : parked && step.kind === "start"
           ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
+          : dispatchedList.length && step.kind === "start" ? "Begin Dispatched Load"
           : step.label}
       </button>
       {step.kind !== "start" && !openingPlanner && (

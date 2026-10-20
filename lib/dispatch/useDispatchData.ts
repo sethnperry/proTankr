@@ -392,3 +392,49 @@ export function useTimelineSettings(companyId: string | null): TimelineSettings 
   }, [companyId]);
   return s;
 }
+
+// Loads dispatch has planned that the driver hasn't begun yet.
+export type DispatchedTrip = {
+  trip_id: string; driver_id: string; planned_start_at: string | null; dispatch_seq: number | null;
+  order: string | null; terminal: string | null; supplier_id: string | null; locationId: string | null;
+};
+export function useDispatchedTrips(companyId: string | null) {
+  const [trips, setTrips] = useState<DispatchedTrip[]>([]);
+  const load = useCallback(async () => {
+    if (!companyId) return;
+    const { data } = await supabase.from("trips")
+      .select("trip_id, driver_id, planned_start_at, dispatch_seq, trip_orders(order_number, is_primary), trip_pickups(name, supplier_id), trip_deliveries(location_id, status)")
+      .eq("company_id", companyId).eq("status", "dispatched").order("planned_start_at");
+    setTrips(((data ?? []) as any[]).map((t) => ({
+      trip_id: t.trip_id, driver_id: t.driver_id, planned_start_at: t.planned_start_at, dispatch_seq: t.dispatch_seq,
+      order: (t.trip_orders ?? []).find((o: any) => o.is_primary)?.order_number ?? null,
+      terminal: t.trip_pickups?.[0]?.name ?? null, supplier_id: t.trip_pickups?.[0]?.supplier_id ?? null,
+      locationId: (t.trip_deliveries ?? []).find((d: any) => d.status !== "cancelled")?.location_id ?? null,
+    })));
+  }, [companyId]);
+  usePoll(load, [load]);
+  return { trips, reload: load };
+}
+
+/** Writes the rows a dispatch builds, parents first. Returns an error message or null. */
+export async function writeDispatched(rows: { trip: any; orders: any[]; pickups: any[]; deliveries: any[]; events: any[] }): Promise<string | null> {
+  const a = await supabase.from("trips").insert(rows.trip);
+  if (a.error) return a.error.message;
+  for (const [table, list] of [["trip_orders", rows.orders], ["trip_pickups", rows.pickups], ["trip_deliveries", rows.deliveries], ["trip_events", rows.events]] as const) {
+    if (!list.length) continue;
+    const r = await supabase.from(table).insert(list);
+    if (r.error) {
+      await supabase.from("trips").delete().eq("trip_id", rows.trip.trip_id); // don't leave a half-written load
+      return r.error.message;
+    }
+  }
+  return null;
+}
+
+export async function cancelDispatched(tripId: string, userId: string): Promise<string | null> {
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("trips").update({
+    status: "cancelled", cancelled_at: now, cancelled_by: userId, cancel_reasons: ["dispatch_cancelled"], client_updated_at: now,
+  }).eq("trip_id", tripId).eq("status", "dispatched");
+  return error ? error.message : null;
+}

@@ -13,7 +13,12 @@ import { PRIMARY_BTN, SECONDARY_BTN } from "@/lib/ui/look";
 import { clock, durationText, type Flag, type Forecast } from "@/lib/dispatch/forecast";
 import { fieldInput } from "../components/trip/tripUi";
 
-export type DayLeg = { startMs: number; endMs: number; driveMin: number; terminal: string; location: string; locationLL: { lat: number; lon: number } | null };
+export type DayLeg = {
+  startMs: number; endMs: number; driveMin: number; terminal: string; location: string; locationLL: { lat: number; lon: number } | null;
+  // What a dispatch of this leg writes.
+  terminalId: string; city: string | null; state: string | null; locationId: string; deliveryType: "drop" | "pump_off";
+  supplierId: string | null; orderNumber: string; truckId: string | null; trailerId: string | null; warnings: string[];
+};
 
 const FLAG_COLOR: Record<Flag["severity"], string> = { info: "rgba(255,255,255,0.5)", warn: "#fb923c", bad: "#f87171" };
 
@@ -34,6 +39,13 @@ export function TimelineCard(p: {
   onAdd: () => void;
   onRemoveLeg: (index: number) => void;
   onClearDay: () => void;
+  // Dispatch
+  orderNumber: string;
+  onOrder: (v: string) => void;
+  warnings: string[];                 // everything shown above that is a problem; never blocks
+  dispatching?: boolean;
+  dispatchMsg?: { ok: boolean; text: string } | null;
+  onDispatch: () => void;
 }) {
   const L = useDashLook();
   const f = p.forecast;
@@ -88,11 +100,20 @@ export function TimelineCard(p: {
           {f.flags.map((x, i) => (
             <div key={i} style={{ fontSize: 12, color: FLAG_COLOR[x.severity], marginTop: 6 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
           ))}
-          <button type="button" className="dash-press" onClick={p.onAdd} style={{ ...PRIMARY_BTN, marginTop: 12 }}>
-            Add to day plan{p.dayLegs.length ? ` (load ${p.dayLegs.length + 1})` : ""}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order number (optional)</div>
+            <input value={p.orderNumber} onChange={(e) => p.onOrder(e.target.value)} placeholder="Saves the driver typing it" style={fieldInput} />
+          </div>
+          <button type="button" className="dash-press" onClick={p.onAdd} style={{ ...SECONDARY_BTN, marginTop: 10, padding: "10px 0", fontSize: 12 }}>
+            + Then another load after this one
+          </button>
+          {p.dispatchMsg && <div style={{ fontSize: 13, marginTop: 10, color: p.dispatchMsg.ok ? "#4ade80" : "#f87171" }}>{p.dispatchMsg.text}</div>}
+          <button type="button" className="dash-press" onClick={p.onDispatch} disabled={p.dispatching} aria-busy={!!p.dispatching} style={{ ...PRIMARY_BTN, marginTop: 10 }}>
+            {p.dispatching ? "Dispatching…" : `${p.warnings.length ? "Dispatch anyway" : "Dispatch"} ${p.dayLegs.length + 1} load${p.dayLegs.length ? "s" : ""} to ${p.driverName.split(" ")[0]}`}
           </button>
           <div style={{ fontSize: 11, color: L.faint, marginTop: 6 }}>
-            The day plan is for planning only. Nothing is sent to the driver yet.
+            {p.warnings.length ? `${p.warnings.length} warning${p.warnings.length === 1 ? "" : "s"} above. Warnings never block a dispatch. ` : ""}
+            The driver sees it on their dashboard and begins it from there.
           </div>
         </>
       )}

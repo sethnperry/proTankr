@@ -224,3 +224,17 @@ test("cancelling a trip closes it", () => {
   cancelTrip(s, s.list("trips")[0], ME, { now: NOW, newId });
   assert.equal(openTripForDriver(s.list("trips"), ME), null);
 });
+
+test("dispatched loads: only this driver's, earliest first; beginning one makes an ordinary trip", async () => {
+  const { dispatchedForDriver, beginDispatched } = await import("./tripLogic.ts");
+  const t = (id: string, driver: string, status: string, start: string, seq: number) =>
+    ({ trip_id: id, driver_id: driver, status, planned_start_at: start, dispatch_seq: seq }) as any;
+  const trips = [t("b", "me", "dispatched", "2026-10-21T15:00:00Z", 2), t("a", "me", "dispatched", "2026-10-21T10:00:00Z", 1), t("x", "other", "dispatched", "2026-10-21T09:00:00Z", 1), t("c", "me", "draft", "", 0)];
+  assert.deepEqual(dispatchedForDriver(trips, "me").map((x: any) => x.trip_id), ["a", "b"]);
+  const puts: any[] = [];
+  const store: any = { put: (k: string, r: any) => puts.push([k, r]), list: () => [{ pickup_id: "p1", trip_id: "a", seq: 1 }] };
+  beginDispatched(store, { trip: trips[1], userId: "me", truckId: "tr", trailerId: "tl", beginMiles: 100, now: new Date("2026-10-21T10:05:00Z"), newId: () => "ev" });
+  assert.deepEqual(puts[0][1], { trip_id: "a", status: "draft", started_at: "2026-10-21T10:05:00.000Z", truck_id: "tr", trailer_id: "tl", begin_miles: 100 });
+  assert.equal(puts[1][1].event_type, "trip_started");
+  assert.equal(puts[1][1].payload.dispatched, true);
+});

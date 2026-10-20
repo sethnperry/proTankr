@@ -254,6 +254,7 @@ export function DispatchDashboardView(props: {
   // Slots
   liveBoard: React.ReactNode; // loads in progress
   planBoard: React.ReactNode; // parked + cancelled
+  dispatchedBoard?: React.ReactNode; // loads sent to drivers, not begun yet
   drivers: React.ReactNode;   // driver picker
   tools: ToolItem[];
 }) {
@@ -360,6 +361,8 @@ export function DispatchDashboardView(props: {
             <>
               <SectionLabel first>Plan a load</SectionLabel>
               {p.planner}
+              {p.dispatchedBoard && <SectionLabel>Dispatched · not begun</SectionLabel>}
+              {p.dispatchedBoard}
               <SectionLabel>Parked &amp; cancelled</SectionLabel>
               {p.planBoard}
             </>

@@ -36,7 +36,7 @@ export function useTripHydration(
     setLoading(true);
     try {
       // Parked trips count here too: the trailer still carries their load.
-      const open = [...OPEN_STATUSES, "parked" as const];
+      const open = [...OPEN_STATUSES, "parked" as const, "dispatched" as const];
       const empty = Promise.resolve({ data: [] as unknown[], error: null });
       const [openRes, recentRes, truckRes, trailerRes, readinessRes] = await Promise.all([
         supabase.from("trips").select("*").eq("driver_id", userId).in("status", open),
@@ -58,7 +58,7 @@ export function useTripHydration(
       if (!recentRes.error) pruneMissingTrips(store, userId, (recentRes.data ?? []) as TripRow[], 10);
       store.hydrate("compartment_readiness", (readinessRes.data ?? []) as CompartmentReadinessRow[]);
 
-      const openIds = [...trips.values()].filter((t) => OPEN_STATUSES.has(t.status) || t.status === "parked").map((t) => t.trip_id);
+      const openIds = [...trips.values()].filter((t) => OPEN_STATUSES.has(t.status) || t.status === "parked" || t.status === "dispatched").map((t) => t.trip_id);
       if (openIds.length) {
         const [o, p, d, c] = await Promise.all([
           supabase.from("trip_orders").select("*").in("trip_id", openIds),

@@ -8,7 +8,7 @@
 // device's own edit time. The server keeps the newest client edit per row
 // (trip_sync_write), so a late-arriving stale write can't clobber a newer one.
 
-export type TripStatus = "draft" | "loading" | "in_transit" | "delivering" | "parked" | "complete" | "cancelled";
+export type TripStatus = "dispatched" | "draft" | "loading" | "in_transit" | "delivering" | "parked" | "complete" | "cancelled";
 export type ParkFor = "slip_seat" | "layover";
 export type DeliveryType = "drop" | "pump_off";
 export type PickupType = "terminal" | "railcar" | "transload" | "other";
@@ -48,6 +48,12 @@ export type TripRow = Synced & {
   cancelled_by?: string | null;
   cancel_returned_to?: string | null;
   driver_hidden?: boolean;
+  // Dispatched by a dispatcher (20261020000000); the driver begins it.
+  dispatched_by?: string | null;
+  planned_start_at?: string | null;
+  planned_truck_id?: string | null;
+  planned_trailer_id?: string | null;
+  dispatch_seq?: number | null;
 };
 
 export type TripOrderRow = Synced & {
@@ -84,6 +90,8 @@ export type TripPickupRow = Synced & {
   // A second pickup on a partly loaded trailer (20261014000000): the empty
   // compartments it fills and with what. Null = an ordinary pickup.
   planned_comps?: { comp_number: number; product_id: string }[] | null;
+  // The supplier dispatch picked (20261020030000).
+  supplier_id?: string | null;
   // The order this pickup loads under (20261014010000). Null = primary order.
   order_id?: string | null;
 };
