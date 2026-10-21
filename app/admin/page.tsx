@@ -469,8 +469,10 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
       <Field label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} style={css.input} onKeyDown={e => e.key === "Enter" && send()} autoFocus /></Field>
       <Field label="Role"><select value={role} onChange={e => setRole(e.target.value)} style={{ ...css.select, width: "100%" }}><option value="driver">Driver</option><option value="lead">Lead</option><option value="dispatch">Dispatch</option><option value="admin">Admin</option></select></Field>
       <Field label="Region">
-        <input list="invite-region-options" value={region} onChange={e => setRegion(e.target.value)} style={css.input} placeholder="e.g. Southeast" />
-        <datalist id="invite-region-options">{regionOptions.map(r => <option key={r} value={r} />)}</datalist>
+        <select value={region} onChange={e => setRegion(e.target.value)} style={css.input}>
+          <option value="">{regionOptions.length ? "— None —" : "No regions set up yet"}</option>
+          {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
       </Field>
       {overCapacity && (
         <div style={{

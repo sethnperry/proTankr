@@ -94,6 +94,14 @@ export function CatalogPicker({
   // was just scoped to.
   const [regionId, setRegionId] = useState<string | null>(null);
   const matchColumnsKey = JSON.stringify(matchColumns ?? null);
+  // Regions are defined by the company admin; everyone else only selects.
+  const [isAdmin, setIsAdmin] = useState(table !== "equipment_regions");
+  useEffect(() => {
+    if (table !== "equipment_regions" || !companyId) return;
+    let off = false;
+    void supabase.rpc("is_company_admin", { p_company_id: companyId }).then(({ data }) => { if (!off) setIsAdmin(!!data); });
+    return () => { off = true; };
+  }, [table, companyId]);
 
   function applyMatchColumns(query: any) {
     if (!matchColumns) return query;
@@ -276,7 +284,7 @@ export function CatalogPicker({
               {r.name}
             </div>
           ))}
-          {!adding ? (
+          {!isAdmin ? null : !adding ? (
             <div
               onClick={() => setAdding(true)}
               style={{ padding: "9px 10px", fontSize: 13, color: "rgba(255,255,255,0.65)", cursor: "pointer", borderRadius: 2, borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 2 }}

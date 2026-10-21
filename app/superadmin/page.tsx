@@ -53,6 +53,7 @@ export default function ProTankrDashPage() {
   const [fEmail, setFEmail] = useState("");
   const [fRole, setFRole] = useState("driver");
   const [fRegion, setFRegion] = useState("");
+  const [fRegionOpts, setFRegionOpts] = useState<string[]>([]);
   const [fBusy, setFBusy] = useState(false);
   const [fMsg, setFMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -120,6 +121,14 @@ export default function ProTankrDashPage() {
 
   const selected = useMemo(() => companies.find((c) => c.company_id === selectedId) ?? null, [companies, selectedId]);
   useEffect(() => { setNameDraft(selected?.company_name ?? ""); setFMsg(null); }, [selectedId, selected?.company_name]);
+  useEffect(() => {
+    setFRegion(""); setFRegionOpts([]);
+    if (!selectedId) return;
+    let off = false;
+    void supabase.from("equipment_regions").select("name").eq("company_id", selectedId).eq("is_active", true).order("name")
+      .then(({ data }) => { if (!off) setFRegionOpts(((data ?? []) as { name: string }[]).map((r) => r.name)); });
+    return () => { off = true; };
+  }, [selectedId]);
 
   const stats = useMemo(() => ({
     companies: companies.length,
@@ -322,8 +331,10 @@ export default function ProTankrDashPage() {
                 <div style={{ width: 150 }}>
                   <CustomSelect value={fRole} onChange={setFRole} options={INVITE_ROLES} buttonStyle={selectBtn} />
                 </div>
-                <input value={fRegion} onChange={(e) => setFRegion(e.target.value)} placeholder="Region (optional)" style={{ ...input, minWidth: 130 }}
-                  onKeyDown={(e) => { if (e.key === "Enter") sendFleetInvite(); }} />
+                <div style={{ width: 170 }}>
+                  <CustomSelect value={fRegion} onChange={setFRegion} buttonStyle={selectBtn}
+                    options={[{ value: "", label: fRegionOpts.length ? "Region (optional)" : "No regions set up" }, ...fRegionOpts.map((r) => ({ value: r, label: r }))]} />
+                </div>
                 <button aria-busy={!!(fBusy)} style={primaryBtn} disabled={fBusy} onClick={sendFleetInvite}>{fBusy ? "Sending…" : "Send Invite"}</button>
               </div>
               {msgLine(fMsg)}

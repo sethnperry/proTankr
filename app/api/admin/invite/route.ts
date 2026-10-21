@@ -203,8 +203,13 @@ export async function POST(req: NextRequest) {
     // invite itself.
     if (regionClean && invitedUserId) {
       try {
-        await admin.from("profiles").upsert(
-          { user_id: invitedUserId, region: regionClean },
+        // Regions are set up by the company admin: only a name in the catalog is accepted,
+        // and it's stored exactly as the catalog spells it.
+        const { data: cat } = await admin.from("equipment_regions").select("name").eq("company_id", companyId).eq("is_active", true);
+        const key = (x: string) => x.trim().replace(/\s+/g, " ").toLowerCase();
+        const canon = ((cat ?? []) as { name: string }[]).find((r) => key(r.name) === key(regionClean))?.name;
+        if (canon) await admin.from("profiles").upsert(
+          { user_id: invitedUserId, region: canon.trim() },
           { onConflict: "user_id" },
         );
       } catch (e: any) {
