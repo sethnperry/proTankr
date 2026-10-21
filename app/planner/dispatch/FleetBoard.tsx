@@ -18,6 +18,8 @@ import { productColorFor } from "@/app/planner/utils/productColor";
 import { cancelReasonLabel, reasonCounts } from "@/lib/trips/cancelReasons";
 import type { CancelledTrip } from "@/lib/trips/useCancelledTrips";
 import { terminalIssueLabel } from "@/lib/trips/terminalIssues";
+import { fractionAlong, liveLine, pointAlong, pointsUpTo, type LivePos } from "@/lib/telematics/progress";
+import type { LatLon } from "@/lib/trips/deliveryLocations";
 
 export type BoardProduct = { name: string; code: string; hex: string | null };
 
@@ -42,7 +44,7 @@ const TOP_Y = 26;
 const BOT_Y = 66;
 const HEIGHT = 92;
 
-function RouteLine({ route, parked }: { route: TripRoute; parked: boolean }) {
+function RouteLine({ route, parked, live }: { route: TripRoute; parked: boolean; live?: number | null }) {
   const { nodes, position } = route;
   const dotColor = parked ? PARKED : MOVING;
   const y = (row: "top" | "bottom") => (row === "top" ? TOP_Y : BOT_Y);
@@ -66,7 +68,7 @@ function RouteLine({ route, parked }: { route: TripRoute; parked: boolean }) {
   if (enRouteSeg) {
     const p = enRouteSeg.pts;
     const [x1, y1] = p[p.length - 2], [x2, y2] = p[p.length - 1];
-    dot = [(x1 + x2) / 2, (y1 + y2) / 2];
+    dot = live != null ? pointAlong(p, live) : [(x1 + x2) / 2, (y1 + y2) / 2];
   } else {
     const n = nodes[position.at];
     dot = [px(n.x), y(n.row)];
@@ -85,7 +87,7 @@ function RouteLine({ route, parked }: { route: TripRoute; parked: boolean }) {
         {enRouteSeg && (() => {
           // Brighten everything before the dot on the en-route segment.
           const p = enRouteSeg.pts;
-          const head = [...p.slice(0, p.length - 1), dot] as [number, number][];
+          const head = live != null ? ([...pointsUpTo(p, live), dot] as [number, number][]) : ([...p.slice(0, p.length - 1), dot] as [number, number][]);
           return line(head, "rgba(255,255,255,0.85)", 2, "head");
         })()}
         {nodes.map((n, i) => {
@@ -257,7 +259,32 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId, onDismiss, o
 
 export type BoardSection = "live" | "parked" | "cancelled";
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled }: {
+// Where this load's truck is, from its telematics position: the dot's place on
+// the en-route leg, and a status line (speed, miles to the next stop, age).
+function liveFor(ft: FleetTrip, route: TripRoute, pos: LivePos | undefined, terminalLL?: (id: string) => LatLon | null, locationLL?: (id: string) => LatLon | null, now: Date = new Date()) {
+  if (!pos) return null;
+  const llOf = (key: string): LatLon | null => {
+    const p = ft.pickups.find((x) => x.pickup_id === key);
+    if (p) return p.terminal_id && terminalLL ? terminalLL(String(p.terminal_id)) : null;
+    const d = ft.deliveries.find((x) => x.delivery_id === key);
+    return d?.location_id && locationLL ? locationLL(d.location_id) : null;
+  };
+  const at = route.position.at;
+  const next = route.nodes[at];
+  const nextLL = next ? llOf(next.key) : null;
+  const line = liveLine(pos, next?.sub ?? next?.label ?? null, route.position.enRoute ? nextLL : null, now);
+  let fraction: number | null = null;
+  if (route.position.enRoute && !line.stale && at > 0) {
+    const prevNode = route.nodes[at - 1];
+    fraction = fractionAlong(prevNode.kind === "start" ? null : llOf(prevNode.key), { lat: pos.lat, lon: pos.lon }, nextLL);
+  }
+  return { ...line, fraction };
+}
+
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, positions, terminalLL, locationLL }: {
+  positions?: Map<string, LivePos>;            // truck id -> live position
+  terminalLL?: (terminalId: string) => LatLon | null;
+  locationLL?: (locationId: string) => LatLon | null;
   onDismissCancelled?: (tripId: string) => void;
   onDismissAllCancelled?: () => void;
   // Which lists to show (default all). The Dispatch Dashboard shows loads in
@@ -284,6 +311,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
       {live.map((ft) => {
         const route = buildTripRoute(ft.trip, ft.pickups, ft.deliveries, locations, ft.start);
         const since = elapsed(route.since, now);
+        const lv = liveFor(ft, route, ft.trip.truck_id ? positions?.get(ft.trip.truck_id) : undefined, terminalLL, locationLL, now);
         return (
           <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onOpenTrip(ft.trip.trip_id)} {...busyProps(openingId === ft.trip.trip_id)}>
             <CardBusy on={openingId === ft.trip.trip_id} />
@@ -298,7 +326,8 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
               {since && <span style={{ color: muted }}>{since}</span>}
               {ft.orderNumbers.length > 0 && <span style={{ color: muted }}>· Order {ft.orderNumbers.join(", ")}</span>}
             </div>
-            <RouteLine route={route} parked={false} />
+            {lv && <div style={{ fontSize: 12, marginTop: 4, color: lv.stale ? muted : MOVING }}>● Live · {lv.text}</div>}
+            <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
             <ProductChips ft={ft} product={product} />
           </button>
         );

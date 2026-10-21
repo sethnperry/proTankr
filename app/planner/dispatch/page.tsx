@@ -53,6 +53,7 @@ import { addDaysISO_, formatMDYWithCountdown_ } from "../utils/dates";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
+import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
@@ -219,6 +220,7 @@ export default function DispatchPage() {
   // ── Dispatch Dashboard (no driver picked) ─────────────────────────────────
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
+  const livePositions = useFleetPositions(companyId || null, mode === "live");
   useEffect(() => {
     try {
       const m = localStorage.getItem("proTankr:dispatchMode");
@@ -830,6 +832,9 @@ export default function DispatchPage() {
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
+          positions={livePositions}
+          terminalLL={(id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; }}
+          locationLL={(id) => { const l = locList.locations.find((x) => x.location_id === id); return l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null; }}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
         dispatchedBoard={!dispatchedShown.length ? undefined : <DispatchedBoard trips={dispatchedShown}
           driverName={(id) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver"}

@@ -47,3 +47,26 @@ test("secrets round-trip and a wrong key fails", () => {
   process.env.TELEMATICS_ENC_KEY = "k2";
   assert.throws(() => decryptSecret(blob));
 });
+
+import { fractionAlong, pointAlong, liveLine } from "./progress.ts";
+
+test("progress: fraction along a leg, clamped, unknown without coordinates", () => {
+  const a = { lat: 27, lon: -82 }, b = { lat: 28, lon: -82 };
+  const mid = fractionAlong(a, { lat: 27.5, lon: -82 }, b)!;
+  assert.ok(Math.abs(mid - 0.5) < 0.02);
+  assert.equal(fractionAlong(a, a, b), 0.03);
+  assert.equal(fractionAlong(null, a, b), null);
+});
+
+test("progress: point along a polyline by length", () => {
+  const [x, y] = pointAlong([[0, 0], [10, 0], [10, 10]], 0.75);
+  assert.deepEqual([x, y], [10, 5]);
+});
+
+test("progress: live line, stale and moving", () => {
+  const now = new Date("2026-10-23T12:00:00Z");
+  const fresh = liveLine({ lat: 27, lon: -82, speedMph: 58, at: "2026-10-23T11:58:00Z" }, "Citgo", { lat: 28, lon: -82 }, now);
+  assert.equal(fresh.stale, false);
+  assert.match(fresh.text, /58 mph · \d+ mi to Citgo · 2 min ago/);
+  assert.deepEqual(liveLine({ lat: 27, lon: -82, speedMph: 0, at: "2026-10-23T09:00:00Z" }, null, null, now), { text: "last seen 3 h ago", stale: true });
+});

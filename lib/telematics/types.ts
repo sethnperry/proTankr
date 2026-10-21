@@ -16,6 +16,8 @@ export type VehicleReading = {
 export interface TelematicsProvider {
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
+  /** Position of every vehicle in one call (no odometer), keyed by provider vehicle id. */
+  positions(): Promise<Map<string, VehicleReading>>;
 }
 
 export class TelematicsAuthError extends Error {}

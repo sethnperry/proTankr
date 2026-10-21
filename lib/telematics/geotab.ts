@@ -78,6 +78,24 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         .map((d) => ({ id: String(d.id), name: String(d.name), vin: d.vehicleIdentificationNumber ? String(d.vehicleIdentificationNumber).toUpperCase() : null }));
     },
 
+    async positions(): Promise<Map<string, VehicleReading>> {
+      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
+      const out = new Map<string, VehicleReading>();
+      for (const s of rows ?? []) {
+        const id = s?.device?.id;
+        if (!id) continue;
+        const kmh = Number(s.speed);
+        out.set(String(id), {
+          odometerMi: null,
+          lat: Number.isFinite(Number(s.latitude)) ? Number(s.latitude) : null,
+          lon: Number.isFinite(Number(s.longitude)) ? Number(s.longitude) : null,
+          speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,
+          at: s.dateTime ? String(s.dateTime) : null,
+        });
+      }
+      return out;
+    },
+
     async reading(id: string): Promise<VehicleReading> {
       const [info, odo] = await Promise.all([
         call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id } } }) as Promise<any[]>,
