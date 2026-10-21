@@ -147,3 +147,22 @@ test("remainingDriveMin: sums the legs, skips unknown stops", () => {
   assert.ok(two > remainingDriveMin(a, [b]));
   assert.equal(remainingDriveMin(a, []), 0);
 });
+
+test("geotab: lists trailers and finds the one hooked to each vehicle now", async () => {
+  const f = (async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (b.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s2", userName: "u" } });
+    if (b.params.typeName === "Trailer") return ok([{ id: "tr1", name: "3151" }, { id: "tr2", name: "3149" }]);
+    return ok([
+      { device: { id: "v1" }, trailer: { id: "tr1" }, activeFrom: "2026-10-01T00:00:00Z", activeTo: "4000-01-01T00:00:00Z" },
+      { device: { id: "v1" }, trailer: { id: "tr2" }, activeFrom: "2026-09-01T00:00:00Z", activeTo: "2026-09-20T00:00:00Z" }, // ended
+      { device: { id: "v2" }, trailer: { id: "tr2" }, activeFrom: "2026-10-05T00:00:00Z" },
+    ]);
+  }) as any;
+  const p = geotabProvider({ database: "db-trailers", userName: "u", password: "p" }, f);
+  assert.deepEqual(await p.listTrailers(), [{ id: "tr1", name: "3151" }, { id: "tr2", name: "3149" }]);
+  const m = await p.attachedTrailers();
+  assert.equal(m.get("v1"), "tr1");
+  assert.equal(m.get("v2"), "tr2");
+});

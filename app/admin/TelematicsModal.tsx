@@ -24,6 +24,9 @@ type Summary = {
   matched?: { vehicleId: string; vehicleName: string | null; truckId: string; truckName: string; by: string }[];
   unmatchedTrucks?: { truckId: string; truckName: string }[];
   unmatchedVehicles?: { id: string; name: string }[];
+  trailersLinked?: number;
+  unmatchedTrailers?: { id: string; name: string }[];
+  unmatchedOurTrailers?: { trailerId: string; name: string }[];
   driversLinked?: number;
   unmatchedDrivers?: { id: string; name: string }[];
   unmatchedMembers?: { userId: string; name: string }[];
@@ -64,6 +67,13 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
     const truckId = pick[vehicleId];
     if (!truckId) return;
     const r = await call("POST", companyId, { map: [{ vehicleId, vehicleName, truckId }] });
+    if (!r.ok) return setErr(r.data?.error ?? "Couldn't save.");
+    setSum(r.data);
+  });
+  const assignTrailer = (providerTrailerId: string, name: string) => run(async () => {
+    const trailerId = pick[`t:${providerTrailerId}`];
+    if (!trailerId) return;
+    const r = await call("POST", companyId, { trailerMap: [{ providerTrailerId, name, trailerId }] });
     if (!r.ok) return setErr(r.data?.error ?? "Couldn't save.");
     setSum(r.data);
   });
@@ -130,6 +140,28 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
               ))}
             </div>
           )}
+
+          <div style={card}>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>Trailers · hookup detection</div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 4, lineHeight: 1.5 }}>
+              {sum.trailersLinked ?? 0} trailer{(sum.trailersLinked ?? 0) === 1 ? "" : "s"} linked by unit number. Drivers are told when Geotab shows a different trailer hooked up than the one they selected.
+              Needs Geotab trailer tracking; without it nothing shows.
+            </div>
+            {(sum.unmatchedTrailers?.length ?? 0) > 0 && (sum.unmatchedOurTrailers?.length ?? 0) > 0 && (
+              <div style={{ marginTop: 10 }}>
+                {sum.unmatchedTrailers!.map((t) => (
+                  <div key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
+                    <select style={{ ...input, flex: 1, padding: "8px 8px", fontSize: 14 }} value={pick[`t:${t.id}`] ?? ""} onChange={(e) => setPick((p) => ({ ...p, [`t:${t.id}`]: e.target.value }))}>
+                      <option value="">Trailer…</option>
+                      {sum.unmatchedOurTrailers!.map((m) => <option key={m.trailerId} value={m.trailerId}>{m.name}</option>)}
+                    </select>
+                    <button type="button" style={{ ...btn, padding: "9px 12px", opacity: pick[`t:${t.id}`] ? 1 : 0.4 }} disabled={busy || !pick[`t:${t.id}`]} onClick={() => void assignTrailer(t.id, t.name)}>Link</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div style={card}>
             <div style={{ fontSize: 13, fontWeight: 800 }}>Drivers · hours of service</div>

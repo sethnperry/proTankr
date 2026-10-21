@@ -25,7 +25,12 @@ export type HosAvailability = {
   at: string;                  // ISO time this was read
 };
 
+export type ProviderTrailer = { id: string; name: string };
+
 export interface TelematicsProvider {
+  listTrailers(): Promise<ProviderTrailer[]>;
+  /** The trailer each vehicle is hooked to right now: provider vehicle id -> provider trailer id. Empty without trailer tracking. */
+  attachedTrailers(): Promise<Map<string, string>>;
   listDrivers(): Promise<ProviderDriver[]>;
   hos(driverId: string): Promise<HosAvailability | null>;
   listVehicles(): Promise<ProviderVehicle[]>;

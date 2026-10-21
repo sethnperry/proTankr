@@ -5,7 +5,7 @@
 
 import { airMiles, type LatLon } from "../trips/deliveryLocations.ts";
 
-export type LivePos = { lat: number; lon: number; speedMph: number | null; at: string | null };
+export type LivePos = { lat: number; lon: number; speedMph: number | null; at: string | null; trailerId?: string | null };
 
 /** How far along prev -> next the truck is (0..1), by straight-line distance.
  * Null when we can't tell (a stop has no coordinates). */

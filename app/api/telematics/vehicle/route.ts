@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { stateCode } from "@/lib/geo/usStates";
-import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole, providerFor, trailerNames } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 
@@ -32,6 +32,15 @@ export async function GET(req: NextRequest) {
     const p = await providerFor(companyId);
     if (!p) return none();
     const reading = await p.reading(vid);
+    // The trailer Geotab says is hooked up (null = nothing hooked or not tracked / not linked).
+    let trailerId: string | null = null, trailerName: string | null = null, trailerKnown = false;
+    try {
+      const attached = await p.attachedTrailers();
+      trailerKnown = attached.size > 0;
+      const prov = attached.get(vid);
+      const mapped = prov ? (await trailerNames(companyId)).get(prov) : null;
+      trailerId = mapped?.trailerId ?? null; trailerName = mapped?.name ?? null;
+    } catch { /* trailer tracking is optional */ }
     let city: string | null = null, state: string | null = null;
     const key = process.env.OPENWEATHER_API_KEY;
     if (key && reading.lat != null && reading.lon != null) {
@@ -41,7 +50,7 @@ export async function GET(req: NextRequest) {
       state = stateCode(typeof it?.state === "string" ? it.state : null);
     }
     await admin.from("telematics_connections").update({ last_ok_at: new Date().toISOString(), last_error: null }).eq("company_id", companyId);
-    return NextResponse.json({ connected: true, ...reading, city, state });
+    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
     return none();

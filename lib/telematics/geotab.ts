@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderVehicle, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderTrailer, type ProviderVehicle, type TelematicsProvider, type VehicleReading } from "./types.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -102,6 +102,27 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return (rows ?? [])
         .filter((d) => d?.id && d.name)
         .map((d) => ({ id: String(d.id), name: String(d.name), vin: d.vehicleIdentificationNumber ? String(d.vehicleIdentificationNumber).toUpperCase() : null }));
+    },
+
+    async listTrailers(): Promise<ProviderTrailer[]> {
+      const rows: any[] = await call("Get", { typeName: "Trailer" });
+      return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name) }));
+    },
+
+    async attachedTrailers(): Promise<Map<string, string>> {
+      const now = new Date().toISOString();
+      const rows: any[] = await call("Get", { typeName: "TrailerAttachment", search: { activeFrom: now, activeTo: now } });
+      const out = new Map<string, { trailer: string; from: string }>();
+      for (const a of rows ?? []) {
+        const dev = a?.device?.id, tr = a?.trailer?.id;
+        if (!dev || !tr) continue;
+        // Still attached: no end, or an end in the future (Geotab uses year 4000 for "open").
+        if (a.activeTo && Date.parse(a.activeTo) <= Date.now()) continue;
+        const from = String(a.activeFrom ?? a.dateTime ?? "");
+        const prev = out.get(String(dev));
+        if (!prev || from > prev.from) out.set(String(dev), { trailer: String(tr), from });
+      }
+      return new Map([...out].map(([k, v]) => [k, v.trailer]));
     },
 
     async listDrivers(): Promise<ProviderDriver[]> {

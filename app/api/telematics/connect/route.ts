@@ -46,6 +46,13 @@ async function summary(companyId: string) {
     vehicles = p ? (await p.listVehicles()).map((v) => ({ id: v.id, name: v.name })) : [];
   } catch { /* the status line already carries the last error */ }
   const mappedVeh = new Set(rows.map((r) => r.provider_vehicle_id));
+  // Trailers (hookup detection): linked, and who is left to match.
+  const tm = await admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", companyId);
+  const trows = (tm.data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
+  const { data: ourTr } = await admin.from("trailers").select("trailer_id, trailer_name").eq("company_id", companyId).eq("active", true);
+  let provTr: { id: string; name: string }[] = [];
+  try { const p = await providerFor(companyId); provTr = p ? await p.listTrailers() : []; } catch { /* trailer tracking may not be on */ }
+  const tUsed = new Set(trows.map((r) => r.trailer_id)), tvUsed = new Set(trows.map((r) => r.provider_trailer_id));
   // Drivers (hours of service): linked, and who is left to match.
   const dm = await admin.from("telematics_driver_map").select("provider_user_id, user_id, driver_name, matched_by").eq("company_id", companyId);
   const drows = (dm.data ?? []) as { provider_user_id: string; user_id: string; driver_name: string | null; matched_by: string }[];
@@ -58,6 +65,9 @@ async function summary(companyId: string) {
   } catch { /* hours of service just shows no drivers */ }
   const dUsed = new Set(drows.map((r) => r.provider_user_id)), mUsed = new Set(drows.map((r) => r.user_id));
   return {
+    trailersLinked: trows.length,
+    unmatchedTrailers: provTr.filter((t) => !tvUsed.has(t.id)),
+    unmatchedOurTrailers: ((ourTr ?? []) as { trailer_id: string; trailer_name: string }[]).filter((t) => !tUsed.has(t.trailer_id)).map((t) => ({ trailerId: t.trailer_id, name: t.trailer_name })),
     driversLinked: drows.length,
     unmatchedDrivers: drivers.filter((d) => !dUsed.has(d.id)),
     unmatchedMembers: members.filter((m) => !mUsed.has(m.user_id)).map((m) => ({ userId: m.user_id, name: m.display_name ?? "Member" })),
@@ -93,6 +103,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(await summary(g.companyId));
   }
 
+  if (Array.isArray(body.trailerMap)) {
+    for (const m of body.trailerMap as { providerTrailerId: string; name?: string; trailerId: string | null }[]) {
+      if (!m.providerTrailerId) continue;
+      await admin.from("telematics_trailer_map").delete().eq("company_id", g.companyId).eq("provider_trailer_id", m.providerTrailerId);
+      if (m.trailerId) {
+        await admin.from("telematics_trailer_map").delete().eq("company_id", g.companyId).eq("trailer_id", m.trailerId);
+        const { error } = await admin.from("telematics_trailer_map").insert({ company_id: g.companyId, provider_trailer_id: m.providerTrailerId, trailer_id: m.trailerId, trailer_name: m.name ?? null, matched_by: "manual" });
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+    }
+    return NextResponse.json(await summary(g.companyId));
+  }
+
   if (Array.isArray(body.driverMap)) {
     for (const m of body.driverMap as { driverId: string; driverName?: string; userId: string | null }[]) {
       if (!m.driverId) continue;
@@ -122,6 +145,16 @@ export async function POST(req: NextRequest) {
       await admin.from("telematics_vehicle_map").upsert({ company_id: g.companyId, provider_vehicle_id: p.vehicle.id, truck_id: p.truck.truck_id, vehicle_name: p.vehicle.name, vin: p.vehicle.vin, matched_by: p.by }, { onConflict: "company_id,provider_vehicle_id", ignoreDuplicates: true });
     }
     try {
+      const prov = geotabProvider({ database, userName, password });
+      const { data: ours } = await admin.from("trailers").select("trailer_id, trailer_name, vin_number").eq("company_id", g.companyId).eq("active", true);
+      const res = matchVehicles((await prov.listTrailers()).map((t) => ({ id: t.id, name: t.name, vin: null })),
+        ((ours ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => ({ truck_id: t.trailer_id, truck_name: t.trailer_name, vin_number: null })));
+      await admin.from("telematics_trailer_map").delete().eq("company_id", g.companyId).neq("matched_by", "manual");
+      for (const p of res.pairs) {
+        await admin.from("telematics_trailer_map").upsert({ company_id: g.companyId, provider_trailer_id: p.vehicle.id, trailer_id: p.truck.truck_id, trailer_name: p.vehicle.name, matched_by: p.by }, { onConflict: "company_id,provider_trailer_id", ignoreDuplicates: true });
+      }
+    } catch { /* no trailer tracking: hookup detection simply stays off */ }
+    try {
       const drv = await geotabProvider({ database, userName, password }).listDrivers();
       const dres = matchDrivers(drv, await rosterMembers(g.companyId));
       await admin.from("telematics_driver_map").delete().eq("company_id", g.companyId).neq("matched_by", "manual");
@@ -143,6 +176,7 @@ export async function DELETE(req: NextRequest) {
   const admin = getServiceSupabase();
   await admin.from("telematics_vehicle_map").delete().eq("company_id", g.companyId);
   await admin.from("telematics_driver_map").delete().eq("company_id", g.companyId);
+  await admin.from("telematics_trailer_map").delete().eq("company_id", g.companyId);
   await admin.from("telematics_connections").delete().eq("company_id", g.companyId);
   return NextResponse.json({ connected: false });
 }

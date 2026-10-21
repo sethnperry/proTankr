@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole, providerFor, trailerNames } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 
@@ -22,14 +22,16 @@ export async function GET(req: NextRequest) {
   try {
     const p = await providerFor(companyId);
     if (!p) return NextResponse.json({ connected: false });
-    const [pos, map] = await Promise.all([
+    const [pos, map, attached, tmap] = await Promise.all([
       p.positions(),
       getServiceSupabase().from("telematics_vehicle_map").select("provider_vehicle_id, truck_id").eq("company_id", companyId),
+      p.attachedTrailers().catch(() => new Map<string, string>()),
+      trailerNames(companyId),
     ]);
-    const positions: Record<string, { lat: number; lon: number; speedMph: number | null; at: string | null }> = {};
+    const positions: Record<string, { lat: number; lon: number; speedMph: number | null; at: string | null; trailerId?: string | null }> = {};
     for (const m of (map.data ?? []) as { provider_vehicle_id: string; truck_id: string }[]) {
       const x = pos.get(m.provider_vehicle_id);
-      if (x && x.lat != null && x.lon != null) positions[m.truck_id] = { lat: x.lat, lon: x.lon, speedMph: x.speedMph, at: x.at };
+      if (x && x.lat != null && x.lon != null) positions[m.truck_id] = { lat: x.lat, lon: x.lon, speedMph: x.speedMph, at: x.at, trailerId: tmap.get(attached.get(m.provider_vehicle_id) ?? "")?.trailerId ?? null };
     }
     return NextResponse.json({ connected: true, positions });
   } catch (e) {

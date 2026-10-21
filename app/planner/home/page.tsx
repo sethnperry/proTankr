@@ -592,6 +592,9 @@ export default function HomePage() {
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
   const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen);
+  // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
+  const hookup = useTruckReading(truckId, !!truckId);
+  const [hookupSnoozed, setHookupSnoozed] = useState(false);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
   const tapFuel = async () => {
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
@@ -1492,6 +1495,28 @@ export default function HomePage() {
         </div>
       )}
 
+
+      {!hookupSnoozed && hookup?.trailerId && hookup.trailerId !== (trailerId ?? null) && (
+        <div style={{ ...card, marginBottom: 10, borderColor: "rgba(251,146,60,0.55)" }}>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>
+            Geotab shows Trailer {hookup.trailerName ?? "?"} hooked to your truck
+          </div>
+          <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
+            {trailerId
+              ? `You have ${equipment.trailerNameById?.[trailerId] || equipment.currentTrailerName || "another trailer"} selected.`
+              : "You don't have a trailer selected."}
+            {tripLoaded ? " Product is on board, so check this before you change anything." : ""}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="button" className="dash-press" onClick={() => openEquipment()} style={{ flex: 2, padding: "11px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", ...L.cta }}>
+              Open Equipment
+            </button>
+            <button type="button" onClick={() => setHookupSnoozed(true)} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
+              It's right
+            </button>
+          </div>
+        </div>
+      )}
 
       {arrival.suggest && arrivalTarget && (
         <div style={{ ...card, marginBottom: 10, borderColor: "rgba(74,222,128,0.5)" }}>

@@ -334,6 +334,12 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
             </div>
             {lv && <div style={{ fontSize: 12, marginTop: 4, color: lv.stale ? muted : MOVING }}>● Live · {lv.text}</div>}
             {(() => {
+              const pos = ft.trip.truck_id ? positions?.get(ft.trip.truck_id) : undefined;
+              // Geotab's hooked trailer vs the one the trip says (only when both are known and linked).
+              if (!pos?.trailerId || !ft.trip.trailer_id || pos.trailerId === ft.trip.trailer_id) return null;
+              return <div style={{ fontSize: 12, marginTop: 3, color: "#fb923c", fontWeight: 700 }}>⚠ Geotab shows a different trailer hooked than the trip's{ft.trailerName ? ` (${ft.trailerName})` : ""}</div>;
+            })()}
+            {(() => {
               const g = geo?.get(ft.trip.trip_id);
               if (!g) return null;
               const mins = Math.max(0, Math.round((now.getTime() - g.sinceMs) / 60000));

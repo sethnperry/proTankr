@@ -50,3 +50,14 @@ export async function rosterMembers(companyId: string): Promise<Member[]> {
   const emails = await Promise.all(ids.map(async (id) => (await admin.auth.admin.getUserById(id)).data.user?.email ?? null));
   return ids.map((id, i) => ({ user_id: id, email: emails[i], display_name: byId.get(id)?.display_name ?? null, employee_number: byId.get(id)?.employee_number ?? null }));
 }
+
+/** Provider trailer id -> the company's trailer, for hookup detection. */
+export async function trailerNames(companyId: string): Promise<Map<string, { trailerId: string; name: string }>> {
+  const admin = getServiceSupabase();
+  const { data } = await admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", companyId);
+  const rows = (data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
+  if (!rows.length) return new Map();
+  const { data: tr } = await admin.from("trailers").select("trailer_id, trailer_name").in("trailer_id", rows.map((r) => r.trailer_id));
+  const nm = new Map(((tr ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => [t.trailer_id, t.trailer_name]));
+  return new Map(rows.map((r) => [r.provider_trailer_id, { trailerId: r.trailer_id, name: nm.get(r.trailer_id) ?? "" }]));
+}
