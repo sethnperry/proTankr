@@ -258,3 +258,20 @@ test("unit sync: new gets everything ticked; existing follows fill / overwrite",
   const ow = parseOpts({ existing: "overwrite" });
   assert.equal((truckPatch(ours, geo, info, null, ow) as any).plate_number, "ABC123");
 });
+
+test("dedupe: retired dropped, one per name, most complete then newest wins", async () => {
+  const { importableVehicles, isRetired } = await import("./dedupe.ts");
+  const now = Date.parse("2026-10-22T00:00:00Z");
+  assert.equal(isRetired({ activeTo: "2025-01-01T00:00:00Z" }, now), true);
+  assert.equal(isRetired({ activeTo: "2050-01-01T00:00:00Z" }, now), false);
+  assert.equal(isRetired({}, now), false);
+  const v = (id: string, name: string, extra: object) => ({ id, name, vin: null, ...extra });
+  const out = importableVehicles([
+    v("a", "100", { activeFrom: "2020-01-01T00:00:00Z" }),
+    v("b", "100", { vin: "1XKYD49X0LJ123456", activeFrom: "2019-01-01T00:00:00Z" }),
+    v("c", "100", { vin: "1XKYD49X0LJ123456", activeFrom: "2022-01-01T00:00:00Z" }),
+    v("d", "200", { activeTo: "2024-01-01T00:00:00Z" }),
+    v("e", "300", {}),
+  ] as any, now);
+  assert.deepEqual(out.map((x) => x.id), ["c", "e"]);
+});

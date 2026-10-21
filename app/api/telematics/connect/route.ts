@@ -13,6 +13,7 @@ import { encryptSecret } from "@/lib/telematics/crypto";
 import { matchVehicles, type TruckLite } from "@/lib/telematics/match";
 import { matchDrivers } from "@/lib/telematics/matchDrivers";
 import { groupNames, pathsFor, summarizeGroups } from "@/lib/telematics/groups";
+import { bestPerName, importableVehicles } from "@/lib/telematics/dedupe";
 import { parseOpts, regionFor, truckPatch, type TruckRow } from "@/lib/telematics/unitSync";
 import { decodeVins } from "@/lib/telematics/vinDecode";
 import { TelematicsAuthError } from "@/lib/telematics/types";
@@ -51,7 +52,7 @@ async function summary(companyId: string) {
     if (p) {
       rawVehicles = await p.listVehicles();
       provGroups = await p.listGroups().catch(() => []);
-      vehicles = rawVehicles.map((v) => ({ id: v.id, name: v.name, vin: v.vin, plate: v.plate ?? null, group: pathsFor(v.groupIds, provGroups), groups: groupNames(v.groupIds, provGroups) }));
+      vehicles = importableVehicles(rawVehicles).map((v) => ({ id: v.id, name: v.name, vin: v.vin, plate: v.plate ?? null, group: pathsFor(v.groupIds, provGroups), groups: groupNames(v.groupIds, provGroups) }));
     }
   } catch { /* the status line already carries the last error */ }
   const mappedVeh = new Set(rows.map((r) => r.provider_vehicle_id));
@@ -78,7 +79,7 @@ async function summary(companyId: string) {
   const dUsed = new Set(drows.map((r) => r.provider_user_id)), mUsed = new Set(drows.map((r) => r.user_id));
   return {
     trailersLinked: trows.length,
-    unmatchedTrailers: provTr.filter((t) => !tvUsed.has(t.id)),
+    unmatchedTrailers: bestPerName(provTr).filter((t) => !tvUsed.has(t.id)),
     unmatchedOurTrailers: ((ourTr ?? []) as { trailer_id: string; trailer_name: string }[]).filter((t) => !tUsed.has(t.trailer_id)).map((t) => ({ trailerId: t.trailer_id, name: t.trailer_name })),
     groups: groupRows,
     driversLinked: drows.length,
@@ -223,7 +224,7 @@ export async function POST(req: NextRequest) {
         const creates: typeof trailers = [];
         const updates: { t: (typeof trailers)[number]; hit: (typeof ours)[number] }[] = [];
         const taken = new Set<string>();
-        for (const t of trailers) {
+        for (const t of bestPerName(trailers)) {
           if (creates.length + updates.length >= CHUNK) break;
           if (!want.has(t.id) || mappedProv.has(t.id)) continue;
           const hit = byName.get(lower(t.name));

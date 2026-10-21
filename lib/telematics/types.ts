@@ -3,7 +3,7 @@
 // A telematics provider (Geotab first) behind one small interface, so adding
 // Samsara or Motive later doesn't touch the rest of the app.
 
-export type ProviderVehicle = { id: string; name: string; vin: string | null; plate?: string | null; plateState?: string | null; groupIds?: string[] };
+export type ProviderVehicle = { id: string; name: string; vin: string | null; plate?: string | null; plateState?: string | null; groupIds?: string[]; activeFrom?: string | null; activeTo?: string | null };
 
 export type VehicleReading = {
   odometerMi: number | null;
