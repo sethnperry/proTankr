@@ -61,6 +61,7 @@ import { useGeofenceWatch } from "@/lib/dispatch/useGeofenceWatch";
 import { useHosNotifier } from "@/lib/dispatch/useHosNotifier";
 import { enablePush } from "@/lib/push/subscribe";
 import { hosText } from "@/lib/telematics/progress";
+import { restWindow } from "@/lib/dispatch/dutyGraph";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
@@ -343,6 +344,7 @@ export default function DispatchPage() {
     return terminalsCatalog.map((t) => ({
       id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", used: used.has(String(t.terminal_id)),
       place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null,
+      city: t.city ?? null, state: t.state ?? null,
     }));
   }, [terminalsCatalog, plan.usedTerminalIds]);
   // Supplier at the chosen terminal (warn-only: a paused contract never blocks).
@@ -822,12 +824,13 @@ export default function DispatchPage() {
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
             onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
-            selectedDriverId={tlDriverId} onSelectDriver={(id) => { setTlDriverId(id); setTlStart(null); }}
+            selectedDriverId={tlDriverId} onSelectDriver={(id) => { setTlDriverId((cur) => (cur === id ? null : id)); setTlStart(null); }}
             timeline={tlDriverId && planLocation && planTerminalId ? (
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={dayLegs.length > 0 && tlStart == null} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
                 terminalPlace={planTerminal?.place ?? null} locationPlace={[planLocation?.city, planLocation?.state].filter(Boolean).join(", ") || null}
                 hosLine={fleetHos.get(tlDriverId) ? hosText(fleetHos.get(tlDriverId)!) : null}
+                rest={restWindow(fleetHos.get(tlDriverId), typicalMin)}
                 dayLegs={dayLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
                 onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i) }))}
                 onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))}
@@ -880,7 +883,7 @@ export default function DispatchPage() {
         drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onlyUserIds={regionOn ? regionDriverIds : undefined} onPick={(id) => setSelectedDriverId(id)} /></div>}
         tools={dashTools}
       />
-      <LocationPicker open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
+      <LocationPicker browse open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
         onToggleStar={locList.toggleStar} onLocationAdded={locList.reload}
         onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />

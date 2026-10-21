@@ -19,6 +19,8 @@ export type DeliveryLocation = {
   zip?: string | null;
   // One of the company's regions (20261022010000). Optional: missing before that migration.
   region?: string | null;
+  // One of that region's local areas (20261031000000). Optional: missing before that migration.
+  local_area?: string | null;
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
@@ -173,4 +175,37 @@ export function destinationRegion(loc: DeliveryLocation | null | undefined, all:
   };
   const others = all.filter((l) => l.location_id !== loc.location_id && norm(l.state) === norm(loc.state));
   return pick(others.filter((l) => norm(l.city) === norm(loc.city))) ?? pick(others);
+}
+
+// ── Browse mode (dispatch): filter by region / local area / city, or search ──
+
+export type BrowseFilter = { region: string; area: string; cityKey: string; query: string };
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+
+// Starred locations always lead, whatever the filters say. A search looks across
+// every location instead of the filters. Each group by store number, then name.
+export function browseLocations(locations: DeliveryLocation[], f: BrowseFilter): { starred: DeliveryLocation[]; others: DeliveryLocation[] } {
+  const live = locations.filter((l) => l.is_active !== false);
+  const q = norm(f.query);
+  const starred = live.filter((l) => l.starred).sort(byNumberThenName);
+  let others: DeliveryLocation[];
+  if (q) {
+    const hit = (l: DeliveryLocation) => [l.location_number, l.name, l.city, l.address].some((x) => norm(x).includes(q));
+    return { starred: starred.filter(hit), others: live.filter((l) => !l.starred && hit(l)).sort(byNumberThenName) };
+  }
+  others = live.filter((l) => !l.starred
+    && (!f.region || norm(l.region) === norm(f.region))
+    && (!f.area || norm(l.local_area) === norm(f.area))
+    && (!f.cityKey || cityKeyOf(l) === f.cityKey)).sort(byNumberThenName);
+  return { starred, others };
+}
+
+// Options for the filter row, narrowed by the filters chosen above them.
+export function browseOptions(locations: DeliveryLocation[], f: Pick<BrowseFilter, "region" | "area">): { regions: string[]; areas: string[]; cities: LocationCity[] } {
+  const live = locations.filter((l) => l.is_active !== false);
+  const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.map((x) => (x ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const inRegion = live.filter((l) => !f.region || norm(l.region) === norm(f.region));
+  const inArea = inRegion.filter((l) => !f.area || norm(l.local_area) === norm(f.area));
+  return { regions: uniq(live.map((l) => l.region)), areas: uniq(inRegion.map((l) => l.local_area)), cities: locationCities(inArea) };
 }

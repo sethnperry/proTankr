@@ -56,7 +56,10 @@ function EquipLine({ e, terminal }: { e: DriverEquip; terminal: string | null })
   );
 }
 
-export type TerminalOption = { id: string; name: string; place: string | null; used: boolean };
+export type TerminalOption = { id: string; name: string; place: string | null; used: boolean; city?: string | null; state?: string | null };
+
+const cityOf = (t: TerminalOption) => `${(t.city ?? "").trim()}|${(t.state ?? "").trim().toUpperCase()}`;
+const cityLabel = (key: string) => { const [c, s] = key.split("|"); return c ? [c, s].filter(Boolean).join(", ") : "No city"; };
 
 function accessText(d: PlanDriver): { text: string; color: string } | null {
   if (!d.access) return null;
@@ -138,11 +141,26 @@ export function PlanLoadCard(props: {
   const p = props;
   const [termOpen, setTermOpen] = useState(false);
   const [q, setQ] = useState("");
+  // Same shape as the driver's terminal picker: terminals in one city, Change to pick another city.
+  const [cityKey, setCityKey] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const cities = useMemo(() => {
+    const m = new Map<string, { key: string; count: number; used: number }>();
+    for (const t of p.terminals) { const k = cityOf(t); const c = m.get(k) ?? { key: k, count: 0, used: 0 }; c.count++; if (t.used) c.used++; m.set(k, c); }
+    const arr = [...m.values()];
+    const st = (k: string) => k.split("|")[1];
+    return arr.sort((a, b) => st(a.key).localeCompare(st(b.key)) || a.key.localeCompare(b.key));
+  }, [p.terminals]);
+  const activeCity = cityKey
+    ?? (p.terminal ? cityOf(p.terminals.find((t) => t.id === p.terminal!.id) ?? p.terminal) : null)
+    ?? cities.filter((c) => c.used).sort((a, b) => b.used - a.used)[0]?.key
+    ?? cities[0]?.key ?? null;
   const options = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const list = s ? p.terminals.filter((t) => `${t.name} ${t.place ?? ""}`.toLowerCase().includes(s)) : p.terminals;
-    return [...list].sort((a, b) => Number(b.used) - Number(a.used) || a.name.localeCompare(b.name)).slice(0, 80);
-  }, [p.terminals, q]);
+    const byUsed = (a: TerminalOption, b: TerminalOption) => Number(b.used) - Number(a.used) || a.name.localeCompare(b.name);
+    if (s) return [...p.terminals.filter((t) => `${t.name} ${t.place ?? ""}`.toLowerCase().includes(s))].sort(byUsed).slice(0, 80);
+    return p.terminals.filter((t) => activeCity != null && cityOf(t) === activeCity).sort(byUsed);
+  }, [p.terminals, q, activeCity]);
 
   const list = p.showNotCarded ? p.result.notCarded : p.result.ready;
   const planning = !!p.location || !!p.terminal;
@@ -188,8 +206,34 @@ export function PlanLoadCard(props: {
         </>
       )}
 
-      <FullscreenModal open={termOpen} title="Pick the terminal" onClose={() => setTermOpen(false)}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search terminals" style={{ ...fieldInput, marginBottom: 10 }} />
+      <FullscreenModal open={termOpen} title="Pick the terminal" onClose={() => { setTermOpen(false); setChoosing(false); }}
+        headerRight={!choosing ? <button type="button" onClick={() => { setChoosing(true); setQ(""); }}
+          style={{ border: "none", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Change city</button> : undefined}>
+        {choosing ? (
+          <>
+            <button type="button" onClick={() => setChoosing(false)} style={{ border: "none", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 10 }}>
+              ‹ Back{activeCity ? ` to ${cityLabel(activeCity)}` : ""}
+            </button>
+            {cities.map((c, i) => {
+              const state = c.key.split("|")[1];
+              const newState = i === 0 || cities[i - 1].key.split("|")[1] !== state;
+              return (
+                <React.Fragment key={c.key}>
+                  {newState && <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: L.muted, margin: "12px 0 6px" }}>{state || "No state"}</div>}
+                  <button type="button" onClick={() => { setCityKey(c.key); setChoosing(false); setQ(""); }} className="dash-press"
+                    style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8,
+                      borderColor: c.key === activeCity ? "rgba(255,255,255,0.4)" : undefined }}>
+                    <span style={{ fontSize: 14, fontWeight: 800 }}>{cityLabel(c.key)}</span>
+                    <span style={{ fontSize: 12, color: L.muted }}>{c.count} terminal{c.count === 1 ? "" : "s"}{c.used ? ` · ${c.used} yours` : ""}</span>
+                  </button>
+                </React.Fragment>
+              );
+            })}
+          </>
+        ) : (<>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search terminals in any city" style={{ ...fieldInput, marginBottom: 10 }} />
+        {!q.trim() && activeCity && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>Showing terminals in <span style={{ color: "#fff" }}>{cityLabel(activeCity)}</span></div>}
+        {options.length === 0 && <div style={{ fontSize: 14, color: L.muted }}>No terminals found.</div>}
         {options.map((t) => (
           <button key={t.id} type="button" onClick={() => { p.onPickTerminal(t.id); setTermOpen(false); }} className="dash-press"
             style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer" }}>
@@ -197,6 +241,7 @@ export function PlanLoadCard(props: {
             <div style={{ fontSize: 12, color: L.muted }}>{t.place ?? ""}{t.used ? " · your company loads here" : ""}</div>
           </button>
         ))}
+        </>)}
       </FullscreenModal>
     </div>
   );

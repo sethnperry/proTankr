@@ -1,7 +1,7 @@
 // lib/trips/deliveryLocations.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { destinationRegion, airMiles, byNumberThenName, defaultLocationCity, filterLocations, locationCities, locationsInCity, type DeliveryLocation } from "./deliveryLocations.ts";
+import { browseLocations, browseOptions, destinationRegion, airMiles, byNumberThenName, defaultLocationCity, filterLocations, locationCities, locationsInCity, type DeliveryLocation } from "./deliveryLocations.ts";
 
 const base = (o: Partial<DeliveryLocation>): DeliveryLocation => ({
   location_id: o.name ?? "x", name: "x", location_number: null, address: null, city: null, state: null,
@@ -82,4 +82,15 @@ test("destinationRegion: own, then same city, then same state", () => {
   assert.equal(destinationRegion(all[3], all), "West"); // same city
   assert.equal(destinationRegion(L("f", "Olympia", "WA", null), all), "West"); // state majority
   assert.equal(destinationRegion(all[4], all), null);
+});
+
+test("browseLocations: favorites lead regardless of filter; search ignores filters", () => {
+  const mk = (id: string, o: Partial<DeliveryLocation>): DeliveryLocation => ({ location_id: id, name: id, location_number: null, address: null, city: "Tampa", state: "FL", lat: null, lon: null, delivery_type: "drop", notes: null, starred: false, ...o });
+  const locs = [mk("a", { region: "North", starred: true }), mk("b", { region: "South" }), mk("c", { region: "South", local_area: "Miami" }), mk("d", { region: "North" })];
+  const r = browseLocations(locs, { region: "South", area: "", cityKey: "", query: "" });
+  assert.deepEqual(r.starred.map((l) => l.location_id), ["a"]);
+  assert.deepEqual(r.others.map((l) => l.location_id), ["b", "c"]);
+  assert.deepEqual(browseLocations(locs, { region: "South", area: "Miami", cityKey: "", query: "" }).others.map((l) => l.location_id), ["c"]);
+  assert.deepEqual(browseLocations(locs, { region: "South", area: "", cityKey: "", query: "d" }).others.map((l) => l.location_id), ["d"]);
+  assert.deepEqual(browseOptions(locs, { region: "South", area: "" }).areas, ["Miami"]);
 });

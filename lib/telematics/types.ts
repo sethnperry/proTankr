@@ -23,6 +23,8 @@ export type HosAvailability = {
   dutyLeftMin: number | null;  // on-duty window left (the 14-hour clock)
   cycleLeftMin: number | null; // 60/70-hour cycle left
   status: string | null;       // current duty status: D, ON, OFF, SB, PC, YM
+  statusSince?: string | null; // ISO time the current status began
+  offSince?: string | null;    // ISO time the current unbroken off-duty stretch began (null when not off duty)
   at: string;                  // ISO time this was read
 };
 

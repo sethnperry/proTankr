@@ -41,6 +41,7 @@ type Draft = {
   state: string;
   zip: string;
   region: string;
+  local_area: string;
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
@@ -52,13 +53,13 @@ type Draft = {
 function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: string): Draft {
   if (!l) {
     return {
-      location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "", region: "",
+      location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "", region: "", local_area: "",
       lat: null, lon: null, delivery_type: "drop", notes: "", tanks: [], removedTankIds: [],
     };
   }
   return {
     location_id: l.location_id, name: l.name, location_number: l.location_number ?? "", address: l.address ?? "",
-    city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", region: l.region ?? "", lat: l.lat, lon: l.lon,
+    city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", region: l.region ?? "", local_area: l.local_area ?? "", lat: l.lat, lon: l.lon,
     delivery_type: l.delivery_type, notes: l.notes ?? "",
     tanks: tanks
       .filter((t) => t.location_id === l.location_id)
@@ -114,6 +115,13 @@ export function LocationEditor({
   const [confirmRetire, setConfirmRetire] = useState(false);
   const [ackSimilar, setAckSimilar] = useState(false);
   const [regionOptions, setRegionOptions] = useState<string[]>([]);
+  const [areaRows, setAreaRows] = useState<{ name: string; region: string | null }[]>([]);
+  useEffect(() => {
+    let off = false;
+    supabase.from("equipment_local_areas").select("name, equipment_regions(name)").eq("company_id", companyId).eq("is_active", true).order("name")
+      .then(({ data }) => { if (!off) setAreaRows(((data ?? []) as any[]).map((a) => ({ name: String(a.name), region: a.equipment_regions?.name ?? null }))); });
+    return () => { off = true; };
+  }, [companyId]);
   useEffect(() => {
     let off = false;
     supabase.from("equipment_regions").select("name").eq("company_id", companyId).eq("is_active", true).order("name")
@@ -178,6 +186,7 @@ export function LocationEditor({
         state: draft.state.trim().toUpperCase() || null,
         zip: draft.zip.trim() || null,
         region: draft.region.trim() || null,
+        local_area: draft.local_area.trim() || null,
         lat, lon,
         delivery_type: draft.delivery_type,
         notes: draft.notes.trim() || null,
@@ -188,8 +197,8 @@ export function LocationEditor({
         : supabase.from("delivery_locations").insert({ ...r, created_by: userId }).select("location_id").single();
       let res = await write(row);
       // Before the 2026-10-11 migration there is no zip column; save without it.
-      if (res.error && /zip|region/i.test(res.error.message)) {
-        const { zip: _zip, region: _region, ...older } = row;
+      if (res.error && /zip|region|local_area/i.test(res.error.message)) {
+        const { zip: _zip, region: _region, local_area: _la, ...older } = row;
         res = await write(older);
       }
       if (res.error) throw new Error(res.error.message);
@@ -267,13 +276,28 @@ export function LocationEditor({
               {regionOptions.map((r) => {
                 const on = draft.region === r;
                 return (
-                  <button key={r} type="button" onClick={() => patch({ region: on ? "" : r })}
+                  <button key={r} type="button" onClick={() => patch({ region: on ? "" : r, local_area: "" })}
                     style={{ padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
                       border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)", background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)" }}>{r}</button>
                 );
               })}
             </div>
             <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Used when a load headed here is parked.</div>
+          </div>
+        )}
+        {draft.region && areaRows.some((a) => a.region === draft.region) && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={fieldLabel}>Local area</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {areaRows.filter((a) => a.region === draft.region).map((a) => {
+                const on = draft.local_area === a.name;
+                return (
+                  <button key={a.name} type="button" onClick={() => patch({ local_area: on ? "" : a.name })}
+                    style={{ padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)", background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)" }}>{a.name}</button>
+                );
+              })}
+            </div>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: muted }}>

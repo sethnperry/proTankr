@@ -5,6 +5,7 @@
 // `fetchImpl` is injectable so this is tested without a network.
 
 import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { dutyFromLogs } from "./dutyLogs.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -211,14 +212,15 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     async hos(id: string): Promise<HosAvailability | null> {
       const [avail, logs] = await Promise.all([
         call("Get", { typeName: "DutyStatusAvailability", search: { userSearch: { id } } }) as Promise<any[]>,
-        call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 36 * 3600 * 1000).toISOString() } }).catch(() => []) as Promise<any[]>,
+        call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 96 * 3600 * 1000).toISOString() } }).catch(() => []) as Promise<any[]>,
       ]);
       const a = (avail ?? [])[0];
       if (!a) return null;
-      const last = (logs ?? []).filter((l) => l?.dateTime && l.status).sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime))).pop();
+      // Only real duty status changes (not ELD log-in/out); see dutyLogs.ts.
+      const duty = dutyFromLogs(logs ?? []);
       return {
         driveLeftMin: durationMinutes(a.driving), dutyLeftMin: durationMinutes(a.duty), cycleLeftMin: durationMinutes(a.cycle),
-        status: last?.status ? String(last.status) : null, at: new Date().toISOString(),
+        status: duty.status, statusSince: duty.since, offSince: duty.offSince, at: new Date().toISOString(),
       };
     },
 

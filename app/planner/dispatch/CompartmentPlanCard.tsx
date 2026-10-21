@@ -122,7 +122,7 @@ export function CompartmentPlanCard(p: {
                   return (
                     <button key={s} type="button" onClick={() => loadSlot(s)} style={{ ...chip(p.activeSlot === s), display: "flex", alignItems: "center", gap: 6 }}>
                       {ltr}
-                      {t && <span style={{ display: "flex", gap: 2 }}>{dots(t.payload).map((c, j) => <span key={j} title={c ? undefined : "Empty"} style={{ width: 8, height: 8, borderRadius: "50%", background: c ?? "linear-gradient(to top right, #000 calc(50% - 1px), #f87171 calc(50% - 1px), #f87171 calc(50% + 1px), #000 calc(50% + 1px))", border: "1px solid rgba(255,255,255,0.3)" }} />)}</span>}
+                      {t && <span style={{ display: "flex", gap: 2 }}>{dots(t.payload).map((c, j) => <span key={j} title={c ? undefined : "Empty"} style={{ width: 8, height: 8, borderRadius: "50%", background: c ?? "linear-gradient(to top right, transparent calc(50% - 1px), rgba(255,255,255,0.5) calc(50% - 1px), rgba(255,255,255,0.5) calc(50% + 1px), transparent calc(50% + 1px)), linear-gradient(to bottom right, transparent calc(50% - 1px), rgba(255,255,255,0.5) calc(50% - 1px), rgba(255,255,255,0.5) calc(50% + 1px), transparent calc(50% + 1px)), #000", border: "1px solid rgba(255,255,255,0.3)" }} />)}</span>}
                     </button>
                   );
                 })}

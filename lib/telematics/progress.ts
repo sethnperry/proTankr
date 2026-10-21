@@ -64,12 +64,32 @@ export function pointsUpTo(pts: [number, number][], t: number): [number, number]
 const STATUS_LABEL: Record<string, string> = { D: "Driving", ON: "On duty", OFF: "Off duty", SB: "Sleeper", PC: "Personal conveyance", YM: "Yard move" };
 
 /** "6.5 h drive · 9.0 h window · On duty", colored by how little is left. */
-export function hosText(h: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; at: string }, nowMs: number = Date.now()): { text: string; color: string } {
+const OFF_CODES = new Set(["OFF", "SB", "PC"]);
+export const RESET_MIN = 600; // the 10-hour off-duty reset
+
+/** How long a driver has been off duty and when the 10-hour reset completes. Null unless they're off duty with a known start. */
+export function resetInfo(h: { status: string | null; offSince?: string | null }, nowMs: number = Date.now()): { offMin: number; resetInMin: number; resetAtMs: number } | null {
+  if (!h.status || !OFF_CODES.has(h.status) || !h.offSince) return null;
+  const since = Date.parse(h.offSince);
+  if (!Number.isFinite(since)) return null;
+  const offMin = Math.max(0, (nowMs - since) / 60000);
+  return { offMin, resetInMin: Math.max(0, RESET_MIN - offMin), resetAtMs: since + RESET_MIN * 60000 };
+}
+
+export function hosText(h: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; at: string; statusSince?: string | null; offSince?: string | null }, nowMs: number = Date.now()): { text: string; color: string } {
   const hrs = (m: number) => `${(Math.max(0, m) / 60).toFixed(1)} h`;
   const parts: string[] = [];
   if (h.driveLeftMin != null) parts.push(`${hrs(h.driveLeftMin)} drive`);
   if (h.dutyLeftMin != null) parts.push(`${hrs(h.dutyLeftMin)} window`);
-  if (h.status) parts.push(STATUS_LABEL[h.status] ?? h.status);
+  if (h.status) {
+    const name = STATUS_LABEL[h.status] ?? h.status;
+    const rs = resetInfo(h, nowMs);
+    const sinceMin = h.statusSince && Number.isFinite(Date.parse(h.statusSince)) ? Math.max(0, (nowMs - Date.parse(h.statusSince)) / 60000) : null;
+    if (rs) {
+      parts.push(`${name} ${hrs(rs.offMin)}`);
+      parts.push(rs.resetInMin > 0 ? `10 h reset in ${hrs(rs.resetInMin)}` : "10 h reset done");
+    } else parts.push(sinceMin != null ? `${name} ${hrs(sinceMin)}` : name);
+  }
   const least = Math.min(h.driveLeftMin ?? Infinity, h.dutyLeftMin ?? Infinity);
   const ageMin = Math.round((nowMs - Date.parse(h.at)) / 60000);
   if (ageMin > 10) parts.push(`${ageMin} min old`);

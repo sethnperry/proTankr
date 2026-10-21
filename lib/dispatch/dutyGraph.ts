@@ -35,10 +35,10 @@ export function dutyBlocks(segments: Seg[], earlier: { startMs: number; endMs: n
 const HOUR = 3600000;
 
 /** The grid's time range: whole hours around the blocks, at least 4 hours wide. */
-export function dutyRange(blocks: DutyBlock[]): { t0: number; t1: number } {
-  if (blocks.length === 0) return { t0: 0, t1: HOUR * 4 };
-  const lo = Math.min(...blocks.map((b) => b.startMs));
-  const hi = Math.max(...blocks.map((b) => b.endMs));
+export function dutyRange(blocks: DutyBlock[], extra?: { fromMs: number; toMs: number } | null): { t0: number; t1: number } {
+  if (blocks.length === 0 && !extra) return { t0: 0, t1: HOUR * 4 };
+  const lo = Math.min(...blocks.map((b) => b.startMs), ...(extra ? [extra.fromMs] : []));
+  const hi = Math.max(...blocks.map((b) => b.endMs), ...(extra ? [extra.toMs] : []));
   let t0 = Math.floor(lo / HOUR) * HOUR;
   let t1 = Math.ceil(hi / HOUR) * HOUR;
   if (t1 - t0 < 4 * HOUR) t1 = t0 + 4 * HOUR;
@@ -48,4 +48,22 @@ export function dutyRange(blocks: DutyBlock[]): { t0: number; t1: number } {
 /** Where a time sits along the grid, 0 to 100. */
 export function pct(ms: number, r: { t0: number; t1: number }): number {
   return ((ms - r.t0) / (r.t1 - r.t0)) * 100;
+}
+
+/** The stretch where a driver is rested and able to start but, going by history, usually hasn't yet:
+ *  from when their 10-hour reset completes (or now, if it already has) to their typical start time.
+ *  Null when they aren't resting, or their usual start is no later than they could start. */
+export function restWindow(
+  h: { status: string | null; offSince?: string | null } | null | undefined,
+  typicalMin: number | null,
+  nowMs: number = Date.now(),
+): { fromMs: number; toMs: number } | null {
+  if (!h || typicalMin == null) return null;
+  const since = h.offSince ? Date.parse(h.offSince) : NaN;
+  if (!h.status || !["OFF", "SB", "PC"].includes(h.status) || !Number.isFinite(since)) return null;
+  const from = Math.max(nowMs, since + 600 * 60000);
+  const d = new Date(nowMs); d.setHours(0, 0, 0, 0);
+  let typical = d.getTime() + typicalMin * 60000;
+  if (typical <= nowMs) typical += 24 * 3600000;
+  return typical > from ? { fromMs: from, toMs: typical } : null;
 }

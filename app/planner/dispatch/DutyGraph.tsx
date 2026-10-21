@@ -18,15 +18,17 @@ function hourLabel(ms: number): string {
   return `${h12}${h < 12 ? "a" : "p"}`;
 }
 
-export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, locationAtMs }: {
+export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, locationAtMs, rest }: {
   blocks: DutyBlock[];
+  /** Rested and able to start, but usually starts later: drawn as a blue hatched band. */
+  rest?: { fromMs: number; toMs: number } | null;
   terminalPlace: string | null;  // "Tampa, FL"
   terminalAtMs: number | null;   // when the driver reaches the terminal
   locationPlace: string | null;
   locationAtMs: number | null;   // when the driver reaches the drop
 }) {
   const L = useDashLook();
-  const r = dutyRange(blocks);
+  const r = dutyRange(blocks, rest);
   const rowOf = (s: string) => DUTY_ROWS.findIndex((x) => x.status === s);
   const y = (s: string) => rowOf(s) * ROW + ROW / 2;
   const H = DUTY_ROWS.length * ROW;
@@ -82,6 +84,17 @@ export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, 
         </div>
         <div style={{ flex: 1, minWidth: 0, position: "relative", height: H, border: `1px solid ${L.hairline}` }}>
           <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" width="100%" height="100%" style={{ position: "absolute", inset: 0, display: "block" }} aria-hidden>
+            {rest && (
+              <>
+                <defs>
+                  <pattern id="rest-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#60a5fa" strokeWidth="2" opacity="0.55" />
+                  </pattern>
+                </defs>
+                <rect x={x(rest.fromMs)} width={Math.max(0, x(rest.toMs) - x(rest.fromMs))} y={0} height={H} fill="rgba(96,165,250,0.14)" />
+                <rect x={x(rest.fromMs)} width={Math.max(0, x(rest.toMs) - x(rest.fromMs))} y={0} height={H} fill="url(#rest-hatch)" />
+              </>
+            )}
             {hours.map((t, i) => <line key={t} x1={x(t)} x2={x(t)} y1={0} y2={H} stroke={L.hairline} strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={i % every ? 0.4 : 1} />)}
             {DUTY_ROWS.map((_, i) => i > 0 && <line key={i} x1={0} x2={100} y1={i * ROW} y2={i * ROW} stroke={L.hairline} strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
             {steps.map((d, i) => <path key={i} d={d} fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth={2} vectorEffect="non-scaling-stroke" />)}

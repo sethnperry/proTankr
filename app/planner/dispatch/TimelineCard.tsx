@@ -52,6 +52,7 @@ export function TimelineCard(p: {
   orderNumber: string;
   shipper: string; customer: string; onShipper: (v: string) => void; onCustomer: (v: string) => void;
   hosLine?: { text: string; color: string } | null; // the driver's real clocks
+  rest?: { fromMs: number; toMs: number } | null;    // rested and able to start, before their usual start
   hideOrder?: boolean; // the per-product order lives in the compartment plan
   onOrder: (v: string) => void;
   warnings: string[];                 // everything shown above that is a problem; never blocks
@@ -98,7 +99,8 @@ export function TimelineCard(p: {
             style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", color: "#fff", cursor: "pointer", padding: 0, marginTop: 10 }}>
             <DutyGraph blocks={dutyBlocks(f.segments, p.dayLegs)}
               terminalPlace={p.terminalPlace ?? null} terminalAtMs={f.segments.find((s) => s.key === "to_terminal")?.endMs ?? null}
-              locationPlace={p.locationPlace ?? null} locationAtMs={f.segments.find((s) => s.key === "to_delivery")?.endMs ?? null} />
+              locationPlace={p.locationPlace ?? null} locationAtMs={f.segments.find((s) => s.key === "to_delivery")?.endMs ?? null} rest={p.rest} />
+            {p.rest && <div className="dash-num" style={{ fontSize: 11, marginTop: 4, color: "#93c5fd" }}>Blue: rested {clock(p.rest.fromMs)}, usually starts {clock(p.rest.toMs)}</div>}
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${L.hairline}` }}>
               <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>Delivery complete about {clock(f.endMs)}</span>
               <span className="dash-num" style={{ fontSize: 12, color: L.muted }}>{shiftH.toFixed(1)} h into the day · details ›</span>

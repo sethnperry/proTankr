@@ -10,7 +10,10 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { CustomSelect } from "@/lib/ui/CustomSelect";
 import {
+  browseLocations,
+  browseOptions,
   defaultLocationCity,
   filterLocations,
   locationCities,
@@ -27,7 +30,7 @@ import { LocationEditor } from "./LocationEditor";
 
 export function LocationPicker({
   open, title, origin, locations, tanks = [], companyId, userId, onToggleStar, onPick, onClose, onManage, onLocationAdded,
-  selectedLocationId = null,
+  selectedLocationId = null, browse = false,
 }: {
   open: boolean;
   title: string;
@@ -44,6 +47,8 @@ export function LocationPicker({
   onLocationAdded?: () => void;
   // Highlighted, and its city is where the picker opens.
   selectedLocationId?: string | null;
+  // Dispatch: browse the whole list by region / local area / city, favorites on top, search at the top.
+  browse?: boolean;
 }) {
   const [cityKey, setCityKey] = useState<string | null>(null);
   const [choosingCity, setChoosingCity] = useState(false);
@@ -51,6 +56,10 @@ export function LocationPicker({
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const { data: products } = useProductsCatalog();
+  const [bRegion, setBRegion] = useState("");
+  const [bArea, setBArea] = useState("");
+  const [bCity, setBCity] = useState("");
+  const [bLimit, setBLimit] = useState(60);
 
   // Each open starts on the list, in the selected location's city.
   useEffect(() => {
@@ -59,6 +68,7 @@ export function LocationPicker({
     setChoosingCity(false);
     setShowAll(false);
     setQuery("");
+    setBRegion(""); setBArea(""); setBCity(""); setBLimit(60);
     setCityKey(defaultLocationCity(locations, { selectedId: selectedLocationId, origin }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -77,6 +87,8 @@ export function LocationPicker({
     () => (query.trim() ? filterLocations(locations, { origin: null, nearMe: false, query }) : []),
     [locations, query],
   );
+  const bOpts = useMemo(() => browseOptions(locations, { region: bRegion, area: bArea }), [locations, bRegion, bArea]);
+  const bList = useMemo(() => browseLocations(locations, { region: bRegion, area: bArea, cityKey: bCity, query }), [locations, bRegion, bArea, bCity, query]);
   const cityLabel = (c: { city: string; state: string } | null) =>
     c ? (c.city ? [c.city, c.state].filter(Boolean).join(", ") : "No city") : "";
 
@@ -138,6 +150,47 @@ export function LocationPicker({
       )}
     </>
   );
+
+  if (browse) {
+    const sel = (value: string, onChange: (v: string) => void, all: string, opts: { value: string; label: string }[]) => (
+      <div style={{ flex: "1 1 130px", minWidth: 0 }}><CustomSelect value={value} onChange={onChange} options={[{ value: "", label: all }, ...opts]} /></div>
+    );
+    const shownOthers = bList.others.slice(0, bLimit);
+    const searching = !!query.trim();
+    return (
+      <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search store number, name or city" autoFocus
+          style={{ ...fieldInput, marginBottom: 10 }} />
+        {!searching && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {bOpts.regions.length > 0 && sel(bRegion, (v) => { setBRegion(v); setBArea(""); setBCity(""); setBLimit(60); }, "All regions", bOpts.regions.map((r) => ({ value: r, label: r })))}
+            {bOpts.areas.length > 0 && sel(bArea, (v) => { setBArea(v); setBCity(""); setBLimit(60); }, "All local areas", bOpts.areas.map((r) => ({ value: r, label: r })))}
+            {sel(bCity, (v) => { setBCity(v); setBLimit(60); }, "All cities", bOpts.cities.map((c) => ({ value: c.key, label: `${cityLabel(c)} (${c.count})` })))}
+          </div>
+        )}
+        {bList.starred.length > 0 && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>Favorites</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>{bList.starred.map((l) => card(l))}</div>
+          </>
+        )}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>
+          {searching ? "Matches" : "Locations"} · {bList.others.length.toLocaleString()}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {bList.others.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "8px 0" }}>{searching ? "No matches." : "No locations here."}</div>}
+          {shownOthers.map((l) => card(l))}
+        </div>
+        {bList.others.length > bLimit && (
+          <button type="button" onClick={() => setBLimit((n) => n + 60)}
+            style={{ width: "100%", marginTop: 10, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            Show {Math.min(60, bList.others.length - bLimit)} more ▼
+          </button>
+        )}
+        {footer}
+      </FullscreenModal>
+    );
+  }
 
   // City list (Change), with a search that finds locations in any city.
   if (choosingCity || (!city && locations.length > 0)) {
