@@ -17,6 +17,7 @@ function noLoadText(reason: string | null | undefined, note: string | null | und
 }
 import { cancelReasonLabel } from "./cancelReasons.ts";
 import { tripMiles, truckChanges } from "./truckChange.ts";
+import { trailerRecords, type TrailerRecord } from "./trailerEvents.ts";
 import { additiveLabel, deliveryDetailsFor, issueLabel } from "./deliveryDetails.ts";
 import type {
   TripCompartmentLoadRow,
@@ -225,6 +226,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     totalMiles: tripMiles(begin, end, changes),
     truckChanges: changes,
     parks: parkRecords(input.events),
+    trailerEvents: trailerRecords(input.events),
     cancellation: trip.status === "cancelled"
       ? {
           at: trip.cancelled_at ?? null,

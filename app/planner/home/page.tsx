@@ -77,6 +77,7 @@ import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/Cance
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
+import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
@@ -595,6 +596,20 @@ export default function HomePage() {
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
+  // Geotab hooks and drops land on the open trip's log, now and every ten minutes.
+  const logTripId = openTrip?.trip_id ?? null;
+  useEffect(() => {
+    if (!store || !userId || !logTripId) return;
+    let off = false;
+    const run = () => {
+      const t = store.list("trips", (x) => x.trip_id === logTripId)[0];
+      if (t && !off) void syncTrailerEvents(store, { trip: t, userId }).then((n) => { if (n && !off) void syncNow(); });
+    };
+    run();
+    const id = window.setInterval(run, 600_000);
+    return () => { off = true; window.clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
   const tapFuel = async () => {
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });

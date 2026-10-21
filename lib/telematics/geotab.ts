@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderTrailer, type ProviderVehicle, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -107,6 +107,33 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     async listTrailers(): Promise<ProviderTrailer[]> {
       const rows: any[] = await call("Get", { typeName: "Trailer" });
       return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name) }));
+    },
+
+    async trailerEvents(id: string, fromIso: string, toIso: string): Promise<TrailerEvent[]> {
+      const rows: any[] = await call("Get", { typeName: "TrailerAttachment", search: { deviceSearch: { id }, activeFrom: fromIso, activeTo: toIso } });
+      const lo = Date.parse(fromIso), hi = Date.parse(toIso), now = Date.now();
+      const raw: { type: "hook" | "drop"; at: string; trailer: string }[] = [];
+      for (const a of rows ?? []) {
+        const tr = a?.trailer?.id;
+        if (!tr) continue;
+        const from = a.activeFrom ? Date.parse(a.activeFrom) : NaN;
+        const to = a.activeTo ? Date.parse(a.activeTo) : NaN;
+        if (Number.isFinite(from) && from >= lo && from <= hi) raw.push({ type: "hook", at: new Date(from).toISOString(), trailer: String(tr) });
+        // An end in the future (Geotab's "open" year-4000 date) is not a drop yet.
+        if (Number.isFinite(to) && to >= lo && to <= hi && to <= now) raw.push({ type: "drop", at: new Date(to).toISOString(), trailer: String(tr) });
+      }
+      raw.sort((x, y) => x.at.localeCompare(y.at));
+      const out: TrailerEvent[] = [];
+      for (const e of raw.slice(0, 12)) {
+        let lat: number | null = null, lon: number | null = null;
+        try {
+          const t = Date.parse(e.at);
+          const recs: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: new Date(t - 5 * 60000).toISOString(), toDate: new Date(t + 5 * 60000).toISOString() }, resultsLimit: 1 });
+          if (recs?.[0] && Number.isFinite(Number(recs[0].latitude))) { lat = Number(recs[0].latitude); lon = Number(recs[0].longitude); }
+        } catch { /* the event still counts without a position */ }
+        out.push({ type: e.type, at: e.at, trailerProviderId: e.trailer, lat, lon });
+      }
+      return out;
     },
 
     async attachedTrailers(): Promise<Map<string, string>> {

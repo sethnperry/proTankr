@@ -27,8 +27,13 @@ export type HosAvailability = {
 
 export type ProviderTrailer = { id: string; name: string };
 
+/** A trailer hooked to or dropped from a vehicle, with where the truck was. */
+export type TrailerEvent = { type: "hook" | "drop"; at: string; trailerProviderId: string; lat: number | null; lon: number | null };
+
 export interface TelematicsProvider {
   listTrailers(): Promise<ProviderTrailer[]>;
+  /** Hooks and drops for one vehicle inside a window, oldest first. */
+  trailerEvents(vehicleId: string, fromIso: string, toIso: string): Promise<TrailerEvent[]>;
   /** The trailer each vehicle is hooked to right now: provider vehicle id -> provider trailer id. Empty without trailer tracking. */
   attachedTrailers(): Promise<Map<string, string>>;
   listDrivers(): Promise<ProviderDriver[]>;

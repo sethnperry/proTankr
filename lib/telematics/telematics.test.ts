@@ -166,3 +166,20 @@ test("geotab: lists trailers and finds the one hooked to each vehicle now", asyn
   assert.equal(m.get("v1"), "tr1");
   assert.equal(m.get("v2"), "tr2");
 });
+
+test("geotab: trailer hooks and drops in a window, open attachments aren't drops, with a position", async () => {
+  const f = (async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (b.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s3", userName: "u" } });
+    if (b.params.typeName === "LogRecord") return ok([{ latitude: 27.95, longitude: -82.45 }]);
+    return ok([
+      { trailer: { id: "tr1" }, activeFrom: "2026-10-01T09:00:00Z", activeTo: "2026-10-01T11:00:00Z" },
+      { trailer: { id: "tr2" }, activeFrom: "2026-10-01T11:05:00Z", activeTo: "4000-01-01T00:00:00Z" },
+      { trailer: { id: "tr0" }, activeFrom: "2026-09-28T00:00:00Z", activeTo: "2026-09-30T00:00:00Z" }, // wholly before the window
+    ]);
+  }) as any;
+  const p = geotabProvider({ database: "db-events", userName: "u", password: "p" }, f);
+  const ev = await p.trailerEvents("v1", "2026-10-01T00:00:00Z", "2026-10-01T23:00:00Z");
+  assert.deepEqual(ev.map((e) => [e.type, e.trailerProviderId, e.lat]), [["hook", "tr1", 27.95], ["drop", "tr1", 27.95], ["hook", "tr2", 27.95]]);
+});

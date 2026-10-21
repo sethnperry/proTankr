@@ -191,6 +191,16 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         </div>
       )}
 
+      {ptd.trailerEvents.length > 0 && (
+        <div style={{ ...box, marginTop: 10 }}>
+          {ptd.trailerEvents.map((e, i) => (
+            <Row key={i} label={e.type === "hook" ? "Trailer hooked" : "Trailer dropped"}
+              value={`${e.trailerName ? `${e.trailerName} · ` : ""}${fmtDateTime(e.at)}${e.place ? ` · ${e.place}` : ""}`} />
+          ))}
+          <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>From the truck's telematics.</div>
+        </div>
+      )}
+
       {ptd.truckChanges.length > 0 && (
         <div style={{ ...box, marginTop: 10 }}>
           {ptd.truckChanges.map((c, i) => (
