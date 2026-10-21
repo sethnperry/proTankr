@@ -24,6 +24,7 @@ import type { WatchTerminal } from "@/lib/dispatch/watch";
 import type { NotifyState } from "@/lib/dispatch/useConflictNotifier";
 import type { PlanAlert, PlanCounts } from "@/lib/dispatch/planAlerts";
 import { groupBySubject } from "@/lib/dispatch/planAlerts";
+import type { HosAlert } from "@/lib/dispatch/hosAlerts";
 import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 
@@ -302,6 +303,7 @@ export function DispatchDashboardView(props: {
   onOpenDriver: (userId: string) => void;
   // Slots
   liveBoard: React.ReactNode; // loads in progress
+  hosAlerts: HosAlert[]; // LIVE: drivers on loads in progress low on hours
   parkedBoard: React.ReactNode; // parked preloads, opened from the Parked chip
   cancelledBoard: React.ReactNode; // cancelled loads (renders nothing when there are none)
   dispatchedCount: number;
@@ -316,6 +318,7 @@ export function DispatchDashboardView(props: {
 
   const [expOpen, setExpOpen] = useState(false);
   const [parkedOpen, setParkedOpen] = useState(false);
+  const [hosOpen, setHosOpen] = useState(false);
   // One expirations tile, worst tier first: expired (red), then 7 days
   // (orange), then 30 days (yellow). Counts only that tier, so resolving the
   // reds moves the tile down to the oranges.
@@ -338,7 +341,7 @@ export function DispatchDashboardView(props: {
         { label: "Conflicts", value: String(open), color: open ? RED : GREY },
         { label: "At Rack", value: String(p.counts.atRack), color: p.counts.atRack ? "#fff" : GREY },
         { label: "To Rack", value: String(p.counts.enRouteToRack), color: p.counts.enRouteToRack ? "#fff" : GREY },
-        { label: "Rolling", value: String(p.counts.loadedRolling), color: p.counts.loadedRolling ? "#4ade80" : GREY },
+        { label: "Hours", value: String(p.hosAlerts.length), color: p.hosAlerts.some((a) => a.level === "red") ? RED : p.hosAlerts.length ? ORANGE : GREY, onClick: () => setHosOpen(true) },
       ]
     : [
         { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true) },
@@ -435,6 +438,18 @@ export function DispatchDashboardView(props: {
       </div>
       <SectionLabel>Tools</SectionLabel>
       <ToolPanel items={p.tools} />
+      <FullscreenModal open={hosOpen} title={`Low on hours (${p.hosAlerts.length})`} onClose={() => setHosOpen(false)}>
+        {p.hosAlerts.length === 0 ? (
+          <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>No driver on a load has under 2 hours left on a clock.</div>
+        ) : p.hosAlerts.map((a) => (
+          <button key={a.userId} type="button" className="dash-press" onClick={() => { setHosOpen(false); p.onOpenTrip(a.tripId); }}
+            style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 8, cursor: "pointer", borderColor: a.level === "red" ? RED : undefined }}>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>{a.driverName}{a.truckName && <span style={{ fontWeight: 600, color: L.muted }}> · {a.truckName}</span>}</div>
+            <div className="dash-num" style={{ fontSize: 13, marginTop: 3, color: a.color }}>{a.text}</div>
+          </button>
+        ))}
+        <div style={{ fontSize: 12, color: L.faint, marginTop: 6 }}>Clocks refresh about every 3 minutes. Tap a driver to open their load.</div>
+      </FullscreenModal>
       <FullscreenModal open={parkedOpen} title={`Parked loads (${p.counts.parked})`} onClose={() => setParkedOpen(false)}>
         {p.parkedBoard}
       </FullscreenModal>

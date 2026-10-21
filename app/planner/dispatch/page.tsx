@@ -55,6 +55,7 @@ import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
 import { useFleetHos } from "@/lib/telematics/useFleetHos";
+import { hosAlerts as buildHosAlerts } from "@/lib/dispatch/hosAlerts";
 import { hosText } from "@/lib/telematics/progress";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
@@ -837,6 +838,7 @@ export default function DispatchPage() {
             onOpenDriver={(id) => setSelectedDriverId(id)} />
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
+        hosAlerts={buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now())}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
           positions={livePositions} hos={fleetHos}
           terminalLL={(id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; }}

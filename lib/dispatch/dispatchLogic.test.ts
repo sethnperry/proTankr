@@ -172,3 +172,18 @@ test("duty graph: drive legs are Driving, the rest On Duty, range in whole hours
   assert.ok(r.t0 <= base && r.t1 >= base + 5 * H);
   assert.ok(pct(r.t0, r) === 0 && pct(r.t1, r) === 100);
 });
+
+import { hosAlerts } from "./hosAlerts.ts";
+test("hosAlerts: only drivers with under 2 h on a clock, tightest first, red under 1 h", () => {
+  const at = "2026-10-23T12:00:00Z";
+  const hos = new Map([
+    ["u1", { driveLeftMin: 200, dutyLeftMin: 90, cycleLeftMin: null, status: "D", at }],
+    ["u2", { driveLeftMin: 30, dutyLeftMin: 600, cycleLeftMin: null, status: "ON", at }],
+    ["u3", { driveLeftMin: 400, dutyLeftMin: 600, cycleLeftMin: null, status: "D", at }],
+  ]);
+  const r = hosAlerts([
+    { tripId: "t1", userId: "u1", driverName: "A", truckName: "1" }, { tripId: "t2", userId: "u2", driverName: "B", truckName: "2" },
+    { tripId: "t3", userId: "u3", driverName: "C", truckName: "3" }, { tripId: "t4", userId: "nobody", driverName: "D", truckName: "4" },
+  ], hos, Date.parse(at));
+  assert.deepEqual(r.map((x) => [x.userId, x.level]), [["u2", "red"], ["u1", "orange"]]);
+});
