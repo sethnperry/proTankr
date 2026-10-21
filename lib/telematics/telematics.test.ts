@@ -193,3 +193,14 @@ test("geofence: departure confirms after leaving the fence and moving, resets if
   assert.deepEqual(stepExit(stepExit(NEW_EXIT, { inside: false, speedMph: 20, nowMs: 1000 }), { inside: true, speedMph: 0, nowMs: 30_000 }), NEW_EXIT);
   assert.equal(stepExit(NEW_EXIT, { inside: false, speedMph: 0, nowMs: 1000 }).outsideSinceMs, null); // parked just outside: not a departure
 });
+
+import { clockHM, clockColor } from "./progress.ts";
+test("driver clocks: h:mm and color by minutes left", () => {
+  assert.equal(clockHM(390), "6:30");
+  assert.equal(clockHM(5), "0:05");
+  assert.equal(clockHM(-4), "0:00");
+  assert.equal(clockHM(null), "—");
+  assert.equal(clockColor(30), "#f87171");
+  assert.equal(clockColor(100), "#fb923c");
+  assert.equal(clockColor(300), "#fff");
+});

@@ -88,3 +88,18 @@ export function remainingDriveMin(from: LatLon, stops: (LatLon | null)[]): numbe
   }
   return (miles / 45) * 60;
 }
+
+export const STATUS_NAME: Record<string, string> = STATUS_LABEL;
+
+/** "6:30" from minutes left (for the driver's own clock cells). */
+export function clockHM(min: number | null): string {
+  if (min == null || !Number.isFinite(min)) return "—";
+  const m = Math.max(0, Math.round(min));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** Color for one clock by minutes left: red under 1 h, orange under 2 h. */
+export function clockColor(min: number | null): string {
+  if (min == null) return "rgba(255,255,255,0.5)";
+  return min < 60 ? "#f87171" : min < 120 ? "#fb923c" : "#fff";
+}

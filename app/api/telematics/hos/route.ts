@@ -13,6 +13,8 @@ export const runtime = "nodejs";
 
 const STAFF = new Set(["admin", "owner", "dispatch", "lead"]);
 const TTL_MS = 120_000;
+const SELF_TTL_MS = 90_000;
+const selfCache = new Map<string, { at: number; hos: HosAvailability | null }>();
 const cache = new Map<string, { at: number; hos: Record<string, HosAvailability> }>();
 
 export async function GET(req: NextRequest) {
@@ -21,6 +23,26 @@ export async function GET(req: NextRequest) {
   const companyId = req.nextUrl.searchParams.get("companyId");
   if (!companyId) return NextResponse.json({ error: "companyId is required." }, { status: 400 });
   const r = await companyRole(uid, companyId);
+  // ?self=1: any member gets their own clocks (for the Driver Dashboard) and nobody else's.
+  if (req.nextUrl.searchParams.get("self") === "1") {
+    if (!r.role && !r.superAdmin) return NextResponse.json({ error: "Not in this company." }, { status: 403 });
+    const ck = `${companyId}:${uid}`;
+    const mine = selfCache.get(ck);
+    if (mine && Date.now() - mine.at < SELF_TTL_MS) return NextResponse.json({ connected: true, hos: mine.hos });
+    try {
+      const p = await providerFor(companyId);
+      if (!p) return NextResponse.json({ connected: false });
+      const { data } = await getServiceSupabase().from("telematics_driver_map").select("provider_user_id").eq("company_id", companyId).eq("user_id", uid).maybeSingle();
+      const pid = (data as { provider_user_id?: string } | null)?.provider_user_id;
+      if (!pid) return NextResponse.json({ connected: true, hos: null });
+      const hos = await p.hos(pid);
+      selfCache.set(ck, { at: Date.now(), hos });
+      return NextResponse.json({ connected: true, hos });
+    } catch (e) {
+      console.warn("[telematics] self hos failed:", (e as Error).message);
+      return NextResponse.json({ connected: false });
+    }
+  }
   if (!r.superAdmin && !(r.role && STAFF.has(r.role))) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const hit = cache.get(companyId);
   if (hit && Date.now() - hit.at < TTL_MS) return NextResponse.json({ connected: true, hos: hit.hos });

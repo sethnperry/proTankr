@@ -79,6 +79,8 @@ import { truckLastKnownPlace } from "@/lib/trips/startPlace";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
+import { useMyHos } from "@/lib/telematics/useMyHos";
+import { clockColor, clockHM, STATUS_NAME } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
@@ -597,6 +599,7 @@ export default function HomePage() {
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
+  const myHos = useMyHos(companyId || null, !!companyId && !!userId);
   // Geotab hooks and drops land on the open trip's log, now and every ten minutes.
   const logTripId = openTrip?.trip_id ?? null;
   useEffect(() => {
@@ -1347,6 +1350,37 @@ export default function HomePage() {
             color: countColor(dropCount), onClick: () => setDropNowOpen(true) },
         ]} />
       </div>
+
+      {myHos && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null) && (() => {
+        const least = Math.min(myHos.driveLeftMin ?? Infinity, myHos.dutyLeftMin ?? Infinity);
+        const cell = (label: string, min: number | null) => (
+          <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+            <div className="dash-num" style={{ fontSize: 24, fontWeight: 800, color: clockColor(min), lineHeight: 1.1 }}>{clockHM(min)}</div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginTop: 3 }}>{label}</div>
+          </div>
+        );
+        const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(myHos.at)) / 60000));
+        return (
+          <div style={{ ...L.secondary, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted }}>Hours left</span>
+              <span style={{ flex: 1 }} />
+              {myHos.status && <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>{STATUS_NAME[myHos.status] ?? myHos.status}</span>}
+              <span style={{ fontSize: 11, color: L.faint }}>{ageMin < 2 ? "just now" : `${ageMin} min ago`}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {cell("Drive", myHos.driveLeftMin)}
+              {cell("Window", myHos.dutyLeftMin)}
+              {myHos.cycleLeftMin != null && cell("Cycle", myHos.cycleLeftMin)}
+            </div>
+            {least < 120 && (
+              <div style={{ fontSize: 12, marginTop: 8, color: clockColor(least) }}>
+                {least < 60 ? "Under an hour left on a clock. Plan where you'll park." : "Under two hours left on a clock. Plan your stops."}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="dash-cols">
       <div>
