@@ -204,3 +204,12 @@ test("driver clocks: h:mm and color by minutes left", () => {
   assert.equal(clockColor(100), "#fb923c");
   assert.equal(clockColor(300), "#fff");
 });
+
+import { tripHosCheck } from "./progress.ts";
+test("tripHosCheck: bad when the clocks can't cover the trip, warn when tight, null when fine", () => {
+  assert.equal(tripHosCheck({ driveLeftMin: 120, dutyLeftMin: 600, remainingDriveMin: 200, stopMin: 60 })?.level, "bad");
+  assert.equal(tripHosCheck({ driveLeftMin: 600, dutyLeftMin: 200, remainingDriveMin: 100, stopMin: 150 })?.level, "bad");
+  assert.equal(tripHosCheck({ driveLeftMin: 220, dutyLeftMin: 900, remainingDriveMin: 200, stopMin: 60 })?.level, "warn");
+  assert.equal(tripHosCheck({ driveLeftMin: 600, dutyLeftMin: 900, remainingDriveMin: 200, stopMin: 60 }), null);
+  assert.equal(tripHosCheck({ driveLeftMin: null, dutyLeftMin: null, remainingDriveMin: 200, stopMin: 60 }), null);
+});

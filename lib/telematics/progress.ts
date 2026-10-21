@@ -103,3 +103,29 @@ export function clockColor(min: number | null): string {
   if (min == null) return "rgba(255,255,255,0.5)";
   return min < 60 ? "#f87171" : min < 120 ? "#fb923c" : "#fff";
 }
+
+export const LOAD_STOP_MIN = 60; // time at a rack still to load at
+export const DROP_STOP_MIN = 45; // time at a delivery
+
+/** Will the driver's clocks cover the rest of the trip? Driving left vs the
+ * driving still to do, and the 14-hour window vs driving plus time at the
+ * stops. `stopMin` is the on-duty time at the stops ahead. Both estimates
+ * only count stops with known coordinates, so they can under-count; the text
+ * says "about". Null when it is fine. */
+export function tripHosCheck(o: { driveLeftMin: number | null; dutyLeftMin: number | null; remainingDriveMin: number; stopMin: number }): { level: "warn" | "bad"; text: string } | null {
+  const h = (m: number) => `${(Math.max(0, m) / 60).toFixed(1)} h`;
+  const needWindow = o.remainingDriveMin + o.stopMin;
+  if (o.driveLeftMin != null && o.remainingDriveMin > o.driveLeftMin) {
+    return { level: "bad", text: `The rest of this trip needs about ${h(o.remainingDriveMin)} of driving and you have ${h(o.driveLeftMin)} left. Plan a break or a place to park.` };
+  }
+  if (o.dutyLeftMin != null && needWindow > o.dutyLeftMin) {
+    return { level: "bad", text: `Finishing this trip takes about ${h(needWindow)} including stops and your window has ${h(o.dutyLeftMin)} left.` };
+  }
+  if (o.driveLeftMin != null && o.driveLeftMin - o.remainingDriveMin < 30) {
+    return { level: "warn", text: `Tight: about ${h(o.driveLeftMin - o.remainingDriveMin)} of driving to spare on this trip.` };
+  }
+  if (o.dutyLeftMin != null && o.dutyLeftMin - needWindow < 30) {
+    return { level: "warn", text: `Tight: about ${h(o.dutyLeftMin - needWindow)} to spare in your window for this trip.` };
+  }
+  return null;
+}

@@ -80,7 +80,7 @@ import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
 import { useMyHos } from "@/lib/telematics/useMyHos";
-import { clockColor, clockHM, STATUS_NAME } from "@/lib/telematics/progress";
+import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
@@ -600,6 +600,26 @@ export default function HomePage() {
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
   const myHos = useMyHos(companyId || null, !!companyId && !!userId);
+  // Where the truck is now (every two minutes while a trip is open), against the stops still ahead.
+  const livePos = useTruckReading(truckId, !!openTrip && !!truckId, 120_000);
+  const hosVsTrip = useMemo(() => {
+    if (!myHos || !openTrip || !snap || !livePos || livePos.lat == null || livePos.lon == null) return null;
+    const fresh = (iso: string | null | undefined, ms: number) => !!iso && Date.now() - Date.parse(iso) <= ms;
+    if (!fresh(livePos.at, 10 * 60_000) || !fresh(myHos.at, 15 * 60_000)) return null;
+    const racks = snap.pickups.filter((p) => !p.left_at && p.outcome !== "no_load").sort((a, b) => a.seq - b.seq);
+    const drops = snap.deliveries.filter((d) => d.status !== "complete" && d.status !== "cancelled").sort((a, b) => a.seq - b.seq);
+    const ll = (lat?: number | null, lon?: number | null) => (lat != null && lon != null ? { lat: Number(lat), lon: Number(lon) } : null);
+    const stops = [
+      ...racks.map((p) => { const t = terminalCatalog?.find((x) => String(x.terminal_id) === String(p.terminal_id)); return ll(t?.lat, t?.lon); }),
+      ...drops.map((d) => { const l = locations.find((x) => x.location_id === d.location_id); return ll(l?.lat, l?.lon); }),
+    ];
+    if (!stops.length) return null;
+    return tripHosCheck({
+      driveLeftMin: myHos.driveLeftMin, dutyLeftMin: myHos.dutyLeftMin,
+      remainingDriveMin: remainingDriveMin({ lat: livePos.lat, lon: livePos.lon }, stops),
+      stopMin: racks.length * LOAD_STOP_MIN + drops.length * DROP_STOP_MIN,
+    });
+  }, [myHos, openTrip, snap, livePos, terminalCatalog, locations]);
   // Geotab hooks and drops land on the open trip's log, now and every ten minutes.
   const logTripId = openTrip?.trip_id ?? null;
   useEffect(() => {
@@ -1373,7 +1393,12 @@ export default function HomePage() {
               {cell("Window", myHos.dutyLeftMin)}
               {myHos.cycleLeftMin != null && cell("Cycle", myHos.cycleLeftMin)}
             </div>
-            {least < 120 && (
+            {hosVsTrip && (
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, color: hosVsTrip.level === "bad" ? "#f87171" : "#fb923c" }}>
+                {hosVsTrip.level === "bad" ? "⚠ " : ""}{hosVsTrip.text}
+              </div>
+            )}
+            {!hosVsTrip && least < 120 && (
               <div style={{ fontSize: 12, marginTop: 8, color: clockColor(least) }}>
                 {least < 60 ? "Under an hour left on a clock. Plan where you'll park." : "Under two hours left on a clock. Plan your stops."}
               </div>

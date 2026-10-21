@@ -25,13 +25,22 @@ export async function fetchTruckReading(truckId: string | null): Promise<TruckRe
   }
 }
 
-export function useTruckReading(truckId: string | null, active: boolean): TruckReading | null {
+export function useTruckReading(truckId: string | null, active: boolean, pollMs?: number): TruckReading | null {
   const [reading, setReading] = useState<TruckReading | null>(null);
   useEffect(() => {
     if (!active || !truckId) { setReading(null); return; }
     let cancelled = false;
-    void fetchTruckReading(truckId).then((r) => { if (!cancelled) setReading(r); });
-    return () => { cancelled = true; };
-  }, [truckId, active]);
+    let timer: number | undefined;
+    const run = () => {
+      if (pollMs && document.visibilityState === "hidden") { timer = window.setTimeout(run, pollMs); return; }
+      void fetchTruckReading(truckId).then((r) => {
+        if (cancelled) return;
+        setReading(r);
+        if (pollMs && r) timer = window.setTimeout(run, pollMs); // no telematics: stop asking
+      });
+    };
+    run();
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+  }, [truckId, active, pollMs]);
   return reading;
 }
