@@ -20,6 +20,7 @@ import type { CancelledTrip } from "@/lib/trips/useCancelledTrips";
 import { terminalIssueLabel } from "@/lib/trips/terminalIssues";
 import { fractionAlong, hosText, liveLine, pointAlong, pointsUpTo, remainingDriveMin, type LivePos } from "@/lib/telematics/progress";
 import type { HosAvailability } from "@/lib/telematics/types";
+import type { GeoState } from "@/lib/dispatch/useGeofenceWatch";
 import type { LatLon } from "@/lib/trips/deliveryLocations";
 
 export type BoardProduct = { name: string; code: string; hex: string | null };
@@ -284,9 +285,10 @@ function liveFor(ft: FleetTrip, route: TripRoute, pos: LivePos | undefined, term
   return { ...line, fraction, remainingDriveMin: remainingDriveMin({ lat: pos.lat, lon: pos.lon }, ahead) };
 }
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, positions, hos, terminalLL, locationLL }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, positions, hos, geo, terminalLL, locationLL }: {
   positions?: Map<string, LivePos>;            // truck id -> live position
   hos?: Map<string, HosAvailability>;          // driver user id -> clocks
+  geo?: Map<string, GeoState>;                 // trip id -> truck is at its next stop's geofence
   terminalLL?: (terminalId: string) => LatLon | null;
   locationLL?: (locationId: string) => LatLon | null;
   onDismissCancelled?: (tripId: string) => void;
@@ -331,6 +333,16 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
               {ft.orderNumbers.length > 0 && <span style={{ color: muted }}>· Order {ft.orderNumbers.join(", ")}</span>}
             </div>
             {lv && <div style={{ fontSize: 12, marginTop: 4, color: lv.stale ? muted : MOVING }}>● Live · {lv.text}</div>}
+            {(() => {
+              const g = geo?.get(ft.trip.trip_id);
+              if (!g) return null;
+              const mins = Math.max(0, Math.round((now.getTime() - g.sinceMs) / 60000));
+              return (
+                <div style={{ fontSize: 12, marginTop: 3, color: g.overdue ? "#fb923c" : MOVING, fontWeight: g.overdue ? 700 : 400 }}>
+                  ◎ At {g.stopName} · {mins} min{g.overdue ? " · driver hasn't tapped Arrive" : ""}
+                </div>
+              );
+            })()}
             {(() => {
               const h = ft.trip.driver_id ? hos?.get(ft.trip.driver_id) : undefined;
               if (!h) return null;

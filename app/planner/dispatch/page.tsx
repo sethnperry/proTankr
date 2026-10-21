@@ -56,6 +56,7 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
 import { useFleetHos } from "@/lib/telematics/useFleetHos";
 import { hosAlerts as buildHosAlerts } from "@/lib/dispatch/hosAlerts";
+import { useGeofenceWatch } from "@/lib/dispatch/useGeofenceWatch";
 import { hosText } from "@/lib/telematics/progress";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
@@ -313,6 +314,9 @@ export default function DispatchPage() {
   const [showNotCarded, setShowNotCarded] = useState(false);
   const [locPickerOpen, setLocPickerOpen] = useState(false);
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
+  const terminalLLOf = (id: string) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; };
+  const locationLLOf = (id: string) => { const l = locList.locations.find((x) => x.location_id === id); return l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null; };
+  const geo = useGeofenceWatch({ userId: authUserId || null, companyId: companyId || null, trips: fleetTrips, locations: fleet.locations, positions: livePositions, terminalLL: terminalLLOf, locationLL: locationLLOf });
   const history = useLocationDeliveries(companyId || null, planLocationId);
   const planLocation = locList.locations.find((l) => l.location_id === planLocationId) ?? null;
   const planTerminal = useMemo<TerminalOption | null>(() => {
@@ -840,9 +844,8 @@ export default function DispatchPage() {
         onOpenDriver={(id) => setSelectedDriverId(id)}
         hosAlerts={buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now())}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
-          positions={livePositions} hos={fleetHos}
-          terminalLL={(id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; }}
-          locationLL={(id) => { const l = locList.locations.find((x) => x.location_id === id); return l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null; }}
+          positions={livePositions} hos={fleetHos} geo={geo}
+          terminalLL={terminalLLOf} locationLL={locationLLOf}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
         dispatchedBoard={!dispatchedShown.length ? undefined : <DispatchedBoard trips={dispatchedShown}
           driverName={(id) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver"}
