@@ -77,6 +77,7 @@ import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/Cance
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
+import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
@@ -596,7 +597,9 @@ export default function HomePage() {
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
     setFuelOpen(true);
   };
-  const clock = () => ({ now: new Date(), newId });
+  // A back-dated arrival (the geofence saw the truck come to rest earlier) sets this for one call.
+  const arriveAtRef = useRef<Date | null>(null);
+  const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
 
   const loadedPickup = step.kind === "loaded" ? step.pickup : null;
   const finishDeliveryRow = step.kind === "finish_delivery" ? step.delivery : null;
@@ -911,6 +914,31 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextRackPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
 
+  // Arrival detection: the stop the truck should be arriving at, from the trip's next step.
+  const arrivalTarget = useMemo<ArrivalTarget | null>(() => {
+    if (step.kind === "arrive_pickup" && step.pickup.terminal_id) {
+      const t = terminalCatalog?.find((x) => String(x.terminal_id) === String(step.pickup.terminal_id));
+      return { kind: "terminal", refId: String(step.pickup.terminal_id), name: step.pickup.name ?? t?.terminal_name ?? "the terminal",
+        catalog: t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null };
+    }
+    if (step.kind === "arrive_delivery" && step.delivery.location_id) {
+      const l = locations.find((x) => x.location_id === step.delivery.location_id);
+      return { kind: "location", refId: step.delivery.location_id, name: l ? locationTitle(l) : "the store",
+        catalog: l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null };
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.kind, (step as any).pickup?.pickup_id, (step as any).delivery?.delivery_id, terminalCatalog, locations]);
+  const arrival = useArrivalSuggestion({ companyId: companyId || null, truckId, target: arrivalTarget, enabled: !!arrivalTarget && !!openTrip });
+  const learnArrival = () => {
+    if (arrivalTarget && companyId && userId) void recordArrivalPoint({ companyId, userId, truckId, target: arrivalTarget });
+  };
+  const confirmDetectedArrival = () => {
+    if (!arrival.suggest) return;
+    arriveAtRef.current = new Date(arrival.suggest.sinceMs);
+    try { onBigButton(); } finally { arriveAtRef.current = null; }
+  };
+
   const onBigButton = () => {
     setNotice(null);
     if (!store || !userId) return;
@@ -932,6 +960,7 @@ export default function HomePage() {
         router.push("/planner");
         break;
       case "arrive_pickup": {
+        learnArrival();
         // Arrived: straight to the Planner to build the load, on this
         // pickup's terminal (the Planner may still be on an earlier one).
         // Which rack isn't known until the driver is there, so it's asked now.
@@ -974,6 +1003,7 @@ export default function HomePage() {
         setPicker({ mode: "add" });
         break;
       case "arrive_delivery":
+        learnArrival();
         // Arrived: the drop clock starts and the delivery screen opens.
         arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
         void syncNow();
@@ -1462,6 +1492,23 @@ export default function HomePage() {
         </div>
       )}
 
+
+      {arrival.suggest && arrivalTarget && (
+        <div style={{ ...card, marginBottom: 10, borderColor: "rgba(74,222,128,0.5)" }}>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>Looks like you're at {arrivalTarget.name}</div>
+          <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
+            Your truck stopped here at {new Date(arrival.suggest.sinceMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="button" className="dash-press" onClick={confirmDetectedArrival} style={{ flex: 2, padding: "11px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", ...L.cta }}>
+              Arrive · {new Date(arrival.suggest.sinceMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+            </button>
+            <button type="button" onClick={() => arrival.snooze(20)} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
+              Not yet
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>
       {/* Next step */}

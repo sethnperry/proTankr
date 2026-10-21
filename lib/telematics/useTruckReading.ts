@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-export type TruckReading = { odometerMi: number | null; city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null };
+export type TruckReading = { odometerMi: number | null; city: string | null; state: string | null; lat: number | null; lon: number | null; speedMph?: number | null; at: string | null };
 
 export async function fetchTruckReading(truckId: string | null): Promise<TruckReading | null> {
   if (!truckId) return null;

@@ -70,3 +70,32 @@ test("progress: live line, stale and moving", () => {
   assert.match(fresh.text, /58 mph · \d+ mi to Citgo · 2 min ago/);
   assert.deepEqual(liveLine({ lat: 27, lon: -82, speedMph: 0, at: "2026-10-23T09:00:00Z" }, null, null, now), { text: "last seen 3 h ago", stale: true });
 });
+
+import { fenceFor, inside, plausiblePoint, stepWatch, NEW_WATCH } from "./geofence.ts";
+
+test("geofence: learned center is the median and tight; catalog fallback is wide", () => {
+  const pts = [{ lat: 27.90, lon: -82.40 }, { lat: 27.9004, lon: -82.4004 }, { lat: 27.95, lon: -82.5 }];
+  const f = fenceFor(pts, { lat: 27.0, lon: -82.0 })!;
+  assert.equal(f.learned, true);
+  assert.ok(Math.abs(f.center.lat - 27.9004) < 1e-6);
+  assert.ok(inside({ lat: 27.9002, lon: -82.4002 }, f));
+  assert.ok(!inside({ lat: 27.92, lon: -82.4 }, f));
+  const w = fenceFor([pts[0]], { lat: 27.0, lon: -82.0 })!;
+  assert.equal(w.learned, false);
+  assert.equal(fenceFor([], null), null);
+});
+
+test("geofence: a point far from the catalog isn't learned", () => {
+  assert.equal(plausiblePoint({ lat: 28.5, lon: -82 }, { lat: 27.9, lon: -82.4 }), false);
+  assert.equal(plausiblePoint({ lat: 27.91, lon: -82.4 }, { lat: 27.9, lon: -82.4 }), true);
+  assert.equal(plausiblePoint({ lat: 1, lon: 1 }, null), true);
+});
+
+test("geofence: confirmed only after staying inside and stopped; moving resets", () => {
+  let w = stepWatch(NEW_WATCH, { inside: true, speedMph: 2, nowMs: 1000 });
+  assert.equal(w.confirmedAtMs, null);
+  w = stepWatch(w, { inside: true, speedMph: 0, nowMs: 61_000 });
+  assert.equal(w.confirmedAtMs, 1000);
+  assert.deepEqual(stepWatch(w, { inside: true, speedMph: 30, nowMs: 90_000 }), NEW_WATCH);
+  assert.deepEqual(stepWatch(w, { inside: false, speedMph: 0, nowMs: 90_000 }), NEW_WATCH);
+});
