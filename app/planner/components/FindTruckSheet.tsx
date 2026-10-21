@@ -10,12 +10,18 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 import { fetchTruckReading, type TruckReading } from "@/lib/telematics/useTruckReading";
 import { fieldInput, muted } from "./trip/tripUi";
+import { fetchTruckTrip } from "@/lib/trips/fetchTruckTrip";
+import { summarizeTruckTrip, type TruckTripSummary } from "@/lib/trips/truckTrip";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { productColorFor } from "../utils/productColor";
 
 type TruckOpt = { id: string; name: string };
 
 export function mapsUrl(lat: number, lon: number): string {
   return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lon.toFixed(6)}`;
 }
+
+export const clockOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 export function ageText(iso: string | null, nowMs: number = Date.now()): string {
   const t = iso ? Date.parse(iso) : NaN;
@@ -36,16 +42,22 @@ export function FindTruckSheet({ open, onClose, companyId, defaultTruckId }: {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [reading, setReading] = useState<TruckReading | null>(null);
+  const [trip, setTrip] = useState<TruckTripSummary | null>(null);
+  const { data: catalog } = useProductsCatalog();
 
   const locate = useCallback(async (id: string) => {
     setBusy(true); setDone(false);
-    const r = await fetchTruckReading(id);
-    setReading(r); setBusy(false); setDone(true);
+    const [r, td] = await Promise.all([fetchTruckReading(id), fetchTruckTrip(id)]);
+    setReading(r);
+    setTrip(td ? summarizeTruckTrip({
+      ...td, pos: r?.lat != null && r?.lon != null ? { lat: r.lat, lon: r.lon } : null, nowMs: Date.now(),
+    }) : null);
+    setBusy(false); setDone(true);
   }, []);
 
   useEffect(() => {
     if (!open) return;
-    setQ(""); setReading(null); setDone(false);
+    setQ(""); setReading(null); setTrip(null); setDone(false);
     setTruckId(defaultTruckId);
     if (defaultTruckId) void locate(defaultTruckId);
     if (!companyId) return;
@@ -113,7 +125,42 @@ export function FindTruckSheet({ open, onClose, companyId, defaultTruckId }: {
               {reading.driverName && reading.heldByName && reading.driverName !== reading.heldByName && (
                 <div style={{ fontSize: 13, marginTop: 4, color: "#fb923c" }}>ProTankr has it selected by {reading.heldByName}.</div>
               )}
-              <div style={{ fontSize: 12, marginTop: 6, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
+              {done && (
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                  {!trip ? (
+                    <div style={{ fontSize: 14, color: muted }}>Not on a load right now.</div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted }}>Load</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{trip.status}</div>
+                      {trip.next && (
+                        <div style={{ fontSize: 14, marginTop: 6 }}>
+                          {trip.next.here ? <>At <b>{trip.next.label}</b></> : <>Next: <b>{trip.next.label}</b>{trip.next.miles != null ? ` · ${trip.next.miles} mi` : ""}</>}
+                          {!trip.next.here && trip.next.etaMs != null && <> · ETA <b>{clockOf(trip.next.etaMs)}</b></>}
+                        </div>
+                      )}
+                      {trip.last && <div style={{ fontSize: 14, marginTop: 4 }}>Last stop: <b>{trip.last.label}</b> · ETA <b>{clockOf(trip.last.etaMs)}</b></div>}
+                      {(trip.next?.etaMs != null || trip.last) && <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Estimated from straight-line distance, with time at each stop.</div>}
+                      {trip.products.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+                          {trip.products.map((p) => {
+                            const cp = p.productId ? catalog.find((x) => x.product_id === p.productId) : null;
+                            const name = cp ? String(cp.display_name || cp.product_name || "Product") : "Product";
+                            const hex = typeof cp?.hex_code === "string" && cp.hex_code.trim() ? cp.hex_code.trim() : productColorFor(name);
+                            return (
+                              <span key={p.comp} style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: hex }} />
+                                C{p.comp} {name}{p.gallons ? ` · ${Math.round(p.gallons).toLocaleString("en-US")} gal` : ""}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              <div style={{ fontSize: 12, marginTop: 10, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
               <a href={mapsUrl(reading.lat!, reading.lon!)} target="_blank" rel="noopener noreferrer"
                 style={{ display: "block", textAlign: "center", marginTop: 14, padding: "13px 0", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none" }}>
                 Open in Maps
