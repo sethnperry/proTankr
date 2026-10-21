@@ -80,6 +80,8 @@ import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
 import { useMyHos } from "@/lib/telematics/useMyHos";
+import { shouldNotifyHosTrip, type Level } from "@/lib/telematics/hosTripNotify";
+import { notifyPermission, requestNotifications, showNotification, type NotifyPermission } from "@/lib/ui/notify";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
@@ -599,6 +601,8 @@ export default function HomePage() {
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
+  const [notifyPerm, setNotifyPerm] = useState<NotifyPermission>("default");
+  useEffect(() => { setNotifyPerm(notifyPermission()); }, []);
   const myHos = useMyHos(companyId || null, !!companyId && !!userId);
   // Where the truck is now (every two minutes while a trip is open), against the stops still ahead.
   const livePos = useTruckReading(truckId, !!openTrip && !!truckId, 120_000);
@@ -620,6 +624,16 @@ export default function HomePage() {
       stopMin: racks.length * LOAD_STOP_MIN + drops.length * DROP_STOP_MIN,
     });
   }, [myHos, openTrip, snap, livePos, terminalCatalog, locations]);
+  // Tell the driver (once per change) when the clocks stop covering the trip. The first look is a baseline.
+  const hosLevel: Level | null = !myHos || !livePos ? null : hosVsTrip ? hosVsTrip.level : "ok";
+  const lastHosLevel = useRef<Level | null>(null);
+  useEffect(() => {
+    if (hosLevel === null) return;
+    if (shouldNotifyHosTrip(lastHosLevel.current, hosLevel) && hosVsTrip) {
+      void showNotification(hosLevel === "bad" ? "Your hours won't cover this trip" : "Your hours are tight for this trip", hosVsTrip.text, "protankr-hos-trip");
+    }
+    lastHosLevel.current = hosLevel;
+  }, [hosLevel]); // eslint-disable-line react-hooks/exhaustive-deps
   // Geotab hooks and drops land on the open trip's log, now and every ten minutes.
   const logTripId = openTrip?.trip_id ?? null;
   useEffect(() => {
@@ -1397,6 +1411,11 @@ export default function HomePage() {
               <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, color: hosVsTrip.level === "bad" ? "#f87171" : "#fb923c" }}>
                 {hosVsTrip.level === "bad" ? "⚠ " : ""}{hosVsTrip.text}
               </div>
+            )}
+            {notifyPerm === "default" && (
+              <button type="button" onClick={() => void requestNotifications().then(setNotifyPerm)} style={{ marginTop: 8, background: "none", border: "none", color: "#93c5fd", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                Turn on alerts for low hours ›
+              </button>
             )}
             {!hosVsTrip && least < 120 && (
               <div style={{ fontSize: 12, marginTop: 8, color: clockColor(least) }}>

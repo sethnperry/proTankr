@@ -213,3 +213,15 @@ test("tripHosCheck: bad when the clocks can't cover the trip, warn when tight, n
   assert.equal(tripHosCheck({ driveLeftMin: 600, dutyLeftMin: 900, remainingDriveMin: 200, stopMin: 60 }), null);
   assert.equal(tripHosCheck({ driveLeftMin: null, dutyLeftMin: null, remainingDriveMin: 200, stopMin: 60 }), null);
 });
+
+import { shouldNotifyHosTrip } from "./hosTripNotify.ts";
+test("hosTripNotify: baseline is silent; new tight/bad notify once; worsening notifies again", () => {
+  assert.equal(shouldNotifyHosTrip(null, "bad"), false);
+  assert.equal(shouldNotifyHosTrip("ok", "warn"), true);
+  assert.equal(shouldNotifyHosTrip("warn", "warn"), false);
+  assert.equal(shouldNotifyHosTrip("warn", "bad"), true);
+  assert.equal(shouldNotifyHosTrip("bad", "bad"), false);
+  assert.equal(shouldNotifyHosTrip("bad", "warn"), false);
+  assert.equal(shouldNotifyHosTrip("bad", "ok"), false);
+  assert.equal(shouldNotifyHosTrip("ok", "bad"), true);
+});
