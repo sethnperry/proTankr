@@ -121,3 +121,31 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+// Push: show the notification the server sent, and open the app on tap.
+self.addEventListener("push", (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch { d = { title: "ProTankr", body: event.data ? event.data.text() : "" }; }
+  event.waitUntil(
+    self.registration.showNotification(d.title || "ProTankr", {
+      body: d.body || "",
+      tag: d.tag || "protankr",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: d.url || "/planner/home" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/planner/home";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ("focus" in c) { c.navigate(url).catch(() => {}); return c.focus(); }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

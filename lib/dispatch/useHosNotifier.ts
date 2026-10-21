@@ -8,6 +8,7 @@
 // permission (the dashboard's "Enable alerts").
 
 import { useEffect, useRef } from "react";
+import { pushEnabledHere } from "@/lib/push/subscribe";
 import type { HosAlert } from "./hosAlerts";
 import { diffHosAlerts, hosNotificationBody, type KnownHos } from "./hosNotify";
 
@@ -19,13 +20,16 @@ export function useHosNotifier(o: { userId: string | null; alerts: HosAlert[]; r
   const { userId, alerts, ready } = o;
   const key = `proTankr:u:${userId}:hosKnown`;
   const started = useRef(false);
+  // With server push on, the cron job sends these; don't also show them from the page.
+  const serverPush = useRef(false);
+  useEffect(() => { void pushEnabledHere().then((v) => { serverPush.current = v; }); }, []);
   useEffect(() => {
     if (!userId || !ready) return;
     const known = read(key);
     const { fresh, next } = diffHosAlerts(known, alerts);
     try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* storage blocked */ }
     if (!started.current) { started.current = true; return; } // baseline
-    if (!fresh.length) return;
+    if (!fresh.length || serverPush.current) return;
     const n = hosNotificationBody(fresh);
     try {
       if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(n.title, { body: n.body, tag: "protankr-dispatch-hos" });

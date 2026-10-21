@@ -58,6 +58,7 @@ import { useFleetHos } from "@/lib/telematics/useFleetHos";
 import { hosAlerts as buildHosAlerts } from "@/lib/dispatch/hosAlerts";
 import { useGeofenceWatch } from "@/lib/dispatch/useGeofenceWatch";
 import { useHosNotifier } from "@/lib/dispatch/useHosNotifier";
+import { enablePush } from "@/lib/push/subscribe";
 import { hosText } from "@/lib/telematics/progress";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
@@ -799,7 +800,7 @@ export default function DispatchPage() {
         error={fleet.error ?? fleetReports.error ?? (mode === "plan" ? plan.error : null)}
         conflicts={conflicts} counts={counts} reportCount={fleetReports.reports.length}
         watch={watch} unseen={notifier.unseen} onSeen={notifier.markSeen} onSeenAll={notifier.markAllSeen}
-        notify={notifier.permission} onEnableNotify={notifier.enable}
+        notify={notifier.permission} onEnableNotify={() => { void enablePush(companyId || "").finally(() => void notifier.enable()); }}
         onAck={acks.ack} ackError={acks.error}
         terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
         alerts={alerts} planCounts={pCounts} planLoading={plan.loading}

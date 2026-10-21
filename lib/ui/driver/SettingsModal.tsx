@@ -35,6 +35,7 @@ import { SelfProfileView } from "./SelfProfileView";
 import { supabase } from "@/lib/supabase/client";
 import JoinFleetView from "@/app/planner/components/JoinFleetView";
 import FuelPinsView from "@/app/planner/components/FuelPinsView";
+import { disablePush, enablePush, pushEnabledHere, pushSupported } from "@/lib/push/subscribe";
 import { T, css } from "./tokens";
 import { useCompanySubscription, computeSeatCapacity } from "@/lib/billing/useCompanySubscription";
 import type { Role } from "./role";
@@ -113,6 +114,16 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
 }) {
   const [view, setView] = useState<"root" | "profile" | "joinFleet" | "fuelPins">("root");
   const [company, setCompany] = useState<{ name: string; isSolo: boolean } | null>(null);
+  const [pushOn, setPushOn] = useState<boolean | null>(null);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  useEffect(() => { if (open) void pushEnabledHere().then(setPushOn); }, [open]);
+  const togglePush = async () => {
+    setPushMsg(null);
+    if (pushOn) { await disablePush(); setPushOn(false); return; }
+    const r = await enablePush(companyId);
+    setPushOn(r.ok);
+    if (!r.ok) setPushMsg(r.reason ?? "Couldn't turn on push.");
+  };
 
   useEffect(() => { if (open) setView("root"); }, [open]);
 
@@ -156,6 +167,14 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
                 sub="Name, hire date, division/region, pay & schedule"
                 onClick={() => setView("profile")}
               />
+              {pushSupported() && (
+                <>
+                  <SettingsRow label="Push alerts" sub="Hours of service and load alerts, even when the app is closed"
+                    right={<span style={{ fontSize: 13, fontWeight: 800, color: pushOn ? "#4ade80" : "rgba(255,255,255,0.45)" }}>{pushOn ? "On" : "Off"}</span>}
+                    onClick={() => void togglePush()} />
+                  {pushMsg && <div style={{ fontSize: 12, color: "#f87171", marginTop: -4 }}>{pushMsg}</div>}
+                </>
+              )}
               <SettingsRow
                 label="Fuel PINs"
                 sub="Your PIN for the company fuel program"

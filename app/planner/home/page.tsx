@@ -81,7 +81,8 @@ import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
 import { useMyHos } from "@/lib/telematics/useMyHos";
 import { shouldNotifyHosTrip, type Level } from "@/lib/telematics/hosTripNotify";
-import { notifyPermission, requestNotifications, showNotification, type NotifyPermission } from "@/lib/ui/notify";
+import { notifyPermission, showNotification, type NotifyPermission } from "@/lib/ui/notify";
+import { enablePush, pushEnabledHere } from "@/lib/push/subscribe";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
@@ -627,9 +628,11 @@ export default function HomePage() {
   // Tell the driver (once per change) when the clocks stop covering the trip. The first look is a baseline.
   const hosLevel: Level | null = !myHos || !livePos ? null : hosVsTrip ? hosVsTrip.level : "ok";
   const lastHosLevel = useRef<Level | null>(null);
+  const serverPushOn = useRef(false);
+  useEffect(() => { void pushEnabledHere().then((v) => { serverPushOn.current = v; }); }, [notifyPerm]);
   useEffect(() => {
     if (hosLevel === null) return;
-    if (shouldNotifyHosTrip(lastHosLevel.current, hosLevel) && hosVsTrip) {
+    if (shouldNotifyHosTrip(lastHosLevel.current, hosLevel) && hosVsTrip && !serverPushOn.current) {
       void showNotification(hosLevel === "bad" ? "Your hours won't cover this trip" : "Your hours are tight for this trip", hosVsTrip.text, "protankr-hos-trip");
     }
     lastHosLevel.current = hosLevel;
@@ -1413,7 +1416,7 @@ export default function HomePage() {
               </div>
             )}
             {notifyPerm === "default" && (
-              <button type="button" onClick={() => void requestNotifications().then(setNotifyPerm)} style={{ marginTop: 8, background: "none", border: "none", color: "#93c5fd", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+              <button type="button" onClick={() => void enablePush(companyId || "").then((r) => { setNotifyPerm(notifyPermission()); if (!r.ok && r.reason) setNotice({ text: r.reason, tripId: null }); })} style={{ marginTop: 8, background: "none", border: "none", color: "#93c5fd", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>
                 Turn on alerts for low hours ›
               </button>
             )}

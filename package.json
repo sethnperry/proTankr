@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/fuelTempPredictor.test.ts lib/supabase/cookieScope.test.ts lib/capacity/*.test.ts lib/pwa/*.test.ts lib/ui/driver/*.test.ts app/planner/utils/*.test.ts lib/trips/*.test.ts lib/terminals/*.test.ts lib/expiry.test.ts lib/equipment/*.test.ts lib/fuel/*.test.ts lib/vault/*.test.ts lib/suppliers/*.test.ts lib/dispatch/*.test.ts lib/telematics/*.test.ts",
+    "test": "node --test lib/fuelTempPredictor.test.ts lib/supabase/cookieScope.test.ts lib/capacity/*.test.ts lib/pwa/*.test.ts lib/ui/driver/*.test.ts app/planner/utils/*.test.ts lib/trips/*.test.ts lib/terminals/*.test.ts lib/expiry.test.ts lib/equipment/*.test.ts lib/fuel/*.test.ts lib/vault/*.test.ts lib/suppliers/*.test.ts lib/dispatch/*.test.ts lib/telematics/*.test.ts lib/push/*.test.ts",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",
@@ -18,11 +18,13 @@
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.97.0",
     "@tanstack/react-query": "^5.102.8",
+    "@types/web-push": "^3.6.4",
     "framer-motion": "^12.42.2",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "stripe": "^22.6.2"
+    "stripe": "^22.6.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@capacitor/android": "^6.2.2",
