@@ -34,6 +34,7 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { SelfProfileView } from "./SelfProfileView";
 import { supabase } from "@/lib/supabase/client";
 import JoinFleetView from "@/app/planner/components/JoinFleetView";
+import FuelPinsView from "@/app/planner/components/FuelPinsView";
 import { T, css } from "./tokens";
 import { useCompanySubscription, computeSeatCapacity } from "@/lib/billing/useCompanySubscription";
 import type { Role } from "./role";
@@ -110,7 +111,7 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
   // analogous state to sync, so it simply omits this.
   onCompanyRenamed?: (name: string) => void;
 }) {
-  const [view, setView] = useState<"root" | "profile" | "joinFleet">("root");
+  const [view, setView] = useState<"root" | "profile" | "joinFleet" | "fuelPins">("root");
   const [company, setCompany] = useState<{ name: string; isSolo: boolean } | null>(null);
 
   useEffect(() => { if (open) setView("root"); }, [open]);
@@ -125,7 +126,7 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
 
   const isAdmin = myRole === "admin";
   const isSolo = company?.isSolo ?? false;
-  const title = view === "profile" ? "Profile" : view === "joinFleet" ? "Join a Fleet"
+  const title = view === "profile" ? "Profile" : view === "joinFleet" ? "Join a Fleet" : view === "fuelPins" ? "Fuel PINs"
     : !isSolo && isAdmin ? "Company Settings" : "Settings";
 
   return (
@@ -134,6 +135,11 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
         <div>
           <BackRow title={title === "Company Settings" ? "Company Settings" : "Settings"} onBack={() => setView("root")} />
           <SelfProfileView />
+        </div>
+      ) : view === "fuelPins" ? (
+        <div>
+          <BackRow title="Settings" onBack={() => setView("root")} />
+          <FuelPinsView companyId={companyId} userId={authUserId} />
         </div>
       ) : view === "joinFleet" ? (
         <div>
@@ -149,6 +155,11 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
                 label="Profile"
                 sub="Name, hire date, division/region, pay & schedule"
                 onClick={() => setView("profile")}
+              />
+              <SettingsRow
+                label="Fuel PINs"
+                sub="Your PIN for the company fuel program"
+                onClick={() => setView("fuelPins")}
               />
               {isSolo && (
                 <SettingsRow

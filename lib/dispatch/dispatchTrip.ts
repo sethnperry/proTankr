@@ -25,6 +25,8 @@ export type DispatchLeg = {
   trailerId: string | null;
   warnings: string[];       // what the dispatcher saw and went ahead with
   groups?: PlanGroup[];     // compartment plan, one entry per product
+  shipper?: string;         // for the BOL; the driver verifies both at Begin
+  customer?: string;
 };
 
 export type DispatchRows = {
@@ -58,6 +60,7 @@ export function buildDispatchedTrip(
       // The truck and trailer are set when the driver begins; these are the plan.
       truck_id: null, trailer_id: null,
       dispatched_by: i.dispatcherId, planned_start_at: new Date(l.startMs).toISOString(),
+      shipper: l.shipper?.trim() || null, customer: l.customer?.trim() || null,
       planned_truck_id: l.truckId, planned_trailer_id: l.trailerId, dispatch_seq: i.seq,
       client_updated_at: nowIso,
     },

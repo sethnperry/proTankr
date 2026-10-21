@@ -42,7 +42,7 @@
 // with two different "current" equipment views at once.
 
 import { expiryStateFor, EXPIRY_COLOR, type ExpiryState } from "@/lib/expiry";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { startSetupSession } from "@/lib/setupSession";
@@ -401,6 +401,8 @@ export default function DispatchPage() {
   }, [tlDriverId, planLocation, termRow, startMs, dayLegs, tripHistory.trips, tlSettings, tlTz]);
   // The load as planned right now, ready to stack or dispatch.
   const [orderNumber, setOrderNumber] = useState("");
+  const [shipper, setShipper] = useState("");
+  const [customer, setCustomer] = useState("");
   const [dispatching, setDispatching] = useState(false);
   const [dispatchMsg, setDispatchMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const dispatched = useDispatchedTrips(companyId || null);
@@ -490,8 +492,31 @@ export default function DispatchPage() {
       locationId: planLocation.location_id, deliveryType: planLocation.delivery_type,
       supplierId: planSupplierId, orderNumber: orderNumber.trim(), truckId: h?.truckId ?? null, trailerId: effectiveTrailerId ?? h?.trailerId ?? null, warnings,
       groups: planGroups.length ? planGroups : undefined,
+      shipper: shipper.trim(), customer: customer.trim(),
     };
   };
+  // Shipper and customer: prefilled from this driver's last trip to the same drop (customer) or any last trip.
+  const prefilledFor = useRef<string>("");
+  useEffect(() => {
+    if (!tlDriverId || !planLocation) return;
+    const key = `${tlDriverId}|${planLocation.location_id}`;
+    if (prefilledFor.current === key) return;
+    prefilledFor.current = key;
+    setShipper(""); setCustomer("");
+    let off = false;
+    void supabase.from("trips").select("shipper, customer, trip_deliveries(location_id)")
+      .eq("driver_id", tlDriverId).or("shipper.not.is.null,customer.not.is.null").neq("status", "cancelled")
+      .order("created_at", { ascending: false }).limit(30)
+      .then(({ data }) => {
+        if (off) return;
+        const rows = (data ?? []) as { shipper: string | null; customer: string | null; trip_deliveries: { location_id: string | null }[] }[];
+        const same = rows.find((r) => r.customer && r.trip_deliveries?.some((d) => d.location_id === planLocation.location_id));
+        setShipper((s) => s || rows.find((r) => r.shipper)?.shipper || "");
+        setCustomer((c) => c || same?.customer || rows.find((r) => r.customer)?.customer || "");
+      });
+    return () => { off = true; };
+  }, [tlDriverId, planLocation]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const addLeg = () => {
     const leg = buildLeg();
     if (!leg || !tlDriverId) return;
@@ -797,7 +822,7 @@ export default function DispatchPage() {
                     }}
                     onPickSupplier={(pid) => { setSupPickFor(pid); setSuppliersOpen("pick"); }} />
                 )}
-                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
+                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} shipper={shipper} customer={customer} onShipper={setShipper} onCustomer={setCustomer} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}

@@ -417,8 +417,9 @@ export default function HomePage() {
       return {
         orderNumber: children.primaryOrder?.order_number ?? "",
         extraOrderNumbers: children.extraOrders.map((o) => o.order_number ?? ""),
-        shipper: openTrip.shipper ?? "",
-        customer: openTrip.customer ?? "",
+        // Dispatch's shipper/customer first; blank falls back to the driver's last entries.
+        shipper: openTrip.shipper || (userId ? lastShipperCustomer(trips, userId).shipper : null) || "",
+        customer: openTrip.customer || (userId ? lastShipperCustomer(trips, userId).customer : null) || "",
         deliveries: planned.length
           ? planned.map((d) => ({ locationId: d.location_id, oneOffName: d.one_off_name, deliveryType: d.delivery_type }))
           : [{ locationId: null, oneOffName: "", deliveryType: "drop" }],

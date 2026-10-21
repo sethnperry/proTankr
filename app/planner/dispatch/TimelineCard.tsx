@@ -23,6 +23,7 @@ export type DayLeg = {
   terminalId: string; city: string | null; state: string | null; locationId: string; deliveryType: "drop" | "pump_off";
   supplierId: string | null; orderNumber: string; truckId: string | null; trailerId: string | null; warnings: string[];
   groups?: PlanGroup[];
+  shipper?: string; customer?: string;
 };
 
 const FLAG_COLOR: Record<Flag["severity"], string> = { info: "rgba(255,255,255,0.5)", warn: "#fb923c", bad: "#f87171" };
@@ -49,6 +50,7 @@ export function TimelineCard(p: {
   terminalPlace?: string | null;   // abbreviated, "Tampa, FL"
   locationPlace?: string | null;
   orderNumber: string;
+  shipper: string; customer: string; onShipper: (v: string) => void; onCustomer: (v: string) => void;
   hideOrder?: boolean; // the per-product order lives in the compartment plan
   onOrder: (v: string) => void;
   warnings: string[];                 // everything shown above that is a problem; never blocks
@@ -125,6 +127,16 @@ export function TimelineCard(p: {
             <div key={i} style={{ fontSize: 12, color: FLAG_COLOR[x.severity], marginTop: 6 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
           ))}
           <div style={{ marginTop: 12 }}>{p.compartments}</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Shipper</div>
+              <input value={p.shipper} onChange={(e) => p.onShipper(e.target.value)} placeholder="From the BOL" style={fieldInput} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Customer</div>
+              <input value={p.customer} onChange={(e) => p.onCustomer(e.target.value)} placeholder="Who it's for" style={fieldInput} />
+            </div>
+          </div>
           {!p.hideOrder && (
             <div style={{ marginTop: 4 }}>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order number (optional)</div>
