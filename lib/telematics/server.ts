@@ -66,9 +66,9 @@ export async function trailerNames(companyId: string): Promise<Map<string, { tra
 // so hours of service work without an admin matching by hand. Tried at most every 10 minutes per
 // person. Never touches a driver or member that is already linked. Returns the provider id or null.
 const autoTried = new Map<string, number>();
-export async function autoLinkDriver(companyId: string, userId: string): Promise<string | null> {
+export async function autoLinkDriver(companyId: string, userId: string, force = false): Promise<string | null> {
   const key = `${companyId}:${userId}`;
-  if (Date.now() - (autoTried.get(key) ?? 0) < 600_000) return null;
+  if (!force && Date.now() - (autoTried.get(key) ?? 0) < 600_000) return null;
   autoTried.set(key, Date.now());
   const p = await providerFor(companyId);
   if (!p) return null;

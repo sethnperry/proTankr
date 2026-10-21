@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { linkMeToTelematics } from "@/lib/telematics/linkMe";
 import { T, css, fmtDate } from "./tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "./primitives";
 import { PortIdEditor, TerminalAccessEditor } from "./editors";
@@ -212,6 +213,7 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         p_data:       payload,
       });
       if (error) throw error;
+      if (showPersonalFields) void linkMeToTelematics(companyId);
 
       // Separate table, separate write -- self-only RLS (user_id =
       // auth.uid()), no RPC needed. Only reachable when showPersonalFields

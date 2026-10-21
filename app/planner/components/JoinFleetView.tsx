@@ -18,6 +18,7 @@
 
 import React, { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { linkMeToTelematics } from "@/lib/telematics/linkMe";
 
 export default function JoinFleetView({ onJoined }: { onJoined: () => void }) {
   const [code, setCode] = useState("");
@@ -39,6 +40,7 @@ export default function JoinFleetView({ onJoined }: { onJoined: () => void }) {
       const { error: activeErr } = await supabase.rpc("set_active_company", { p_company_id: companyId });
       if (activeErr) throw activeErr;
 
+      void linkMeToTelematics(String(companyId));
       onJoined();
     } catch (e: any) {
       setErr(e?.message ?? "Something went wrong. Check the code and try again.");
