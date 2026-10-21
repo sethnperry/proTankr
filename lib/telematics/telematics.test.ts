@@ -34,7 +34,7 @@ test("geotab: lists devices and reads odometer + position", async () => {
     return ok([{ data: 160934.4, dateTime: "2026-10-23T09:00:00Z" }]);
   }) as any;
   const p = geotabProvider({ database: "db-test", userName: "u", password: "p" }, f);
-  assert.deepEqual(await p.listVehicles(), [{ id: "b1", name: "25184", vin: "ABC" }]);
+  assert.deepEqual(await p.listVehicles(), [{ id: "b1", name: "25184", vin: "ABC", plate: null, plateState: null }]);
   const r = await p.reading("b1");
   assert.equal(r.odometerMi, 100);
   assert.equal(r.lat, 27.9);
@@ -226,4 +226,10 @@ test("hosTripNotify: baseline is silent; new tight/bad notify once; worsening no
   assert.equal(shouldNotifyHosTrip("bad", "warn"), false);
   assert.equal(shouldNotifyHosTrip("bad", "ok"), false);
   assert.equal(shouldNotifyHosTrip("ok", "bad"), true);
+});
+
+test("vin decode: tidy make, year and model; junk becomes null", async () => {
+  const { parseVinRow } = await import("./vinDecode.ts");
+  assert.deepEqual(parseVinRow({ ModelYear: "2021", Make: "FREIGHTLINER", Model: "Cascadia" }), { year: 2021, make: "Freightliner", model: "Cascadia" });
+  assert.deepEqual(parseVinRow({ ModelYear: "", Make: "", Model: "" }), { year: null, make: null, model: null });
 });

@@ -23,7 +23,7 @@ type Summary = {
   database_name?: string; user_name?: string; status?: string; last_error?: string | null; last_ok_at?: string | null;
   matched?: { vehicleId: string; vehicleName: string | null; truckId: string; truckName: string; by: string }[];
   unmatchedTrucks?: { truckId: string; truckName: string }[];
-  unmatchedVehicles?: { id: string; name: string }[];
+  unmatchedVehicles?: { id: string; name: string; vin?: string | null; plate?: string | null }[];
   trailersLinked?: number;
   unmatchedTrailers?: { id: string; name: string }[];
   unmatchedOurTrailers?: { trailerId: string; name: string }[];
@@ -50,6 +50,7 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pick, setPick] = useState<Record<string, string>>({});
+  const [skip, setSkip] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     const r = await call("GET", companyId);
@@ -68,6 +69,13 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
     if (!truckId) return;
     const r = await call("POST", companyId, { map: [{ vehicleId, vehicleName, truckId }] });
     if (!r.ok) return setErr(r.data?.error ?? "Couldn't save.");
+    setSum(r.data);
+  });
+  const importUnits = (kind: "vehicles" | "trailers") => run(async () => {
+    const ids = (kind === "vehicles" ? sum?.unmatchedVehicles : sum?.unmatchedTrailers ?? [])?.map((x) => x.id).filter((id) => !skip[`${kind}:${id}`]) ?? [];
+    if (!ids.length) return;
+    const r = await call("POST", companyId, kind === "vehicles" ? { importVehicles: ids } : { importTrailers: ids });
+    if (!r.ok) return setErr(r.data?.error ?? "Couldn't add them.");
     setSum(r.data);
   });
   const assignTrailer = (providerTrailerId: string, name: string) => run(async () => {
@@ -123,6 +131,35 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
             </div>
             {sum.last_error && <div style={{ fontSize: 13, color: "#fbbf24", marginTop: 6 }}>Last problem: {sum.last_error}</div>}
           </div>
+
+          {((sum.unmatchedVehicles?.length ?? 0) > 0 || (sum.unmatchedTrailers?.length ?? 0) > 0) && (
+            <div style={card}>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>Add from Geotab</div>
+              <div style={{ fontSize: 12, color: muted, margin: "4px 0 8px", lineHeight: 1.5 }}>
+                These are in Geotab but not in your equipment. Adding creates the truck or trailer (VIN, plate, year, make and model filled in where Geotab or the VIN lookup has them) and links it. Untick any that already exist under a different name; link those by hand instead.
+              </div>
+              {(["vehicles", "trailers"] as const).map((kind) => {
+                const rows = kind === "vehicles" ? (sum.unmatchedVehicles ?? []) : (sum.unmatchedTrailers ?? []);
+                if (!rows.length) return null;
+                const n = rows.filter((x) => !skip[`${kind}:${x.id}`]).length;
+                return (
+                  <div key={kind} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{kind === "vehicles" ? "Trucks" : "Trailers"}</div>
+                    {rows.map((x) => (
+                      <label key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, padding: "3px 0" }}>
+                        <input type="checkbox" checked={!skip[`${kind}:${x.id}`]} onChange={(e) => setSkip((p) => ({ ...p, [`${kind}:${x.id}`]: !e.target.checked }))} />
+                        <span style={{ fontWeight: 700 }}>{x.name}</span>
+                        <span style={{ color: muted, fontSize: 12 }}>{[(x as any).vin, (x as any).plate].filter(Boolean).join(" · ")}</span>
+                      </label>
+                    ))}
+                    <button type="button" style={{ ...btn, marginTop: 6, opacity: busy || !n ? 0.5 : 1 }} disabled={busy || !n} aria-busy={busy} onClick={() => void importUnits(kind)}>
+                      Add {n} {kind === "vehicles" ? `truck${n === 1 ? "" : "s"}` : `trailer${n === 1 ? "" : "s"}`}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {(sum.unmatchedVehicles?.length ?? 0) > 0 && (sum.unmatchedTrucks?.length ?? 0) > 0 && (
             <div style={card}>

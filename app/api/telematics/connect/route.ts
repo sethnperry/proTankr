@@ -12,6 +12,7 @@ import { geotabProvider } from "@/lib/telematics/geotab";
 import { encryptSecret } from "@/lib/telematics/crypto";
 import { matchVehicles, type TruckLite } from "@/lib/telematics/match";
 import { matchDrivers } from "@/lib/telematics/matchDrivers";
+import { decodeVins } from "@/lib/telematics/vinDecode";
 import { TelematicsAuthError } from "@/lib/telematics/types";
 import { autoLinkAllDrivers, callerId, companyRole, isCompanyAdmin, providerFor, rosterMembers } from "@/lib/telematics/server";
 
@@ -40,10 +41,10 @@ async function summary(companyId: string) {
   ]);
   const rows = (map.data ?? []) as { provider_vehicle_id: string; truck_id: string; vehicle_name: string | null; matched_by: string }[];
   const mapped = new Set(rows.map((r) => r.truck_id));
-  let vehicles: { id: string; name: string }[] = [];
+  let vehicles: { id: string; name: string; vin?: string | null; plate?: string | null }[] = [];
   try {
     const p = await providerFor(companyId);
-    vehicles = p ? (await p.listVehicles()).map((v) => ({ id: v.id, name: v.name })) : [];
+    vehicles = p ? (await p.listVehicles()).map((v) => ({ id: v.id, name: v.name, vin: v.vin, plate: v.plate ?? null })) : [];
   } catch { /* the status line already carries the last error */ }
   const mappedVeh = new Set(rows.map((r) => r.provider_vehicle_id));
   // Trailers (hookup detection): linked, and who is left to match.
@@ -114,6 +115,54 @@ export async function POST(req: NextRequest) {
         const { error } = await admin.from("telematics_trailer_map").insert({ company_id: g.companyId, provider_trailer_id: m.providerTrailerId, trailer_id: m.trailerId, trailer_name: m.name ?? null, matched_by: "manual" });
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       }
+    }
+    return NextResponse.json(await summary(g.companyId));
+  }
+
+  // Add Geotab vehicles / trailers we don't have yet as new equipment, and link them.
+  if (Array.isArray(body.importVehicles) || Array.isArray(body.importTrailers)) {
+    const p = await providerFor(g.companyId);
+    if (!p) return NextResponse.json({ error: "Geotab isn't connected." }, { status: 400 });
+    const lower = (x: string) => x.trim().toLowerCase();
+    try {
+      if (Array.isArray(body.importVehicles)) {
+        const want = new Set((body.importVehicles as unknown[]).map(String));
+        const [vehicles, mapRes, ours] = await Promise.all([
+          p.listVehicles(),
+          admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", g.companyId),
+          admin.from("trucks").select("truck_name").eq("company_id", g.companyId),
+        ]);
+        const mapped = new Set(((mapRes.data ?? []) as { provider_vehicle_id: string }[]).map((r) => r.provider_vehicle_id));
+        const names = new Set(((ours.data ?? []) as { truck_name: string }[]).map((t) => lower(t.truck_name)));
+        const todo = vehicles.filter((v) => want.has(v.id) && !mapped.has(v.id) && !names.has(lower(v.name)));
+        const info = await decodeVins(todo.map((v) => v.vin ?? ""));
+        for (const v of todo) {
+          const d = v.vin ? info.get(v.vin) : undefined;
+          const { data, error } = await admin.from("trucks").insert({
+            company_id: g.companyId, truck_name: v.name.trim(), active: true, vin_number: v.vin, plate_number: v.plate ?? null,
+            make: d?.make ?? null, model: d?.model ?? null, year: d?.year ?? null,
+          }).select("truck_id").single();
+          if (error || !data) continue;
+          await admin.from("telematics_vehicle_map").insert({ company_id: g.companyId, provider_vehicle_id: v.id, truck_id: data.truck_id, vehicle_name: v.name, matched_by: "import" });
+        }
+      }
+      if (Array.isArray(body.importTrailers)) {
+        const want = new Set((body.importTrailers as unknown[]).map(String));
+        const [trailers, mapRes, ours] = await Promise.all([
+          p.listTrailers(),
+          admin.from("telematics_trailer_map").select("provider_trailer_id").eq("company_id", g.companyId),
+          admin.from("trailers").select("trailer_name").eq("company_id", g.companyId),
+        ]);
+        const mapped = new Set(((mapRes.data ?? []) as { provider_trailer_id: string }[]).map((r) => r.provider_trailer_id));
+        const names = new Set(((ours.data ?? []) as { trailer_name: string }[]).map((t) => lower(t.trailer_name)));
+        for (const t of trailers.filter((x) => want.has(x.id) && !mapped.has(x.id) && !names.has(lower(x.name)))) {
+          const { data, error } = await admin.from("trailers").insert({ company_id: g.companyId, trailer_name: t.name.trim(), active: true }).select("trailer_id").single();
+          if (error || !data) continue;
+          await admin.from("telematics_trailer_map").insert({ company_id: g.companyId, provider_trailer_id: t.id, trailer_id: data.trailer_id, trailer_name: t.name, matched_by: "import" });
+        }
+      }
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 502 });
     }
     return NextResponse.json(await summary(g.companyId));
   }

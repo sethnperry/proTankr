@@ -112,7 +112,8 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       const rows: any[] = await call("Get", { typeName: "Device" });
       return (rows ?? [])
         .filter((d) => d?.id && d.name)
-        .map((d) => ({ id: String(d.id), name: String(d.name), vin: d.vehicleIdentificationNumber ? String(d.vehicleIdentificationNumber).toUpperCase() : null }));
+        .map((d) => ({ id: String(d.id), name: String(d.name), vin: d.vehicleIdentificationNumber ? String(d.vehicleIdentificationNumber).toUpperCase() : null,
+          plate: d.licensePlate ? String(d.licensePlate).toUpperCase() : null, plateState: d.licenseState ? String(d.licenseState).toUpperCase() : null }));
     },
 
     async engineHours(id: string): Promise<number | null> { return engineHours(id); },
