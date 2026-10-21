@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type UnitNotes, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -58,6 +58,15 @@ export function durationMinutes(v: unknown): number | null {
   if (n >= 1e10) return n / 1e7 / 60; // ticks
   if (n >= 1e6) return n / 60000;     // milliseconds
   return n / 60;                      // seconds
+}
+
+/** Pure: one Geotab Device/Trailer row -> its comment and named custom values. */
+export function notesOf(kind: "truck" | "trailer", row: any, propNames: Map<string, string>): UnitNotes {
+  const props = (Array.isArray(row?.customProperties) ? row.customProperties : [])
+    .map((c: any) => ({ name: propNames.get(String(c?.property?.id ?? "")) ?? String(c?.property?.id ?? "Field"), value: c?.value == null ? "" : String(c.value).trim() }))
+    .filter((p: { value: string }) => p.value !== "");
+  const comment = row?.comment ? String(row.comment).trim() : "";
+  return { kind, id: String(row.id), name: String(row.name ?? row.id), comment: comment || null, props };
 }
 
 const groupIdsOf = (d: any): { groupIds?: string[] } => {
@@ -146,6 +155,19 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         if (v.length >= 2) return { firstMi: Number(v[0].data) / METERS_PER_MILE, lastMi: Number(v[v.length - 1].data) / METERS_PER_MILE };
       }
       return null;
+    },
+
+    async unitNotes(): Promise<UnitNotes[]> {
+      const [devs, trs, props] = await Promise.all([
+        call("Get", { typeName: "Device" }) as Promise<any[]>,
+        (call("Get", { typeName: "Trailer" }) as Promise<any[]>).catch(() => []),
+        (call("Get", { typeName: "Property" }) as Promise<any[]>).catch(() => []),
+      ]);
+      const names = new Map<string, string>((props ?? []).filter((p) => p?.id).map((p) => [String(p.id), String(p.name ?? p.id)]));
+      return [
+        ...(devs ?? []).filter((d) => d?.id).map((d) => notesOf("truck", d, names)),
+        ...(trs ?? []).filter((t) => t?.id).map((t) => notesOf("trailer", t, names)),
+      ];
     },
 
     async listGroups(): Promise<ProviderGroup[]> {
