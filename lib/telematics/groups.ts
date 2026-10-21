@@ -19,6 +19,13 @@ export function groupPath(id: string, byId: Map<string, ProviderGroup>): string 
   return chain.length ? chain.join(" › ") : WHOLE_COMPANY;
 }
 
+/** Where one unit sits: its group paths joined, or "Whole company". */
+export function pathsFor(ids: string[] | undefined, groups: ProviderGroup[] | Map<string, ProviderGroup>): string {
+  const byId = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
+  if (!ids?.length) return WHOLE_COMPANY;
+  return [...new Set(ids.map((i) => groupPath(i, byId)))].join(", ");
+}
+
 export type GroupRow = { path: string; trucks: string[]; trailers: string[] };
 
 export function summarizeGroups(
