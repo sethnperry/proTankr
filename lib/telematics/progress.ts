@@ -75,3 +75,16 @@ export function hosText(h: { driveLeftMin: number | null; dutyLeftMin: number | 
   if (ageMin > 10) parts.push(`${ageMin} min old`);
   return { text: parts.join(" · "), color: least < 60 ? "#f87171" : least < 120 ? "#fb923c" : "rgba(255,255,255,0.5)" };
 }
+
+/** Rough driving time left to run the remaining stops in order, from the truck's
+ * position: straight-line miles x 1.25 at 45 mph. Stops without coordinates are
+ * skipped, so it can only under-count. */
+export function remainingDriveMin(from: LatLon, stops: (LatLon | null)[]): number {
+  let at = from, miles = 0;
+  for (const s of stops) {
+    if (!s) continue;
+    miles += airMiles(at, s) * 1.25;
+    at = s;
+  }
+  return (miles / 45) * 60;
+}

@@ -223,7 +223,7 @@ export default function DispatchPage() {
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
   const livePositions = useFleetPositions(companyId || null, mode === "live");
-  const fleetHos = useFleetHos(companyId || null, mode === "plan");
+  const fleetHos = useFleetHos(companyId || null, true);
   useEffect(() => {
     try {
       const m = localStorage.getItem("proTankr:dispatchMode");
@@ -838,7 +838,7 @@ export default function DispatchPage() {
         }
         onOpenDriver={(id) => setSelectedDriverId(id)}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
-          positions={livePositions}
+          positions={livePositions} hos={fleetHos}
           terminalLL={(id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; }}
           locationLL={(id) => { const l = locList.locations.find((x) => x.location_id === id); return l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null; }}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}

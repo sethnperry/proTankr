@@ -138,3 +138,12 @@ test("hosText: hours left, status, and color by the tightest clock", () => {
   assert.equal(r.text, "6.5 h drive · 9.0 h window · On duty");
   assert.equal(hosText({ driveLeftMin: 30, dutyLeftMin: 540, status: null, at: "2026-10-23T12:00:00Z" }, Date.parse("2026-10-23T12:00:00Z")).color, "#f87171");
 });
+
+import { remainingDriveMin } from "./progress.ts";
+test("remainingDriveMin: sums the legs, skips unknown stops", () => {
+  const a = { lat: 27, lon: -82 }, b = { lat: 28, lon: -82 }, c = { lat: 29, lon: -82 };
+  const two = remainingDriveMin(a, [b, c]);
+  assert.ok(Math.abs(two - remainingDriveMin(a, [b, null, c])) < 1e-9);
+  assert.ok(two > remainingDriveMin(a, [b]));
+  assert.equal(remainingDriveMin(a, []), 0);
+});

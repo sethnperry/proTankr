@@ -18,7 +18,8 @@ import { productColorFor } from "@/app/planner/utils/productColor";
 import { cancelReasonLabel, reasonCounts } from "@/lib/trips/cancelReasons";
 import type { CancelledTrip } from "@/lib/trips/useCancelledTrips";
 import { terminalIssueLabel } from "@/lib/trips/terminalIssues";
-import { fractionAlong, liveLine, pointAlong, pointsUpTo, type LivePos } from "@/lib/telematics/progress";
+import { fractionAlong, hosText, liveLine, pointAlong, pointsUpTo, remainingDriveMin, type LivePos } from "@/lib/telematics/progress";
+import type { HosAvailability } from "@/lib/telematics/types";
 import type { LatLon } from "@/lib/trips/deliveryLocations";
 
 export type BoardProduct = { name: string; code: string; hex: string | null };
@@ -278,11 +279,14 @@ function liveFor(ft: FleetTrip, route: TripRoute, pos: LivePos | undefined, term
     const prevNode = route.nodes[at - 1];
     fraction = fractionAlong(prevNode.kind === "start" ? null : llOf(prevNode.key), { lat: pos.lat, lon: pos.lon }, nextLL);
   }
-  return { ...line, fraction };
+  // Stops still ahead, in order, for the drive-time check.
+  const ahead = route.nodes.slice(at).map((n) => llOf(n.key));
+  return { ...line, fraction, remainingDriveMin: remainingDriveMin({ lat: pos.lat, lon: pos.lon }, ahead) };
 }
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, positions, terminalLL, locationLL }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, positions, hos, terminalLL, locationLL }: {
   positions?: Map<string, LivePos>;            // truck id -> live position
+  hos?: Map<string, HosAvailability>;          // driver user id -> clocks
   terminalLL?: (terminalId: string) => LatLon | null;
   locationLL?: (locationId: string) => LatLon | null;
   onDismissCancelled?: (tripId: string) => void;
@@ -327,6 +331,19 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
               {ft.orderNumbers.length > 0 && <span style={{ color: muted }}>· Order {ft.orderNumbers.join(", ")}</span>}
             </div>
             {lv && <div style={{ fontSize: 12, marginTop: 4, color: lv.stale ? muted : MOVING }}>● Live · {lv.text}</div>}
+            {(() => {
+              const h = ft.trip.driver_id ? hos?.get(ft.trip.driver_id) : undefined;
+              if (!h) return null;
+              const t = hosText(h, now.getTime());
+              // Won't make the remaining stops on the drive time left (a rough, optimistic estimate).
+              const short = lv && !lv.stale && h.driveLeftMin != null && lv.remainingDriveMin > h.driveLeftMin;
+              return (
+                <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: t.color }}>
+                  Hours · {t.text}
+                  {short && <span style={{ color: "#f87171", fontWeight: 700 }}> · about {(lv!.remainingDriveMin / 60).toFixed(1)} h of driving left to run, {(Math.max(0, h.driveLeftMin!) / 60).toFixed(1)} h on the clock</span>}
+                </div>
+              );
+            })()}
             <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
             <ProductChips ft={ft} product={product} />
           </button>
