@@ -49,6 +49,9 @@ import {
   canPark,
   arriveDelivery,
   arrivePickup,
+  undoableArrival,
+  undoArrivePickup,
+  undoArriveDelivery,
   compartmentsForDelivery,
   closePickupNoLoad,
   canCancelLoad,
@@ -1011,12 +1014,29 @@ export default function HomePage() {
     return null;
   }, [snap, terminalCatalog, locations]);
   const autoStampOn = settings.auto_stamp_arrival !== false;
+  // After an undone Arrive the truck is usually still at the stop; don't re-stamp or re-offer it.
+  const noAutoKey = (id: string) => `proTankr:noAuto:${id}`;
+  const stepStopId = step.kind === "arrive_pickup" ? step.pickup.pickup_id : step.kind === "arrive_delivery" ? step.delivery.delivery_id : null;
+  const autoBlocked = (() => { try { return !!stepStopId && localStorage.getItem(noAutoKey(stepStopId)) === "1"; } catch { return false; } })();
+  const [undoConfirm, setUndoConfirm] = useState(false);
+  const undoable = snap ? undoableArrival(snap) : null;
+  const undoName = undoable?.kind === "pickup" ? (undoable.pickup.name ?? "the terminal") : undoable?.kind === "delivery" ? "the store" : "";
+  const doUndoArrival = () => {
+    if (!store || !userId || !undoable) return;
+    const id = undoable.kind === "pickup" ? undoable.pickup.pickup_id : undoable.delivery.delivery_id;
+    try { localStorage.setItem(noAutoKey(id), "1"); } catch {}
+    if (undoable.kind === "pickup") undoArrivePickup(store, { userId, pickup: undoable.pickup, now: new Date(), newId });
+    else undoArriveDelivery(store, { userId, delivery: undoable.delivery, now: new Date(), newId });
+    void syncNow();
+    setUndoConfirm(false);
+    setNotice({ text: "Arrival undone. Tap Arrive when you really get there.", tripId: null });
+  };
   useDepartureWatch({ companyId: companyId || null, truckId, stopKey: atStop?.key ?? null, target: atStop?.target ?? null, enabled: !!atStop && autoStampOn });
 
   // Arrival auto-stamp: only where the fence is learned (tight). A wide catalog-point fence still
   // just offers the Arrive card. Back-dated to when the truck came to rest; the driver can edit.
   useEffect(() => {
-    if (!autoStampOn || !arrival.suggest || !arrival.learned || !arrivalTarget || !store || !userId) return;
+    if (!autoStampOn || autoBlocked || !arrival.suggest || !arrival.learned || !arrivalTarget || !store || !userId) return;
     const at = new Date(arrival.suggest.sinceMs);
     const when = at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     if (step.kind === "arrive_pickup") {
@@ -1657,7 +1677,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {arrival.suggest && arrivalTarget && (
+      {arrival.suggest && arrivalTarget && !autoBlocked && (
         <div style={{ ...card, marginBottom: 10, borderColor: "rgba(74,222,128,0.5)" }}>
           <div style={{ fontSize: 14, fontWeight: 800 }}>Looks like you're at {arrivalTarget.name}</div>
           <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
@@ -1692,6 +1712,21 @@ export default function HomePage() {
       </button>
       {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
+      )}
+      {undoable && !openingPlanner && (
+        <div style={{ textAlign: "center", fontSize: 13, marginTop: 8 }}>
+          {!undoConfirm ? (
+            <button type="button" onClick={() => setUndoConfirm(true)} style={{ background: "none", border: "none", color: muted, textDecoration: "underline", cursor: "pointer", fontSize: 13 }}>
+              Tapped Arrive by mistake? Undo
+            </button>
+          ) : (
+            <div>
+              <div style={{ color: "#fff", marginBottom: 6 }}>Undo arrival at {undoName}?</div>
+              <button type="button" onClick={doUndoArrival} style={{ padding: "8px 16px", fontWeight: 700, cursor: "pointer", background: "#fff", color: "#000", border: "none", borderRadius: 2, marginRight: 8 }}>Undo arrival</button>
+              <button type="button" onClick={() => setUndoConfirm(false)} style={{ padding: "8px 16px", cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>Keep</button>
+            </div>
+          )}
+        </div>
       )}
       </div>
 

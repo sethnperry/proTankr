@@ -978,3 +978,40 @@ export function cancelLoad(
 export function setTripHidden(store: TripStoreLike, tripId: string, hidden: boolean) {
   store.put("trips", { trip_id: tripId, driver_hidden: hidden });
 }
+
+// ── Undo an accidental Arrive ────────────────────────────────────────────────
+
+export type UndoableArrival =
+  | { kind: "pickup"; pickup: TripPickupRow }
+  | { kind: "delivery"; delivery: TripDeliveryRow };
+
+/** The stop the driver arrived at but hasn't started anything at yet, so the
+ * Arrive tap can still be taken back. Null once loading has begun, a load is
+ * attached, the stop is closed, or a delivery has begun. */
+export function undoableArrival(snap: TripSnapshot): UndoableArrival | null {
+  const pk = snap.pickups.find((p) => p.arrived_at && !p.begin_at && !p.load_id && !p.left_at && !p.outcome);
+  if (pk) return { kind: "pickup", pickup: pk };
+  const dl = snap.deliveries.find((d) => d.arrived_at && !d.begin_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled");
+  if (dl) return { kind: "delivery", delivery: dl };
+  return null;
+}
+
+/** Take back an Arrive tap at a pickup. The time and any delay reason go; the
+ * trip logs that it happened. */
+export function undoArrivePickup(store: TripStoreLike, args: { userId: string; pickup: TripPickupRow } & Clock) {
+  store.put("trip_pickups", { pickup_id: args.pickup.pickup_id, arrived_at: null, delay_reason_id: null, delay_note: null });
+  logEvent(store, args.newId, {
+    trip_id: args.pickup.trip_id, event_type: "pickup_arrival_undone", occurred_at: args.now.toISOString(),
+    actor_id: args.userId, pickup_id: args.pickup.pickup_id, payload: { was: args.pickup.arrived_at },
+  });
+}
+
+/** Take back an Arrive tap at a delivery; the trip goes back to in transit. */
+export function undoArriveDelivery(store: TripStoreLike, args: { userId: string; delivery: TripDeliveryRow } & Clock) {
+  store.put("trip_deliveries", { delivery_id: args.delivery.delivery_id, arrived_at: null, delay_reason_id: null, delay_note: null });
+  store.put("trips", { trip_id: args.delivery.trip_id, status: "in_transit" });
+  logEvent(store, args.newId, {
+    trip_id: args.delivery.trip_id, event_type: "delivery_arrival_undone", occurred_at: args.now.toISOString(),
+    actor_id: args.userId, delivery_id: args.delivery.delivery_id, payload: { was: args.delivery.arrived_at },
+  });
+}

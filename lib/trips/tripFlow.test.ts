@@ -9,6 +9,8 @@ import {
   setPickupOrder,
   arriveDelivery,
   arrivePickup,
+  undoableArrival,
+  undoArrivePickup,
   canCancelLoad,
   cancelLoad,
   setTripHidden,
@@ -443,4 +445,24 @@ test("defaultStepTimes: a geofence departure sets the leave time, never in the f
   const t = defaultStepTimes(now, 10, "2026-10-23T10:00:00Z", null, "2026-10-23T11:30:00Z");
   assert.equal(t.leftAt, "2026-10-23T11:30:00.000Z");
   assert.equal(defaultStepTimes(now, 10, null, null, "2026-10-23T13:00:00Z").leftAt, now.toISOString());
+});
+
+test("undo an accidental pickup arrival", () => {
+  const { s, newId, snap, getTrip } = setup();
+  assert.equal(undoableArrival(snap()), null);
+  arrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
+  assert.equal(nextStep(getTrip(), snap()).kind, "planner");
+  const u = undoableArrival(snap());
+  assert.equal(u?.kind, "pickup");
+  undoArrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
+  assert.equal(snap().pickups[0].arrived_at, null);
+  assert.equal(nextStep(getTrip(), snap()).kind, "arrive_pickup");
+  assert.equal(undoableArrival(snap()), null);
+});
+
+test("undo is refused once a load is attached", () => {
+  const { s, newId, snap } = setup();
+  arrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  assert.equal(undoableArrival(snap()), null);
 });
