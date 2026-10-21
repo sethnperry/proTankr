@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { HosAvailability } from "./types";
 
-export function useFleetHos(companyId: string | null, enabled: boolean): Map<string, HosAvailability> {
+export function useFleetHos(companyId: string | null, enabled: boolean, nonce = 0): Map<string, HosAvailability> {
   const [hos, setHos] = useState<Map<string, HosAvailability>>(new Map());
   useEffect(() => {
     if (!companyId || !enabled) return;
@@ -21,7 +21,7 @@ export function useFleetHos(companyId: string | null, enabled: boolean): Map<str
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;
           if (!token) return;
-          const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+          const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}${nonce > 0 ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
           const j = r.ok ? await r.json() : null;
           if (off) return;
           if (!j?.connected) { setHos(new Map()); return; }
@@ -32,6 +32,6 @@ export function useFleetHos(companyId: string | null, enabled: boolean): Map<str
     };
     void run();
     return () => { off = true; if (timer) window.clearTimeout(timer); };
-  }, [companyId, enabled]);
+  }, [companyId, enabled, nonce]);
   return hos;
 }

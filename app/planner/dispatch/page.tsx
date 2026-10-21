@@ -55,6 +55,7 @@ import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
 import { useFleetHos } from "@/lib/telematics/useFleetHos";
+import { linkMeToTelematics } from "@/lib/telematics/linkMe";
 import { hosAlerts as buildHosAlerts } from "@/lib/dispatch/hosAlerts";
 import { useGeofenceWatch } from "@/lib/dispatch/useGeofenceWatch";
 import { useHosNotifier } from "@/lib/dispatch/useHosNotifier";
@@ -227,7 +228,15 @@ export default function DispatchPage() {
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
   const livePositions = useFleetPositions(companyId || null, mode === "live");
-  const fleetHos = useFleetHos(companyId || null, true);
+  const [hosNonce, setHosNonce] = useState(0);
+  const fleetHos = useFleetHos(companyId || null, true, hosNonce);
+  // Picking a driver for the timeline: link them to Geotab now (if they match), then reload clocks.
+  useEffect(() => {
+    if (!companyId || !selectedDriverId) return;
+    let off = false;
+    void linkMeToTelematics(companyId, selectedDriverId).then(() => { if (!off) setHosNonce((n) => n + 1); });
+    return () => { off = true; };
+  }, [companyId, selectedDriverId]);
   useEffect(() => {
     try {
       const m = localStorage.getItem("proTankr:dispatchMode");

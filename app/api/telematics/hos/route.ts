@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     }
   }
   if (!r.superAdmin && !(r.role && STAFF.has(r.role))) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const hit = cache.get(companyId);
+  const hit = req.nextUrl.searchParams.get("fresh") === "1" ? undefined : cache.get(companyId);
   if (hit && Date.now() - hit.at < TTL_MS) return NextResponse.json({ connected: true, hos: hit.hos });
   try {
     const p = await providerFor(companyId);
