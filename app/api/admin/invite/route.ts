@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient }              from "@supabase/supabase-js";
 import { isRole }                    from "@/lib/ui/driver/role";
+import { autoLinkDriver }           from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 
@@ -209,6 +210,12 @@ export async function POST(req: NextRequest) {
       } catch (e: any) {
         console.warn("[invite] region write failed:", e?.message ?? e);
       }
+    }
+
+    // ── Optional: link the invitee to their Geotab driver (by sign-in email) so hours of service
+    // work from day one. Best-effort; a no-op when the company has no telematics connection.
+    if (invitedUserId) {
+      try { await autoLinkDriver(companyId, invitedUserId); } catch (e: any) { console.warn("[invite] driver link failed:", e?.message ?? e); }
     }
 
     // ── Send our custom branded email ────────────────────────────────────────
