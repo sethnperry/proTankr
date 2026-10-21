@@ -187,3 +187,19 @@ test("hosAlerts: only drivers with under 2 h on a clock, tightest first, red und
   ], hos, Date.parse(at));
   assert.deepEqual(r.map((x) => [x.userId, x.level]), [["u2", "red"], ["u1", "orange"]]);
 });
+
+import { diffHosAlerts, hosNotificationBody } from "./hosNotify.ts";
+test("hosNotify: new low drivers and escalations announce once; recovery re-arms", () => {
+  const a = (userId: string, level: "red" | "orange") => ({ tripId: "t" + userId, userId, driverName: userId.toUpperCase(), truckName: "9", text: "0.5 h drive", color: "#fff", level, leastMin: 30 });
+  let r = diffHosAlerts({}, [a("u1", "orange")]);
+  assert.deepEqual(r.fresh.map((x) => x.userId), ["u1"]);
+  r = diffHosAlerts(r.next, [a("u1", "orange")]);
+  assert.equal(r.fresh.length, 0); // still the same
+  r = diffHosAlerts(r.next, [a("u1", "red")]);
+  assert.deepEqual(r.fresh.map((x) => x.userId), ["u1"]); // got worse
+  r = diffHosAlerts(r.next, []);
+  assert.deepEqual(r.next, {}); // recovered
+  assert.equal(diffHosAlerts(r.next, [a("u1", "orange")]).fresh.length, 1);
+  assert.match(hosNotificationBody([a("u1", "red")]).title, /U1 is low on hours/);
+  assert.equal(hosNotificationBody([a("u1", "red"), a("u2", "red")]).title, "2 drivers are low on hours");
+});
