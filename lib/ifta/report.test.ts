@@ -40,3 +40,21 @@ test("purchaseState: the recorded state wins, else lat/lon, else unknown", () =>
   assert.equal(purchaseState({ state: null, lat: 33.7, lon: -84.4 }, lookup), "GA");
   assert.equal(purchaseState({ state: " ", lat: null, lon: null }, lookup), null);
 });
+
+import { iftaReturn, iftaReturnCsv } from "./report.ts";
+test("return worksheet: fleet MPG, taxable gallons, net taxable; AK/HI/OUT and no-state gallons set aside", () => {
+  const rep = buildIftaReport(
+    [{ truck_id: "t1", state: "FL", miles: 600 }, { truck_id: "t1", state: "GA", miles: 400 }, { truck_id: "t1", state: "OUT", miles: 50 }, { truck_id: "t1", state: "AK", miles: 20 }],
+    [{ truck_id: "t1", state: "FL", gallons: 100 }, { truck_id: "t1", state: "GA", gallons: 50 }, { truck_id: "t1", state: null, gallons: 25 }],
+    () => "25184",
+  );
+  const ret = iftaReturn(rep);
+  assert.equal(ret.mpg, 6.67); // 1000 mi / 150 gal (the no-state gallons aren't in a jurisdiction)
+  assert.deepEqual(ret.lines.map((l) => [l.jurisdiction, l.totalMiles, l.taxableGallons, l.taxPaidGallons, l.netTaxableGallons]), [["FL", 600, 90, 100, -10], ["GA", 400, 60, 50, 10]]);
+  assert.equal(ret.skippedMiles, 70);
+  assert.equal(ret.noStateGallons, 25);
+  const csv = iftaReturnCsv(rep, "Q4 2026").split("\n");
+  assert.equal(csv[0], '"Quarter","Jurisdiction","Total miles","Taxable miles","Fleet MPG","Taxable gallons","Tax-paid gallons","Net taxable gallons"');
+  assert.equal(csv[1], '"Q4 2026","FL",600,600,6.67,90,100,-10');
+  assert.equal(csv[3], '"Q4 2026","TOTAL",1000,1000,6.67,150,150,0');
+});

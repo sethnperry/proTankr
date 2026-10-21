@@ -88,3 +88,49 @@ export function purchaseState(p: { state: string | null; lat: number | null; lon
   if (p.lat != null && p.lon != null) return stateOf(Number(p.lat), Number(p.lon));
   return null;
 }
+
+/** IFTA members that file by jurisdiction: the lower 48 and DC. Alaska and Hawaii
+ * aren't IFTA jurisdictions, and OUT is outside the states, so none of them is reported. */
+const NOT_IFTA = new Set(["AK", "HI", "OUT"]);
+
+export type ReturnLine = { jurisdiction: string; totalMiles: number; taxableMiles: number; taxableGallons: number; taxPaidGallons: number; netTaxableGallons: number };
+export type IftaReturn = { lines: ReturnLine[]; totalMiles: number; totalGallons: number; mpg: number | null; skippedMiles: number; skippedGallons: number; noStateGallons: number };
+
+/** The return worksheet: per jurisdiction, total and taxable miles (no exempt
+ * miles are tracked, so they are equal), fleet MPG, taxable gallons (taxable
+ * miles / MPG), tax-paid gallons (what was bought there) and net taxable
+ * gallons. Tax rates change every quarter and aren't included. Whole numbers. */
+export function iftaReturn(r: IftaReport): IftaReturn {
+  const kept = r.states.filter((s) => !NOT_IFTA.has(s.state));
+  const skipped = r.states.filter((s) => NOT_IFTA.has(s.state));
+  const miles = kept.reduce((s, l) => s + l.miles, 0);
+  const gallons = kept.reduce((s, l) => s + l.gallons, 0);
+  const mpg = miles > 0 && gallons > 0 ? miles / gallons : null;
+  const lines = kept
+    .filter((l) => l.miles > 0 || l.gallons > 0)
+    .map((l) => {
+      const totalMiles = Math.round(l.miles);
+      const taxableGallons = mpg ? Math.round(l.miles / mpg) : 0;
+      const taxPaidGallons = Math.round(l.gallons);
+      return { jurisdiction: l.state, totalMiles, taxableMiles: totalMiles, taxableGallons, taxPaidGallons, netTaxableGallons: taxableGallons - taxPaidGallons };
+    });
+  return {
+    lines,
+    totalMiles: lines.reduce((s, l) => s + l.totalMiles, 0),
+    totalGallons: Math.round(gallons),
+    mpg: mpg != null ? Math.round(mpg * 100) / 100 : null,
+    skippedMiles: Math.round(skipped.reduce((s, l) => s + l.miles, 0)),
+    skippedGallons: Math.round(skipped.reduce((s, l) => s + l.gallons, 0)),
+    noStateGallons: Math.round(r.gallonsNoState),
+  };
+}
+
+/** CSV of the return worksheet, ready to key or import into a filing tool. */
+export function iftaReturnCsv(r: IftaReport, label: string): string {
+  const ret = iftaReturn(r);
+  const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const rows = [["Quarter", "Jurisdiction", "Total miles", "Taxable miles", "Fleet MPG", "Taxable gallons", "Tax-paid gallons", "Net taxable gallons"].map(q).join(",")];
+  for (const l of ret.lines) rows.push([q(label), q(l.jurisdiction), l.totalMiles, l.taxableMiles, ret.mpg ?? "", l.taxableGallons, l.taxPaidGallons, l.netTaxableGallons].join(","));
+  rows.push([q(label), q("TOTAL"), ret.totalMiles, ret.totalMiles, ret.mpg ?? "", ret.lines.reduce((s, l) => s + l.taxableGallons, 0), ret.lines.reduce((s, l) => s + l.taxPaidGallons, 0), ret.lines.reduce((s, l) => s + l.netTaxableGallons, 0)].join(","));
+  return rows.join("\n");
+}

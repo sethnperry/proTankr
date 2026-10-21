@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { buildIftaReport, iftaCsv, purchaseState, quarterOf, quarterRange, type GallonsRow, type MilesRow } from "@/lib/ifta/report";
+import { buildIftaReport, iftaCsv, iftaReturn, iftaReturnCsv, purchaseState, quarterOf, quarterRange, type GallonsRow, type MilesRow } from "@/lib/ifta/report";
 import type { StateOf } from "@/lib/ifta/milesByState";
 
 const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
@@ -73,14 +73,15 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
     setPurchases((xs) => xs.map((x) => (x.id === p.id ? { ...x, state: st } : x)));
   };
   const years = [now.year, now.year - 1];
-  const download = () => {
-    const blob = new Blob([iftaCsv(report, range.label)], { type: "text/csv" });
+  const save = (csv: string, name: string) => {
+    const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `ifta_${range.label.replace(" ", "_")}.csv`;
+    a.download = `${name}_${range.label.replace(" ", "_")}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
+  const ret = useMemo(() => iftaReturn(report), [report]);
 
   return (
     <FullscreenModal open={open} title="IFTA" onClose={onClose}>
@@ -158,7 +159,18 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
               );
             })}
           </div>
-          <button type="button" onClick={download} style={{ width: "100%", padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Download CSV</button>
+          <button type="button" onClick={() => save(iftaReturnCsv(report, range.label), "ifta_return")} style={{ width: "100%", padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+            Download {range.label} IFTA return (CSV)
+          </button>
+          <div style={{ fontSize: 12, color: muted, margin: "6px 0 10px", lineHeight: 1.5 }}>
+            One row per state: total and taxable miles, fleet MPG ({ret.mpg ?? "—"}), taxable gallons, tax-paid gallons and net taxable gallons.
+            Tax rates change each quarter and aren't included.
+            {ret.skippedMiles > 0 ? ` ${num(ret.skippedMiles)} mi in Alaska, Hawaii or outside the states are left out.` : ""}
+            {ret.noStateGallons > 0 ? ` ${num(ret.noStateGallons)} gal with no state aren't counted in MPG until a state is set.` : ""}
+          </div>
+          <button type="button" onClick={() => save(iftaCsv(report, range.label), "ifta_detail")} style={{ width: "100%", padding: "10px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+            Download per-truck detail (CSV)
+          </button>
           <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>
             A working figure: miles come from the truck's GPS trail scaled to its odometer (state lines can be off by about a mile; the Census boundaries are used), gallons from this company's fuel stops. It leaves out Canadian provinces and tax-paid gallons, so check it before filing.
           </div>
