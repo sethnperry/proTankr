@@ -115,6 +115,8 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         .map((d) => ({ id: String(d.id), name: String(d.name), vin: d.vehicleIdentificationNumber ? String(d.vehicleIdentificationNumber).toUpperCase() : null }));
     },
 
+    async engineHours(id: string): Promise<number | null> { return engineHours(id); },
+
     async listTrailers(): Promise<ProviderTrailer[]> {
       const rows: any[] = await call("Get", { typeName: "Trailer" });
       return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name) }));

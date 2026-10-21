@@ -12,6 +12,7 @@ export type ServiceInputs = {
   trailers: Map<string, string>;
   types: ServiceTypeInput[];
   records: (ServiceRecordInput & { truck_id: string | null; trailer_id: string | null })[];
+  engineHours?: Map<string, number>; // truck id -> hour meter now (telematics)
   trips: { truck_id: string | null; begin_miles: number | null; end_miles: number | null; created_at: string; completed_at: string | null }[];
 };
 
@@ -33,7 +34,7 @@ export function serviceAlerts(input: ServiceInputs, nowMs: number = Date.now()):
         if (t.end_miles != null) odometer.push({ miles: Number(t.end_miles), at: t.completed_at ?? t.created_at });
       }
     }
-    const s = unitAlerts({ unit, permits: [], types: input.types, records, odometer, todayIso, nowMs });
+    const s = unitAlerts({ unit, permits: [], types: input.types, records, odometer, engineHours: unit === "truck" ? input.engineHours?.get(id) ?? null : null, todayIso, nowMs });
     s.alerts.filter((a) => a.kind === "service").forEach((a, i) => {
       out.push({
         key: `s:${unit}:${id}:${i}`, kind: "service",

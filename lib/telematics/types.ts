@@ -41,6 +41,8 @@ export interface TelematicsProvider {
   hos(driverId: string): Promise<HosAvailability | null>;
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
+  /** Just the hour meter, for one vehicle. */
+  engineHours(vehicleId: string): Promise<number | null>;
   /** Position of every vehicle in one call (no odometer), keyed by provider vehicle id. */
   positions(): Promise<Map<string, VehicleReading>>;
 }

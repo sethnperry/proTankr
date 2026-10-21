@@ -23,7 +23,8 @@ import type { ActiveReport, ReportType } from "./conflicts";
 import type { PlanInputs } from "./planAlerts";
 import { OFTEN_WINDOW_DAYS } from "./planAlerts";
 import { swapRunOrder } from "./dispatchTrip";
-import { serviceAlerts } from "./serviceAlerts";
+import { serviceAlerts, type ServiceInputs } from "./serviceAlerts";
+import { useFleetEngineHours } from "../telematics/useFleetEngineHours";
 import type { Ack } from "./acks";
 import type { CertType, CertRecord } from "./certs";
 import { buildUsageItems, type AllocContract, type UsageItem } from "./allocation";
@@ -184,7 +185,10 @@ export function useTerminalUse(userIds: string[]) {
 export function usePlanData(companyId: string | null) {
   const roster = useCompanyRoster(companyId);
   const catalog = useTerminalsCatalog();
-  const [raw, setRaw] = useState<Omit<PlanInputs, "names" | "terminals" | "loads"> | null>(null);
+  const [raw, setRaw] = useState<Omit<PlanInputs, "names" | "terminals" | "loads" | "extra"> | null>(null);
+  // Service-due inputs kept raw so the truck hour meters (a separate, slower fetch) can be folded in.
+  const [svc, setSvc] = useState<Omit<ServiceInputs, "engineHours"> | null>(null);
+  const engineHours = useFleetEngineHours(companyId);
   const loads = useTerminalUse(roster.members.map((m) => m.user_id));
   const [error, setError] = useState<string | null>(null);
   // Region of each truck and trailer, for the dashboard's region filter.
@@ -220,14 +224,13 @@ export function usePlanData(companyId: string | null) {
       ]));
       const trucks = new Map(((trk.data ?? []) as any[]).filter((t) => t.active !== false).map((t) => [t.truck_id, t.truck_name ?? "—"]));
       const trailers = new Map(((trl.data ?? []) as any[]).filter((t) => t.active !== false).map((t) => [t.trailer_id, t.trailer_name ?? "—"]));
-      const extra = (sty.error || srec.error) ? [] : serviceAlerts({
+      setSvc((sty.error || srec.error) ? null : {
         trucks, trailers,
         types: ((sty.data ?? []) as any[]).map((t) => ({ ...t, interval_value: t.interval_value == null ? null : Number(t.interval_value) })),
         records: ((srec.data ?? []) as any[]).map((r) => ({ ...r, reading_value: r.reading_value == null ? null : Number(r.reading_value) })),
         trips: ((trp.data ?? []) as any[]),
       });
       setRaw({
-        extra,
         access: (acc.data ?? []) as any[],
         credentials: [...cred(lic, "license"), ...cred(med, "medical"), ...cred(twic, "twic")],
         badges: (port.data ?? []) as any[],
@@ -248,11 +251,12 @@ export function usePlanData(companyId: string | null) {
     if (!raw) return null;
     return {
       ...raw,
+      extra: svc ? serviceAlerts({ ...svc, engineHours }) : [],
       loads,
       names: new Map(roster.members.map((m) => [m.user_id, m.display_name])),
       terminals: new Map(catalog.data.map((t) => [String(t.terminal_id), { name: t.terminal_name ?? "Terminal", renewal_days: (t as any).renewal_days ?? null }])),
     };
-  }, [raw, loads, roster.members, catalog.data]);
+  }, [raw, svc, engineHours, loads, roster.members, catalog.data]);
 
   // Terminals this company uses: cards held and recent loads. The Watch list
   // reads reports for these.

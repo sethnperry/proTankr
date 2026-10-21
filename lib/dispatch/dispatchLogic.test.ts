@@ -203,3 +203,17 @@ test("hosNotify: new low drivers and escalations announce once; recovery re-arms
   assert.match(hosNotificationBody([a("u1", "red")]).title, /U1 is low on hours/);
   assert.equal(hosNotificationBody([a("u1", "red"), a("u2", "red")]).title, "2 drivers are low on hours");
 });
+
+test("serviceAlerts: an engine-hours service is due from the fleet hour meters, and silent without them", () => {
+  const base = {
+    trucks: new Map([["t1", "25184"]]), trailers: new Map<string, string>(),
+    types: [{ service_type_id: "h", name: "Oil", interval_kind: "hours" as const, interval_value: 500, applies_to: "truck" as const, is_active: true }],
+    records: [{ service_type_id: "h", date: "2026-09-01", reading_value: 3000, created_at: "2026-09-01T00:00:00Z", truck_id: "t1", trailer_id: null }],
+    trips: [],
+  };
+  const now = Date.parse("2026-10-19T12:00:00Z");
+  assert.equal(serviceAlerts(base, now).length, 0);
+  const r = serviceAlerts({ ...base, engineHours: new Map([["t1", 3490]]) }, now);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].subject, "Truck 25184");
+});
