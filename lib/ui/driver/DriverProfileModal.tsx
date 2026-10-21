@@ -213,7 +213,7 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         p_data:       payload,
       });
       if (error) throw error;
-      if (showPersonalFields) void linkMeToTelematics(companyId);
+      void linkMeToTelematics(companyId, showPersonalFields ? undefined : member.user_id);
 
       // Separate table, separate write -- self-only RLS (user_id =
       // auth.uid()), no RPC needed. Only reachable when showPersonalFields
