@@ -79,3 +79,12 @@ export function iftaCsv(r: IftaReport, label: string): string {
   if (r.gallonsNoState) rows.push([q(label), q("ALL TRUCKS"), q("(no state recorded)"), 0, r.gallonsNoState].join(","));
   return rows.join("\n");
 }
+
+/** The state of a fuel purchase: the one recorded, else looked up from where the
+ * stop was (lat/lon). Null when neither is known. */
+export function purchaseState(p: { state: string | null; lat: number | null; lon: number | null }, stateOf: (lat: number, lon: number) => string | null): string | null {
+  const s = p.state?.trim().toUpperCase();
+  if (s) return s;
+  if (p.lat != null && p.lon != null) return stateOf(Number(p.lat), Number(p.lon));
+  return null;
+}

@@ -32,3 +32,11 @@ test("csv: header, per-truck rows, fleet rows, quoting", () => {
   assert.equal(csv[1], '"Q4 2026","Big ""Red""","FL",12.3,0');
   assert.equal(csv[2], '"Q4 2026","ALL TRUCKS","FL",12.3,0');
 });
+
+import { purchaseState } from "./report.ts";
+test("purchaseState: the recorded state wins, else lat/lon, else unknown", () => {
+  const lookup = () => "GA";
+  assert.equal(purchaseState({ state: "fl", lat: 1, lon: 1 }, lookup), "FL");
+  assert.equal(purchaseState({ state: null, lat: 33.7, lon: -84.4 }, lookup), "GA");
+  assert.equal(purchaseState({ state: " ", lat: null, lon: null }, lookup), null);
+});

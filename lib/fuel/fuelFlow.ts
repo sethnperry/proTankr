@@ -56,11 +56,14 @@ export function recordFailedTry(p: FuelPurchase, e: PumpEntry, now: string): Fue
 // (for MPG) and the time; price comes from the fuel network.
 export function finishQuick(
   p: FuelPurchase,
-  e: { payKind: PayKind; methodId: string | null; odometer: string; gallons: string; filledToFull: boolean; pos?: { lat: number; lon: number } | null },
+  e: { payKind: PayKind; methodId: string | null; odometer: string; gallons: string; filledToFull: boolean; pos?: { lat: number; lon: number } | null; city?: string; state?: string },
   now: string,
 ): FuelPurchase {
   return {
     ...p,
+    // Where it happened, for IFTA: keep what's there, else the place worked out from the truck or phone.
+    city: p.city ?? (e.city?.trim() || null),
+    state: p.state ?? (e.state?.trim().toUpperCase() || null),
     status: "complete",
     pay_kind: e.payKind,
     method_id: e.methodId,

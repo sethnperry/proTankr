@@ -9,7 +9,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { buildIftaReport, iftaCsv, quarterOf, quarterRange, type GallonsRow, type MilesRow } from "@/lib/ifta/report";
+import { buildIftaReport, iftaCsv, purchaseState, quarterOf, quarterRange, type GallonsRow, type MilesRow } from "@/lib/ifta/report";
+import type { StateOf } from "@/lib/ifta/milesByState";
+
+const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
+type Purchase = { id: string; truck_id: string | null; state: string | null; lat: number | null; lon: number | null; gallons: number; at: string; place: string };
 
 const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 };
@@ -20,7 +24,15 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
   const now = quarterOf(new Date().toISOString().slice(0, 10));
   const [sel, setSel] = useState<{ year: number; q: 1 | 2 | 3 | 4 }>(now);
   const [miles, setMiles] = useState<MilesRow[] | null>(null);
-  const [gallons, setGallons] = useState<GallonsRow[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [stateOf, setStateOf] = useState<StateOf | null>(null);
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<string | null>(null);
+  // The state lookup (Census boundaries) loads when the report opens, for stops saved without a state.
+  useEffect(() => {
+    if (!open || stateOf) return;
+    void Promise.all([import("@/lib/ifta/milesByState"), import("us-atlas/states-10m.json")]).then(([m, t]) => setStateOf(() => m.makeStateOf((t as { default: unknown }).default)));
+  }, [open, stateOf]);
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [err, setErr] = useState<string | null>(null);
   const [openTruck, setOpenTruck] = useState<string | null>(null);
@@ -33,20 +45,33 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
     void (async () => {
       const [m, g, t] = await Promise.all([
         supabase.from("ifta_daily_miles").select("truck_id, state, miles").eq("company_id", companyId).gte("day", range.from).lte("day", range.to).limit(50000),
-        supabase.from("fuel_purchases").select("truck_id, state, diesel_gallons").eq("company_id", companyId).eq("status", "complete")
+        supabase.from("fuel_purchases").select("id, truck_id, state, lat, lon, diesel_gallons, started_at, store_name, city").eq("company_id", companyId).eq("status", "complete")
           .gte("started_at", `${range.from}T00:00:00Z`).lte("started_at", `${range.to}T23:59:59Z`).limit(20000),
         supabase.from("trucks").select("truck_id, truck_name").eq("company_id", companyId),
       ]);
       if (off) return;
       if (m.error) { setErr(m.error.message); setMiles([]); return; }
       setMiles(((m.data ?? []) as MilesRow[]).map((r) => ({ ...r, miles: Number(r.miles) })));
-      setGallons(((g.data ?? []) as { truck_id: string | null; state: string | null; diesel_gallons: number | null }[]).map((r) => ({ truck_id: r.truck_id, state: r.state, gallons: Number(r.diesel_gallons ?? 0) })));
+      setPurchases(((g.data ?? []) as { id: string; truck_id: string | null; state: string | null; lat: number | null; lon: number | null; diesel_gallons: number | null; started_at: string; store_name: string | null; city: string | null }[])
+        .map((r) => ({ id: r.id, truck_id: r.truck_id, state: r.state, lat: r.lat, lon: r.lon, gallons: Number(r.diesel_gallons ?? 0), at: r.started_at, place: [r.store_name, r.city].filter(Boolean).join(" · ") }))
+        .sort((a, b) => b.at.localeCompare(a.at)));
       setNames(new Map(((t.data ?? []) as { truck_id: string; truck_name: string }[]).map((x) => [x.truck_id, x.truck_name])));
     })();
     return () => { off = true; };
   }, [open, companyId, range.from, range.to]);
 
+  const stateFor = (p: Purchase) => purchaseState(p, stateOf ?? (() => null));
+  const gallons = useMemo<GallonsRow[]>(() => purchases.map((p) => ({ truck_id: p.truck_id, state: stateFor(p), gallons: p.gallons })), [purchases, stateOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const report = useMemo(() => buildIftaReport(miles ?? [], gallons, (id) => names.get(id) ?? "Truck"), [miles, gallons, names]);
+  const unknown = purchases.filter((p) => p.gallons > 0 && !stateFor(p));
+  const setState = async (p: Purchase) => {
+    const st = pick[p.id];
+    if (!st) return;
+    setMsg(null);
+    const { error } = await supabase.from("fuel_purchases").update({ state: st }).eq("id", p.id).select("id");
+    if (error) return setMsg(error.message);
+    setPurchases((xs) => xs.map((x) => (x.id === p.id ? { ...x, state: st } : x)));
+  };
   const years = [now.year, now.year - 1];
   const download = () => {
     const blob = new Blob([iftaCsv(report, range.label)], { type: "text/csv" });
@@ -105,6 +130,33 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
                 ))}
               </div>
             ))}
+          </div>
+          <div style={card}>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Fuel purchases · {purchases.length}</div>
+            {unknown.length > 0 && <div style={{ fontSize: 12, color: "#fbbf24", marginBottom: 8 }}>{unknown.length} {unknown.length === 1 ? "stop has" : "stops have"} no state. Pick one so the gallons count for IFTA.</div>}
+            {msg && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>{msg}</div>}
+            {purchases.length === 0 && <div style={{ fontSize: 13, color: muted }}>No completed fuel stops this quarter.</div>}
+            {purchases.map((p) => {
+              const st = stateFor(p);
+              return (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "5px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <span className="dash-num" style={{ color: muted, width: 44 }}>{p.at.slice(5, 10).replace("-", "/")}</span>
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.truck_id ? names.get(p.truck_id) ?? "Truck" : "Truck ?"}{p.place ? <span style={{ color: muted }}> · {p.place}</span> : null}
+                  </span>
+                  <span className="dash-num">{num(p.gallons)} gal</span>
+                  {st ? <span style={{ fontWeight: 800, width: 28, textAlign: "right" }}>{st}</span> : (
+                    <span style={{ display: "flex", gap: 4 }}>
+                      <select value={pick[p.id] ?? ""} onChange={(e) => setPick((x) => ({ ...x, [p.id]: e.target.value }))} style={{ background: "rgba(255,255,255,0.06)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2, fontSize: 13, padding: "3px 4px" }}>
+                        <option value="">State</option>
+                        {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <button type="button" disabled={!pick[p.id]} onClick={() => void setState(p)} style={{ border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 12, borderRadius: 2, padding: "3px 8px", cursor: "pointer", opacity: pick[p.id] ? 1 : 0.4 }}>Set</button>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <button type="button" onClick={download} style={{ width: "100%", padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Download CSV</button>
           <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>

@@ -34,6 +34,7 @@ import {
   type FuelMethod, type FuelProducts, type FuelSettings, type PayKind,
 } from "@/lib/fuel/types";
 import { currentCity } from "@/lib/trips/startPlace";
+import { resolveStopPlace } from "@/lib/fuel/stopPlace";
 import { COMPANY_CARD, PERSONAL_CARD, maskCard, type VaultCard } from "@/lib/vault/cards";
 
 const muted = "rgba(255,255,255,0.5)";
@@ -362,7 +363,8 @@ export default function FuelSheet({
     if (!choice) return;
     if (!odo.trim()) { setErr("Enter the odometer."); return; }
     if (!quickGal.trim()) { setErr("Enter the gallons."); return; }
-    const done = finishQuick(p, { payKind: choice.payKind, methodId: choice.method?.id ?? null, odometer: odo, gallons: quickGal, filledToFull: quickFull, pos }, new Date().toISOString());
+    const place = p.state ? null : await resolveStopPlace(p.truck_id);
+    const done = finishQuick(p, { payKind: choice.payKind, methodId: choice.method?.id ?? null, odometer: odo, gallons: quickGal, filledToFull: quickFull, pos, city: place?.city, state: place?.state }, new Date().toISOString());
     const ok = await stop.complete(done, {
       is_personal: false, price_per_gallon: null, diesel_amount: null, def_amount: null, total_amount: null, vault_entry_id: null, receipt_path: null,
     });
@@ -402,7 +404,8 @@ export default function FuelSheet({
   const missing = missingForComplete(p, d, needReceipt, total);
   const save = () => run(async () => {
     if (missing.length) { setErr(`Still needed: ${missing.join(", ")}`); return; }
-    const done = completeStop(p, { ...d, pos: storePos() }, new Date().toISOString());
+    const place = d.state.trim() ? null : await resolveStopPlace(p.truck_id);
+    const done = completeStop(p, { ...d, state: d.state.trim() || place?.state || "", city: d.city.trim() || place?.city || "", pos: storePos() }, new Date().toISOString());
     const ok = await stop.complete(done, {
       is_personal: personal,
       ...paymentAmounts({ dieselGallons: d.dieselGallons, total }),
