@@ -26,6 +26,22 @@ const chip = (on: boolean): React.CSSProperties => ({
   background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.85)",
 });
 
+// Plan slots: the active one is a thick white outline with a faint tint and bright text, so the
+// product dots inside stay readable (a solid white fill swallowed them).
+const slotChip = (on: boolean): React.CSSProperties => ({
+  padding: on ? "7px 10px" : "8px 11px", borderRadius: 2, fontSize: 13, fontWeight: on ? 800 : 700, cursor: "pointer",
+  border: on ? "2px solid #fff" : "1px solid rgba(255,255,255,0.18)",
+  background: on ? "rgba(255,255,255,0.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,0.75)",
+});
+
+// Product choices: the chosen one gets a thick border and a tint in its own color, so the
+// product color stays visible (a solid white fill hid it).
+const productChip = (on: boolean, color: string): React.CSSProperties => ({
+  padding: "8px 11px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#fff",
+  border: on ? `2px solid ${color}` : "1px solid rgba(255,255,255,0.18)",
+  background: on ? `color-mix(in srgb, ${color} 22%, transparent)` : "transparent",
+} as React.CSSProperties);
+
 export function CompartmentPlanCard(p: {
   trailerName: string;
   trailerOptions: { id: string; name: string }[];
@@ -120,7 +136,7 @@ export function CompartmentPlanCard(p: {
                 {LETTERS.map((ltr, i) => {
                   const s = i + 1, t = p.slots[s];
                   return (
-                    <button key={s} type="button" onClick={() => loadSlot(s)} style={{ ...chip(p.activeSlot === s), display: "flex", alignItems: "center", gap: 6 }}>
+                    <button key={s} type="button" onClick={() => loadSlot(s)} style={{ ...slotChip(p.activeSlot === s), display: "flex", alignItems: "center", gap: 6 }}>
                       {ltr}
                       {t && <span style={{ display: "flex", gap: 2 }}>{dots(t.payload).map((c, j) => <span key={j} title={c ? undefined : "Empty"} style={{ width: 8, height: 8, borderRadius: "50%", background: c ?? "linear-gradient(to top right, transparent calc(50% - 1px), rgba(255,255,255,0.5) calc(50% - 1px), rgba(255,255,255,0.5) calc(50% + 1px), transparent calc(50% + 1px)), linear-gradient(to bottom right, transparent calc(50% - 1px), rgba(255,255,255,0.5) calc(50% - 1px), rgba(255,255,255,0.5) calc(50% + 1px), transparent calc(50% + 1px)), #000", border: "1px solid rgba(255,255,255,0.3)" }} />)}</span>}
                     </button>
@@ -135,12 +151,12 @@ export function CompartmentPlanCard(p: {
                   <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>C{pickComp}</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {choices.map((x) => (
-                      <button key={x.product_id} type="button" style={{ ...chip(p.plan[pickComp] === x.product_id), display: "flex", alignItems: "center", gap: 6 }}
+                      <button key={x.product_id} type="button" style={{ ...productChip(p.plan[pickComp] === x.product_id, x.hex ?? productColorFor(x.name)), display: "flex", alignItems: "center", gap: 6, padding: p.plan[pickComp] === x.product_id ? "7px 10px" : "8px 11px" }}
                         onClick={() => { setComp(pickComp, x.product_id); setPickComp(null); }}>
                         <span style={{ width: 9, height: 9, borderRadius: "50%", background: x.hex ?? productColorFor(x.name) }} />{x.code}
                       </button>
                     ))}
-                    <button type="button" style={chip(false)} onClick={() => { setComp(pickComp, null); setPickComp(null); }}>Empty</button>
+                    <button type="button" style={{ ...productChip(!p.plan[pickComp], "rgba(255,255,255,0.6)") }} onClick={() => { setComp(pickComp, null); setPickComp(null); }}>Empty</button>
                   </div>
                   {p.terminalProductIds && (
                     <button type="button" onClick={() => setShowAll((v) => !v)} style={{ background: "none", border: "none", color: L.muted, fontSize: 12, cursor: "pointer", padding: "6px 0 0" }}>
