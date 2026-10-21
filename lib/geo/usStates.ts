@@ -14,6 +14,10 @@ const CODES: Record<string, string> = {
   "south carolina": "SC", "south dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
   virginia: "VA", washington: "WA", "west virginia": "WV", wisconsin: "WI", wyoming: "WY",
   "puerto rico": "PR",
+  // Canadian provinces and territories (IFTA jurisdictions)
+  alberta: "AB", "british columbia": "BC", manitoba: "MB", "new brunswick": "NB", "newfoundland and labrador": "NL",
+  "nova scotia": "NS", "northwest territories": "NT", nunavut: "NU", ontario: "ON", "prince edward island": "PE",
+  quebec: "QC", "québec": "QC", saskatchewan: "SK", yukon: "YT", "yukon territory": "YT",
 };
 
 export function stateCode(name: string | null | undefined): string | null {

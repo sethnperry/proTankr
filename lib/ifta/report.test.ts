@@ -58,3 +58,14 @@ test("return worksheet: fleet MPG, taxable gallons, net taxable; AK/HI/OUT and n
   assert.equal(csv[1], '"Q4 2026","FL",600,600,6.67,90,100,-10');
   assert.equal(csv[3], '"Q4 2026","TOTAL",1000,1000,6.67,150,150,0');
 });
+
+test("return worksheet: Canadian provinces are jurisdictions, but NT and NU aren't", () => {
+  const rep = buildIftaReport(
+    [{ truck_id: "t", state: "MI", miles: 500 }, { truck_id: "t", state: "ON", miles: 300 }, { truck_id: "t", state: "QC", miles: 100 }, { truck_id: "t", state: "NT", miles: 40 }],
+    [{ truck_id: "t", state: "MI", gallons: 80 }, { truck_id: "t", state: "ON", gallons: 45 }],
+    () => "1",
+  );
+  const ret = iftaReturn(rep);
+  assert.deepEqual(ret.lines.map((l) => l.jurisdiction), ["MI", "ON", "QC"]);
+  assert.equal(ret.skippedMiles, 40);
+});

@@ -4,15 +4,23 @@ import { readFileSync } from "node:fs";
 import { makeStateOf, milesByState, scaleToOdometer } from "./milesByState.ts";
 
 const topology = JSON.parse(readFileSync(new URL("../../node_modules/us-atlas/states-10m.json", import.meta.url), "utf8"));
-const stateOf = makeStateOf(topology);
+const canada = JSON.parse(readFileSync(new URL("./canada-provinces.json", import.meta.url), "utf8"));
+const stateOf = makeStateOf(topology, canada);
 
-test("stateOf: real places land in the right state; the ocean and Canada don't", () => {
+test("stateOf: real places land in the right state or province; the ocean and Mexico don't", () => {
   assert.equal(stateOf(27.95, -82.46), "FL"); // Tampa
   assert.equal(stateOf(33.75, -84.39), "GA"); // Atlanta
   assert.equal(stateOf(29.76, -95.37), "TX"); // Houston
   assert.equal(stateOf(41.88, -87.63), "IL"); // Chicago
   assert.equal(stateOf(25.0, -90.0), null);   // Gulf of Mexico
-  assert.equal(stateOf(45.5, -73.6), null);   // Montreal
+  assert.equal(stateOf(45.5, -73.6), "QC");   // Montreal
+  assert.equal(stateOf(43.65, -79.38), "ON"); // Toronto
+  assert.equal(stateOf(51.05, -114.07), "AB"); // Calgary
+  assert.equal(stateOf(49.28, -123.12), "BC"); // Vancouver
+  assert.equal(stateOf(44.65, -63.57), "NS"); // Halifax
+  assert.equal(stateOf(42.40, -83.10), "MI"); // north of Detroit
+  assert.equal(stateOf(42.95, -81.25), "ON"); // London, Ontario
+  assert.equal(stateOf(19.43, -99.13), null); // Mexico City
 });
 
 test("milesByState: a trip Tampa to Atlanta splits between FL and GA and sums to the distance", () => {
@@ -40,4 +48,12 @@ test("scaleToOdometer: scales within 25%, otherwise keeps the GPS figures", () =
   assert.ok(Math.abs(s.FL - 110) < 1e-9 && Math.abs(s.GA - 110) < 1e-9);
   assert.deepEqual(scaleToOdometer({ FL: 100 }, 500), { FL: 100 });
   assert.deepEqual(scaleToOdometer({ FL: 100 }, null), { FL: 100 });
+});
+
+import { stateCode } from "../geo/usStates.ts";
+test("stateCode: Canadian province names and accented Québec", () => {
+  assert.equal(stateCode("Ontario"), "ON");
+  assert.equal(stateCode("Québec"), "QC");
+  assert.equal(stateCode("British Columbia"), "BC");
+  assert.equal(stateCode("on"), "ON");
 });

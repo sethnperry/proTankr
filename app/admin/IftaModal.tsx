@@ -12,7 +12,7 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { buildIftaReport, iftaCsv, iftaReturn, iftaReturnCsv, purchaseState, quarterOf, quarterRange, type GallonsRow, type MilesRow } from "@/lib/ifta/report";
 import type { StateOf } from "@/lib/ifta/milesByState";
 
-const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
+const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AB BC MB NB NL NS NT NU ON PE QC SK YT".split(" ");
 type Purchase = { id: string; truck_id: string | null; state: string | null; lat: number | null; lon: number | null; gallons: number; at: string; place: string };
 
 const muted = "rgba(255,255,255,0.5)";
@@ -31,7 +31,7 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
   // The state lookup (Census boundaries) loads when the report opens, for stops saved without a state.
   useEffect(() => {
     if (!open || stateOf) return;
-    void Promise.all([import("@/lib/ifta/milesByState"), import("us-atlas/states-10m.json")]).then(([m, t]) => setStateOf(() => m.makeStateOf((t as { default: unknown }).default)));
+    void Promise.all([import("@/lib/ifta/milesByState"), import("us-atlas/states-10m.json"), import("@/lib/ifta/canada-provinces.json")]).then(([m, t, c]) => setStateOf(() => m.makeStateOf((t as { default: unknown }).default, (c as { default: unknown }).default)));
   }, [open, stateOf]);
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [err, setErr] = useState<string | null>(null);
@@ -109,7 +109,7 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>By state · all trucks</div>
             {report.states.map((s) => (
               <div key={s.state} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "4px 0" }}>
-                <span style={{ fontWeight: 700 }}>{s.state === "OUT" ? "Outside the 50 states" : s.state}</span>
+                <span style={{ fontWeight: 700 }}>{s.state === "OUT" ? "Outside the US and Canada" : s.state}</span>
                 <span className="dash-num" style={{ color: muted }}>{num(s.miles)} mi · {num(s.gallons)} gal</span>
               </div>
             ))}
@@ -172,7 +172,7 @@ export default function IftaModal({ open, onClose, companyId }: { open: boolean;
             Download per-truck detail (CSV)
           </button>
           <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>
-            A working figure: miles come from the truck's GPS trail scaled to its odometer (state lines can be off by about a mile; the Census boundaries are used), gallons from this company's fuel stops. It leaves out Canadian provinces and tax-paid gallons, so check it before filing.
+            A working figure: miles come from the truck's GPS trail scaled to its odometer (state lines can be off by about a mile; the Census boundaries are used), gallons from this company's fuel stops. Canadian fuel bought in litres has to be entered as gallons, and tax-paid status isn't checked, so check it before filing.
           </div>
         </>
       )}

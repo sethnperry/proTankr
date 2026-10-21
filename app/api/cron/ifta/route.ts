@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import topology from "us-atlas/states-10m.json";
+import canada from "@/lib/ifta/canada-provinces.json";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { providerFor } from "@/lib/telematics/server";
 import { makeStateOf, milesByState, scaleToOdometer } from "@/lib/ifta/milesByState";
@@ -16,7 +17,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const DAY = 86400000;
-const stateOf = makeStateOf(topology as unknown);
+const stateOf = makeStateOf(topology as unknown, canada as unknown);
 const dayStr = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 export async function GET(req: NextRequest) { return handle(req); }

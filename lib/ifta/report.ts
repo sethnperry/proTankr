@@ -89,9 +89,10 @@ export function purchaseState(p: { state: string | null; lat: number | null; lon
   return null;
 }
 
-/** IFTA members that file by jurisdiction: the lower 48 and DC. Alaska and Hawaii
- * aren't IFTA jurisdictions, and OUT is outside the states, so none of them is reported. */
-const NOT_IFTA = new Set(["AK", "HI", "OUT"]);
+/** IFTA members that file by jurisdiction: the lower 48, DC and the Canadian
+ * provinces. Alaska, Hawaii, the Northwest Territories and Nunavut aren't
+ * members, and OUT is outside the states and provinces, so none of them is reported. */
+const NOT_IFTA = new Set(["AK", "HI", "NT", "NU", "OUT"]);
 
 export type ReturnLine = { jurisdiction: string; totalMiles: number; taxableMiles: number; taxableGallons: number; taxPaidGallons: number; netTaxableGallons: number };
 export type IftaReturn = { lines: ReturnLine[]; totalMiles: number; totalGallons: number; mpg: number | null; skippedMiles: number; skippedGallons: number; noStateGallons: number };
