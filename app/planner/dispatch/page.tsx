@@ -47,7 +47,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { startSetupSession } from "@/lib/setupSession";
 import { useCalculatorShell } from "../CalculatorShellContext";
-import DriverPicker from "../components/DriverPicker";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { addDaysISO_, formatMDYWithCountdown_ } from "../utils/dates";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
@@ -74,7 +73,7 @@ import FleetCardsModal from "@/app/admin/FleetCardsModal";
 import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
 import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
-import { PlanLoadCard, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
+import { PlanLoadCard, DriverList, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
 import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
 import { TimelineCard, type DayLeg } from "./TimelineCard";
@@ -824,7 +823,6 @@ export default function DispatchPage() {
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
             onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
-            selectedDriverId={tlDriverId} onSelectDriver={(id) => { setTlDriverId((cur) => (cur === id ? null : id)); setTlStart(null); }}
             timeline={tlDriverId && planLocation && planTerminalId ? (
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={dayLegs.length > 0 && tlStart == null} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
@@ -880,10 +878,11 @@ export default function DispatchPage() {
           onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
         dispatchedCount={dispatchedShown.length}
         regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
-        drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onlyUserIds={regionOn ? regionDriverIds : undefined} onPick={(id) => {
-          // While planning a load (drop location + terminal chosen) a tap builds that driver's timeline; otherwise it opens their file.
-          if (planLocationId && planTerminalId) { setTlDriverId(id); setTlStart(null); window.scrollTo({ top: 0, behavior: "smooth" }); } else setSelectedDriverId(id);
-        }} /></div>}
+        drivers={<div id="dispatch-drivers"><DriverList result={ranked} showNotCarded={showNotCarded && !!planTerminalId}
+          location={planLocation} terminal={planTerminal} historyLoading={history.loading} historyError={history.error}
+          selectedDriverId={tlDriverId}
+          onSelectDriver={(id) => { setTlDriverId((cur) => (cur === id ? null : id)); setTlStart(null); if (planLocationId && planTerminalId) window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onOpenDriver={(id) => setSelectedDriverId(id)} equipFor={equipFor} hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)} /></div>}
         tools={dashTools}
       />
       <LocationPicker browse open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}

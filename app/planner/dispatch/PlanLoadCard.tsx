@@ -69,7 +69,7 @@ function accessText(d: PlanDriver): { text: string; color: string } | null {
   return { text: `Access ${days}d`, color: EXPIRY_COLOR[state] };
 }
 
-function DriverRow({ d, onOpen, onSelect, selected, equip, terminal, hos }: { hos?: { text: string; color: string } | null; d: PlanDriver; onOpen: (id: string) => void; onSelect: (id: string) => void; selected: boolean; equip?: DriverEquip | null; terminal: string | null }) {
+function DriverRow({ d, onOpen, onSelect, selected, equip, terminal, hos, canPlan }: { hos?: { text: string; color: string } | null; d: PlanDriver; onOpen: (id: string) => void; onSelect: (id: string) => void; selected: boolean; equip?: DriverEquip | null; terminal: string | null; canPlan: boolean }) {
   const L = useDashLook();
   const acc = accessText(d);
   return (
@@ -84,11 +84,19 @@ function DriverRow({ d, onOpen, onSelect, selected, equip, terminal, hos }: { ho
       <span className="dash-num" style={{ fontSize: 12, color: L.muted, minWidth: 74, textAlign: "right" }}>
         {d.count > 0 ? `${d.count} here` : "not here yet"}
       </span>
-      <button type="button" aria-label={`Open ${d.name}`} onClick={(e) => { e.stopPropagation(); onOpen(d.userId); }}
-        style={{ border: "none", background: "transparent", color: L.faint, cursor: "pointer", fontSize: 14, padding: "0 2px" }}>›</button>
+      <span style={{ color: L.faint, fontSize: 12 }}>{selected ? "▲" : "▼"}</span>
      </div>
      {equip && <EquipLine e={equip} terminal={terminal} />}
      {hos && <div className="dash-num" style={{ fontSize: 11, marginTop: 3, color: hos.color }}>Hours · {hos.text}</div>}
+     {selected && (
+       <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${L.hairline}`, display: "flex", alignItems: "center", gap: 10 }}>
+         <span style={{ flex: 1, fontSize: 12, color: L.muted }}>
+           {canPlan ? "Timeline is open above." : "Pick a drop location and a terminal to build their timeline."}
+         </span>
+         <button type="button" onClick={() => onOpen(d.userId)} className="dash-press"
+           style={{ ...L.secondary, color: "#fff", padding: "7px 12px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Open driver file ›</button>
+       </div>
+     )}
     </div>
   );
 }
@@ -162,8 +170,6 @@ export function PlanLoadCard(props: {
     return p.terminals.filter((t) => activeCity != null && cityOf(t) === activeCity).sort(byUsed);
   }, [p.terminals, q, activeCity]);
 
-  const list = p.showNotCarded ? p.result.notCarded : p.result.ready;
-  const planning = !!p.location || !!p.terminal;
 
   return (
     <div style={{ marginBottom: 6 }}>
@@ -188,26 +194,9 @@ export function PlanLoadCard(props: {
       )}
 
       {p.timeline}
-      {!p.timeline && p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the terminal, then tap a driver to build the timeline.</div>}
-      {!p.timeline && !p.location && p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the drop location, then tap a driver to build the timeline.</div>}
-      {!p.timeline && !p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>To plan a load, pick a drop location and a terminal, then tap a driver. Tapping a driver below only opens their file until both are picked.</div>}
-
-      {planning && (
-        <>
-          <div style={{ fontSize: 11, color: L.faint, margin: "10px 0 6px" }}>
-            {p.showNotCarded
-              ? "Delivered here before, but no usable access at this terminal."
-              : p.location ? "Most deliveries here first." : "Pick a drop location to rank drivers."}
-            {p.historyLoading && " Loading…"}
-          </div>
-          {p.historyError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 6 }}>{p.historyError}</div>}
-          {list.length === 0 ? (
-            <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
-              {p.showNotCarded ? "Everyone who delivers here is carded at this terminal." : "No drivers to show."}
-            </div>
-          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} onSelect={p.onSelectDriver ?? p.onOpenDriver} selected={p.selectedDriverId === d.userId} equip={p.equipFor?.(d.userId) ?? null} hos={p.hosFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} />)}
-        </>
-      )}
+      {!p.timeline && p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the terminal, then tap a driver in the Drivers list.</div>}
+      {!p.timeline && !p.location && p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the drop location, then tap a driver in the Drivers list.</div>}
+      {!p.timeline && !p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>To plan a load, pick a drop location and a terminal, then tap a driver in the Drivers list.</div>}
 
       <FullscreenModal open={termOpen} title="Pick the terminal" onClose={() => { setTermOpen(false); setChoosing(false); }}
         headerRight={!choosing ? <button type="button" onClick={() => { setChoosing(true); setQ(""); }}
@@ -246,6 +235,52 @@ export function PlanLoadCard(props: {
         ))}
         </>)}
       </FullscreenModal>
+    </div>
+  );
+}
+
+
+/** The one driver list: ranked cards for the whole roster. Tap a card to select the driver (builds the
+ *  timeline once a drop location and terminal are picked); the open card has the driver-file button. */
+export function DriverList(p: {
+  result: PlanLoadResult;
+  showNotCarded: boolean;
+  location: DeliveryLocation | null;
+  terminal: TerminalOption | null;
+  historyLoading?: boolean;
+  historyError?: string | null;
+  selectedDriverId: string | null;
+  onSelectDriver: (userId: string) => void;
+  onOpenDriver: (userId: string) => void;
+  equipFor?: (userId: string) => DriverEquip | null;
+  hosFor?: (userId: string) => { text: string; color: string } | null;
+}) {
+  const L = useDashLook();
+  const [search, setSearch] = useState("");
+  const all = p.showNotCarded ? p.result.notCarded : p.result.ready;
+  const list = useMemo(() => {
+    const t = search.trim().toLowerCase();
+    return t ? all.filter((d) => d.name.toLowerCase().includes(t)) : all;
+  }, [all, search]);
+  const canPlan = !!p.location && !!p.terminal;
+  return (
+    <div>
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search drivers…" style={{ ...fieldInput, marginBottom: 8 }} />
+      <div style={{ fontSize: 11, color: L.faint, margin: "2px 0 6px" }}>
+        {p.showNotCarded
+          ? "Delivered here before, but no usable access at this terminal."
+          : p.location ? "Most deliveries here first." : "Tap a driver to open their card."}
+        {p.historyLoading && " Loading…"}
+      </div>
+      {p.historyError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 6 }}>{p.historyError}</div>}
+      {list.length === 0 ? (
+        <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
+          {p.showNotCarded ? "Everyone who delivers here is carded at this terminal." : "No drivers to show."}
+        </div>
+      ) : list.map((d) => (
+        <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} onSelect={p.onSelectDriver} selected={p.selectedDriverId === d.userId}
+          equip={p.equipFor?.(d.userId) ?? null} hos={p.hosFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} canPlan={canPlan} />
+      ))}
     </div>
   );
 }
