@@ -28,6 +28,7 @@ test("geotab: lists devices and reads odometer + position", async () => {
     if (body.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s", userName: "u" } });
     if (body.params.typeName === "Device") return ok([{ id: "b1", name: "25184", vehicleIdentificationNumber: "abc" }]);
     if (body.params.typeName === "DeviceStatusInfo") return ok([{ latitude: 27.9, longitude: -82.4, speed: 100, dateTime: "2026-10-23T10:00:00Z" }]);
+    if (body.params.search.diagnosticSearch.id === "DiagnosticEngineHoursAdjustmentId") return ok([{ data: 7203600, dateTime: "2026-10-23T09:30:00Z" }]);
     if (body.params.search.diagnosticSearch.id === "DiagnosticFuelLevelId") return ok([{ data: 61.24, dateTime: "2026-10-23T09:30:00Z" }]);
     if (body.params.search.diagnosticSearch.id === "DiagnosticOdometerAdjustmentId") return ok([]);
     return ok([{ data: 160934.4, dateTime: "2026-10-23T09:00:00Z" }]);
@@ -39,6 +40,7 @@ test("geotab: lists devices and reads odometer + position", async () => {
   assert.equal(r.lat, 27.9);
   assert.equal(r.speedMph, 62);
   assert.equal(r.fuelLevelPct, 61.2);
+  assert.equal(r.engineHours, 2001);
   assert.ok(calls.some((c) => c.url === "https://my5.geotab.com/apiv1" && c.type === "StatusData"));
 });
 

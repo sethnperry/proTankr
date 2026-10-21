@@ -10,6 +10,9 @@
 import { expiryStateForDays, daysUntilIso, type ExpiryState } from "../expiry.ts";
 
 export const DEFAULT_MILES_PER_DAY = 500;
+// Engine hours per day, from miles per day at a 35 mph average that includes idling, kept to a sane range.
+export const AVG_MPH_WITH_IDLE = 35;
+export const hoursPerDay = (milesDay: number) => Math.min(16, Math.max(4, milesDay / AVG_MPH_WITH_IDLE));
 // Days of trip odometer history needed before a truck's own average is used.
 export const MIN_RATE_SPAN_DAYS = 7;
 
@@ -63,6 +66,7 @@ export function unitAlerts(input: {
   types: ServiceTypeInput[];
   records: ServiceRecordInput[];
   odometer?: OdometerPoint[];   // truck only
+  engineHours?: number | null;  // the truck's hour meter right now (telematics)
   todayIso?: string;
   nowMs?: number;
 }): UnitAlertSummary {
@@ -113,7 +117,16 @@ export function unitAlerts(input: {
       all.push({ kind: "service", name: t.name, state: expiryStateForDays(left < 0 ? -1 : days), days: left < 0 ? -1 : days,
         detail: left < 0 ? `Overdue by ${fmtMi(-left)}` : `Due in ${fmtMi(left)} (about ${days} day${days === 1 ? "" : "s"})` });
     }
-    // Hours aren't counted: nothing records engine or trailer hours.
+    else if (t.interval_kind === "hours" && input.unit === "truck") {
+      // Needs the live hour meter; without it there's nothing current to count from.
+      const last = Number(rec.reading_value);
+      const now = input.engineHours;
+      if (!Number.isFinite(last) || now == null || !Number.isFinite(now)) continue;
+      const left = last + every - now;
+      const days = Math.floor(left / hoursPerDay(rate));
+      all.push({ kind: "service", name: t.name, state: expiryStateForDays(left < 0 ? -1 : days), days: left < 0 ? -1 : days,
+        detail: left < 0 ? `Overdue by ${Math.round(-left).toLocaleString("en-US")} h` : `Due in ${Math.round(left).toLocaleString("en-US")} h (about ${days} day${days === 1 ? "" : "s"})` });
+    }
   }
 
   const alerts = all

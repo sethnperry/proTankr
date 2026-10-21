@@ -1166,7 +1166,7 @@ export default function HomePage() {
   const [terminalNowOpen, setTerminalNowOpen] = useState(false);
   const [dropNowOpen, setDropNowOpen] = useState(false);
   // Truck / trailer alert squares: permits + service coming due.
-  const truckAlerts = useUnitAlerts("truck", truckId, companyId);
+  const truckAlerts = useUnitAlerts("truck", truckId, companyId, undefined, hookup?.engineHours ?? null);
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
   const [unitAlertsOpen, setUnitAlertsOpen] = useState<"truck" | "trailer" | null>(null);
   const unitCell = (label: string, s: UnitAlertSummary, which: "truck" | "trailer", has: boolean) => ({

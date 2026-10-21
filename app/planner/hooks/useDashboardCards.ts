@@ -170,7 +170,7 @@ export function useTrailerResidue(trailerId: string | null, refreshKey?: unknown
 
 // Everything coming due on one truck or trailer: permits + service
 // (lib/equipment/unitAlerts.ts). Truck miles come from trip odometer readings.
-export function useUnitAlerts(unit: "truck" | "trailer", unitId: string | null, companyId: string | null, refreshKey?: unknown) {
+export function useUnitAlerts(unit: "truck" | "trailer", unitId: string | null, companyId: string | null, refreshKey?: unknown, engineHours?: number | null) {
   const [summary, setSummary] = useState<UnitAlertSummary>({ alerts: [], count: 0, worst: null });
   useEffect(() => {
     setSummary({ alerts: [], count: 0, worst: null });
@@ -202,11 +202,12 @@ export function useUnitAlerts(unit: "truck" | "trailer", unitId: string | null, 
           types: ((types.data ?? []) as ServiceTypeInput[]).map((t) => ({ ...t, interval_value: t.interval_value == null ? null : Number(t.interval_value) })),
           records: ((records.data ?? []) as ServiceRecordInput[]).map((r) => ({ ...r, reading_value: r.reading_value == null ? null : Number(r.reading_value) })),
           odometer,
+          engineHours,
         });
         if (alive) setSummary(s);
       } catch { /* fail open: no alerts */ }
     })();
     return () => { alive = false; };
-  }, [unit, unitId, companyId, refreshKey]);
+  }, [unit, unitId, companyId, refreshKey, engineHours]);
   return summary;
 }

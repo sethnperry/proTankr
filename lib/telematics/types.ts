@@ -8,6 +8,7 @@ export type ProviderVehicle = { id: string; name: string; vin: string | null };
 export type VehicleReading = {
   odometerMi: number | null;
   fuelLevelPct?: number | null; // combined tank level, 0-100
+  engineHours?: number | null;  // total engine hours (an hour meter)
   lat: number | null;
   lon: number | null;
   speedMph: number | null;

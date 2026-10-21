@@ -23,6 +23,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
+import { fetchTruckReading } from "@/lib/telematics/useTruckReading";
 
 export type ServiceType = {
   service_type_id: string;
@@ -166,17 +167,21 @@ export function ServiceTypeEditorModal({
                 value={kind}
                 onChange={(v) => setKind(v as any)}
                 options={[
-                  // Trailers have no odometer and nothing records engine
-                  // hours, so service is by date, or miles for trucks.
-                  ...(appliesTo !== "trailer" ? [{ value: "miles", label: "Miles" }] : []),
+                  // Trailers have no odometer or hour meter, so service is by
+                  // date; trucks can also go by miles or engine hours.
+                  ...(appliesTo !== "trailer" ? [{ value: "miles", label: "Miles" }, { value: "hours", label: "Engine hours" }] : []),
                   { value: "duration", label: "Duration (days)" },
                   { value: "none", label: "None" },
-                  ...(kind === "hours" ? [{ value: "hours", label: "Hours (not tracked)" }] : []),
                 ]}
               />
-              {kind === "hours" && (
+              {kind === "hours" && appliesTo === "trailer" && (
                 <div style={{ color: "#fbbf24", fontSize: 12, marginTop: 6 }}>
-                  Hours aren't tracked, so this service never comes due. Pick Duration (days){appliesTo !== "trailer" ? " or Miles" : ""}.
+                  Trailers have no hour meter, so this service never comes due. Pick Duration (days).
+                </div>
+              )}
+              {kind === "hours" && appliesTo !== "trailer" && (
+                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 6 }}>
+                  Counted on the truck from its engine hours, which need the Geotab link. Without it this service doesn't come due.
                 </div>
               )}
               {kind === "miles" && appliesTo !== "truck" && (
@@ -531,6 +536,18 @@ export function SimpleServiceModal({
     () => serviceTypes.filter((t) => t.is_active && (t.applies_to === "both" || t.applies_to === "trailer")),
     [serviceTypes]
   );
+
+  // A miles or engine-hours service fills the reading from the truck's telematics when linked.
+  const truckKind = serviceTypes.find((t) => t.service_type_id === truckTypeId)?.interval_kind;
+  useEffect(() => {
+    if (!open || !truckId || (truckKind !== "miles" && truckKind !== "hours")) return;
+    let off = false;
+    void fetchTruckReading(truckId).then((r) => {
+      const v = truckKind === "hours" ? r?.engineHours : r?.odometerMi;
+      if (!off && v != null) setTruckReading((cur) => (cur.trim() ? cur : String(v)));
+    });
+    return () => { off = true; };
+  }, [open, truckId, truckKind]);
 
   const showTruck = truckId && (unit === "both" || unit === "truck");
   const showTrailer = trailerId && (unit === "both" || unit === "trailer");

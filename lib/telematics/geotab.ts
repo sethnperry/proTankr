@@ -87,6 +87,17 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     return null;
   };
 
+  // Engine hours (the hour meter), from seconds. The adjusted value is what MyGeotab shows.
+  const engineHours = async (id: string): Promise<number | null> => {
+    const from = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    for (const diag of ["DiagnosticEngineHoursAdjustmentId", "DiagnosticEngineHoursId"]) {
+      const rows: any[] = await call("Get", { typeName: "StatusData", search: { deviceSearch: { id }, diagnosticSearch: { id: diag }, fromDate: from } });
+      const last = (rows ?? []).filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+      if (last) return Math.round((Number(last.data) / 3600) * 10) / 10;
+    }
+    return null;
+  };
+
   // Combined fuel level, percent. Null when the truck doesn't report it.
   const fuelLevel = async (id: string): Promise<number | null> => {
     const from = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
@@ -192,16 +203,18 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     },
 
     async reading(id: string): Promise<VehicleReading> {
-      const [info, odo, fuel] = await Promise.all([
+      const [info, odo, fuel, hours] = await Promise.all([
         call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id } } }) as Promise<any[]>,
         odometer(id).catch(() => null),
         fuelLevel(id).catch(() => null),
+        engineHours(id).catch(() => null),
       ]);
       const s = (info ?? [])[0];
       const kmh = Number(s?.speed);
       return {
         odometerMi: odo,
         fuelLevelPct: fuel,
+        engineHours: hours,
         lat: Number.isFinite(Number(s?.latitude)) ? Number(s.latitude) : null,
         lon: Number.isFinite(Number(s?.longitude)) ? Number(s.longitude) : null,
         speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,

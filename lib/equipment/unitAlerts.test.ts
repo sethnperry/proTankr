@@ -52,3 +52,18 @@ test("overdue miles and dated trailer service are red/yellow; trailer ignores mi
   assert.equal(trailer.count, 1);
   assert.equal(trailer.worst, "soon");
 });
+
+test("service by engine hours counts from the live hour meter, and waits for it", () => {
+  const types = [{ service_type_id: "h", name: "Oil", interval_kind: "hours" as const, interval_value: 500, applies_to: "truck" as const, is_active: true }];
+  const records = [{ service_type_id: "h", date: "2026-09-01", reading_value: 3000, created_at: "2026-09-01T00:00:00Z" }];
+  const none = unitAlerts({ unit: "truck", permits: [], types, records, todayIso: "2026-10-23" });
+  assert.equal(none.alerts.length, 0); // no live hour meter: nothing current to count from
+  const soon = unitAlerts({ unit: "truck", permits: [], types, records, engineHours: 3490, todayIso: "2026-10-23" });
+  assert.equal(soon.alerts.length, 1);
+  assert.match(soon.alerts[0].detail, /Due in 10 h/);
+  const over = unitAlerts({ unit: "truck", permits: [], types, records, engineHours: 3520, todayIso: "2026-10-23" });
+  assert.equal(over.alerts[0].state, "expired");
+  assert.match(over.alerts[0].detail, /Overdue by 20 h/);
+  // a trailer never counts hours
+  assert.equal(unitAlerts({ unit: "trailer", permits: [], types: [{ ...types[0], applies_to: "both" as const }], records, engineHours: 3520, todayIso: "2026-10-23" }).alerts.length, 0);
+});
