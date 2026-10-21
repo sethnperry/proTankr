@@ -880,7 +880,10 @@ export default function DispatchPage() {
           onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
         dispatchedCount={dispatchedShown.length}
         regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
-        drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onlyUserIds={regionOn ? regionDriverIds : undefined} onPick={(id) => setSelectedDriverId(id)} /></div>}
+        drivers={<div id="dispatch-drivers"><DriverPicker companyId={companyId} onlyUserIds={regionOn ? regionDriverIds : undefined} onPick={(id) => {
+          // While planning a load (drop location + terminal chosen) a tap builds that driver's timeline; otherwise it opens their file.
+          if (planLocationId && planTerminalId) { setTlDriverId(id); setTlStart(null); window.scrollTo({ top: 0, behavior: "smooth" }); } else setSelectedDriverId(id);
+        }} /></div>}
         tools={dashTools}
       />
       <LocationPicker browse open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}

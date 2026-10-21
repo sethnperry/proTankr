@@ -188,6 +188,9 @@ export function PlanLoadCard(props: {
       )}
 
       {p.timeline}
+      {!p.timeline && p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the terminal, then tap a driver to build the timeline.</div>}
+      {!p.timeline && !p.location && p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the drop location, then tap a driver to build the timeline.</div>}
+      {!p.timeline && !p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>To plan a load, pick a drop location and a terminal, then tap a driver. Tapping a driver below only opens their file until both are picked.</div>}
 
       {planning && (
         <>
