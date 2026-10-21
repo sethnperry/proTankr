@@ -90,8 +90,8 @@ export async function autoLinkDriver(companyId: string, userId: string): Promise
 // Same, for the whole roster: whoever isn't linked yet and matches gets linked, so dispatch's board
 // fills in without anyone opening their dashboard first. At most every 10 minutes per company.
 const autoTriedAll = new Map<string, number>();
-export async function autoLinkAllDrivers(companyId: string): Promise<number> {
-  if (Date.now() - (autoTriedAll.get(companyId) ?? 0) < 600_000) return 0;
+export async function autoLinkAllDrivers(companyId: string, force = false): Promise<number> {
+  if (!force && Date.now() - (autoTriedAll.get(companyId) ?? 0) < 600_000) return 0;
   autoTriedAll.set(companyId, Date.now());
   const p = await providerFor(companyId);
   if (!p) return 0;

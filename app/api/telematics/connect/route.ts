@@ -13,7 +13,7 @@ import { encryptSecret } from "@/lib/telematics/crypto";
 import { matchVehicles, type TruckLite } from "@/lib/telematics/match";
 import { matchDrivers } from "@/lib/telematics/matchDrivers";
 import { TelematicsAuthError } from "@/lib/telematics/types";
-import { callerId, companyRole, isCompanyAdmin, providerFor, rosterMembers } from "@/lib/telematics/server";
+import { autoLinkAllDrivers, callerId, companyRole, isCompanyAdmin, providerFor, rosterMembers } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 
@@ -81,6 +81,8 @@ async function summary(companyId: string) {
 export async function GET(req: NextRequest) {
   const g = await gate(req, req.nextUrl.searchParams.get("companyId"));
   if ("err" in g) return g.err;
+  // Opening the settings fills in any driver that matches by employee number, email or name.
+  try { await autoLinkAllDrivers(g.companyId, true); } catch { /* the list below still shows who is left */ }
   return NextResponse.json(await summary(g.companyId));
 }
 
