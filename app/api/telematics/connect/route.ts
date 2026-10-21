@@ -131,25 +131,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(await summary(g.companyId));
   }
 
-  // Read-only peek at every unit's comment and custom fields (nothing is written).
-  if (body.peek === true) {
-    const p = await providerFor(g.companyId);
-    if (!p) return NextResponse.json({ error: "Geotab isn't connected." }, { status: 400 });
-    try {
-      const all = await p.unitNotes();
-      const withData = all.filter((u) => u.comment || u.props.length);
-      const fields = new Map<string, number>();
-      for (const u of withData) for (const pr of u.props) fields.set(pr.name, (fields.get(pr.name) ?? 0) + 1);
-      return NextResponse.json({
-        peek: {
-          total: all.length, withData: withData.length, withComment: withData.filter((u) => u.comment).length,
-          fields: [...fields.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
-          rows: withData.slice(0, 400),
-        },
-      });
-    } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 502 }); }
-  }
-
   // Bring Geotab equipment in: new units are created, units we already have (same VIN or name) are
   // linked and updated per the chosen fields and mode. syncLinked re-applies that to units already linked.
   if (Array.isArray(body.importVehicles) || Array.isArray(body.importTrailers) || body.syncLinked === true) {

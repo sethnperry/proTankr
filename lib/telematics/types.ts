@@ -28,9 +28,6 @@ export type HosAvailability = {
 
 export type ProviderTrailer = { id: string; name: string; groupIds?: string[] };
 
-/** A unit's free-text comment and custom fields, for the read-only peek. */
-export type UnitNotes = { kind: "truck" | "trailer"; id: string; name: string; comment: string | null; props: { name: string; value: string }[] };
-
 export type ProviderGroup = { id: string; name: string; parentId: string | null };
 
 /** A trailer hooked to or dropped from a vehicle, with where the truck was. */
@@ -40,8 +37,6 @@ export interface TelematicsProvider {
   listTrailers(): Promise<ProviderTrailer[]>;
   /** The provider's group tree (Geotab Groups), flat with parent ids. */
   listGroups(): Promise<ProviderGroup[]>;
-  /** Every vehicle's and trailer's comment and custom fields (Geotab: Device/Trailer comment + customProperties). */
-  unitNotes(): Promise<UnitNotes[]>;
   /** Hooks and drops for one vehicle inside a window, oldest first. */
   trailerEvents(vehicleId: string, fromIso: string, toIso: string): Promise<TrailerEvent[]>;
   /** The trailer each vehicle is hooked to right now: provider vehicle id -> provider trailer id. Empty without trailer tracking. */

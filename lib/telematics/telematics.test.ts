@@ -258,11 +258,3 @@ test("unit sync: new gets everything ticked; existing follows fill / overwrite",
   const ow = parseOpts({ existing: "overwrite" });
   assert.equal((truckPatch(ours, geo, info, null, ow) as any).plate_number, "ABC123");
 });
-
-test("geotab notes: comment trimmed, custom fields named, empty values dropped", async () => {
-  const { notesOf } = await import("./geotab.ts");
-  const names = new Map([["p1", "Tank size"], ["p2", "Notes"]]);
-  const n = notesOf("truck", { id: "b1", name: "25184", comment: "  5 comp  ", customProperties: [{ property: { id: "p1" }, value: 9200 }, { property: { id: "p2" }, value: " " }, { property: { id: "pX" }, value: "x" }] }, names);
-  assert.deepEqual(n, { kind: "truck", id: "b1", name: "25184", comment: "5 comp", props: [{ name: "Tank size", value: "9200" }, { name: "pX", value: "x" }] });
-  assert.equal(notesOf("trailer", { id: "t", name: "T" }, names).comment, null);
-});

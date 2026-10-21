@@ -11,7 +11,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
-import GeotabNotes, { type NotesPeek } from "./GeotabNotes";
 import GeotabImport, { type ImportResult } from "./GeotabImport";
 import type { SyncOpts } from "@/lib/telematics/unitSync";
 
@@ -88,12 +87,6 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
     setErr(null);
     return finish(await call("POST", companyId, kind === "vehicles" ? { importVehicles: ids, opts } : { importTrailers: ids, opts }));
   };
-  const loadNotes = async (): Promise<NotesPeek | null> => {
-    setErr(null);
-    const r = await call("POST", companyId, { peek: true });
-    if (!r.ok) { setErr(r.data?.error ?? "Couldn't read Geotab."); return null; }
-    return r.data.peek as NotesPeek;
-  };
   const syncLinked = async (opts: SyncOpts) => { setErr(null); return finish(await call("POST", companyId, { syncLinked: true, opts })); };
   const assignTrailer = (providerTrailerId: string, name: string) => run(async () => {
     const trailerId = pick[`t:${providerTrailerId}`];
@@ -164,8 +157,6 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
               ))}
             </div>
           )}
-
-          <GeotabNotes load={loadNotes} busy={busy} />
 
           {(sum.groups?.length ?? 0) > 0 && (
             <div style={card}>
