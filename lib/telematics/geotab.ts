@@ -209,6 +209,23 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         .map((u) => ({ id: String(u.id), name: String(u.name), firstName: u.firstName ? String(u.firstName) : null, lastName: u.lastName ? String(u.lastName) : null, employeeNo: u.employeeNo ? String(u.employeeNo) : null }));
     },
 
+    async currentDrivers(): Promise<Map<string, string>> {
+      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
+      const out = new Map<string, string>();
+      for (const s of rows ?? []) {
+        const dev = s?.device?.id, drv = s?.currentDriver?.id;
+        if (dev && drv && !/^unknown/i.test(String(drv))) out.set(String(dev), String(drv));
+      }
+      return out;
+    },
+
+    async lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null> {
+      const from = new Date(Date.now() - 30 * 86400000).toISOString();
+      const rows: any[] = await call("Get", { typeName: "DriverChange", search: { driverSearch: { id: driverId }, fromDate: from } });
+      const last = (rows ?? []).filter((r) => r?.device?.id && r.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+      return last ? { vehicleId: String(last.device.id), at: String(last.dateTime) } : null;
+    },
+
     async hos(id: string): Promise<HosAvailability | null> {
       const [avail, logs] = await Promise.all([
         call("Get", { typeName: "DutyStatusAvailability", search: { userSearch: { id } } }) as Promise<any[]>,

@@ -118,7 +118,7 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
-import { FindTruckSheet } from "../components/FindTruckSheet";
+import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
 import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./DashboardChrome";
 import { QualificationCard, type QualTerminal } from "./QualificationStrip";
@@ -1982,7 +1982,7 @@ export default function HomePage() {
         onClose={() => setSyncOpen(false)}
       />
 
-      <FindTruckSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId} defaultTruckId={truckId} />
+      <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId} role={shell.role ?? null} myTruckId={truckId} myTrailerId={trailerId} />
 
       {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
       <SectionLabel>Tools</SectionLabel>
@@ -1993,7 +1993,7 @@ export default function HomePage() {
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
             onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
-          { icon: "locate", label: "Find truck", sub: "Last position", onClick: () => setFindTruckOpen(true) },
+          { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
             sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} within 7 days` : soonCount > 0 ? `${soonCount} within 30 days` : "All current",

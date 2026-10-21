@@ -61,7 +61,7 @@ import { useHosNotifier } from "@/lib/dispatch/useHosNotifier";
 import { enablePush } from "@/lib/push/subscribe";
 import { hosText, resetInfo } from "@/lib/telematics/progress";
 import { restWindow } from "@/lib/dispatch/dutyGraph";
-import { FindTruckSheet } from "../components/FindTruckSheet";
+import { TrackSheet } from "../components/track/TrackSheet";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
@@ -828,7 +828,7 @@ export default function DispatchPage() {
     const openTrip = (id: string) => nav.go(`trip:${id}`, `/planner/trips/${id}`);
     const dashTools: ToolItem[] = [
       { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
-      { icon: "locate" as const, label: "Find truck", onClick: () => setFindTruckOpen(true) },
+      { icon: "locate" as const, label: "Track", onClick: () => setFindTruckOpen(true) },
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       { icon: "terminal" as const, label: "Suppliers", onClick: () => setSuppliersOpen("manage") },
       { icon: "chart", label: "Reports", busy: nav.is("reports"), onClick: () => nav.go("reports", "/planner/reports") },
@@ -929,7 +929,7 @@ export default function DispatchPage() {
           onSelect={suppliersOpen === "pick" ? (sid) => { if (supPickFor && supPickFor !== planGroups[0]?.productId) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: sid } })); else { setPlanSupplierId(sid); if (supPickFor) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: undefined } })); } setSupPickFor(null); } : undefined}
           selectedSupplierId={supPickFor ? groupOverrides[supPickFor]?.supplierId ?? planSupplierId : planSupplierId} />
       )}
-      <FindTruckSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId || null} defaultTruckId={null} />
+      <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId || null} role={shell.role ?? null} myTruckId={null} myTrailerId={null} />
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}
       </>
     );

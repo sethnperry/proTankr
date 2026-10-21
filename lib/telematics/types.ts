@@ -45,6 +45,10 @@ export interface TelematicsProvider {
   /** The trailer each vehicle is hooked to right now: provider vehicle id -> provider trailer id. Empty without trailer tracking. */
   attachedTrailers(): Promise<Map<string, string>>;
   listDrivers(): Promise<ProviderDriver[]>;
+  /** The driver signed in to each vehicle right now: provider vehicle id -> provider driver id. */
+  currentDrivers(): Promise<Map<string, string>>;
+  /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */
+  lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null>;
   hos(driverId: string): Promise<HosAvailability | null>;
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
