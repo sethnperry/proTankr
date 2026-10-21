@@ -90,8 +90,8 @@ export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, 
                     <line x1="0" y1="0" x2="0" y2="6" stroke="#60a5fa" strokeWidth="2" opacity="0.55" />
                   </pattern>
                 </defs>
-                <rect x={0} width={Math.max(0, Math.min(x(rest.toMs), x(blocks.length ? Math.min(...blocks.map((b) => b.startMs)) : rest.toMs)) - 0)} y={0} height={H} fill="rgba(96,165,250,0.14)" />
-                <rect x={0} width={Math.max(0, Math.min(x(rest.toMs), x(blocks.length ? Math.min(...blocks.map((b) => b.startMs)) : rest.toMs)) - 0)} y={0} height={H} fill="url(#rest-hatch)" />
+                <rect x={x(r.restFromMs)} width={Math.max(0, Math.min(x(rest.toMs), x(blocks.length ? Math.min(...blocks.map((b) => b.startMs)) : rest.toMs)) - x(r.restFromMs))} y={0} height={H} fill="rgba(96,165,250,0.14)" />
+                <rect x={x(r.restFromMs)} width={Math.max(0, Math.min(x(rest.toMs), x(blocks.length ? Math.min(...blocks.map((b) => b.startMs)) : rest.toMs)) - x(r.restFromMs))} y={0} height={H} fill="url(#rest-hatch)" />
               </>
             )}
             {hours.map((t, i) => <line key={t} x1={x(t)} x2={x(t)} y1={0} y2={H} stroke={L.hairline} strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={i % every ? 0.4 : 1} />)}

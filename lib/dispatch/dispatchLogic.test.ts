@@ -168,15 +168,19 @@ test("duty graph: drive legs are Driving, the rest On Duty, range in whole hours
   const blocks = dutyBlocks(segs);
   assert.deepEqual(blocks.map((b) => b.status), ["driving", "on", "driving"]);
   const r = dutyRange(blocks);
-  assert.equal(r.t0, base); // the first load starts at the far left
-  assert.ok(r.t1 >= base + 5 * H && r.t1 < base + 5.5 * H);
+  // Zoomed out to 26 hours with the dispatch centered, so there is room before and after.
+  assert.equal(r.t1 - r.t0, 26 * H);
+  assert.ok(r.t0 < base && r.t1 > base + 5 * H);
+  assert.equal(base - r.t0, r.t1 - (base + 5 * H));
   assert.ok(pct(r.t0, r) === 0 && pct(r.t1, r) === 100);
-  // A short rested wait is drawn from where it starts; a long one is cut off at the left so the day still fits.
+  // The rested band starts where it starts, or at the left edge when it began earlier.
   const near = dutyRange(blocks, { fromMs: base - 3 * H, toMs: base });
-  assert.equal(near.t0, base - 3 * H); assert.equal(near.restClipped, false);
-  const far = dutyRange(blocks, { fromMs: base - 14 * H, toMs: base });
-  assert.equal(far.t0, base - 11 * H); assert.equal(far.restClipped, true); // 16 h cap, 5 h of loads
-  assert.ok(far.t1 - far.t0 <= 16 * H + 15 * 60000);
+  assert.equal(near.restFromMs, base - 3 * H); assert.equal(near.restClipped, false);
+  const far = dutyRange(blocks, { fromMs: base - 20 * H, toMs: base });
+  assert.equal(far.restFromMs, far.t0); assert.equal(far.restClipped, true);
+  // A very long dispatch keeps a margin on each side.
+  const long = dutyRange([{ status: "on", startMs: base, endMs: base + 24 * H, key: "loading" }]);
+  assert.equal(long.t1 - long.t0, 32 * H);
 });
 
 import { hosAlerts } from "./hosAlerts.ts";

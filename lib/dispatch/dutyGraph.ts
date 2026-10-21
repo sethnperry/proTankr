@@ -33,11 +33,13 @@ export function dutyBlocks(segments: Seg[], earlier: { startMs: number; endMs: n
 }
 
 const HOUR = 3600000;
-/** The most the chart spans when a long rested stretch is drawn before the first load (Alaska's 20 h day fits the loads themselves). */
-const MAX_SPAN = 16 * HOUR;
+/** The chart always covers at least this much, so there is room before and after the dispatch (Alaska's 20 h day still fits with margin). */
+const MIN_SPAN = 26 * HOUR;
+/** Margin kept on each side when the dispatch itself is long. */
+const MIN_MARGIN = 4 * HOUR;
 
-/** The whole working day on one chart: the first load starts at the far left and the chart runs to the end of the last.
- *  A rested-and-waiting band is drawn before the start when it fits in MAX_SPAN; a longer one is cut off at the left edge. */
+/** The working day on one card, zoomed out: at least 26 hours, the dispatch centered so some time shows before and after.
+ *  The rested band is drawn from where it starts, cut off at the left edge when it begins earlier. */
 export function dutyRange(
   blocks: DutyBlock[],
   rest?: { fromMs: number; toMs: number } | null,
@@ -48,17 +50,16 @@ export function dutyRange(
   }
   const s = Math.min(...blocks.map((b) => b.startMs));
   const e = Math.max(...blocks.map((b) => b.endMs));
-  let t0 = s;
+  const total = Math.max(MIN_SPAN, e - s + 2 * MIN_MARGIN);
+  const pad = (total - (e - s)) / 2;
+  const t0 = s - pad;
+  const t1 = e + pad;
   let restFromMs: number | null = null;
   let restClipped = false;
   if (rest && rest.fromMs < s) {
-    const pad = Math.max(HOUR, MAX_SPAN - (e - s)); // always at least an hour of rested time, more when the day is short
-    t0 = Math.max(rest.fromMs, s - pad);
-    restFromMs = t0;
+    restFromMs = Math.max(rest.fromMs, t0);
     restClipped = rest.fromMs < t0;
   }
-  let t1 = Math.ceil(e / (15 * 60000)) * 15 * 60000;
-  if (t1 - t0 < 4 * HOUR) t1 = t0 + 4 * HOUR;
   return { t0, t1, restFromMs, restClipped };
 }
 
