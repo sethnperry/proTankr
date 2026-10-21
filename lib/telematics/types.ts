@@ -14,7 +14,20 @@ export type VehicleReading = {
   at: string | null; // ISO time of the position fix
 };
 
+export type ProviderDriver = { id: string; name: string; firstName: string | null; lastName: string | null; employeeNo: string | null };
+
+/** What a driver has left on the clock, as of `at`. Minutes. Null = not reported. */
+export type HosAvailability = {
+  driveLeftMin: number | null; // driving time left before a required break / limit
+  dutyLeftMin: number | null;  // on-duty window left (the 14-hour clock)
+  cycleLeftMin: number | null; // 60/70-hour cycle left
+  status: string | null;       // current duty status: D, ON, OFF, SB, PC, YM
+  at: string;                  // ISO time this was read
+};
+
 export interface TelematicsProvider {
+  listDrivers(): Promise<ProviderDriver[]>;
+  hos(driverId: string): Promise<HosAvailability | null>;
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
   /** Position of every vehicle in one call (no odometer), keyed by provider vehicle id. */

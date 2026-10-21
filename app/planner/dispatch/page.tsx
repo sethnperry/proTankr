@@ -54,6 +54,8 @@ import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
+import { useFleetHos } from "@/lib/telematics/useFleetHos";
+import { hosText } from "@/lib/telematics/progress";
 import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
@@ -221,6 +223,7 @@ export default function DispatchPage() {
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
   const livePositions = useFleetPositions(companyId || null, mode === "live");
+  const fleetHos = useFleetHos(companyId || null, mode === "plan");
   useEffect(() => {
     try {
       const m = localStorage.getItem("proTankr:dispatchMode");
@@ -399,8 +402,9 @@ export default function DispatchPage() {
       location: { id: planLocation.location_id, name: locationTitle(planLocation), ll: ll(planLocation) },
       history: tripHistory.trips, settings: settingsForTerminal(tlSettings, termRow as any),
       dutyStartMs: dayLegs[0]?.startMs ?? startMs, drivingMinSoFar: dayLegs.reduce((a, l) => a + l.driveMin, 0),
+      hos: (() => { const h = fleetHos.get(tlDriverId); return h ? { driveLeftMin: h.driveLeftMin, dutyLeftMin: h.dutyLeftMin, asOfMs: Date.parse(h.at) } : null; })(),
     });
-  }, [tlDriverId, planLocation, termRow, startMs, dayLegs, tripHistory.trips, tlSettings, tlTz]);
+  }, [tlDriverId, planLocation, termRow, startMs, dayLegs, tripHistory.trips, tlSettings, tlTz, fleetHos]);
   // The load as planned right now, ready to stack or dispatch.
   const [orderNumber, setOrderNumber] = useState("");
   const [shipper, setShipper] = useState("");
@@ -803,6 +807,7 @@ export default function DispatchPage() {
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={dayLegs.length > 0 && tlStart == null} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
                 terminalPlace={planTerminal?.place ?? null} locationPlace={[planLocation?.city, planLocation?.state].filter(Boolean).join(", ") || null}
+                hosLine={fleetHos.get(tlDriverId) ? hosText(fleetHos.get(tlDriverId)!) : null}
                 dayLegs={dayLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
                 onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i) }))}
                 onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))}
@@ -826,6 +831,7 @@ export default function DispatchPage() {
                 )}
                 orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} shipper={shipper} customer={customer} onShipper={setShipper} onCustomer={setCustomer} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
+            hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}
             onOpenDriver={(id) => setSelectedDriverId(id)} />

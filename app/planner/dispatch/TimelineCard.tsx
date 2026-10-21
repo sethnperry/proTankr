@@ -51,6 +51,7 @@ export function TimelineCard(p: {
   locationPlace?: string | null;
   orderNumber: string;
   shipper: string; customer: string; onShipper: (v: string) => void; onCustomer: (v: string) => void;
+  hosLine?: { text: string; color: string } | null; // the driver's real clocks
   hideOrder?: boolean; // the per-product order lives in the compartment plan
   onOrder: (v: string) => void;
   warnings: string[];                 // everything shown above that is a problem; never blocks
@@ -123,6 +124,7 @@ export function TimelineCard(p: {
               <div key={i} style={{ fontSize: 13, color: FLAG_COLOR[x.severity], marginTop: 8 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
             ))}
           </FullscreenModal>
+          {p.hosLine && <div className="dash-num" style={{ fontSize: 12, marginTop: 6, color: p.hosLine.color }}>Clocks · {p.hosLine.text}</div>}
           {f.flags.map((x, i) => (
             <div key={i} style={{ fontSize: 12, color: FLAG_COLOR[x.severity], marginTop: 6 }}>{x.severity === "info" ? "" : "⚠ "}{x.text}</div>
           ))}

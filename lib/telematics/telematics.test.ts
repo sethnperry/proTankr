@@ -101,3 +101,40 @@ test("geofence: confirmed only after staying inside and stopped; moving resets",
   assert.deepEqual(stepWatch(w, { inside: true, speedMph: 30, nowMs: 90_000 }), NEW_WATCH);
   assert.deepEqual(stepWatch(w, { inside: false, speedMph: 0, nowMs: 90_000 }), NEW_WATCH);
 });
+
+import { durationMinutes } from "./geotab.ts";
+import { matchDrivers } from "./matchDrivers.ts";
+
+test("hos: durations read as ticks, ms, seconds or a time string", () => {
+  assert.equal(Math.round(durationMinutes(11 * 3600 * 1e7)!), 660);
+  assert.equal(Math.round(durationMinutes(11 * 3600 * 1000)!), 660);
+  assert.equal(Math.round(durationMinutes(11 * 3600)!), 660);
+  assert.equal(Math.round(durationMinutes("08:30:00")!), 510);
+  assert.equal(Math.round(durationMinutes("1.02:00:00")!), 1560);
+  assert.equal(durationMinutes(null), null);
+  assert.equal(durationMinutes("junk"), null);
+});
+
+test("drivers: employee number, then login email, then full name; ambiguous is left", () => {
+  const members = [
+    { user_id: "u1", email: "a@x.com", display_name: "Ann Lee", employee_number: "E7" },
+    { user_id: "u2", email: "bob@x.com", display_name: "Bob Ray", employee_number: null },
+    { user_id: "u3", email: "c@x.com", display_name: "Cy Dunn", employee_number: null },
+    { user_id: "u4", email: "d@x.com", display_name: "Cy Dunn", employee_number: null },
+  ];
+  const r = matchDrivers([
+    { id: "g1", name: "ann.l", firstName: "A", lastName: "L", employeeNo: "e-7" },
+    { id: "g2", name: "BOB@x.com", firstName: null, lastName: null, employeeNo: null },
+    { id: "g3", name: "cdunn", firstName: "Cy", lastName: "Dunn", employeeNo: null },
+    { id: "g4", name: "zed", firstName: "Zed", lastName: "Q", employeeNo: null },
+  ], members);
+  assert.deepEqual(r.pairs.map((p) => [p.driver.id, p.member.user_id, p.by]), [["g1", "u1", "employee"], ["g2", "u2", "email"]]);
+  assert.deepEqual(r.unmatchedDrivers.map((d) => d.id), ["g3", "g4"]);
+});
+
+import { hosText } from "./progress.ts";
+test("hosText: hours left, status, and color by the tightest clock", () => {
+  const r = hosText({ driveLeftMin: 390, dutyLeftMin: 540, status: "ON", at: "2026-10-23T12:00:00Z" }, Date.parse("2026-10-23T12:02:00Z"));
+  assert.equal(r.text, "6.5 h drive · 9.0 h window · On duty");
+  assert.equal(hosText({ driveLeftMin: 30, dutyLeftMin: 540, status: null, at: "2026-10-23T12:00:00Z" }, Date.parse("2026-10-23T12:00:00Z")).color, "#f87171");
+});

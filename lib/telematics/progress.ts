@@ -60,3 +60,18 @@ export function pointsUpTo(pts: [number, number][], t: number): [number, number]
   }
   return out;
 }
+
+const STATUS_LABEL: Record<string, string> = { D: "Driving", ON: "On duty", OFF: "Off duty", SB: "Sleeper", PC: "Personal conveyance", YM: "Yard move" };
+
+/** "6.5 h drive · 9.0 h window · On duty", colored by how little is left. */
+export function hosText(h: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; at: string }, nowMs: number = Date.now()): { text: string; color: string } {
+  const hrs = (m: number) => `${(Math.max(0, m) / 60).toFixed(1)} h`;
+  const parts: string[] = [];
+  if (h.driveLeftMin != null) parts.push(`${hrs(h.driveLeftMin)} drive`);
+  if (h.dutyLeftMin != null) parts.push(`${hrs(h.dutyLeftMin)} window`);
+  if (h.status) parts.push(STATUS_LABEL[h.status] ?? h.status);
+  const least = Math.min(h.driveLeftMin ?? Infinity, h.dutyLeftMin ?? Infinity);
+  const ageMin = Math.round((nowMs - Date.parse(h.at)) / 60000);
+  if (ageMin > 10) parts.push(`${ageMin} min old`);
+  return { text: parts.join(" · "), color: least < 60 ? "#f87171" : least < 120 ? "#fb923c" : "rgba(255,255,255,0.5)" };
+}

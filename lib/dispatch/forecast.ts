@@ -153,7 +153,13 @@ export type ForecastInput = {
   settings?: TimelineSettings;
   dutyStartMs?: number;                // start of the driver's day (default: this load's start)
   drivingMinSoFar?: number;            // drive time already used earlier in the day
+  // The driver's real clocks from telematics. Used instead of the estimate
+  // below when the load starts soon enough for them to still apply.
+  hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; asOfMs: number } | null;
+  nowMs?: number;
 };
+
+const HOS_HORIZON_MS = 2 * 3600000; // clocks only mean something for a start this soon
 
 export type Forecast = { segments: Seg[]; endMs: number; driveMinutes: number; flags: Flag[] };
 
@@ -206,10 +212,28 @@ export function forecastLoad(i: ForecastInput): Forecast {
   const driveMinutes = toTerm.minutes + toDel.minutes;
   const duty = i.dutyStartMs ?? i.startMs;
   const shiftH = (t - duty) / 3600000;
-  if (shiftH > 14) flags.push({ kind: "dot14", severity: "bad", text: `Delivery finishes ${shiftH.toFixed(1)} h into the day, past the 14-hour driving window.` });
-  else if (shiftH > set.maxShiftHours) flags.push({ kind: "shift", severity: "warn", text: `Delivery finishes ${shiftH.toFixed(1)} h into the day (company limit ${set.maxShiftHours} h).` });
-  const driveH = ((i.drivingMinSoFar ?? 0) + driveMinutes) / 60;
-  if (driveH > 11) flags.push({ kind: "driving", severity: "bad", text: `${driveH.toFixed(1)} h of driving today, past the 11-hour limit.` });
+  const nowMs = i.nowMs ?? Date.now();
+  const realHos = i.hos && i.startMs - nowMs <= HOS_HORIZON_MS ? i.hos : null;
+  const h1 = (min: number) => `${(min / 60).toFixed(1)} h`;
+  if (realHos) {
+    // Real clocks: what this load (and any earlier ones stacked before it) uses, from now.
+    const needDrive = (i.drivingMinSoFar ?? 0) + driveMinutes;
+    const needWindow = (t - Math.min(nowMs, i.startMs)) / 60000;
+    if (realHos.driveLeftMin != null) {
+      if (needDrive > realHos.driveLeftMin) flags.push({ kind: "driving", severity: "bad", text: `Needs ${h1(needDrive)} of driving; the driver has ${h1(Math.max(0, realHos.driveLeftMin))} left on the clock.` });
+      else if (realHos.driveLeftMin - needDrive < 30) flags.push({ kind: "driving", severity: "warn", text: `Only ${h1(realHos.driveLeftMin - needDrive)} of driving time to spare on the clock.` });
+    }
+    if (realHos.dutyLeftMin != null) {
+      if (needWindow > realHos.dutyLeftMin) flags.push({ kind: "dot14", severity: "bad", text: `Finishes ${h1(needWindow)} from now; the 14-hour window has ${h1(Math.max(0, realHos.dutyLeftMin))} left.` });
+      else if (realHos.dutyLeftMin - needWindow < 30) flags.push({ kind: "dot14", severity: "warn", text: `Finishes with only ${h1(realHos.dutyLeftMin - needWindow)} left in the 14-hour window.` });
+    }
+    if (shiftH > set.maxShiftHours) flags.push({ kind: "shift", severity: "warn", text: `Delivery finishes ${shiftH.toFixed(1)} h into the day (company limit ${set.maxShiftHours} h).` });
+  } else {
+    if (shiftH > 14) flags.push({ kind: "dot14", severity: "bad", text: `Delivery finishes ${shiftH.toFixed(1)} h into the day, past the 14-hour driving window.` });
+    else if (shiftH > set.maxShiftHours) flags.push({ kind: "shift", severity: "warn", text: `Delivery finishes ${shiftH.toFixed(1)} h into the day (company limit ${set.maxShiftHours} h).` });
+    const driveH = ((i.drivingMinSoFar ?? 0) + driveMinutes) / 60;
+    if (driveH > 11) flags.push({ kind: "driving", severity: "bad", text: `${driveH.toFixed(1)} h of driving today, past the 11-hour limit.` });
+  }
   if (segs.some((s) => s.basis && s.basis.kind !== "history")) {
     flags.push({ kind: "estimate", severity: "info", text: "Some legs are estimates (distance or a standard allowance); they sharpen as trips are completed." });
   }

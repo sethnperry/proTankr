@@ -66,7 +66,7 @@ function accessText(d: PlanDriver): { text: string; color: string } | null {
   return { text: `Access ${days}d`, color: EXPIRY_COLOR[state] };
 }
 
-function DriverRow({ d, onOpen, onSelect, selected, equip, terminal }: { d: PlanDriver; onOpen: (id: string) => void; onSelect: (id: string) => void; selected: boolean; equip?: DriverEquip | null; terminal: string | null }) {
+function DriverRow({ d, onOpen, onSelect, selected, equip, terminal, hos }: { hos?: { text: string; color: string } | null; d: PlanDriver; onOpen: (id: string) => void; onSelect: (id: string) => void; selected: boolean; equip?: DriverEquip | null; terminal: string | null }) {
   const L = useDashLook();
   const acc = accessText(d);
   return (
@@ -85,6 +85,7 @@ function DriverRow({ d, onOpen, onSelect, selected, equip, terminal }: { d: Plan
         style={{ border: "none", background: "transparent", color: L.faint, cursor: "pointer", fontSize: 14, padding: "0 2px" }}>›</button>
      </div>
      {equip && <EquipLine e={equip} terminal={terminal} />}
+     {hos && <div className="dash-num" style={{ fontSize: 11, marginTop: 3, color: hos.color }}>Hours · {hos.text}</div>}
     </div>
   );
 }
@@ -126,6 +127,7 @@ export function PlanLoadCard(props: {
   onClearSupplier?: () => void;
   // Equipment each driver holds and the terminal's trailer-certification check.
   equipFor?: (userId: string) => DriverEquip | null;
+  hosFor?: (userId: string) => { text: string; color: string } | null;
   certNames?: string[]; // certificate(s) the chosen terminal requires on the trailer
   certProblems?: number; // listed drivers whose trailer can't load there
   selectedDriverId?: string | null;
@@ -182,7 +184,7 @@ export function PlanLoadCard(props: {
             <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
               {p.showNotCarded ? "Everyone who delivers here is carded at this terminal." : "No drivers to show."}
             </div>
-          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} onSelect={p.onSelectDriver ?? p.onOpenDriver} selected={p.selectedDriverId === d.userId} equip={p.equipFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} />)}
+          ) : list.map((d) => <DriverRow key={d.userId} d={d} onOpen={p.onOpenDriver} onSelect={p.onSelectDriver ?? p.onOpenDriver} selected={p.selectedDriverId === d.userId} equip={p.equipFor?.(d.userId) ?? null} hos={p.hosFor?.(d.userId) ?? null} terminal={p.terminal?.name ?? null} />)}
         </>
       )}
 

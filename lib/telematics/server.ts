@@ -9,6 +9,7 @@ import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { decryptSecret } from "./crypto";
 import { geotabProvider } from "./geotab";
 import type { TelematicsProvider } from "./types";
+import type { Member } from "./matchDrivers";
 
 export async function callerId(req: NextRequest): Promise<string | null> {
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
@@ -36,4 +37,16 @@ export async function providerFor(companyId: string): Promise<TelematicsProvider
   const c = data as { database_name: string; user_name: string; credentials_enc: string; status: string } | null;
   if (!c || c.status !== "active") return null;
   return geotabProvider({ database: c.database_name, userName: c.user_name, password: decryptSecret(c.credentials_enc) });
+}
+
+/** The company's members with the identity fields used to match provider drivers. */
+export async function rosterMembers(companyId: string): Promise<Member[]> {
+  const admin = getServiceSupabase();
+  const { data: uc } = await admin.from("user_companies").select("user_id").eq("company_id", companyId);
+  const ids = ((uc ?? []) as { user_id: string }[]).map((x) => x.user_id);
+  if (!ids.length) return [];
+  const { data: prof } = await admin.from("profiles").select("user_id, display_name, employee_number").in("user_id", ids);
+  const byId = new Map(((prof ?? []) as { user_id: string; display_name: string | null; employee_number: string | null }[]).map((p) => [p.user_id, p]));
+  const emails = await Promise.all(ids.map(async (id) => (await admin.auth.admin.getUserById(id)).data.user?.email ?? null));
+  return ids.map((id, i) => ({ user_id: id, email: emails[i], display_name: byId.get(id)?.display_name ?? null, employee_number: byId.get(id)?.employee_number ?? null }));
 }

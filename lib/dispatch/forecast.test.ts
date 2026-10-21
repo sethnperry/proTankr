@@ -82,3 +82,17 @@ test("pickMinutes falls back as samples thin out", () => {
   assert.equal(pickMinutes(s, at(20, 6), TZ)!.stage, "few");
   assert.equal(pickMinutes([], at(20, 6), TZ), null);
 });
+
+test("real hours of service replace the estimate when the start is soon", () => {
+  const nowMs = at(20, 8);
+  const hos = { driveLeftMin: 60, dutyLeftMin: 600, asOfMs: nowMs };
+  const f = forecastLoad({ ...base, startFrom: null, startMs: at(20, 8, 30), history: [], hos, nowMs });
+  const d = f.flags.find((x) => x.kind === "driving");
+  assert.ok(d && d.severity === "bad" && /has 1\.0 h left/.test(d.text), "short on drive time");
+  // plenty of time: no HOS flags
+  const ok = forecastLoad({ ...base, startFrom: null, startMs: at(20, 8, 30), history: [], hos: { driveLeftMin: 700, dutyLeftMin: 800, asOfMs: nowMs }, nowMs });
+  assert.equal(ok.flags.some((x) => x.kind === "driving" || x.kind === "dot14"), false);
+  // a start days away ignores today's clocks and falls back to the estimate
+  const far = forecastLoad({ ...base, startFrom: null, startMs: at(22, 8), history: [], hos, nowMs });
+  assert.equal(far.flags.some((x) => /left on the clock/.test(x.text)), false);
+});
