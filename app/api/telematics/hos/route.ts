@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { autoLinkDriver, callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { autoLinkAllDrivers, autoLinkDriver, callerId, companyRole, providerFor } from "@/lib/telematics/server";
 import type { HosAvailability } from "@/lib/telematics/types";
 
 export const runtime = "nodejs";
@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
   try {
     const p = await providerFor(companyId);
     if (!p) return NextResponse.json({ connected: false });
+    try { if (await autoLinkAllDrivers(companyId)) cache.delete(companyId); } catch { /* board still shows who is linked */ }
     const { data } = await getServiceSupabase().from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId);
     const rows = (data ?? []) as { provider_user_id: string; user_id: string }[];
     const hos: Record<string, HosAvailability> = {};

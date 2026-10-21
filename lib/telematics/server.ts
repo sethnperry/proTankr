@@ -86,3 +86,27 @@ export async function autoLinkDriver(companyId: string, userId: string): Promise
     { onConflict: "company_id,provider_user_id", ignoreDuplicates: true });
   return pair.driver.id;
 }
+
+// Same, for the whole roster: whoever isn't linked yet and matches gets linked, so dispatch's board
+// fills in without anyone opening their dashboard first. At most every 10 minutes per company.
+const autoTriedAll = new Map<string, number>();
+export async function autoLinkAllDrivers(companyId: string): Promise<number> {
+  if (Date.now() - (autoTriedAll.get(companyId) ?? 0) < 600_000) return 0;
+  autoTriedAll.set(companyId, Date.now());
+  const p = await providerFor(companyId);
+  if (!p) return 0;
+  const admin = getServiceSupabase();
+  const { data } = await admin.from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId);
+  const rows = (data ?? []) as { provider_user_id: string; user_id: string }[];
+  const usedD = new Set(rows.map((r) => r.provider_user_id)), usedM = new Set(rows.map((r) => r.user_id));
+  const members = (await rosterMembers(companyId)).filter((m) => !usedM.has(m.user_id));
+  if (!members.length) return 0;
+  const drivers = (await p.listDrivers()).filter((d) => !usedD.has(d.id));
+  const { pairs } = matchDrivers(drivers, members);
+  for (const x of pairs) {
+    await admin.from("telematics_driver_map").upsert(
+      { company_id: companyId, provider_user_id: x.driver.id, user_id: x.member.user_id, driver_name: x.driver.name, matched_by: x.by },
+      { onConflict: "company_id,provider_user_id", ignoreDuplicates: true });
+  }
+  return pairs.length;
+}
