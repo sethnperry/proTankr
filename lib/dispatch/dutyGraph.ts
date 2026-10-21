@@ -10,8 +10,10 @@ import type { Seg, SegKey } from "./forecast.ts";
 
 export type DutyStatus = "off" | "sleeper" | "driving" | "on";
 
-/** Top to bottom. Off duty and sleeper aren't charted: the graph is the working day only. */
+/** Top to bottom, as on a paper log. */
 export const DUTY_ROWS: { status: DutyStatus; label: string }[] = [
+  { status: "off", label: "OFF" },
+  { status: "sleeper", label: "SB" },
   { status: "driving", label: "D" },
   { status: "on", label: "ON" },
 ];

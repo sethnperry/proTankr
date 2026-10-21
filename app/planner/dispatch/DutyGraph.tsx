@@ -1,8 +1,7 @@
 "use client";
 // app/planner/dispatch/DutyGraph.tsx
 //
-// The planned load as a logbook-style grid: Driving / On Duty rows (off duty and
-// sleeper aren't charted), the first load starting at the far left and the chart running to the end of the last. Widths are
+// The planned load as a logbook-style grid: Off / Sleeper / Driving / On Duty rows, the first load starting at the far left and the chart running to the end of the last. Widths are
 // proportional to time, so the loaded drive shows as the long run it is.
 // Lines are SVG stretched to the width; text is HTML so it never distorts.
 
@@ -36,19 +35,31 @@ export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, 
   for (let t = Math.ceil(r.t0 / 3600000) * 3600000; t <= r.t1; t += 3600000) hours.push(t);
   const every = hours.length > 16 ? 3 : hours.length > 8 ? 2 : 1;
 
-  // A colored run per block; thin grey steps join one block to the next (idle time isn't charted).
+  // Path pieces: a colored run per block, grey steps between them. Time outside a block is Off Duty,
+  // so a driver who goes off duty mid-trip drops to the Off row for that gap.
   const runs: React.ReactNode[] = [];
   const steps: string[] = [];
   const x = (ms: number) => pct(ms, r);
+  let lastY = y("off"), lastX = 0;
   blocks.forEach((b, i) => {
     const by = y(b.status);
+    if (b.startMs > r.t0 && (i === 0 || b.startMs > blocks[i - 1].endMs)) {
+      steps.push(`M${lastX} ${lastY} H${x(b.startMs)}`);
+      lastX = x(b.startMs);
+    }
+    steps.push(`M${lastX} ${lastY} V${by}`);
     runs.push(
       <line key={i} x1={x(b.startMs)} x2={x(b.endMs)} y1={by} y2={by} vectorEffect="non-scaling-stroke"
         stroke={b.key === "gauging" ? "#fb923c" : b.key === "earlier" ? "rgba(255,255,255,0.4)" : "#fff"} strokeWidth={3} />,
     );
+    lastY = by; lastX = x(b.endMs);
     const next = blocks[i + 1];
-    if (next) steps.push(`M${x(b.endMs)} ${by} H${x(next.startMs)} V${y(next.status)}`);
+    if (!next || next.startMs > b.endMs) {
+      steps.push(`M${lastX} ${lastY} V${y("off")}`);
+      lastY = y("off");
+    }
   });
+  if (blocks.length) steps.push(`M${lastX} ${lastY} H100`);
 
   const tag = (text: string | null, ms: number | null) => {
     if (!text || ms == null) return null;
