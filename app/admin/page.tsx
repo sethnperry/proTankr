@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
+import { linkMeToTelematics } from "@/lib/telematics/linkMe";
 import { fetchProductsCatalogCached } from "@/lib/queries/useProductsCatalog";
 import { fetchTerminalsCatalogCached, TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
 import ComboEditModal from "@/lib/ui/driver/ComboEditModal";
@@ -1309,6 +1310,8 @@ export default function AdminPage() {
         local_area: profileMap[m.user_id]?.local_area ?? null,
         employee_number: profileMap[m.user_id]?.employee_number ?? null,
       })));
+      // Geotab: link any member that matches a Geotab driver (no-op without a connection).
+      if (role === "admin" || role === "dispatch" || role === "lead") void linkMeToTelematics(cid, undefined, true);
 
       // Per-member license/medical/TWIC/terminal-card data, for the Needs
       // Attention panel's fleet-wide credential rollup -- reuses the exact
