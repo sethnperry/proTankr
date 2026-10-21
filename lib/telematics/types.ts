@@ -41,6 +41,10 @@ export interface TelematicsProvider {
   hos(driverId: string): Promise<HosAvailability | null>;
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
+  /** GPS trail for one vehicle inside a window, oldest first (paged). */
+  trail(vehicleId: string, fromIso: string, toIso: string): Promise<{ lat: number; lon: number; at: string }[]>;
+  /** First and last odometer reading (miles) inside a window, if any. */
+  odometerSpan(vehicleId: string, fromIso: string, toIso: string): Promise<{ firstMi: number; lastMi: number } | null>;
   /** Just the hour meter, for one vehicle. */
   engineHours(vehicleId: string): Promise<number | null>;
   /** Position of every vehicle in one call (no odometer), keyed by provider vehicle id. */

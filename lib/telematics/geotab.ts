@@ -117,6 +117,30 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
 
     async engineHours(id: string): Promise<number | null> { return engineHours(id); },
 
+    async trail(id: string, fromIso: string, toIso: string) {
+      const out: { lat: number; lon: number; at: string }[] = [];
+      let from = fromIso;
+      for (let page = 0; page < 8; page++) {
+        const rows: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: from, toDate: toIso }, resultsLimit: 50000 });
+        const good = (rows ?? []).filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)) && r.dateTime);
+        for (const r of good) out.push({ lat: Number(r.latitude), lon: Number(r.longitude), at: String(r.dateTime) });
+        if ((rows ?? []).length < 50000) break;
+        const last = good.map((r) => String(r.dateTime)).sort().pop();
+        if (!last) break;
+        from = new Date(Date.parse(last) + 1).toISOString();
+      }
+      return out.sort((a, b) => a.at.localeCompare(b.at));
+    },
+
+    async odometerSpan(id: string, fromIso: string, toIso: string) {
+      for (const diag of ["DiagnosticOdometerAdjustmentId", "DiagnosticOdometerId"]) {
+        const rows: any[] = await call("Get", { typeName: "StatusData", search: { deviceSearch: { id }, diagnosticSearch: { id: diag }, fromDate: fromIso, toDate: toIso } });
+        const v = (rows ?? []).filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime)));
+        if (v.length >= 2) return { firstMi: Number(v[0].data) / METERS_PER_MILE, lastMi: Number(v[v.length - 1].data) / METERS_PER_MILE };
+      }
+      return null;
+    },
+
     async listTrailers(): Promise<ProviderTrailer[]> {
       const rows: any[] = await call("Get", { typeName: "Trailer" });
       return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name) }));
