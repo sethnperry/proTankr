@@ -303,6 +303,12 @@ export default function FuelSheet({
     return list;
   }, [methods, cards]);
 
+  // Hooks must all run before the early returns below, or finishing a stop (p goes null) crashes the screen.
+  // The truck's own odometer fills the field when it's empty. Never overwrites a typed value.
+  useEffect(() => {
+    if (liveOdometer != null) setOdo((o) => (o.trim() ? o : String(liveOdometer)));
+  }, [liveOdometer, p?.id, p?.status, p?.odometer, choice]);
+
   if (!open) return null;
   if (!p) {
     return (
@@ -341,11 +347,6 @@ export default function FuelSheet({
     await stop.save(finishFueling(p, new Date().toISOString()));
     setShowDetails(true);
   });
-
-  // The truck's own odometer fills the field when it's empty. Never overwrites a typed value.
-  useEffect(() => {
-    if (liveOdometer != null) setOdo((o) => (o.trim() ? o : String(liveOdometer)));
-  }, [liveOdometer, p?.id, p?.status, p?.odometer, choice]);
 
   const closeChoice = () => { setChoice(null); setErr(null); setDown(false); setIssue(""); setIssueNote(""); setEditPin(false); setPinDraft(""); setChoosingCard(false); };
 
