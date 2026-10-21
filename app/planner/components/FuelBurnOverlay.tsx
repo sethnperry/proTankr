@@ -13,9 +13,9 @@
 // scale. See utils/fuelBurn.ts for the conservative-density reasoning.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { GAUGE_STOPS, burnedFromGauge, burnCreditLbs, DIESEL_CREDIT_LBS_PER_GAL } from "../utils/fuelBurn";
+import { GAUGE_STOPS, burnedFromGauge, burnedFromLevel, LEVEL_MARGIN_PCT, burnCreditLbs, DIESEL_CREDIT_LBS_PER_GAL } from "../utils/fuelBurn";
 
-type Mode = "gauge" | "gallons";
+type Mode = "truck" | "gauge" | "gallons";
 
 type Props = {
   open: boolean;
@@ -23,6 +23,8 @@ type Props = {
   savedTankGallons: number | null;
   /** Previously applied value, so reopening shows what was entered. */
   initialGallons: number | null;
+  /** The truck's own fuel level (percent) from telematics, when connected and recent. */
+  liveFuelPct?: number | null;
   onCancel: () => void;
   /** gallonsBurned, plus the tank size to remember when it was entered/changed in gauge mode. */
   onApply: (gallonsBurned: number, tankGallonsToSave: number | null) => void;
@@ -40,8 +42,9 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4,
 };
 
-export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons, onCancel, onApply }: Props) {
-  const [mode, setMode] = useState<Mode>("gauge");
+export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons, liveFuelPct, onCancel, onApply }: Props) {
+  const hasLive = liveFuelPct != null && Number.isFinite(liveFuelPct);
+  const [mode, setMode] = useState<Mode>(hasLive ? "truck" : "gauge");
   const [tankStr, setTankStr] = useState("");
   const [gaugeFraction, setGaugeFraction] = useState<number | null>(null);
   const [gallonsStr, setGallonsStr] = useState("");
@@ -49,23 +52,29 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
   // Re-seed every time the window opens.
   useEffect(() => {
     if (!open) return;
-    setMode("gauge");
+    setMode(hasLive ? "truck" : "gauge");
     setTankStr(savedTankGallons != null && savedTankGallons > 0 ? String(savedTankGallons) : "");
     setGaugeFraction(null);
     setGallonsStr(initialGallons != null && initialGallons > 0 ? String(Math.round(initialGallons)) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, savedTankGallons, initialGallons]);
 
   const tank = Number(tankStr);
   const tankValid = Number.isFinite(tank) && tank > 0;
 
   const gallonsBurned = useMemo(() => {
+    if (mode === "truck") {
+      if (!tankValid || !hasLive) return null;
+      const g = burnedFromLevel(tank, liveFuelPct!);
+      return g > 0 ? Math.round(g * 10) / 10 : null;
+    }
     if (mode === "gauge") {
       if (!tankValid || gaugeFraction == null) return null;
       return burnedFromGauge(tank, gaugeFraction);
     }
     const g = Number(gallonsStr);
     return Number.isFinite(g) && g > 0 ? g : null;
-  }, [mode, tankValid, tank, gaugeFraction, gallonsStr]);
+  }, [mode, tankValid, tank, gaugeFraction, gallonsStr, hasLive, liveFuelPct]);
 
   if (!open) return null;
 
@@ -73,7 +82,7 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
 
   function apply() {
     if (!canApply) return;
-    const tankToSave = mode === "gauge" && tankValid && tank !== savedTankGallons ? tank : null;
+    const tankToSave = mode !== "gallons" && tankValid && tank !== savedTankGallons ? tank : null;
     onApply(gallonsBurned!, tankToSave);
   }
 
@@ -121,11 +130,33 @@ export default function FuelBurnOverlay({ open, savedTankGallons, initialGallons
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
+          {hasLive && modeBtn("truck", "From truck")}
           {modeBtn("gauge", "Tank + Gauge")}
           {modeBtn("gallons", "Gallons")}
         </div>
 
-        {mode === "gauge" ? (
+        {mode === "truck" ? (
+          <>
+            <div style={{ textAlign: "center" }}>
+              <div style={labelStyle}>Truck reports</div>
+              <div style={{ fontSize: 34, fontWeight: 800 }}>{Math.round(liveFuelPct as number)}% <span style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>fuel</span></div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4, lineHeight: 1.4 }}>
+                We read it {LEVEL_MARGIN_PCT} points fuller than reported, so the credit is never overstated.
+              </div>
+            </div>
+            <div>
+              <div style={labelStyle}>Total tank size (all tanks)</div>
+              <div style={{ position: "relative" }}>
+                <input type="text" inputMode="decimal" value={tankStr} placeholder="e.g. 200" onChange={(e) => setTankStr(digits(e.target.value))} onFocus={(e) => e.target.select()}
+                  style={{ width: "100%", textAlign: "center", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.20)", color: "#fff", fontSize: 28, fontWeight: 700, padding: "4px 0" }} />
+                <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.3)" }}>gal</span>
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4, textAlign: "center" }}>
+                {savedTankGallons != null && savedTankGallons > 0 ? "Saved for this truck" : "We'll remember this for this truck"}
+              </div>
+            </div>
+          </>
+        ) : mode === "gauge" ? (
           <>
             <div>
               <div style={labelStyle}>Total tank size (all tanks)</div>

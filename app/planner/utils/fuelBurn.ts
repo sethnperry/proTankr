@@ -45,3 +45,15 @@ export function burnCreditLbs(gallonsBurned: number): number {
 export function correctedGrossLbs(actualGrossLbs: number, gallonsBurned: number): number {
   return actualGrossLbs - burnCreditLbs(gallonsBurned);
 }
+
+// A truck's fuel-level reading is noisy (slosh, grades), so it is read as
+// this many percentage points FULLER than reported: less fuel burned means a
+// smaller credit, the same direction as picking the fuller gauge mark.
+export const LEVEL_MARGIN_PCT = 3;
+
+/** Gallons burned since a full-tank tare, from the truck's reported fuel level (percent). */
+export function burnedFromLevel(tankGallons: number, levelPct: number, marginPct = LEVEL_MARGIN_PCT): number {
+  if (!Number.isFinite(tankGallons) || tankGallons <= 0 || !Number.isFinite(levelPct)) return 0;
+  const eff = Math.min(100, Math.max(0, levelPct) + marginPct);
+  return (tankGallons * (100 - eff)) / 100;
+}

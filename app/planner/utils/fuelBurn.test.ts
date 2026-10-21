@@ -32,3 +32,13 @@ test("gauge stops run fullest to empty in eighths", () => {
   assert.equal(GAUGE_STOPS[0].fraction, 1);
   assert.equal(GAUGE_STOPS[8].fraction, 0);
 });
+
+import { burnedFromLevel } from "./fuelBurn.ts";
+
+test("burnedFromLevel reads the tank 3 points fuller than reported and never goes negative", () => {
+  assert.equal(burnedFromLevel(200, 50), 94); // 53% effective -> 47% of 200
+  assert.equal(burnedFromLevel(200, 100), 0);
+  assert.equal(burnedFromLevel(200, 98), 0);
+  assert.equal(burnedFromLevel(0, 40), 0);
+  assert.equal(burnedFromLevel(200, Number.NaN), 0);
+});

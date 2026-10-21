@@ -1,4 +1,5 @@
 "use client";
+import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { openAccessSteps } from "./components/access/useAccessSteps";
 import { motion } from "framer-motion";
 import { clearSetupSession } from "@/lib/setupSession";
@@ -1557,6 +1558,10 @@ export default function CalculatorPage() {
     activeSlotLetter,
     capacityResult,
   });
+
+  // The truck's own fuel level (telematics), used only when recent.
+  const fuelReading = useTruckReading(selectedTruckId ?? null, loadWorkflow.loadingOpen);
+  const recentFuelPct = fuelReading?.fuelLevelPct != null && fuelReading.at && Date.now() - Date.parse(fuelReading.at) < 30 * 60_000 ? fuelReading.fuelLevelPct : null;
 
   // ── Trip mode for the Loaded flow ─────────────────────────────────────────
   // When this load is attached to a trip pickup, Plan Review's Loaded steps
@@ -3738,6 +3743,7 @@ const lastProductInfoById = useMemo(() => {
         tuneTempColor={tuneTempColor}
         ambientTempF={fuelTempAmbientF}
         fuelTankGallons={fuelTankGallons}
+        liveFuelPct={recentFuelPct}
         onSaveFuelTankGallons={saveFuelTankGallons}
       />
 

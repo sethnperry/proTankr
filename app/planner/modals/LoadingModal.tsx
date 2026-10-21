@@ -442,6 +442,7 @@ export default function LoadingModal(props: {
   // Fuel-burn correction (Load Report, over legal only). Saddle-tank size
   // saved on the selected truck, and a saver for the first time it's entered.
   fuelTankGallons?: number | null;
+  liveFuelPct?: number | null; // truck's fuel level from telematics (recent only)
   onSaveFuelTankGallons?: (gallons: number) => Promise<void>;
 
   // Drives the first-open "look here" walkthrough (see the spotlight block
@@ -489,6 +490,7 @@ export default function LoadingModal(props: {
     tuneTempColor,
     ambientTempF,
     fuelTankGallons,
+    liveFuelPct,
     onSaveFuelTankGallons,
     userId,
     trip,
@@ -1275,6 +1277,7 @@ export default function LoadingModal(props: {
             <FuelBurnOverlay
               open={burnOpen}
               savedTankGallons={fuelTankGallons ?? null}
+              liveFuelPct={liveFuelPct ?? null}
               initialGallons={burnGallons}
               onCancel={() => setBurnOpen(false)}
               onApply={(gal, tankToSave) => {

@@ -70,6 +70,15 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     return null;
   };
 
+  // Combined fuel level, percent. Null when the truck doesn't report it.
+  const fuelLevel = async (id: string): Promise<number | null> => {
+    const from = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+    const rows: any[] = await call("Get", { typeName: "StatusData", search: { deviceSearch: { id }, diagnosticSearch: { id: "DiagnosticFuelLevelId" }, fromDate: from } });
+    const last = (rows ?? []).filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+    if (!last) return null;
+    return Math.max(0, Math.min(100, Math.round(Number(last.data) * 10) / 10));
+  };
+
   return {
     async listVehicles(): Promise<ProviderVehicle[]> {
       const rows: any[] = await call("Get", { typeName: "Device" });
@@ -97,14 +106,16 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     },
 
     async reading(id: string): Promise<VehicleReading> {
-      const [info, odo] = await Promise.all([
+      const [info, odo, fuel] = await Promise.all([
         call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id } } }) as Promise<any[]>,
         odometer(id).catch(() => null),
+        fuelLevel(id).catch(() => null),
       ]);
       const s = (info ?? [])[0];
       const kmh = Number(s?.speed);
       return {
         odometerMi: odo,
+        fuelLevelPct: fuel,
         lat: Number.isFinite(Number(s?.latitude)) ? Number(s.latitude) : null,
         lon: Number.isFinite(Number(s?.longitude)) ? Number(s.longitude) : null,
         speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,
