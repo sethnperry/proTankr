@@ -168,9 +168,15 @@ test("duty graph: drive legs are Driving, the rest On Duty, range in whole hours
   const blocks = dutyBlocks(segs);
   assert.deepEqual(blocks.map((b) => b.status), ["driving", "on", "driving"]);
   const r = dutyRange(blocks);
-  assert.equal((r.t1 - r.t0) % H, 0);
-  assert.ok(r.t0 <= base && r.t1 >= base + 5 * H);
+  assert.equal(r.t0, base); // the first load starts at the far left
+  assert.ok(r.t1 >= base + 5 * H && r.t1 < base + 5.5 * H);
   assert.ok(pct(r.t0, r) === 0 && pct(r.t1, r) === 100);
+  // A short rested wait is drawn from where it starts; a long one is cut off at the left so the day still fits.
+  const near = dutyRange(blocks, { fromMs: base - 3 * H, toMs: base });
+  assert.equal(near.t0, base - 3 * H); assert.equal(near.restClipped, false);
+  const far = dutyRange(blocks, { fromMs: base - 14 * H, toMs: base });
+  assert.equal(far.t0, base - 11 * H); assert.equal(far.restClipped, true); // 16 h cap, 5 h of loads
+  assert.ok(far.t1 - far.t0 <= 16 * H + 15 * 60000);
 });
 
 import { hosAlerts } from "./hosAlerts.ts";

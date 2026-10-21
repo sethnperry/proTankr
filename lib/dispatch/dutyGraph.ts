@@ -10,10 +10,8 @@ import type { Seg, SegKey } from "./forecast.ts";
 
 export type DutyStatus = "off" | "sleeper" | "driving" | "on";
 
-/** Top to bottom, as on a paper log. */
+/** Top to bottom. Off duty and sleeper aren't charted: the graph is the working day only. */
 export const DUTY_ROWS: { status: DutyStatus; label: string }[] = [
-  { status: "off", label: "OFF" },
-  { status: "sleeper", label: "SB" },
   { status: "driving", label: "D" },
   { status: "on", label: "ON" },
 ];
@@ -33,16 +31,33 @@ export function dutyBlocks(segments: Seg[], earlier: { startMs: number; endMs: n
 }
 
 const HOUR = 3600000;
+/** The most the chart spans when a long rested stretch is drawn before the first load (Alaska's 20 h day fits the loads themselves). */
+const MAX_SPAN = 16 * HOUR;
 
-/** The grid's time range: whole hours around the blocks, at least 4 hours wide. */
-export function dutyRange(blocks: DutyBlock[], extra?: { fromMs: number; toMs: number } | null): { t0: number; t1: number } {
-  if (blocks.length === 0 && !extra) return { t0: 0, t1: HOUR * 4 };
-  const lo = Math.min(...blocks.map((b) => b.startMs), ...(extra ? [extra.fromMs] : []));
-  const hi = Math.max(...blocks.map((b) => b.endMs), ...(extra ? [extra.toMs] : []));
-  let t0 = Math.floor(lo / HOUR) * HOUR;
-  let t1 = Math.ceil(hi / HOUR) * HOUR;
+/** The whole working day on one chart: the first load starts at the far left and the chart runs to the end of the last.
+ *  A rested-and-waiting band is drawn before the start when it fits in MAX_SPAN; a longer one is cut off at the left edge. */
+export function dutyRange(
+  blocks: DutyBlock[],
+  rest?: { fromMs: number; toMs: number } | null,
+): { t0: number; t1: number; restFromMs: number | null; restClipped: boolean } {
+  if (blocks.length === 0) {
+    if (!rest) return { t0: 0, t1: HOUR * 4, restFromMs: null, restClipped: false };
+    return { t0: rest.fromMs, t1: Math.max(rest.toMs, rest.fromMs + 4 * HOUR), restFromMs: rest.fromMs, restClipped: false };
+  }
+  const s = Math.min(...blocks.map((b) => b.startMs));
+  const e = Math.max(...blocks.map((b) => b.endMs));
+  let t0 = s;
+  let restFromMs: number | null = null;
+  let restClipped = false;
+  if (rest && rest.fromMs < s) {
+    const pad = Math.max(HOUR, MAX_SPAN - (e - s)); // always at least an hour of rested time, more when the day is short
+    t0 = Math.max(rest.fromMs, s - pad);
+    restFromMs = t0;
+    restClipped = rest.fromMs < t0;
+  }
+  let t1 = Math.ceil(e / (15 * 60000)) * 15 * 60000;
   if (t1 - t0 < 4 * HOUR) t1 = t0 + 4 * HOUR;
-  return { t0, t1 };
+  return { t0, t1, restFromMs, restClipped };
 }
 
 /** Where a time sits along the grid, 0 to 100. */
