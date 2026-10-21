@@ -12,7 +12,8 @@ import { geotabProvider } from "@/lib/telematics/geotab";
 import { encryptSecret } from "@/lib/telematics/crypto";
 import { matchVehicles, type TruckLite } from "@/lib/telematics/match";
 import { matchDrivers } from "@/lib/telematics/matchDrivers";
-import { pathsFor, summarizeGroups } from "@/lib/telematics/groups";
+import { groupNames, pathsFor, summarizeGroups } from "@/lib/telematics/groups";
+import { parseOpts, regionFor, truckPatch, type TruckRow } from "@/lib/telematics/unitSync";
 import { decodeVins } from "@/lib/telematics/vinDecode";
 import { TelematicsAuthError } from "@/lib/telematics/types";
 import { autoLinkAllDrivers, callerId, companyRole, isCompanyAdmin, providerFor, rosterMembers } from "@/lib/telematics/server";
@@ -42,7 +43,7 @@ async function summary(companyId: string) {
   ]);
   const rows = (map.data ?? []) as { provider_vehicle_id: string; truck_id: string; vehicle_name: string | null; matched_by: string }[];
   const mapped = new Set(rows.map((r) => r.truck_id));
-  let vehicles: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string }[] = [];
+  let vehicles: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string; groups?: string[] }[] = [];
   let rawVehicles: import("@/lib/telematics/types").ProviderVehicle[] = [];
   let provGroups: import("@/lib/telematics/types").ProviderGroup[] = [];
   try {
@@ -50,7 +51,7 @@ async function summary(companyId: string) {
     if (p) {
       rawVehicles = await p.listVehicles();
       provGroups = await p.listGroups().catch(() => []);
-      vehicles = rawVehicles.map((v) => ({ id: v.id, name: v.name, vin: v.vin, plate: v.plate ?? null, group: pathsFor(v.groupIds, provGroups) }));
+      vehicles = rawVehicles.map((v) => ({ id: v.id, name: v.name, vin: v.vin, plate: v.plate ?? null, group: pathsFor(v.groupIds, provGroups), groups: groupNames(v.groupIds, provGroups) }));
     }
   } catch { /* the status line already carries the last error */ }
   const mappedVeh = new Set(rows.map((r) => r.provider_vehicle_id));
@@ -58,8 +59,8 @@ async function summary(companyId: string) {
   const tm = await admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", companyId);
   const trows = (tm.data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
   const { data: ourTr } = await admin.from("trailers").select("trailer_id, trailer_name").eq("company_id", companyId).eq("active", true);
-  let provTr: { id: string; name: string; groupIds?: string[]; group?: string }[] = [];
-  try { const p = await providerFor(companyId); provTr = p ? (await p.listTrailers()).map((t) => ({ ...t, group: pathsFor(t.groupIds, provGroups) })) : []; } catch { /* trailer tracking may not be on */ }
+  let provTr: { id: string; name: string; groupIds?: string[]; group?: string; groups?: string[] }[] = [];
+  try { const p = await providerFor(companyId); provTr = p ? (await p.listTrailers()).map((t) => ({ ...t, group: pathsFor(t.groupIds, provGroups), groups: groupNames(t.groupIds, provGroups) })) : []; } catch { /* trailer tracking may not be on */ }
   const tUsed = new Set(trows.map((r) => r.trailer_id)), tvUsed = new Set(trows.map((r) => r.provider_trailer_id));
   // Drivers (hours of service): linked, and who is left to match.
   const dm = await admin.from("telematics_driver_map").select("provider_user_id, user_id, driver_name, matched_by").eq("company_id", companyId);
@@ -130,69 +131,139 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(await summary(g.companyId));
   }
 
-  // Add Geotab vehicles / trailers we don't have yet as new equipment, and link them.
-  if (Array.isArray(body.importVehicles) || Array.isArray(body.importTrailers)) {
+  // Bring Geotab equipment in: new units are created, units we already have (same VIN or name) are
+  // linked and updated per the chosen fields and mode. syncLinked re-applies that to units already linked.
+  if (Array.isArray(body.importVehicles) || Array.isArray(body.importTrailers) || body.syncLinked === true) {
     const p = await providerFor(g.companyId);
     if (!p) return NextResponse.json({ error: "Geotab isn't connected." }, { status: 400 });
+    const o = parseOpts(body.opts);
     const lower = (x: string) => x.trim().toLowerCase();
+    const CHUNK = 150; // keeps one request inside the function time limit
+    const result = { added: 0, linked: 0, updated: 0 };
+    const regionsSeen = new Set<string>();
+    const inBatches = async <T,>(items: T[], fn: (x: T) => Promise<void>) => { for (let i = 0; i < items.length; i += 15) await Promise.all(items.slice(i, i + 15).map(fn)); };
     try {
-      const CHUNK = 150; // keeps one request inside the function time limit
-      if (Array.isArray(body.importVehicles)) {
-        const want = new Set((body.importVehicles as unknown[]).map(String));
-        const [vehicles, mapRes, ours] = await Promise.all([
+      const groups = await p.listGroups().catch(() => []);
+      const TRUCK_COLS = "truck_id, truck_name, vin_number, plate_number, make, model, year, region";
+      if (Array.isArray(body.importVehicles) || body.syncLinked === true) {
+        const [vehicles, mapRes, oursRes] = await Promise.all([
           p.listVehicles(),
-          admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", g.companyId),
-          admin.from("trucks").select("truck_name").eq("company_id", g.companyId),
+          admin.from("telematics_vehicle_map").select("provider_vehicle_id, truck_id").eq("company_id", g.companyId),
+          admin.from("trucks").select(TRUCK_COLS).eq("company_id", g.companyId),
         ]);
-        const mapped = new Set(((mapRes.data ?? []) as { provider_vehicle_id: string }[]).map((r) => r.provider_vehicle_id));
-        const names = new Set(((ours.data ?? []) as { truck_name: string }[]).map((t) => lower(t.truck_name)));
-        const todo: typeof vehicles = [];
-        for (const v of vehicles) {
-          if (todo.length >= CHUNK) break;
-          if (!want.has(v.id) || mapped.has(v.id) || names.has(lower(v.name))) continue;
-          names.add(lower(v.name));
-          todo.push(v);
+        const mapRows = (mapRes.data ?? []) as { provider_vehicle_id: string; truck_id: string }[];
+        const mappedProv = new Set(mapRows.map((r) => r.provider_vehicle_id));
+        const mappedTruck = new Set(mapRows.map((r) => r.truck_id));
+        const ours = (oursRes.data ?? []) as TruckRow[];
+        const byId = new Map(ours.map((t) => [t.truck_id, t]));
+        const byVin = new Map(ours.filter((t) => t.vin_number).map((t) => [t.vin_number!.toUpperCase(), t]));
+        const byName = new Map(ours.map((t) => [lower(t.truck_name), t]));
+        const vById = new Map(vehicles.map((v) => [v.id, v]));
+        const creates: typeof vehicles = [];
+        const updates: { v: (typeof vehicles)[number]; truck: TruckRow; link: boolean }[] = [];
+        if (body.syncLinked === true) {
+          if (o.existing !== "skip") for (const r of mapRows) { const v = vById.get(r.provider_vehicle_id), t = byId.get(r.truck_id); if (v && t) updates.push({ v, truck: t, link: false }); }
+        } else {
+          const want = new Set((body.importVehicles as unknown[]).map(String));
+          const takenNames = new Set<string>();
+          for (const v of vehicles) {
+            if (creates.length + updates.length >= CHUNK) break;
+            if (!want.has(v.id) || mappedProv.has(v.id)) continue;
+            const hit = (v.vin && byVin.get(v.vin)) || byName.get(lower(v.name));
+            if (hit) {
+              if (o.existing === "skip" || mappedTruck.has(hit.truck_id)) continue;
+              mappedTruck.add(hit.truck_id);
+              updates.push({ v, truck: hit, link: true });
+            } else {
+              if (takenNames.has(lower(v.name))) continue;
+              takenNames.add(lower(v.name));
+              creates.push(v);
+            }
+          }
         }
-        const info = await decodeVins(todo.map((v) => v.vin ?? ""));
-        if (todo.length) {
-          const { data, error } = await admin.from("trucks").insert(todo.map((v) => {
-            const d = v.vin ? info.get(v.vin) : undefined;
-            return { company_id: g.companyId, truck_name: v.name.trim(), active: true, vin_number: v.vin, plate_number: v.plate ?? null, make: d?.make ?? null, model: d?.model ?? null, year: d?.year ?? null };
-          })).select("truck_id, truck_name");
+        const need = [...creates, ...updates.map((u) => u.v)];
+        const info = o.fields.vehicle ? await decodeVins(need.map((v) => v.vin ?? "")) : new Map();
+        const regionOf = (v: (typeof vehicles)[number]) => regionFor(groupNames(v.groupIds, groups), o);
+        if (creates.length) {
+          const rows = creates.map((v) => {
+            const patch = truckPatch(null, { vin: v.vin, plate: v.plate ?? null }, v.vin ? info.get(v.vin) : undefined, regionOf(v), o);
+            if (patch.region) regionsSeen.add(String(patch.region));
+            return { company_id: g.companyId, truck_name: v.name.trim(), active: true, ...patch };
+          });
+          const { data, error } = await admin.from("trucks").insert(rows).select("truck_id, truck_name");
           if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-          const byName = new Map(((data ?? []) as { truck_id: string; truck_name: string }[]).map((t) => [lower(t.truck_name), t.truck_id]));
-          const rows = todo.flatMap((v) => { const id = byName.get(lower(v.name)); return id ? [{ company_id: g.companyId, provider_vehicle_id: v.id, truck_id: id, vehicle_name: v.name, matched_by: "import" }] : []; });
-          if (rows.length) await admin.from("telematics_vehicle_map").insert(rows);
+          const idByName = new Map(((data ?? []) as { truck_id: string; truck_name: string }[]).map((t) => [lower(t.truck_name), t.truck_id]));
+          const maps = creates.flatMap((v) => { const id = idByName.get(lower(v.name)); return id ? [{ company_id: g.companyId, provider_vehicle_id: v.id, truck_id: id, vehicle_name: v.name, matched_by: "import" }] : []; });
+          if (maps.length) await admin.from("telematics_vehicle_map").insert(maps);
+          result.added += maps.length;
         }
+        await inBatches(updates, async ({ v, truck, link }) => {
+          if (link) {
+            const { error } = await admin.from("telematics_vehicle_map").insert({ company_id: g.companyId, provider_vehicle_id: v.id, truck_id: truck.truck_id, vehicle_name: v.name, matched_by: "import" });
+            if (!error) result.linked++;
+          }
+          const patch = truckPatch(truck, { vin: v.vin, plate: v.plate ?? null }, v.vin ? info.get(v.vin) : undefined, regionOf(v), o);
+          if (!Object.keys(patch).length) return;
+          const { error } = await admin.from("trucks").update(patch).eq("truck_id", truck.truck_id).eq("company_id", g.companyId);
+          if (!error) { result.updated++; if (patch.region) regionsSeen.add(String(patch.region)); }
+        });
       }
       if (Array.isArray(body.importTrailers)) {
-        const want = new Set((body.importTrailers as unknown[]).map(String));
-        const [trailers, mapRes, ours] = await Promise.all([
+        const [trailers, mapRes, oursRes] = await Promise.all([
           p.listTrailers(),
-          admin.from("telematics_trailer_map").select("provider_trailer_id").eq("company_id", g.companyId),
-          admin.from("trailers").select("trailer_name").eq("company_id", g.companyId),
+          admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", g.companyId),
+          admin.from("trailers").select("trailer_id, trailer_name, region").eq("company_id", g.companyId),
         ]);
-        const mapped = new Set(((mapRes.data ?? []) as { provider_trailer_id: string }[]).map((r) => r.provider_trailer_id));
-        const names = new Set(((ours.data ?? []) as { trailer_name: string }[]).map((t) => lower(t.trailer_name)));
-        const todo: typeof trailers = [];
+        const want = new Set((body.importTrailers as unknown[]).map(String));
+        const mapRows = (mapRes.data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
+        const mappedProv = new Set(mapRows.map((r) => r.provider_trailer_id));
+        const mappedTr = new Set(mapRows.map((r) => r.trailer_id));
+        const ours = (oursRes.data ?? []) as { trailer_id: string; trailer_name: string; region: string | null }[];
+        const byName = new Map(ours.map((t) => [lower(t.trailer_name), t]));
+        const creates: typeof trailers = [];
+        const updates: { t: (typeof trailers)[number]; hit: (typeof ours)[number] }[] = [];
+        const taken = new Set<string>();
         for (const t of trailers) {
-          if (todo.length >= CHUNK) break;
-          if (!want.has(t.id) || mapped.has(t.id) || names.has(lower(t.name))) continue;
-          names.add(lower(t.name));
-          todo.push(t);
+          if (creates.length + updates.length >= CHUNK) break;
+          if (!want.has(t.id) || mappedProv.has(t.id)) continue;
+          const hit = byName.get(lower(t.name));
+          if (hit) {
+            if (o.existing === "skip" || mappedTr.has(hit.trailer_id)) continue;
+            mappedTr.add(hit.trailer_id);
+            updates.push({ t, hit });
+          } else if (!taken.has(lower(t.name))) { taken.add(lower(t.name)); creates.push(t); }
         }
-        if (todo.length) {
-          const { data, error } = await admin.from("trailers").insert(todo.map((t) => ({ company_id: g.companyId, trailer_name: t.name.trim(), active: true }))).select("trailer_id, trailer_name");
+        const regionOf = (t: (typeof trailers)[number]) => regionFor(groupNames(t.groupIds, groups), o);
+        if (creates.length) {
+          const rows = creates.map((t) => { const r = regionOf(t); if (r) regionsSeen.add(r); return { company_id: g.companyId, trailer_name: t.name.trim(), active: true, ...(r ? { region: r } : {}) }; });
+          const { data, error } = await admin.from("trailers").insert(rows).select("trailer_id, trailer_name");
           if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-          const byName = new Map(((data ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => [lower(t.trailer_name), t.trailer_id]));
-          const rows = todo.flatMap((t) => { const id = byName.get(lower(t.name)); return id ? [{ company_id: g.companyId, provider_trailer_id: t.id, trailer_id: id, trailer_name: t.name, matched_by: "import" }] : []; });
-          if (rows.length) await admin.from("telematics_trailer_map").insert(rows);
+          const idByName = new Map(((data ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => [lower(t.trailer_name), t.trailer_id]));
+          const maps = creates.flatMap((t) => { const id = idByName.get(lower(t.name)); return id ? [{ company_id: g.companyId, provider_trailer_id: t.id, trailer_id: id, trailer_name: t.name, matched_by: "import" }] : []; });
+          if (maps.length) await admin.from("telematics_trailer_map").insert(maps);
+          result.added += maps.length;
         }
+        await inBatches(updates, async ({ t, hit }) => {
+          const { error } = await admin.from("telematics_trailer_map").insert({ company_id: g.companyId, provider_trailer_id: t.id, trailer_id: hit.trailer_id, trailer_name: t.name, matched_by: "import" });
+          if (!error) result.linked++;
+          const r = regionOf(t);
+          if (r && (o.existing === "overwrite" ? hit.region !== r : !hit.region)) {
+            const { error: e2 } = await admin.from("trailers").update({ region: r }).eq("trailer_id", hit.trailer_id).eq("company_id", g.companyId);
+            if (!e2) { result.updated++; regionsSeen.add(r); }
+          }
+        });
+      }
+      // Region names used above become real Region entries so the pickers offer them.
+      if (regionsSeen.size) {
+        const { data } = await admin.from("equipment_regions").select("name").eq("company_id", g.companyId);
+        const have = new Set(((data ?? []) as { name: string }[]).map((r) => lower(r.name)));
+        const add = [...regionsSeen].filter((n) => !have.has(lower(n))).map((name) => ({ company_id: g.companyId, name }));
+        if (add.length) await admin.from("equipment_regions").insert(add);
       }
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 502 });
     }
-    return NextResponse.json(await summary(g.companyId));
+    return NextResponse.json({ ...(await summary(g.companyId)), result });
   }
 
   if (Array.isArray(body.driverMap)) {

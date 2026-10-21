@@ -244,3 +244,17 @@ test("groups: paths skip Geotab's built-in top groups; units count under each pa
   const rows = summarizeGroups(groups, [{ name: "25184", groupIds: ["g2"] }, { name: "99", groupIds: ["GroupCompanyId"] }], [{ name: "3151" }]);
   assert.deepEqual(rows.map((r) => [r.path, r.trucks.length, r.trailers.length]), [["Southeast › Tampa", 1, 0], ["Whole company", 1, 1]]);
 });
+
+test("unit sync: new gets everything ticked; existing follows fill / overwrite", async () => {
+  const { truckPatch, parseOpts, regionFor } = await import("./unitSync.ts");
+  const o = parseOpts({ fields: { region: true }, existing: "fill", regionGroup: "Gemini Region 502", regionName: "502" });
+  const geo = { vin: "1XKYD49X0LJ123456", plate: "ABC123" };
+  const info = { year: 2021, make: "Freightliner", model: "Cascadia" };
+  assert.equal(regionFor(["Gemini Region 502"], o), "502");
+  assert.equal(regionFor(["Whole company"], o), null);
+  assert.deepEqual(truckPatch(null, geo, info, "502", o), { vin_number: geo.vin, plate_number: "ABC123", make: "Freightliner", model: "Cascadia", year: 2021, region: "502" });
+  const ours = { truck_id: "t", truck_name: "1", vin_number: null, plate_number: "OLD", make: null, model: "X", year: null, region: null };
+  assert.deepEqual(truckPatch(ours, geo, info, "502", o), { vin_number: geo.vin, make: "Freightliner", year: 2021, region: "502" });
+  const ow = parseOpts({ existing: "overwrite" });
+  assert.equal((truckPatch(ours, geo, info, null, ow) as any).plate_number, "ABC123");
+});

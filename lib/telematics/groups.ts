@@ -19,11 +19,17 @@ export function groupPath(id: string, byId: Map<string, ProviderGroup>): string 
   return chain.length ? chain.join(" › ") : WHOLE_COMPANY;
 }
 
-/** Where one unit sits: its group paths joined, or "Whole company". */
-export function pathsFor(ids: string[] | undefined, groups: ProviderGroup[] | Map<string, ProviderGroup>): string {
+/** The groups one unit sits in, sorted, "Whole company" only when it has nothing better. */
+export function groupNames(ids: string[] | undefined, groups: ProviderGroup[] | Map<string, ProviderGroup>): string[] {
   const byId = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
-  if (!ids?.length) return WHOLE_COMPANY;
-  return [...new Set(ids.map((i) => groupPath(i, byId)))].join(", ");
+  const all = [...new Set((ids ?? []).map((i) => groupPath(i, byId)))];
+  const named = all.filter((p) => p !== WHOLE_COMPANY).sort();
+  return named.length ? named : [WHOLE_COMPANY];
+}
+
+/** Same, joined for display. */
+export function pathsFor(ids: string[] | undefined, groups: ProviderGroup[] | Map<string, ProviderGroup>): string {
+  return groupNames(ids, groups).join(", ");
 }
 
 export type GroupRow = { path: string; trucks: string[]; trailers: string[] };

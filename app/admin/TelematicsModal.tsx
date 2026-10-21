@@ -10,7 +10,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import GeotabImport from "./GeotabImport";
+import { CustomSelect } from "@/lib/ui/CustomSelect";
+import GeotabImport, { type ImportResult } from "./GeotabImport";
+import type { SyncOpts } from "@/lib/telematics/unitSync";
 
 const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 };
@@ -24,7 +26,7 @@ type Summary = {
   database_name?: string; user_name?: string; status?: string; last_error?: string | null; last_ok_at?: string | null;
   matched?: { vehicleId: string; vehicleName: string | null; truckId: string; truckName: string; by: string }[];
   unmatchedTrucks?: { truckId: string; truckName: string }[];
-  unmatchedVehicles?: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string }[];
+  unmatchedVehicles?: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string; groups?: string[] }[];
   trailersLinked?: number;
   unmatchedTrailers?: { id: string; name: string; group?: string }[];
   unmatchedOurTrailers?: { trailerId: string; name: string }[];
@@ -73,13 +75,19 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
     if (!r.ok) return setErr(r.data?.error ?? "Couldn't save.");
     setSum(r.data);
   });
-  const addBatch = async (kind: "vehicles" | "trailers", ids: string[]): Promise<boolean> => {
-    setErr(null);
-    const r = await call("POST", companyId, kind === "vehicles" ? { importVehicles: ids } : { importTrailers: ids });
-    if (!r.ok) { setErr(r.data?.error ?? "Couldn't add them."); return false; }
+  const [note, setNote] = useState<string | null>(null);
+  const finish = (r: { ok: boolean; data: any }): ImportResult | null => {
+    if (!r.ok) { setErr(r.data?.error ?? "Couldn't update."); return null; }
     setSum(r.data);
-    return true;
+    const x = r.data.result as ImportResult | undefined;
+    if (x) setNote(`Last run: ${x.added} added, ${x.linked} linked, ${x.updated} updated.`);
+    return x ?? { added: 0, linked: 0, updated: 0 };
   };
+  const addBatch = async (kind: "vehicles" | "trailers", ids: string[], opts: SyncOpts) => {
+    setErr(null);
+    return finish(await call("POST", companyId, kind === "vehicles" ? { importVehicles: ids, opts } : { importTrailers: ids, opts }));
+  };
+  const syncLinked = async (opts: SyncOpts) => { setErr(null); return finish(await call("POST", companyId, { syncLinked: true, opts })); };
   const assignTrailer = (providerTrailerId: string, name: string) => run(async () => {
     const trailerId = pick[`t:${providerTrailerId}`];
     if (!trailerId) return;
@@ -134,7 +142,7 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
             {sum.last_error && <div style={{ fontSize: 13, color: "#fbbf24", marginTop: 6 }}>Last problem: {sum.last_error}</div>}
           </div>
 
-          <GeotabImport vehicles={sum.unmatchedVehicles ?? []} trailers={(sum.unmatchedTrailers ?? []) as any} add={addBatch} />
+          <GeotabImport vehicles={sum.unmatchedVehicles ?? []} trailers={(sum.unmatchedTrailers ?? []) as any} linkedTrucks={sum.matched?.length ?? 0} add={addBatch} syncLinked={syncLinked} note={note} />
 
           {(sum.unmatchedVehicles?.length ?? 0) > 0 && (sum.unmatchedTrucks?.length ?? 0) > 0 && (
             <div style={card}>
@@ -143,10 +151,7 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
               {sum.unmatchedVehicles!.slice(0, 25).map((v) => (
                 <div key={v.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                   <div style={{ flex: 1, fontSize: 14, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</div>
-                  <select style={{ ...input, flex: 1, padding: "8px 8px", fontSize: 14 }} value={pick[v.id] ?? ""} onChange={(e) => setPick((p) => ({ ...p, [v.id]: e.target.value }))}>
-                    <option value="">Truck…</option>
-                    {sum.unmatchedTrucks!.map((t) => <option key={t.truckId} value={t.truckId}>{t.truckName}</option>)}
-                  </select>
+                  <div style={{ flex: 1, minWidth: 0 }}><CustomSelect value={pick[v.id] ?? ""} onChange={(val) => setPick((p) => ({ ...p, [v.id]: val }))} options={[{ value: "", label: "Truck…" }, ...sum.unmatchedTrucks!.map((t) => ({ value: t.truckId, label: t.truckName }))]} /></div>
                   <button type="button" style={{ ...btn, padding: "9px 12px", opacity: pick[v.id] ? 1 : 0.4 }} disabled={busy || !pick[v.id]} onClick={() => void assign(v.id, v.name)}>Link</button>
                 </div>
               ))}
@@ -189,10 +194,7 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
                 {sum.unmatchedTrailers!.slice(0, 25).map((t) => (
                   <div key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                     <div style={{ flex: 1, fontSize: 14, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
-                    <select style={{ ...input, flex: 1, padding: "8px 8px", fontSize: 14 }} value={pick[`t:${t.id}`] ?? ""} onChange={(e) => setPick((p) => ({ ...p, [`t:${t.id}`]: e.target.value }))}>
-                      <option value="">Trailer…</option>
-                      {sum.unmatchedOurTrailers!.map((m) => <option key={m.trailerId} value={m.trailerId}>{m.name}</option>)}
-                    </select>
+                    <div style={{ flex: 1, minWidth: 0 }}><CustomSelect value={pick[`t:${t.id}`] ?? ""} onChange={(v) => setPick((p) => ({ ...p, [`t:${t.id}`]: v }))} options={[{ value: "", label: "Trailer…" }, ...sum.unmatchedOurTrailers!.map((m) => ({ value: m.trailerId, label: m.name }))]} /></div>
                     <button type="button" style={{ ...btn, padding: "9px 12px", opacity: pick[`t:${t.id}`] ? 1 : 0.4 }} disabled={busy || !pick[`t:${t.id}`]} onClick={() => void assignTrailer(t.id, t.name)}>Link</button>
                   </div>
                 ))}
@@ -211,10 +213,7 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
                 {sum.unmatchedDrivers!.slice(0, 25).map((d) => (
                   <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                     <div style={{ flex: 1, fontSize: 14, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-                    <select style={{ ...input, flex: 1, padding: "8px 8px", fontSize: 14 }} value={pick[`d:${d.id}`] ?? ""} onChange={(e) => setPick((p) => ({ ...p, [`d:${d.id}`]: e.target.value }))}>
-                      <option value="">Driver…</option>
-                      {sum.unmatchedMembers!.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
-                    </select>
+                    <div style={{ flex: 1, minWidth: 0 }}><CustomSelect value={pick[`d:${d.id}`] ?? ""} onChange={(v) => setPick((p) => ({ ...p, [`d:${d.id}`]: v }))} options={[{ value: "", label: "Driver…" }, ...sum.unmatchedMembers!.map((m) => ({ value: m.userId, label: m.name }))]} /></div>
                     <button type="button" style={{ ...btn, padding: "9px 12px", opacity: pick[`d:${d.id}`] ? 1 : 0.4 }} disabled={busy || !pick[`d:${d.id}`]} onClick={() => void assignDriver(d.id, d.name)}>Link</button>
                   </div>
                 ))}
