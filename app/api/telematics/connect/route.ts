@@ -12,6 +12,7 @@ import { geotabProvider } from "@/lib/telematics/geotab";
 import { encryptSecret } from "@/lib/telematics/crypto";
 import { matchVehicles, type TruckLite } from "@/lib/telematics/match";
 import { matchDrivers } from "@/lib/telematics/matchDrivers";
+import { summarizeGroups } from "@/lib/telematics/groups";
 import { decodeVins } from "@/lib/telematics/vinDecode";
 import { TelematicsAuthError } from "@/lib/telematics/types";
 import { autoLinkAllDrivers, callerId, companyRole, isCompanyAdmin, providerFor, rosterMembers } from "@/lib/telematics/server";
@@ -64,11 +65,20 @@ async function summary(companyId: string) {
     drivers = p ? (await p.listDrivers()).map((d) => ({ id: d.id, name: [d.firstName, d.lastName].filter(Boolean).join(" ") || d.name })) : [];
     members = (await rosterMembers(companyId)).map((m) => ({ user_id: m.user_id, display_name: m.display_name }));
   } catch { /* hours of service just shows no drivers */ }
+  let groupRows: ReturnType<typeof summarizeGroups> = [];
+  try {
+    const p = await providerFor(companyId);
+    if (p) {
+      const [g, v, t] = await Promise.all([p.listGroups(), p.listVehicles(), p.listTrailers().catch(() => [])]);
+      groupRows = summarizeGroups(g, v, t);
+    }
+  } catch { /* groups are just a view */ }
   const dUsed = new Set(drows.map((r) => r.provider_user_id)), mUsed = new Set(drows.map((r) => r.user_id));
   return {
     trailersLinked: trows.length,
     unmatchedTrailers: provTr.filter((t) => !tvUsed.has(t.id)),
     unmatchedOurTrailers: ((ourTr ?? []) as { trailer_id: string; trailer_name: string }[]).filter((t) => !tUsed.has(t.trailer_id)).map((t) => ({ trailerId: t.trailer_id, name: t.trailer_name })),
+    groups: groupRows,
     driversLinked: drows.length,
     unmatchedDrivers: drivers.filter((d) => !dUsed.has(d.id)),
     unmatchedMembers: members.filter((m) => !mUsed.has(m.user_id)).map((m) => ({ userId: m.user_id, name: m.display_name ?? "Member" })),

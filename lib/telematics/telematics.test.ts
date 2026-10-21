@@ -233,3 +233,14 @@ test("vin decode: tidy make, year and model; junk becomes null", async () => {
   assert.deepEqual(parseVinRow({ ModelYear: "2021", Make: "FREIGHTLINER", Model: "Cascadia" }), { year: 2021, make: "Freightliner", model: "Cascadia" });
   assert.deepEqual(parseVinRow({ ModelYear: "", Make: "", Model: "" }), { year: null, make: null, model: null });
 });
+
+test("groups: paths skip Geotab's built-in top groups; units count under each path", async () => {
+  const { summarizeGroups } = await import("./groups.ts");
+  const groups = [
+    { id: "GroupCompanyId", name: "Company Group", parentId: null },
+    { id: "g1", name: "Southeast", parentId: "GroupCompanyId" },
+    { id: "g2", name: "Tampa", parentId: "g1" },
+  ];
+  const rows = summarizeGroups(groups, [{ name: "25184", groupIds: ["g2"] }, { name: "99", groupIds: ["GroupCompanyId"] }], [{ name: "3151" }]);
+  assert.deepEqual(rows.map((r) => [r.path, r.trucks.length, r.trailers.length]), [["Southeast › Tampa", 1, 0], ["Whole company", 1, 1]]);
+});

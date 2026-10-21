@@ -28,6 +28,7 @@ type Summary = {
   unmatchedTrailers?: { id: string; name: string }[];
   unmatchedOurTrailers?: { trailerId: string; name: string }[];
   driversLinked?: number;
+  groups?: { path: string; trucks: string[]; trailers: string[] }[];
   unmatchedDrivers?: { id: string; name: string }[];
   unmatchedMembers?: { userId: string; name: string }[];
 };
@@ -173,6 +174,24 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
                     {sum.unmatchedTrucks!.map((t) => <option key={t.truckId} value={t.truckId}>{t.truckName}</option>)}
                   </select>
                   <button type="button" style={{ ...btn, padding: "9px 12px", opacity: pick[v.id] ? 1 : 0.4 }} disabled={busy || !pick[v.id]} onClick={() => void assign(v.id, v.name)}>Link</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(sum.groups?.length ?? 0) > 0 && (
+            <div style={card}>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>Groups in Geotab</div>
+              <div style={{ fontSize: 12, color: muted, margin: "4px 0 8px", lineHeight: 1.5 }}>
+                How your Geotab account sorts its vehicles. This could become Region and Local Area; nothing is copied yet.
+              </div>
+              {sum.groups!.map((g) => (
+                <div key={g.path} style={{ padding: "5px 0", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{g.path}</div>
+                  <div style={{ fontSize: 12, color: muted }}>
+                    {g.trucks.length} truck{g.trucks.length === 1 ? "" : "s"}{g.trucks.length ? ` (${g.trucks.slice(0, 6).join(", ")}${g.trucks.length > 6 ? "…" : ""})` : ""}
+                    {" · "}{g.trailers.length} trailer{g.trailers.length === 1 ? "" : "s"}
+                  </div>
                 </div>
               ))}
             </div>

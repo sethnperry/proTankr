@@ -3,7 +3,7 @@
 // A telematics provider (Geotab first) behind one small interface, so adding
 // Samsara or Motive later doesn't touch the rest of the app.
 
-export type ProviderVehicle = { id: string; name: string; vin: string | null; plate?: string | null; plateState?: string | null };
+export type ProviderVehicle = { id: string; name: string; vin: string | null; plate?: string | null; plateState?: string | null; groupIds?: string[] };
 
 export type VehicleReading = {
   odometerMi: number | null;
@@ -26,13 +26,17 @@ export type HosAvailability = {
   at: string;                  // ISO time this was read
 };
 
-export type ProviderTrailer = { id: string; name: string };
+export type ProviderTrailer = { id: string; name: string; groupIds?: string[] };
+
+export type ProviderGroup = { id: string; name: string; parentId: string | null };
 
 /** A trailer hooked to or dropped from a vehicle, with where the truck was. */
 export type TrailerEvent = { type: "hook" | "drop"; at: string; trailerProviderId: string; lat: number | null; lon: number | null };
 
 export interface TelematicsProvider {
   listTrailers(): Promise<ProviderTrailer[]>;
+  /** The provider's group tree (Geotab Groups), flat with parent ids. */
+  listGroups(): Promise<ProviderGroup[]>;
   /** Hooks and drops for one vehicle inside a window, oldest first. */
   trailerEvents(vehicleId: string, fromIso: string, toIso: string): Promise<TrailerEvent[]>;
   /** The trailer each vehicle is hooked to right now: provider vehicle id -> provider trailer id. Empty without trailer tracking. */

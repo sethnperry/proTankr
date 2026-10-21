@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -60,6 +60,11 @@ export function durationMinutes(v: unknown): number | null {
   return n / 60;                      // seconds
 }
 
+const groupIdsOf = (d: any): { groupIds?: string[] } => {
+  const ids = (Array.isArray(d?.groups) ? d.groups : []).map((g: any) => g?.id).filter(Boolean).map(String);
+  return ids.length ? { groupIds: ids } : {};
+};
+
 export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProvider {
   // One retry with a fresh session if the cached one has expired.
   const call = async (method: string, params: Record<string, unknown>) => {
@@ -113,7 +118,8 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return (rows ?? [])
         .filter((d) => d?.id && d.name)
         .map((d) => ({ id: String(d.id), name: String(d.name), vin: d.vehicleIdentificationNumber ? String(d.vehicleIdentificationNumber).toUpperCase() : null,
-          plate: d.licensePlate ? String(d.licensePlate).toUpperCase() : null, plateState: d.licenseState ? String(d.licenseState).toUpperCase() : null }));
+          plate: d.licensePlate ? String(d.licensePlate).toUpperCase() : null, plateState: d.licenseState ? String(d.licenseState).toUpperCase() : null,
+          ...groupIdsOf(d) }));
     },
 
     async engineHours(id: string): Promise<number | null> { return engineHours(id); },
@@ -142,9 +148,14 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return null;
     },
 
+    async listGroups(): Promise<ProviderGroup[]> {
+      const rows: any[] = await call("Get", { typeName: "Group" });
+      return (rows ?? []).filter((g) => g?.id).map((g) => ({ id: String(g.id), name: g.name ? String(g.name) : String(g.id), parentId: g.parent?.id ? String(g.parent.id) : null }));
+    },
+
     async listTrailers(): Promise<ProviderTrailer[]> {
       const rows: any[] = await call("Get", { typeName: "Trailer" });
-      return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name) }));
+      return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name), ...groupIdsOf(t) }));
     },
 
     async trailerEvents(id: string, fromIso: string, toIso: string): Promise<TrailerEvent[]> {
