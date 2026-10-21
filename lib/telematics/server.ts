@@ -9,7 +9,7 @@ import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { decryptSecret } from "./crypto";
 import { geotabProvider } from "./geotab";
 import type { TelematicsProvider } from "./types";
-import type { Member } from "./matchDrivers";
+import { matchDrivers, type Member } from "./matchDrivers";
 
 export async function callerId(req: NextRequest): Promise<string | null> {
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
@@ -60,4 +60,29 @@ export async function trailerNames(companyId: string): Promise<Map<string, { tra
   const { data: tr } = await admin.from("trailers").select("trailer_id, trailer_name").in("trailer_id", rows.map((r) => r.trailer_id));
   const nm = new Map(((tr ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => [t.trailer_id, t.trailer_name]));
   return new Map(rows.map((r) => [r.provider_trailer_id, { trailerId: r.trailer_id, name: nm.get(r.trailer_id) ?? "" }]));
+}
+
+// Links one member to their Geotab driver on the fly (employee number, sign-in email, then name),
+// so hours of service work without an admin matching by hand. Tried at most every 10 minutes per
+// person. Never touches a driver or member that is already linked. Returns the provider id or null.
+const autoTried = new Map<string, number>();
+export async function autoLinkDriver(companyId: string, userId: string): Promise<string | null> {
+  const key = `${companyId}:${userId}`;
+  if (Date.now() - (autoTried.get(key) ?? 0) < 600_000) return null;
+  autoTried.set(key, Date.now());
+  const p = await providerFor(companyId);
+  if (!p) return null;
+  const admin = getServiceSupabase();
+  const { data } = await admin.from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId);
+  const rows = (data ?? []) as { provider_user_id: string; user_id: string }[];
+  const usedD = new Set(rows.map((r) => r.provider_user_id)), usedM = new Set(rows.map((r) => r.user_id));
+  if (usedM.has(userId)) return rows.find((r) => r.user_id === userId)?.provider_user_id ?? null;
+  const drivers = (await p.listDrivers()).filter((d) => !usedD.has(d.id));
+  const members = (await rosterMembers(companyId)).filter((m) => !usedM.has(m.user_id));
+  const pair = matchDrivers(drivers, members).pairs.find((x) => x.member.user_id === userId);
+  if (!pair) return null;
+  await admin.from("telematics_driver_map").upsert(
+    { company_id: companyId, provider_user_id: pair.driver.id, user_id: userId, driver_name: pair.driver.name, matched_by: pair.by },
+    { onConflict: "company_id,provider_user_id", ignoreDuplicates: true });
+  return pair.driver.id;
 }

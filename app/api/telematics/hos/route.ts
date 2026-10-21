@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { autoLinkDriver, callerId, companyRole, providerFor } from "@/lib/telematics/server";
 import type { HosAvailability } from "@/lib/telematics/types";
 
 export const runtime = "nodejs";
@@ -33,7 +33,8 @@ export async function GET(req: NextRequest) {
       const p = await providerFor(companyId);
       if (!p) return NextResponse.json({ connected: false });
       const { data } = await getServiceSupabase().from("telematics_driver_map").select("provider_user_id").eq("company_id", companyId).eq("user_id", uid).maybeSingle();
-      const pid = (data as { provider_user_id?: string } | null)?.provider_user_id;
+      let pid = (data as { provider_user_id?: string } | null)?.provider_user_id;
+      if (!pid) { try { pid = (await autoLinkDriver(companyId, uid)) ?? undefined; } catch { /* stays unlinked */ } }
       if (!pid) return NextResponse.json({ connected: true, hos: null });
       const hos = await p.hos(pid);
       selfCache.set(ck, { at: Date.now(), hos });
