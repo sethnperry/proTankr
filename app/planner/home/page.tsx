@@ -598,7 +598,8 @@ export default function HomePage() {
   const fuel = useFuelStop(userId || null, companyId || null);
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
-  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen);
+  const [truckSheetWatch, setTruckSheetWatch] = useState(false);
+  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || truckSheetWatch);
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
@@ -1169,6 +1170,7 @@ export default function HomePage() {
   const truckAlerts = useUnitAlerts("truck", truckId, companyId, undefined, hookup?.engineHours ?? null);
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
   const [unitAlertsOpen, setUnitAlertsOpen] = useState<"truck" | "trailer" | null>(null);
+  useEffect(() => { setTruckSheetWatch(unitAlertsOpen === "truck"); }, [unitAlertsOpen]);
   const unitCell = (label: string, s: UnitAlertSummary, which: "truck" | "trailer", has: boolean) => ({
     label, value: has ? String(s.count) : "—", unit: has ? "due" : undefined,
     color: s.worst ? EXPIRY_COLOR[s.worst] : LOOK.muted,
@@ -1865,8 +1867,27 @@ export default function HomePage() {
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
           const s = unitAlertsOpen === "trailer" ? trailerAlerts : truckAlerts;
+          const live = unitAlertsOpen === "truck" ? (truckReading ?? hookup) : null;
+          const stat = (label: string, v: string | null) => v == null ? null : (
+            <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+              <div className="dash-num" style={{ fontSize: 18, fontWeight: 800 }}>{v}</div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: muted, marginTop: 3 }}>{label}</div>
+            </div>
+          );
           return (
             <>
+              {live && (live.odometerMi != null || live.engineHours != null || live.fuelLevelPct != null) && (
+                <div style={{ ...card, marginBottom: 12 }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {stat("Odometer", live.odometerMi != null ? `${Math.round(live.odometerMi).toLocaleString("en-US")} mi` : null)}
+                    {stat("Engine hours", live.engineHours != null ? `${Math.round(live.engineHours).toLocaleString("en-US")} h` : null)}
+                    {stat("Fuel", live.fuelLevelPct != null ? `${Math.round(live.fuelLevelPct)}%` : null)}
+                  </div>
+                  <div style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 8 }}>
+                    From the truck{live.city ? ` · near ${[live.city, live.state].filter(Boolean).join(", ")}` : ""}
+                  </div>
+                </div>
+              )}
               {s.alerts.length === 0 && <div style={{ ...card, color: muted, fontSize: 14 }}>Nothing due in the next 30 days.</div>}
               {s.alerts.map((a, i) => (
                 <div key={i} style={{ ...card, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
