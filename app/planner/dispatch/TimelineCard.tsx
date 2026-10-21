@@ -51,6 +51,8 @@ export function TimelineCard(p: {
   locationPlace?: string | null;
   orderNumber: string;
   shipper: string; customer: string; onShipper: (v: string) => void; onCustomer: (v: string) => void;
+  lockedCount?: number;               // the first N day legs are already dispatched
+  blockMsg?: string | null;           // this start overlaps the load before it
   hosLine?: { text: string; color: string } | null; // the driver's real clocks
   rest?: { fromMs: number; toMs: number } | null;    // rested and able to start, before their usual start
   hideOrder?: boolean; // the per-product order lives in the compartment plan
@@ -78,7 +80,9 @@ export function TimelineCard(p: {
             <div key={i} className="dash-num" style={{ display: "flex", gap: 8, fontSize: 12, padding: "4px 0", borderTop: i ? `1px solid ${L.hairline}` : undefined }}>
               <span style={{ color: L.muted, width: 44 }}>Load {i + 1}</span>
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{clock(l.startMs)}–{clock(l.endMs)} · {l.terminal} → {l.location}</span>
-              <button type="button" aria-label="Remove load" onClick={() => p.onRemoveLeg(i)} style={{ border: "none", background: "transparent", color: L.muted, cursor: "pointer", fontSize: 15 }}>×</button>
+              {i < (p.lockedCount ?? 0)
+                ? <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "#93c5fd" }}>Sent</span>
+                : <button type="button" aria-label="Remove load" onClick={() => p.onRemoveLeg(i)} style={{ border: "none", background: "transparent", color: L.muted, cursor: "pointer", fontSize: 15 }}>×</button>}
             </div>
           ))}
         </div>
@@ -89,6 +93,7 @@ export function TimelineCard(p: {
           {p.chained ? `Load ${p.dayLegs.length + 1} starts (after load ${p.dayLegs.length})` : "Starts"}
         </div>
         <input type="datetime-local" value={toLocalInput(p.startMs)} onChange={(e) => { const t = Date.parse(e.target.value); if (Number.isFinite(t)) p.onStart(t); }} style={fieldInput} />
+        {p.blockMsg && <div style={{ fontSize: 13, color: "#f87171", marginTop: 6 }}>⚠ {p.blockMsg}</div>}
       </div>
 
       {!f ? (
@@ -147,12 +152,12 @@ export function TimelineCard(p: {
               <input value={p.orderNumber} onChange={(e) => p.onOrder(e.target.value)} placeholder="Saves the driver typing it" style={fieldInput} />
             </div>
           )}
-          <button type="button" className="dash-press" onClick={p.onAdd} style={{ ...SECONDARY_BTN, marginTop: 10, padding: "10px 0", fontSize: 12 }}>
+          <button type="button" className="dash-press" onClick={p.onAdd} disabled={!!p.blockMsg} style={{ ...SECONDARY_BTN, marginTop: 10, padding: "10px 0", fontSize: 12, opacity: p.blockMsg ? 0.5 : 1 }}>
             + Then another load after this one
           </button>
           {p.dispatchMsg && <div style={{ fontSize: 13, marginTop: 10, color: p.dispatchMsg.ok ? "#4ade80" : "#f87171" }}>{p.dispatchMsg.text}</div>}
-          <button type="button" className="dash-press" onClick={p.onDispatch} disabled={p.dispatching} aria-busy={!!p.dispatching} style={{ ...PRIMARY_BTN, marginTop: 10 }}>
-            {p.dispatching ? "Dispatching…" : `${p.warnings.length ? "Dispatch anyway" : "Dispatch"} ${p.dayLegs.length + 1} load${p.dayLegs.length ? "s" : ""} to ${p.driverName.split(" ")[0]}`}
+          <button type="button" className="dash-press" onClick={p.onDispatch} disabled={p.dispatching || !!p.blockMsg} aria-busy={!!p.dispatching} style={{ ...PRIMARY_BTN, marginTop: 10, opacity: p.blockMsg ? 0.5 : 1 }}>
+            {p.dispatching ? "Dispatching…" : `${p.warnings.length ? "Dispatch anyway" : "Dispatch"} ${p.dayLegs.length - (p.lockedCount ?? 0) + 1} load${p.dayLegs.length - (p.lockedCount ?? 0) ? "s" : ""} to ${p.driverName.split(" ")[0]}`}
           </button>
           <div style={{ fontSize: 11, color: L.faint, marginTop: 6 }}>
             {p.warnings.length ? `${p.warnings.length} warning${p.warnings.length === 1 ? "" : "s"} above. Warnings never block a dispatch. ` : ""}
@@ -160,7 +165,7 @@ export function TimelineCard(p: {
           </div>
         </>
       )}
-      {p.dayLegs.length > 0 && (
+      {p.dayLegs.length - (p.lockedCount ?? 0) > 0 && (
         <button type="button" className="dash-press" onClick={p.onClearDay} style={{ ...SECONDARY_BTN, marginTop: 8, padding: "9px 0", fontSize: 12 }}>Clear day plan</button>
       )}
     </div>

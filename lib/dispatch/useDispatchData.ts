@@ -407,7 +407,7 @@ export function useTimelineSettings(companyId: string | null): TimelineSettings 
 
 // Loads dispatch has planned that the driver hasn't begun yet.
 export type DispatchedTrip = {
-  trip_id: string; driver_id: string; planned_start_at: string | null; dispatch_seq: number | null;
+  trip_id: string; driver_id: string; planned_start_at: string | null; planned_end_at: string | null; planned_drive_min: number | null; dispatch_seq: number | null;
   order: string | null; terminal: string | null; supplier_id: string | null; locationId: string | null;
 };
 export function useDispatchedTrips(companyId: string | null) {
@@ -415,10 +415,10 @@ export function useDispatchedTrips(companyId: string | null) {
   const load = useCallback(async () => {
     if (!companyId) return;
     const { data } = await supabase.from("trips")
-      .select("trip_id, driver_id, planned_start_at, dispatch_seq, trip_orders(order_number, is_primary), trip_pickups(name, supplier_id), trip_deliveries(location_id, status)")
+      .select("trip_id, driver_id, planned_start_at, planned_end_at, planned_drive_min, dispatch_seq, trip_orders(order_number, is_primary), trip_pickups(name, supplier_id), trip_deliveries(location_id, status)")
       .eq("company_id", companyId).eq("status", "dispatched").order("planned_start_at");
     setTrips(((data ?? []) as any[]).map((t) => ({
-      trip_id: t.trip_id, driver_id: t.driver_id, planned_start_at: t.planned_start_at, dispatch_seq: t.dispatch_seq,
+      trip_id: t.trip_id, driver_id: t.driver_id, planned_start_at: t.planned_start_at, planned_end_at: t.planned_end_at ?? null, planned_drive_min: t.planned_drive_min ?? null, dispatch_seq: t.dispatch_seq,
       order: (t.trip_orders ?? []).find((o: any) => o.is_primary)?.order_number ?? null,
       terminal: t.trip_pickups?.[0]?.name ?? null, supplier_id: t.trip_pickups?.[0]?.supplier_id ?? null,
       locationId: (t.trip_deliveries ?? []).find((d: any) => d.status !== "cancelled")?.location_id ?? null,

@@ -52,6 +52,8 @@ export type TripRow = Synced & {
   // Dispatched by a dispatcher (20261020000000); the driver begins it.
   dispatched_by?: string | null;
   planned_start_at?: string | null;
+  planned_end_at?: string | null;
+  planned_drive_min?: number | null;
   planned_truck_id?: string | null;
   planned_trailer_id?: string | null;
   dispatch_seq?: number | null;

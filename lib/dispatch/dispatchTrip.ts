@@ -21,6 +21,7 @@ export type DispatchLeg = {
   orderNumber: string;
   startMs: number;
   endMs: number;
+  driveMin?: number;        // driving in this load, for the next load's hours check
   truckId: string | null;   // the equipment the driver holds now
   trailerId: string | null;
   warnings: string[];       // what the dispatcher saw and went ahead with
@@ -60,6 +61,7 @@ export function buildDispatchedTrip(
       // The truck and trailer are set when the driver begins; these are the plan.
       truck_id: null, trailer_id: null,
       dispatched_by: i.dispatcherId, planned_start_at: new Date(l.startMs).toISOString(),
+      planned_end_at: new Date(l.endMs).toISOString(), planned_drive_min: Math.round(l.driveMin ?? 0),
       shipper: l.shipper?.trim() || null, customer: l.customer?.trim() || null,
       planned_truck_id: l.truckId, planned_trailer_id: l.trailerId, dispatch_seq: i.seq,
       client_updated_at: nowIso,
