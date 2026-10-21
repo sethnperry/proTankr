@@ -156,7 +156,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
 
     async listTrailers(): Promise<ProviderTrailer[]> {
       const rows: any[] = await call("Get", { typeName: "Trailer" });
-      return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name), ...groupIdsOf(t) }));
+      return (rows ?? []).filter((t) => t?.id && t.name).map((t) => ({ id: String(t.id), name: String(t.name), comment: t.comment ? String(t.comment) : null, ...groupIdsOf(t) }));
     },
 
     async trailerEvents(id: string, fromIso: string, toIso: string): Promise<TrailerEvent[]> {
@@ -207,6 +207,26 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return (rows ?? [])
         .filter((u) => u?.id && u.isDriver !== false && u.name)
         .map((u) => ({ id: String(u.id), name: String(u.name), firstName: u.firstName ? String(u.firstName) : null, lastName: u.lastName ? String(u.lastName) : null, employeeNo: u.employeeNo ? String(u.employeeNo) : null }));
+    },
+
+    async attachedAll(): Promise<Map<string, string[]>> {
+      const now = new Date().toISOString();
+      const rows: any[] = await call("Get", { typeName: "TrailerAttachment", search: { activeFrom: now, activeTo: now } });
+      const out = new Map<string, Set<string>>();
+      for (const a of rows ?? []) {
+        const dev = a?.device?.id, tr = a?.trailer?.id;
+        if (!dev || !tr) continue;
+        if (a.activeTo && Date.parse(a.activeTo) <= Date.now()) continue;
+        (out.get(String(dev)) ?? out.set(String(dev), new Set()).get(String(dev))!).add(String(tr));
+      }
+      return new Map([...out].map(([k, v]) => [k, [...v]]));
+    },
+
+    async lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null> {
+      const from = new Date(Date.now() - 7 * 86400000).toISOString();
+      const rows: any[] = await call("Get", { typeName: "DriverChange", search: { deviceSearch: { id: vehicleId }, fromDate: from } });
+      const last = (rows ?? []).filter((r) => r?.driver?.id && !/^unknown/i.test(String(r.driver.id)) && r.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+      return last ? { driverId: String(last.driver.id), at: String(last.dateTime) } : null;
     },
 
     async currentDrivers(): Promise<Map<string, string>> {
@@ -278,6 +298,8 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         at: s?.dateTime ? String(s.dateTime) : null,
         // The driver signed in to the truck. Geotab says "UnknownDriverId" when nobody is.
         driverId: s?.currentDriver?.id && !/^unknown/i.test(String(s.currentDriver.id)) ? String(s.currentDriver.id) : null,
+        bearingDeg: Number.isFinite(Number(s?.bearing)) ? Math.round(Number(s.bearing)) : null,
+        isDriving: typeof s?.isDriving === "boolean" ? s.isDriving : null,
       };
     },
   };

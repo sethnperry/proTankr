@@ -163,10 +163,13 @@ test("geotab: lists trailers and finds the one hooked to each vehicle now", asyn
     ]);
   }) as any;
   const p = geotabProvider({ database: "db-trailers", userName: "u", password: "p" }, f);
-  assert.deepEqual(await p.listTrailers(), [{ id: "tr1", name: "3151" }, { id: "tr2", name: "3149" }]);
+  assert.deepEqual(await p.listTrailers(), [{ id: "tr1", name: "3151", comment: null }, { id: "tr2", name: "3149", comment: null }]);
   const m = await p.attachedTrailers();
   assert.equal(m.get("v1"), "tr1");
   assert.equal(m.get("v2"), "tr2");
+  const all = await p.attachedAll();
+  assert.deepEqual(all.get("v1"), ["tr1"]); // the ended attachment isn't included
+  assert.deepEqual(all.get("v2"), ["tr2"]);
 });
 
 test("geotab: trailer hooks and drops in a window, open attachments aren't drops, with a position", async () => {

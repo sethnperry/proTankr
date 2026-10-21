@@ -14,6 +14,8 @@ export type VehicleReading = {
   speedMph: number | null;
   at: string | null; // ISO time of the position fix
   driverId?: string | null; // provider id of the driver signed in to the vehicle, if known
+  bearingDeg?: number | null; // direction of travel, degrees clockwise from north
+  isDriving?: boolean | null;
 };
 
 export type ProviderDriver = { id: string; name: string; firstName: string | null; lastName: string | null; employeeNo: string | null };
@@ -29,7 +31,7 @@ export type HosAvailability = {
   at: string;                  // ISO time this was read
 };
 
-export type ProviderTrailer = { id: string; name: string; groupIds?: string[] };
+export type ProviderTrailer = { id: string; name: string; comment?: string | null; groupIds?: string[] };
 
 export type ProviderGroup = { id: string; name: string; parentId: string | null };
 
@@ -45,6 +47,10 @@ export interface TelematicsProvider {
   /** The trailer each vehicle is hooked to right now: provider vehicle id -> provider trailer id. Empty without trailer tracking. */
   attachedTrailers(): Promise<Map<string, string>>;
   listDrivers(): Promise<ProviderDriver[]>;
+  /** Every trailer attached to each vehicle right now: provider vehicle id -> provider trailer ids. */
+  attachedAll(): Promise<Map<string, string[]>>;
+  /** The driver who most recently signed in to a vehicle (last 7 days), if the provider says. */
+  lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null>;
   /** The driver signed in to each vehicle right now: provider vehicle id -> provider driver id. */
   currentDrivers(): Promise<Map<string, string>>;
   /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */

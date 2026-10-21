@@ -25,3 +25,9 @@ test("buildTrackRows: query matches either unit of a pairing; filter uses home o
   assert.deepEqual(buildTrackRows(trucks, trailers, combos, { region: "SE", localArea: null }, "").trucks.map((t) => t.name), ["200"]); // borrowed in
   assert.deepEqual(buildTrackRows(trucks, trailers, [], { region: null, localArea: null, awayOnly: true }, "").trucks.map((t) => t.name), ["200"]);
 });
+
+import { compass } from "./trackFormat.ts";
+test("compass: degrees to a compass point", () => {
+  assert.equal(compass(0), "N"); assert.equal(compass(44), "NE"); assert.equal(compass(180), "S");
+  assert.equal(compass(359), "N"); assert.equal(compass(-90), "W"); assert.equal(compass(null), null);
+});

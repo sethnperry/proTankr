@@ -14,7 +14,8 @@ import { fetchTruckTrip } from "@/lib/trips/fetchTruckTrip";
 import { summarizeTruckTrip, type TruckTripSummary } from "@/lib/trips/truckTrip";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { productColorFor } from "../../utils/productColor";
-import { ageText, clockOf, mapsUrl } from "@/lib/equipment/trackFormat";
+import { ageText, clockOf, compass, mapsUrl } from "@/lib/equipment/trackFormat";
+import { hosText } from "@/lib/telematics/progress";
 import type { TrackUnit } from "@/lib/equipment/trackList";
 import type { TrackChange } from "@/lib/telematics/trackChanges";
 import EquipmentStatusModal, { fleetStatusColor, fleetStatusLabel, type FleetStatus } from "../../modals/EquipmentStatusModal";
@@ -148,21 +149,55 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
               <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12 }}>{place || "Position found"}</div>
               <div style={{ fontSize: 14, marginTop: 4, color: "rgba(255,255,255,0.75)" }}>
                 Last update {ageText(reading.at)}
-                {reading.speedMph != null ? ` · ${reading.speedMph > 2 ? `moving ${reading.speedMph} mph` : "stopped"}` : ""}
               </div>
-              <div style={{ fontSize: 14, marginTop: 10 }}>
-                {reading.driverName
-                  ? <>Driver <b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in to the truck)</span></>
-                  : reading.heldByName
-                    ? <>Driver <b>{reading.heldByName}</b> <span style={{ color: muted }}>(has it selected in ProTankr)</span></>
-                    : <span style={{ color: muted }}>No driver signed in to this truck.</span>}
+              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>
+                {reading.speedMph != null && reading.speedMph > 2
+                  ? <>Moving {reading.speedMph} mph{compass(reading.bearingDeg) ? <> heading {compass(reading.bearingDeg)} <span style={{ color: muted, fontWeight: 600 }}>({reading.bearingDeg}°)</span></> : null}</>
+                  : <>Stopped{compass(reading.bearingDeg) ? <span style={{ color: muted, fontWeight: 600 }}> · last heading {compass(reading.bearingDeg)}</span> : null}</>}
               </div>
-              {reading.driverName && reading.heldByName && reading.driverName !== reading.heldByName && (
-                <div style={{ fontSize: 13, marginTop: 4, color: "#fb923c" }}>ProTankr has it selected by {reading.heldByName}.</div>
-              )}
-              {reading.trailerKnown && (
-                <div style={{ fontSize: 14, marginTop: 6 }}>
-                  Geotab says: {reading.trailerName ? <>pulling trailer <b>{reading.trailerName}</b></> : "no trailer hooked"}
+
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                <div style={label}>Driver</div>
+                <div style={{ fontSize: 15, marginTop: 4 }}>
+                  {reading.driverName
+                    ? <><b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in to the truck)</span></>
+                    : reading.lastDriver
+                      ? <><span style={{ color: muted }}>Nobody signed in now. Last signed in: </span><b>{reading.lastDriver.name}</b> <span style={{ color: muted }}>· {ageText(reading.lastDriver.at)}</span></>
+                      : reading.heldByName
+                        ? <><b>{reading.heldByName}</b> <span style={{ color: muted }}>(has it selected in ProTankr)</span></>
+                        : <span style={{ color: muted }}>No driver found for this truck.</span>}
+                </div>
+                {(reading.driverName || reading.lastDriver) && reading.heldByName && (reading.driverName ?? reading.lastDriver?.name) !== reading.heldByName && (
+                  <div style={{ fontSize: 13, marginTop: 4, color: "#fb923c" }}>ProTankr has it selected by {reading.heldByName}.</div>
+                )}
+                {reading.hos && (() => { const t = hosText(reading.hos); return <div className="dash-num" style={{ fontSize: 13, marginTop: 4, color: t.color }}>Hours · {t.text}</div>; })()}
+              </div>
+
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                <div style={label}>Trailers in Geotab</div>
+                {reading.geotabTrailers && reading.geotabTrailers.length > 0 ? (
+                  <>
+                    {reading.geotabTrailers.map((t, i) => (
+                      <div key={i} style={{ fontSize: 15, marginTop: 6 }}>
+                        <b>{t.name}</b>{" "}
+                        <span style={{ color: muted, fontSize: 13 }}>{t.ours ? "ProTankr trailer" : "not a ProTankr trailer"}</span>
+                        {t.comment && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{t.comment}</div>}
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>Geotab has no BOL field of its own. These are the trailer names and comments exactly as entered in Geotab, so a BOL number kept as a trailer shows here.</div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 14, marginTop: 4, color: muted }}>
+                    {reading.trailerKnown ? "No trailer attached to this truck in Geotab." : "Geotab isn't reporting any trailer hookups for this company."}
+                  </div>
+                )}
+              </div>
+
+              {(reading.odometerMi != null || reading.fuelLevelPct != null || reading.engineHours != null) && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)", fontSize: 14 }}>
+                  {reading.odometerMi != null && <span><span style={{ color: muted }}>Odometer </span><b>{Math.round(reading.odometerMi).toLocaleString("en-US")} mi</b></span>}
+                  {reading.fuelLevelPct != null && <span><span style={{ color: muted }}>Fuel </span><b>{Math.round(reading.fuelLevelPct)}%</b></span>}
+                  {reading.engineHours != null && <span><span style={{ color: muted }}>Engine </span><b>{Math.round(reading.engineHours).toLocaleString("en-US")} h</b></span>}
                 </div>
               )}
               {done && (

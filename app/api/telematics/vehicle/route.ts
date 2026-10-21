@@ -32,14 +32,24 @@ export async function GET(req: NextRequest) {
     const p = await providerFor(companyId);
     if (!p) return none();
     const reading = await p.reading(vid);
-    // The trailer Geotab says is hooked up (null = nothing hooked or not tracked / not linked).
+    // Every trailer Geotab says is attached. Some are ProTankr trailers; others are just names in Geotab
+    // (for example a BOL number kept as a trailer record), so those are listed as they appear there.
     let trailerId: string | null = null, trailerName: string | null = null, trailerKnown = false;
+    const geotabTrailers: { name: string; comment: string | null; ours: boolean }[] = [];
     try {
-      const attached = await p.attachedTrailers();
+      const attached = await p.attachedAll();
       trailerKnown = attached.size > 0;
-      const prov = attached.get(vid);
-      const mapped = prov ? (await trailerNames(companyId)).get(prov) : null;
-      trailerId = mapped?.trailerId ?? null; trailerName = mapped?.name ?? null;
+      const ids = attached.get(vid) ?? [];
+      if (ids.length) {
+        const [ours, all] = await Promise.all([trailerNames(companyId), p.listTrailers().catch(() => [])]);
+        const info = new Map(all.map((t) => [t.id, t]));
+        for (const id of ids) {
+          const mapped = ours.get(id);
+          const t = info.get(id);
+          if (mapped && !trailerId) { trailerId = mapped.trailerId; trailerName = mapped.name; }
+          geotabTrailers.push({ name: mapped?.name ?? t?.name ?? "Trailer", comment: t?.comment?.trim() || null, ours: !!mapped });
+        }
+      }
     } catch { /* trailer tracking is optional */ }
     let city: string | null = null, state: string | null = null;
     const key = process.env.OPENWEATHER_API_KEY;
@@ -49,29 +59,40 @@ export async function GET(req: NextRequest) {
       city = typeof it?.name === "string" ? it.name : null;
       state = stateCode(typeof it?.state === "string" ? it.state : null);
     }
-    // Who is in the truck: the driver signed in to Geotab, matched to a ProTankr member, and who holds it in ProTankr.
+    // Who is in the truck: the driver signed in to Geotab (or the last one who was), matched to a ProTankr
+    // member when possible, plus who holds the truck in ProTankr, and the driver's hours.
     let driverName: string | null = null, heldByName: string | null = null;
+    let lastDriver: { name: string; at: string } | null = null;
+    let hos: Awaited<ReturnType<typeof p.hos>> = null;
     try {
       const nameOf = async (userId: string) => {
         const { data: pr } = await admin.from("profiles").select("display_name").eq("user_id", userId).maybeSingle();
         return (pr as { display_name?: string | null } | null)?.display_name ?? null;
       };
-      if (reading.driverId) {
-        const { data: dm } = await admin.from("telematics_driver_map").select("user_id, driver_name").eq("company_id", companyId).eq("provider_user_id", reading.driverId).maybeSingle();
+      const providerDriverName = async (driverId: string): Promise<string | null> => {
+        const { data: dm } = await admin.from("telematics_driver_map").select("user_id, driver_name").eq("company_id", companyId).eq("provider_user_id", driverId).maybeSingle();
         const row = dm as { user_id?: string; driver_name?: string | null } | null;
-        driverName = (row?.user_id ? await nameOf(row.user_id) : null) ?? row?.driver_name ?? null;
-        if (!driverName) {
-          const ds = await p.listDrivers().catch(() => []);
-          const d = ds.find((x) => x.id === reading.driverId);
-          driverName = d ? ([d.firstName, d.lastName].filter(Boolean).join(" ") || d.name) : null;
+        const n = (row?.user_id ? await nameOf(row.user_id) : null) ?? row?.driver_name ?? null;
+        if (n) return n;
+        const d = (await p.listDrivers().catch(() => [])).find((x) => x.id === driverId);
+        return d ? ([d.firstName, d.lastName].filter(Boolean).join(" ") || d.name) : null;
+      };
+      let hosDriverId: string | null = reading.driverId ?? null;
+      if (reading.driverId) driverName = await providerDriverName(reading.driverId);
+      else {
+        const last = await p.lastDriverOf(vid).catch(() => null);
+        if (last) {
+          const n = await providerDriverName(last.driverId);
+          if (n) { lastDriver = { name: n, at: last.at }; hosDriverId = last.driverId; }
         }
       }
+      if (hosDriverId) hos = await p.hos(hosDriverId).catch(() => null);
       const { data: combo } = await admin.from("equipment_combos").select("claimed_by").eq("truck_id", truckId).eq("active", true).not("claimed_by", "is", null).order("claimed_at", { ascending: false }).limit(1).maybeSingle();
       const by = (combo as { claimed_by?: string | null } | null)?.claimed_by;
       heldByName = by ? await nameOf(by) : null;
     } catch { /* the position is still useful without a name */ }
     await admin.from("telematics_connections").update({ last_ok_at: new Date().toISOString(), last_error: null }).eq("company_id", companyId);
-    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, driverName, heldByName });
+    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, driverName, lastDriver, heldByName, hos });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
     return none();
