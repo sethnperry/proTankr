@@ -392,8 +392,8 @@ export function useTimelineSettings(companyId: string | null): TimelineSettings 
         const d = data as any;
         setS({
           maxShiftHours: Number(d.max_shift_hours ?? 12),
-          gaugingCutoff: String(d.gauging_cutoff ?? "00:00").slice(0, 5),
-          gaugingMinutes: Number(d.gauging_minutes ?? 60),
+          gaugingCutoff: String(d.gauging_cutoff ?? "23:30").slice(0, 5),
+          gaugingMinutes: Number(d.gauging_minutes ?? 30),
         });
       });
     return () => { off = true; };

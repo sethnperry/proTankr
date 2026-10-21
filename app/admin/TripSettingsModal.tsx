@@ -98,8 +98,8 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       require_consignee_signature: settings.require_consignee_signature,
       require_tank_readings: settings.require_tank_readings,
       max_shift_hours: Math.min(24, Math.max(1, settings.max_shift_hours ?? 12)),
-      gauging_cutoff: (settings.gauging_cutoff ?? "00:00").slice(0, 5),
-      gauging_minutes: Math.min(600, Math.max(0, settings.gauging_minutes ?? 60)),
+      gauging_cutoff: (settings.gauging_cutoff ?? "23:30").slice(0, 5),
+      gauging_minutes: Math.min(600, Math.max(0, settings.gauging_minutes ?? 30)),
     }, { onConflict: "company_id" }).select("company_id");
     setBusy(false);
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
@@ -161,14 +161,14 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
         <NumRow label="Max shift (hours)" help="Dispatch flags a planned day that runs longer than this."
           value={settings.max_shift_hours ?? 12} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, max_shift_hours: n }))} />
         <NumRow label="Gauging length (min)" help="Terminals can't load while they gauge, usually around midnight."
-          value={settings.gauging_minutes ?? 60} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, gauging_minutes: n }))} />
+          value={settings.gauging_minutes ?? 30} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, gauging_minutes: n }))} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
           <div>
             <div style={{ fontSize: 15, color: "#fff" }}>Gauging time</div>
             <div style={{ fontSize: 12, color: muted }}>Terminal local time. Midnight at most terminals.</div>
           </div>
-          <input type="time" disabled={!isAdmin} value={(settings.gauging_cutoff ?? "00:00").slice(0, 5)}
-            onChange={(e) => setSettings((s) => ({ ...s, gauging_cutoff: e.target.value || "00:00" }))} style={{ ...input, width: 120, textAlign: "left" }} />
+          <input type="time" disabled={!isAdmin} value={(settings.gauging_cutoff ?? "23:30").slice(0, 5)}
+            onChange={(e) => setSettings((s) => ({ ...s, gauging_cutoff: e.target.value || "23:30" }))} style={{ ...input, width: 120, textAlign: "left" }} />
         </div>
       </div>
       <div style={card}>

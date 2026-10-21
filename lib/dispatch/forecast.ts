@@ -32,7 +32,7 @@ export function settingsForTerminal(
   return { ...base, gaugingCutoff: cutoff, gaugingMinutes: mins };
 }
 
-export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = { maxShiftHours: 12, gaugingCutoff: "00:00", gaugingMinutes: 60 };
+export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = { maxShiftHours: 12, gaugingCutoff: "23:30", gaugingMinutes: 30 };
 
 const MIN = 60000;
 const DEFAULTS = { to_terminal: 30, loading: 60, to_delivery: 60, drop: 45 };
@@ -186,7 +186,7 @@ export function forecastLoad(i: ForecastInput): Forecast {
   const d = ((a - cutoff + 720 + 1440) % 1440) - 720; // minutes after the cutoff (negative = before)
   if (set.gaugingMinutes > 0 && d >= -loadMin && d < set.gaugingMinutes) {
     const delay = set.gaugingMinutes - d;
-    t = push("gauging", "Terminal gauging", t, delay, { kind: "default", n: 0, note: `terminal gauges at ${set.gaugingCutoff === "00:00" ? "midnight" : set.gaugingCutoff} for ${set.gaugingMinutes} min` });
+    t = push("gauging", "Terminal gauging", t, delay, { kind: "default", n: 0, note: `terminal gauges at ${set.gaugingCutoff} (terminal time) for ${set.gaugingMinutes} min` });
     flags.push({ kind: "gauging", severity: "warn", text: `Arrives about ${clock(arriveTerminalMs, i.terminal.tz)}, near gauging. Loading would start about ${clock(t, i.terminal.tz)} (${Math.round(delay)} min later).` });
   }
   t = push("loading", `Load at ${i.terminal.name}`, t, loadMin, basisFor(lp));

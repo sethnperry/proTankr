@@ -49,11 +49,11 @@ test("distance estimate when coordinates exist but no pair history", () => {
 
 test("arriving around 11 PM is held until after midnight gauging", () => {
   const f = forecastLoad({ ...base, startFrom: null, startMs: at(20, 22, 30), history: [trip(5, 22, { toTerm: 40 })].concat([trip(6, 22), trip(7, 22)]) });
-  // start 22:30 + 40 = arrives 23:10, load ~50 would run past midnight -> gauging until 01:00
+  // start 22:30 + 40 = arrives 23:10, load ~50 would run past midnight -> gauging until 00:00 (gauges 23:30, back up at midnight)
   const g = f.segments.find((s) => s.key === "gauging")!;
   assert.ok(g, "gauging segment");
   assert.equal(g.startMs, at(20, 23, 10));
-  assert.equal(f.segments.find((s) => s.key === "loading")!.startMs, at(21, 1, 0));
+  assert.equal(f.segments.find((s) => s.key === "loading")!.startMs, at(21, 0, 0));
   assert.ok(f.flags.some((x) => x.kind === "gauging"));
 });
 
