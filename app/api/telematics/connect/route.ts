@@ -209,21 +209,46 @@ export async function POST(req: NextRequest) {
           if (!error) { result.updated++; if (patch.region) regionsSeen.add(String(patch.region)); }
         });
       }
-      if (Array.isArray(body.importTrailers)) {
-        const [trailers, mapRes, oursRes] = await Promise.all([
+      if (Array.isArray(body.importTrailers) || body.syncLinked === true) {
+        const [trailers, mapRes, oursRes, devices] = await Promise.all([
           p.listTrailers(),
           admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", g.companyId),
-          admin.from("trailers").select("trailer_id, trailer_name, region").eq("company_id", g.companyId),
+          admin.from("trailers").select("trailer_id, trailer_name, region, vin_number, plate_number").eq("company_id", g.companyId),
+          p.listVehicles().catch(() => []),
         ]);
-        const want = new Set((body.importTrailers as unknown[]).map(String));
+        // Geotab keeps a trailer's VIN and plate on the same-named Device in the "Trailer" group.
+        const devByName = new Map<string, { vin: string | null; plate: string | null }>();
+        for (const d of bestPerName(importableVehicles(devices))) {
+          if (!groupNames(d.groupIds, groups).some((n) => n.trim().toLowerCase() === "trailer")) continue;
+          devByName.set(lower(d.name), { vin: d.vin, plate: d.plate ?? null });
+        }
+        const want = new Set(Array.isArray(body.importTrailers) ? (body.importTrailers as unknown[]).map(String) : []);
         const mapRows = (mapRes.data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
         const mappedProv = new Set(mapRows.map((r) => r.provider_trailer_id));
         const mappedTr = new Set(mapRows.map((r) => r.trailer_id));
-        const ours = (oursRes.data ?? []) as { trailer_id: string; trailer_name: string; region: string | null }[];
+        const ours = (oursRes.data ?? []) as { trailer_id: string; trailer_name: string; region: string | null; vin_number: string | null; plate_number: string | null }[];
         const byName = new Map(ours.map((t) => [lower(t.trailer_name), t]));
+        const tById = new Map(ours.map((t) => [t.trailer_id, t]));
+        const provById = new Map(trailers.map((t) => [t.id, t]));
         const creates: typeof trailers = [];
         const updates: { t: (typeof trailers)[number]; hit: (typeof ours)[number] }[] = [];
         const taken = new Set<string>();
+        const idPatch = (name: string, cur: { vin_number: string | null; plate_number: string | null } | null) => {
+          const dev = devByName.get(lower(name));
+          const want: Record<string, string> = {};
+          if (dev && o.fields.vin && dev.vin) want.vin_number = dev.vin;
+          if (dev && o.fields.plate && dev.plate) want.plate_number = dev.plate;
+          if (!cur) return want;
+          const out: Record<string, string> = {};
+          for (const [k, v] of Object.entries(want)) {
+            const c = (cur as any)[k];
+            if (o.existing === "overwrite" ? String(c ?? "") !== v : c == null || String(c).trim() === "") out[k] = v;
+          }
+          return out;
+        };
+        if (body.syncLinked === true) {
+          if (o.existing !== "skip") for (const r of mapRows) { const t = provById.get(r.provider_trailer_id), hit = tById.get(r.trailer_id); if (t && hit) updates.push({ t, hit }); }
+        } else
         for (const t of bestPerName(trailers)) {
           if (creates.length + updates.length >= CHUNK) break;
           if (!want.has(t.id) || mappedProv.has(t.id)) continue;
@@ -236,7 +261,7 @@ export async function POST(req: NextRequest) {
         }
         const regionOf = (t: (typeof trailers)[number]) => regionFor(groupNames(t.groupIds, groups), o);
         if (creates.length) {
-          const rows = creates.map((t) => { const r = regionOf(t); if (r) regionsSeen.add(r); return { company_id: g.companyId, trailer_name: t.name.trim(), active: true, ...(r ? { region: r } : {}) }; });
+          const rows = creates.map((t) => { const r = regionOf(t); if (r) regionsSeen.add(r); return { company_id: g.companyId, trailer_name: t.name.trim(), active: true, ...(r ? { region: r } : {}), ...idPatch(t.name, null) }; });
           const { data, error } = await admin.from("trailers").insert(rows).select("trailer_id, trailer_name");
           if (error) return NextResponse.json({ error: error.message }, { status: 400 });
           const idByName = new Map(((data ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => [lower(t.trailer_name), t.trailer_id]));
@@ -245,12 +270,16 @@ export async function POST(req: NextRequest) {
           result.added += maps.length;
         }
         await inBatches(updates, async ({ t, hit }) => {
+          if (body.syncLinked !== true) {
           const { error } = await admin.from("telematics_trailer_map").insert({ company_id: g.companyId, provider_trailer_id: t.id, trailer_id: hit.trailer_id, trailer_name: t.name, matched_by: "import" });
           if (!error) result.linked++;
+          }
           const r = regionOf(t);
-          if (r && (o.existing === "overwrite" ? hit.region !== r : !hit.region)) {
-            const { error: e2 } = await admin.from("trailers").update({ region: r }).eq("trailer_id", hit.trailer_id).eq("company_id", g.companyId);
-            if (!e2) { result.updated++; regionsSeen.add(r); }
+          const patch: Record<string, unknown> = idPatch(t.name, hit);
+          if (r && (o.existing === "overwrite" ? hit.region !== r : !hit.region)) patch.region = r;
+          if (Object.keys(patch).length) {
+            const { error: e2 } = await admin.from("trailers").update(patch).eq("trailer_id", hit.trailer_id).eq("company_id", g.companyId);
+            if (!e2) { result.updated++; if (patch.region) regionsSeen.add(String(patch.region)); }
           }
         });
       }

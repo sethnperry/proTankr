@@ -59,7 +59,7 @@ export default function GeotabImport({ vehicles, trailers, linkedTrucks, add, sy
     setProgress(null);
     setChosen(new Set());
   };
-  const doSync = async () => { setProgress("Updating linked trucks…"); await syncLinked(eff); setProgress(null); };
+  const doSync = async () => { setProgress("Updating linked trucks and trailers…"); await syncLinked(eff); setProgress(null); };
 
   const total = vehicles.length + trailers.length;
   if (!total && !linkedTrucks) return null;
@@ -96,7 +96,7 @@ export default function GeotabImport({ vehicles, trailers, linkedTrucks, add, sy
           {linkedTrucks > 0 && (
             <button type="button" style={{ ...btn, width: "100%", marginTop: 10, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", opacity: progress || opts.existing === "skip" ? 0.5 : 1 }}
               disabled={!!progress || opts.existing === "skip"} onClick={() => void doSync()}>
-              Update the {linkedTrucks.toLocaleString()} linked truck{linkedTrucks === 1 ? "" : "s"} with these choices
+              Update the {linkedTrucks.toLocaleString()} linked truck{linkedTrucks === 1 ? "" : "s"} (and trailers) with these choices
             </button>
           )}
 
