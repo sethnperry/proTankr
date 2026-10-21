@@ -183,3 +183,13 @@ test("geotab: trailer hooks and drops in a window, open attachments aren't drops
   const ev = await p.trailerEvents("v1", "2026-10-01T00:00:00Z", "2026-10-01T23:00:00Z");
   assert.deepEqual(ev.map((e) => [e.type, e.trailerProviderId, e.lat]), [["hook", "tr1", 27.95], ["drop", "tr1", 27.95], ["hook", "tr2", 27.95]]);
 });
+
+import { stepExit, NEW_EXIT } from "./geofence.ts";
+test("geofence: departure confirms after leaving the fence and moving, resets if it comes back", () => {
+  let w = stepExit(NEW_EXIT, { inside: false, speedMph: 25, nowMs: 1000 });
+  assert.equal(w.confirmedAtMs, null);
+  w = stepExit(w, { inside: false, speedMph: 40, nowMs: 61_000 });
+  assert.equal(w.confirmedAtMs, 1000);
+  assert.deepEqual(stepExit(stepExit(NEW_EXIT, { inside: false, speedMph: 20, nowMs: 1000 }), { inside: true, speedMph: 0, nowMs: 30_000 }), NEW_EXIT);
+  assert.equal(stepExit(NEW_EXIT, { inside: false, speedMph: 0, nowMs: 1000 }).outsideSinceMs, null); // parked just outside: not a departure
+});

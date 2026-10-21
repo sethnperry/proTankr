@@ -49,3 +49,17 @@ export function stepWatch(w: Watch, o: { inside: boolean; speedMph: number | nul
   const confirmed = w.confirmedAtMs ?? (o.nowMs - since >= CONFIRM_MS ? since : null);
   return { sinceMs: since, confirmedAtMs: confirmed };
 }
+
+export type ExitWatch = { outsideSinceMs: number | null; confirmedAtMs: number | null };
+export const NEW_EXIT: ExitWatch = { outsideSinceMs: null, confirmedAtMs: null };
+
+/** Departure: the truck is outside the fence and moving on readings CONFIRM_MS
+ * apart. `confirmedAtMs` is when it first left. Coming back inside resets it. */
+export function stepExit(w: ExitWatch, o: { inside: boolean; speedMph: number | null; nowMs: number }): ExitWatch {
+  if (o.inside) return NEW_EXIT;
+  if (w.confirmedAtMs != null) return w;
+  const moving = o.speedMph != null && o.speedMph >= STOPPED_MPH;
+  const since = w.outsideSinceMs ?? o.nowMs;
+  if (!moving && w.outsideSinceMs == null) return w; // just outside, not moving yet: wait
+  return { outsideSinceMs: since, confirmedAtMs: o.nowMs - since >= CONFIRM_MS ? since : null };
+}

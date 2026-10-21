@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { calculateNetGallons, netMethodForProduct } from "@/lib/trips/netGallons";
+import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
 import {
   defaultStepTimes,
   delayMinutes,
@@ -121,7 +122,7 @@ export function LoadedSheet({
     })));
     const t = pickup.begin_at && pickup.left_at
       ? { arrivedAt: pickup.arrived_at ?? pickup.begin_at, beginAt: pickup.begin_at, leftAt: pickup.left_at }
-      : defaultStepTimes(new Date(), loadingOffset(settings), pickup.arrived_at, pickup.begin_at);
+      : defaultStepTimes(new Date(), loadingOffset(settings), pickup.arrived_at, pickup.begin_at, readGeoDeparture(pickup.pickup_id));
     setTimes(t);
     setReasonId(pickup.delay_code && isTerminalIssueCode(pickup.delay_code) ? issueChoiceValue(pickup.delay_code) : pickup.delay_reason_id);
     setNote(pickup.delay_note ?? "");

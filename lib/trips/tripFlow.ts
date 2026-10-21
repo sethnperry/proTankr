@@ -126,8 +126,10 @@ export type StepTimes = { arrivedAt: string; beginAt: string; leftAt: string };
 // leave = now. Begin never lands before arrival. `beganAt` is a begin time the
 // driver already recorded (Start Loading in the Planner); when it's valid it
 // wins over the offset.
-export function defaultStepTimes(now: Date, offsetMinutes: number, arrivedAt: string | null, beganAt?: string | null): StepTimes {
-  const leave = now.getTime();
+export function defaultStepTimes(now: Date, offsetMinutes: number, arrivedAt: string | null, beganAt?: string | null, departedAt?: string | null): StepTimes {
+  // When the truck's position showed it leaving, that beats the moment of the tap.
+  const dep = departedAt ? Date.parse(departedAt) : NaN;
+  const leave = Number.isFinite(dep) && dep <= now.getTime() ? dep : now.getTime();
   let begin = leave - Math.max(0, offsetMinutes) * MIN;
   const began = beganAt ? Date.parse(beganAt) : NaN;
   if (Number.isFinite(began) && began <= leave) begin = began;

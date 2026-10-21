@@ -20,7 +20,7 @@ export type ArrivalTarget = { kind: "terminal" | "location"; refId: string; name
 const POLL_MS = 60_000;
 const FRESH_MS = 10 * 60_000;
 
-async function learnedPoints(companyId: string, t: ArrivalTarget): Promise<LatLon[]> {
+export async function learnedPoints(companyId: string, t: ArrivalTarget): Promise<LatLon[]> {
   try {
     const { data } = await supabase.from("stop_arrival_points").select("lat, lon").eq("company_id", companyId).eq("kind", t.kind).eq("ref_id", t.refId)
       .order("created_at", { ascending: false }).limit(12);
@@ -46,6 +46,7 @@ export function useArrivalSuggestion(o: { companyId: string | null; truckId: str
   const { companyId, truckId, target, enabled } = o;
   const key = target ? `${target.kind}:${target.refId}` : "";
   const [sinceMs, setSinceMs] = useState<number | null>(null);
+  const [learned, setLearned] = useState(false);
   const [snoozedUntil, setSnoozedUntil] = useState(0);
   const watch = useRef<Watch>(NEW_WATCH);
   const targetRef = useRef(target);
@@ -63,7 +64,7 @@ export function useArrivalSuggestion(o: { companyId: string | null; truckId: str
       const t = targetRef.current;
       if (t && document.visibilityState !== "hidden") {
         try {
-          if (fence === undefined) fence = fenceFor(await learnedPoints(companyId, t), t.catalog);
+          if (fence === undefined) { fence = fenceFor(await learnedPoints(companyId, t), t.catalog); setLearned(!!fence?.learned); }
           const r = await fetchTruckReading(truckId);
           if (off) return;
           if (!r) return; // no telematics: stop checking
@@ -81,5 +82,5 @@ export function useArrivalSuggestion(o: { companyId: string | null; truckId: str
 
   const snooze = useCallback((min = 20) => setSnoozedUntil(Date.now() + min * 60_000), []);
   const suggest = sinceMs != null && Date.now() >= snoozedUntil ? { sinceMs } : null;
-  return { suggest, snooze };
+  return { suggest, snooze, learned };
 }

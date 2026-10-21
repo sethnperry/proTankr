@@ -24,6 +24,8 @@ export type TripSettings = {
   max_shift_hours?: number;
   gauging_cutoff?: string;
   gauging_minutes?: number;
+  // Stamp arrival from the truck's position (20261027000000). Absent = on.
+  auto_stamp_arrival?: boolean;
 };
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {

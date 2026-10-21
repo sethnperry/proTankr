@@ -1,5 +1,6 @@
 "use client";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
+import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
 import { openAccessSteps } from "./components/access/useAccessSteps";
 import { motion } from "framer-motion";
 import { clearSetupSession } from "@/lib/setupSession";
@@ -1635,6 +1636,7 @@ export default function CalculatorPage() {
       settings: tripSettings,
       reasons: tripReasons.filter((r) => r.kind === "loading" && r.is_active),
       arrivedAt: tripPickup.arrived_at,
+      departedAt: readGeoDeparture(tripPickup.pickup_id),
       beganAt: tripPickup.begin_at,
       existingTimes: tripPickup.left_at ? { arrivedAt: tripPickup.arrived_at, beginAt: tripPickup.begin_at, leftAt: tripPickup.left_at } as StepTimes : null,
       existingDelayReasonId: tripPickup.delay_code && isTerminalIssueCode(tripPickup.delay_code)

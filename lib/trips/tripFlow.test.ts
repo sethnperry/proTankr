@@ -437,3 +437,10 @@ test("finish delivery: bio blend goes on the compartment, details become one eve
   assert.deepEqual((ev[0].payload as any).issues, ["vapor"]);
   assert.equal((ev[0].payload as any).odometer, 1234);
 });
+
+test("defaultStepTimes: a geofence departure sets the leave time, never in the future", () => {
+  const now = new Date("2026-10-23T12:00:00Z");
+  const t = defaultStepTimes(now, 10, "2026-10-23T10:00:00Z", null, "2026-10-23T11:30:00Z");
+  assert.equal(t.leftAt, "2026-10-23T11:30:00.000Z");
+  assert.equal(defaultStepTimes(now, 10, null, null, "2026-10-23T13:00:00Z").leftAt, now.toISOString());
+});

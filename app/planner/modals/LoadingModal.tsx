@@ -45,6 +45,7 @@ export type LoadingTripMode = {
   settings: TripSettings;
   reasons: DelayReason[];
   arrivedAt: string | null;
+  departedAt?: string | null; // when the truck's position showed it leave (telematics)
   existingTimes: StepTimes | null;
   // When Start Loading was tapped (the pickup's begin time), if recorded.
   beganAt: string | null;
@@ -873,7 +874,7 @@ export default function LoadingModal(props: {
       } else if (trip) {
         // On to the times window, then the signature. Begin is the Begin
         // Loading tap; depart is the Finish Loading tap.
-        setTripTimes(trip.existingTimes ?? defaultStepTimes(finishTappedAt.current ?? new Date(), loadingOffset(trip.settings), trip.arrivedAt, trip.beganAt));
+        setTripTimes(trip.existingTimes ?? defaultStepTimes(finishTappedAt.current ?? new Date(), loadingOffset(trip.settings), trip.arrivedAt, trip.beganAt, trip.departedAt ?? null));
         setTripReasonId(trip.existingDelayReasonId);
         setTripNote(trip.existingDelayNote ?? "");
         setTripOdometer(trip.existingOdometer != null ? String(trip.existingOdometer) : "");

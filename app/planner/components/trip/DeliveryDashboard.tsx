@@ -27,6 +27,7 @@ import { productColorFor } from "@/app/planner/utils/productColor";
 import { useIsLandscape } from "@/app/planner/hooks/useOrientation";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { busyProps } from "@/lib/ui/pending";
+import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
 import { useStoreDeliveries, type StoreDelivery } from "@/app/planner/hooks/useDashboardCards";
 import {
   ADDITIVES,
@@ -690,7 +691,8 @@ export function DeliveryDashboard({
       setSection("miles");
       return setErr(`Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`);
     }
-    const leftAt = new Date().toISOString();
+    const dep = readGeoDeparture(delivery.delivery_id);
+    const leftAt = dep && Date.parse(dep) <= Date.now() && Date.parse(dep) > Date.parse(delivery.begin_at ?? arrivedAt) ? dep : new Date().toISOString();
     const times: StepTimes = { arrivedAt, beginAt: delivery.begin_at ?? arrivedAt, leftAt };
     const tp = timesProblem(times);
     if (tp) return setErr(tp);

@@ -78,6 +78,7 @@ import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
+import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
@@ -951,6 +952,46 @@ export default function HomePage() {
   const learnArrival = () => {
     if (arrivalTarget && companyId && userId) void recordArrivalPoint({ companyId, userId, truckId, target: arrivalTarget });
   };
+  // Departure: while the truck sits at a stop it has arrived at, note when it really leaves.
+  const atStop = useMemo(() => {
+    if (!snap) return null;
+    const pk = snap.pickups.find((p) => p.arrived_at && !p.left_at && p.outcome !== "no_load");
+    if (pk?.terminal_id) {
+      const t = terminalCatalog?.find((x) => String(x.terminal_id) === String(pk.terminal_id));
+      return { key: pk.pickup_id, target: { kind: "terminal" as const, refId: String(pk.terminal_id), name: pk.name ?? t?.terminal_name ?? "the terminal",
+        catalog: t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null } };
+    }
+    const dl = snap.deliveries.find((d) => d.arrived_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled" && d.location_id);
+    if (dl?.location_id) {
+      const l = locations.find((x) => x.location_id === dl.location_id);
+      return { key: dl.delivery_id, target: { kind: "location" as const, refId: dl.location_id, name: l ? locationTitle(l) : "the store",
+        catalog: l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null } };
+    }
+    return null;
+  }, [snap, terminalCatalog, locations]);
+  const autoStampOn = settings.auto_stamp_arrival !== false;
+  useDepartureWatch({ companyId: companyId || null, truckId, stopKey: atStop?.key ?? null, target: atStop?.target ?? null, enabled: !!atStop && autoStampOn });
+
+  // Arrival auto-stamp: only where the fence is learned (tight). A wide catalog-point fence still
+  // just offers the Arrive card. Back-dated to when the truck came to rest; the driver can edit.
+  useEffect(() => {
+    if (!autoStampOn || !arrival.suggest || !arrival.learned || !arrivalTarget || !store || !userId) return;
+    const at = new Date(arrival.suggest.sinceMs);
+    const when = at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    if (step.kind === "arrive_pickup") {
+      arrivePickup(store, { userId, pickup: step.pickup, now: at, newId });
+      const loc = shell.location;
+      if (step.pickup.rack_id == null && loc.selectedRackId && String(loc.selectedTerminalId || "") === String(step.pickup.terminal_id || "")) {
+        store.put("trip_pickups", { pickup_id: step.pickup.pickup_id, rack_id: loc.selectedRackId });
+      }
+    } else if (step.kind === "arrive_delivery") {
+      arriveDelivery(store, { userId, delivery: step.delivery, now: at, newId });
+    } else return;
+    void syncNow();
+    setNotice({ text: `Arrived at ${arrivalTarget.name} at ${when}, from your truck's position.`, tripId: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrival.suggest?.sinceMs, arrival.learned, autoStampOn, step.kind]);
+
   const confirmDetectedArrival = () => {
     if (!arrival.suggest) return;
     arriveAtRef.current = new Date(arrival.suggest.sinceMs);

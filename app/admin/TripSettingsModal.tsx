@@ -100,6 +100,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       max_shift_hours: Math.min(24, Math.max(1, settings.max_shift_hours ?? 12)),
       gauging_cutoff: (settings.gauging_cutoff ?? "23:30").slice(0, 5),
       gauging_minutes: Math.min(600, Math.max(0, settings.gauging_minutes ?? 30)),
+      auto_stamp_arrival: settings.auto_stamp_arrival !== false,
     }, { onConflict: "company_id" }).select("company_id");
     setBusy(false);
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
@@ -170,6 +171,11 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           <input type="time" disabled={!isAdmin} value={(settings.gauging_cutoff ?? "23:30").slice(0, 5)}
             onChange={(e) => setSettings((s) => ({ ...s, gauging_cutoff: e.target.value || "23:30" }))} style={{ ...input, width: 120, textAlign: "left" }} />
         </div>
+      </div>
+      <div style={card}>
+        <div style={title}>Truck position</div>
+        <CheckRow label="Stamp arrival and departure from the truck" help="Needs the Geotab link. Arrival is stamped for the driver once the truck has stopped at a stop whose location the app has learned; departure defaults to when the truck really left. Drivers can always correct a time."
+          value={settings.auto_stamp_arrival !== false} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, auto_stamp_arrival: v }))} />
       </div>
       <div style={card}>
         <div style={title}>Finish Delivery requires</div>
