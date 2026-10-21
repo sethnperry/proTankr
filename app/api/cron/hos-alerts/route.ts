@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { providerFor } from "@/lib/telematics/server";
+import { autoLinkAllDrivers, providerFor } from "@/lib/telematics/server";
 import { planHosAlerts, type DriverCase } from "@/lib/push/hosAlertCore";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import type { Level } from "@/lib/telematics/hosTripNotify";
@@ -30,6 +30,9 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
     .eq("company_id", companyId).in("status", OPEN);
   const trips = ((tripRows ?? []) as any[]).filter((t) => t.driver_id);
   if (!trips.length) return { sent: 0, drivers: 0 };
+
+  // Drivers on open trips who aren't linked yet get matched now, so their alerts don't wait on an admin.
+  try { await autoLinkAllDrivers(companyId); } catch { /* alerts go out for whoever is linked */ }
 
   const driverIds = [...new Set(trips.map((t) => t.driver_id as string))];
   const truckIds = [...new Set(trips.map((t) => t.truck_id).filter(Boolean) as string[])];
