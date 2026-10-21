@@ -49,8 +49,29 @@ export async function GET(req: NextRequest) {
       city = typeof it?.name === "string" ? it.name : null;
       state = stateCode(typeof it?.state === "string" ? it.state : null);
     }
+    // Who is in the truck: the driver signed in to Geotab, matched to a ProTankr member, and who holds it in ProTankr.
+    let driverName: string | null = null, heldByName: string | null = null;
+    try {
+      const nameOf = async (userId: string) => {
+        const { data: pr } = await admin.from("profiles").select("display_name").eq("user_id", userId).maybeSingle();
+        return (pr as { display_name?: string | null } | null)?.display_name ?? null;
+      };
+      if (reading.driverId) {
+        const { data: dm } = await admin.from("telematics_driver_map").select("user_id, driver_name").eq("company_id", companyId).eq("provider_user_id", reading.driverId).maybeSingle();
+        const row = dm as { user_id?: string; driver_name?: string | null } | null;
+        driverName = (row?.user_id ? await nameOf(row.user_id) : null) ?? row?.driver_name ?? null;
+        if (!driverName) {
+          const ds = await p.listDrivers().catch(() => []);
+          const d = ds.find((x) => x.id === reading.driverId);
+          driverName = d ? ([d.firstName, d.lastName].filter(Boolean).join(" ") || d.name) : null;
+        }
+      }
+      const { data: combo } = await admin.from("equipment_combos").select("claimed_by").eq("truck_id", truckId).eq("active", true).not("claimed_by", "is", null).order("claimed_at", { ascending: false }).limit(1).maybeSingle();
+      const by = (combo as { claimed_by?: string | null } | null)?.claimed_by;
+      heldByName = by ? await nameOf(by) : null;
+    } catch { /* the position is still useful without a name */ }
     await admin.from("telematics_connections").update({ last_ok_at: new Date().toISOString(), last_error: null }).eq("company_id", companyId);
-    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown });
+    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, driverName, heldByName });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
     return none();

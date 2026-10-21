@@ -13,6 +13,7 @@ export type VehicleReading = {
   lon: number | null;
   speedMph: number | null;
   at: string | null; // ISO time of the position fix
+  driverId?: string | null; // provider id of the driver signed in to the vehicle, if known
 };
 
 export type ProviderDriver = { id: string; name: string; firstName: string | null; lastName: string | null; employeeNo: string | null };

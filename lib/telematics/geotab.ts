@@ -259,6 +259,8 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         lon: Number.isFinite(Number(s?.longitude)) ? Number(s.longitude) : null,
         speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,
         at: s?.dateTime ? String(s.dateTime) : null,
+        // The driver signed in to the truck. Geotab says "UnknownDriverId" when nobody is.
+        driverId: s?.currentDriver?.id && !/^unknown/i.test(String(s.currentDriver.id)) ? String(s.currentDriver.id) : null,
       };
     },
   };

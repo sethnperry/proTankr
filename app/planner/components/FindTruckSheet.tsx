@@ -103,7 +103,17 @@ export function FindTruckSheet({ open, onClose, companyId, defaultTruckId }: {
                 Last update {ageText(reading.at)}
                 {reading.speedMph != null ? ` · ${reading.speedMph > 2 ? `moving ${reading.speedMph} mph` : "stopped"}` : ""}
               </div>
-              <div style={{ fontSize: 12, marginTop: 4, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
+              <div style={{ fontSize: 14, marginTop: 10 }}>
+                {reading.driverName
+                  ? <>Driver <b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in to the truck)</span></>
+                  : reading.heldByName
+                    ? <>Driver <b>{reading.heldByName}</b> <span style={{ color: muted }}>(has it selected in ProTankr)</span></>
+                    : <span style={{ color: muted }}>No driver signed in to this truck.</span>}
+              </div>
+              {reading.driverName && reading.heldByName && reading.driverName !== reading.heldByName && (
+                <div style={{ fontSize: 13, marginTop: 4, color: "#fb923c" }}>ProTankr has it selected by {reading.heldByName}.</div>
+              )}
+              <div style={{ fontSize: 12, marginTop: 6, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
               <a href={mapsUrl(reading.lat!, reading.lon!)} target="_blank" rel="noopener noreferrer"
                 style={{ display: "block", textAlign: "center", marginTop: 14, padding: "13px 0", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none" }}>
                 Open in Maps
