@@ -63,6 +63,14 @@ async function summary(companyId: string) {
   let provTr: { id: string; name: string; groupIds?: string[]; group?: string; groups?: string[] }[] = [];
   try { const p = await providerFor(companyId); provTr = p ? (await p.listTrailers()).map((t) => ({ ...t, group: pathsFor(t.groupIds, provGroups), groups: groupNames(t.groupIds, provGroups) })) : []; } catch { /* trailer tracking may not be on */ }
   const tUsed = new Set(trows.map((r) => r.trailer_id)), tvUsed = new Set(trows.map((r) => r.provider_trailer_id));
+  // A trailer's VIN and plate live on the same-named Device in the "Trailer" group.
+  const devByName = new Map<string, { vin: string | null; plate: string | null }>();
+  for (const d of bestPerName(importableVehicles(rawVehicles))) {
+    if (groupNames(d.groupIds, provGroups).some((n) => n.trim().toLowerCase() === "trailer")) devByName.set(d.name.trim().toLowerCase(), { vin: d.vin, plate: d.plate ?? null });
+  }
+  const withIds = <T extends { name: string }>(t: T) => ({ ...t, ...(devByName.get(t.name.trim().toLowerCase()) ?? {}) });
+  const ourTrName = new Map(((ourTr ?? []) as { trailer_id: string; trailer_name: string }[]).map((t) => [t.trailer_id, t.trailer_name]));
+  const linkedByProv = new Map(trows.map((r) => [r.provider_trailer_id, ourTrName.get(r.trailer_id) ?? null]));
   // Drivers (hours of service): linked, and who is left to match.
   const dm = await admin.from("telematics_driver_map").select("provider_user_id, user_id, driver_name, matched_by").eq("company_id", companyId);
   const drows = (dm.data ?? []) as { provider_user_id: string; user_id: string; driver_name: string | null; matched_by: string }[];
@@ -79,7 +87,8 @@ async function summary(companyId: string) {
   const dUsed = new Set(drows.map((r) => r.provider_user_id)), mUsed = new Set(drows.map((r) => r.user_id));
   return {
     trailersLinked: trows.length,
-    unmatchedTrailers: bestPerName(provTr).filter((t) => !tvUsed.has(t.id)),
+    unmatchedTrailers: bestPerName(provTr).filter((t) => !tvUsed.has(t.id)).map(withIds),
+    linkedTrailers: provTr.filter((t) => tvUsed.has(t.id)).map((t) => ({ ...withIds(t), linkedTo: linkedByProv.get(t.id) ?? null })),
     unmatchedOurTrailers: ((ourTr ?? []) as { trailer_id: string; trailer_name: string }[]).filter((t) => !tUsed.has(t.trailer_id)).map((t) => ({ trailerId: t.trailer_id, name: t.trailer_name })),
     groups: groupRows,
     driversLinked: drows.length,

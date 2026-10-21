@@ -29,6 +29,7 @@ type Summary = {
   unmatchedVehicles?: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string; groups?: string[] }[];
   trailersLinked?: number;
   unmatchedTrailers?: { id: string; name: string; group?: string }[];
+  linkedTrailers?: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string; groups?: string[]; linkedTo?: string | null }[];
   unmatchedOurTrailers?: { trailerId: string; name: string }[];
   driversLinked?: number;
   groups?: { path: string; truckCount: number; trailerCount: number; sample: string[] }[];
@@ -142,7 +143,7 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
             {sum.last_error && <div style={{ fontSize: 13, color: "#fbbf24", marginTop: 6 }}>Last problem: {sum.last_error}</div>}
           </div>
 
-          <GeotabImport vehicles={sum.unmatchedVehicles ?? []} trailers={(sum.unmatchedTrailers ?? []) as any} linkedTrucks={sum.matched?.length ?? 0} add={addBatch} syncLinked={syncLinked} note={note} />
+          <GeotabImport vehicles={sum.unmatchedVehicles ?? []} trailers={(sum.unmatchedTrailers ?? []) as any} linkedTrailers={sum.linkedTrailers ?? []} linkedTrucks={sum.matched?.length ?? 0} add={addBatch} syncLinked={syncLinked} note={note} />
 
           {(sum.unmatchedVehicles?.length ?? 0) > 0 && (sum.unmatchedTrucks?.length ?? 0) > 0 && (
             <div style={card}>
