@@ -88,7 +88,9 @@ export async function GET(req: NextRequest) {
       let hosDriverId: string | null = reading.driverId ?? null;
       if (reading.driverId) driverName = await providerDriverName(reading.driverId);
       else {
-        const last = await p.lastDriverOf(vid).catch(() => null);
+        const last = reading.lastDriverId
+          ? { driverId: reading.lastDriverId, at: reading.at ?? new Date().toISOString() }
+          : await p.lastDriverOf(vid).catch(() => null);
         if (last) {
           const n = await providerDriverName(last.driverId);
           if (n) { lastDriver = { name: n, at: last.at }; hosDriverId = last.driverId; }

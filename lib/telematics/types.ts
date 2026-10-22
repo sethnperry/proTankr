@@ -14,6 +14,7 @@ export type VehicleReading = {
   speedMph: number | null;
   at: string | null; // ISO time of the position fix
   driverId?: string | null; // provider id of the driver signed in to the vehicle, if known
+  lastDriverId?: string | null; // when nobody is signed in: the last driver the provider recorded for it
   bearingDeg?: number | null; // direction of travel, degrees clockwise from north
   isDriving?: boolean | null;
 };
@@ -58,6 +59,8 @@ export interface TelematicsProvider {
   lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null>;
   /** The driver signed in to each vehicle right now: provider vehicle id -> provider driver id. */
   currentDrivers(): Promise<Map<string, string>>;
+  /** The last driver recorded for each vehicle that has nobody signed in now. */
+  historicDrivers(): Promise<Map<string, string>>;
   /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */
   lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null>;
   hos(driverId: string): Promise<HosAvailability | null>;

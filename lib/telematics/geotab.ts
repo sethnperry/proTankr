@@ -47,6 +47,13 @@ async function session(f: Fetch, c: GeotabCreds, fresh = false): Promise<Session
 /** Geotab durations arrive as ticks (100 ns), milliseconds, seconds or an
  * "[d.]hh:mm:ss" string depending on the field and API version, so read all of
  * them. Returns minutes. */
+/** Who a DeviceStatusInfo record says is in the vehicle: signed in now, or only the last driver. */
+export function driverOf(s: any): { current: string | null; historic: string | null } {
+  const raw = s?.driver?.id ?? s?.currentDriver?.id;
+  if (!raw || /^unknown/i.test(String(raw))) return { current: null, historic: null };
+  return s?.isHistoricLastDriver === true ? { current: null, historic: String(raw) } : { current: String(raw), historic: null };
+}
+
 export function durationMinutes(v: unknown): number | null {
   if (v == null || v === "") return null;
   if (typeof v === "string" && /^\d+(\.\d+)?$/.test(v) === false) {
@@ -249,8 +256,18 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       const out = new Map<string, string>();
       for (const s of rows ?? []) {
-        const dev = s?.device?.id, drv = s?.currentDriver?.id;
-        if (dev && drv && !/^unknown/i.test(String(drv))) out.set(String(dev), String(drv));
+        const dev = s?.device?.id, d = driverOf(s).current;
+        if (dev && d) out.set(String(dev), d);
+      }
+      return out;
+    },
+
+    async historicDrivers(): Promise<Map<string, string>> {
+      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
+      const out = new Map<string, string>();
+      for (const s of rows ?? []) {
+        const dev = s?.device?.id, d = driverOf(s).historic;
+        if (dev && d) out.set(String(dev), d);
       }
       return out;
     },
@@ -331,8 +348,10 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         lon: fix ? fix.lon : Number.isFinite(Number(s?.longitude)) ? Number(s.longitude) : null,
         speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,
         at: fix ? fix.at : s?.dateTime ? String(s.dateTime) : null,
-        // The driver signed in to the truck. Geotab says "UnknownDriverId" when nobody is.
-        driverId: s?.currentDriver?.id && !/^unknown/i.test(String(s.currentDriver.id)) ? String(s.currentDriver.id) : null,
+        // The driver on a status record is `driver`. `isHistoricLastDriver` means nobody is signed in now and
+        // this is just the last one, and "UnknownDriverId" means no driver at all.
+        driverId: driverOf(s).current,
+        lastDriverId: driverOf(s).historic,
         bearingDeg: Number.isFinite(Number(s?.bearing)) ? Math.round(Number(s.bearing)) : null,
         isDriving: typeof s?.isDriving === "boolean" ? s.isDriving : null,
       };

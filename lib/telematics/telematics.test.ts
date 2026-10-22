@@ -336,3 +336,11 @@ test("geotab: a vehicle parked for weeks still reports where it last logged", as
   assert.equal(r.lon, -82.4);
   assert.equal(r.at, old);
 });
+
+import { driverOf } from "./geotab.ts";
+test("geotab: a status record's driver is signed in unless it is only the last one", () => {
+  assert.deepEqual(driverOf({ driver: { id: "b1" }, isHistoricLastDriver: false }), { current: "b1", historic: null });
+  assert.deepEqual(driverOf({ driver: { id: "b1" }, isHistoricLastDriver: true }), { current: null, historic: "b1" });
+  assert.deepEqual(driverOf({ driver: { id: "UnknownDriverId" } }), { current: null, historic: null });
+  assert.deepEqual(driverOf({}), { current: null, historic: null });
+});

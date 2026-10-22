@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
     const hits = all.filter((d) => `${d.name} ${d.firstName ?? ""} ${d.lastName ?? ""} ${d.employeeNo ?? ""}`.toLowerCase().includes(q)).slice(0, 8);
     if (hits.length === 0) return NextResponse.json({ connected: true, drivers: [] });
 
-    const [current, positions, vmap, dmap] = await Promise.all([
+    const [current, historic, positions, vmap, dmap] = await Promise.all([
       p.currentDrivers().catch(() => new Map<string, string>()),
+      p.historicDrivers().catch(() => new Map<string, string>()),
       p.positions().catch(() => new Map()),
       admin.from("telematics_vehicle_map").select("provider_vehicle_id, truck_id, vehicle_name").eq("company_id", companyId),
       admin.from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId),
@@ -69,7 +70,9 @@ export async function GET(req: NextRequest) {
       let now: Place | null = null, last: Place | null = null;
       if (vid) now = await placeOf(vid, null);
       else {
-        const l = await p.lastVehicleOf(d.id).catch(() => null);
+        // The status record's last driver first (instant), then the sign-in history and trips.
+        const hv = [...historic.entries()].find(([, drv]) => drv === d.id)?.[0] ?? null;
+        const l = hv ? { vehicleId: hv, at: positions.get(hv)?.at ?? new Date().toISOString() } : await p.lastVehicleOf(d.id).catch(() => null);
         if (l) last = { ...(await placeOf(l.vehicleId, l.at)), at: l.at };
       }
       const uidm = memberOf.get(d.id);
