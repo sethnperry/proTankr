@@ -53,7 +53,8 @@ export function useTripEquipment(storeHook: StoreHook, userId: string | null) {
 
   // ── Warning before the picker ──────────────────────────────────────────────
   const [equipWarnOpen, setEquipWarnOpen] = useState(false);
-  const openEquipment = () => (tripHasLoad ? setEquipWarnOpen(true) : shell.setEquipOpen(true));
+  // No warning step: tapping Equipment opens the picker straight away.
+  const openEquipment = () => shell.setEquipOpen(true);
 
   // ── Truck change ───────────────────────────────────────────────────────────
   const onBoardWeight = useMemo(() => {
