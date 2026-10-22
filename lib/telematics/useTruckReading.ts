@@ -76,3 +76,17 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
   }, [truckId, active, pollMs]);
   return reading;
 }
+
+/** Shipment numbers entered in the telematics app on a truck since a time. Empty when there's no connection. */
+export async function fetchTruckShipments(truckId: string | null, sinceIso: string): Promise<{ documentNumber: string; start: string | null; shipperName: string | null; commodity: string | null }[]> {
+  if (!truckId) return [];
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return [];
+    const r = await fetch(`/api/telematics/shipments?truckId=${encodeURIComponent(truckId)}&since=${encodeURIComponent(sinceIso)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return j?.connected ? (j.shipments ?? []) : [];
+  } catch { return []; }
+}

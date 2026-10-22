@@ -55,6 +55,8 @@ export type LoadingTripMode = {
   existingOdometer: number | null;
   suppliers: SupplierRow[];
   onAddSupplier: (name: string) => SupplierRow | null;
+  // Shipment numbers the telematics app logged for this stop (oldest first); prefill the BOL.
+  geotabBols?: string[];
   // BOL numbers among `values` already on another load.
   checkBols: (values: string[]) => Promise<string[]>;
   signature: string | null;
@@ -676,7 +678,8 @@ export default function LoadingModal(props: {
       const own = tripExtras[first];
       const def = trip.compDefaults[first];
       const prevExtra = prevGroup && prevGroup.productId !== seqGroup.productId ? tripExtras[prevGroup.comps[0]] : undefined;
-      setSeqBol(own?.bol ?? def?.bol ?? prevExtra?.bol ?? "");
+      const geo = trip.geotabBols?.[seqGroup.bolIndex] ?? (seqGroup.bolCount <= 1 ? trip.geotabBols?.[0] : undefined);
+      setSeqBol(own?.bol ?? def?.bol ?? geo ?? prevExtra?.bol ?? "");
       if (own) { setSeqSupplier(own.supplier); setSeqSupplierId(own.supplierId); }
       else if (def?.supplier) { setSeqSupplier(def.supplier); setSeqSupplierId(def.supplierId); }
       else { setSeqSupplier(prevExtra?.supplier ?? ""); setSeqSupplierId(prevExtra?.supplierId ?? null); }
@@ -1530,6 +1533,17 @@ export default function LoadingModal(props: {
             // Next on the BOL opens the supplier list when none is picked yet.
             onEnter: () => { if (seqSupplier.trim()) return false; setPickingSupplier(true); return true; },
             after: (
+              <>
+              {(trip.geotabBols?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+                  {trip.geotabBols!.includes(seqBol.trim())
+                    ? <span style={{ color: "#4ade80", fontWeight: 800 }}>✓ Matches the shipment in your telematics app</span>
+                    : <>Telematics app has: {trip.geotabBols!.map((b) => (
+                        <button key={b} type="button" onClick={() => { setSeqBol(b); setSeqError(null); }}
+                          style={{ marginLeft: 6, padding: "3px 8px", border: "1px solid rgba(255,255,255,0.35)", background: "transparent", color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", borderRadius: 2 }}>{b}</button>
+                      ))}</>}
+                </div>
+              )}
               <button type="button" onClick={() => setPickingSupplier(true)}
                 style={{
                   width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 2, cursor: "pointer",
@@ -1540,6 +1554,7 @@ export default function LoadingModal(props: {
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{seqSupplier || "Pick supplier"}</span>
                 <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
               </button>
+              </>
             ),
           }] : []),
           { key: "api", label: "API", value: seqApi, onChange: (v: string) => { setSeqApi(v); setSeqError(null); }, decimal: true },

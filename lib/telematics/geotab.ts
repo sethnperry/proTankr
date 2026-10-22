@@ -245,6 +245,17 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
+    async shipmentsSince(vehicleId: string, sinceIso: string) {
+      const rows: any[] = (await call("Get", { typeName: "ShipmentLog", search: { deviceSearch: { id: vehicleId }, fromDate: sinceIso }, resultsLimit: 500 })) ?? [];
+      const out: { documentNumber: string; start: string | null; shipperName: string | null; commodity: string | null }[] = [];
+      for (const r of rows) {
+        const doc = r?.documentNumber ? String(r.documentNumber).trim() : "";
+        if (!doc) continue;
+        out.push({ documentNumber: doc, start: r.activeFrom ? String(r.activeFrom) : r.dateTime ? String(r.dateTime) : null, shipperName: r.shipperName ? String(r.shipperName) : null, commodity: r.commodity ? String(r.commodity) : null });
+      }
+      return out.sort((a, b) => String(b.start ?? "").localeCompare(String(a.start ?? "")));
+    },
+
     async lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null> {
       const from = new Date(Date.now() - 7 * 86400000).toISOString();
       const rows: any[] = await call("Get", { typeName: "DriverChange", search: { deviceSearch: { id: vehicleId }, fromDate: from } });

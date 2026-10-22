@@ -1,5 +1,6 @@
 "use client";
-import { useTruckReading } from "@/lib/telematics/useTruckReading";
+import { useTruckReading, fetchTruckShipments } from "@/lib/telematics/useTruckReading";
+import { shipmentsForPickup, type GeoShipment } from "@/lib/telematics/shipmentMatch";
 import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
 import { openAccessSteps } from "./components/access/useAccessSteps";
 import { motion } from "framer-motion";
@@ -1603,6 +1604,35 @@ export default function CalculatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripNeedsArrive]);
 
+  // Shipment numbers (BOLs) the driver entered in the telematics app on this truck since arriving. They are
+  // logged within minutes of leaving the rack, so they prefill Finish Loading's BOL. Polled gently while
+  // still at the rack (the provider allows only 10 calls a minute).
+  const [geoShips, setGeoShips] = useState<GeoShipment[]>([]);
+  const geoPickupId = tripPickup?.pickup_id ?? null;
+  const geoArrived = tripPickup?.arrived_at ?? null;
+  const geoLeft = tripPickup?.left_at ?? null;
+  const geoTruckId = useMemo(() => {
+    const t = tripPickup ? (Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[]).find((x) => x.trip_id === tripPickup.trip_id) : null;
+    return t?.truck_id ?? shell.equipment.selectedCombo?.truck_id ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoPickupId, shell.equipment.selectedCombo?.truck_id]);
+  useEffect(() => {
+    setGeoShips([]);
+    if (!geoPickupId || !geoArrived || !geoTruckId) return;
+    let alive = true;
+    let timer: number | undefined;
+    const since = new Date(Date.parse(geoArrived) - 3600000).toISOString();
+    const run = () => {
+      void fetchTruckShipments(geoTruckId, since).then((r) => {
+        if (!alive) return;
+        setGeoShips(r);
+        if (!geoLeft) timer = window.setTimeout(run, 90_000);
+      });
+    };
+    run();
+    return () => { alive = false; if (timer) window.clearTimeout(timer); };
+  }, [geoPickupId, geoArrived, geoLeft, geoTruckId]);
+
   const tripModeForLoading = useMemo<LoadingTripMode | null>(() => {
     if (!tripPickup || !tripStoreObj || !shell.companyId) return null;
     const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
@@ -1631,8 +1661,11 @@ export default function CalculatorPage() {
     const allComps = Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[];
     const trips = Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[];
     const mine = new Set(comps.map((c) => c.compartment_load_id));
+    const usedElsewhere = allComps.filter((c) => !mine.has(c.compartment_load_id) && c.bol_number).map((c) => String(c.bol_number));
+    const geotabBols = shipmentsForPickup(geoShips, { arrivedAt: tripPickup.arrived_at, leftAt: tripPickup.left_at }, Date.now(), usedElsewhere).map((s) => s.documentNumber);
     return {
       pickupName: null,
+      geotabBols,
       settings: tripSettings,
       reasons: tripReasons.filter((r) => r.kind === "loading" && r.is_active),
       arrivedAt: tripPickup.arrived_at,
@@ -1657,7 +1690,7 @@ export default function CalculatorPage() {
       onBackToDashboard: () => leaveTo("/planner/home", "Opening dashboard…"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds, compPlan]);
+  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds, compPlan, geoShips]);
 
   // Runs right after recordLoadCompleted wrote gross/temp/API for this load.
   const recordTripLoaded = useCallback((extras: TripLoadExtras | undefined, editOnly: boolean) => {
