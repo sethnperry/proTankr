@@ -16,6 +16,7 @@ import { DARK_EXP_COLOR } from "../../cards/cardTheme";
 import type { TrackUnit } from "@/lib/equipment/trackList";
 import { PRIMARY_BTN as primaryBtn, SECONDARY_BTN as secondaryBtn } from "@/lib/ui/look";
 import { CameraButton } from "./AddDocumentSheet";
+import { TelematicsLink } from "./TelematicsPanel";
 
 const MUTED = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.14)", padding: 14, marginBottom: 12 };
@@ -93,9 +94,12 @@ function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "t
           <span style={{ fontWeight: 800 }}>{a.name}</span><span>{a.detail}</span>
         </div>
       ))}
-      <button type="button" onClick={onOpenFile} style={{ background: "none", border: "none", padding: "10px 0 0", color: "#93c5fd", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-        Open {kind} file ›
-      </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <button type="button" onClick={onOpenFile} style={{ background: "none", border: "none", padding: "10px 0 0", color: "#93c5fd", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+          Open {kind} file ›
+        </button>
+        {kind === "truck" && <TelematicsLink companyId={companyId} truckId={unit.id} truckName={unit.name} />}
+      </div>
     </div>
   );
 }
