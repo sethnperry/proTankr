@@ -213,7 +213,7 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
   if (!storeName) {
     return (
       <div style={cardStyle}>
-        <CardHeader title="Recent Deliveries" summary="Select a delivery location" summaryColor={muted} open={false} onToggle={onPickStore} />
+        <CardHeader title="Recent Deliveries" summary="No delivery location selected" summaryColor={muted} open={false} onToggle={() => {}} />
       </div>
     );
   }
@@ -295,9 +295,6 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
         );
       })}
       {items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No deliveries recorded here yet.</div>}
-      <button type="button" onClick={onPickStore} style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: muted, fontSize: 12, textAlign: "left", cursor: "pointer" }}>
-        Change location ›
-      </button>
     </div>
   );
 }
@@ -395,9 +392,7 @@ export function StoreActivityCard({ storeName, items, productInfo, onPickStore }
   if (!storeName) {
     return (
       <div style={cardStyle}>
-        <button type="button" onClick={onPickStore} style={{ ...rowStyle, borderTop: "none", width: "100%", background: "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}>
-          Select a delivery location ›
-        </button>
+        <div style={{ ...rowStyle, borderTop: "none", color: muted }}>No delivery location selected. Pick one from the Delivery tool.</div>
       </div>
     );
   }

@@ -1929,7 +1929,6 @@ export default function HomePage() {
       <div className="dash-side">
       {/* Readouts: terminal status and recent deliveries always; the rest
           only when there's something to show. */}
-      <SectionLabel first>Right now</SectionLabel>
       {/* Terminal: right-now status of the selected terminal + who's headed
           there, with a switch button. Opened from the Terminal tool and the
           To Rack gauge. */}
