@@ -34,6 +34,10 @@ import BinderModal from "./BinderModal";
 import { TruckModal as AdminTruckModal, TrailerModal as AdminTrailerModal } from "@/lib/ui/driver/EquipmentDetails";
 import { type ServiceType, ServiceTypeSelect, ServiceTypeEditorModal, SimpleServiceModal } from "./ServiceTypeManager";
 import UnitPickerSheet from "./UnitPickerSheet";
+import { EquipmentBoard } from "../components/equipment/EquipmentBoard";
+import { ComboDetailSheet } from "../components/equipment/ComboDetailSheet";
+import { useEquipmentBoardStatus } from "../hooks/useEquipmentBoardStatus";
+import { buildTrackRows, type TrackUnit } from "@/lib/equipment/trackList";
 import RegionLocalAreaFilterModal, { type EquipmentFilter } from "./RegionLocalAreaFilterModal";
 import EquipmentStatusModal, { fleetStatusColor, fleetStatusLabel } from "./EquipmentStatusModal";
 
@@ -563,6 +567,13 @@ export default function SoloEquipmentModal({
   // someone else's truck/trailer (couple_combo's p_force:true force-
   // decouples whatever's currently coupled, with no prior check at all).
   const [claimedByNames, setClaimedByNames] = useState<Record<string, string>>({});
+  // Combo pop-out (tap a connected combo on the picker) and the three things its buttons open.
+  const [detailComboId, setDetailComboId] = useState<string | null>(null);
+  const [dropSwapOpen, setDropSwapOpen] = useState(false);
+  const [studPickOpen, setStudPickOpen] = useState(false);
+  const [docPickOpen, setDocPickOpen] = useState(false);
+  const [docUnit, setDocUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
+  const [takeCombo, setTakeCombo] = useState<{ truckId: string; trailerId: string; ownerName: string | null } | null>(null);
   const [commandeerTarget, setCommandeerTarget] = useState<
     { kind: "truck" | "trailer"; id: string; ownerName: string } | null
   >(null);
@@ -755,7 +766,7 @@ export default function SoloEquipmentModal({
   // response to the user's tap (a one-shot event, never re-invoked by a
   // render) removes the cycle entirely.
 
-  async function resolvePair(truckId: string | null, trailerId: string | null, tareLbs?: number) {
+  async function resolvePair(truckId: string | null, trailerId: string | null, tareLbs?: number, forceClaim = false) {
     if (!truckId || !trailerId) {
       if (selectedComboId) onSelectComboId("");
       return;
@@ -764,7 +775,7 @@ export default function SoloEquipmentModal({
     const existing = combos.find(
       (c) => String(c.truck_id) === String(truckId) && String(c.trailer_id) === String(trailerId)
     );
-    if (existing) {
+    if (existing && !forceClaim) {
       if (String(existing.combo_id) !== String(selectedComboId)) onSelectComboId(String(existing.combo_id));
       return;
     }
@@ -957,6 +968,14 @@ export default function SoloEquipmentModal({
 
   // Update Status (STUD) -- same "skip the picker when there's nothing to
   // choose between" precedent as Edit above.
+  function openStatusFor(kind: "truck" | "trailer", id: string) {
+    const t = kind === "truck" ? trucks.find((x) => x.truck_id === id) : trailers.find((x) => x.trailer_id === id);
+    if (!t) return;
+    setStatusTarget({
+      kind, id, name: kind === "truck" ? (t as TruckRow).truck_name : (t as TrailerRow).trailer_name,
+      status: t.status_code, notes: t.status_notes, subStatus: t.sub_status, homeLocalArea: t.local_area,
+    });
+  }
   function openStatusForTruck() {
     const t = trucks.find((x) => x.truck_id === selectedTruckId);
     if (!t) return;
@@ -1091,22 +1110,23 @@ export default function SoloEquipmentModal({
   // and the connector line runs straight across, with every other ("loose")
   // unit listed underneath. Array.prototype.sort is stable, so ties (i.e.
   // every non-selected row) keep their existing alphabetical order.
-  const filteredTrucks = useMemo(
-    () => trucks.filter((t) =>
-      (!filter.region || t.region === filter.region || t.current_region === filter.region) &&
-      (!filter.localArea || t.local_area === filter.localArea || t.current_local_area === filter.localArea) &&
-      (!filter.awayOnly || isAway(t))
-    ).sort((a, b) => (a.truck_id === selectedTruckId ? -1 : 0) - (b.truck_id === selectedTruckId ? -1 : 0)),
-    [trucks, filter, selectedTruckId]
-  );
-  const filteredTrailers = useMemo(
-    () => trailers.filter((t) =>
-      (!filter.region || t.region === filter.region || t.current_region === filter.region) &&
-      (!filter.localArea || t.local_area === filter.localArea || t.current_local_area === filter.localArea) &&
-      (!filter.awayOnly || isAway(t))
-    ).sort((a, b) => (a.trailer_id === selectedTrailerId ? -1 : 0) - (b.trailer_id === selectedTrailerId ? -1 : 0)),
-    [trailers, filter, selectedTrailerId]
-  );
+  const toUnit = (r: TruckRow | TrailerRow, kind: "truck" | "trailer"): TrackUnit => ({
+    id: kind === "truck" ? (r as TruckRow).truck_id : (r as TrailerRow).trailer_id,
+    name: kind === "truck" ? (r as TruckRow).truck_name : (r as TrailerRow).trailer_name,
+    kind, region: r.region, localArea: r.local_area, currentRegion: r.current_region, currentLocalArea: r.current_local_area,
+    statusCode: r.status_code, statusNotes: r.status_notes, subStatus: r.sub_status, statusLocation: null, statusUpdatedAt: null,
+  });
+  const boardRows = useMemo(() => buildTrackRows(
+    trucks.map((t) => toUnit(t, "truck")),
+    trailers.map((t) => toUnit(t, "trailer")),
+    combos.filter((c) => c.active !== false && c.truck_id && c.trailer_id).map((c) => ({ comboId: c.combo_id, truckId: String(c.truck_id), trailerId: String(c.trailer_id) })),
+    { region: filter.region, localArea: filter.localArea, awayOnly: filter.awayOnly }, "",
+  ), [trucks, trailers, combos, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const claimedByCombo = useMemo(() => Object.fromEntries(combos.map((c) => [c.combo_id, c.claimed_by])), [combos]);
+  const boardStatus = useEquipmentBoardStatus(open && pickerOpen, combos.map((c) => c.claimed_by).filter((x): x is string => !!x), trailers.map((t) => t.trailer_id), combos.length);
+  const detailRow = detailComboId ? boardRows.combos.find((c) => c.comboId === detailComboId) ?? null : null;
+  const detailCombo = detailComboId ? combos.find((c) => c.combo_id === detailComboId) ?? null : null;
+  const detailMine = !!detailComboId && String(detailComboId) === String(selectedComboId);
 
   const truckLongPress = (t: TruckRow) => createLongPress(() => setRemoveTarget({ kind: "truck", id: t.truck_id, name: t.truck_name }));
   const trailerLongPress = (t: TrailerRow) => createLongPress(() => setRemoveTarget({ kind: "trailer", id: t.trailer_id, name: t.trailer_name }));
@@ -1312,102 +1332,134 @@ export default function SoloEquipmentModal({
         }
       >
         <div ref={scrollRef} style={{ position: "relative", height: "100%", overflowY: "auto", minHeight: 0 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            <div>
-              <div style={S.sectionHeader}>Trucks</div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {filteredTrucks.map((t) => {
-                  const selected = t.truck_id === selectedTruckId;
-                  const { didFire, ...lpHandlers } = truckLongPress(t);
-                  // Long-press-to-remove is staff-only; a plain fleet
-                  // driver taps to select/couple and nothing else.
-                  const cardHandlers = canAddRemove ? lpHandlers : {};
-                  return (
-                    <div
-                      key={t.truck_id}
-                      ref={selected ? truckCardRef : undefined}
-                      style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
-                      onClick={() => { if (!canAddRemove || !didFire()) toggleTruck(t.truck_id); }}
-                      {...cardHandlers}
-                    >
-                      {t.truck_name}
-                      {/* Only shown for an abnormal fleet status -- a plain
-                          "in_use" unit stays clean, matching the away-
-                          caption's own "don't clutter the normal case"
-                          precedent. */}
-                      {t.status_code && t.status_code !== "in_use" && (
-                        <div style={{ ...S.cardCurrentCaption, color: fleetStatusColor(t.status_code) }}>
-                          {fleetStatusLabel(t.status_code)}
-                        </div>
-                      )}
-                      {/* Every card in this list is already away by
-                          construction once this filter is on -- see
-                          filteredTrucks' own awayOnly predicate above. */}
-                      {filter.awayOnly && (
-                        <div style={S.cardCurrentCaption}>
-                          Currently in {t.current_region ?? t.region ?? "—"} · {t.current_local_area ?? t.local_area ?? "—"}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {canAddRemove && <div style={S.plusCard} onClick={() => setAddTruckOpen(true)}>+</div>}
+          <EquipmentBoard
+            rows={boardRows}
+            claimedByCombo={claimedByCombo}
+            initials={boardStatus.initials}
+            loadedByTrailer={boardStatus.loadedByTrailer}
+            mine={{ truckId: selectedTruckId, trailerId: selectedTrailerId }}
+            loading={loading}
+            onCombo={(c) => setDetailComboId(c.comboId)}
+            onTruck={(u) => toggleTruck(u.id)}
+            onTrailer={(u) => toggleTrailer(u.id)}
+            canAdd={canAddRemove}
+            onAddTruck={() => setAddTruckOpen(true)}
+            onAddTrailer={() => setAddTrailerOpen(true)}
+            // Long-press-to-remove is staff-only; a plain fleet driver taps to
+            // select/couple and nothing else.
+            longPress={canAddRemove ? (u) => {
+              const { didFire, ...handlers } = createLongPress(() => setRemoveTarget({ kind: u.kind, id: u.id, name: u.name }));
+              return { handlers: handlers as Record<string, unknown>, didFire };
+            } : undefined}
+            looseCaption={(u) => filter.awayOnly ? (
+              <div style={S.cardCurrentCaption}>
+                Currently in {u.currentRegion ?? u.region ?? "—"} · {u.currentLocalArea ?? u.localArea ?? "—"}
               </div>
-            </div>
-
-            <div>
-              <div style={S.sectionHeader}>Trailers</div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {filteredTrailers.map((t) => {
-                  const selected = t.trailer_id === selectedTrailerId;
-                  const { didFire, ...lpHandlers } = trailerLongPress(t);
-                  const cardHandlers = canAddRemove ? lpHandlers : {};
-                  return (
-                    <div
-                      key={t.trailer_id}
-                      ref={selected ? trailerCardRef : undefined}
-                      style={{ ...S.card, ...(selected ? S.cardSelected : {}) }}
-                      onClick={() => { if (!canAddRemove || !didFire()) toggleTrailer(t.trailer_id); }}
-                      {...cardHandlers}
-                    >
-                      {t.trailer_name}
-                      {t.status_code && t.status_code !== "in_use" && (
-                        <div style={{ ...S.cardCurrentCaption, color: fleetStatusColor(t.status_code) }}>
-                          {fleetStatusLabel(t.status_code)}
-                        </div>
-                      )}
-                      {filter.awayOnly && (
-                        <div style={S.cardCurrentCaption}>
-                          Currently in {t.current_region ?? t.region ?? "—"} · {t.current_local_area ?? t.local_area ?? "—"}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {canAddRemove && <div style={S.plusCard} onClick={() => setAddTrailerOpen(true)}>+</div>}
-              </div>
-            </div>
-          </div>
-
-          <ComboConnector
-            containerRef={scrollRef}
-            fromRef={truckCardRef}
-            toRef={trailerCardRef}
-            active={!!(selectedTruckId && selectedTrailerId)}
+            ) : null}
           />
-
-          {/* Stud + Done -- same full-width size/shape as the main
-              screen's own pair, Stud directly above Done, per explicit
-              direction. Operates on whatever's currently selected here,
-              same as the main screen's Stud button. */}
-          <button type="button" onClick={openStatus} style={{ ...saveBtnStyle, marginTop: 20 }}>
-            Stud
-          </button>
-          <button type="button" onClick={() => setPickerOpen(false)} style={{ ...saveBtnStyle, marginTop: 10 }}>
+          <button type="button" onClick={() => setPickerOpen(false)} style={{ ...saveBtnStyle, marginTop: 20 }}>
             Done
           </button>
         </div>
       </FullscreenModal>
+
+      {/* ── Combo pop-out: tap a connected combo on the picker ── */}
+      {detailRow && (
+        <ComboDetailSheet
+          open
+          onClose={() => setDetailComboId(null)}
+          companyId={companyId}
+          truck={detailRow.truck}
+          trailer={detailRow.trailer}
+          holderLabel={detailMine ? "In use by you" : detailCombo?.claimed_by ? `In use by ${claimedByNames[detailCombo.claimed_by] ?? "another driver"}` : null}
+          onOpenFile={(kind) => setDocUnit({ kind, id: kind === "truck" ? detailRow.truck.id : detailRow.trailer.id })}
+          onDropSwap={() => setDropSwapOpen(true)}
+          onStud={() => setStudPickOpen(true)}
+          onNewDoc={() => setDocPickOpen(true)}
+        />
+      )}
+      {detailRow && dropSwapOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 4 }}>{detailRow.truck.name} / {detailRow.trailer.name}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 16 }}>
+              {detailMine ? "Drop a unit, then tap another one on the list to swap it in." : "Take this combo as your equipment."}
+            </div>
+            {(() => {
+              const opt: React.CSSProperties = { width: "100%", padding: "16px 18px", borderRadius: 2, marginBottom: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 16, fontWeight: 800, textAlign: "left", cursor: "pointer" };
+              const closeAll = () => { setDropSwapOpen(false); setDetailComboId(null); };
+              if (!detailMine) {
+                return (
+                  <button type="button" style={{ ...opt, background: "#fff", color: "#000" }} onClick={() => {
+                    const owner = detailCombo?.claimed_by && detailCombo.claimed_by !== authUserId ? (claimedByNames[detailCombo.claimed_by] ?? "another driver") : null;
+                    setDropSwapOpen(false);
+                    if (owner) { setTakeCombo({ truckId: detailRow.truck.id, trailerId: detailRow.trailer.id, ownerName: owner }); return; }
+                    setSelectedTruckId(detailRow.truck.id); setSelectedTrailerId(detailRow.trailer.id);
+                    void resolvePair(detailRow.truck.id, detailRow.trailer.id, undefined, true);
+                    setDetailComboId(null);
+                  }}>Take this combo</button>
+                );
+              }
+              return (
+                <>
+                  <button type="button" style={opt} onClick={() => { closeAll(); toggleTrailer(detailRow.trailer.id); }}>Drop trailer · {detailRow.trailer.name}</button>
+                  <button type="button" style={opt} onClick={() => { closeAll(); toggleTruck(detailRow.truck.id); }}>Drop truck · {detailRow.truck.name}</button>
+                  <button type="button" style={opt} onClick={() => { closeAll(); setSelectedTruckId(null); setSelectedTrailerId(null); onSelectComboId(""); }}>Drop both</button>
+                </>
+              );
+            })()}
+            <button type="button" onClick={() => setDropSwapOpen(false)} style={{ width: "100%", padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", marginTop: 4 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {detailRow && (
+        <UnitPickerSheet
+          open={studPickOpen}
+          title="Update status for which unit?"
+          subtitle="Flag it In Use, Deadline, or Readyline."
+          truckName={detailRow.truck.name}
+          trailerName={detailRow.trailer.name}
+          onPickTruck={() => { setStudPickOpen(false); openStatusFor("truck", detailRow.truck.id); }}
+          onPickTrailer={() => { setStudPickOpen(false); openStatusFor("trailer", detailRow.trailer.id); }}
+          onCancel={() => setStudPickOpen(false)}
+        />
+      )}
+      {detailRow && (
+        <UnitPickerSheet
+          open={docPickOpen}
+          title="New document for which unit?"
+          subtitle="Opens that unit's file, where you can attach it to a permit."
+          truckName={detailRow.truck.name}
+          trailerName={detailRow.trailer.name}
+          onPickTruck={() => { setDocPickOpen(false); setDocUnit({ kind: "truck", id: detailRow.truck.id }); }}
+          onPickTrailer={() => { setDocPickOpen(false); setDocUnit({ kind: "trailer", id: detailRow.trailer.id }); }}
+          onCancel={() => setDocPickOpen(false)}
+        />
+      )}
+      <BinderModal
+        open={!!docUnit}
+        onClose={() => setDocUnit(null)}
+        companyId={companyId}
+        truckId={docUnit?.kind === "truck" ? docUnit.id : null}
+        trailerId={docUnit?.kind === "trailer" ? docUnit.id : null}
+        truckName={trucks.find((t) => t.truck_id === docUnit?.id)?.truck_name}
+        trailerName={trailers.find((t) => t.trailer_id === docUnit?.id)?.trailer_name}
+        myRole={myRole}
+      />
+      {takeCombo && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 6 }}>Take this combo from {takeCombo.ownerName}?</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 16 }}>They're using it right now. Taking it removes it from their equipment.</div>
+            <button type="button" style={{ width: "100%", padding: "14px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, cursor: "pointer", marginBottom: 8 }} onClick={() => {
+              const t = takeCombo; setTakeCombo(null); setDetailComboId(null);
+              setSelectedTruckId(t.truckId); setSelectedTrailerId(t.trailerId);
+              void resolvePair(t.truckId, t.trailerId, undefined, true);
+            }}>Take it</button>
+            <button type="button" onClick={() => setTakeCombo(null)} style={{ width: "100%", padding: "10px 14px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Scale Ticket (§6) ── */}
       {selectedCombo && (

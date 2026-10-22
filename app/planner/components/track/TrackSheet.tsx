@@ -18,6 +18,8 @@ import { ageText, mapsUrl } from "@/lib/equipment/trackFormat";
 import { fieldInput, muted } from "../trip/tripUi";
 import { hosText } from "@/lib/telematics/progress";
 import { TrackDetail } from "./TrackDetail";
+import { EquipmentBoard } from "../equipment/EquipmentBoard";
+import { useEquipmentBoardStatus } from "../../hooks/useEquipmentBoardStatus";
 
 type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
 type GeoTrailerHit = { providerTrailerId: string; name: string; comment: string | null; trailerId: string | null; ourName: string | null; vin: string | null; plate: string | null; attachedTo: string | null };
@@ -61,6 +63,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [trucks, setTrucks] = useState<TrackUnit[]>([]);
   const [trailers, setTrailers] = useState<TrackUnit[]>([]);
   const [combos, setCombos] = useState<TrackCombo[]>([]);
+  const [claimedByCombo, setClaimedByCombo] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<EquipmentFilter>({ region: null, localArea: null, awayOnly: false });
@@ -92,11 +95,12 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     const [t, r, c] = await Promise.all([
       supabase.from("trucks").select(sel("truck")).eq("company_id", companyId),
       supabase.from("trailers").select(sel("trailer")).eq("company_id", companyId),
-      supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id").eq("company_id", companyId).eq("active", true),
+      supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, claimed_by").eq("company_id", companyId).eq("active", true),
     ]);
     setTrucks(((t.data ?? []) as any[]).filter((x) => x.active !== false).map((x) => toUnit(x, "truck")));
     setTrailers(((r.data ?? []) as any[]).filter((x) => x.active !== false).map((x) => toUnit(x, "trailer")));
     setCombos(((c.data ?? []) as any[]).filter((x) => x.truck_id && x.trailer_id).map((x) => ({ comboId: x.combo_id, truckId: x.truck_id, trailerId: x.trailer_id })));
+    setClaimedByCombo(Object.fromEntries(((c.data ?? []) as any[]).map((x) => [x.combo_id, x.claimed_by ?? null])));
     setLoading(false);
   }, [companyId]);
 
@@ -143,6 +147,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const detailTruck = pick?.truckId ? truckById.get(pick.truckId) ?? null : null;
   const detailTrailer = pick?.trailerId ? trailerById.get(pick.trailerId) ?? null : null;
 
+  const boardStatus = useEquipmentBoardStatus(open, Object.values(claimedByCombo).filter((x): x is string => !!x), trailers.map((t) => t.id), combos.length);
   const myCombo = myTruckId ? combos.find((c) => c.truckId === myTruckId) : null;
   const mine = (truckId: string | null, trailerId: string | null) => (!!myTruckId && truckId === myTruckId) || (!!myTrailerId && trailerId === myTrailerId);
 
@@ -266,38 +271,21 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
 
       {loading && trucks.length === 0 && <div style={{ fontSize: 14, color: muted }}>Loading equipment…</div>}
 
-      {rows.combos.length > 0 && (
-        <>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>Pairings · {rows.combos.length}</div>
-          <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-            {rows.combos.map((c) => (
-              <div key={c.comboId} style={{ display: "grid", gridTemplateColumns: "1fr 26px 1fr", alignItems: "center" }}>
-                <UnitCard u={c.truck} mine={mine(c.truck.id, c.trailer.id)} onClick={() => setPick({ truckId: c.truck.id, trailerId: c.trailer.id })} />
-                <div aria-hidden style={{ height: 2, background: "rgba(255,255,255,0.45)" }} />
-                <UnitCard u={c.trailer} mine={mine(c.truck.id, c.trailer.id)} onClick={() => setPick({ truckId: c.truck.id, trailerId: c.trailer.id })} />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>Trucks · {rows.trucks.length}</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {rows.trucks.map((t) => <UnitCard key={t.id} u={t} mine={t.id === myTruckId} onClick={() => setPick({ truckId: t.id, trailerId: null })} />)}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>Trailers · {rows.trailers.length}</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {rows.trailers.map((t) => <UnitCard key={t.id} u={t} mine={t.id === myTrailerId} onClick={() => setPick({ truckId: null, trailerId: t.id })} />)}
-          </div>
-        </div>
-      </div>
-      {!loading && rows.combos.length + rows.trucks.length + rows.trailers.length === 0 && (
-        <div style={{ fontSize: 14, color: muted, marginTop: 12 }}>Nothing matches{filtered ? " this filter" : ""}.</div>
-      )}
+      <EquipmentBoard
+        rows={rows}
+        claimedByCombo={claimedByCombo}
+        initials={boardStatus.initials}
+        loadedByTrailer={boardStatus.loadedByTrailer}
+        mine={{ truckId: myTruckId, trailerId: myTrailerId }}
+        loading={loading}
+        onCombo={(c) => setPick({ truckId: c.truck.id, trailerId: c.trailer.id })}
+        onTruck={(u) => setPick({ truckId: u.id, trailerId: null })}
+        onTrailer={(u) => setPick({ truckId: null, trailerId: u.id })}
+        renderExtra={(u) => u.statusLocation ? (
+          <div style={{ fontSize: 11, marginTop: 2, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.statusLocation}</div>
+        ) : null}
+        emptyNote={`Nothing matches${filtered ? " this filter" : ""}.`}
+      />
 
       {companyId && (
         <RegionLocalAreaFilterModal open={filterOpen} onClose={() => setFilterOpen(false)} companyId={companyId} canManage={canManage} filter={filter} onChange={setFilter} />
