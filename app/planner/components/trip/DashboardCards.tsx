@@ -197,8 +197,11 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
 // For the selected delivery location, every carrier. Collapsed shows the
 // latest drop; tap a drop for the store's tank levels after it.
 
-export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore, openingId }: {
+export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore, openingId, alwaysOpen = false, max }: {
   openingId?: string | null;
+  // Inside the To Drop window: no collapse, list up to `max`.
+  alwaysOpen?: boolean;
+  max?: number;
   storeName: string | null;
   items: StoreDelivery[];
   productInfo: ProductInfoFn;
@@ -214,10 +217,10 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
       </div>
     );
   }
-  const shown = open ? items : items.slice(0, 1);
+  const shown = (open || alwaysOpen ? items : items.slice(0, 1)).slice(0, max ?? items.length);
   return (
     <div style={cardStyle}>
-      <CardHeader title="Recent Deliveries" summary={storeName} open={open} onToggle={() => setOpen((o) => !o)} />
+      <CardHeader title={alwaysOpen && max ? `Previous ${max} deliveries` : "Recent Deliveries"} summary={storeName} open={open || alwaysOpen} onToggle={() => { if (!alwaysOpen) setOpen((o) => !o); }} />
       {shown.map((d) => {
         const isOpen = expanded === d.deliveryId;
         return (
@@ -245,6 +248,23 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
             </button>
             {isOpen && (
               <div style={{ padding: "0 14px 10px", fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "2px 0" }}>
+                  <span style={{ color: muted }}>Driver</span><span style={{ fontWeight: 700 }}>{d.isMine ? "You" : d.who}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "2px 0" }}>
+                  <span style={{ color: muted }}>Delivered</span><span style={{ fontWeight: 700 }}>{when(d.leftAt)}</span>
+                </div>
+                {d.products.map((x, i) => {
+                  const info = productInfo(x.productId);
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+                      <Dot color={colorOf(info)} />
+                      <span style={{ flex: 1 }}>{info.code} <span style={{ color: muted }}>{info.name}</span></span>
+                      <span style={{ fontWeight: 700 }}>{gal(x.gallons)}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ height: 6 }} />
                 {d.tanks.length === 0 ? (
                   <div style={{ color: muted }}>No tank readings recorded.</div>
                 ) : (

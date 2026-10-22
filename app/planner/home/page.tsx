@@ -2003,16 +2003,18 @@ export default function HomePage() {
       <FullscreenModal open={dropNowOpen} title={myDelivery ? deliveryName(myDelivery) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
         <HeadingToDeliveryCard defaultOpen deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo}
           emptyText={myDelivery ? "No other company loads headed here right now." : "Set a delivery on your trip to see other loads headed there."} />
+        <div style={{ marginTop: 12 }}>
+          <RecentDeliveriesCard
+            alwaysOpen max={5}
+            storeName={selectedLoc ? locationTitle(selectedLoc) : null}
+            items={recent.items}
+            productInfo={productInfo}
+            onOpenTrip={(id) => { setDropNowOpen(false); nav.go(`trip:${id}`, `/planner/trips/${id}`); }} openingId={nav.openingId("trip")}
+            onPickStore={() => { setDropNowOpen(false); setPicker({ mode: "select" }); }}
+          />
+        </div>
       </FullscreenModal>
       <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")} />
-      <RecentDeliveriesCard
-        storeName={selectedLoc ? locationTitle(selectedLoc) : null}
-        items={recent.items}
-        productInfo={productInfo}
-        onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")}
-        onPickStore={() => setPicker({ mode: "select" })}
-      />
-
       <TerminalOutageDetailModal
         open={alertsOpen}
         onClose={() => setAlertsOpen(false)}
