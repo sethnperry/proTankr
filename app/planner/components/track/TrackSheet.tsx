@@ -20,6 +20,7 @@ import { hosText } from "@/lib/telematics/progress";
 import { TrackDetail } from "./TrackDetail";
 
 type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
+type GeoTrailerHit = { providerTrailerId: string; name: string; comment: string | null; trailerId: string | null; ourName: string | null; vin: string | null; plate: string | null; attachedTo: string | null };
 type VehicleHit = { vehicleId: string; name: string; truckId: string | null; lat: number | null; lon: number | null; at: string | null; speedMph: number | null; driverName: string | null; signedIn: boolean };
 type DriverHit = {
   providerId: string; name: string; employeeNo: string | null; memberName: string | null;
@@ -66,6 +67,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [filterOpen, setFilterOpen] = useState(false);
   const [drivers, setDrivers] = useState<DriverHit[]>([]);
   const [vehicles, setVehicles] = useState<VehicleHit[]>([]);
+  const [geoTrailers, setGeoTrailers] = useState<GeoTrailerHit[]>([]);
   const [driversBusy, setDriversBusy] = useState(false);
   const [driverNote, setDriverNote] = useState<string | null>(null);
   const [openDriver, setOpenDriver] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
       setDebugLines((m) => ({ ...m, [driverId]: j?.lines ?? ["Geotab didn't answer. Close and open this again in a minute."] }));
     } catch { setDebugLines((m) => ({ ...m, [driverId]: ["Couldn't reach the server."] })); }
   };
-  const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null; vehicle?: { id: string; name: string } | null } | null>(null);
+  const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null; vehicle?: { id: string; name: string } | null; geoTrailer?: GeoTrailerHit | null } | null>(null);
 
   const reload = useCallback(async () => {
     if (!companyId) return;
@@ -99,13 +101,13 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   }, [companyId]);
 
   const [submitted, setSubmitted] = useState("");
-  useEffect(() => { if (open) { setQ(""); setSubmitted(""); setDrivers([]); setVehicles([]); setDriverNote(null); void reload(); } }, [open, reload]);
+  useEffect(() => { if (open) { setQ(""); setSubmitted(""); setDrivers([]); setVehicles([]); setGeoTrailers([]); setDriverNote(null); void reload(); } }, [open, reload]);
 
   // Driver and Geotab-vehicle search against the telematics provider. Geotab limits how many calls it
   // answers per minute, so this only runs when you press Search (or Enter), never while you type.
   useEffect(() => {
     const term = submitted.trim();
-    if (!open || !companyId || term.length < 2) { setDrivers([]); setVehicles([]); setDriverNote(null); return; }
+    if (!open || !companyId || term.length < 2) { setDrivers([]); setVehicles([]); setGeoTrailers([]); setDriverNote(null); return; }
     let off = false;
     const timer = window.setTimeout(async () => {
       setDriversBusy(true);
@@ -118,8 +120,9 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         if (off) return;
         setDrivers(j?.connected ? (j.drivers as DriverHit[]) : []);
         setVehicles(j?.connected ? ((j.vehicles ?? []) as VehicleHit[]) : []);
+        setGeoTrailers(j?.connected ? ((j.trailers ?? []) as GeoTrailerHit[]) : []);
         setDriverNote(j && !j.connected ? "Driver search needs the company's Geotab connection." : j?.error ?? null);
-      } catch { if (!off) { setDrivers([]); setVehicles([]); } }
+      } catch { if (!off) { setDrivers([]); setVehicles([]); setGeoTrailers([]); } }
       finally { if (!off) setDriversBusy(false); }
     }, 0);
     return () => { off = true; window.clearTimeout(timer); };
@@ -164,13 +167,15 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
       }>
       <form onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim()); }} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Unit number or driver name" enterKeyHint="search" style={{ ...fieldInput, flex: 1, minWidth: 0 }} />
-        <button type="submit" disabled={q.trim().length < 2 || driversBusy} aria-busy={driversBusy}
-          style={{ padding: "0 16px", border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", opacity: q.trim().length < 2 ? 0.5 : 1 }}>
-          {driversBusy ? "…" : "Search"}
-        </button>
       </form>
-      {q.trim().length >= 2 && q.trim() !== submitted && (
-        <div style={{ fontSize: 12, color: muted, margin: "-6px 0 10px" }}>Press Search to look up drivers and Geotab vehicles. The lists below filter as you type.</div>
+      {q.trim().length >= 2 && (
+        <button type="button" onClick={() => setSubmitted(q.trim())} disabled={driversBusy} aria-busy={driversBusy}
+          style={{ display: "block", width: "100%", margin: "-4px 0 12px", padding: "11px 0", border: "1px solid rgba(255,255,255,0.35)", background: q.trim() === submitted ? "transparent" : "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+          {driversBusy ? "Searching Geotab…" : q.trim() === submitted ? "Search Geotab again" : `Search Geotab for “${q.trim()}”`}
+        </button>
+      )}
+      {q.trim().length >= 2 && !loading && rows.combos.length + rows.trucks.length + rows.trailers.length === 0 && q.trim() !== submitted && (
+        <div style={{ fontSize: 13, color: muted, margin: "-4px 0 12px" }}>Nothing in ProTankr matches. Tap Search Geotab to look there; you can add a truck or trailer from the results.</div>
       )}
 
       {myCombo && !q && (
@@ -242,6 +247,23 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         </div>
       )}
 
+      {submitted.length >= 2 && geoTrailers.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>Trailers in Geotab</div>
+          {geoTrailers.map((t) => (
+            <button key={t.providerTrailerId} type="button"
+              onClick={() => (t.trailerId ? setPick({ truckId: null, trailerId: t.trailerId }) : setPick({ truckId: null, trailerId: null, geoTrailer: t }))}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "#fff", cursor: "pointer" }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{t.name}{!t.trailerId && <span style={{ fontSize: 11, fontWeight: 700, color: muted, marginLeft: 8 }}>not in ProTankr</span>}</div>
+              <div style={{ fontSize: 13, marginTop: 3, color: "rgba(255,255,255,0.8)" }}>
+                {[t.vin ? `VIN ${t.vin}` : null, t.plate ? `Plate ${t.plate}` : null].filter(Boolean).join(" · ") || <span style={{ color: muted }}>No VIN or plate in Geotab</span>}
+              </div>
+              <div style={{ fontSize: 12, marginTop: 2, color: muted }}>{t.attachedTo ? `Hooked to ${t.attachedTo} now` : "Not hooked to a truck right now"}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading && trucks.length === 0 && <div style={{ fontSize: 14, color: muted }}>Loading equipment…</div>}
 
       {rows.combos.length > 0 && (
@@ -284,7 +306,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
       {pick && companyId && (
         <TrackDetail
           open onClose={() => setPick(null)} companyId={companyId}
-          truck={detailTruck} trailer={detailTrailer} vehicle={pick.vehicle ?? null} allTrucks={trucks}
+          truck={detailTruck} trailer={detailTrailer} vehicle={pick.vehicle ?? null} geoTrailer={pick.geoTrailer ?? null} allTrucks={trucks}
+          onAddedTrailer={async (id) => { await reload(); setPick({ truckId: null, trailerId: id }); }}
           canAdd={canManage}
           onAdded={async (id) => { await reload(); openTruck(id); }}
           onChanged={() => void reload()}

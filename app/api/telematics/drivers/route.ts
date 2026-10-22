@@ -8,7 +8,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { importableVehicles } from "@/lib/telematics/dedupe";
+import { bestPerName, importableVehicles } from "@/lib/telematics/dedupe";
+import { groupNames } from "@/lib/telematics/groups";
 import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
 import type { TelematicsProvider } from "@/lib/telematics/types";
 
@@ -16,19 +17,21 @@ export const runtime = "nodejs";
 
 // Geotab limits how often the whole-fleet calls can run, and a search fires as you type, so the fleet's
 // driver list and vehicle status are kept for a short while and shared between searches.
-type Snap = { at: number; vehicles: { id: string; name: string; vin: string | null; activeTo?: string | null; activeFrom?: string | null; groupIds?: string[] }[]; drivers: Awaited<ReturnType<TelematicsProvider["listDrivers"]>>; current: Map<string, string>; historic: Map<string, string>; positions: Map<string, any> };
+type Snap = { at: number; groups: Awaited<ReturnType<TelematicsProvider["listGroups"]>>; trailers: Awaited<ReturnType<TelematicsProvider["listTrailers"]>>; vehicles: { id: string; name: string; vin: string | null; activeTo?: string | null; activeFrom?: string | null; groupIds?: string[] }[]; drivers: Awaited<ReturnType<TelematicsProvider["listDrivers"]>>; current: Map<string, string>; historic: Map<string, string>; positions: Map<string, any> };
 const SNAP_MS = 20_000;
 const snaps = new Map<string, Snap>();
 async function snapshot(companyId: string, p: TelematicsProvider): Promise<Snap> {
   const hit = snaps.get(companyId);
   if (hit && Date.now() - hit.at < SNAP_MS) return hit;
   const warm = !!hit && Date.now() - hit.at < 10 * 60_000;
-  const [drivers, vehicles, st] = await Promise.all([
+  const [drivers, groups, trailers, vehicles, st] = await Promise.all([
     warm && hit!.drivers.length ? Promise.resolve(hit!.drivers) : p.listDrivers(),
+    warm && hit!.groups.length ? Promise.resolve(hit!.groups) : p.listGroups().catch(() => []),
+    warm && hit!.trailers.length ? Promise.resolve(hit!.trailers) : p.listTrailers().catch(() => []),
     warm && hit!.vehicles.length ? Promise.resolve(hit!.vehicles) : p.listVehicles().catch(() => []),
     p.fleetStatus().catch(() => ({ positions: new Map(), current: new Map<string, string>(), historic: new Map<string, string>() })),
   ]);
-  const next: Snap = { at: Date.now(), drivers, vehicles, ...st };
+  const next: Snap = { at: Date.now(), drivers, groups, trailers, vehicles, ...st };
   snaps.set(companyId, next);
   return next;
 }
@@ -58,9 +61,15 @@ export async function GET(req: NextRequest) {
     const snap = await snapshot(companyId, p);
     const all = snap.drivers;
     const hits = all.filter((d) => `${d.name} ${d.firstName ?? ""} ${d.lastName ?? ""} ${d.employeeNo ?? ""}`.toLowerCase().includes(q)).slice(0, 8);
+    // Geotab keeps a trailer's VIN and plate on a same-named vehicle record in its "Trailer" group, so those
+    // records are trailers, not trucks: they feed the trailer results and are left out of the truck results.
+    const isTrailerDevice = (v: { groupIds?: string[] }) => groupNames(v.groupIds, snap.groups).some((n) => n.trim().toLowerCase() === "trailer");
+    const live = importableVehicles(snap.vehicles as any);
+    const trailerDevice = new Map(live.filter(isTrailerDevice).map((v) => [v.name.trim().toLowerCase(), v]));
     // Vehicles in Geotab whose name matches (a truck that was never added to ProTankr still shows).
-    const vehicleHits = importableVehicles(snap.vehicles as any).filter((v) => v.name.toLowerCase().includes(q)).slice(0, 8);
-    if (hits.length === 0 && vehicleHits.length === 0) return NextResponse.json({ connected: true, drivers: [], vehicles: [] });
+    const vehicleHits = live.filter((v) => !isTrailerDevice(v) && v.name.toLowerCase().includes(q)).slice(0, 8);
+    const trailerHits = bestPerName(snap.trailers).filter((t) => t.name.toLowerCase().includes(q)).slice(0, 8);
+    if (hits.length === 0 && vehicleHits.length === 0 && trailerHits.length === 0) return NextResponse.json({ connected: true, drivers: [], vehicles: [], trailers: [] });
 
     const { current, historic, positions } = snap;
     const [vmap, dmap] = await Promise.all([
@@ -103,6 +112,29 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Trailers: which are already ProTankr trailers, the VIN and plate Geotab has, and which truck each is hooked to now.
+    let trailers: unknown[] = [];
+    if (trailerHits.length) {
+      const [tmap, attached] = await Promise.all([
+        admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", companyId),
+        p.attachedAll().catch(() => new Map<string, string[]>()),
+      ]);
+      const trow = new Map(((tmap.data ?? []) as { provider_trailer_id: string; trailer_id: string }[]).map((x) => [x.provider_trailer_id, x.trailer_id]));
+      const truckByProvTrailer = new Map<string, string>();
+      for (const [vid, trs] of attached) for (const tr of trs) truckByProvTrailer.set(tr, truckName.get(truckOf.get(vid)?.truck_id ?? "") ?? snap.vehicles.find((x) => x.id === vid)?.name ?? "a vehicle");
+      const ourIds = trailerHits.map((t) => trow.get(t.id)).filter((x): x is string => !!x);
+      const { data: tr } = ourIds.length ? await admin.from("trailers").select("trailer_id, trailer_name").in("trailer_id", ourIds) : { data: [] as any[] };
+      const ourName = new Map(((tr ?? []) as { trailer_id: string; trailer_name: string }[]).map((x) => [x.trailer_id, x.trailer_name]));
+      trailers = trailerHits.map((t) => {
+        const dev = trailerDevice.get(t.name.trim().toLowerCase());
+        const trailerId = trow.get(t.id) ?? null;
+        return {
+          providerTrailerId: t.id, name: t.name, comment: t.comment ?? null, trailerId, ourName: trailerId ? ourName.get(trailerId) ?? null : null,
+          vin: dev?.vin ?? null, plate: dev?.plate ?? null, attachedTo: truckByProvTrailer.get(t.id) ?? null,
+        };
+      });
+    }
+
     const drivers = [];
     for (const d of hits) {
       const vid = [...current.entries()].find(([, drv]) => drv === d.id)?.[0] ?? null;
@@ -124,7 +156,7 @@ export async function GET(req: NextRequest) {
         diag: `Geotab sees ${current.size} signed-in and ${historic.size} last-driver records. This driver: ${vid ? "signed in" : [...historic.values()].includes(d.id) ? "last driver on a vehicle" : "on no vehicle status record"}.`,
       });
     }
-    return NextResponse.json({ connected: true, drivers, vehicles });
+    return NextResponse.json({ connected: true, drivers, vehicles, trailers });
   } catch (e) {
     console.warn("[telematics] driver search failed:", (e as Error).message);
     // The provider is reachable but didn't answer (a busy or rate-limited Geotab); not the same as "not connected".

@@ -27,11 +27,14 @@ const bigBtn: React.CSSProperties = { display: "block", width: "100%", textAlign
 
 type Preview = { changes: TrackChange[]; canSeparate: boolean; truckId: string; truckName: string; observed: { city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null; trailerName: string | null } };
 
-export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded }: {
+export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded, geoTrailer, onAddedTrailer }: {
   open: boolean; onClose: () => void; companyId: string;
   truck: TrackUnit | null; trailer: TrackUnit | null;
   /** A Geotab vehicle that isn't a ProTankr truck (found through a driver). */
   vehicle?: { id: string; name: string } | null;
+  /** A Geotab trailer that isn't a ProTankr trailer yet. */
+  geoTrailer?: { providerTrailerId: string; name: string; comment: string | null; vin: string | null; plate: string | null; attachedTo: string | null } | null;
+  onAddedTrailer?: (trailerId: string) => void | Promise<void>;
   allTrucks: TrackUnit[];
   /** May add this vehicle to ProTankr (admin, dispatch or lead). */
   canAdd?: boolean;
@@ -84,6 +87,22 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
     return j as any;
   }
 
+  async function addTrailerToProTankr() {
+    if (!geoTrailer) return;
+    setAdding(true); setMsg(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const r = await fetch("/api/telematics/add-vehicle", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ companyId, trailerProviderId: geoTrailer.providerTrailerId }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.trailerId) throw new Error(j?.error ?? "Couldn't add it.");
+      await onAddedTrailer?.(j.trailerId);
+    } catch (e: any) {
+      setMsg({ ok: false, text: e?.message ?? "Couldn't add it." });
+    } finally { setAdding(false); }
+  }
+
   async function addToProTankr() {
     if (!vehicle) return;
     setAdding(true); setMsg(null);
@@ -131,7 +150,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
 
   const hasPos = reading?.lat != null && reading?.lon != null;
   const place = [reading?.city, reading?.state].filter(Boolean).join(", ");
-  const title = [truck ? `Truck ${truck.name}` : vehicle ? `Vehicle ${vehicle.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
+  const title = geoTrailer ? `Trailer ${geoTrailer.name}` : [truck ? `Truck ${truck.name}` : vehicle ? `Vehicle ${vehicle.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
 
   const unitCard = (u: TrackUnit) => (
     <div key={u.id} style={card}>
@@ -154,6 +173,27 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
 
   return (
     <FullscreenModal open={open} onClose={onClose} title={title || "Track"} footer={null}>
+      {geoTrailer && (
+        <>
+          <div style={card}>
+            <div style={label}>Trailer in Geotab</div>
+            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 8 }}>{geoTrailer.name}</div>
+            <div style={{ fontSize: 14, marginTop: 6 }}>{geoTrailer.vin ? <>VIN <b>{geoTrailer.vin}</b></> : <span style={{ color: muted }}>No VIN in Geotab.</span>}</div>
+            <div style={{ fontSize: 14, marginTop: 2 }}>{geoTrailer.plate ? <>Plate <b>{geoTrailer.plate}</b></> : <span style={{ color: muted }}>No plate in Geotab.</span>}</div>
+            {geoTrailer.comment && <div style={{ fontSize: 13, marginTop: 6, color: "rgba(255,255,255,0.7)" }}>{geoTrailer.comment}</div>}
+            <div style={{ fontSize: 13, marginTop: 8, color: muted }}>{geoTrailer.attachedTo ? `Hooked to ${geoTrailer.attachedTo} right now.` : "Not hooked to a truck right now."}</div>
+          </div>
+          <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>
+            Adding it brings in the number, VIN and plate from Geotab, and the year, make and model from the VIN. Compartments and anything else Geotab doesn't have are left for the first driver to use it to fill in.
+          </div>
+          {msg && <div style={{ fontSize: 14, marginBottom: 10, color: msg.ok ? "#4ade80" : "#f87171" }}>{msg.text}</div>}
+          {canAdd ? (
+            <button type="button" onClick={() => void addTrailerToProTankr()} disabled={adding} aria-busy={adding} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: adding ? 0.6 : 1 }}>
+              {adding ? "Adding…" : "Add trailer to ProTankr"}
+            </button>
+          ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
+        </>
+      )}
       {truck && unitCard(truck)}
       {trailer && unitCard(trailer)}
 
@@ -311,8 +351,8 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
         </div>
       )}
 
-      {msg && <div style={{ fontSize: 14, marginBottom: 10, color: msg.ok ? "#4ade80" : "#f87171" }}>{msg.text}</div>}
-      {(truck || trailer) && (
+      {!geoTrailer && msg && <div style={{ fontSize: 14, marginBottom: 10, color: msg.ok ? "#4ade80" : "#f87171" }}>{msg.text}</div>}
+      {!geoTrailer && (truck || trailer) && (
         <button type="button" onClick={() => void startUpdate()} disabled={updating} aria-busy={updating} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: updating ? 0.6 : 1 }}>
           {updating && !preview ? "Reading Geotab…" : "Update from Geotab"}
         </button>
