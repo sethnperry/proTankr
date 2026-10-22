@@ -148,9 +148,14 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
           </div>
           {busy && !reading && <div style={{ fontSize: 14, color: muted, marginTop: 12 }}>Asking Geotab for the last position…</div>}
           {done && !reading && <div style={{ fontSize: 14, color: "#fb923c", marginTop: 12 }}>Can't locate this truck. It isn't linked to a Geotab vehicle, or Geotab didn't answer. Link it in Company Dashboard → Telematics.</div>}
-          {reading && !hasPos && <div style={{ fontSize: 14, color: "#fb923c", marginTop: 12 }}>Geotab has no position for this truck yet.</div>}
-          {reading && hasPos && (
+          {reading && (
             <>
+              {!hasPos && (
+                <div style={{ fontSize: 14, color: "#fb923c", marginTop: 12 }}>
+                  Geotab has no position for this vehicle{reading.at ? ` (last report ${ageText(reading.at)})` : ""}. Everything else it reports is below.
+                </div>
+              )}
+              {hasPos && (<>
               <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12 }}>{place || "Position found"}</div>
               <div style={{ fontSize: 14, marginTop: 4, color: "rgba(255,255,255,0.75)" }}>
                 Last update {ageText(reading.at)}
@@ -160,6 +165,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
                   ? <>Moving {reading.speedMph} mph{compass(reading.bearingDeg) ? <> heading {compass(reading.bearingDeg)} <span style={{ color: muted, fontWeight: 600 }}>({reading.bearingDeg}°)</span></> : null}</>
                   : <>Stopped{compass(reading.bearingDeg) ? <span style={{ color: muted, fontWeight: 600 }}> · last heading {compass(reading.bearingDeg)}</span> : null}</>}
               </div>
+              </>)}
 
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
                 <div style={label}>Driver</div>
@@ -257,11 +263,11 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
                   )}
                 </div>
               )}
-              <div style={{ fontSize: 12, marginTop: 10, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
+              {hasPos && <><div style={{ fontSize: 12, marginTop: 10, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
               <a href={mapsUrl(reading.lat!, reading.lon!)} target="_blank" rel="noopener noreferrer"
                 style={{ ...bigBtn, marginTop: 14, background: "rgba(255,255,255,0.1)", color: "#fff", textDecoration: "none", boxSizing: "border-box" }}>
                 Open in Maps
-              </a>
+              </a></>}
             </>
           )}
         </div>

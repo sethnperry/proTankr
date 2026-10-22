@@ -311,14 +311,21 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       ]);
       const s = (info ?? [])[0];
       const kmh = Number(s?.speed);
+      // A parked vehicle's status record can lack a fix; its last log record still has one.
+      let fix: { lat: number; lon: number; at: string } | null = null;
+      if (!(Number.isFinite(Number(s?.latitude)) && Number.isFinite(Number(s?.longitude)))) {
+        const logs: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: new Date(Date.now() - 3 * 86400000).toISOString() }, resultsLimit: 5000 }).catch(() => []);
+        const lr = (logs ?? []).filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)) && r.dateTime).sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime))).pop();
+        if (lr) fix = { lat: Number(lr.latitude), lon: Number(lr.longitude), at: String(lr.dateTime) };
+      }
       return {
         odometerMi: odo,
         fuelLevelPct: fuel,
         engineHours: hours,
-        lat: Number.isFinite(Number(s?.latitude)) ? Number(s.latitude) : null,
-        lon: Number.isFinite(Number(s?.longitude)) ? Number(s.longitude) : null,
+        lat: fix ? fix.lat : Number.isFinite(Number(s?.latitude)) ? Number(s.latitude) : null,
+        lon: fix ? fix.lon : Number.isFinite(Number(s?.longitude)) ? Number(s.longitude) : null,
         speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,
-        at: s?.dateTime ? String(s.dateTime) : null,
+        at: fix ? fix.at : s?.dateTime ? String(s.dateTime) : null,
         // The driver signed in to the truck. Geotab says "UnknownDriverId" when nobody is.
         driverId: s?.currentDriver?.id && !/^unknown/i.test(String(s.currentDriver.id)) ? String(s.currentDriver.id) : null,
         bearingDeg: Number.isFinite(Number(s?.bearing)) ? Math.round(Number(s.bearing)) : null,
