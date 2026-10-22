@@ -6,7 +6,7 @@
 
 import { breakLeftMin, cycleRecap, workdayLeftMin } from "./cycleRecap.ts";
 import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
-import { dutyFromLogs } from "./dutyLogs.ts";
+import { dutyFromLogs, isDutyChange } from "./dutyLogs.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -493,7 +493,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     async hos(id: string, tz?: string): Promise<HosAvailability | null> {
       const [avail, logs] = await Promise.all([
         call("Get", { typeName: "DutyStatusAvailability", search: { userSearch: { id } } }) as Promise<any[]>,
-        call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 96 * 3600 * 1000).toISOString() } }).catch(() => []) as Promise<any[]>,
+        call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString() } }).catch(() => []) as Promise<any[]>,
       ]);
       const a = (avail ?? [])[0];
       if (!a) return null;
@@ -501,7 +501,20 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       const duty = dutyFromLogs(logs ?? []);
       return {
         driveLeftMin: durationMinutes(a.driving), dutyLeftMin: durationMinutes(a.duty) ?? workdayLeftMin(logs ?? [], Date.now()), cycleLeftMin: durationMinutes(a.cycle),
-        status: duty.status, statusSince: duty.since, offSince: duty.offSince, at: new Date().toISOString(),
+        status: duty.status, statusSince: duty.since, offSince: duty.offSince,
+        breakLeftMin: breakLeftMin(logs ?? [], Date.now()) ?? durationMinutes(a.rest),
+        recap: tz ? cycleRecap(logs ?? [], Date.now(), tz) : null,
+        debug: (() => {
+          const d: Record<string, string> = {};
+          for (const [k, v] of Object.entries(a ?? {})) d[`avail.${k}`] = typeof v === "object" ? JSON.stringify(v).slice(0, 60) : String(v);
+          d.logRows = String((logs ?? []).length);
+          d.dutyChanges = String((logs ?? []).filter(isDutyChange).length);
+          d.breakFromLogs = String(breakLeftMin(logs ?? [], Date.now()));
+          d.workdayFromLogs = String(workdayLeftMin(logs ?? [], Date.now()));
+          (logs ?? []).slice(-3).forEach((l: any, i: number) => { d[`lastLog${i}`] = `${l.dateTime ?? "?"} ${l.status ?? ""} t${l.eventType ?? ""} ${l.state ?? ""}`; });
+          return d;
+        })(),
+        at: new Date().toISOString(),
       };
     },
 

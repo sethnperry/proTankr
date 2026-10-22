@@ -56,6 +56,14 @@ export function HosRecapModal({ open, hos, onClose }: { open: boolean; hos: HosA
         ) : (
           <div style={{ color: MUTED, fontSize: 14 }}>No recap yet. Hours load a few minutes after you connect.</div>
         )}
+        {hos.debug && (
+          <details style={{ marginTop: 16, fontSize: 11, color: MUTED }}>
+            <summary style={{ cursor: "pointer" }}>Hours data (for support)</summary>
+            <div style={{ marginTop: 6, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.5 }}>
+              {Object.entries(hos.debug).map(([k, v]) => <div key={k}>{k}: {v}</div>)}
+            </div>
+          </details>
+        )}
       </div>
     </FullscreenModal>
   );
