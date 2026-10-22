@@ -38,7 +38,7 @@ function ShipmentsSection({ truckId, providerName }: { truckId: string; provider
   return (
     <div style={{ marginTop: 10 }}>
       <button type="button" onClick={() => void run()} disabled={state === "loading"} aria-busy={state === "loading"} style={{ ...SECONDARY_BTN }}>
-        {state === "loading" ? `Asking ${providerName}…` : state === "ok" ? "Ask again" : "Recent shipments and trips by driver"}
+        {state === "loading" ? `Asking ${providerName}… (can take up to a minute)` : state === "ok" ? "Ask again" : "Recent shipments and trips by driver"}
       </button>
       {err && <div style={{ color: "#fca5a5", fontSize: 13, marginTop: 8 }}>{err}</div>}
       {state === "ok" && info && (

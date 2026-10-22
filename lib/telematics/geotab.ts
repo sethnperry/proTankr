@@ -318,12 +318,25 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       const errors: string[] = [];
       const from = new Date(Date.now() - days * 86400000).toISOString();
       const shipFrom = new Date(Date.now() - 90 * 86400000).toISOString(); // shipments are logged sparsely, so look further back
-      const [ships, trips, vehicles, drivers] = await Promise.all([
-        call("Get", { typeName: "ShipmentLog", search: { fromDate: shipFrom }, resultsLimit: 5000 }).catch((e) => { errors.push(`Shipments: ${String((e as Error).message).slice(0, 200)}`); return [] as any[]; }),
-        call("Get", { typeName: "Trip", search: { deviceSearch: { id: vehicleId }, fromDate: from }, resultsLimit: 5000 }).catch((e) => { errors.push(`Trips: ${String((e as Error).message).slice(0, 200)}`); return [] as any[]; }),
-        this.listVehicles().catch(() => []),
-        this.listDrivers().catch(() => []),
-      ]);
+      // Geotab answers only 10 calls a minute, and the telematics window has already used some,
+      // so go one call at a time and, if the limit is hit, wait it out once and retry.
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const patient = async (label: string, fn: () => Promise<any>): Promise<any> => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try { return await fn(); } catch (e) {
+            const msg = String((e as Error).message);
+            if (attempt === 0 && /quota exceeded/i.test(msg)) { await sleep(22000); continue; }
+            errors.push(`${label}: ${msg.slice(0, 200)}`);
+            return [];
+          }
+        }
+        return [];
+      };
+      const ships: any[] = await patient("Shipments", () => call("Get", { typeName: "ShipmentLog", search: { fromDate: shipFrom }, resultsLimit: 5000 }));
+      const trips: any[] = await patient("Trips", () => call("Get", { typeName: "Trip", search: { deviceSearch: { id: vehicleId }, fromDate: from }, resultsLimit: 5000 }));
+      // Names are only worth two more calls when there is something to name.
+      const vehicles: { id: string; name: string }[] = ships.length || trips.length ? await patient("Vehicle names", () => this.listVehicles()) : [];
+      const drivers: { id: string; name: string }[] = ships.length || trips.length ? await patient("Driver names", () => this.listDrivers()) : [];
       const vName = new Map(vehicles.map((v) => [v.id, v.name]));
       const dName = new Map(drivers.map((d) => [d.id, d.name]));
       const open = (iso: unknown) => (iso && Date.parse(String(iso)) < Date.UTC(3000, 0, 1) ? String(iso) : null); // Geotab uses year 4000 for "still open"
