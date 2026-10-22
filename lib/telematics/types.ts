@@ -67,8 +67,8 @@ export interface TelematicsProvider {
   positionDebug(vehicleId: string): Promise<string[]>;
   /** Everything the provider reports for one vehicle, for finding out what we could fetch. */
   discover(vehicleId: string): Promise<Discovery>;
-  /** Shipment numbers (BOLs) entered on a vehicle since a time, newest first. Start time only: end times are unreliable. */
-  shipmentsSince(vehicleId: string, sinceIso: string): Promise<{ documentNumber: string; start: string | null; shipperName: string | null; commodity: string | null }[]>;
+  /** Shipment numbers (BOLs) entered on ANY vehicle since a time, in ONE call, so one answer serves the whole fleet. Start time only: end times are unreliable. */
+  recentShipments(sinceIso: string): Promise<{ vehicleId: string; documentNumber: string; start: string | null; shipperName: string | null; commodity: string | null }[]>;
   /** Shipments (fleet-wide) and one vehicle's trips, grouped by driver and ordered by time, to see how the provider defines each. */
   shipmentTimeline(vehicleId: string, days: number): Promise<{ drivers: DriverTimeline[]; errors: string[]; counts: { shipments: number; trips: number } }>;
   /** Plain-language lines about what the provider returns for one driver (troubleshooting). */

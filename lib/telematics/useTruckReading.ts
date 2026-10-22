@@ -80,13 +80,16 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
 /** Shipment numbers entered in the telematics app on a truck since a time. Empty when there's no connection. */
 export async function fetchTruckShipments(truckId: string | null, sinceIso: string): Promise<{ documentNumber: string; start: string | null; shipperName: string | null; commodity: string | null }[]> {
   if (!truckId) return [];
+  // Never holds the driver up: gives up after 6 seconds and the app carries on without a suggestion.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 6000);
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return [];
-    const r = await fetch(`/api/telematics/shipments?truckId=${encodeURIComponent(truckId)}&since=${encodeURIComponent(sinceIso)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const r = await fetch(`/api/telematics/shipments?truckId=${encodeURIComponent(truckId)}&since=${encodeURIComponent(sinceIso)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: ctl.signal });
     if (!r.ok) return [];
     const j = await r.json();
     return j?.connected ? (j.shipments ?? []) : [];
-  } catch { return []; }
+  } catch { return []; } finally { clearTimeout(timer); }
 }

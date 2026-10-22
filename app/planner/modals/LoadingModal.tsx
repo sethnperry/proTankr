@@ -394,6 +394,8 @@ export default function LoadingModal(props: {
   onLoaded: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>, extras?: TripLoadExtras) => void;
   // Set when this load is attached to an open trip (see LoadingTripMode).
   trip?: LoadingTripMode | null;
+  // Finish Loading was tapped: the page asks the telematics app for the shipment number once.
+  onFinishLoadingStart?: () => void;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
   // Report Terminal Issue: hands off to CancelLoadSheet's report flow.
@@ -738,9 +740,18 @@ export default function LoadingModal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compSeqIndex, seqGroupKey]);
 
+  // The shipment number arrives a moment after the window opens: fill the BOL then, unless the driver has typed.
+  useEffect(() => {
+    if (!trip || compSeqIndex == null || !seqGroup || seqBol.trim()) return;
+    const geo = trip.geotabBols?.[seqGroup.bolIndex] ?? (seqGroup.bolCount <= 1 ? trip.geotabBols?.[0] : undefined);
+    if (geo) setSeqBol(geo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.geotabBols?.join(","), compSeqIndex]);
+
   function startLogSequence() {
     // The Finish Loading tap ends loading and starts travel to the delivery.
     finishTappedAt.current = new Date();
+    if (trip) props.onFinishLoadingStart?.();
     if (orderedCompLines.length === 0) { onLoaded({}); return; }
     setCompEntries({});
     setTripExtras({});

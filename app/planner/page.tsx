@@ -1604,34 +1604,22 @@ export default function CalculatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripNeedsArrive]);
 
-  // Shipment numbers (BOLs) the driver entered in the telematics app on this truck since arriving. They are
-  // logged within minutes of leaving the rack, so they prefill Finish Loading's BOL. Polled gently while
-  // still at the rack (the provider allows only 10 calls a minute).
+  // Shipment numbers (BOLs) the driver entered in the telematics app on this truck since arriving. The
+  // driver enters it before opening ProTankr, so it's asked for ONCE, when Finish Loading starts (never
+  // polled), through a company-wide cache on the server. A slow or failed answer just means no suggestion.
   const [geoShips, setGeoShips] = useState<GeoShipment[]>([]);
   const geoPickupId = tripPickup?.pickup_id ?? null;
   const geoArrived = tripPickup?.arrived_at ?? null;
-  const geoLeft = tripPickup?.left_at ?? null;
   const geoTruckId = useMemo(() => {
     const t = tripPickup ? (Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[]).find((x) => x.trip_id === tripPickup.trip_id) : null;
     return t?.truck_id ?? shell.equipment.selectedCombo?.truck_id ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoPickupId, shell.equipment.selectedCombo?.truck_id]);
-  useEffect(() => {
-    setGeoShips([]);
+  useEffect(() => { setGeoShips([]); }, [geoPickupId]);
+  const loadGeoShips = useCallback(() => {
     if (!geoPickupId || !geoArrived || !geoTruckId) return;
-    let alive = true;
-    let timer: number | undefined;
-    const since = new Date(Date.parse(geoArrived) - 3600000).toISOString();
-    const run = () => {
-      void fetchTruckShipments(geoTruckId, since).then((r) => {
-        if (!alive) return;
-        setGeoShips(r);
-        if (!geoLeft) timer = window.setTimeout(run, 90_000);
-      });
-    };
-    run();
-    return () => { alive = false; if (timer) window.clearTimeout(timer); };
-  }, [geoPickupId, geoArrived, geoLeft, geoTruckId]);
+    void fetchTruckShipments(geoTruckId, new Date(Date.parse(geoArrived) - 3600000).toISOString()).then(setGeoShips);
+  }, [geoPickupId, geoArrived, geoTruckId]);
 
   const tripModeForLoading = useMemo<LoadingTripMode | null>(() => {
     if (!tripPickup || !tripStoreObj || !shell.companyId) return null;
@@ -3765,6 +3753,7 @@ const lastProductInfoById = useMemo(() => {
         deleteError={loadWorkflow.reportError}
         onLoaded={(entries, extras) => loadWorkflow.onLoadedFromLoadingModal(entries, extras ? { afterTripRecord: () => recordTripLoaded(extras, false) } : undefined)}
         trip={tripModeForLoading}
+        onFinishLoadingStart={loadGeoShips}
         onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}

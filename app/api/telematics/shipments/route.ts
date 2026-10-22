@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { BLOCK_MS, WINDOW_MS, decide, forVehicle, isQuotaError, type CacheRecord, type ShipmentRow } from "@/lib/telematics/shipmentCache";
 
 export const runtime = "nodejs";
 
@@ -27,9 +28,24 @@ export async function GET(req: NextRequest) {
     const { data: m } = await admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", companyId).eq("truck_id", truckId).maybeSingle();
     const vid = (m as { provider_vehicle_id?: string } | null)?.provider_vehicle_id;
     if (!vid) return NextResponse.json({ connected: false });
-    const p = await providerFor(companyId);
-    if (!p) return NextResponse.json({ connected: false });
-    return NextResponse.json({ connected: true, shipments: await p.shipmentsSince(vid, new Date(since).toISOString()) });
+    // One provider call per company, shared by every truck and every server instance for ~25 s.
+    const { data: c } = await admin.from("telematics_shipment_cache").select("fetched_at, blocked_until, rows").eq("company_id", companyId).maybeSingle();
+    const rec = c as CacheRecord;
+    let rows: ShipmentRow[] = rec?.rows ?? [];
+    const what = decide(rec, Date.now());
+    if (what === "fetch") {
+      const p = await providerFor(companyId);
+      if (!p) return NextResponse.json({ connected: false });
+      try {
+        rows = await p.recentShipments(new Date(Date.now() - WINDOW_MS).toISOString());
+        await admin.from("telematics_shipment_cache").upsert({ company_id: companyId, fetched_at: new Date().toISOString(), blocked_until: null, rows });
+      } catch (e) {
+        // Over the provider's limit (or down): pause calls for a minute and answer with what we have.
+        if (isQuotaError(e)) await admin.from("telematics_shipment_cache").upsert({ company_id: companyId, fetched_at: rec?.fetched_at ?? new Date(0).toISOString(), blocked_until: new Date(Date.now() + BLOCK_MS).toISOString(), rows });
+        else console.warn("[telematics] shipments failed:", (e as Error).message);
+      }
+    }
+    return NextResponse.json({ connected: true, shipments: forVehicle(rows, vid, since).map((r) => ({ documentNumber: r.documentNumber, start: r.start, shipperName: r.shipperName, commodity: r.commodity })) });
   } catch (e) {
     console.warn("[telematics] shipments failed:", (e as Error).message);
     return NextResponse.json({ connected: false });
