@@ -15,6 +15,50 @@ import { gaugeTiles, type Tile, type Tone } from "@/lib/telematics/readoutLayout
 import { hosText } from "@/lib/telematics/progress";
 import { ageText, compass, mapsUrl } from "@/lib/equipment/trackFormat";
 import { PRIMARY_BTN, SECONDARY_BTN } from "@/lib/ui/look";
+import { supabase } from "@/lib/supabase/client";
+import type { Discovery } from "@/lib/telematics/types";
+
+/** Admin tool: ask the provider what it actually reports for this truck. */
+function DiscoverySection({ truckId, providerName }: { truckId: string; providerName: string }) {
+  const [state, setState] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [data, setData] = useState<Discovery | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  async function run() {
+    setState("loading"); setErr(null);
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const r = await fetch(`/api/telematics/discover?truckId=${encodeURIComponent(truckId)}`, { headers: { Authorization: `Bearer ${s.session?.access_token ?? ""}` }, cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error ?? "Couldn't ask.");
+      setData(j as Discovery); setState("ok");
+    } catch (e: any) { setErr(e?.message ?? "Couldn't ask."); setState("error"); }
+  }
+  const kv = (o: Record<string, string>) => Object.entries(o);
+  const readings = (data?.readings ?? []).filter((r) => !q.trim() || r.name.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div style={{ marginTop: 14 }}>
+      <button type="button" onClick={() => void run()} disabled={state === "loading"} aria-busy={state === "loading"} style={{ ...SECONDARY_BTN }}>
+        {state === "loading" ? `Asking ${providerName}… (can take a minute)` : state === "ok" ? "Ask again" : `What can ${providerName} tell us? (admin)`}
+      </button>
+      {err && <div style={{ color: "#fca5a5", fontSize: 13, marginTop: 8 }}>{err}</div>}
+      {data && (
+        <div style={{ marginTop: 12, fontSize: 13 }}>
+          {data.errors.length > 0 && <div style={{ color: "#fb923c", marginBottom: 8 }}>{data.errors.map((e, i) => <div key={i}>• {e}</div>)}</div>}
+          <div style={cap}>Other data ({providerName} has)</div>
+          {data.counts.map((c) => <Line key={c.label} k={c.label} v={c.count == null ? "error" : `${c.count}${c.note ? ` · ${c.note}` : ""}`} />)}
+          <div style={{ ...cap, marginTop: 14 }}>Readings logged in the last 3 days · {data.readings.length}</div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter (fuel, def, temp, battery…)" style={{ width: "100%", boxSizing: "border-box", margin: "6px 0", padding: "9px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 14 }} />
+          {readings.map((r) => <Line key={r.id} k={`${r.name}${r.unit ? ` (${r.unit})` : ""}`} v={`${r.latest} · ${r.samples} samples`} />)}
+          <div style={{ ...cap, marginTop: 14 }}>Live status fields</div>
+          {kv(data.status).map(([k, v]) => <Line key={k} k={k} v={v} />)}
+          <div style={{ ...cap, marginTop: 14 }}>Vehicle record fields</div>
+          {kv(data.device).map(([k, v]) => <Line key={k} k={k} v={v} />)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const MUTED = "rgba(255,255,255,0.5)";
 const TONE: Record<Tone, string> = { normal: "#fff", good: "#4ade80", warn: "#fb923c", bad: "#f87171", muted: "rgba(255,255,255,0.3)" };
@@ -66,8 +110,8 @@ function Break({ label }: { label: string }) {
   );
 }
 
-export function TelematicsPanel({ open, onClose, providerName, truckId, truckName, linked }: {
-  open: boolean; onClose: () => void; providerName: string; truckId: string; truckName: string; linked: boolean;
+export function TelematicsPanel({ open, onClose, providerName, truckId, truckName, linked, isAdmin }: {
+  open: boolean; onClose: () => void; providerName: string; truckId: string; truckName: string; linked: boolean; isAdmin?: boolean;
 }) {
   const [reading, setReading] = useState<TruckReading | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "none">("loading");
@@ -150,6 +194,7 @@ export function TelematicsPanel({ open, onClose, providerName, truckId, truckNam
       <div style={{ border: "1px dashed rgba(255,255,255,0.2)", padding: 16, fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
         Trip recap, status and change history will live here.
       </div>
+      {isAdmin && linked && <DiscoverySection truckId={truckId} providerName={providerName} />}
 
       <button type="button" onClick={onClose} style={{ ...SECONDARY_BTN, marginTop: 16 }}>Close</button>
     </FullscreenModal>
@@ -167,7 +212,7 @@ export function TelematicsLink({ companyId, truckId, truckName }: { companyId: s
         style={{ background: "none", border: "none", padding: "10px 0 0", color: "#93c5fd", fontWeight: 800, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
         <ConnectIcon size={15} /> {info.providerName} ›
       </button>
-      {open && <TelematicsPanel open onClose={() => setOpen(false)} providerName={info.providerName} truckId={truckId} truckName={truckName} linked={info.linked} />}
+      {open && <TelematicsPanel open onClose={() => setOpen(false)} providerName={info.providerName} truckId={truckId} truckName={truckName} linked={info.linked} isAdmin={info.isAdmin} />}
     </>
   );
 }

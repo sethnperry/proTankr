@@ -63,6 +63,8 @@ export interface TelematicsProvider {
   historicDrivers(): Promise<Map<string, string>>;
   /** Plain-language lines about why a vehicle has no position (troubleshooting). */
   positionDebug(vehicleId: string): Promise<string[]>;
+  /** Everything the provider reports for one vehicle, for finding out what we could fetch. */
+  discover(vehicleId: string): Promise<Discovery>;
   /** Plain-language lines about what the provider returns for one driver (troubleshooting). */
   driverDebug(driverId: string): Promise<string[]>;
   /** Positions, signed-in drivers and last drivers for every vehicle from ONE provider call. */
@@ -83,3 +85,14 @@ export interface TelematicsProvider {
 }
 
 export class TelematicsAuthError extends Error {}
+
+
+/** What a provider returns for one vehicle: the record's own fields, its live status, every
+ * numeric/state reading it logged recently, and how much of each other kind of data exists. */
+export type Discovery = {
+  device: Record<string, string>;
+  status: Record<string, string>;
+  readings: { id: string; name: string; unit: string | null; latest: string; at: string | null; samples: number }[];
+  counts: { label: string; count: number | null; note?: string }[];
+  errors: string[];
+};

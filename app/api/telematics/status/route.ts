@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole } from "@/lib/telematics/server";
+import { callerId, companyRole, isCompanyAdmin } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       const { data: m } = await admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", companyId).eq("truck_id", truckId).maybeSingle();
       linked = !!m;
     }
-    return NextResponse.json({ connected: true, provider, providerName: NAMES[provider] ?? provider, linked });
+    return NextResponse.json({ connected: true, provider, providerName: NAMES[provider] ?? provider, linked, isAdmin: isCompanyAdmin(r) });
   } catch {
     return NextResponse.json({ connected: false });
   }

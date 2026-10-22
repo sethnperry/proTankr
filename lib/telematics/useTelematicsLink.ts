@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-export type TelematicsLinkInfo = { connected: boolean; provider: string; providerName: string; linked: boolean };
+export type TelematicsLinkInfo = { connected: boolean; provider: string; providerName: string; linked: boolean; isAdmin: boolean };
 const cache = new Map<string, TelematicsLinkInfo>();
 
 export function useTelematicsLink(companyId: string | null, truckId: string | null): TelematicsLinkInfo | null {
@@ -26,7 +26,7 @@ export function useTelematicsLink(companyId: string | null, truckId: string | nu
         if (!token) return;
         const r = await fetch(`/api/telematics/status?companyId=${encodeURIComponent(companyId)}&truckId=${encodeURIComponent(truckId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         const j = r.ok ? await r.json() : null;
-        const v: TelematicsLinkInfo = j?.connected ? { connected: true, provider: j.provider, providerName: j.providerName, linked: !!j.linked } : { connected: false, provider: "", providerName: "", linked: false };
+        const v: TelematicsLinkInfo = j?.connected ? { connected: true, provider: j.provider, providerName: j.providerName, linked: !!j.linked, isAdmin: !!j.isAdmin } : { connected: false, provider: "", providerName: "", linked: false, isAdmin: false };
         cache.set(key, v);
         if (alive) setInfo(v);
       } catch { /* fail open: no link */ }

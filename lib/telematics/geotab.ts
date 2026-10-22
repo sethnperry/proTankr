@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type Discovery, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs } from "./dutyLogs.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
@@ -311,6 +311,58 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
           out.push(`Location logs ${toD === 0 ? `last ${fromD} d` : `${toD}-${fromD} d ago`}: ${logs.length} rows, ${withFix.length} with a position.`);
         } catch (e) { out.push(`Location logs ${fromD} d: error ${String((e as Error).message).slice(0, 80)}`); }
       }
+      return out;
+    },
+
+    async discover(vehicleId: string): Promise<Discovery> {
+      const out: Discovery = { device: {}, status: {}, readings: [], counts: [], errors: [] };
+      const DAY = 86400000, now = Date.now();
+      const iso = (d: number) => new Date(now - d * DAY).toISOString();
+      const flat = (o: any, into: Record<string, string>) => {
+        for (const [k, v] of Object.entries(o ?? {})) {
+          if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) continue;
+          if (typeof v === "object") {
+            const sample = Array.isArray(v) ? `${v.length} items` : (v as any).id ?? (v as any).name ?? JSON.stringify(v).slice(0, 60);
+            into[k] = String(sample);
+          } else into[k] = String(v).slice(0, 80);
+        }
+      };
+      const guard = async <T,>(label: string, fn: () => Promise<T>): Promise<T | null> => {
+        try { return await fn(); } catch (e) { out.errors.push(`${label}: ${String((e as Error).message).slice(0, 90)}`); return null; }
+      };
+      const dev: any[] | null = await guard("Vehicle record", () => call("Get", { typeName: "Device", search: { id: vehicleId } }));
+      flat(dev?.[0], out.device);
+      const st: any[] | null = await guard("Live status", () => call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id: vehicleId } } }));
+      flat(st?.[0], out.status);
+
+      // Every diagnostic reading from the last 3 days, newest value of each.
+      const rows: any[] | null = await guard("Readings", () => call("Get", { typeName: "StatusData", search: { deviceSearch: { id: vehicleId }, fromDate: iso(3) }, resultsLimit: 50000 }));
+      const byId = new Map<string, { latest: any; n: number }>();
+      for (const r of rows ?? []) {
+        const id = String(r?.diagnostic?.id ?? "");
+        if (!id) continue;
+        const cur = byId.get(id);
+        if (!cur) byId.set(id, { latest: r, n: 1 });
+        else { cur.n++; if (String(r.dateTime) > String(cur.latest.dateTime)) cur.latest = r; }
+      }
+      let names = new Map<string, { name: string; unit: string | null }>();
+      if (byId.size) {
+        const diags: any[] | null = await guard("Reading names", () => call("Get", { typeName: "Diagnostic", resultsLimit: 20000 }));
+        names = new Map((diags ?? []).map((d) => [String(d.id), { name: String(d.name ?? d.id), unit: d.unitOfMeasure?.id ? String(d.unitOfMeasure.id).replace(/^UnitOfMeasure/, "").replace(/Id$/, "") : d.unitOfMeasure ? String(d.unitOfMeasure) : null }]));
+      }
+      out.readings = [...byId.entries()].map(([id, v]) => ({
+        id, name: names.get(id)?.name ?? id, unit: names.get(id)?.unit ?? null,
+        latest: String(Math.round(Number(v.latest.data) * 100) / 100), at: v.latest.dateTime ?? null, samples: v.n,
+      })).sort((a, b) => a.name.localeCompare(b.name));
+
+      const count = async (label: string, typeName: string, search: Record<string, unknown>, note?: string) => {
+        const r: any[] | null = await guard(label, () => call("Get", { typeName, search, resultsLimit: 5000 }));
+        out.counts.push({ label, count: r ? r.length : null, note });
+      };
+      await count("Fault codes (7 d)", "FaultData", { deviceSearch: { id: vehicleId }, fromDate: iso(7) });
+      await count("Trips (7 d)", "Trip", { deviceSearch: { id: vehicleId }, fromDate: iso(7) });
+      await count("Rule violations (7 d)", "ExceptionEvent", { deviceSearch: { id: vehicleId }, fromDate: iso(7) }, "harsh braking, speeding, idling and so on");
+      await count("Fuel-tax records (30 d)", "FuelTaxDetail", { deviceSearch: { id: vehicleId }, fromDate: iso(30) });
       return out;
     },
 
