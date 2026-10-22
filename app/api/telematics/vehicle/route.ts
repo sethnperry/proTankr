@@ -91,8 +91,10 @@ export async function GET(req: NextRequest) {
       const by = (combo as { claimed_by?: string | null } | null)?.claimed_by;
       heldByName = by ? await nameOf(by) : null;
     } catch { /* the position is still useful without a name */ }
+    // Shipping documents (BOL numbers) on the truck's Drive app, if the company uses them.
+    const shipments = await p.activeShipments(vid).catch(() => []);
     await admin.from("telematics_connections").update({ last_ok_at: new Date().toISOString(), last_error: null }).eq("company_id", companyId);
-    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, driverName, lastDriver, heldByName, hos });
+    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, shipments, driverName, lastDriver, heldByName, hos });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
     return none();

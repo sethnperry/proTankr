@@ -174,6 +174,23 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
               </div>
 
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                <div style={label}>Shipments (BOL numbers)</div>
+                {reading.shipments && reading.shipments.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                    {reading.shipments.map((s) => (
+                      <span key={s.documentNumber} title={[s.shipperName, s.commodity].filter(Boolean).join(" · ") || undefined}
+                        style={{ border: "1px solid rgba(255,255,255,0.3)", padding: "5px 10px", fontSize: 15, fontWeight: 800 }}>
+                        {s.documentNumber}
+                        {(s.shipperName || s.commodity) && <span style={{ fontSize: 11, fontWeight: 600, color: muted }}> {[s.shipperName, s.commodity].filter(Boolean).join(" · ")}</span>}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 14, marginTop: 4, color: muted }}>None on the truck's Drive app (Assets → Shipments).</div>
+                )}
+              </div>
+
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
                 <div style={label}>Trailers in Geotab</div>
                 {reading.geotabTrailers && reading.geotabTrailers.length > 0 ? (
                   <>
@@ -184,7 +201,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
                         {t.comment && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{t.comment}</div>}
                       </div>
                     ))}
-                    <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>Geotab has no BOL field of its own. These are the trailer names and comments exactly as entered in Geotab, so a BOL number kept as a trailer shows here.</div>
+                    <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>Trailer names and comments exactly as entered in Geotab.</div>
                   </>
                 ) : (
                   <div style={{ fontSize: 14, marginTop: 4, color: muted }}>

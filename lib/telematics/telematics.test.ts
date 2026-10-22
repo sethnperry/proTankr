@@ -278,3 +278,22 @@ test("dedupe: retired dropped, one per name, most complete then newest wins", as
   ] as any, now);
   assert.deepEqual(out.map((x) => x.id), ["c", "e"]);
 });
+
+test("geotab: shipping documents (BOL numbers) still on a vehicle, newest first, no repeats", async () => {
+  const f = (async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (b.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s3", userName: "u" } });
+    return ok([
+      { documentNumber: "754929", shipperName: "Citgo", commodity: "ULSD", activeFrom: "2026-10-22T10:00:00Z", activeTo: "4000-01-01T00:00:00Z" },
+      { documentNumber: "754809", activeFrom: "2026-10-22T09:00:00Z" },
+      { documentNumber: "754929", activeFrom: "2026-10-22T08:00:00Z" },            // repeat
+      { documentNumber: "111", activeFrom: "2026-10-20T08:00:00Z", activeTo: "2026-10-20T12:00:00Z" }, // ended
+      { documentNumber: " ", activeFrom: "2026-10-22T11:00:00Z" },
+    ]);
+  }) as any;
+  const p = geotabProvider({ database: "db-ship", userName: "u", password: "p" }, f);
+  const s = await p.activeShipments("v1");
+  assert.deepEqual(s.map((x) => x.documentNumber), ["754929", "754809"]);
+  assert.equal(s[0].shipperName, "Citgo");
+});

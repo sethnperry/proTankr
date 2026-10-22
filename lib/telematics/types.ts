@@ -31,6 +31,9 @@ export type HosAvailability = {
   at: string;                  // ISO time this was read
 };
 
+/** A shipping document (BOL) entered on the vehicle's in-cab Drive app under Assets > Shipments. */
+export type ProviderShipment = { documentNumber: string; shipperName: string | null; commodity: string | null; activeFrom: string | null };
+
 export type ProviderTrailer = { id: string; name: string; comment?: string | null; groupIds?: string[] };
 
 export type ProviderGroup = { id: string; name: string; parentId: string | null };
@@ -49,6 +52,8 @@ export interface TelematicsProvider {
   listDrivers(): Promise<ProviderDriver[]>;
   /** Every trailer attached to each vehicle right now: provider vehicle id -> provider trailer ids. */
   attachedAll(): Promise<Map<string, string[]>>;
+  /** The shipping documents (BOL numbers) currently on a vehicle, newest first. */
+  activeShipments(vehicleId: string): Promise<ProviderShipment[]>;
   /** The driver who most recently signed in to a vehicle (last 7 days), if the provider says. */
   lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null>;
   /** The driver signed in to each vehicle right now: provider vehicle id -> provider driver id. */

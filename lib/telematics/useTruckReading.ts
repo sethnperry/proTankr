@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 
 export type TruckReading = { odometerMi: number | null; fuelLevelPct?: number | null; engineHours?: number | null; trailerId?: string | null; trailerName?: string | null; trailerKnown?: boolean; city: string | null; state: string | null; lat: number | null; lon: number | null; speedMph?: number | null; at: string | null; driverName?: string | null; heldByName?: string | null;
   bearingDeg?: number | null; isDriving?: boolean | null;
+  shipments?: { documentNumber: string; shipperName: string | null; commodity: string | null; activeFrom: string | null }[];
   geotabTrailers?: { name: string; comment: string | null; ours: boolean }[];
   lastDriver?: { name: string; at: string } | null;
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; cycleLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null };

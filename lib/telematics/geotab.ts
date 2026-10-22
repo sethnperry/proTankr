@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs } from "./dutyLogs.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
@@ -220,6 +220,22 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         (out.get(String(dev)) ?? out.set(String(dev), new Set()).get(String(dev))!).add(String(tr));
       }
       return new Map([...out].map(([k, v]) => [k, [...v]]));
+    },
+
+    async activeShipments(vehicleId: string): Promise<ProviderShipment[]> {
+      const from = new Date(Date.now() - 7 * 86400000).toISOString();
+      const rows: any[] = await call("Get", { typeName: "ShipmentLog", search: { deviceSearch: { id: vehicleId }, fromDate: from } });
+      const seen = new Set<string>();
+      const out: ProviderShipment[] = [];
+      for (const r of (rows ?? []).sort((a, b) => String(b.activeFrom ?? b.dateTime ?? "").localeCompare(String(a.activeFrom ?? a.dateTime ?? "")))) {
+        const doc = r?.documentNumber ? String(r.documentNumber).trim() : "";
+        if (!doc || seen.has(doc)) continue;
+        // Still on the truck: no end, or an end in the future (Geotab uses year 4000 for "open").
+        if (r.activeTo && Date.parse(r.activeTo) <= Date.now()) continue;
+        seen.add(doc);
+        out.push({ documentNumber: doc, shipperName: r.shipperName ? String(r.shipperName) : null, commodity: r.commodity ? String(r.commodity) : null, activeFrom: r.activeFrom ? String(r.activeFrom) : r.dateTime ? String(r.dateTime) : null });
+      }
+      return out;
     },
 
     async lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null> {
