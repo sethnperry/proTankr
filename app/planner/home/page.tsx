@@ -1130,7 +1130,9 @@ export default function HomePage() {
         break;
       case "planner":
         setOpeningPlanner(true);
-        router.push("/planner");
+        // Arrived with no load yet: straight to Plan Review (the Planner skips
+        // ahead when a plan exists). Already loading: back to the Planner.
+        router.push(step.label === "Begin Loading" ? "/planner?begin=1" : "/planner");
         break;
       case "arrive_pickup": {
         learnArrival();
@@ -1159,7 +1161,7 @@ export default function HomePage() {
             }
           } finally {
             void syncNow();
-            router.push("/planner");
+            router.push("/planner?begin=1");
           }
         })();
         break;

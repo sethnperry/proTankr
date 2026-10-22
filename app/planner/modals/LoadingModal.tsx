@@ -437,6 +437,8 @@ export default function LoadingModal(props: {
   // Tapping the terminal name opens the shared location/terminal picker
   // without leaving this modal (mid-load switch flow, see page.tsx).
   onTapTerminal?: () => void;
+  /** Plan Review: undo the load start and go back to the Planner to change the plan. */
+  onAdjustPlan?: () => void;
   // True when the plan HAS products but none of them are sold at the
   // currently-selected terminal -- e.g. after a mid-review terminal switch
   // to a place that carries different products. Those comps get dropped
@@ -499,6 +501,7 @@ export default function LoadingModal(props: {
     locationLabel,
     rackName,
     onTapTerminal,
+    onAdjustPlan,
     allPlannedUnavailable,
     tuneRows,
     onTuneProduct,
@@ -1271,7 +1274,14 @@ export default function LoadingModal(props: {
           // ── Plan Review -- editable, per compartment ─────────────────────
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {supplierSection}
-            <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.2, opacity: 0.7, textTransform: "uppercase" }}>Planned compartments</div>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.2, opacity: 0.7, textTransform: "uppercase" }}>Planned compartments</div>
+              {onAdjustPlan && (
+                <button type="button" onClick={onAdjustPlan} disabled={busy} style={{ background: "none", border: "none", color: "#93c5fd", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                  Adjust plan ›
+                </button>
+              )}
+            </div>
 
             {plannedLines.length === 0 ? (
               allPlannedUnavailable ? (

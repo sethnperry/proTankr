@@ -99,8 +99,8 @@ export function nextStep(
     }
     return {
       kind: "planner",
-      label: "Continue Trip",
-      detail: p.load_id ? `Loading${where}` : `Plan and load${where}`,
+      label: p.load_id ? "Continue Trip" : "Begin Loading",
+      detail: p.load_id ? `Loading${where}` : `Review the plan and start${where}`,
     };
   }
   // Every rack so far ended without a load (rack hop): pick the next one.

@@ -2862,6 +2862,46 @@ const lastProductInfoById = useMemo(() => {
     : tripAwaitingLoad ? "BEGIN LOADING"
     : "LOAD";
 
+  // Arrived from the dashboard with ?begin=1: when a plan is already in place,
+  // skip the Planner and open Plan Review (what BEGIN LOADING would do).
+  // With no plan, stay here to build one. Waits for presets/equipment, gives
+  // up after 8 s, and runs once.
+  const beginParamRef = useRef<boolean | null>(null); // null = not read yet, true = waiting, false = nothing to do / finished
+  const beginReadyRef = useRef({ go: false, plan: false });
+  beginReadyRef.current = {
+    go: !loadDisabled && !tripNeedsArrive && !loadWorkflow.activeLoadId && unavailableComps.length === 0 && planSlots.presetsReady,
+    plan: plannedProductIds.size > 0,
+  };
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (beginParamRef.current === null) {
+      const params = new URLSearchParams(window.location.search);
+      beginParamRef.current = !!params.get("begin");
+      if (beginParamRef.current) {
+        params.delete("begin");
+        const qs = params.toString();
+        window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+      }
+    }
+    if (!beginParamRef.current) return;
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      const r = beginReadyRef.current;
+      if (r.go) {
+        // give a just-applied trip plan a moment to land before deciding
+        if (!r.plan && Date.now() - started < 1500) return;
+        window.clearInterval(tick);
+        beginParamRef.current = false;
+        if (r.plan) requestBegin({});
+      } else if (Date.now() - started > 8000) {
+        window.clearInterval(tick);
+        beginParamRef.current = false;
+      }
+    }, 250);
+    return () => window.clearInterval(tick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Same tap-to-load/tap-empty-to-save sequence the old PresetDial's own
   // onLoad/onSave props used -- preserved verbatim, just triggered from
   // PresetQuickPick's row taps now instead of the dial's.
@@ -3788,6 +3828,7 @@ const lastProductInfoById = useMemo(() => {
         onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}
+        onAdjustPlan={handleBackToPlannerNoUpdate}
         loadedDisabled={loadWorkflow.completeBusy}
         loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Finish Loading"}
         returnLabel={reportFromDashboard ? "Back to Dashboard" : undefined}
