@@ -43,7 +43,7 @@ const fieldLabel: React.CSSProperties = {
 
 export default function EquipmentStatusModal({
   open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes,
-  currentSubStatus, homeLocalArea, onSaved,
+  currentSubStatus, homeLocalArea, onSaved, locationOptional = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -63,6 +63,8 @@ export default function EquipmentStatusModal({
    *  writes current_local_area instead. Shown for reference only. */
   homeLocalArea?: string | null;
   onSaved: (newStatus: FleetStatus) => void;
+  /** Drop trailer / Park truck: a status is all that's needed, location is optional. */
+  locationOptional?: boolean;
 }) {
   const [status, setStatus] = useState<FleetStatus>("in_use");
   const [region, setRegion] = useState("");
@@ -82,7 +84,8 @@ export default function EquipmentStatusModal({
     setErr(null);
   }, [open, currentStatus, currentNotes, currentSubStatus]);
 
-  const needsLocation = status === "deadline" || status === "readyline";
+  const offDuty = status === "deadline" || status === "readyline";
+  const needsLocation = offDuty && !locationOptional;
 
   async function save() {
     if (needsLocation && (!region.trim() || !localArea.trim())) {
@@ -180,7 +183,7 @@ export default function EquipmentStatusModal({
             this unit's kind (truck/trailer) and to whichever of
             Deadline/Readyline is currently picked, so "Available" can
             never show up under Deadline and vice versa. */}
-        {needsLocation && (
+        {offDuty && (
           <CatalogPicker
             label="Sub-Status (optional)" placeholder="Select sub-status"
             value={subStatus} onChange={setSubStatus}

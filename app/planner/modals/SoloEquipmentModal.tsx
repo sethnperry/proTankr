@@ -573,6 +573,9 @@ export default function SoloEquipmentModal({
   const [studPickOpen, setStudPickOpen] = useState(false);
   const [docPickOpen, setDocPickOpen] = useState(false);
   const [docUnit, setDocUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
+  // Drop trailer / Park truck: status (+ optional location) first, then the unlink.
+  const [statusFlow, setStatusFlow] = useState<"drop_trailer" | "park_truck" | null>(null);
+  const [awaitingTruck, setAwaitingTruck] = useState(false);
   const [takeCombo, setTakeCombo] = useState<{ truckId: string; trailerId: string; ownerName: string | null } | null>(null);
   const [commandeerTarget, setCommandeerTarget] = useState<
     { kind: "truck" | "trailer"; id: string; ownerName: string } | null
@@ -865,6 +868,7 @@ export default function SoloEquipmentModal({
 
   function toggleTruck(id: string) {
     const next = selectedTruckId === id ? null : id;
+    if (next) setAwaitingTruck(false);
     if (next) {
       const unit = trucks.find((t) => t.truck_id === next);
       if (unit?.status_code === "deadline") { setDeadlineConfirmTarget({ kind: "truck", id: next, notes: unit.status_notes }); return; }
@@ -878,6 +882,7 @@ export default function SoloEquipmentModal({
   }
   function toggleTrailer(id: string) {
     const next = selectedTrailerId === id ? null : id;
+    if (next && !selectedTruckId) { setError("Pick a truck first. A trailer can't be linked without one."); return; }
     if (next) {
       const unit = trailers.find((t) => t.trailer_id === next);
       if (unit?.status_code === "deadline") { setDeadlineConfirmTarget({ kind: "trailer", id: next, notes: unit.status_notes }); return; }
@@ -1057,7 +1062,8 @@ export default function SoloEquipmentModal({
     try {
       if (setCurrentEquipment && !selectedComboId) {
         const t = selectedTruckId ?? null;
-        const r = selectedTrailerId ?? null;
+        // A trailer can't be linked without a truck.
+        const r = t ? (selectedTrailerId ?? null) : null;
         const partialOrEmpty = !(t && r); // both set would be a full pair (couple path)
         const changed = t !== (currentTruckId ?? null) || r !== (currentTrailerId ?? null);
         if (partialOrEmpty && changed) {
@@ -1316,7 +1322,7 @@ export default function SoloEquipmentModal({
           commandeer-confirm, new-tare prompt); the main screen re-renders
           the status report once this closes. ── */}
       <FullscreenModal
-        open={pickerOpen} onClose={() => setPickerOpen(false)} title="Select Equipment" footer={null}
+        open={pickerOpen} onClose={() => { setPickerOpen(false); if (awaitingTruck) { setAwaitingTruck(false); setSelectedTrailerId(null); } }} title="Select Equipment" footer={null}
         headerRight={
           <button
             type="button"
@@ -1332,6 +1338,11 @@ export default function SoloEquipmentModal({
         }
       >
         <div ref={scrollRef} style={{ position: "relative", height: "100%", overflowY: "auto", minHeight: 0 }}>
+          {awaitingTruck && (
+            <div style={{ border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", padding: "10px 12px", marginBottom: 12, fontSize: 13, lineHeight: 1.5 }}>
+              <b>Truck parked.</b> Tap a truck to hook up to {trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name ?? "the trailer"}, or tap Done to leave without equipment.
+            </div>
+          )}
           <EquipmentBoard
             rows={boardRows}
             claimedByCombo={claimedByCombo}
@@ -1357,7 +1368,7 @@ export default function SoloEquipmentModal({
               </div>
             ) : null}
           />
-          <button type="button" onClick={() => setPickerOpen(false)} style={{ ...saveBtnStyle, marginTop: 20 }}>
+          <button type="button" onClick={() => { setPickerOpen(false); if (awaitingTruck) { setAwaitingTruck(false); setSelectedTrailerId(null); } }} style={{ ...saveBtnStyle, marginTop: 20 }}>
             Done
           </button>
         </div>
@@ -1383,7 +1394,7 @@ export default function SoloEquipmentModal({
           <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
             <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 4 }}>{detailRow.truck.name} / {detailRow.trailer.name}</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, marginBottom: 16 }}>
-              {detailMine ? "Drop a unit, then tap another one on the list to swap it in." : "Take this combo as your equipment."}
+              {detailMine ? "Drop the trailer, or park the truck and hook up another one. You set a status and, if you want, where it is." : "Take this combo as your equipment."}
             </div>
             {(() => {
               const opt: React.CSSProperties = { width: "100%", padding: "16px 18px", borderRadius: 2, marginBottom: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 16, fontWeight: 800, textAlign: "left", cursor: "pointer" };
@@ -1402,9 +1413,8 @@ export default function SoloEquipmentModal({
               }
               return (
                 <>
-                  <button type="button" style={opt} onClick={() => { closeAll(); toggleTrailer(detailRow.trailer.id); }}>Drop trailer · {detailRow.trailer.name}</button>
-                  <button type="button" style={opt} onClick={() => { closeAll(); toggleTruck(detailRow.truck.id); }}>Drop truck · {detailRow.truck.name}</button>
-                  <button type="button" style={opt} onClick={() => { closeAll(); setSelectedTruckId(null); setSelectedTrailerId(null); onSelectComboId(""); }}>Drop both</button>
+                  <button type="button" style={opt} onClick={() => { closeAll(); setStatusFlow("drop_trailer"); openStatusFor("trailer", detailRow.trailer.id); }}>Drop trailer · {detailRow.trailer.name}</button>
+                  <button type="button" style={opt} onClick={() => { closeAll(); setStatusFlow("park_truck"); openStatusFor("truck", detailRow.truck.id); }}>Park truck · {detailRow.truck.name}</button>
                 </>
               );
             })()}
@@ -1590,12 +1600,13 @@ export default function SoloEquipmentModal({
       {statusTarget && (
         <EquipmentStatusModal
           open={!!statusTarget}
-          onClose={() => setStatusTarget(null)}
+          onClose={() => { setStatusTarget(null); setStatusFlow(null); }}
           companyId={companyId}
           unitKind={statusTarget.kind}
           unitId={statusTarget.id}
           unitName={statusTarget.name}
-          currentStatus={statusTarget.status}
+          currentStatus={statusFlow ? "readyline" : statusTarget.status}
+          locationOptional={!!statusFlow}
           currentNotes={statusTarget.notes}
           currentSubStatus={statusTarget.subStatus}
           homeLocalArea={statusTarget.homeLocalArea}
@@ -1621,6 +1632,26 @@ export default function SoloEquipmentModal({
             // the truck re-paired with that stale leftover trailer
             // instead of bobtail. Setting status back to "in_use" evicts
             // nothing -- leave the current selection exactly as it was.
+            if (statusFlow === "drop_trailer") {
+              // Trailer is dropped; the truck stays with the driver (bobtail).
+              setSelectedTrailerId(null);
+              onSelectComboId("");
+              setStatusFlow(null);
+              void (async () => { await onRefreshCurrentEquipment?.(); await Promise.all([loadEquipment(), onRefreshCombos()]); })();
+              return;
+            }
+            if (statusFlow === "park_truck") {
+              // Truck is parked. A trailer can't be linked without a truck, so the
+              // trailer waits here (selected, unlinked) for a new truck, or is
+              // cleared too if the driver leaves without picking one.
+              setSelectedTruckId(null);
+              onSelectComboId("");
+              setStatusFlow(null);
+              setAwaitingTruck(true);
+              setPickerOpen(true);
+              void (async () => { await onRefreshCurrentEquipment?.(); await Promise.all([loadEquipment(), onRefreshCombos()]); })();
+              return;
+            }
             if (newStatus !== "in_use") {
               if (statusTarget.kind === "truck") setSelectedTruckId(null);
               else setSelectedTrailerId(null);
