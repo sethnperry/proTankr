@@ -20,6 +20,7 @@ import { hosText } from "@/lib/telematics/progress";
 import { TrackDetail } from "./TrackDetail";
 
 type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
+type VehicleHit = { vehicleId: string; name: string; truckId: string | null; lat: number | null; lon: number | null; at: string | null; speedMph: number | null; driverName: string | null; signedIn: boolean };
 type DriverHit = {
   providerId: string; name: string; employeeNo: string | null; memberName: string | null;
   now: DriverPlace | null; last: DriverPlace | null;
@@ -64,6 +65,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [filter, setFilter] = useState<EquipmentFilter>({ region: null, localArea: null, awayOnly: false });
   const [filterOpen, setFilterOpen] = useState(false);
   const [drivers, setDrivers] = useState<DriverHit[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleHit[]>([]);
   const [driversBusy, setDriversBusy] = useState(false);
   const [driverNote, setDriverNote] = useState<string | null>(null);
   const [openDriver, setOpenDriver] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   // Driver search against the telematics provider, once there's something to search for.
   useEffect(() => {
     const term = q.trim();
-    if (!open || !companyId || term.length < 3) { setDrivers([]); setDriverNote(null); return; }
+    if (!open || !companyId || term.length < 3) { setDrivers([]); setVehicles([]); setDriverNote(null); return; }
     let off = false;
     const timer = window.setTimeout(async () => {
       setDriversBusy(true);
@@ -101,8 +103,9 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         const j = r.ok ? await r.json() : null;
         if (off) return;
         setDrivers(j?.connected ? (j.drivers as DriverHit[]) : []);
+        setVehicles(j?.connected ? ((j.vehicles ?? []) as VehicleHit[]) : []);
         setDriverNote(j && !j.connected ? "Driver search needs the company's Geotab connection." : j?.error ?? null);
-      } catch { if (!off) setDrivers([]); }
+      } catch { if (!off) { setDrivers([]); setVehicles([]); } }
       finally { if (!off) setDriversBusy(false); }
     }, 600);
     return () => { off = true; window.clearTimeout(timer); };
@@ -111,6 +114,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const rows = useMemo(() => buildTrackRows(trucks, trailers, combos, { region: filter.region, localArea: filter.localArea, awayOnly: filter.awayOnly }, q), [trucks, trailers, combos, filter, q]);
   const truckById = useMemo(() => new Map(trucks.map((t) => [t.id, t])), [trucks]);
   const trailerById = useMemo(() => new Map(trailers.map((t) => [t.id, t])), [trailers]);
+  // Geotab vehicles not already listed below as one of our own units.
+  const geoVehicles = useMemo(() => vehicles.filter((v) => !v.truckId || !rows.trucks.some((t) => t.id === v.truckId) && !rows.combos.some((c) => c.truck.id === v.truckId)), [vehicles, rows]);
   const filtered = !!(filter.region || filter.localArea || filter.awayOnly);
 
   const openTruck = (truckId: string) => {
@@ -193,6 +198,24 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
               </div>
             );
           })}
+        </div>
+      )}
+
+      {q.trim().length >= 3 && geoVehicles.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>Vehicles in Geotab</div>
+          {geoVehicles.map((v) => (
+            <button key={v.vehicleId} type="button"
+              onClick={() => (v.truckId ? openTruck(v.truckId) : setPick({ truckId: null, trailerId: null, vehicle: { id: v.vehicleId, name: v.name } }))}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "#fff", cursor: "pointer" }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{v.name}{!v.truckId && <span style={{ fontSize: 11, fontWeight: 700, color: muted, marginLeft: 8 }}>not set up in ProTankr</span>}</div>
+              <div style={{ fontSize: 13, marginTop: 3 }}>
+                {v.driverName ? <>{v.signedIn ? "Driver" : "Last driver"} <b>{v.driverName}</b> · </> : null}
+                {v.speedMph != null && v.speedMph > 2 ? `moving ${v.speedMph} mph` : "stopped"}
+                <span style={{ color: muted }}> · {ageText(v.at)}</span>
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
