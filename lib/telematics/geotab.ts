@@ -295,6 +295,34 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
+    async driverDebug(driverId: string): Promise<string[]> {
+      const out: string[] = [];
+      const day = 86400000, now = Date.now();
+      const iso = (d: number) => new Date(now - d * day).toISOString();
+      const newest = (rows: any[], pick: (r: any) => string) => {
+        const r = [...rows].sort((a, b) => String(pick(b)).localeCompare(String(pick(a))))[0];
+        return r ? ` newest ${String(pick(r)).slice(0, 16)} on vehicle ${r.device?.id ?? "?"}` : "";
+      };
+      const run = async (label: string, typeName: string, search: any, mine: (r: any) => boolean, when: (r: any) => string) => {
+        try {
+          const rows: any[] = (await call("Get", { typeName, search, resultsLimit: 5000 })) ?? [];
+          const m = rows.filter(mine);
+          out.push(`${label}: ${rows.length} rows, ${m.length} for this driver.${m.length ? newest(m, when) : ""}`);
+        } catch (e) {
+          out.push(`${label}: error ${String((e as Error).message).slice(0, 80)}`);
+        }
+      };
+      const isMe = (r: any) => String(r?.driver?.id ?? r?.user?.id ?? "") === driverId;
+      await run("Sign-ins (30 d)", "DriverChange", { driverSearch: { id: driverId }, fromDate: iso(30) }, isMe, (r) => r.dateTime);
+      await run("Trips (14 d)", "Trip", { userSearch: { id: driverId }, fromDate: iso(14) }, isMe, (r) => r.stop ?? r.start);
+      try {
+        const logs: any[] = (await call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id: driverId }, fromDate: iso(4) } })) ?? [];
+        const l = [...logs].sort((a, b) => String(b.dateTime).localeCompare(String(a.dateTime)))[0];
+        out.push(`Duty logs (4 d): ${logs.length} rows.${l ? ` newest ${String(l.dateTime).slice(0, 16)} ${l.status} on vehicle ${l.device?.id ?? "none"}` : ""}`);
+      } catch (e) { out.push(`Duty logs: error ${String((e as Error).message).slice(0, 80)}`); }
+      return out;
+    },
+
     async lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null> {
       // The provider may ignore a driver filter it doesn't know, so every row is checked against the
       // driver here; otherwise anyone would get the fleet's most recent sign-in.

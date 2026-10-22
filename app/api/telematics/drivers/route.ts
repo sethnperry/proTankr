@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
         memberName: uidm ? profName.get(uidm) ?? null : null, now, last,
         hos: await p.hos(d.id).catch(() => null),
         // Why a driver isn't placed, for troubleshooting: what Geotab's vehicle status records say about them.
+        debug: vid || last ? undefined : await p.driverDebug(d.id).catch(() => undefined),
         diag: `Geotab sees ${current.size} signed-in and ${historic.size} last-driver records. This driver: ${vid ? "signed in" : [...historic.values()].includes(d.id) ? "last driver on a vehicle" : "on no vehicle status record"}.`,
       });
     }

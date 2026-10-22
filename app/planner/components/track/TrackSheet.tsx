@@ -24,6 +24,7 @@ type DriverHit = {
   providerId: string; name: string; employeeNo: string | null; memberName: string | null;
   now: DriverPlace | null; last: DriverPlace | null;
   diag?: string;
+  debug?: string[];
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null;
 };
 
@@ -65,6 +66,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [drivers, setDrivers] = useState<DriverHit[]>([]);
   const [driversBusy, setDriversBusy] = useState(false);
   const [driverNote, setDriverNote] = useState<string | null>(null);
+  const [openDriver, setOpenDriver] = useState<string | null>(null);
   const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null; vehicle?: { id: string; name: string } | null } | null>(null);
 
   const reload = useCallback(async () => {
@@ -159,11 +161,11 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
           {!driversBusy && !driverNote && drivers.length === 0 && <div style={{ fontSize: 13, color: muted }}>No driver found in Geotab.</div>}
           {drivers.map((d) => {
             const p = d.now ?? d.last;
-            const tappable = !!p;
+            const tappable = true;
             const hosT = d.hos ? hosText(d.hos) : null;
             return (
               <div key={d.providerId} style={{ border: "1px solid rgba(255,255,255,0.14)", marginBottom: 8 }}>
-                <button type="button" disabled={!tappable} onClick={() => { if (!p) return; if (p.truckId) openTruck(p.truckId); else setPick({ truckId: null, trailerId: null, vehicle: { id: p.vehicleId, name: p.vehicleName } }); }}
+                <button type="button" disabled={!tappable} onClick={() => { if (!p) { setOpenDriver((cur) => (cur === d.providerId ? null : d.providerId)); return; } if (p.truckId) openTruck(p.truckId); else setPick({ truckId: null, trailerId: null, vehicle: { id: p.vehicleId, name: p.vehicleName } }); }}
                   style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "transparent", border: "none", color: "#fff", cursor: tappable ? "pointer" : "default" }}>
                   <div style={{ fontSize: 16, fontWeight: 800 }}>
                     {d.name}
@@ -172,6 +174,15 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
                   </div>
                   <div style={{ fontSize: 13, marginTop: 3 }}>{driverLine(d)}</div>
                   {!p && d.diag && <div style={{ fontSize: 11, color: muted, marginTop: 3 }}>{d.diag}</div>}
+                  {!p && <div style={{ fontSize: 11, color: "#93c5fd", marginTop: 3 }}>{openDriver === d.providerId ? "Hide details ▲" : "Tap for details ▼"}</div>}
+                  {!p && openDriver === d.providerId && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.75)" }}>
+                      <div>Geotab doesn't say which vehicle this driver is in. What it returned for them:</div>
+                      {(d.debug ?? ["No further detail was returned."]).map((l, i) => <div key={i} style={{ marginTop: 2, color: muted }}>• {l}</div>)}
+                      {d.hos && <div style={{ marginTop: 4 }}>Hours are known, so the driver exists: {hosText(d.hos).text}</div>}
+                      <div style={{ marginTop: 4 }}>Searching the unit number instead works if you know the truck.</div>
+                    </div>
+                  )}
                   {hosT && <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: hosT.color }}>Hours · {hosT.text}</div>}
                   {p && !p.truckId && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>That vehicle isn't set up as a ProTankr truck. Tap to see it anyway.</div>}
                 </button>
