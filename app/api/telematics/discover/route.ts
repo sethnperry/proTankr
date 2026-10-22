@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     if (!p) return NextResponse.json({ error: "No active telematics connection." }, { status: 404 });
     if (req.nextUrl.searchParams.get("mode") === "shipments") {
       const days = Math.min(30, Math.max(1, Number(req.nextUrl.searchParams.get("days")) || 14));
-      return NextResponse.json({ drivers: await p.shipmentTimeline(vid, days) });
+      return NextResponse.json(await p.shipmentTimeline(vid, days));
     }
     return NextResponse.json(await p.discover(vid));
   } catch (e) {

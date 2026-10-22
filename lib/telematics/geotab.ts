@@ -314,11 +314,13 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
-    async shipmentTimeline(vehicleId: string, days: number): Promise<DriverTimeline[]> {
+    async shipmentTimeline(vehicleId: string, days: number) {
+      const errors: string[] = [];
       const from = new Date(Date.now() - days * 86400000).toISOString();
+      const shipFrom = new Date(Date.now() - 90 * 86400000).toISOString(); // shipments are logged sparsely, so look further back
       const [ships, trips, vehicles, drivers] = await Promise.all([
-        call("Get", { typeName: "ShipmentLog", search: { fromDate: from }, resultsLimit: 5000 }).catch(() => [] as any[]),
-        call("Get", { typeName: "Trip", search: { deviceSearch: { id: vehicleId }, fromDate: from }, resultsLimit: 5000 }).catch(() => [] as any[]),
+        call("Get", { typeName: "ShipmentLog", search: { fromDate: shipFrom }, resultsLimit: 5000 }).catch((e) => { errors.push(`Shipments: ${String((e as Error).message).slice(0, 200)}`); return [] as any[]; }),
+        call("Get", { typeName: "Trip", search: { deviceSearch: { id: vehicleId }, fromDate: from }, resultsLimit: 5000 }).catch((e) => { errors.push(`Trips: ${String((e as Error).message).slice(0, 200)}`); return [] as any[]; }),
         this.listVehicles().catch(() => []),
         this.listDrivers().catch(() => []),
       ]);
@@ -333,7 +335,9 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         return g;
       };
       const driverId = (r: any) => { const id = String(r?.driver?.id ?? r?.user?.id ?? ""); return !id || /^unknown/i.test(id) ? null : id; };
-      for (const r of (ships ?? []) as any[]) {
+      // Only the most recent shipments: they are logged sparsely and older ones can't be matched to a driver's time anyway.
+      const recentShips = ((ships ?? []) as any[]).sort((a, b) => String(b.activeFrom ?? b.dateTime ?? "").localeCompare(String(a.activeFrom ?? a.dateTime ?? ""))).slice(0, 40);
+      for (const r of recentShips) {
         const doc = r?.documentNumber ? String(r.documentNumber).trim() : "";
         const item: TimelineItem = {
           kind: "shipment", start: open(r.activeFrom ?? r.dateTime), end: open(r.activeTo),
@@ -355,7 +359,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       }
       const out = [...groups.values()].filter((g) => g.items.length);
       for (const g of out) g.items.sort((a, b) => String(a.start ?? "").localeCompare(String(b.start ?? "")));
-      return out.sort((a, b) => a.name.localeCompare(b.name));
+      return { drivers: out.sort((a, b) => a.name.localeCompare(b.name)), errors, counts: { shipments: (ships ?? []).length, trips: (trips ?? []).length } };
     },
 
     async discover(vehicleId: string): Promise<Discovery> {

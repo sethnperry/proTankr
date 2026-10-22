@@ -22,6 +22,7 @@ import type { Discovery, DriverTimeline } from "@/lib/telematics/types";
 function ShipmentsSection({ truckId, providerName }: { truckId: string; providerName: string }) {
   const [state, setState] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [rows, setRows] = useState<DriverTimeline[]>([]);
+  const [info, setInfo] = useState<{ errors: string[]; counts: { shipments: number; trips: number } } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   async function run() {
     setState("loading"); setErr(null);
@@ -30,17 +31,22 @@ function ShipmentsSection({ truckId, providerName }: { truckId: string; provider
       const r = await fetch(`/api/telematics/discover?truckId=${encodeURIComponent(truckId)}&mode=shipments&days=14`, { headers: { Authorization: `Bearer ${s.session?.access_token ?? ""}` }, cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error ?? "Couldn't ask.");
-      setRows((j.drivers ?? []) as DriverTimeline[]); setState("ok");
+      setRows((j.drivers ?? []) as DriverTimeline[]); setInfo({ errors: j.errors ?? [], counts: j.counts ?? { shipments: 0, trips: 0 } }); setState("ok");
     } catch (e: any) { setErr(e?.message ?? "Couldn't ask."); setState("error"); }
   }
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "still open");
   return (
     <div style={{ marginTop: 10 }}>
       <button type="button" onClick={() => void run()} disabled={state === "loading"} aria-busy={state === "loading"} style={{ ...SECONDARY_BTN }}>
-        {state === "loading" ? `Asking ${providerName}…` : state === "ok" ? "Ask again" : "Shipments and trips by driver (14 days)"}
+        {state === "loading" ? `Asking ${providerName}…` : state === "ok" ? "Ask again" : "Recent shipments and trips by driver"}
       </button>
       {err && <div style={{ color: "#fca5a5", fontSize: 13, marginTop: 8 }}>{err}</div>}
-      {state === "ok" && rows.length === 0 && <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>Nothing found in the last 14 days.</div>}
+      {state === "ok" && info && (
+        <div style={{ fontSize: 13, marginTop: 8 }}>
+          <div style={{ color: MUTED }}>{providerName} returned {info.counts.shipments} shipments (last 90 days, newest 40 shown) and {info.counts.trips} trips for this truck (14 days).</div>
+          {info.errors.map((e, i) => <div key={i} style={{ color: "#fb923c", marginTop: 4 }}>• {e}</div>)}
+        </div>
+      )}
       {rows.map((g) => (
         <div key={g.driverId ?? "none"} style={{ marginTop: 14 }}>
           <div style={{ ...cap, color: "#fff" }}>{g.name} · {g.items.filter((i) => i.kind === "shipment").length} shipments, {g.items.filter((i) => i.kind === "trip").length} trips</div>
