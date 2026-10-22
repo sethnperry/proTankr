@@ -31,6 +31,8 @@ export type HosAvailability = {
   status: string | null;       // current duty status: D, ON, OFF, SB, PC, YM
   statusSince?: string | null; // ISO time the current status began
   offSince?: string | null;    // ISO time the current unbroken off-duty stretch began (null when not off duty)
+  breakLeftMin?: number | null; // driving left before the 30-minute break rule (worked out from duty logs)
+  recap?: { days: { date: string; minutes: number }[]; usedMin: number; availableTomorrowMin: number; limitMin: number } | null;
   at: string;                  // ISO time this was read
 };
 
@@ -77,7 +79,7 @@ export interface TelematicsProvider {
   fleetStatus(): Promise<{ positions: Map<string, VehicleReading>; current: Map<string, string>; historic: Map<string, string> }>;
   /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */
   lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null>;
-  hos(driverId: string): Promise<HosAvailability | null>;
+  hos(driverId: string, tz?: string): Promise<HosAvailability | null>;
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
   /** GPS trail for one vehicle inside a window, oldest first (paged). */

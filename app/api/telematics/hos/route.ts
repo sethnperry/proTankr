@@ -26,7 +26,10 @@ export async function GET(req: NextRequest) {
   // ?self=1: any member gets their own clocks (for the Driver Dashboard) and nobody else's.
   if (req.nextUrl.searchParams.get("self") === "1") {
     if (!r.role && !r.superAdmin) return NextResponse.json({ error: "Not in this company." }, { status: 403 });
-    const ck = `${companyId}:${uid}`;
+    const tzRaw = req.nextUrl.searchParams.get("tz") || "";
+    let tz = "America/New_York";
+    try { if (tzRaw) { new Intl.DateTimeFormat("en-US", { timeZone: tzRaw }); tz = tzRaw; } } catch { /* keep default */ }
+    const ck = `${companyId}:${uid}:${tz}`;
     const mine = selfCache.get(ck);
     if (mine && Date.now() - mine.at < SELF_TTL_MS) return NextResponse.json({ connected: true, hos: mine.hos });
     try {
@@ -36,7 +39,7 @@ export async function GET(req: NextRequest) {
       let pid = (data as { provider_user_id?: string } | null)?.provider_user_id;
       if (!pid) { try { pid = (await autoLinkDriver(companyId, uid)) ?? undefined; } catch { /* stays unlinked */ } }
       if (!pid) return NextResponse.json({ connected: true, hos: null });
-      const hos = await p.hos(pid);
+      const hos = await p.hos(pid, tz);
       selfCache.set(ck, { at: Date.now(), hos });
       return NextResponse.json({ connected: true, hos });
     } catch (e) {

@@ -4,6 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
+import { breakLeftMin, cycleRecap } from "./cycleRecap.ts";
 import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs } from "./dutyLogs.ts";
 
@@ -489,7 +490,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return ld ? { vehicleId: String(ld.device.id), at: String(ld.dateTime) } : null;
     },
 
-    async hos(id: string): Promise<HosAvailability | null> {
+    async hos(id: string, tz?: string): Promise<HosAvailability | null> {
       const [avail, logs] = await Promise.all([
         call("Get", { typeName: "DutyStatusAvailability", search: { userSearch: { id } } }) as Promise<any[]>,
         call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 96 * 3600 * 1000).toISOString() } }).catch(() => []) as Promise<any[]>,

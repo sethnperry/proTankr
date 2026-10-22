@@ -16,6 +16,7 @@ import { Spinner, busyProps, busyText, usePending } from "@/lib/ui/pending";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { HosRecapModal } from "@/app/planner/components/trip/HosRecap";
 import type { TripPickupRow, TripTable } from "@/lib/trips/types";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -1238,6 +1239,7 @@ export default function HomePage() {
   // Right-now sheets opened from the gauges and the Terminal tool.
   const [terminalNowOpen, setTerminalNowOpen] = useState(false);
   const [dropNowOpen, setDropNowOpen] = useState(false);
+  const [recapOpen, setRecapOpen] = useState(false);
   // Truck / trailer alert squares: permits + service coming due.
   const truckAlerts = useUnitAlerts("truck", truckId, companyId, undefined, hookup?.engineHours ?? null);
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
@@ -1479,26 +1481,31 @@ export default function HomePage() {
 
       {myHos && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null) && (() => {
         const least = Math.min(myHos.driveLeftMin ?? Infinity, myHos.dutyLeftMin ?? Infinity);
-        const cell = (label: string, min: number | null) => (
+        const cell = (label: string, min: number | null | undefined) => (
           <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-            <div className="dash-num" style={{ fontSize: 24, fontWeight: 800, color: clockColor(min), lineHeight: 1.1 }}>{clockHM(min)}</div>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginTop: 3 }}>{label}</div>
+            <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, color: clockColor(min ?? null), lineHeight: 1.1 }}>{clockHM(min ?? null)}</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: L.muted, marginTop: 3, whiteSpace: "nowrap" }}>{label}</div>
           </div>
         );
         const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(myHos.at)) / 60000));
         return (
           <div style={{ ...L.secondary, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted }}>Hours left</span>
-              <span style={{ flex: 1 }} />
-              {myHos.status && <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>{STATUS_NAME[myHos.status] ?? myHos.status}</span>}
-              <span style={{ fontSize: 11, color: L.faint }}>{ageMin < 2 ? "just now" : `${ageMin} min ago`}</span>
+            <div role="button" tabIndex={0} onClick={() => setRecapOpen(true)} onKeyDown={(e) => { if (e.key === "Enter") setRecapOpen(true); }} style={{ cursor: "pointer" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted }}>Hours</span>
+                <span style={{ flex: 1 }} />
+                {myHos.status && <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>{STATUS_NAME[myHos.status] ?? myHos.status}</span>}
+                <span style={{ fontSize: 11, color: L.faint }}>{ageMin < 2 ? "just now" : `${ageMin} min ago`}</span>
+                <span style={{ color: L.faint }}>›</span>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {cell("Break in", myHos.breakLeftMin)}
+                {cell("Driving left", myHos.driveLeftMin)}
+                {cell("Workday left", myHos.dutyLeftMin)}
+                {cell("Cycle left", myHos.cycleLeftMin)}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {cell("Drive", myHos.driveLeftMin)}
-              {cell("Window", myHos.dutyLeftMin)}
-              {myHos.cycleLeftMin != null && cell("Cycle", myHos.cycleLeftMin)}
-            </div>
+            <HosRecapModal open={recapOpen} hos={myHos} onClose={() => setRecapOpen(false)} />
             {hosVsTrip && (
               <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, color: hosVsTrip.level === "bad" ? "#f87171" : "#fb923c" }}>
                 {hosVsTrip.level === "bad" ? "⚠ " : ""}{hosVsTrip.text}

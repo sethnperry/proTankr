@@ -26,7 +26,7 @@ export function useMyHos(companyId: string | null, enabled: boolean): HosAvailab
           if (!token) return;
           // First look each time the dashboard opens: link this driver to Geotab if they match.
           if (!linked) { linked = true; await linkMeToTelematics(companyId); }
-          const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}&self=1`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+          const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}&self=1&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "")}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
           const j = r.ok ? await r.json() : null;
           if (off) return;
           if (!j?.connected) { setHos(null); return; } // no telematics: stop asking
