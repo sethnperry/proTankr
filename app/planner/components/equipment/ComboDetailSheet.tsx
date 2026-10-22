@@ -15,6 +15,7 @@ import type { ServiceType } from "../../modals/ServiceTypeManager";
 import { DARK_EXP_COLOR } from "../../cards/cardTheme";
 import type { TrackUnit } from "@/lib/equipment/trackList";
 import { PRIMARY_BTN as primaryBtn, SECONDARY_BTN as secondaryBtn } from "@/lib/ui/look";
+import { CameraButton } from "./AddDocumentSheet";
 
 const MUTED = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.14)", padding: 14, marginBottom: 12 };
@@ -99,7 +100,7 @@ function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "t
   );
 }
 
-export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, holderLabel, onOpenFile, onDropSwap, onStud, onNewDoc, primaryLabel = "Drop / Swap" }: {
+export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, holderLabel, onOpenFile, onDropSwap, onStud, onDocCaptured, primaryLabel = "Drop / Swap" }: {
   open: boolean; onClose: () => void; companyId: string;
   /** A combo passes both; a loose unit passes just its own. */
   truck: TrackUnit | null; trailer: TrackUnit | null;
@@ -107,8 +108,12 @@ export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, hol
   /** "In use by Seth Perry", or null when nobody holds it. */
   holderLabel: string | null;
   onOpenFile: (kind: "truck" | "trailer") => void;
-  onDropSwap: () => void; onStud: () => void; onNewDoc: () => void;
+  onDropSwap: () => void; onStud: () => void;
+  /** + New Doc opens the camera straight away; this gets the photos and which unit they are for. */
+  onDocCaptured: (kind: "truck" | "trailer", files: File[]) => void;
 }) {
+  const [chooseUnit, setChooseUnit] = useState(false);
+  const docBtn = { ...secondaryBtn, padding: "14px 4px", fontSize: 13, display: "block", textAlign: "center" as const, boxSizing: "border-box" as const };
   return (
     <FullscreenModal open={open} onClose={onClose} title={[truck?.name, trailer?.name].filter(Boolean).join(" / ")} footer={null}>
       {holderLabel && <div style={{ fontSize: 13, color: MUTED, marginBottom: 10 }}>{holderLabel}</div>}
@@ -117,9 +122,24 @@ export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, hol
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 4 }}>
         <button type="button" onClick={onDropSwap} style={{ ...primaryBtn, padding: "14px 4px", fontSize: 13 }}>{primaryLabel}</button>
         <button type="button" onClick={onStud} style={{ ...secondaryBtn, padding: "14px 4px", fontSize: 13 }}>STUD</button>
-        <button type="button" onClick={onNewDoc} style={{ ...secondaryBtn, padding: "14px 4px", fontSize: 13 }}>+ New Doc</button>
+        {truck && trailer ? (
+          <button type="button" onClick={() => setChooseUnit(true)} style={{ ...secondaryBtn, padding: "14px 4px", fontSize: 13 }}>+ New Doc</button>
+        ) : (
+          <CameraButton onFile={(f) => onDocCaptured(truck ? "truck" : "trailer", f)} style={docBtn}>+ New Doc</CameraButton>
+        )}
       </div>
       <button type="button" onClick={onClose} style={{ ...secondaryBtn, width: "100%", marginTop: 10 }}>Close</button>
+      {chooseUnit && truck && trailer && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", padding: 20, maxWidth: 360, width: "100%" }}>
+            <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 4 }}>Document for which unit?</div>
+            <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 16 }}>Pick one and the camera opens.</div>
+            <CameraButton onFile={(f) => { setChooseUnit(false); onDocCaptured("truck", f); }} style={{ ...docBtn, textAlign: "left", padding: "16px 18px", fontSize: 16, marginBottom: 10 }}>Truck · {truck.name}</CameraButton>
+            <CameraButton onFile={(f) => { setChooseUnit(false); onDocCaptured("trailer", f); }} style={{ ...docBtn, textAlign: "left", padding: "16px 18px", fontSize: 16, marginBottom: 10 }}>Trailer · {trailer.name}</CameraButton>
+            <button type="button" onClick={() => setChooseUnit(false)} style={{ ...secondaryBtn, width: "100%" }}>Cancel</button>
+          </div>
+        </div>
+      )}
     </FullscreenModal>
   );
 }

@@ -23,8 +23,9 @@ import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { RequiredEquipmentFields } from "@/lib/ui/driver/RequiredEquipmentFields";
 import { ServiceTypeListModal } from "./ServiceTypeManager";
+import { AddDocumentSheet, CameraButton } from "../components/equipment/AddDocumentSheet";
 import {
-  usePermitAttachments, AttachmentIndicator, DocPreviewModal,
+  usePermitAttachments, DocPreviewModal,
   type AttachmentRecord, type AttachmentGroup,
 } from "@/lib/ui/driver/DocHub";
 
@@ -701,6 +702,7 @@ function UnitSection({
   const { pagesFor, hasDoc, reload: reloadDocs } = usePermitAttachments(unitKind, unitId, companyId);
   const [screen, setScreen] = useState<"front" | "details">("front");
   const [serviceOpen, setServiceOpen] = useState(false);
+  const [docFiles, setDocFiles] = useState<File[] | null>(null);
 
   const rows: Row[] = useMemo(() => {
     const applicable = types.filter((t) => {
@@ -771,6 +773,7 @@ function UnitSection({
           {unitKind === "trailer" && (
             <CompartmentsSection trailerId={unitId} expandedId={expandedId} onToggleExpand={onToggleExpand} />
           )}
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)", margin: "18px 0 8px" }}>Documents · {rows.length}</div>
           {rows.map((row) => (
             <PermitRow
               key={row.id}
@@ -787,21 +790,57 @@ function UnitSection({
               onSaved={onSaved}
             />
           ))}
-          <div
-            onClick={onAddType}
+          <CameraButton
+            onFile={(files) => setDocFiles(files)}
             style={{
-              borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", padding: "10px 12px",
-              textAlign: "center" as const, cursor: "pointer", fontSize: 13, fontWeight: 700,
-              color: "rgba(255,255,255,0.35)", marginTop: 4,
+              display: "block", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.3)", padding: "14px 12px",
+              textAlign: "center" as const, fontSize: 14, fontWeight: 800, color: "rgba(255,255,255,0.7)", marginTop: 4,
             }}
           >
-            + Add permit type
-          </div>
+            + Document
+          </CameraButton>
+          {docFiles && (
+            <AddDocumentSheet
+              open onClose={() => setDocFiles(null)} companyId={companyId} unitKind={unitKind} unitId={unitId} unitName={unitName}
+              initialFiles={docFiles} onSaved={() => { reloadDocs(); onSaved(); }}
+            />
+          )}
         </>
       )}
 
       <ServiceTypeListModal open={serviceOpen} onClose={() => setServiceOpen(false)} companyId={companyId} unit={unitKind} />
     </div>
+  );
+}
+
+// ─── Document thumbnail (replaces the paperclip) ────────────────────────────
+// The first page as a small preview, with a page count when there are several.
+// Tapping it opens the viewer. No document yet shows a dashed placeholder.
+
+function DocThumb({ pages, onOpen }: { pages: AttachmentRecord[]; onOpen: () => void }) {
+  const first = pages[0] ?? null;
+  const [url, setUrl] = useState<string | null>(null);
+  const isImage = !!first?.mime_type?.startsWith("image/");
+  useEffect(() => {
+    setUrl(null);
+    if (!first || !isImage) return;
+    let alive = true;
+    void supabase.storage.from("equipment-docs").createSignedUrl(first.file_path, 3600).then(({ data }) => { if (alive) setUrl(data?.signedUrl ?? null); });
+    return () => { alive = false; };
+  }, [first?.file_path, isImage]); // eslint-disable-line react-hooks/exhaustive-deps
+  const box: React.CSSProperties = { position: "relative", width: 44, height: 56, flexShrink: 0, borderRadius: 2, overflow: "hidden", cursor: first ? "pointer" : "default", padding: 0 };
+  if (!first) {
+    return <div aria-hidden style={{ ...box, border: "1px dashed rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.3)", textAlign: "center", lineHeight: 1.2 }}>NO<br />DOC</div>;
+  }
+  return (
+    <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} aria-label="View document"
+      style={{ ...box, border: "1px solid rgba(255,255,255,0.3)", background: "#1a1a1a" }}>
+      {isImage && url ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        : <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 10, fontWeight: 900, color: "rgba(255,255,255,0.7)" }}>{isImage ? "…" : "PDF"}</span>}
+      {pages.length > 1 && (
+        <span style={{ position: "absolute", right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", color: "#fff", fontSize: 10, fontWeight: 900, padding: "1px 5px" }}>{pages.length}</span>
+      )}
+    </button>
   );
 }
 
@@ -948,13 +987,15 @@ function PermitRow({
   }
 
   return (
-    <div style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-      <div onClick={onToggleExpand} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 2px", cursor: "pointer" }}>
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-          {row.type.name}
-        </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: statusColor(row), flexShrink: 0 }}>{statusText(row)}</span>
-        <AttachmentIndicator hasDoc={hasDoc} onOpen={() => setPreviewGroup({ category: row.type.permit_type_id, label: row.type.name, pages })} />
+    <div style={{ border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", marginBottom: 8, padding: "0 10px" }}>
+      <div onClick={onToggleExpand} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer" }}>
+        <DocThumb pages={pages} onOpen={() => setPreviewGroup({ category: row.type.permit_type_id, label: row.type.name, pages })} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(255,255,255,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+            {row.type.name}
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: statusColor(row), marginTop: 3 }}>{statusText(row)}</div>
+        </div>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onEditType(); }}

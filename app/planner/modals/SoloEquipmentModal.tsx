@@ -36,6 +36,7 @@ import { type ServiceType, ServiceTypeSelect, ServiceTypeEditorModal, SimpleServ
 import UnitPickerSheet from "./UnitPickerSheet";
 import { EquipmentBoard } from "../components/equipment/EquipmentBoard";
 import { ComboDetailSheet } from "../components/equipment/ComboDetailSheet";
+import { AddDocumentSheet } from "../components/equipment/AddDocumentSheet";
 import { useEquipmentBoardStatus } from "../hooks/useEquipmentBoardStatus";
 import { buildTrackRows, type TrackUnit } from "@/lib/equipment/trackList";
 import RegionLocalAreaFilterModal, { type EquipmentFilter } from "./RegionLocalAreaFilterModal";
@@ -571,7 +572,7 @@ export default function SoloEquipmentModal({
   const [detailComboId, setDetailComboId] = useState<string | null>(null);
   const [dropSwapOpen, setDropSwapOpen] = useState(false);
   const [studPickOpen, setStudPickOpen] = useState(false);
-  const [docPickOpen, setDocPickOpen] = useState(false);
+  const [docDraft, setDocDraft] = useState<{ kind: "truck" | "trailer"; id: string; files: File[] } | null>(null);
   const [docUnit, setDocUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   // Drop trailer / Park truck: status (+ optional location) first, then the unlink.
   const [statusFlow, setStatusFlow] = useState<"drop_trailer" | "park_truck" | null>(null);
@@ -1433,7 +1434,7 @@ export default function SoloEquipmentModal({
             onOpenFile={(kind) => setDocUnit({ kind, id: u.id })}
             onDropSwap={() => startCouple(detailUnit.kind, u.id)}
             onStud={() => { setDetailUnit(null); openStatusFor(detailUnit.kind, u.id); }}
-            onNewDoc={() => { setDetailUnit(null); setDocUnit({ kind: detailUnit.kind, id: u.id }); }}
+            onDocCaptured={(kind, files) => { setDetailUnit(null); setDocDraft({ kind, id: u.id, files }); }}
           />
         );
       })()}
@@ -1450,7 +1451,7 @@ export default function SoloEquipmentModal({
           onOpenFile={(kind) => setDocUnit({ kind, id: kind === "truck" ? detailRow.truck.id : detailRow.trailer.id })}
           onDropSwap={() => setDropSwapOpen(true)}
           onStud={() => setStudPickOpen(true)}
-          onNewDoc={() => setDocPickOpen(true)}
+          onDocCaptured={(kind, files) => { setDetailComboId(null); setDocDraft({ kind, id: kind === "truck" ? detailRow.truck.id : detailRow.trailer.id, files }); }}
         />
       )}
       {detailRow && dropSwapOpen && (
@@ -1498,16 +1499,16 @@ export default function SoloEquipmentModal({
           onCancel={() => setStudPickOpen(false)}
         />
       )}
-      {detailRow && (
-        <UnitPickerSheet
-          open={docPickOpen}
-          title="New document for which unit?"
-          subtitle="Opens that unit's file, where you can attach it to a permit."
-          truckName={detailRow.truck.name}
-          trailerName={detailRow.trailer.name}
-          onPickTruck={() => { setDocPickOpen(false); setDocUnit({ kind: "truck", id: detailRow.truck.id }); }}
-          onPickTrailer={() => { setDocPickOpen(false); setDocUnit({ kind: "trailer", id: detailRow.trailer.id }); }}
-          onCancel={() => setDocPickOpen(false)}
+      {docDraft && (
+        <AddDocumentSheet
+          open
+          onClose={() => setDocDraft(null)}
+          companyId={companyId}
+          unitKind={docDraft.kind}
+          unitId={docDraft.id}
+          unitName={(docDraft.kind === "truck" ? trucks.find((t) => t.truck_id === docDraft.id)?.truck_name : trailers.find((t) => t.trailer_id === docDraft.id)?.trailer_name) ?? ""}
+          initialFiles={docDraft.files}
+          onSaved={() => { void loadEquipment(); }}
         />
       )}
       <BinderModal
