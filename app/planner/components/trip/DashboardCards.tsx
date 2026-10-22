@@ -11,7 +11,7 @@ import React, { useState } from "react";
 import { CardBusy, Spinner, busyProps } from "@/lib/ui/pending";
 import { apiTierColor, type ApiTier } from "../../utils/apiBasis";
 import type { TerminalProductStatus, StoreDelivery } from "../../hooks/useDashboardCards";
-import type { HeadingToDelivery, HeadingToTerminal, FleetTripLike } from "@/lib/trips/dashboardCards";
+import type { HeadingToDelivery, HeadingToTerminal, FleetTripLike, StoreActivity, StoreActivityState } from "@/lib/trips/dashboardCards";
 import type { ComposedOutageReport } from "../../hooks/useTerminalOutageReports";
 import { PARK_FOR_LABEL, onBoard } from "@/lib/trips/tripFlow";
 
@@ -374,6 +374,59 @@ export function HeadingToDeliveryCard({ deliveryName, items, productInfo, defaul
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const STATE_LABEL: Record<StoreActivityState, { text: string; color: string }> = {
+  delivering: { text: "Delivering now", color: "#4ade80" },
+  enroute: { text: "Loaded, en route", color: "#fff" },
+  planned: { text: "Planned", color: muted },
+};
+
+// Who in the company has this store on their trip right now: delivering there, loaded and on the way, or
+// planned. The previous deliveries (every carrier) are the card below it.
+export function StoreActivityCard({ storeName, items, productInfo, onPickStore }: {
+  storeName: string | null;
+  items: StoreActivity[];
+  productInfo: ProductInfoFn;
+  onPickStore: () => void;
+}) {
+  if (!storeName) {
+    return (
+      <div style={cardStyle}>
+        <button type="button" onClick={onPickStore} style={{ ...rowStyle, borderTop: "none", width: "100%", background: "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}>
+          Select a delivery location ›
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div style={cardStyle}>
+      <CardHeader title="Going to this store" summary={items.length === 0 ? "Nobody right now" : `${items.length} load${items.length === 1 ? "" : "s"}`} open onToggle={() => {}} />
+      {items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No company loads are delivering, on the way or planned for {storeName}.</div>}
+      {items.map((x) => {
+        const st = STATE_LABEL[x.state];
+        return (
+          <div key={x.tripId} style={rowStyle}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {x.isMine ? "You" : x.driverName ?? "Driver"}{x.truckName ? <span style={{ color: muted }}> · Truck {x.truckName}</span> : null}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: st.color }}>{st.text}</span>
+            </div>
+            {(x.products.length > 0 || x.plannedStartAt) && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
+                {x.products.map((a) => {
+                  const info = productInfo(a.productId);
+                  return <span key={String(a.productId)} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Dot color={colorOf(info)} />{info.code}{a.gallons != null ? ` ${gal(a.gallons)}` : ""}</span>;
+                })}
+                {x.plannedStartAt && <span style={{ color: muted }}>starts {when(x.plannedStartAt)}</span>}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

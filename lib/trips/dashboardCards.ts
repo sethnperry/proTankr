@@ -86,3 +86,47 @@ export function parkedPreloads(trips: FleetTripLike[], myTrailerId: string | nul
     .filter((f) => f.trip.status === "parked" && f.trip.trailer_id !== myTrailerId && onBoard(f.compLoads).length > 0)
     .sort((a, b) => String(b.trip.parked_at ?? "").localeCompare(String(a.trip.parked_at ?? "")));
 }
+
+export type StoreActivityState = "delivering" | "enroute" | "planned";
+export type StoreActivity = {
+  tripId: string;
+  state: StoreActivityState;
+  isMine: boolean;
+  driverName: string | null;
+  truckName: string | null;
+  // What's on the truck (delivering / en route) or what's planned to load (dispatched).
+  products: { productId: string | null; gallons: number | null }[];
+  plannedStartAt: string | null;
+};
+
+const STATE_RANK: Record<StoreActivityState, number> = { delivering: 0, enroute: 1, planned: 2 };
+
+// Everyone in the company who has this store on their trip right now: delivering there, loaded and on
+// the way, or planned (dispatched or still loading). `dispatched` are trips dispatched but not begun.
+// Previous deliveries come from the server (every carrier), not from here.
+export function storeActivity(trips: FleetTripLike[], dispatched: FleetTripLike[], locationId: string | null, myUserId: string | null): StoreActivity[] {
+  if (!locationId) return [];
+  const out: StoreActivity[] = [];
+  const seen = new Set<string>();
+  for (const f of [...trips, ...dispatched]) {
+    if (f.trip.status === "parked" || seen.has(f.trip.trip_id)) continue;
+    const d = f.deliveries.find((x) => x.status === "planned" && x.location_id === locationId);
+    if (!d) continue;
+    seen.add(f.trip.trip_id);
+    const aboard = onBoard(f.compLoads);
+    const byProduct = new Map<string | null, number>();
+    for (const c of aboard) byProduct.set(c.product_id, (byProduct.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
+    let products: StoreActivity["products"] = [...byProduct].map(([productId, gallons]) => ({ productId, gallons }));
+    const state: StoreActivityState = d.arrived_at ? "delivering" : aboard.length > 0 ? "enroute" : "planned";
+    if (state === "planned") {
+      const planned = new Map<string | null, null>();
+      for (const p of f.pickups) for (const c of p.planned_comps ?? []) planned.set(c.product_id ?? null, null);
+      products = [...planned.keys()].map((productId) => ({ productId, gallons: null }));
+    }
+    out.push({
+      tripId: f.trip.trip_id, state, isMine: f.trip.driver_id === myUserId, driverName: f.driverName, truckName: f.truckName,
+      products, plannedStartAt: f.trip.status === "dispatched" ? f.trip.planned_start_at ?? null : null,
+    });
+  }
+  return out.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state]);
+}

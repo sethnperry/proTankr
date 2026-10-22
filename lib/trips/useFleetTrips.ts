@@ -6,7 +6,7 @@
 // their children are readable by any company member under the phase 1 RLS.
 // Refreshes every minute and when the tab comes back into view.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Place } from "./fleetProgress";
 import { truckStartPlace } from "./fleetProgress";
@@ -26,6 +26,8 @@ export type FleetTrip = {
 };
 
 const LIVE = ["draft", "loading", "in_transit", "delivering", "parked"];
+// Dispatched loads (not begun) are returned separately so the live lists never count them as headed anywhere.
+const QUERY = [...LIVE, "dispatched"];
 const POLL_MS = 60_000;
 
 export function useFleetTrips(companyId: string | null) {
@@ -39,7 +41,7 @@ export function useFleetTrips(companyId: string | null) {
     if (!companyId) return;
     setLoading(true);
     try {
-      const tr = await supabase.from("trips").select("*").eq("company_id", companyId).in("status", LIVE)
+      const tr = await supabase.from("trips").select("*").eq("company_id", companyId).in("status", QUERY)
         .order("started_at", { ascending: false });
       if (tr.error) throw tr.error;
       const rows = (tr.data ?? []) as TripRow[];
@@ -139,5 +141,7 @@ export function useFleetTrips(companyId: string | null) {
     };
   }, [load]);
 
-  return { trips, locations, loading, loaded, error, reload: load };
+  const live = useMemo(() => trips.filter((t) => t.trip.status !== "dispatched"), [trips]);
+  const dispatched = useMemo(() => trips.filter((t) => t.trip.status === "dispatched"), [trips]);
+  return { trips: live, dispatched, locations, loading, loaded, error, reload: load };
 }

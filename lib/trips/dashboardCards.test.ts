@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { headingToDelivery, headingToTerminal, parkedPreloads, type FleetTripLike } from "./dashboardCards.ts";
+import { headingToDelivery, headingToTerminal, parkedPreloads, storeActivity, type FleetTripLike } from "./dashboardCards.ts";
 
 const f = (id: string, over: any = {}): FleetTripLike => ({
   driverName: `D${id}`, truckName: `T${id}`, trailerName: `R${id}`,
@@ -45,4 +45,22 @@ test("parked preloads skip my own trailer and empty trailers", () => {
     f("4", { trip: { status: "parked", parked_at: "2026-10-04" }, compLoads: [cl()] as any }),
   ];
   assert.deepEqual(parkedPreloads(trips, "mine").map((x) => x.trip.trip_id), ["4", "1"]);
+});
+
+test("store activity: delivering now, loaded en route, planned (dispatched); sorted; me included; other stores and parked excluded", () => {
+  const trips = [
+    f("1", { deliveries: [dl()] as any, compLoads: [cl()] as any }),                                   // loaded, on the way
+    f("2", { deliveries: [dl({ arrived_at: "x" })] as any, compLoads: [cl({ gross_gallons: 5000 })] as any }), // delivering
+    f("3", { deliveries: [dl()] as any }),                                                              // planned, nothing loaded
+    f("4", { deliveries: [dl({ location_id: "L2" })] as any, compLoads: [cl()] as any }),               // another store
+    f("5", { trip: { status: "parked" }, deliveries: [dl()] as any, compLoads: [cl()] as any }),        // parked
+    f("me", { trip: { driver_id: "me" }, deliveries: [dl()] as any, compLoads: [cl()] as any }),
+  ];
+  const dispatched = [f("9", { trip: { status: "dispatched", planned_start_at: "2026-10-23T10:00:00Z" }, deliveries: [dl()] as any, pickups: [pk({ planned_comps: [{ comp_number: 1, product_id: "P7" }] })] as any })];
+  const r = storeActivity(trips, dispatched, "L1", "me");
+  assert.deepEqual(r.map((x) => [x.tripId, x.state]), [["2", "delivering"], ["1", "enroute"], ["me", "enroute"], ["3", "planned"], ["9", "planned"]]);
+  assert.equal(r.find((x) => x.tripId === "me")!.isMine, true);
+  assert.deepEqual(r.find((x) => x.tripId === "9")!.products, [{ productId: "P7", gallons: null }]);
+  assert.equal(r.find((x) => x.tripId === "9")!.plannedStartAt, "2026-10-23T10:00:00Z");
+  assert.deepEqual(storeActivity(trips, dispatched, null, "me"), []);
 });

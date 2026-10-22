@@ -117,7 +117,7 @@ import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
-import { headingToDelivery, headingToTerminal, parkedPreloads } from "@/lib/trips/dashboardCards";
+import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
@@ -129,7 +129,7 @@ import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/a
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR } from "@/lib/expiry";
-import { HeadingToDeliveryCard, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, TerminalStatusCard } from "../components/trip/DashboardCards";
+import { HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
 import { DispatchedCard, type DispatchedItem } from "./DispatchedCard";
@@ -285,7 +285,6 @@ export default function HomePage() {
   const fleet = useFleetTrips(companyId);
   const myDelivery = snap ? plannedDeliveries(snap.deliveries)[0] ?? null : null;
   const toMyTerminal = useMemo(() => headingToTerminal(fleet.trips, alertTerminalId, userId), [fleet.trips, alertTerminalId, userId]);
-  const toMyDelivery = useMemo(() => headingToDelivery(fleet.trips, myDelivery?.location_id ?? null, userId), [fleet.trips, myDelivery?.location_id, userId]);
   // My own truck counts too: headed to this rack until I've left it, and
   // headed to the drop while loaded with a delivery set.
   const meToRack = !!snap && !!alertTerminalId && String(activePickup(snap.pickups)?.terminal_id ?? "") === alertTerminalId;
@@ -1249,8 +1248,23 @@ export default function HomePage() {
     color: s.worst ? EXPIRY_COLOR[s.worst] : LOOK.muted,
     onClick: has ? () => setUnitAlertsOpen(which) : undefined,
   });
-  const meToDrop = !!myDelivery && aboardRows.length > 0;
-  const dropCount = toMyDelivery.length + (meToDrop ? 1 : 0);
+  // Everyone in the company with the SELECTED store on their trip: delivering there, loaded and on the way, or
+  // planned. My own trip is included (from the server list, or from this phone when it hasn't synced yet).
+  const storeLive = useMemo(() => {
+    const list = storeActivity(fleet.trips, fleet.dispatched, selectedLoc?.location_id ?? null, userId);
+    if (selectedLoc && myDelivery?.location_id === selectedLoc.location_id && openTrip && !list.some((x) => x.isMine)) {
+      const by = new Map<string | null, number>();
+      for (const c of aboardRows) by.set(c.product_id, (by.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
+      list.unshift({
+        tripId: openTrip.trip_id, isMine: true, driverName: null, truckName: null, plannedStartAt: null,
+        state: myDelivery.arrived_at ? "delivering" : aboardRows.length > 0 ? "enroute" : "planned",
+        products: [...by].map(([productId, gallons]) => ({ productId, gallons })),
+      });
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleet.trips, fleet.dispatched, selectedLoc?.location_id, userId, myDelivery?.location_id, myDelivery?.arrived_at, openTrip?.trip_id, aboardRows]);
+  const dropCount = storeLive.length;
   // 1 (usually just me) is white; more than one truck going there is red.
   const countColor = (n: number) => (n === 0 ? LOOK.muted : n === 1 ? "#fff" : "#f87171");
   const switchTerminal = () => {
@@ -2000,9 +2014,13 @@ export default function HomePage() {
           );
         })()}
       </FullscreenModal>
-      <FullscreenModal open={dropNowOpen} title={myDelivery ? deliveryName(myDelivery) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
-        <HeadingToDeliveryCard defaultOpen deliveryName={myDelivery ? deliveryName(myDelivery) : null} items={toMyDelivery} productInfo={productInfo}
-          emptyText={myDelivery ? "No other company loads headed here right now." : "Set a delivery on your trip to see other loads headed there."} />
+      <FullscreenModal open={dropNowOpen} title={selectedLoc ? locationTitle(selectedLoc) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
+        <StoreActivityCard
+          storeName={selectedLoc ? locationTitle(selectedLoc) : null}
+          items={storeLive}
+          productInfo={productInfo}
+          onPickStore={() => { setDropNowOpen(false); setPicker({ mode: "select" }); }}
+        />
         <div style={{ marginTop: 12 }}>
           <RecentDeliveriesCard
             alwaysOpen max={5}
