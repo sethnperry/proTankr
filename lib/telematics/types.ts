@@ -17,6 +17,8 @@ export type VehicleReading = {
   lastDriverId?: string | null; // when nobody is signed in: the last driver the provider recorded for it
   bearingDeg?: number | null; // direction of travel, degrees clockwise from north
   isDriving?: boolean | null;
+  /** The provider's own flag for whether the tracker is reporting in right now. */
+  communicating?: boolean | null;
 };
 
 export type ProviderDriver = { id: string; name: string; firstName: string | null; lastName: string | null; employeeNo: string | null };

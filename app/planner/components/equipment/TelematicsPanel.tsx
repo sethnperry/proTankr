@@ -201,6 +201,11 @@ export function TelematicsPanel({ open, onClose, providerName, truckId, truckNam
 
       {state === "ok" && reading && (
         <>
+          {(reading.communicating === false || (reading.at && Date.now() - Date.parse(reading.at) > 30 * 60000)) && (
+            <div style={{ border: "1px solid rgba(251,146,60,0.6)", background: "rgba(251,146,60,0.08)", padding: 12, marginBottom: 12, fontSize: 13, lineHeight: 1.5 }}>
+              <b>This position may be old.</b> {providerName} {reading.communicating === false ? "says this truck's tracker isn't reporting in right now" : `last heard from it ${ageText(reading.at)}`}. If the driver is moving, he may be in a different truck, or the tracker has lost power or signal.
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {tiles.map((t) => <GaugeTile key={t.key} t={t} />)}
           </div>

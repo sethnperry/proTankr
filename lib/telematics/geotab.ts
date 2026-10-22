@@ -545,6 +545,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         lastDriverId: driverOf(s).historic,
         bearingDeg: Number.isFinite(Number(s?.bearing)) ? Math.round(Number(s.bearing)) : null,
         isDriving: typeof s?.isDriving === "boolean" ? s.isDriving : null,
+        communicating: typeof s?.isDeviceCommunicating === "boolean" ? s.isDeviceCommunicating : null,
       };
     },
   };
