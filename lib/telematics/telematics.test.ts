@@ -315,3 +315,24 @@ test("geotab: a driver's last vehicle ignores other drivers' rows even if the fi
   assert.deepEqual(await p2.lastVehicleOf("d3"), { vehicleId: "vC", at: "2026-10-22T09:00:00Z" });
   assert.equal(await p2.lastVehicleOf("nobody"), null);
 });
+
+test("geotab: a vehicle parked for weeks still reports where it last logged", async () => {
+  const old = new Date(Date.now() - 12 * 86400000).toISOString();
+  const f = (async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (b.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s5", userName: "u" } });
+    const t = b.params.typeName;
+    if (t === "DeviceStatusInfo") return ok([{ device: { id: "v1" }, speed: 0 }]); // no fix
+    if (t === "LogRecord") {
+      const to = Date.parse(b.params.search.toDate ?? new Date().toISOString());
+      return ok(Date.now() - to > 86400000 ? [{ latitude: 27.92, longitude: -82.4, dateTime: old }] : []); // only the older window has one
+    }
+    return ok([]);
+  }) as any;
+  const p = geotabProvider({ database: "db-parked", userName: "u", password: "p" }, f);
+  const r = await p.reading("v1");
+  assert.equal(r.lat, 27.92);
+  assert.equal(r.lon, -82.4);
+  assert.equal(r.at, old);
+});

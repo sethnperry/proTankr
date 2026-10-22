@@ -314,9 +314,14 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       // A parked vehicle's status record can lack a fix; its last log record still has one.
       let fix: { lat: number; lon: number; at: string } | null = null;
       if (!(Number.isFinite(Number(s?.latitude)) && Number.isFinite(Number(s?.longitude)))) {
-        const logs: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: new Date(Date.now() - 3 * 86400000).toISOString() }, resultsLimit: 5000 }).catch(() => []);
-        const lr = (logs ?? []).filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)) && r.dateTime).sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime))).pop();
-        if (lr) fix = { lat: Number(lr.latitude), lon: Number(lr.longitude), at: String(lr.dateTime) };
+        // Newest window first (3 days, then back to 30, then 180), so a truck parked for weeks still
+        // shows where it last reported without reading a busy truck's whole history.
+        const DAY = 86400000, now = Date.now();
+        for (const [fromD, toD] of [[3, 0], [30, 3], [180, 30]]) {
+          const logs: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: new Date(now - fromD * DAY).toISOString(), toDate: new Date(now - toD * DAY).toISOString() }, resultsLimit: 5000 }).catch(() => []);
+          const lr = (logs ?? []).filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)) && r.dateTime).sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime))).pop();
+          if (lr) { fix = { lat: Number(lr.latitude), lon: Number(lr.longitude), at: String(lr.dateTime) }; break; }
+        }
       }
       return {
         odometerMi: odo,
