@@ -68,7 +68,7 @@ export type LoadingTripMode = {
 };
 
 // One full-card step window, same look as ValueEntryOverlay.
-function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error }: {
+function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error, secondary }: {
   title: string;
   children: React.ReactNode;
   onBack: () => void;
@@ -76,6 +76,8 @@ function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error
   onNext: () => void;
   nextLabel: string;
   error?: string | null;
+  // A quiet extra action under the buttons (Finish Later).
+  secondary?: { label: string; onClick: () => void };
 }) {
   return (
     <div style={{
@@ -104,6 +106,12 @@ function StepCard({ title, children, onBack, backLabel, onNext, nextLabel, error
             {nextLabel}
           </button>
         </div>
+        {secondary && (
+          <button type="button" onClick={secondary.onClick}
+            style={{ background: "none", border: "none", color: "#93c5fd", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: "4px 0" }}>
+            {secondary.label}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -396,6 +404,8 @@ export default function LoadingModal(props: {
   trip?: LoadingTripMode | null;
   // Finish Loading was tapped: the page asks the telematics app for the shipment number once.
   onFinishLoadingStart?: () => void;
+  // Finish Later: leave now with only the times recorded; BOL, supplier and signature are completed later.
+  onLoadedLater?: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>, partial: Record<number, Partial<TripCompExtra>>) => void;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
   // Report Terminal Issue: hands off to CancelLoadSheet's report flow.
@@ -1005,6 +1015,29 @@ export default function LoadingModal(props: {
     setTripStep("times");
   }
   const quickCanFinish = !!trip && !!trip.signature && !trip.needsOdometer;
+
+  // Finish Later: record gross, API and temp (already known) and any BOL / supplier / net that is
+  // already filled in; the rest is completed from the dashboard.
+  function finishLater() {
+    if (!trip || !props.onLoadedLater || quickBusy) return;
+    const updated: Record<number, { gallons: number; api: number; tempF: number }> = {};
+    const partial: Record<number, Partial<TripCompExtra>> = {};
+    for (const r of quickRows) {
+      if (r.api == null || r.tempF == null) { setQuickBadIdx(r.idx); setQuickError(`Add API and temp for ${productNameById.get(r.productId) ?? "this product"} first.`); return; }
+      const grossShares = distributeWhole(r.gross, r.comps.map((c) => lineByComp.get(c)?.gallons ?? 0));
+      const netShares = r.net != null && Number.isFinite(r.net) ? distributeWhole(r.net, grossShares) : null;
+      r.comps.forEach((c, i) => {
+        updated[c] = { gallons: grossShares[i], api: r.api as number, tempF: r.tempF as number };
+        partial[c] = {
+          ...(r.bol.trim() ? { bol: r.bol.trim() } : {}),
+          ...(r.supplier.trim() ? { supplier: r.supplier.trim(), supplierId: r.supplierId } : {}),
+          ...(netShares ? { net: netShares[i] } : {}),
+        };
+      });
+    }
+    setQuickOpen(false);
+    props.onLoadedLater(updated, partial);
+  }
 
   const showLivePreview = livePreviewGrossLbs != null;
 
@@ -1765,6 +1798,7 @@ export default function LoadingModal(props: {
           onNext={() => void confirmQuick()}
           nextLabel={quickBusy ? "Checking…" : quickCanFinish ? "Confirm & Sign" : "Next"}
           error={quickError}
+          secondary={props.onLoadedLater ? { label: "Finish later — I'll add the BOL when I arrive", onClick: finishLater } : undefined}
         >
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", textAlign: "center" as const, marginTop: -4 }}>
             Check it matches your BOL. Tap a product to change anything.

@@ -28,6 +28,8 @@ import {
   rerouteDelivery,
   splitToNewDelivery,
   suggestTank,
+  stampLoadedLater,
+  pendingLoadDetails,
   takeOverTrip,
   timesProblem,
   tripSnapshot,
@@ -465,4 +467,35 @@ test("undo is refused once a load is attached", () => {
   arrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
   linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
   assert.equal(undoableArrival(snap()), null);
+});
+
+test("finish later: times are stamped now, details stay owed until confirmed, status is not dragged back", () => {
+  const { s, newId, trip, snap, getTrip } = setup();
+  arrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000), reading(2, 3800)], now: NOW, newId });
+  assert.equal(pendingLoadDetails(s, trip.trip_id).length, 0); // not left yet: the normal Loaded step still applies
+
+  const pickup = snap().pickups[0];
+  const times = defaultStepTimes(NOW, 10, pickup.arrived_at);
+  stampLoadedLater(s, { userId: ME, companyId: "co", trailerId: "trailer-1", pickup, times, now: NOW, newId });
+  assert.equal(getTrip().status, "in_transit");
+  assert.ok(snap().pickups[0].left_at);
+  assert.equal(nextStep(getTrip(), snap()).kind, "arrive_delivery"); // can drive on and arrive
+
+  const pend = pendingLoadDetails(s, trip.trip_id);
+  assert.equal(pend.length, 1);
+  assert.deepEqual([pend[0].missingBol, pend[0].missingSupplier, pend[0].missingSignature], [true, true, true]);
+
+  // Arrive at the delivery, then complete the details: the trip stays "delivering".
+  arriveDelivery(s, { userId: ME, delivery: snap().deliveries[0], now: NOW, newId });
+  assert.equal(getTrip().status, "delivering");
+  confirmLoaded(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", pickup: snap().pickups[0],
+    times: { arrivedAt: snap().pickups[0].arrived_at!, beginAt: snap().pickups[0].begin_at!, leftAt: snap().pickups[0].left_at! },
+    delayReasonId: null, delayNote: null, odometer: null,
+    compartments: snap().compLoads.map((c) => ({ ...c, bol_number: "B9", supplier: "Sup" })), signed: true, now: NOW, newId,
+  });
+  assert.equal(getTrip().status, "delivering");
+  assert.equal(pendingLoadDetails(s, trip.trip_id).length, 0);
 });

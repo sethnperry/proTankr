@@ -65,8 +65,10 @@ const str = (n: number | null | undefined) => (n == null ? "" : String(n));
 
 export function LoadedSheet({
   open, pickup, compLoads, orders, settings, reasons, needsOdometer, productName,
-  signature, onSaveSignature, suppliers, onAddSupplier, checkBols, onSubmit, onClose,
+  signature, onSaveSignature, suppliers, onAddSupplier, checkBols, onSubmit, onClose, geotabBols,
 }: {
+  // Shipment numbers the telematics app logged for this stop; fill an empty BOL.
+  geotabBols?: string[];
   open: boolean;
   pickup: TripPickupRow;
   compLoads: TripCompartmentLoadRow[]; // this pickup's, not cancelled
@@ -131,6 +133,13 @@ export function LoadedSheet({
     setErr(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // The shipment number can arrive a moment after the sheet opens: fill the BOL unless the driver typed.
+  useEffect(() => {
+    if (!open || bol.trim() || perRowBol || !geotabBols?.length) return;
+    setBol(geotabBols[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geotabBols?.join(","), open]);
 
   const calcFor = (r: Row) =>
     calculateNetGallons(numOrNull(r.gross), numOrNull(r.api), numOrNull(r.temp), netMethodForProduct(productName(r.productId)));
