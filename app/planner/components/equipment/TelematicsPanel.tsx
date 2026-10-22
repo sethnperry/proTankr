@@ -94,8 +94,8 @@ function GaugeTile({ t }: { t: Tile }) {
 function Line({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 14, padding: "9px 0", borderTop: "1px solid rgba(255,255,255,0.08)", fontSize: 14 }}>
-      <span style={{ color: MUTED, flexShrink: 0 }}>{k}</span>
-      <span style={{ fontWeight: 700, textAlign: "right", minWidth: 0, wordBreak: "break-word" }}>{v}</span>
+      <span style={{ color: MUTED, minWidth: 0, flex: "1 1 55%", wordBreak: "break-word" }}>{k}</span>
+      <span style={{ fontWeight: 700, textAlign: "right", minWidth: 0, flex: "0 1 auto", maxWidth: "45%", wordBreak: "break-word" }}>{v}</span>
     </div>
   );
 }

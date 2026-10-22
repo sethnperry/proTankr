@@ -328,7 +328,11 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         }
       };
       const guard = async <T,>(label: string, fn: () => Promise<T>): Promise<T | null> => {
-        try { return await fn(); } catch (e) { out.errors.push(`${label}: ${String((e as Error).message).slice(0, 90)}`); return null; }
+        try { return await fn(); } catch (e) { out.errors.push(`${label}: ${String((e as Error).message).slice(0, 220)}`); return null; }
+      };
+      const unitName = (u: unknown): string | null => {
+        const t = String(u ?? "").replace(/^UnitOfMeasure/, "").replace(/Id$/, "").trim();
+        return !t || /^none$/i.test(t) ? null : t;
       };
       const dev: any[] | null = await guard("Vehicle record", () => call("Get", { typeName: "Device", search: { id: vehicleId } }));
       flat(dev?.[0], out.device);
@@ -348,7 +352,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       let names = new Map<string, { name: string; unit: string | null }>();
       if (byId.size) {
         const diags: any[] | null = await guard("Reading names", () => call("Get", { typeName: "Diagnostic", resultsLimit: 20000 }));
-        names = new Map((diags ?? []).map((d) => [String(d.id), { name: String(d.name ?? d.id), unit: d.unitOfMeasure?.id ? String(d.unitOfMeasure.id).replace(/^UnitOfMeasure/, "").replace(/Id$/, "") : d.unitOfMeasure ? String(d.unitOfMeasure) : null }]));
+        names = new Map((diags ?? []).map((d) => [String(d.id), { name: String(d.name ?? d.id), unit: unitName(d.unitOfMeasure?.id ?? d.unitOfMeasure) }]));
       }
       out.readings = [...byId.entries()].map(([id, v]) => ({
         id, name: names.get(id)?.name ?? id, unit: names.get(id)?.unit ?? null,
