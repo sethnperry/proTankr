@@ -16,12 +16,14 @@ import { fleetStatusColor, fleetStatusLabel } from "../../modals/EquipmentStatus
 import { buildTrackRows, type TrackCombo, type TrackUnit } from "@/lib/equipment/trackList";
 import { ageText, mapsUrl } from "@/lib/equipment/trackFormat";
 import { fieldInput, muted } from "../trip/tripUi";
+import { hosText } from "@/lib/telematics/progress";
 import { TrackDetail } from "./TrackDetail";
 
+type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
 type DriverHit = {
   providerId: string; name: string; employeeNo: string | null; memberName: string | null;
-  now: { truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null } | null;
-  last: { truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null } | null;
+  now: DriverPlace | null; last: DriverPlace | null;
+  hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null;
 };
 
 const COLS = "id, name, active, region, local_area, current_region, current_local_area, status_code, status_notes, sub_status, status_location, status_updated_at";
@@ -62,7 +64,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [drivers, setDrivers] = useState<DriverHit[]>([]);
   const [driversBusy, setDriversBusy] = useState(false);
   const [driverNote, setDriverNote] = useState<string | null>(null);
-  const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null } | null>(null);
+  const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null; vehicle?: { id: string; name: string } | null } | null>(null);
 
   const reload = useCallback(async () => {
     if (!companyId) return;
@@ -156,10 +158,11 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
           {!driversBusy && !driverNote && drivers.length === 0 && <div style={{ fontSize: 13, color: muted }}>No driver found in Geotab.</div>}
           {drivers.map((d) => {
             const p = d.now ?? d.last;
-            const tappable = !!p?.truckId;
+            const tappable = !!p;
+            const hosT = d.hos ? hosText(d.hos) : null;
             return (
               <div key={d.providerId} style={{ border: "1px solid rgba(255,255,255,0.14)", marginBottom: 8 }}>
-                <button type="button" disabled={!tappable} onClick={() => p?.truckId && openTruck(p.truckId)}
+                <button type="button" disabled={!tappable} onClick={() => { if (!p) return; if (p.truckId) openTruck(p.truckId); else setPick({ truckId: null, trailerId: null, vehicle: { id: p.vehicleId, name: p.vehicleName } }); }}
                   style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "transparent", border: "none", color: "#fff", cursor: tappable ? "pointer" : "default" }}>
                   <div style={{ fontSize: 16, fontWeight: 800 }}>
                     {d.name}
@@ -167,7 +170,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
                     {d.employeeNo && <span style={{ fontSize: 12, fontWeight: 600, color: muted, marginLeft: 8 }}>#{d.employeeNo}</span>}
                   </div>
                   <div style={{ fontSize: 13, marginTop: 3 }}>{driverLine(d)}</div>
-                  {p && !p.truckId && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>That vehicle isn't set up in ProTankr.</div>}
+                  {hosT && <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: hosT.color }}>Hours · {hosT.text}</div>}
+                  {p && !p.truckId && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>That vehicle isn't set up as a ProTankr truck. Tap to see it anyway.</div>}
                 </button>
                 {p?.lat != null && p?.lon != null && (
                   <a href={mapsUrl(p.lat, p.lon)} target="_blank" rel="noopener noreferrer"
@@ -221,7 +225,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
       {pick && companyId && (
         <TrackDetail
           open onClose={() => setPick(null)} companyId={companyId}
-          truck={detailTruck} trailer={detailTrailer} allTrucks={trucks}
+          truck={detailTruck} trailer={detailTrailer} vehicle={pick.vehicle ?? null} allTrucks={trucks}
           onChanged={() => void reload()}
           onSwitchTruck={(id) => openTruck(id)}
         />

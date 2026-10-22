@@ -30,6 +30,21 @@ export async function fetchTruckReading(truckId: string | null): Promise<TruckRe
   }
 }
 
+/** A Geotab vehicle that isn't a ProTankr truck, by its provider id. */
+export async function fetchVehicleReading(companyId: string, vehicleId: string): Promise<TruckReading | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return null;
+    const r = await fetch(`/api/telematics/vehicle?companyId=${encodeURIComponent(companyId)}&vehicleId=${encodeURIComponent(vehicleId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j?.connected ? (j as TruckReading) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useTruckReading(truckId: string | null, active: boolean, pollMs?: number): TruckReading | null {
   const [reading, setReading] = useState<TruckReading | null>(null);
   useEffect(() => {

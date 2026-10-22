@@ -18,16 +18,24 @@ export async function GET(req: NextRequest) {
   const uid = await callerId(req);
   if (!uid) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const truckId = req.nextUrl.searchParams.get("truckId");
-  if (!truckId) return NextResponse.json({ error: "truckId is required." }, { status: 400 });
+  // A vehicle that isn't a ProTankr truck can be looked up by its provider id, with the company.
+  const rawVehicleId = req.nextUrl.searchParams.get("vehicleId");
+  if (!truckId && !(rawVehicleId && req.nextUrl.searchParams.get("companyId"))) return NextResponse.json({ error: "truckId is required." }, { status: 400 });
   try {
     const admin = getServiceSupabase();
-    const { data: t } = await admin.from("trucks").select("company_id").eq("truck_id", truckId).maybeSingle();
-    const companyId = (t as { company_id?: string } | null)?.company_id;
+    let companyId: string | undefined;
+    if (truckId) {
+      const { data: t } = await admin.from("trucks").select("company_id").eq("truck_id", truckId).maybeSingle();
+      companyId = (t as { company_id?: string } | null)?.company_id;
+    } else companyId = req.nextUrl.searchParams.get("companyId") ?? undefined;
     if (!companyId) return none();
     const r = await companyRole(uid, companyId);
     if (!r.role && !r.superAdmin) return NextResponse.json({ error: "Not in this company." }, { status: 403 });
-    const { data: m } = await admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", companyId).eq("truck_id", truckId).maybeSingle();
-    const vid = (m as { provider_vehicle_id?: string } | null)?.provider_vehicle_id;
+    let vid: string | undefined;
+    if (truckId) {
+      const { data: m } = await admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", companyId).eq("truck_id", truckId).maybeSingle();
+      vid = (m as { provider_vehicle_id?: string } | null)?.provider_vehicle_id;
+    } else vid = rawVehicleId ?? undefined;
     if (!vid) return none();
     const p = await providerFor(companyId);
     if (!p) return none();
@@ -87,9 +95,11 @@ export async function GET(req: NextRequest) {
         }
       }
       if (hosDriverId) hos = await p.hos(hosDriverId).catch(() => null);
-      const { data: combo } = await admin.from("equipment_combos").select("claimed_by").eq("truck_id", truckId).eq("active", true).not("claimed_by", "is", null).order("claimed_at", { ascending: false }).limit(1).maybeSingle();
-      const by = (combo as { claimed_by?: string | null } | null)?.claimed_by;
-      heldByName = by ? await nameOf(by) : null;
+      if (truckId) {
+        const { data: combo } = await admin.from("equipment_combos").select("claimed_by").eq("truck_id", truckId).eq("active", true).not("claimed_by", "is", null).order("claimed_at", { ascending: false }).limit(1).maybeSingle();
+        const by = (combo as { claimed_by?: string | null } | null)?.claimed_by;
+        heldByName = by ? await nameOf(by) : null;
+      }
     } catch { /* the position is still useful without a name */ }
     // Shipping documents (BOL numbers) on the truck's Drive app, if the company uses them.
     const shipments = await p.activeShipments(vid).catch(() => []);

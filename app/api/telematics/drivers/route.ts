@@ -12,7 +12,7 @@ import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 
-type Place = { truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
+type Place = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
 
 export async function GET(req: NextRequest) {
   const uid = await callerId(req);
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     const placeOf = async (vid: string, at: string | null): Promise<Place> => {
       const pos = positions.get(vid);
       return {
-        truckId: truckOf.get(vid)?.truck_id ?? null, vehicleName: await nameOfVehicle(vid),
+        vehicleId: vid, truckId: truckOf.get(vid)?.truck_id ?? null, vehicleName: await nameOfVehicle(vid),
         lat: pos?.lat ?? null, lon: pos?.lon ?? null, at: pos?.at ?? at,
       };
     };
@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
       drivers.push({
         providerId: d.id, name: [d.firstName, d.lastName].filter(Boolean).join(" ") || d.name, employeeNo: d.employeeNo,
         memberName: uidm ? profName.get(uidm) ?? null : null, now, last,
+        hos: await p.hos(d.id).catch(() => null),
       });
     }
     return NextResponse.json({ connected: true, drivers });

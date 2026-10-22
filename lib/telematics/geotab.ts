@@ -241,7 +241,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     async lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null> {
       const from = new Date(Date.now() - 7 * 86400000).toISOString();
       const rows: any[] = await call("Get", { typeName: "DriverChange", search: { deviceSearch: { id: vehicleId }, fromDate: from } });
-      const last = (rows ?? []).filter((r) => r?.driver?.id && !/^unknown/i.test(String(r.driver.id)) && r.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+      const last = (rows ?? []).filter((r) => r?.driver?.id && !/^unknown/i.test(String(r.driver.id)) && r.dateTime && (!r.device?.id || String(r.device.id) === vehicleId)).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
       return last ? { driverId: String(last.driver.id), at: String(last.dateTime) } : null;
     },
 
@@ -256,10 +256,17 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     },
 
     async lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null> {
+      // The provider may ignore a driver filter it doesn't know, so every row is checked against the
+      // driver here; otherwise anyone would get the fleet's most recent sign-in.
       const from = new Date(Date.now() - 30 * 86400000).toISOString();
-      const rows: any[] = await call("Get", { typeName: "DriverChange", search: { driverSearch: { id: driverId }, fromDate: from } });
-      const last = (rows ?? []).filter((r) => r?.device?.id && r.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
-      return last ? { vehicleId: String(last.device.id), at: String(last.dateTime) } : null;
+      let rows: any[] | null = await call("Get", { typeName: "DriverChange", search: { driverSearch: { id: driverId }, fromDate: from }, resultsLimit: 5000 }).catch(() => null);
+      if (!rows) rows = await call("Get", { typeName: "DriverChange", search: { fromDate: new Date(Date.now() - 3 * 86400000).toISOString() }, resultsLimit: 20000 }).catch(() => []);
+      const last = (rows ?? []).filter((r) => r?.device?.id && String(r?.driver?.id ?? "") === driverId && r.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+      if (last) return { vehicleId: String(last.device.id), at: String(last.dateTime) };
+      // A driver who drove without a sign-in record still has trips.
+      const trips: any[] = await call("Get", { typeName: "Trip", search: { userSearch: { id: driverId }, fromDate: new Date(Date.now() - 3 * 86400000).toISOString() }, resultsLimit: 2000 }).catch(() => []);
+      const lt = (trips ?? []).filter((t) => t?.device?.id && String(t?.driver?.id ?? "") === driverId && (t.stop || t.start)).sort((a, b) => String(a.stop ?? a.start).localeCompare(String(b.stop ?? b.start))).pop();
+      return lt ? { vehicleId: String(lt.device.id), at: String(lt.stop ?? lt.start) } : null;
     },
 
     async hos(id: string): Promise<HosAvailability | null> {

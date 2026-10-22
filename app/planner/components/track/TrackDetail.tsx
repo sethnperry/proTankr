@@ -9,7 +9,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
-import { fetchTruckReading, type TruckReading } from "@/lib/telematics/useTruckReading";
+import { fetchTruckReading, fetchVehicleReading, type TruckReading } from "@/lib/telematics/useTruckReading";
 import { fetchTruckTrip } from "@/lib/trips/fetchTruckTrip";
 import { summarizeTruckTrip, type TruckTripSummary } from "@/lib/trips/truckTrip";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
@@ -27,9 +27,11 @@ const bigBtn: React.CSSProperties = { display: "block", width: "100%", textAlign
 
 type Preview = { changes: TrackChange[]; canSeparate: boolean; truckId: string; truckName: string; observed: { city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null; trailerName: string | null } };
 
-export function TrackDetail({ open, onClose, companyId, truck, trailer, allTrucks, onChanged, onSwitchTruck }: {
+export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, onChanged, onSwitchTruck }: {
   open: boolean; onClose: () => void; companyId: string;
   truck: TrackUnit | null; trailer: TrackUnit | null;
+  /** A Geotab vehicle that isn't a ProTankr truck (found through a driver). */
+  vehicle?: { id: string; name: string } | null;
   allTrucks: TrackUnit[];
   onChanged: () => void;
   onSwitchTruck: (truckId: string) => void;
@@ -44,11 +46,14 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
   const [separate, setSeparate] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { data: catalog } = useProductsCatalog();
-  const truckId = truck?.id ?? null;
+  const truckId = truck?.id ?? vehicle?.id ?? null;
 
   const load = useCallback(async (id: string) => {
     setBusy(true); setDone(false);
-    const [r, td] = await Promise.all([fetchTruckReading(id), fetchTruckTrip(id)]);
+    const [r, td] = await Promise.all([
+      truck ? fetchTruckReading(id) : fetchVehicleReading(companyId, id),
+      truck ? fetchTruckTrip(id) : Promise.resolve(null),
+    ]);
     setReading(r);
     setTrip(td ? summarizeTruckTrip({ ...td, pos: r?.lat != null && r?.lon != null ? { lat: r.lat, lon: r.lon } : null, nowMs: Date.now() }) : null);
     setBusy(false); setDone(true);
@@ -105,7 +110,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
 
   const hasPos = reading?.lat != null && reading?.lon != null;
   const place = [reading?.city, reading?.state].filter(Boolean).join(", ");
-  const title = [truck ? `Truck ${truck.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
+  const title = [truck ? `Truck ${truck.name}` : vehicle ? `Vehicle ${vehicle.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
 
   const unitCard = (u: TrackUnit) => (
     <div key={u.id} style={card}>
@@ -131,7 +136,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
       {truck && unitCard(truck)}
       {trailer && unitCard(trailer)}
 
-      {truck && (
+      {(truck || vehicle) && (
         <div style={card}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={label}>Live from Geotab</span>
@@ -262,16 +267,19 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, allTruck
         </div>
       )}
 
-      {!truck && trailer && (
+      {!truck && !vehicle && trailer && (
         <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>
           A trailer has no tracker of its own. Update from Geotab finds it through the truck it's hooked to.
         </div>
       )}
 
       {msg && <div style={{ fontSize: 14, marginBottom: 10, color: msg.ok ? "#4ade80" : "#f87171" }}>{msg.text}</div>}
-      <button type="button" onClick={() => void startUpdate()} disabled={updating} aria-busy={updating} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: updating ? 0.6 : 1 }}>
-        {updating && !preview ? "Reading Geotab…" : "Update from Geotab"}
-      </button>
+      {(truck || trailer) && (
+        <button type="button" onClick={() => void startUpdate()} disabled={updating} aria-busy={updating} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: updating ? 0.6 : 1 }}>
+          {updating && !preview ? "Reading Geotab…" : "Update from Geotab"}
+        </button>
+      )}
+      {vehicle && !truck && <div style={{ fontSize: 12, color: muted }}>This vehicle isn't set up as a ProTankr truck, so there's no status to update. Add it under Company Dashboard → Telematics.</div>}
 
       {/* Acknowledge what will change before anything is saved. */}
       <FullscreenModal open={!!preview} onClose={() => setPreview(null)} title="Update from Geotab" footer={null}>

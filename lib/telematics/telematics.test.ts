@@ -297,3 +297,21 @@ test("geotab: shipping documents (BOL numbers) still on a vehicle, newest first,
   assert.deepEqual(s.map((x) => x.documentNumber), ["754929", "754809"]);
   assert.equal(s[0].shipperName, "Citgo");
 });
+
+test("geotab: a driver's last vehicle ignores other drivers' rows even if the filter was ignored; falls back to trips", async () => {
+  const mk = (changes: any[], trips: any[]) => (async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (b.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s4", userName: "u" } });
+    return ok(b.params.typeName === "DriverChange" ? changes : trips);
+  }) as any;
+  const changes = [
+    { device: { id: "vA" }, driver: { id: "d1" }, dateTime: "2026-10-22T10:00:00Z" },
+    { device: { id: "vB" }, driver: { id: "d2" }, dateTime: "2026-10-22T11:00:00Z" }, // newer, but someone else
+  ];
+  const p = geotabProvider({ database: "db-last1", userName: "u", password: "p" }, mk(changes, []));
+  assert.deepEqual(await p.lastVehicleOf("d1"), { vehicleId: "vA", at: "2026-10-22T10:00:00Z" });
+  const p2 = geotabProvider({ database: "db-last2", userName: "u", password: "p" }, mk([], [{ device: { id: "vC" }, driver: { id: "d3" }, start: "2026-10-22T08:00:00Z", stop: "2026-10-22T09:00:00Z" }, { device: { id: "vD" }, driver: { id: "d9" }, stop: "2026-10-22T09:30:00Z" }]));
+  assert.deepEqual(await p2.lastVehicleOf("d3"), { vehicleId: "vC", at: "2026-10-22T09:00:00Z" });
+  assert.equal(await p2.lastVehicleOf("nobody"), null);
+});
