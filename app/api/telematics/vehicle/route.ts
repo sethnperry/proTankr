@@ -39,6 +39,9 @@ export async function GET(req: NextRequest) {
     if (!vid) return none();
     const p = await providerFor(companyId);
     if (!p) return none();
+    if (req.nextUrl.searchParams.get("debug") === "position") {
+      return NextResponse.json({ connected: true, vehicleId: vid, lines: await p.positionDebug(vid).catch((e) => [`error ${String((e as Error).message).slice(0, 100)}`]) });
+    }
     const reading = await p.reading(vid);
     // Every trailer Geotab says is attached. Some are ProTankr trailers; others are just names in Geotab
     // (for example a BOL number kept as a trailer record), so those are listed as they appear there.

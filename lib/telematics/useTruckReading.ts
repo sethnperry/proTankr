@@ -30,6 +30,18 @@ export async function fetchTruckReading(truckId: string | null): Promise<TruckRe
   }
 }
 
+/** Why a vehicle has no position (Geotab's own answers), fetched on request. */
+export async function fetchPositionDebug(companyId: string, truckId: string | null, vehicleId: string | null): Promise<string[]> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    const qs = truckId ? `truckId=${encodeURIComponent(truckId)}` : `companyId=${encodeURIComponent(companyId)}&vehicleId=${encodeURIComponent(vehicleId ?? "")}`;
+    const r = await fetch(`/api/telematics/vehicle?${qs}&debug=position`, { headers: { Authorization: `Bearer ${token ?? ""}` }, cache: "no-store" });
+    const j = r.ok ? await r.json() : null;
+    return j?.lines ?? ["Geotab didn't answer. Try again in a minute."];
+  } catch { return ["Couldn't reach the server."]; }
+}
+
 /** A Geotab vehicle that isn't a ProTankr truck, by its provider id. */
 export async function fetchVehicleReading(companyId: string, vehicleId: string): Promise<TruckReading | null> {
   try {

@@ -295,6 +295,25 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
+    async positionDebug(vehicleId: string): Promise<string[]> {
+      const out: string[] = [];
+      const DAY = 86400000, now = Date.now();
+      try {
+        const info: any[] = (await call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id: vehicleId } } })) ?? [];
+        const s = info[0];
+        if (!s) out.push("Status record: none. Geotab has no live status for this vehicle id.");
+        else out.push(`Status record: found. Latitude ${s.latitude ?? "none"}, longitude ${s.longitude ?? "none"}, reported ${s.dateTime ? String(s.dateTime).slice(0, 16) : "never"}, communicating: ${s.isDeviceCommunicating === undefined ? "unknown" : s.isDeviceCommunicating ? "yes" : "no"}.`);
+      } catch (e) { out.push(`Status record: error ${String((e as Error).message).slice(0, 80)}`); }
+      for (const [fromD, toD] of [[3, 0], [30, 3], [180, 30]]) {
+        try {
+          const logs: any[] = (await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id: vehicleId }, fromDate: new Date(now - fromD * DAY).toISOString(), toDate: new Date(now - toD * DAY).toISOString() }, resultsLimit: 5000 })) ?? [];
+          const withFix = logs.filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)));
+          out.push(`Location logs ${toD === 0 ? `last ${fromD} d` : `${toD}-${fromD} d ago`}: ${logs.length} rows, ${withFix.length} with a position.`);
+        } catch (e) { out.push(`Location logs ${fromD} d: error ${String((e as Error).message).slice(0, 80)}`); }
+      }
+      return out;
+    },
+
     async driverDebug(driverId: string): Promise<string[]> {
       const out: string[] = [];
       const day = 86400000, now = Date.now();

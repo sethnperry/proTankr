@@ -61,6 +61,8 @@ export interface TelematicsProvider {
   currentDrivers(): Promise<Map<string, string>>;
   /** The last driver recorded for each vehicle that has nobody signed in now. */
   historicDrivers(): Promise<Map<string, string>>;
+  /** Plain-language lines about why a vehicle has no position (troubleshooting). */
+  positionDebug(vehicleId: string): Promise<string[]>;
   /** Plain-language lines about what the provider returns for one driver (troubleshooting). */
   driverDebug(driverId: string): Promise<string[]>;
   /** Positions, signed-in drivers and last drivers for every vehicle from ONE provider call. */

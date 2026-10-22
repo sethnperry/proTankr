@@ -9,7 +9,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
-import { fetchTruckReading, fetchVehicleReading, type TruckReading } from "@/lib/telematics/useTruckReading";
+import { fetchPositionDebug, fetchTruckReading, fetchVehicleReading, type TruckReading } from "@/lib/telematics/useTruckReading";
 import { fetchTruckTrip } from "@/lib/trips/fetchTruckTrip";
 import { summarizeTruckTrip, type TruckTripSummary } from "@/lib/trips/truckTrip";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
@@ -38,6 +38,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
 }) {
   const [reading, setReading] = useState<TruckReading | null>(null);
   const [trip, setTrip] = useState<TruckTripSummary | null>(null);
+  const [posDebug, setPosDebug] = useState<string[] | "loading" | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [statusUnit, setStatusUnit] = useState<TrackUnit | null>(null);
@@ -61,7 +62,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
 
   useEffect(() => {
     if (!open) return;
-    setReading(null); setTrip(null); setDone(false); setMsg(null); setPreview(null);
+    setReading(null); setTrip(null); setDone(false); setMsg(null); setPreview(null); setPosDebug(null);
     if (truckId) void load(truckId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, truckId]);
@@ -153,6 +154,17 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
               {!hasPos && (
                 <div style={{ fontSize: 14, color: "#fb923c", marginTop: 12 }}>
                   Geotab has no position for this vehicle{reading.at ? ` (last report ${ageText(reading.at)})` : ""}. Everything else it reports is below.
+                  <div style={{ marginTop: 6 }}>
+                    <button type="button" onClick={() => { setPosDebug("loading"); void fetchPositionDebug(companyId, truck?.id ?? null, vehicle?.id ?? null).then(setPosDebug); }}
+                      style={{ border: "none", background: "transparent", color: "#93c5fd", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                      {posDebug ? "Check again" : "Why? Ask Geotab"}
+                    </button>
+                  </div>
+                  {posDebug && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.75)" }}>
+                      {posDebug === "loading" ? "Asking Geotab…" : posDebug.map((l, i) => <div key={i} style={{ marginTop: 2 }}>• {l}</div>)}
+                    </div>
+                  )}
                 </div>
               )}
               {hasPos && (<>
