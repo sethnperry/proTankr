@@ -281,9 +281,13 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       const last = (rows ?? []).filter((r) => r?.device?.id && String(r?.driver?.id ?? "") === driverId && r.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
       if (last) return { vehicleId: String(last.device.id), at: String(last.dateTime) };
       // A driver who drove without a sign-in record still has trips.
-      const trips: any[] = await call("Get", { typeName: "Trip", search: { userSearch: { id: driverId }, fromDate: new Date(Date.now() - 3 * 86400000).toISOString() }, resultsLimit: 2000 }).catch(() => []);
+      const trips: any[] = await call("Get", { typeName: "Trip", search: { userSearch: { id: driverId }, fromDate: new Date(Date.now() - 14 * 86400000).toISOString() }, resultsLimit: 2000 }).catch(() => []);
       const lt = (trips ?? []).filter((t) => t?.device?.id && String(t?.driver?.id ?? "") === driverId && (t.stop || t.start)).sort((a, b) => String(a.stop ?? a.start).localeCompare(String(b.stop ?? b.start))).pop();
-      return lt ? { vehicleId: String(lt.device.id), at: String(lt.stop ?? lt.start) } : null;
+      if (lt) return { vehicleId: String(lt.device.id), at: String(lt.stop ?? lt.start) };
+      // A driver on duty through the Drive app has duty-status logs, each tagged with the vehicle it was logged on.
+      const logs: any[] = await call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id: driverId }, fromDate: new Date(Date.now() - 4 * 86400000).toISOString() } }).catch(() => []);
+      const ld = (logs ?? []).filter((l) => l?.device?.id && !/^no/i.test(String(l.device.id)) && l.dateTime).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+      return ld ? { vehicleId: String(ld.device.id), at: String(ld.dateTime) } : null;
     },
 
     async hos(id: string): Promise<HosAvailability | null> {

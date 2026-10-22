@@ -23,6 +23,7 @@ type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: str
 type DriverHit = {
   providerId: string; name: string; employeeNo: string | null; memberName: string | null;
   now: DriverPlace | null; last: DriverPlace | null;
+  diag?: string;
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null;
 };
 
@@ -170,6 +171,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
                     {d.employeeNo && <span style={{ fontSize: 12, fontWeight: 600, color: muted, marginLeft: 8 }}>#{d.employeeNo}</span>}
                   </div>
                   <div style={{ fontSize: 13, marginTop: 3 }}>{driverLine(d)}</div>
+                  {!p && d.diag && <div style={{ fontSize: 11, color: muted, marginTop: 3 }}>{d.diag}</div>}
                   {hosT && <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: hosT.color }}>Hours · {hosT.text}</div>}
                   {p && !p.truckId && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>That vehicle isn't set up as a ProTankr truck. Tap to see it anyway.</div>}
                 </button>

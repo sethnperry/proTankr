@@ -344,3 +344,15 @@ test("geotab: a status record's driver is signed in unless it is only the last o
   assert.deepEqual(driverOf({ driver: { id: "UnknownDriverId" } }), { current: null, historic: null });
   assert.deepEqual(driverOf({}), { current: null, historic: null });
 });
+
+test("geotab: a driver on duty through the Drive app is placed by the vehicle on their duty log", async () => {
+  const f = (async (_u: string, init: any) => {
+    const b = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (b.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s6", userName: "u" } });
+    if (b.params.typeName === "DutyStatusLog") return ok([{ device: { id: "vE" }, dateTime: "2026-10-22T07:00:00Z", status: "ON" }, { device: { id: "vF" }, dateTime: "2026-10-22T09:00:00Z", status: "D" }]);
+    return ok([]); // no sign-in rows, no trips
+  }) as any;
+  const p = geotabProvider({ database: "db-duty", userName: "u", password: "p" }, f);
+  assert.deepEqual(await p.lastVehicleOf("d7"), { vehicleId: "vF", at: "2026-10-22T09:00:00Z" });
+});
