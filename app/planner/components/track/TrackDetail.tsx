@@ -27,17 +27,21 @@ const bigBtn: React.CSSProperties = { display: "block", width: "100%", textAlign
 
 type Preview = { changes: TrackChange[]; canSeparate: boolean; truckId: string; truckName: string; observed: { city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null; trailerName: string | null } };
 
-export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, onChanged, onSwitchTruck }: {
+export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded }: {
   open: boolean; onClose: () => void; companyId: string;
   truck: TrackUnit | null; trailer: TrackUnit | null;
   /** A Geotab vehicle that isn't a ProTankr truck (found through a driver). */
   vehicle?: { id: string; name: string } | null;
   allTrucks: TrackUnit[];
+  /** May add this vehicle to ProTankr (admin, dispatch or lead). */
+  canAdd?: boolean;
+  onAdded?: (truckId: string) => void | Promise<void>;
   onChanged: () => void;
   onSwitchTruck: (truckId: string) => void;
 }) {
   const [reading, setReading] = useState<TruckReading | null>(null);
   const [trip, setTrip] = useState<TruckTripSummary | null>(null);
+  const [adding, setAdding] = useState(false);
   const [posDebug, setPosDebug] = useState<string[] | "loading" | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -78,6 +82,22 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j?.error ?? "Update failed.");
     return j as any;
+  }
+
+  async function addToProTankr() {
+    if (!vehicle) return;
+    setAdding(true); setMsg(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const r = await fetch("/api/telematics/add-vehicle", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ companyId, vehicleId: vehicle.id }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.truckId) throw new Error(j?.error ?? "Couldn't add it.");
+      await onAdded?.(j.truckId);
+    } catch (e: any) {
+      setMsg({ ok: false, text: e?.message ?? "Couldn't add it." });
+    } finally { setAdding(false); }
   }
 
   async function startUpdate() {
@@ -297,7 +317,18 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
           {updating && !preview ? "Reading Geotab…" : "Update from Geotab"}
         </button>
       )}
-      {vehicle && !truck && <div style={{ fontSize: 12, color: muted }}>This vehicle isn't set up as a ProTankr truck, so there's no status to update. Add it under Company Dashboard → Telematics.</div>}
+      {vehicle && !truck && (
+        <>
+          <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>
+            This vehicle isn't a ProTankr truck yet, so there's no status to update. Adding it brings in its number, VIN and plate from Geotab, and the year, make and model from the VIN, and links it so Update from Geotab works.
+          </div>
+          {canAdd ? (
+            <button type="button" onClick={() => void addToProTankr()} disabled={adding} aria-busy={adding} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: adding ? 0.6 : 1 }}>
+              {adding ? "Adding…" : "Add to ProTankr"}
+            </button>
+          ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
+        </>
+      )}
 
       {/* Acknowledge what will change before anything is saved. */}
       <FullscreenModal open={!!preview} onClose={() => setPreview(null)} title="Update from Geotab" footer={null}>

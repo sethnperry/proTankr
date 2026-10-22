@@ -285,6 +285,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         <TrackDetail
           open onClose={() => setPick(null)} companyId={companyId}
           truck={detailTruck} trailer={detailTrailer} vehicle={pick.vehicle ?? null} allTrucks={trucks}
+          canAdd={canManage}
+          onAdded={async (id) => { await reload(); openTruck(id); }}
           onChanged={() => void reload()}
           onSwitchTruck={(id) => openTruck(id)}
         />
