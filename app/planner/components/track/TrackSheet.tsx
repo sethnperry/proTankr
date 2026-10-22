@@ -69,6 +69,18 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [driversBusy, setDriversBusy] = useState(false);
   const [driverNote, setDriverNote] = useState<string | null>(null);
   const [openDriver, setOpenDriver] = useState<string | null>(null);
+  const [debugLines, setDebugLines] = useState<Record<string, string[] | "loading">>({});
+  const loadDebug = async (driverId: string) => {
+    if (!companyId || debugLines[driverId]) return;
+    setDebugLines((m) => ({ ...m, [driverId]: "loading" }));
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const r = await fetch(`/api/telematics/drivers?companyId=${encodeURIComponent(companyId)}&debug=${encodeURIComponent(driverId)}`, { headers: { Authorization: `Bearer ${token ?? ""}` }, cache: "no-store" });
+      const j = r.ok ? await r.json() : null;
+      setDebugLines((m) => ({ ...m, [driverId]: j?.lines ?? ["Geotab didn't answer. Close and open this again in a minute."] }));
+    } catch { setDebugLines((m) => ({ ...m, [driverId]: ["Couldn't reach the server."] })); }
+  };
   const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null; vehicle?: { id: string; name: string } | null } | null>(null);
 
   const reload = useCallback(async () => {
@@ -86,12 +98,14 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     setLoading(false);
   }, [companyId]);
 
-  useEffect(() => { if (open) { setQ(""); setDrivers([]); setDriverNote(null); void reload(); } }, [open, reload]);
+  const [submitted, setSubmitted] = useState("");
+  useEffect(() => { if (open) { setQ(""); setSubmitted(""); setDrivers([]); setVehicles([]); setDriverNote(null); void reload(); } }, [open, reload]);
 
-  // Driver search against the telematics provider, once there's something to search for.
+  // Driver and Geotab-vehicle search against the telematics provider. Geotab limits how many calls it
+  // answers per minute, so this only runs when you press Search (or Enter), never while you type.
   useEffect(() => {
-    const term = q.trim();
-    if (!open || !companyId || term.length < 3) { setDrivers([]); setVehicles([]); setDriverNote(null); return; }
+    const term = submitted.trim();
+    if (!open || !companyId || term.length < 2) { setDrivers([]); setVehicles([]); setDriverNote(null); return; }
     let off = false;
     const timer = window.setTimeout(async () => {
       setDriversBusy(true);
@@ -107,9 +121,9 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         setDriverNote(j && !j.connected ? "Driver search needs the company's Geotab connection." : j?.error ?? null);
       } catch { if (!off) { setDrivers([]); setVehicles([]); } }
       finally { if (!off) setDriversBusy(false); }
-    }, 600);
+    }, 0);
     return () => { off = true; window.clearTimeout(timer); };
-  }, [q, open, companyId]);
+  }, [submitted, open, companyId]);
 
   const rows = useMemo(() => buildTrackRows(trucks, trailers, combos, { region: filter.region, localArea: filter.localArea, awayOnly: filter.awayOnly }, q), [trucks, trailers, combos, filter, q]);
   const truckById = useMemo(() => new Map(trucks.map((t) => [t.id, t])), [trucks]);
@@ -148,7 +162,16 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
           Filter{filtered ? " •" : ""}
         </button>
       }>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a unit number or a driver" style={{ ...fieldInput, marginBottom: 12 }} />
+      <form onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim()); }} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Unit number or driver name" enterKeyHint="search" style={{ ...fieldInput, flex: 1, minWidth: 0 }} />
+        <button type="submit" disabled={q.trim().length < 2 || driversBusy} aria-busy={driversBusy}
+          style={{ padding: "0 16px", border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", opacity: q.trim().length < 2 ? 0.5 : 1 }}>
+          {driversBusy ? "…" : "Search"}
+        </button>
+      </form>
+      {q.trim().length >= 2 && q.trim() !== submitted && (
+        <div style={{ fontSize: 12, color: muted, margin: "-6px 0 10px" }}>Press Search to look up drivers and Geotab vehicles. The lists below filter as you type.</div>
+      )}
 
       {myCombo && !q && (
         <button type="button" onClick={() => openTruck(myCombo.truckId)}
@@ -157,7 +180,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         </button>
       )}
 
-      {q.trim().length >= 3 && (
+      {submitted.length >= 2 && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>
             Drivers{driversBusy ? " · searching…" : ""}
@@ -170,7 +193,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
             const hosT = d.hos ? hosText(d.hos) : null;
             return (
               <div key={d.providerId} style={{ border: "1px solid rgba(255,255,255,0.14)", marginBottom: 8 }}>
-                <button type="button" disabled={!tappable} onClick={() => { if (!p) { setOpenDriver((cur) => (cur === d.providerId ? null : d.providerId)); return; } if (p.truckId) openTruck(p.truckId); else setPick({ truckId: null, trailerId: null, vehicle: { id: p.vehicleId, name: p.vehicleName } }); }}
+                <button type="button" disabled={!tappable} onClick={() => { if (!p) { setOpenDriver((cur) => (cur === d.providerId ? null : d.providerId)); void loadDebug(d.providerId); return; } if (p.truckId) openTruck(p.truckId); else setPick({ truckId: null, trailerId: null, vehicle: { id: p.vehicleId, name: p.vehicleName } }); }}
                   style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "transparent", border: "none", color: "#fff", cursor: tappable ? "pointer" : "default" }}>
                   <div style={{ fontSize: 16, fontWeight: 800 }}>
                     {d.name}
@@ -183,7 +206,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
                   {!p && openDriver === d.providerId && (
                     <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.75)" }}>
                       <div>Geotab doesn't say which vehicle this driver is in. What it returned for them:</div>
-                      {(d.debug ?? ["No further detail was returned."]).map((l, i) => <div key={i} style={{ marginTop: 2, color: muted }}>• {l}</div>)}
+                      {(debugLines[d.providerId] === "loading" ? ["Asking Geotab…"] : (debugLines[d.providerId] as string[] | undefined) ?? ["No further detail was returned."]).map((l, i) => <div key={i} style={{ marginTop: 2, color: muted }}>• {l}</div>)}
                       {d.hos && <div style={{ marginTop: 4 }}>Hours are known, so the driver exists: {hosText(d.hos).text}</div>}
                       <div style={{ marginTop: 4 }}>Searching the unit number instead works if you know the truck.</div>
                     </div>
@@ -201,7 +224,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         </div>
       )}
 
-      {q.trim().length >= 3 && geoVehicles.length > 0 && (
+      {submitted.length >= 2 && geoVehicles.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>Vehicles in Geotab</div>
           {geoVehicles.map((v) => (

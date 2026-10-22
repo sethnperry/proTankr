@@ -43,6 +43,13 @@ export async function GET(req: NextRequest) {
   if (!companyId) return NextResponse.json({ error: "companyId is required." }, { status: 400 });
   const r = await companyRole(uid, companyId);
   if (!r.role && !r.superAdmin) return NextResponse.json({ error: "Not in this company." }, { status: 403 });
+  const debugId = req.nextUrl.searchParams.get("debug");
+  if (debugId) {
+    // What the provider returns for one driver, fetched only when someone asks (it costs several calls).
+    const p = await providerFor(companyId).catch(() => null);
+    if (!p) return NextResponse.json({ connected: false });
+    return NextResponse.json({ connected: true, lines: await p.driverDebug(debugId).catch((e) => [`error ${String((e as Error).message).slice(0, 100)}`]) });
+  }
   if (q.length < 2) return NextResponse.json({ connected: true, drivers: [] });
   try {
     const p = await providerFor(companyId);
@@ -104,16 +111,16 @@ export async function GET(req: NextRequest) {
       else {
         // The status record's last driver first (instant), then the sign-in history and trips.
         const hv = [...historic.entries()].find(([, drv]) => drv === d.id)?.[0] ?? null;
-        const l = hv ? { vehicleId: hv, at: positions.get(hv)?.at ?? new Date().toISOString() } : await p.lastVehicleOf(d.id).catch(() => null);
+        // The slower history lookups (several calls each) run for the first few matches only, to stay inside Geotab's rate limit.
+        const l = hv ? { vehicleId: hv, at: positions.get(hv)?.at ?? new Date().toISOString() } : hits.indexOf(d) < 3 ? await p.lastVehicleOf(d.id).catch(() => null) : null;
         if (l) last = { ...(await placeOf(l.vehicleId, l.at)), at: l.at };
       }
       const uidm = memberOf.get(d.id);
       drivers.push({
         providerId: d.id, name: [d.firstName, d.lastName].filter(Boolean).join(" ") || d.name, employeeNo: d.employeeNo,
         memberName: uidm ? profName.get(uidm) ?? null : null, now, last,
-        hos: await p.hos(d.id).catch(() => null),
+        hos: hits.indexOf(d) < 3 ? await p.hos(d.id).catch(() => null) : null,
         // Why a driver isn't placed, for troubleshooting: what Geotab's vehicle status records say about them.
-        debug: vid || last ? undefined : await p.driverDebug(d.id).catch(() => undefined),
         diag: `Geotab sees ${current.size} signed-in and ${historic.size} last-driver records. This driver: ${vid ? "signed in" : [...historic.values()].includes(d.id) ? "last driver on a vehicle" : "on no vehicle status record"}.`,
       });
     }
