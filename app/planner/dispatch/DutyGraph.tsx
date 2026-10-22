@@ -61,12 +61,14 @@ export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, 
   });
   if (blocks.length) steps.push(`M${lastX} ${lastY} H100`);
 
-  const tag = (text: string | null, ms: number | null) => {
+  // Two place names closer than ~35% of the width would print on top of each other: stack them.
+  const tagsClose = terminalPlace != null && locationPlace != null && terminalAtMs != null && locationAtMs != null && Math.abs(x(terminalAtMs) - x(locationAtMs)) < 35;
+  const tag = (text: string | null, ms: number | null, row = 0) => {
     if (!text || ms == null) return null;
     const p = Math.max(0, Math.min(100, x(ms)));
     const align = p < 18 ? "left" : p > 82 ? "right" : "center";
     return (
-      <span key={text + ms} style={{ position: "absolute", top: 0, left: `${p}%`, transform: align === "center" ? "translateX(-50%)" : align === "right" ? "translateX(-100%)" : "none",
+      <span key={text + ms} style={{ position: "absolute", top: row * 15, left: `${p}%`, transform: align === "center" ? "translateX(-50%)" : align === "right" ? "translateX(-100%)" : "none",
         fontSize: 11, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>
         {text}
       </span>
@@ -109,9 +111,9 @@ export function DutyGraph({ blocks, terminalPlace, terminalAtMs, locationPlace, 
               <span key={t} className="dash-num" style={{ position: "absolute", top: 0, left: `${x(t)}%`, transform: x(t) < 3 ? "none" : x(t) > 97 ? "translateX(-100%)" : "translateX(-50%)", fontSize: 10, color: L.faint }}>{hourLabel(t)}</span>
             ))}
           </div>
-          <div style={{ position: "relative", height: 16, marginTop: 2 }}>
+          <div style={{ position: "relative", height: tagsClose ? 31 : 16, marginTop: 2 }}>
             {tag(terminalPlace, terminalAtMs)}
-            {tag(locationPlace, locationAtMs)}
+            {tag(locationPlace, locationAtMs, tagsClose ? 1 : 0)}
           </div>
         </div>
       </div>

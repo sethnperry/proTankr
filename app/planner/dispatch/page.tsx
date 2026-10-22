@@ -605,6 +605,8 @@ export default function DispatchPage() {
       setDispatchMsg({ ok: true, text: `Dispatched ${legs.length} load${legs.length === 1 ? "" : "s"} to ${name}.` });
       setDayPlan((m) => ({ ...m, [tlDriverId]: [] }));
       setTlStart(null); setOrderNumber(""); setPlanSupplierId(null); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
+      // Start the next load from a blank route; the one just sent now shows as "Sent" above it.
+      setPlanLocationId(null); setPlanTerminalId(null); setShowNotCarded(false);
       dispatched.reload();
     } finally {
       setDispatching(false);
