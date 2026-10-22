@@ -404,8 +404,6 @@ export default function LoadingModal(props: {
   trip?: LoadingTripMode | null;
   // Finish Loading was tapped: the page asks the telematics app for the shipment number once.
   onFinishLoadingStart?: () => void;
-  // Finish Later: leave now with only the times recorded; BOL, supplier and signature are completed later.
-  onLoadedLater?: (compEntries: Record<number, { gallons: number; api: number; tempF: number }>, partial: Record<number, Partial<TripCompExtra>>) => void;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
   // Report Terminal Issue: hands off to CancelLoadSheet's report flow.
@@ -645,13 +643,6 @@ export default function LoadingModal(props: {
   const [tripSigned, setTripSigned] = useState(false);
   const [tripStepError, setTripStepError] = useState<string | null>(null);
   const finishTappedAt = useRef<Date | null>(null);
-  // One-screen Finish Loading (trip mode): everything known is prefilled and one tap confirms. A row opens
-  // that product's own window to fix something; quickEdit sends the window back here instead of onward.
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [quickEdit, setQuickEdit] = useState(false);
-  const [quickError, setQuickError] = useState<string | null>(null);
-  const [quickBadIdx, setQuickBadIdx] = useState<number | null>(null);
-  const [quickBusy, setQuickBusy] = useState(false);
 
   const seqGroups = useMemo(
     () => buildBolGroups(orderedCompLines.map((l) => ({ comp: l.comp, productId: l.productId, gallons: l.gallons })), bolAssign),
@@ -666,7 +657,6 @@ export default function LoadingModal(props: {
   useEffect(() => {
     if (!open) {
       setCompSeqIndex(null);
-      setQuickOpen(false); setQuickEdit(false); setQuickError(null); setQuickBadIdx(null); setQuickBusy(false);
       setCompEntries({});
       setGallonsTarget(null);
       setEditingReport(false);
@@ -777,7 +767,6 @@ export default function LoadingModal(props: {
     setCompEntries({});
     setTripExtras({});
     setBolAssign({});
-    if (trip) { setQuickError(null); setQuickBadIdx(null); setQuickOpen(true); return; }
     setCompSeqIndex(0);
   }
   function startEditSequence() {
@@ -801,7 +790,6 @@ export default function LoadingModal(props: {
   function cancelLogSequence() {
     setCompSeqIndex(null);
     setEditingReport(false);
-    setQuickEdit(false);
   }
   function goToPreviousCompStep() {
     if (compSeqIndex == null || compSeqIndex <= 0) return;
@@ -902,7 +890,6 @@ export default function LoadingModal(props: {
       setTripExtras(updatedExtras);
     }
 
-    if (quickEdit) { setQuickEdit(false); setCompSeqIndex(null); return; }
     const isLast = compSeqIndex >= seqGroups.length - 1;
     if (isLast) {
       setCompSeqIndex(null);
@@ -925,121 +912,6 @@ export default function LoadingModal(props: {
     } else {
       setCompSeqIndex(compSeqIndex + 1);
     }
-  }
-
-  // ── One-screen Finish Loading ───────────────────────────────────────────
-  type QuickRow = {
-    idx: number; productId: string; comps: number[]; bol: string; fromGeo: boolean; supplier: string; supplierId: string | null;
-    api: number | null; tempF: number | null; gross: number; net: number | null; calc: number | null; edited: boolean;
-  };
-  const quickRows = useMemo<QuickRow[]>(() => {
-    if (!trip || !quickOpen) return [];
-    const rows: QuickRow[] = [];
-    seqGroups.forEach((g, idx) => {
-      const first = g.comps[0];
-      const own = tripExtras[first], entry = compEntries[first], def = trip.compDefaults[first];
-      const geo = trip.geotabBols?.[g.bolIndex] ?? (g.bolCount <= 1 ? trip.geotabBols?.[0] : undefined);
-      const prev = idx > 0 && seqGroups[idx - 1].productId !== g.productId ? rows[idx - 1] : null;
-      const bol = own?.bol ?? def?.bol ?? geo ?? prev?.bol ?? "";
-      const pi = productInputs[g.productId];
-      const api = entry ? entry.api : pi?.api ? Number(pi.api) : null;
-      const tempF = entry ? entry.tempF : pi?.tempF != null ? Number(pi.tempF) : null;
-      const gross = g.comps.reduce((t, c) => t + (compEntries[c]?.gallons ?? lineByComp.get(c)?.gallons ?? 0), 0);
-      const calc = calculateNetGallons(gross, api, tempF, netMethodForProduct(productNameById.get(g.productId) ?? null));
-      const ownNet = g.comps.every((c) => tripExtras[c]?.net != null) ? g.comps.reduce((t, c) => t + (tripExtras[c].net ?? 0), 0) : null;
-      rows.push({
-        idx, productId: g.productId, comps: g.comps, bol, fromGeo: !!geo && bol === geo,
-        supplier: own?.supplier ?? def?.supplier ?? prev?.supplier ?? "", supplierId: own ? own.supplierId : def?.supplier ? def.supplierId : prev?.supplierId ?? null,
-        api, tempF, gross, net: ownNet ?? calc, calc, edited: !!entry,
-      });
-    });
-    return rows;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trip, quickOpen, seqGroups, tripExtras, compEntries, productInputs, lineByComp, productNameById]);
-
-  async function confirmQuick() {
-    if (!trip || quickBusy) return;
-    // Anything missing opens that product's own window instead of guessing.
-    for (const r of quickRows) {
-      const name = productNameById.get(r.productId) ?? "this product";
-      const miss = !r.bol.trim() ? `Add the BOL for ${name}.` : !r.supplier.trim() ? `Pick the supplier for ${name}.`
-        : r.api == null || r.tempF == null ? `Add API and temp for ${name}.` : r.net == null || !Number.isFinite(r.net) ? `Add the net gallons for ${name}.` : null;
-      if (miss) { setQuickBadIdx(r.idx); setQuickError(miss); return; }
-      if (persistedCapForComp) {
-        const caps = r.comps.map((c) => persistedCapForComp(c));
-        if (caps.every((c) => c != null) && r.gross > caps.reduce((t, c) => t + (c as number), 0) + 1) {
-          setQuickBadIdx(r.idx); setQuickError(`${name}: more than the compartments hold.`); return;
-        }
-      }
-    }
-    const keys = quickRows.map((r) => normalizeRef(r.bol));
-    const dupSplit = quickRows.findIndex((r, i) => quickRows.some((o, j) => j !== i && o.productId === r.productId && normalizeRef(o.bol) === normalizeRef(r.bol)));
-    if (dupSplit >= 0) { setQuickBadIdx(dupSplit); setQuickError("Each split needs its own BOL number."); return; }
-    const unchecked = [...new Set(quickRows.map((r) => r.bol.trim()))].filter((b) => !okBols.current.has(normalizeRef(b)));
-    if (unchecked.length) {
-      setQuickBusy(true);
-      const dup = await trip.checkBols(unchecked).catch(() => [] as string[]);
-      setQuickBusy(false);
-      if (dup.length) {
-        const bad = quickRows.findIndex((r) => dup.some((d) => normalizeRef(d) === normalizeRef(r.bol)));
-        setQuickBadIdx(bad >= 0 ? bad : null); setQuickError(`BOL ${dup[0]} is already on another load.`); return;
-      }
-      keys.forEach((k) => okBols.current.add(k));
-    }
-    const updated: Record<number, { gallons: number; api: number; tempF: number }> = {};
-    const extras: Record<number, TripCompExtra> = {};
-    for (const r of quickRows) {
-      const weights = r.comps.map((c) => lineByComp.get(c)?.gallons ?? 0);
-      const grossShares = distributeWhole(r.gross, weights);
-      const netShares = distributeWhole(r.net as number, grossShares);
-      const calcShares = r.calc != null ? distributeWhole(r.calc, grossShares) : r.comps.map(() => null);
-      r.comps.forEach((c, i) => {
-        updated[c] = { gallons: grossShares[i], api: r.api as number, tempF: r.tempF as number };
-        extras[c] = { bol: r.bol.trim(), supplier: r.supplier.trim(), supplierId: r.supplierId, net: netShares[i], netCalculated: calcShares[i] };
-      });
-    }
-    setCompEntries(updated);
-    setTripExtras(extras);
-    setQuickError(null); setQuickBadIdx(null);
-    const times = trip.existingTimes ?? defaultStepTimes(finishTappedAt.current ?? new Date(), loadingOffset(trip.settings), trip.arrivedAt, trip.beganAt, trip.departedAt ?? null);
-    const needDelay = needsDelayReason(delayMinutes(times.arrivedAt, times.beginAt), trip.settings.loading_delay_threshold_minutes);
-    // Nothing left to ask and a saved signature: Confirm is the signature, and the load is finished.
-    if (!timesProblem(times) && !needDelay && !trip.needsOdometer && trip.signature) {
-      setQuickOpen(false);
-      onLoaded(updated, { byComp: extras, times, delayReasonId: null, delayNote: null, odometer: trip.existingOdometer, signed: true });
-      return;
-    }
-    setTripTimes(times);
-    setTripReasonId(trip.existingDelayReasonId);
-    setTripNote(trip.existingDelayNote ?? "");
-    setTripOdometer(trip.existingOdometer != null ? String(trip.existingOdometer) : "");
-    setTripSigned(false);
-    setTripStepError(null);
-    setTripStep("times");
-  }
-  const quickCanFinish = !!trip && !!trip.signature && !trip.needsOdometer;
-
-  // Finish Later: record gross, API and temp (already known) and any BOL / supplier / net that is
-  // already filled in; the rest is completed from the dashboard.
-  function finishLater() {
-    if (!trip || !props.onLoadedLater || quickBusy) return;
-    const updated: Record<number, { gallons: number; api: number; tempF: number }> = {};
-    const partial: Record<number, Partial<TripCompExtra>> = {};
-    for (const r of quickRows) {
-      if (r.api == null || r.tempF == null) { setQuickBadIdx(r.idx); setQuickError(`Add API and temp for ${productNameById.get(r.productId) ?? "this product"} first.`); return; }
-      const grossShares = distributeWhole(r.gross, r.comps.map((c) => lineByComp.get(c)?.gallons ?? 0));
-      const netShares = r.net != null && Number.isFinite(r.net) ? distributeWhole(r.net, grossShares) : null;
-      r.comps.forEach((c, i) => {
-        updated[c] = { gallons: grossShares[i], api: r.api as number, tempF: r.tempF as number };
-        partial[c] = {
-          ...(r.bol.trim() ? { bol: r.bol.trim() } : {}),
-          ...(r.supplier.trim() ? { supplier: r.supplier.trim(), supplierId: r.supplierId } : {}),
-          ...(netShares ? { net: netShares[i] } : {}),
-        };
-      });
-    }
-    setQuickOpen(false);
-    props.onLoadedLater(updated, partial);
   }
 
   const showLivePreview = livePreviewGrossLbs != null;
@@ -1098,7 +970,6 @@ export default function LoadingModal(props: {
     if (!tripSigned) return setTripStepError("Accept your signature to finish.");
     const delayNeeded = needsDelayReason(delayMinutes(tripTimes.arrivedAt, tripTimes.beginAt), trip.settings.loading_delay_threshold_minutes);
     setTripStep(null);
-    setQuickOpen(false);
     onLoaded(compEntries, {
       byComp: tripExtras,
       times: tripTimes,
@@ -1687,6 +1558,7 @@ export default function LoadingModal(props: {
         fields={[
           ...(trip ? [{
             key: "bol", label: "BOL #", value: seqBol, text: true,
+            badge: seqBol.trim() && (trip.geotabBols ?? []).includes(seqBol.trim()) ? "✓" : undefined,
             onChange: (v: string) => { setSeqBol(v); setSeqError(null); },
             // Next on the BOL opens the supplier list when none is picked yet.
             onEnter: () => { if (seqSupplier.trim()) return false; setPickingSupplier(true); return true; },
@@ -1695,7 +1567,7 @@ export default function LoadingModal(props: {
               {(trip.geotabBols?.length ?? 0) > 0 && (
                 <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
                   {trip.geotabBols!.includes(seqBol.trim())
-                    ? <span style={{ color: "#4ade80", fontWeight: 800 }}>✓ Matches the shipment in your telematics app</span>
+                    ? <span style={{ color: "#4ade80", fontWeight: 800 }}>Matches your telematics app. Check it against the BOL.</span>
                     : <>Telematics app has: {trip.geotabBols!.map((b) => (
                         <button key={b} type="button" onClick={() => { setSeqBol(b); setSeqError(null); }}
                           style={{ marginLeft: 6, padding: "3px 8px", border: "1px solid rgba(255,255,255,0.35)", background: "transparent", color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", borderRadius: 2 }}>{b}</button>
@@ -1742,7 +1614,7 @@ export default function LoadingModal(props: {
             <span>If the BOL shows more than one, use the lowest API and the coldest temperature.</span>
           </div>
         )}
-        onCancel={!quickEdit && compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}
+        onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}
         cancelLabel={compSeqIndex != null && compSeqIndex > 0 ? "‹ Back" : "Cancel"}
         onSubmit={() => { void commitCompStep(); }}
         submitLabel={seqSubmitLabel}
@@ -1800,49 +1672,10 @@ export default function LoadingModal(props: {
         />
       )}
 
-      {trip && quickOpen && compSeqIndex == null && tripStep == null && (
-        <StepCard
-          title="Finish Loading"
-          onBack={() => { setQuickOpen(false); setQuickError(null); setQuickBadIdx(null); }}
-          backLabel="‹ Back"
-          onNext={() => void confirmQuick()}
-          nextLabel={quickBusy ? "Checking…" : quickCanFinish ? "Confirm & Sign" : "Next"}
-          error={quickError}
-          secondary={props.onLoadedLater ? { label: "Finish later — I'll add the BOL when I arrive", onClick: finishLater } : undefined}
-        >
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", textAlign: "center" as const, marginTop: -4 }}>
-            Check it matches your BOL. Tap a product to change anything.
-          </div>
-          {quickRows.map((r) => {
-            const name = productNameById.get(r.productId) ?? r.productId;
-            const dot = (productHexCodeById?.[r.productId] && String(productHexCodeById[r.productId]).trim()) || "rgba(255,255,255,0.5)";
-            const missing = (t: string) => <span style={{ color: "#f87171", fontWeight: 800 }}>{t}</span>;
-            return (
-              <button key={r.idx} type="button" onClick={() => { setQuickEdit(true); setQuickError(null); setQuickBadIdx(null); setCompSeqIndex(r.idx); }}
-                style={{ display: "block", width: "100%", textAlign: "left" as const, padding: "10px 12px", cursor: "pointer", color: "#fff", background: "rgba(255,255,255,0.04)",
-                  border: quickBadIdx === r.idx ? "1px solid #f87171" : "1px solid rgba(255,255,255,0.14)", borderRadius: 2 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span aria-hidden style={{ width: 10, height: 10, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 0, fontWeight: 800, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                    {name}{seqGroups[r.idx]?.bolCount > 1 ? ` · BOL ${seqGroups[r.idx].bolIndex} of ${seqGroups[r.idx].bolCount}` : ""}
-                  </span>
-                  <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
-                </div>
-                <div style={{ marginTop: 5, fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.8)" }}>
-                  <div>BOL {r.bol ? <b>{r.bol}</b> : missing("add")}{r.fromGeo && <span style={{ color: "#4ade80", fontWeight: 800 }}> ✓ telematics</span>} · {r.supplier || missing("supplier?")}</div>
-                  <div>API {r.api != null ? r.api : missing("add")} · {r.tempF != null ? `${r.tempF.toFixed(1)}°F` : missing("temp?")}</div>
-                  <div>Gross <b>{Math.round(r.gross).toLocaleString()}</b> · Net {r.net != null ? <b>{Math.round(r.net).toLocaleString()}</b> : missing("add")}</div>
-                </div>
-              </button>
-            );
-          })}
-        </StepCard>
-      )}
-
       {trip && tripStep === "times" && tripTimes && (
         <StepCard
           title={trip.pickupName ? `Times · ${trip.pickupName}` : "Loading times"}
-          onBack={() => { setTripStep(null); setTripStepError(null); if (!quickOpen) setCompSeqIndex(Math.max(0, seqGroups.length - 1)); }}
+          onBack={() => { setTripStep(null); setTripStepError(null); setCompSeqIndex(Math.max(0, seqGroups.length - 1)); }}
           backLabel="‹ Back"
           onNext={finishTimesStep}
           nextLabel="Next"

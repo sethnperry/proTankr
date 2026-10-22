@@ -20,7 +20,8 @@ function segments(logs: any[], nowMs: number): Seg[] {
   const rows = (logs ?? [])
     .filter(isDutyChange)
     .map((l) => ({ code: dutyCodeOf(l.status)!, t: Date.parse(l.dateTime) }))
-    .filter((r) => Number.isFinite(r.t) && r.t <= nowMs)
+    .filter((r) => Number.isFinite(r.t))
+    .map((r) => ({ ...r, t: Math.min(r.t, nowMs) })) // a log stamped a few seconds ahead still counts
     .sort((a, b) => a.t - b.t);
   const out: Seg[] = [];
   for (let i = 0; i < rows.length; i++) {
@@ -82,4 +83,28 @@ export function breakLeftMin(logs: any[], nowMs: number): number | null {
     }
   }
   return Math.max(0, Math.round(BREAK_AFTER_DRIVE_MIN - drove));
+}
+
+export const WORKDAY_MIN = 14 * 60;
+export const RESET_OFF_MIN = 10 * 60;
+
+/** The 14-hour window: it opens when on-duty time starts after 10 straight hours off, and runs on the wall clock.
+ * Null when there is nothing to go on or the driver is fresh off a reset (a full window). */
+export function workdayLeftMin(logs: any[], nowMs: number): number | null {
+  const segs = segments(logs, nowMs);
+  if (!segs.length) return null;
+  let windowStart: number | null = null;
+  let off = 0;
+  for (const s of segs) {
+    const len = (s.to - s.from) / 60000;
+    if (ONDUTY.has(s.code)) {
+      if (windowStart == null || off >= RESET_OFF_MIN) windowStart = s.from;
+      off = 0;
+    } else {
+      off += len;
+    }
+  }
+  if (windowStart == null) return null;
+  if (off >= RESET_OFF_MIN) return null; // reset since the last duty: next window hasn't opened
+  return Math.max(0, Math.round(WORKDAY_MIN - (nowMs - windowStart) / 60000));
 }

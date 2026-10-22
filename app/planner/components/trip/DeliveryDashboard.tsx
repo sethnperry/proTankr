@@ -231,11 +231,8 @@ const fmtDayTime = (iso: string | null) => {
 export function DeliveryDashboard({
   open, title, delivery, location, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
   otherPlanned, beginMiles, liveOdometer, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
-  loadingPending, onFinishLoadingDetails,
 }: {
   // The loading BOL / supplier / signature were left for later (Finish Later): finishing the delivery waits for them.
-  loadingPending?: boolean;
-  onFinishLoadingDetails?: () => void;
   // Park Preloaded, offered until the delivery begins.
   onPark?: () => void;
   open: boolean;
@@ -667,11 +664,6 @@ export function DeliveryDashboard({
   // needed opens instead, with a line saying why.
   const finish = () => {
     if (finishing) return;
-    if (loadingPending) {
-      setErr("Finish the loading details first: BOL, supplier and your signature.");
-      onFinishLoadingDetails?.();
-      return;
-    }
     if (unpicked.length) {
       setSection("tanks");
       return setErr(`Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}.`);

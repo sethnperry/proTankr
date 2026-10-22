@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { breakLeftMin, cycleRecap } from "./cycleRecap.ts";
+import { breakLeftMin, cycleRecap, workdayLeftMin } from "./cycleRecap.ts";
 import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs } from "./dutyLogs.ts";
 
@@ -500,7 +500,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       // Only real duty status changes (not ELD log-in/out); see dutyLogs.ts.
       const duty = dutyFromLogs(logs ?? []);
       return {
-        driveLeftMin: durationMinutes(a.driving), dutyLeftMin: durationMinutes(a.duty), cycleLeftMin: durationMinutes(a.cycle),
+        driveLeftMin: durationMinutes(a.driving), dutyLeftMin: durationMinutes(a.duty) ?? workdayLeftMin(logs ?? [], Date.now()), cycleLeftMin: durationMinutes(a.cycle),
         status: duty.status, statusSince: duty.since, offSince: duty.offSince, at: new Date().toISOString(),
       };
     },

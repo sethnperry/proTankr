@@ -99,7 +99,7 @@ import { newId as newTripId } from "@/lib/trips/tripStore";
 import { useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
-import { addPickup, arrivePickup, closePickupNoLoad, confirmLoaded, defaultStepTimes, pickupNeedsOdometer, stampLoadedLater, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
+import { addPickup, arrivePickup, closePickupNoLoad, confirmLoaded, defaultStepTimes, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
 import { loadingOffset } from "@/lib/trips/useTripData";
 import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import type { LoadingTripMode, TripCompExtra, TripLoadExtras } from "./modals/LoadingModal";
@@ -1750,35 +1750,6 @@ export default function CalculatorPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId]);
-
-  // Finish Later: stamp the times now (arrived, began, left = now, or the truck's own departure when the
-  // telematics saw it), keep whatever BOL / supplier / net is already known, and go to the dashboard.
-  // The rest (BOL, supplier, signature) is completed there; the trip can't be finished until it is.
-  const recordTripLater = useCallback((partial: Record<number, Partial<TripCompExtra>>) => {
-    if (!tripStoreObj || !tripPickup || !effectiveUserId || !shell.companyId) return;
-    const pickup = (tripStoreObj.list("trip_pickups", (p) => p.pickup_id === tripPickup.pickup_id)[0]) ?? tripPickup;
-    const now = new Date();
-    const times = defaultStepTimes(now, loadingOffset(tripSettings), pickup.arrived_at, pickup.begin_at, readGeoDeparture(pickup.pickup_id));
-    const comps = tripStoreObj.list("trip_compartment_loads", (c) => c.pickup_id === pickup.pickup_id && c.disposition !== "cancelled");
-    updateLoadedCompartments(tripStoreObj, comps.map((c) => {
-      const x = partial[c.comp_number] ?? {};
-      return {
-        compartment_load_id: c.compartment_load_id,
-        bol_number: x.bol ?? c.bol_number,
-        supplier: x.supplier ?? c.supplier,
-        supplier_id: x.supplier !== undefined ? (x.supplierId ?? null) : ((c as any).supplier_id ?? null),
-        net_gallons: x.net ?? c.net_gallons,
-      };
-    }));
-    stampLoadedLater(tripStoreObj, {
-      userId: effectiveUserId, companyId: shell.companyId, trailerId: equipment.selectedCombo?.trailer_id ?? equipment.currentTrailerId ?? null,
-      pickup, times, now, newId: newTripId,
-    });
-    void tripStoreHook.syncNow();
-    leaveTo("/planner/home", "Opening dashboard…");
-    loadWorkflow.closeLoadReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId, tripSettings]);
 
   // ── Incentive running-average card ────────────────────────────────────────
   // Left side is this load's own recovered points; right side is the
@@ -3824,7 +3795,6 @@ const lastProductInfoById = useMemo(() => {
         onLoaded={(entries, extras) => loadWorkflow.onLoadedFromLoadingModal(entries, extras ? { afterTripRecord: () => recordTripLoaded(extras, false) } : undefined)}
         trip={tripModeForLoading}
         onFinishLoadingStart={loadGeoShips}
-        onLoadedLater={(entries, partial) => loadWorkflow.onLoadedFromLoadingModal(entries, { afterTripRecord: () => recordTripLater(partial) })}
         onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
         onReportTerminalIssue={() => setCancelLoadConfirmOpen(true)}
         onBackToPlanner={handleBackToPlannerNoUpdate}

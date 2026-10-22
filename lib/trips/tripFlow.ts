@@ -365,55 +365,6 @@ export function confirmLoaded(
   }
 }
 
-// Finish Later: the driver leaves the rack with only the times recorded. The pickup is stamped
-// arrived / began / left and the load is on the truck (compartments Pre-Loaded, trip moves on),
-// but BOL, supplier and the loading signature are still owed: see pendingLoadDetails. The details
-// are completed later in the Loaded sheet (confirmLoaded), which keeps these times.
-export function stampLoadedLater(
-  store: TripStoreLike,
-  args: { userId: string; companyId: string; trailerId: string | null; pickup: TripPickupRow; times: StepTimes } & Clock,
-) {
-  const p = args.pickup;
-  store.put("trip_pickups", {
-    pickup_id: p.pickup_id,
-    arrived_at: args.times.arrivedAt,
-    begin_at: args.times.beginAt,
-    left_at: args.times.leftAt,
-    outcome: "loaded",
-  });
-  const comps = store.list("trip_compartment_loads", (c) => c.pickup_id === p.pickup_id && c.disposition !== "cancelled");
-  for (const c of comps) {
-    setReadiness(store, args, c.comp_number, "preloaded", { last_product_id: c.product_id, compartment_load_id: c.compartment_load_id });
-  }
-  const others = store.list("trip_pickups", (x) => x.trip_id === p.trip_id && x.pickup_id !== p.pickup_id && !x.left_at);
-  store.put("trips", { trip_id: p.trip_id, status: others.length ? "loading" : "in_transit" });
-  logEvent(store, args.newId, {
-    trip_id: p.trip_id, event_type: "loaded", occurred_at: args.now.toISOString(), actor_id: args.userId, pickup_id: p.pickup_id,
-    payload: { deferred: true, bol_numbers: [], compartments: comps.map((c) => c.comp_number) },
-  });
-}
-
-export type PendingLoad = { pickup: TripPickupRow; comps: TripCompartmentLoadRow[]; missingBol: boolean; missingSupplier: boolean; missingSignature: boolean };
-
-// Pickups the driver left with details still owed: a loaded pickup whose compartments lack a BOL or
-// supplier, or whose loading driver never signed. The trip can't be finished until this is empty.
-export function pendingLoadDetails(store: TripStoreLike, tripId: string): PendingLoad[] {
-  const out: PendingLoad[] = [];
-  const signed = new Set(
-    store.list("trip_events", (e) => e.trip_id === tripId && e.event_type === "signature_accepted" && (e.payload as { role?: string } | null)?.role === "loading_driver")
-      .map((e) => e.pickup_id),
-  );
-  for (const p of store.list("trip_pickups", (x) => x.trip_id === tripId && x.outcome === "loaded" && !!x.left_at)) {
-    const comps = store.list("trip_compartment_loads", (c) => c.pickup_id === p.pickup_id && c.disposition !== "cancelled");
-    if (comps.length === 0) continue;
-    const missingBol = comps.some((c) => !String(c.bol_number ?? "").trim());
-    const missingSupplier = comps.some((c) => !String(c.supplier ?? "").trim());
-    const missingSignature = !signed.has(p.pickup_id);
-    if (missingBol || missingSupplier || missingSignature) out.push({ pickup: p, comps, missingBol, missingSupplier, missingSignature });
-  }
-  return out;
-}
-
 // Edit Load from the Planner report: BOL, supplier and net only. Gross,
 // temp and API were already rewritten by recordLoadCompleted; trip status
 // and times stay as they are.

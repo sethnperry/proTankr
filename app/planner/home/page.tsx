@@ -66,7 +66,6 @@ import {
   parkTrip,
   parkedTripOnTrailer,
   resumeTrip,
-  pendingLoadDetails,
   pickupNeedsOdometer,
   plannedDeliveries,
   rerouteDelivery,
@@ -668,21 +667,10 @@ export default function HomePage() {
   const arriveAtRef = useRef<Date | null>(null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
 
-  // Pickups left with details owed (Finish Later). The row below opens the Loaded sheet for one.
-  const pending = useMemo(
-    () => (store && openTrip ? pendingLoadDetails(store, openTrip.trip_id) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [store, openTrip?.trip_id, state],
-  );
-  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
-  const loadedPickup = step.kind === "loaded" ? step.pickup : (pendingTarget ? pending.find((x) => x.pickup.pickup_id === pendingTarget)?.pickup ?? null : null);
-  const openPending = () => { if (pending[0]) { setPendingTarget(pending[0].pickup.pickup_id); setLoadedOpen(true); } };
+  const loadedPickup = step.kind === "loaded" ? step.pickup : null;
 
-  // The truck's shipment numbers (BOLs) from the telematics app. Asked once when the catch-up sheet opens, and
-  // once automatically a few minutes after leaving (the driver adds the shipment in that app after loading), so
-  // an unambiguous number is already filled in when the driver gets here. Never polled.
+  // The truck's shipment numbers (BOLs) from the telematics app. Asked once when the Loaded sheet opens. Never polled.
   const [loadedGeoBols, setLoadedGeoBols] = useState<string[]>([]);
-  const tryGeo = useRef<Set<string>>(new Set());
   useEffect(() => {
     setLoadedGeoBols([]);
     if (!loadedOpen || !loadedPickup || !openTrip?.truck_id || !loadedPickup.arrived_at) return;
@@ -695,28 +683,6 @@ export default function HomePage() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedOpen, loadedPickup?.pickup_id]);
-  useEffect(() => {
-    if (!store || !openTrip?.truck_id) return;
-    for (const pd of pending) {
-      const p = pd.pickup;
-      if (!pd.missingBol || !p.arrived_at || !p.left_at || tryGeo.current.has(p.pickup_id)) continue;
-      const waitMs = 8 * 60000 - (Date.now() - Date.parse(p.left_at));
-      const run = () => {
-        tryGeo.current.add(p.pickup_id);
-        const used = (Object.values(state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
-          .filter((c) => c.pickup_id !== p.pickup_id && c.bol_number).map((c) => String(c.bol_number));
-        void fetchTruckShipments(openTrip.truck_id, new Date(Date.parse(p.arrived_at!) - 3600000).toISOString()).then((r) => {
-          const found = shipmentsForPickup(r, { arrivedAt: p.arrived_at, leftAt: p.left_at }, Date.now(), used);
-          if (found.length !== 1) return; // none yet, or ambiguous: the driver picks in the sheet
-          for (const c of pd.comps) if (!String(c.bol_number ?? "").trim()) store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, bol_number: found[0].documentNumber });
-          void syncNow();
-        });
-      };
-      if (waitMs <= 0) run();
-      else { const t = window.setTimeout(run, waitMs); return () => window.clearTimeout(t); }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending, openTrip?.truck_id]);
   const finishDeliveryRow = step.kind === "finish_delivery" ? step.delivery : null;
 
   const onLoadedSubmit = (v: LoadedSubmit) => {
@@ -731,7 +697,7 @@ export default function HomePage() {
       companyId, userId, truckLabel: equipment.currentTruckName ?? "",
     });
     setLoadedOpen(false);
-    setPendingTarget(null);
+    
     setNotice({ text: step.kind === "loaded" ? "Loaded. Drive safe." : "Loading details saved.", tripId: null });
     void syncNow();
   };
@@ -1857,19 +1823,9 @@ export default function HomePage() {
         const showExp = expired > 0 || warning > 0 || soonCount > 0;
         const showSync = pendingCount > 0 || failed.length > 0;
         const showFuel = !!fuel.active;
-        const showLoad = pending.length > 0;
-        if (!showGross && !showExp && !showSync && !showFuel && !showLoad) return null;
+        if (!showGross && !showExp && !showSync && !showFuel) return null;
         return (
           <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>
-            {showLoad && (
-              <InfoRow
-                label="Finish loading"
-                value={[pending[0].missingBol ? "BOL" : null, pending[0].missingSupplier ? "supplier" : null, pending[0].missingSignature ? "sign" : null].filter(Boolean).join(" · ")}
-                valueColor="#fbbf24"
-                onClick={openPending}
-                last={!showFuel && !showGross && !showExp && !showSync}
-              />
-            )}
             {showFuel && (
               <InfoRow
                 label="Fuel stop"
@@ -2163,7 +2119,7 @@ export default function HomePage() {
           )}
           geotabBols={loadedGeoBols}
           onSubmit={onLoadedSubmit}
-          onClose={() => { setLoadedOpen(false); setPendingTarget(null); }}
+          onClose={() => { setLoadedOpen(false); }}
         />
       )}
 
@@ -2188,8 +2144,6 @@ export default function HomePage() {
             liveOdometer={truckReading?.odometerMi ?? null}
             productInfo={productInfo}
             signature={signature.svg}
-            loadingPending={pending.length > 0}
-            onFinishLoadingDetails={() => { setFinishOpen(false); openPending(); }}
             onSaveSignature={signature.save}
             onSaveProgress={onDeliveryProgress}
             onSubmit={(v) => void onFinishSubmit(v)}

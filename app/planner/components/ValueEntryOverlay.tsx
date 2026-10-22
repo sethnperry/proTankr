@@ -20,6 +20,8 @@ export type ValueEntryField = {
   value: string;
   onChange: (v: string) => void;
   suffix?: string;
+  /** Small mark pinned inside the field's right edge (e.g. a green check). */
+  badge?: React.ReactNode;
   /** Digits + at most one decimal point (API/Temp) vs. digits-only (gallons). Default false. */
   decimal?: boolean;
   /** Show the label even when it's the only field. */
@@ -175,6 +177,9 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                     inputRef={{ get current() { return inputRefs.current[f.key] ?? null; } }}
                     style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}
                   />
+                )}
+                {f.badge && (
+                  <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", fontSize: 28, fontWeight: 900, color: "#4ade80", lineHeight: 1 }}>{f.badge}</span>
                 )}
                 {f.suffix && (
                   <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.3)" }}>
