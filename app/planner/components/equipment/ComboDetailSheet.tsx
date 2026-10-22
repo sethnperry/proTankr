@@ -99,21 +99,23 @@ function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "t
   );
 }
 
-export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, holderLabel, onOpenFile, onDropSwap, onStud, onNewDoc }: {
+export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, holderLabel, onOpenFile, onDropSwap, onStud, onNewDoc, primaryLabel = "Drop / Swap" }: {
   open: boolean; onClose: () => void; companyId: string;
-  truck: TrackUnit; trailer: TrackUnit;
+  /** A combo passes both; a loose unit passes just its own. */
+  truck: TrackUnit | null; trailer: TrackUnit | null;
+  primaryLabel?: string;
   /** "In use by Seth Perry", or null when nobody holds it. */
   holderLabel: string | null;
   onOpenFile: (kind: "truck" | "trailer") => void;
   onDropSwap: () => void; onStud: () => void; onNewDoc: () => void;
 }) {
   return (
-    <FullscreenModal open={open} onClose={onClose} title={`${truck.name} / ${trailer.name}`} footer={null}>
+    <FullscreenModal open={open} onClose={onClose} title={[truck?.name, trailer?.name].filter(Boolean).join(" / ")} footer={null}>
       {holderLabel && <div style={{ fontSize: 13, color: MUTED, marginBottom: 10 }}>{holderLabel}</div>}
-      <UnitSection kind="truck" unit={truck} companyId={companyId} onOpenFile={() => onOpenFile("truck")} />
-      <UnitSection kind="trailer" unit={trailer} companyId={companyId} onOpenFile={() => onOpenFile("trailer")} />
+      {truck && <UnitSection kind="truck" unit={truck} companyId={companyId} onOpenFile={() => onOpenFile("truck")} />}
+      {trailer && <UnitSection kind="trailer" unit={trailer} companyId={companyId} onOpenFile={() => onOpenFile("trailer")} />}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 4 }}>
-        <button type="button" onClick={onDropSwap} style={{ ...primaryBtn, padding: "14px 4px", fontSize: 13 }}>Drop / Swap</button>
+        <button type="button" onClick={onDropSwap} style={{ ...primaryBtn, padding: "14px 4px", fontSize: 13 }}>{primaryLabel}</button>
         <button type="button" onClick={onStud} style={{ ...secondaryBtn, padding: "14px 4px", fontSize: 13 }}>STUD</button>
         <button type="button" onClick={onNewDoc} style={{ ...secondaryBtn, padding: "14px 4px", fontSize: 13 }}>+ New Doc</button>
       </div>

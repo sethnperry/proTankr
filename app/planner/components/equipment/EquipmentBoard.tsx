@@ -40,6 +40,8 @@ type Props = {
   loadedByTrailer: Record<string, LoadedDot[]>;
   /** The viewer's own pair (highlighted). */
   mine?: { truckId: string | null; trailerId: string | null };
+  /** A loose unit waiting to be coupled (outlined). */
+  pendingId?: string | null;
   onCombo?: (row: TrackRows["combos"][number]) => void;
   onTruck?: (u: TrackUnit) => void;
   onTrailer?: (u: TrackUnit) => void;
@@ -134,8 +136,9 @@ export function EquipmentBoard(p: Props) {
               {rows.trucks.map((u) => {
                 const lp = p.longPress?.(u);
                 const mine = p.mine?.truckId === u.id;
+                const pending = p.pendingId === u.id;
                 return (
-                  <div key={u.id} style={{ ...tileBase, ...(mine ? tileMine : {}), cursor: "pointer" }}
+                  <div key={u.id} style={{ ...tileBase, ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     <StatusLine u={u} />
@@ -153,9 +156,10 @@ export function EquipmentBoard(p: Props) {
               {rows.trailers.map((u) => {
                 const lp = p.longPress?.(u);
                 const mine = p.mine?.trailerId === u.id;
+                const pending = p.pendingId === u.id;
                 const dots = p.loadedByTrailer[u.id];
                 return (
-                  <div key={u.id} style={{ ...tileBase, ...(mine ? tileMine : {}), cursor: "pointer" }}
+                  <div key={u.id} style={{ ...tileBase, ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {dots ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded<Dots dots={dots} /></div> : <StatusLine u={u} />}

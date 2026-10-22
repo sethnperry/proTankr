@@ -576,6 +576,9 @@ export default function SoloEquipmentModal({
   // Drop trailer / Park truck: status (+ optional location) first, then the unlink.
   const [statusFlow, setStatusFlow] = useState<"drop_trailer" | "park_truck" | null>(null);
   const [awaitingTruck, setAwaitingTruck] = useState(false);
+  // Loose-unit pop-out, and the unit waiting for its partner after "Couple".
+  const [detailUnit, setDetailUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
+  const [coupleFrom, setCoupleFrom] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   const [takeCombo, setTakeCombo] = useState<{ truckId: string; trailerId: string; ownerName: string | null } | null>(null);
   const [commandeerTarget, setCommandeerTarget] = useState<
     { kind: "truck" | "trailer"; id: string; ownerName: string } | null
@@ -866,8 +869,9 @@ export default function SoloEquipmentModal({
     return unit.region;
   }
 
-  function toggleTruck(id: string) {
-    const next = selectedTruckId === id ? null : id;
+  function toggleTruck(id: string, trailerOverride?: string | null, force = false) {
+    const trailerSel = trailerOverride ?? selectedTrailerId;
+    const next = !force && selectedTruckId === id ? null : id;
     if (next) setAwaitingTruck(false);
     if (next) {
       const unit = trucks.find((t) => t.truck_id === next);
@@ -878,11 +882,12 @@ export default function SoloEquipmentModal({
       if (ownerName) { setCommandeerTarget({ kind: "truck", id: next, ownerName }); return; }
     }
     setSelectedTruckId(next);
-    void resolvePair(next, selectedTrailerId);
+    void resolvePair(next, trailerSel);
   }
-  function toggleTrailer(id: string) {
-    const next = selectedTrailerId === id ? null : id;
-    if (next && !selectedTruckId) { setError("Pick a truck first. A trailer can't be linked without one."); return; }
+  function toggleTrailer(id: string, truckOverride?: string | null, force = false) {
+    const truckSel = truckOverride ?? selectedTruckId;
+    const next = !force && selectedTrailerId === id ? null : id;
+    if (next && !truckSel) { setError("Pick a truck first. A trailer can't be linked without one."); return; }
     if (next) {
       const unit = trailers.find((t) => t.trailer_id === next);
       if (unit?.status_code === "deadline") { setDeadlineConfirmTarget({ kind: "trailer", id: next, notes: unit.status_notes }); return; }
@@ -892,7 +897,36 @@ export default function SoloEquipmentModal({
       if (ownerName) { setCommandeerTarget({ kind: "trailer", id: next, ownerName }); return; }
     }
     setSelectedTrailerId(next);
-    void resolvePair(selectedTruckId, next);
+    void resolvePair(truckSel, next);
+  }
+
+  // Couple: pick the first unit, close its pop-out, then tap the other kind to make the pairing.
+  function startCouple(kind: "truck" | "trailer", id: string) {
+    setDetailUnit(null);
+    setCoupleFrom({ kind, id });
+  }
+  function boardTapTruck(id: string) {
+    if (coupleFrom?.kind === "trailer") { finishCouple(id, coupleFrom.id, "truck"); return; }
+    if (coupleFrom?.kind === "truck") { setCoupleFrom(coupleFrom.id === id ? null : { kind: "truck", id }); return; }
+    setDetailUnit({ kind: "truck", id });
+  }
+  function boardTapTrailer(id: string) {
+    if (coupleFrom?.kind === "truck") { finishCouple(coupleFrom.id, id, "trailer"); return; }
+    if (coupleFrom?.kind === "trailer") { setCoupleFrom(coupleFrom.id === id ? null : { kind: "trailer", id }); return; }
+    setDetailUnit({ kind: "trailer", id });
+  }
+  // Makes the pairing. The first-tapped unit is selected locally, then the normal tap chain runs
+  // for the second so the deadline / away / commandeer confirms still apply. A brand-new pairing
+  // asks for its tare weight (resolvePair's own prompt).
+  function finishCouple(truckId: string, trailerId: string, second: "truck" | "trailer") {
+    setCoupleFrom(null);
+    if (second === "truck") {
+      setSelectedTrailerId(trailerId);
+      toggleTruck(truckId, trailerId, true);
+    } else {
+      setSelectedTruckId(truckId);
+      toggleTrailer(trailerId, truckId, true);
+    }
   }
 
   // Continues past the deadline confirm into the SAME away/commandeer
@@ -1338,6 +1372,12 @@ export default function SoloEquipmentModal({
         }
       >
         <div ref={scrollRef} style={{ position: "relative", height: "100%", overflowY: "auto", minHeight: 0 }}>
+          {coupleFrom && (
+            <div style={{ border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", padding: "10px 12px", marginBottom: 12, fontSize: 13, lineHeight: 1.5, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <span>Coupling <b>{(coupleFrom.kind === "truck" ? trucks.find((t) => t.truck_id === coupleFrom.id)?.truck_name : trailers.find((t) => t.trailer_id === coupleFrom.id)?.trailer_name) ?? "unit"}</b>. Tap a {coupleFrom.kind === "truck" ? "trailer" : "truck"} to pair with it.</span>
+              <button type="button" onClick={() => setCoupleFrom(null)} style={{ background: "none", border: "none", color: "#93c5fd", fontWeight: 800, cursor: "pointer" }}>Cancel</button>
+            </div>
+          )}
           {awaitingTruck && (
             <div style={{ border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", padding: "10px 12px", marginBottom: 12, fontSize: 13, lineHeight: 1.5 }}>
               <b>Truck parked.</b> Tap a truck to hook up to {trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name ?? "the trailer"}, or tap Done to leave without equipment.
@@ -1351,8 +1391,9 @@ export default function SoloEquipmentModal({
             mine={{ truckId: selectedTruckId, trailerId: selectedTrailerId }}
             loading={loading}
             onCombo={(c) => setDetailComboId(c.comboId)}
-            onTruck={(u) => toggleTruck(u.id)}
-            onTrailer={(u) => toggleTrailer(u.id)}
+            pendingId={coupleFrom?.id ?? null}
+            onTruck={(u) => boardTapTruck(u.id)}
+            onTrailer={(u) => boardTapTrailer(u.id)}
             canAdd={canAddRemove}
             onAddTruck={() => setAddTruckOpen(true)}
             onAddTrailer={() => setAddTrailerOpen(true)}
@@ -1373,6 +1414,29 @@ export default function SoloEquipmentModal({
           </button>
         </div>
       </FullscreenModal>
+
+      {/* ── Loose-unit pop-out: same window as a combo, with Couple as its main button ── */}
+      {detailUnit && (() => {
+        const u = detailUnit.kind === "truck"
+          ? boardRows.trucks.find((x) => x.id === detailUnit.id)
+          : boardRows.trailers.find((x) => x.id === detailUnit.id);
+        if (!u) return null;
+        return (
+          <ComboDetailSheet
+            open
+            onClose={() => setDetailUnit(null)}
+            companyId={companyId}
+            truck={detailUnit.kind === "truck" ? u : null}
+            trailer={detailUnit.kind === "trailer" ? u : null}
+            holderLabel={null}
+            primaryLabel="Couple"
+            onOpenFile={(kind) => setDocUnit({ kind, id: u.id })}
+            onDropSwap={() => startCouple(detailUnit.kind, u.id)}
+            onStud={() => { setDetailUnit(null); openStatusFor(detailUnit.kind, u.id); }}
+            onNewDoc={() => { setDetailUnit(null); setDocUnit({ kind: detailUnit.kind, id: u.id }); }}
+          />
+        );
+      })()}
 
       {/* ── Combo pop-out: tap a connected combo on the picker ── */}
       {detailRow && (
