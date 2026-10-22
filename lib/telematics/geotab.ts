@@ -4,7 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
-import { TelematicsAuthError, type Discovery, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
+import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs } from "./dutyLogs.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
@@ -312,6 +312,50 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         } catch (e) { out.push(`Location logs ${fromD} d: error ${String((e as Error).message).slice(0, 80)}`); }
       }
       return out;
+    },
+
+    async shipmentTimeline(vehicleId: string, days: number): Promise<DriverTimeline[]> {
+      const from = new Date(Date.now() - days * 86400000).toISOString();
+      const [ships, trips, vehicles, drivers] = await Promise.all([
+        call("Get", { typeName: "ShipmentLog", search: { fromDate: from }, resultsLimit: 5000 }).catch(() => [] as any[]),
+        call("Get", { typeName: "Trip", search: { deviceSearch: { id: vehicleId }, fromDate: from }, resultsLimit: 5000 }).catch(() => [] as any[]),
+        this.listVehicles().catch(() => []),
+        this.listDrivers().catch(() => []),
+      ]);
+      const vName = new Map(vehicles.map((v) => [v.id, v.name]));
+      const dName = new Map(drivers.map((d) => [d.id, d.name]));
+      const open = (iso: unknown) => (iso && Date.parse(String(iso)) < Date.UTC(3000, 0, 1) ? String(iso) : null); // Geotab uses year 4000 for "still open"
+      const groups = new Map<string, DriverTimeline>();
+      const slot = (id: string | null) => {
+        const key = id ?? "none";
+        let g = groups.get(key);
+        if (!g) { g = { driverId: id, name: id ? dName.get(id) ?? `Driver ${id}` : "No driver recorded", items: [] }; groups.set(key, g); }
+        return g;
+      };
+      const driverId = (r: any) => { const id = String(r?.driver?.id ?? r?.user?.id ?? ""); return !id || /^unknown/i.test(id) ? null : id; };
+      for (const r of (ships ?? []) as any[]) {
+        const doc = r?.documentNumber ? String(r.documentNumber).trim() : "";
+        const item: TimelineItem = {
+          kind: "shipment", start: open(r.activeFrom ?? r.dateTime), end: open(r.activeTo),
+          title: doc || "(no document number)",
+          detail: [r.shipperName, r.commodity].filter(Boolean).join(" · "),
+          vehicle: vName.get(String(r?.device?.id ?? "")) ?? String(r?.device?.id ?? ""),
+        };
+        slot(driverId(r)).items.push(item);
+      }
+      for (const r of (trips ?? []) as any[]) {
+        const km = Number(r.distance);
+        const dur = (t: unknown) => (t ? String(t).replace(/^0+:?/, "").slice(0, 8) : "");
+        slot(driverId(r)).items.push({
+          kind: "trip", start: open(r.start), end: open(r.stop),
+          title: Number.isFinite(km) ? `${(km / 1.609344).toFixed(1)} mi` : "trip",
+          detail: [r.drivingDuration ? `driving ${dur(r.drivingDuration)}` : null, r.stopDuration ? `then stopped ${dur(r.stopDuration)}` : null, r.maximumSpeed ? `top ${Math.round(Number(r.maximumSpeed) / 1.609344)} mph` : null].filter(Boolean).join(" · "),
+          vehicle: vName.get(String(r?.device?.id ?? vehicleId)) ?? vehicleId,
+        });
+      }
+      const out = [...groups.values()].filter((g) => g.items.length);
+      for (const g of out) g.items.sort((a, b) => String(a.start ?? "").localeCompare(String(b.start ?? "")));
+      return out.sort((a, b) => a.name.localeCompare(b.name));
     },
 
     async discover(vehicleId: string): Promise<Discovery> {

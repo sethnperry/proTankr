@@ -16,7 +16,48 @@ import { hosText } from "@/lib/telematics/progress";
 import { ageText, compass, mapsUrl } from "@/lib/equipment/trackFormat";
 import { PRIMARY_BTN, SECONDARY_BTN } from "@/lib/ui/look";
 import { supabase } from "@/lib/supabase/client";
-import type { Discovery } from "@/lib/telematics/types";
+import type { Discovery, DriverTimeline } from "@/lib/telematics/types";
+
+/** Admin tool: shipments (whole fleet) and this truck's trips, by driver, in time order. */
+function ShipmentsSection({ truckId, providerName }: { truckId: string; providerName: string }) {
+  const [state, setState] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [rows, setRows] = useState<DriverTimeline[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  async function run() {
+    setState("loading"); setErr(null);
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const r = await fetch(`/api/telematics/discover?truckId=${encodeURIComponent(truckId)}&mode=shipments&days=14`, { headers: { Authorization: `Bearer ${s.session?.access_token ?? ""}` }, cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error ?? "Couldn't ask.");
+      setRows((j.drivers ?? []) as DriverTimeline[]); setState("ok");
+    } catch (e: any) { setErr(e?.message ?? "Couldn't ask."); setState("error"); }
+  }
+  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "still open");
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button type="button" onClick={() => void run()} disabled={state === "loading"} aria-busy={state === "loading"} style={{ ...SECONDARY_BTN }}>
+        {state === "loading" ? `Asking ${providerName}…` : state === "ok" ? "Ask again" : "Shipments and trips by driver (14 days)"}
+      </button>
+      {err && <div style={{ color: "#fca5a5", fontSize: 13, marginTop: 8 }}>{err}</div>}
+      {state === "ok" && rows.length === 0 && <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>Nothing found in the last 14 days.</div>}
+      {rows.map((g) => (
+        <div key={g.driverId ?? "none"} style={{ marginTop: 14 }}>
+          <div style={{ ...cap, color: "#fff" }}>{g.name} · {g.items.filter((i) => i.kind === "shipment").length} shipments, {g.items.filter((i) => i.kind === "trip").length} trips</div>
+          {g.items.map((it, i) => (
+            <div key={i} style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "7px 0", fontSize: 13 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ fontWeight: 800, color: it.kind === "shipment" ? "#93c5fd" : "#fff" }}>{it.kind === "shipment" ? "SHIPMENT " : "TRIP "}{it.title}</span>
+                <span style={{ color: MUTED, textAlign: "right" }}>{when(it.start)} → {it.end ? when(it.end) : "open"}</span>
+              </div>
+              <div style={{ color: MUTED, marginTop: 2 }}>{[it.vehicle ? `vehicle ${it.vehicle}` : null, it.detail].filter(Boolean).join(" · ")}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** Admin tool: ask the provider what it actually reports for this truck. */
 function DiscoverySection({ truckId, providerName }: { truckId: string; providerName: string }) {
@@ -194,6 +235,7 @@ export function TelematicsPanel({ open, onClose, providerName, truckId, truckNam
       <div style={{ border: "1px dashed rgba(255,255,255,0.2)", padding: 16, fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
         Trip recap, status and change history will live here.
       </div>
+      {isAdmin && linked && <ShipmentsSection truckId={truckId} providerName={providerName} />}
       {isAdmin && linked && <DiscoverySection truckId={truckId} providerName={providerName} />}
 
       <button type="button" onClick={onClose} style={{ ...SECONDARY_BTN, marginTop: 16 }}>Close</button>

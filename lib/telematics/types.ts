@@ -65,6 +65,8 @@ export interface TelematicsProvider {
   positionDebug(vehicleId: string): Promise<string[]>;
   /** Everything the provider reports for one vehicle, for finding out what we could fetch. */
   discover(vehicleId: string): Promise<Discovery>;
+  /** Shipments (fleet-wide) and one vehicle's trips, grouped by driver and ordered by time, to see how the provider defines each. */
+  shipmentTimeline(vehicleId: string, days: number): Promise<DriverTimeline[]>;
   /** Plain-language lines about what the provider returns for one driver (troubleshooting). */
   driverDebug(driverId: string): Promise<string[]>;
   /** Positions, signed-in drivers and last drivers for every vehicle from ONE provider call. */
@@ -96,3 +98,6 @@ export type Discovery = {
   counts: { label: string; count: number | null; note?: string }[];
   errors: string[];
 };
+
+export type TimelineItem = { kind: "shipment" | "trip"; start: string | null; end: string | null; title: string; detail: string; vehicle: string };
+export type DriverTimeline = { driverId: string | null; name: string; items: TimelineItem[] };

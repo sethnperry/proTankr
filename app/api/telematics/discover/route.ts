@@ -28,6 +28,10 @@ export async function GET(req: NextRequest) {
     if (!vid) return NextResponse.json({ error: "This truck isn't linked to a vehicle yet." }, { status: 404 });
     const p = await providerFor(companyId);
     if (!p) return NextResponse.json({ error: "No active telematics connection." }, { status: 404 });
+    if (req.nextUrl.searchParams.get("mode") === "shipments") {
+      const days = Math.min(30, Math.max(1, Number(req.nextUrl.searchParams.get("days")) || 14));
+      return NextResponse.json({ drivers: await p.shipmentTimeline(vid, days) });
+    }
     return NextResponse.json(await p.discover(vid));
   } catch (e) {
     return NextResponse.json({ error: String((e as Error).message ?? e).slice(0, 200) }, { status: 502 });
