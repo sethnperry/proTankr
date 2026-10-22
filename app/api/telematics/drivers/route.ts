@@ -9,8 +9,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import type { TelematicsProvider } from "@/lib/telematics/types";
 
 export const runtime = "nodejs";
+
+// Geotab limits how often the whole-fleet calls can run, and a search fires as you type, so the fleet's
+// driver list and vehicle status are kept for a short while and shared between searches.
+type Snap = { at: number; drivers: Awaited<ReturnType<TelematicsProvider["listDrivers"]>>; current: Map<string, string>; historic: Map<string, string>; positions: Map<string, any> };
+const SNAP_MS = 20_000;
+const snaps = new Map<string, Snap>();
+async function snapshot(companyId: string, p: TelematicsProvider): Promise<Snap> {
+  const hit = snaps.get(companyId);
+  if (hit && Date.now() - hit.at < SNAP_MS) return hit;
+  const [drivers, st] = await Promise.all([
+    hit?.drivers.length && Date.now() - hit.at < 10 * 60_000 ? Promise.resolve(hit.drivers) : p.listDrivers(),
+    p.fleetStatus().catch(() => ({ positions: new Map(), current: new Map<string, string>(), historic: new Map<string, string>() })),
+  ]);
+  const next: Snap = { at: Date.now(), drivers, ...st };
+  snaps.set(companyId, next);
+  return next;
+}
 
 type Place = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
 
@@ -27,14 +45,13 @@ export async function GET(req: NextRequest) {
     const p = await providerFor(companyId);
     if (!p) return NextResponse.json({ connected: false });
     const admin = getServiceSupabase();
-    const all = await p.listDrivers();
+    const snap = await snapshot(companyId, p);
+    const all = snap.drivers;
     const hits = all.filter((d) => `${d.name} ${d.firstName ?? ""} ${d.lastName ?? ""} ${d.employeeNo ?? ""}`.toLowerCase().includes(q)).slice(0, 8);
     if (hits.length === 0) return NextResponse.json({ connected: true, drivers: [] });
 
-    const [current, historic, positions, vmap, dmap] = await Promise.all([
-      p.currentDrivers().catch(() => new Map<string, string>()),
-      p.historicDrivers().catch(() => new Map<string, string>()),
-      p.positions().catch(() => new Map()),
+    const { current, historic, positions } = snap;
+    const [vmap, dmap] = await Promise.all([
       admin.from("telematics_vehicle_map").select("provider_vehicle_id, truck_id, vehicle_name").eq("company_id", companyId),
       admin.from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId),
     ]);
@@ -81,12 +98,13 @@ export async function GET(req: NextRequest) {
         memberName: uidm ? profName.get(uidm) ?? null : null, now, last,
         hos: await p.hos(d.id).catch(() => null),
         // Why a driver isn't placed, for troubleshooting: what Geotab's vehicle status records say about them.
-        diag: `Geotab sees ${current.size} signed-in and ${historic.size} last-driver records.This driver: ${vid ? "signed in" : [...historic.values()].includes(d.id) ? "last driver on a vehicle" : "on no vehicle status record"}.`,
+        diag: `Geotab sees ${current.size} signed-in and ${historic.size} last-driver records. This driver: ${vid ? "signed in" : [...historic.values()].includes(d.id) ? "last driver on a vehicle" : "on no vehicle status record"}.`,
       });
     }
     return NextResponse.json({ connected: true, drivers });
   } catch (e) {
     console.warn("[telematics] driver search failed:", (e as Error).message);
-    return NextResponse.json({ connected: false });
+    // The provider is reachable but didn't answer (a busy or rate-limited Geotab); not the same as "not connected".
+    return NextResponse.json({ connected: true, error: `Geotab didn't answer (${String((e as Error).message ?? e).slice(0, 140)}). Try again in a moment.`, drivers: [] });
   }
 }

@@ -87,7 +87,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   // Driver search against the telematics provider, once there's something to search for.
   useEffect(() => {
     const term = q.trim();
-    if (!open || !companyId || term.length < 2) { setDrivers([]); setDriverNote(null); return; }
+    if (!open || !companyId || term.length < 3) { setDrivers([]); setDriverNote(null); return; }
     let off = false;
     const timer = window.setTimeout(async () => {
       setDriversBusy(true);
@@ -99,10 +99,10 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         const j = r.ok ? await r.json() : null;
         if (off) return;
         setDrivers(j?.connected ? (j.drivers as DriverHit[]) : []);
-        setDriverNote(j && !j.connected ? "Driver search needs the company's Geotab connection." : null);
+        setDriverNote(j && !j.connected ? "Driver search needs the company's Geotab connection." : j?.error ?? null);
       } catch { if (!off) setDrivers([]); }
       finally { if (!off) setDriversBusy(false); }
-    }, 350);
+    }, 600);
     return () => { off = true; window.clearTimeout(timer); };
   }, [q, open, companyId]);
 
@@ -150,7 +150,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         </button>
       )}
 
-      {q.trim().length >= 2 && (
+      {q.trim().length >= 3 && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>
             Drivers{driversBusy ? " · searching…" : ""}

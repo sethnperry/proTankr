@@ -61,6 +61,8 @@ export interface TelematicsProvider {
   currentDrivers(): Promise<Map<string, string>>;
   /** The last driver recorded for each vehicle that has nobody signed in now. */
   historicDrivers(): Promise<Map<string, string>>;
+  /** Positions, signed-in drivers and last drivers for every vehicle from ONE provider call. */
+  fleetStatus(): Promise<{ positions: Map<string, VehicleReading>; current: Map<string, string>; historic: Map<string, string> }>;
   /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */
   lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null>;
   hos(driverId: string): Promise<HosAvailability | null>;

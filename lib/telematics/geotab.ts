@@ -262,6 +262,29 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
+    async fleetStatus() {
+      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
+      const positions = new Map<string, VehicleReading>();
+      const current = new Map<string, string>();
+      const historic = new Map<string, string>();
+      for (const s of rows ?? []) {
+        const id = s?.device?.id;
+        if (!id) continue;
+        const kmh = Number(s.speed);
+        positions.set(String(id), {
+          odometerMi: null,
+          lat: Number.isFinite(Number(s.latitude)) ? Number(s.latitude) : null,
+          lon: Number.isFinite(Number(s.longitude)) ? Number(s.longitude) : null,
+          speedMph: Number.isFinite(kmh) ? Math.round(kmh * 0.621371) : null,
+          at: s.dateTime ? String(s.dateTime) : null,
+        });
+        const d = driverOf(s);
+        if (d.current) current.set(String(id), d.current);
+        if (d.historic) historic.set(String(id), d.historic);
+      }
+      return { positions, current, historic };
+    },
+
     async historicDrivers(): Promise<Map<string, string>> {
       const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       const out = new Map<string, string>();
