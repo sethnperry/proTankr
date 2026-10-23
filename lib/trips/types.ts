@@ -117,6 +117,8 @@ export type TripDeliveryRow = Synced & {
   driver_signed_at: string | null;
   consignee_name: string | null;
   consignee_signature: string | null;
+  // Minutes over the drop estimate the driver said had no reason (20261033000000).
+  unaccounted_delay_min?: number | null;
 };
 
 export type TripDeliveryTankRow = Synced & {

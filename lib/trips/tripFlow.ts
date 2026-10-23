@@ -115,7 +115,7 @@ export function nextStep(
   if (!next.arrived_at) {
     return { kind: "arrive_delivery", label: "Arrive", detail: `Tap when arrived at ${name}`, delivery: next };
   }
-  return { kind: "finish_delivery", label: "Continue Delivery", detail: name, delivery: next };
+  return { kind: "finish_delivery", label: "Finish Delivery", detail: name, delivery: next };
 }
 
 // ── Times and delays (§5) ────────────────────────────────────────────────────
@@ -586,6 +586,8 @@ export function finishDelivery(
     times: StepTimes;
     delayReasonId: string | null;
     delayNote: string | null;
+    // Time past the estimate (and grace) the driver said had no reason.
+    unaccountedMin?: number | null;
     delivered: DeliveredCompartment[];
     tanks: DeliveryTankReading[];
     consigneeName: string | null;
@@ -611,6 +613,7 @@ export function finishDelivery(
     left_at: args.times.leftAt,
     delay_reason_id: args.delayReasonId,
     delay_note: args.delayNote,
+    unaccounted_delay_min: args.unaccountedMin ?? null,
     delivering_driver_id: args.userId,
     driver_signed_at: args.signed ? at : null,
     consignee_name: args.consigneeName,

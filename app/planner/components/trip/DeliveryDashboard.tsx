@@ -1,25 +1,22 @@
 "use client";
 // app/planner/components/trip/DeliveryDashboard.tsx
 //
-// The delivery screen (docs/trip-workflow-design.md §8, §9), opened when the
-// driver arrives at a delivery. Two halves:
+// The delivery sequence (docs/trip-workflow-design.md §8, §9). The driver only
+// taps Arrive (that stamps the time and nothing opens). Finish Delivery then
+// walks through, in order:
 //
-//   Arrived    → the drop clock is running from arrival (delay timer). Shows
-//                what to know before getting out: hose length per tank and notes saved
-//                for this store, hours since the last drop here, and the last
-//                load of each product being dropped (our driver, or the
-//                carrier's company). The only entry is ending miles.
-//                Begin Delivery / Begin Pump Off stamps the start time (asks
-//                for a delay reason if over the company threshold).
-//   Delivering → back in the truck, reconcile how it went. Everything is
-//                optional and collapsed unless needed: which compartment went
-//                into which tank (or Retain), tank readings and water, bio
-//                blended, additives, issues at the drop, consignee signature.
-//                Finish stops the clock (left_at = now), signs with the saved
-//                driver signature and returns to the dashboard.
+//   1 Tanks      which store tank each compartment goes into, or Retain
+//   2 Details    tank readings and water, bio blended, additives, issues,
+//                ending miles. Everything optional unless the company asks.
+//   3 Consignee  signature (a pop-out; full screen sideways)
+//   4 Driver     the delivering driver's saved signature, pump offs included
+//   5 Times      verify or edit. The finish time is stamped here, when this
+//                window opens, because going through the steps can remind a
+//                driver of something forgotten. Compared with the estimate:
+//                arrival + prep allowance + gallons at the pump rate (+ grace).
 //
-// Progress (start time, tank picks, readings) is saved to the trip as the
-// driver goes; the rest is kept on the phone until Finish.
+// Progress (tank picks, readings) is saved to the trip as the driver goes;
+// the rest is kept on the phone until Finish.
 
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
@@ -28,6 +25,7 @@ import { useIsLandscape } from "@/app/planner/hooks/useOrientation";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { busyProps } from "@/lib/ui/pending";
 import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
+import { dropEstimate, dropOutcome, dropRules } from "@/lib/trips/dropSchedule";
 import { useStoreDeliveries, type StoreDelivery } from "@/app/planner/hooks/useDashboardCards";
 import {
   ADDITIVES,
@@ -63,10 +61,8 @@ import type { DeliveryLocation, LocationTank } from "@/lib/trips/deliveryLocatio
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripDeliveryTankRow } from "@/lib/trips/types";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
 import {
-  DelayReasonField,
   SignatureAccept,
   SignaturePad,
-  delayReasonOk,
   fieldInput,
   fmtTime,
   fromLocalInput,
@@ -81,6 +77,7 @@ export type FinishDeliverySubmit = {
   times: StepTimes;
   delayReasonId: string | null;
   delayNote: string | null;
+  unaccountedMin: number | null;
   delivered: DeliveredCompartment[];
   retained: DeliveredCompartment[];
   tanks: DeliveryTankReading[];
@@ -106,6 +103,14 @@ const RETAIN = "__retain__";
 
 type Reading = { before: string; after: string };
 type Step = { productIdx: number; phase: "before" | "after" };
+type WStep = "tanks" | "details" | "consignee" | "driver" | "times";
+const WSTEPS: { id: WStep; label: string }[] = [
+  { id: "tanks", label: "Tanks" },
+  { id: "details", label: "Details" },
+  { id: "consignee", label: "Consignee" },
+  { id: "driver", label: "Driver" },
+  { id: "times", label: "Times" },
+];
 type Draft = {
   choice: Record<string, string>;
   unit: ReadingUnit;
@@ -281,14 +286,13 @@ export function DeliveryDashboard({
   const [pickFor, setPickFor] = useState<string | null>(null); // compartment_load_id
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
   const [newTankText, setNewTankText] = useState("");
-  const [beginOpen, setBeginOpen] = useState(false);
-  // "start": Begin tapped over the delay threshold, asks why, then begins.
-  // "edit": the Times row, fixes the start time.
-  const [beginMode, setBeginMode] = useState<"start" | "edit">("edit");
+  const [wstep, setWstep] = useState<WStep>("tanks");
+  // Times window: stamped when it opens, editable.
   const [beginText, setBeginText] = useState("");
+  const [finishText, setFinishText] = useState("");
   const [reasonId, setReasonId] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [beginErr, setBeginErr] = useState<string | null>(null);
+  const [lateAnswer, setLateAnswer] = useState<"yes" | "no" | null>(null);
   const [step, setStep] = useState<Step | null>(null);
   const [stepErr, setStepErr] = useState<string | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
@@ -373,7 +377,8 @@ export function DeliveryDashboard({
     setSection(null);
     setPickFor(null);
     setStep(null);
-    setBeginOpen(false);
+    setWstep("tanks");
+    setLateAnswer(null);
     setConsigneeOpen(false);
     setErr(null);
     setFinishing(false);
@@ -412,7 +417,6 @@ export function DeliveryDashboard({
   const delivered = rows.filter((c) => choice[c.compartment_load_id] && choice[c.compartment_load_id] !== RETAIN);
   const retained = rows.filter((c) => choice[c.compartment_load_id] === RETAIN);
   const unpicked = rows.filter((c) => !choice[c.compartment_load_id]);
-  const begun = !!delivery.begin_at;
   const pumpOff = delivery.delivery_type === "pump_off";
   const nextLeg = retained.length > 0 || otherPlanned > 0;
   const isLast = !nextLeg;
@@ -506,7 +510,7 @@ export function DeliveryDashboard({
     setChoice((m) => ({ ...m, [id]: v }));
     setPickFor(null);
     setErr(null);
-    if (begun) onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: v === RETAIN ? null : v }] });
+    onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: v === RETAIN ? null : v }] });
   };
   const addNewTank = () => {
     const n = newTankText.trim();
@@ -518,43 +522,34 @@ export function DeliveryDashboard({
     setNewTankText("");
   };
 
-  // ── Begin ──────────────────────────────────────────────────────────────────
+  // ── Times ──────────────────────────────────────────────────────────────────
+  const rules = dropRules(settings);
+  const dropGallons = delivered.reduce((t, c) => t + gross(c), 0);
+  const est = dropEstimate(arrivedAt, dropGallons, rules);
   const beginIso = fromLocalInput(beginText) || "";
-  const beginTimes: StepTimes = { arrivedAt, beginAt: beginIso || arrivedAt, leftAt: beginIso || arrivedAt };
-  const overThreshold = needsDelayReason(delayMinutes(arrivedAt, new Date(now).toISOString()), settings.delivery_delay_threshold_minutes);
+  const finishIso = fromLocalInput(finishText) || "";
+  const timesNow: StepTimes = { arrivedAt, beginAt: beginIso || arrivedAt, leftAt: finishIso || arrivedAt };
+  const outcome = finishIso ? dropOutcome({ expectedEndAt: est.expectedEndAt, finishAt: finishIso, graceMin: rules.graceMin }) : null;
+  const preDropLate = needsDelayReason(delayMinutes(arrivedAt, beginIso || null), settings.delivery_delay_threshold_minutes);
   const milesProblem = (): string | null => {
-    if (miles == null) return otherPlanned === 0 ? "Enter ending miles." : null;
+    if (miles == null) return isLast ? "Enter ending miles." : null;
     if (beginMiles != null && miles < beginMiles) return `Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`;
     return null;
   };
-  const tapBegin = () => {
-    if (rows.length === 0) return;
-    const mp = milesProblem();
-    if (mp) return setErr(mp);
-    setErr(null);
-    if (overThreshold) return openBegin("start");
-    onSaveProgress({ beginAt: new Date().toISOString(), compTanks: compTanks() });
-  };
-  const openBegin = (mode: "start" | "edit") => {
-    setBeginErr(null);
-    setBeginMode(mode);
-    setBeginText(toLocalInput(mode === "start" ? new Date().toISOString() : delivery.begin_at ?? new Date().toISOString()));
+  // Opening the last window stamps the finish time (or takes the GPS departure when the
+  // truck has already left) and fills the start from the prep allowance.
+  const openTimes = () => {
+    const nowIso = new Date().toISOString();
+    const dep = readGeoDeparture(delivery.delivery_id);
+    const finish = dep && Date.parse(dep) <= Date.now() && Date.parse(dep) > Date.parse(arrivedAt) ? dep : nowIso;
+    const begin = delivery.begin_at ?? (Date.parse(est.beginAt) < Date.parse(finish) ? est.beginAt : finish);
+    setFinishText(toLocalInput(finish));
+    setBeginText(toLocalInput(begin));
     setReasonId(delivery.delay_reason_id ?? null);
     setNote(delivery.delay_note ?? "");
-    setBeginOpen(true);
-  };
-  const saveBegin = () => {
-    if (!beginIso) return setBeginErr("Enter the time.");
-    if (Date.parse(beginIso) < Date.parse(arrivedAt)) return setBeginErr(`Can't be before you arrived (${fmtTime(arrivedAt)}).`);
-    if (!delayReasonOk(beginTimes, settings.delivery_delay_threshold_minutes, reasonId, note)) return setBeginErr("Pick a delay reason.");
-    const need = needsDelayReason(delayMinutes(arrivedAt, beginIso), settings.delivery_delay_threshold_minutes);
-    onSaveProgress({
-      beginAt: beginIso,
-      delayReasonId: need ? reasonId : null,
-      delayNote: need && !reasonId ? note.trim() || null : null,
-      compTanks: compTanks(),
-    });
-    setBeginOpen(false);
+    setLateAnswer(null);
+    setErr(null);
+    setWstep("times");
   };
 
   // ── Tank readings ──────────────────────────────────────────────────────────
@@ -659,44 +654,57 @@ export function DeliveryDashboard({
     setConsigneeOpen(false);
   };
 
-  // ── Finish ─────────────────────────────────────────────────────────────────
-  // One tap: stops the clock and goes back to the dashboard. Anything still
-  // needed opens instead, with a line saying why.
-  const finish = () => {
-    if (finishing) return;
-    if (unpicked.length) {
-      setSection("tanks");
-      return setErr(`Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}.`);
+  // ── Steps and Finish ───────────────────────────────────────────────────────
+  const stepIdx = WSTEPS.findIndex((w) => w.id === wstep);
+  const goBackStep = () => {
+    setErr(null);
+    if (stepIdx > 0) setWstep(WSTEPS[stepIdx - 1].id);
+  };
+  // Moves forward one step, or says what's still needed.
+  const goNextStep = () => {
+    setErr(null);
+    if (wstep === "tanks") {
+      if (unpicked.length) return setErr(`Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}.`);
+      if (delivered.length === 0 && retained.length === 0) return setErr("Pick a tank for at least one compartment.");
+      return setWstep("details");
     }
-    if (delivered.length === 0 && retained.length === 0) {
-      setSection("tanks");
-      return setErr("Pick a tank for at least one compartment.");
-    }
-    if (settings.require_tank_readings) {
-      const missing = products.findIndex((p) => !readingsDone(p));
-      if (missing >= 0) {
-        setStepErr("Tank readings are required before you can finish.");
-        setStep({ productIdx: missing, phase: "before" });
-        return;
+    if (wstep === "details") {
+      if (settings.require_tank_readings) {
+        const missing = products.findIndex((p) => !readingsDone(p));
+        if (missing >= 0) {
+          setStepErr("Tank readings are required before you can finish.");
+          setStep({ productIdx: missing, phase: "before" });
+          return;
+        }
       }
+      const mp = milesProblem();
+      if (mp) return setErr(mp);
+      return setWstep("consignee");
     }
-    if (settings.require_consignee_signature && !consigneeSig) {
-      setErr("Get the consignee's signature first.");
-      return openConsignee();
+    if (wstep === "consignee") {
+      if (settings.require_consignee_signature && !consigneeSig) {
+        setErr("Get the consignee's signature first.");
+        return openConsignee();
+      }
+      return setWstep("driver");
     }
-    if (isLast && miles == null) {
-      setSection("miles");
-      return setErr("Enter ending miles.");
+    if (wstep === "driver") {
+      if (signature) setSignedMine(true);
+      else if (!signedMine) return setErr("Draw and save your signature as the delivering driver.");
+      return openTimes();
     }
-    if (miles != null && beginMiles != null && miles < beginMiles) {
-      setSection("miles");
-      return setErr(`Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`);
-    }
-    const dep = readGeoDeparture(delivery.delivery_id);
-    const leftAt = dep && Date.parse(dep) <= Date.now() && Date.parse(dep) > Date.parse(delivery.begin_at ?? arrivedAt) ? dep : new Date().toISOString();
-    const times: StepTimes = { arrivedAt, beginAt: delivery.begin_at ?? arrivedAt, leftAt };
+  };
+
+  const submit = () => {
+    if (finishing) return;
+    if (!beginIso || !finishIso) return setErr("Enter both times.");
+    const times: StepTimes = { arrivedAt, beginAt: beginIso, leftAt: finishIso };
     const tp = timesProblem(times);
     if (tp) return setErr(tp);
+    const over = outcome?.kind === "over";
+    if (over && !lateAnswer) return setErr("Was there a delay? Tap Yes or No.");
+    const needReason = preDropLate || (over && lateAnswer === "yes");
+    if (needReason && !reasonId && !note.trim()) return setErr("Pick a delay reason.");
     const toDc = (c: TripCompartmentLoadRow, tank: string | null): DeliveredCompartment => ({
       compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: tank,
     });
@@ -704,14 +712,14 @@ export function DeliveryDashboard({
     setFinishing(true);
     onSubmit({
       times,
-      delayReasonId: delivery.delay_reason_id ?? null,
-      delayNote: delivery.delay_note ?? null,
+      delayReasonId: needReason ? reasonId : delivery.delay_reason_id ?? null,
+      delayNote: needReason && !reasonId ? note.trim() || null : delivery.delay_note ?? null,
+      unaccountedMin: over && lateAnswer === "no" && outcome ? outcome.minutes : null,
       delivered: delivered.map((c) => toDc(c, choice[c.compartment_load_id])),
       retained: retained.map((c) => toDc(c, null)),
       tanks: buildTanks(),
       consigneeName: consigneeName.trim() || null,
       consigneeSignature: consigneeSig,
-      // The saved driver signature signs automatically.
       signed: !!signature || signedMine,
       endMiles: miles,
       bioBlends: delivered.filter((c) => bio[c.compartment_load_id] != null)
@@ -742,9 +750,7 @@ export function DeliveryDashboard({
   const totalMax = barSlots.reduce((t, s) => t + s.max, 0) || 1;
   const nBars = barSlots.length || 1;
   const gap = landscape ? 12 : nBars >= 5 ? 10 : 16;
-  const barH = begun
-    ? (landscape ? "70px" : nBars >= 5 ? "min(80px, 16vw)" : "min(90px, 18vw)")
-    : (landscape ? "80px" : nBars >= 5 ? "min(96px, 18vw)" : "min(110px, 22vw)");
+  const barH = landscape ? "70px" : nBars >= 5 ? "min(80px, 16vw)" : "min(90px, 18vw)";
 
   const bars = (withPickers: boolean) => barSlots.length === 0 ? (
     <div style={{ fontSize: 14, color: muted }}>Nothing aboard for this delivery.</div>
@@ -788,27 +794,6 @@ export function DeliveryDashboard({
           </div>
         );
       })}
-    </div>
-  );
-
-  // ── Clock ──────────────────────────────────────────────────────────────────
-  const clockFrom = begun ? delivery.begin_at! : arrivedAt;
-  const clockColor = !begun && overThreshold ? "#fbbf24" : "#fff";
-  const clockCard = (
-    <div style={{ ...sectionCard, display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={miniLabel}>{begun ? (pumpOff ? "Pumping off since" : "Delivering since") : "On site since"}</div>
-        <div className="dash-num" style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.05, color: clockColor, fontVariantNumeric: "tabular-nums" }}>
-          {fmtTime(clockFrom)}
-        </div>
-      </div>
-      <div style={{ textAlign: "right", fontSize: 13, color: muted, lineHeight: 1.5 }}>
-        {begun
-          ? <div>Arrived {fmtTime(arrivedAt)}</div>
-          : overThreshold
-            ? <div style={{ color: "#fbbf24", fontWeight: 700 }}>Delay reason needed</div>
-            : <div>Delay after {settings.delivery_delay_threshold_minutes} min</div>}
-      </div>
     </div>
   );
 
@@ -913,23 +898,77 @@ export function DeliveryDashboard({
   const toggle = (id: string) => setSection((s) => (s === id ? null : id));
   const toggleIn = (list: string[], set: (v: string[]) => void, code: string) => set(list.includes(code) ? list.filter((x) => x !== code) : [...list, code]);
 
+  const reasonOptions = reasons.filter((r) => r.kind === "delivery" && r.is_active);
+  const reasonPicker = (
+    <div style={{ marginTop: 8 }}>
+      <select value={reasonId ?? "__other__"} onChange={(e) => setReasonId(e.target.value === "__other__" ? null : e.target.value)}
+        style={{ ...fieldInput, marginBottom: 8 }}>
+        {reasonOptions.map((r) => <option key={r.reason_id} value={r.reason_id}>{r.label}</option>)}
+        <option value="__other__">Other</option>
+      </select>
+      {reasonId == null && (
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What held you up?" style={fieldInput} />
+      )}
+    </div>
+  );
+  const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`);
+
+  const stepper = (
+    <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+      {WSTEPS.map((w, i) => (
+        <div key={w.id} style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ height: 3, background: i <= stepIdx ? "#fff" : "rgba(255,255,255,0.14)" }} />
+          <div style={{ marginTop: 4, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            color: i === stepIdx ? "#fff" : "rgba(255,255,255,0.35)" }}>{w.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const navRow = (nextLabel: string, onNext: () => void, opts?: { nextBusy?: boolean }) => (
+    <>
+      {err && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", margin: "10px 0 8px", textAlign: "center" }}>{err}</div>}
+      <div style={{ display: "flex", gap: 10, marginTop: err ? 0 : 14 }}>
+        {stepIdx > 0 && (
+          <button type="button" onClick={goBackStep}
+            style={{ flex: "0 0 30%", padding: "18px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
+            ‹ Back
+          </button>
+        )}
+        <button type="button" onClick={onNext} {...busyProps(!!opts?.nextBusy)}
+          style={{ ...primaryBtn, flex: 1, fontSize: 18, padding: "18px 0" }}>
+          {nextLabel}
+        </button>
+      </div>
+    </>
+  );
+
+  const nextLabelFor = (id: WStep) => {
+    const n = WSTEPS[WSTEPS.findIndex((w) => w.id === id) + 1];
+    return n ? `Next · ${n.label}` : "Next";
+  };
+
   return (
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
-      {clockCard}
+      {stepper}
 
-      {!begun ? (
+      {wstep === "tanks" && (
         <>
-          {knowCard}
-          <div style={{ ...sectionCard, padding: "14px 10px" }}>{bars(false)}</div>
-          <div style={{ ...sectionCard }}>{milesInput}</div>
-          {err && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{err}</div>}
-          <button type="button" onClick={tapBegin} disabled={rows.length === 0}
-            style={{ ...primaryBtn, fontSize: 20, padding: "20px 0", opacity: rows.length === 0 ? 0.5 : 1 }}>
-            {pumpOff ? "Begin Pump Off" : "Begin Delivery"}
-          </button>
-          <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
-            Tap before you get out. Note how it went when you&apos;re back in the truck.
+          <div style={{ fontSize: 12, color: muted, margin: "0 2px 10px" }}>
+            {pumpOff ? "Pump off" : "Delivery"} · arrived {fmtTime(arrivedAt)}
           </div>
+          <div style={{ ...sectionCard, padding: 0 }}>
+            <Section title="Store info" summary={notes ? "Notes saved" : anyHose ? "Hose lengths" : "Last drop"} open={section === "know"} onToggle={() => toggle("know")} last>
+              {knowCard}
+            </Section>
+          </div>
+          <div style={{ ...sectionCard, padding: "14px 10px" }}>{bars(true)}</div>
+          {retained.length > 0 && (
+            <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, textAlign: "center" }}>
+              Retained compartments stay aboard. Finish, then pick the next delivery or Park preloaded.
+            </div>
+          )}
+          {navRow(nextLabelFor("tanks"), goNextStep)}
           {onPark && (
             <button type="button" onClick={onPark}
               style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", color: "#93c5fd", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
@@ -937,20 +976,12 @@ export function DeliveryDashboard({
             </button>
           )}
         </>
-      ) : (
+      )}
+
+      {wstep === "details" && (
         <>
           <div style={{ ...miniLabel, margin: "2px 2px 8px" }}>How it went · all optional</div>
           <div style={{ ...sectionCard, padding: 0 }}>
-            <Section title="Compartments → tanks" summary={tanksSummary.text} summaryColor={tanksSummary.color}
-              open={section === "tanks"} onToggle={() => toggle("tanks")}>
-              {bars(true)}
-              {retained.length > 0 && (
-                <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 12, textAlign: "center" }}>
-                  Retained compartments stay aboard. Finish, then pick the next delivery or Park preloaded.
-                </div>
-              )}
-            </Section>
-
             <Section title="Tank readings" summary={readingsSummary}
               summaryColor={settings.require_tank_readings && readingsCount < products.length ? "#fbbf24" : undefined}
               open={section === "readings"} onToggle={() => toggle("readings")}>
@@ -1019,36 +1050,27 @@ export function DeliveryDashboard({
 
             <Section title="Ending miles" summary={miles != null ? miles.toLocaleString("en-US") : isLast ? "Required" : "—"}
               summaryColor={miles == null && isLast ? "#fbbf24" : undefined}
-              open={section === "miles"} onToggle={() => toggle("miles")}>
+              open={section === "miles"} onToggle={() => toggle("miles")} last>
               {milesInput}
             </Section>
+          </div>
+          {navRow(nextLabelFor("details"), goNextStep)}
+        </>
+      )}
 
-            <Section title="Times" summary={`${fmtTime(arrivedAt)} → ${fmtTime(delivery.begin_at)}`}
-              open={section === "times"} onToggle={() => toggle("times")}>
-              <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-                <div>Arrived {fmtTime(arrivedAt)}</div>
-                <div>{pumpOff ? "Pump off" : "Delivery"} began {fmtTime(delivery.begin_at)}</div>
-                <div style={{ color: muted }}>Finished: when you tap Finish</div>
-              </div>
-              <button type="button" onClick={() => openBegin("edit")} style={{ ...pill(false), marginTop: 8 }}>Fix start time</button>
-            </Section>
-
-            {!signature && (
-              <Section title="Your signature" summary={signedMine ? "Signed ✓" : "Not saved"} open={section === "mysig"} onToggle={() => toggle("mysig")}>
-                <SignatureAccept savedPath={signature} onSave={onSaveSignature} accepted={signedMine} onAccept={setSignedMine} who="the delivering driver" />
-              </Section>
-            )}
-
-            <button type="button" onClick={openConsignee} style={{ ...rowBtn, borderBottom: "none" }}>
+      {wstep === "consignee" && (
+        <>
+          <div style={{ ...sectionCard, padding: 0 }}>
+            <button type="button" onClick={openConsignee} style={{ ...rowBtn, borderBottom: "none", padding: "18px 14px" }}>
               <span style={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 900,
+                width: 26, height: 26, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontSize: 15, fontWeight: 900,
                 background: consigneeSig ? "#22c55e" : "transparent", color: "#000",
                 border: consigneeSig ? "none" : "1.5px solid rgba(255,255,255,0.3)",
               }}>
                 {consigneeSig ? "✓" : ""}
               </span>
-              <span style={{ flex: 1, fontWeight: 700 }}>
+              <span style={{ flex: 1, fontWeight: 700, fontSize: 16 }}>
                 Consignee signature{consigneeSig && consigneeName ? ` · ${consigneeName}` : ""}
               </span>
               <span style={{ color: settings.require_consignee_signature && !consigneeSig ? "#fbbf24" : muted, fontSize: 13 }}>
@@ -1056,15 +1078,71 @@ export function DeliveryDashboard({
               </span>
             </button>
           </div>
-
-          {err && <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{err}</div>}
-          <button type="button" onClick={finish} {...busyProps(finishing)}
-            style={{ ...primaryBtn, fontSize: 20, padding: "20px 0" }}>
-            {finishing ? "Finishing…" : nextLeg ? "Finish · Next Leg" : "Finish"}
-          </button>
-          <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
-            Stops the clock and goes back to the dashboard.
+          <div style={{ fontSize: 13, color: muted, textAlign: "center", marginTop: 4 }}>
+            Hand the phone to the person receiving the fuel.
           </div>
+          {navRow(consigneeSig || settings.require_consignee_signature ? nextLabelFor("consignee") : "Skip · Driver", goNextStep)}
+        </>
+      )}
+
+      {wstep === "driver" && (
+        <>
+          <div style={{ ...sectionCard }}>
+            <div style={{ ...miniLabel, marginBottom: 8 }}>Delivering driver · {pumpOff ? "pump off" : "delivery"}</div>
+            <SignatureAccept savedPath={signature} onSave={onSaveSignature} accepted={signature ? true : signedMine}
+              onAccept={(v) => setSignedMine(v)} who="the delivering driver" />
+          </div>
+          {navRow(nextLabelFor("driver"), goNextStep)}
+        </>
+      )}
+
+      {wstep === "times" && (
+        <>
+          <div style={{ ...sectionCard }}>
+            <div style={{ ...miniLabel, marginBottom: 6 }}>Check your times</div>
+            <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>Arrived {fmtTime(arrivedAt)}</div>
+            <div style={{ ...miniLabel, marginBottom: 4 }}>{pumpOff ? "Pump off began" : "Delivery began"}</div>
+            <input type="datetime-local" value={beginText} onChange={(e) => setBeginText(e.target.value)} style={{ ...fieldInput, marginBottom: 12 }} />
+            <div style={{ ...miniLabel, marginBottom: 4 }}>Finished</div>
+            <input type="datetime-local" value={finishText} onChange={(e) => setFinishText(e.target.value)} style={fieldInput} />
+            {preDropLate && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 13, color: "#fbbf24" }}>
+                  Arrive to start was {delayMinutes(arrivedAt, beginIso)} min (over {settings.delivery_delay_threshold_minutes}). Reason required.
+                </div>
+                {reasonPicker}
+              </div>
+            )}
+          </div>
+
+          {outcome && outcome.kind !== "over" && (
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#22c55e", textAlign: "center", margin: "4px 0 6px" }}>
+              {outcome.kind === "ahead" && outcome.minutes > 0
+                ? `On or ahead of schedule by ${fmtMin(outcome.minutes)}`
+                : "On schedule"}
+            </div>
+          )}
+          {outcome && outcome.kind === "over" && (
+            <div style={{ ...sectionCard }}>
+              <div style={{ fontSize: 15, color: "#fff", lineHeight: 1.45 }}>
+                This took about <b>{fmtMin(outcome.minutes)}</b> longer than expected
+                <span style={{ color: muted }}> ({dropGallons.toLocaleString("en-US")} gal at {rules.gallonsPerMin} gal/min, plus {rules.prepMin} min to get started)</span>.
+                Was there a delay?
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button type="button" style={{ ...pill(lateAnswer === "yes"), flex: 1, padding: "12px 0", fontSize: 15 }} onClick={() => setLateAnswer("yes")}>Yes</button>
+                <button type="button" style={{ ...pill(lateAnswer === "no"), flex: 1, padding: "12px 0", fontSize: 15 }} onClick={() => setLateAnswer("no")}>No</button>
+              </div>
+              {lateAnswer === "yes" && !preDropLate && reasonPicker}
+              {lateAnswer === "no" && (
+                <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
+                  OK. This time goes to your manager as unaccounted.
+                </div>
+              )}
+            </div>
+          )}
+
+          {navRow(finishing ? "Finishing…" : nextLeg ? "Finish · Next Leg" : "Finish", submit, { nextBusy: finishing })}
         </>
       )}
 
@@ -1097,25 +1175,6 @@ export function DeliveryDashboard({
         onCancel={() => setNewTankFor(null)}
         submitLabel="Use"
         onSubmit={addNewTank}
-      />
-
-      {/* Start time: Begin over the delay threshold, or fixing it later */}
-      <ValueEntryOverlay
-        open={beginOpen}
-        title={beginMode === "start" ? `Begin ${pumpOff ? "pump off" : "delivery"} · delayed` : "Start time"}
-        fields={[]}
-        footer={
-          <div style={{ width: "100%" }}>
-            <input type="datetime-local" value={beginText} onChange={(e) => setBeginText(e.target.value)} style={{ ...fieldInput, marginBottom: 10 }} />
-            <DelayReasonField times={beginTimes} threshold={settings.delivery_delay_threshold_minutes} reasons={reasons} kind="delivery"
-              reasonId={reasonId} note={note} onChange={(id, n) => { setReasonId(id); setNote(n); }} />
-          </div>
-        }
-        hint={`Arrived ${fmtTime(arrivedAt)}`}
-        error={beginErr}
-        onCancel={() => setBeginOpen(false)}
-        submitLabel={beginMode === "start" ? "Begin" : "Save"}
-        onSubmit={saveBegin}
       />
 
       <ValueEntryOverlay

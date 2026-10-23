@@ -1145,10 +1145,10 @@ export default function HomePage() {
         break;
       case "arrive_delivery":
         learnArrival();
-        // Arrived: the drop clock starts and the delivery screen opens.
+        // Arrived: only the time is stamped. Nothing opens; the button becomes
+        // Finish Delivery, and the sequence starts when the driver taps it.
         arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
         void syncNow();
-        setFinishOpen(true);
         break;
       case "finish_delivery":
         setFinishOpen(true);
@@ -1157,8 +1157,8 @@ export default function HomePage() {
   };
 
   // Arriving straight from the Planner's load report ("Arrived at Delivery"):
-  // /planner/home?arrive=1 arrives the next delivery and opens Finish
-  // Delivery. With no delivery set yet, the picker opens first.
+  // /planner/home?arrive=1 arrives the next delivery (the time is stamped,
+  // nothing opens). With no delivery set yet, the picker opens first.
   const [autoArrive, setAutoArrive] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1174,7 +1174,6 @@ export default function HomePage() {
     if (step.kind === "arrive_delivery") {
       arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
       void syncNow();
-      setFinishOpen(true);
       setAutoArrive(false);
     } else if (step.kind === "finish_delivery") {
       setFinishOpen(true);

@@ -26,6 +26,10 @@ export type TripSettings = {
   gauging_minutes?: number;
   // Stamp arrival from the truck's position (20261027000000). Absent = on.
   auto_stamp_arrival?: boolean;
+  // Drop sequence (20261033000000). Absent before that migration.
+  delivery_prep_minutes?: number;
+  pump_gal_per_min?: number;
+  unaccounted_grace_minutes?: number;
 };
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {

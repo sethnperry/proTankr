@@ -101,6 +101,9 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       gauging_cutoff: (settings.gauging_cutoff ?? "23:30").slice(0, 5),
       gauging_minutes: Math.min(600, Math.max(0, settings.gauging_minutes ?? 30)),
       auto_stamp_arrival: settings.auto_stamp_arrival !== false,
+      delivery_prep_minutes: Math.min(120, Math.max(0, settings.delivery_prep_minutes ?? 15)),
+      pump_gal_per_min: Math.min(2000, Math.max(20, settings.pump_gal_per_min ?? 450)),
+      unaccounted_grace_minutes: Math.min(120, Math.max(0, settings.unaccounted_grace_minutes ?? 10)),
     }, { onConflict: "company_id" }).select("company_id");
     setBusy(false);
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
@@ -156,6 +159,15 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           value={settings.loading_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, loading_delay_threshold_minutes: n }))} />
         <NumRow label="Delivery delay" help="Arrive → Begin delivering longer than this asks for a reason."
           value={settings.delivery_delay_threshold_minutes} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_delay_threshold_minutes: n }))} />
+      </div>
+      <div style={card}>
+        <div style={title}>Drop timing</div>
+        <NumRow label="Time before the drop (min)" help="After the driver taps Arrive, this much time is allowed before the drop starts: get out, walk, gauge."
+          value={settings.delivery_prep_minutes ?? 15} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, delivery_prep_minutes: n }))} />
+        <NumRow label="Pump rate (gal/min)" help="Used to estimate how long a drop takes. Finishing later than the estimate asks about a delay."
+          value={settings.pump_gal_per_min ?? 450} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, pump_gal_per_min: n }))} />
+        <NumRow label="Grace (min)" help="Time over the estimate that isn't questioned. Past this, the driver says whether there was a delay."
+          value={settings.unaccounted_grace_minutes ?? 10} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, unaccounted_grace_minutes: n }))} />
       </div>
       <div style={card}>
         <div style={title}>Dispatch timeline</div>
