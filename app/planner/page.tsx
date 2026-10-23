@@ -2020,9 +2020,13 @@ export default function CalculatorPage() {
   // Report opened from the dashboard: closing it (any button) goes straight
   // back there, under the same cover, so the Planner never shows.
   const reportFromDashboardRef = useRef(false);
+  // Same idea for ?begin=1 (Begin Loading / Continue Trip): the Planner stays
+  // covered until Plan Review opens, or until it's clear the driver stays here.
+  const [beginCover, setBeginCover] = useState(false);
   const reportShownRef = useRef(false);
   const [reportFromDashboard, setReportFromDashboard] = useState(false);
   useLayoutEffect(() => {
+    if (new URLSearchParams(window.location.search).get("begin")) setBeginCover(true);
     if (new URLSearchParams(window.location.search).get("report")) {
       setReportPending(true);
       reportFromDashboardRef.current = true;
@@ -2037,6 +2041,7 @@ export default function CalculatorPage() {
     setReportFromDashboard(false);
     leaveTo("/planner/home", "Opening dashboard…");
   }, [loadWorkflow.loadingOpen, loadWorkflow.reportLines, reportPending, leaveTo]);
+  useEffect(() => { if (loadWorkflow.loadingOpen) setBeginCover(false); }, [loadWorkflow.loadingOpen]);
   useEffect(() => {
     if (reportParamDone.current || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -2863,10 +2868,12 @@ const lastProductInfoById = useMemo(() => {
         if (!r.plan && Date.now() - started < 1500) return;
         window.clearInterval(tick);
         beginParamRef.current = false;
-        if (r.plan) requestBegin({});
+        if (r.plan) { requestBegin({}); window.setTimeout(() => setBeginCover(false), 1500); }
+        else setBeginCover(false);
       } else if (Date.now() - started > 8000) {
         window.clearInterval(tick);
         beginParamRef.current = false;
+        setBeginCover(false);
       }
     }, 250);
     return () => window.clearInterval(tick);
@@ -3193,9 +3200,9 @@ const lastProductInfoById = useMemo(() => {
 
   return (
     <div style={pageStyle}>
-      {(leaving || reportPending) && typeof document !== "undefined" && createPortal(
+      {(leaving || reportPending || beginCover) && typeof document !== "undefined" && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 49, background: "#0b0b0b", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: "rgba(255,255,255,0.55)", fontSize: 15 }}>
-          <Spinner size={14} />{leaving ?? "Opening load report…"}
+          <Spinner size={14} />{leaving ?? (beginCover ? "Opening Plan Review…" : "Opening load report…")}
         </div>,
         document.body,
       )}
