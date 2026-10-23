@@ -18,6 +18,7 @@
 // metadata exports to live in a server component -- this client component
 // holds all the actual interactive shell logic.
 
+import PlannerHost from "./PlannerHost";
 import { AccessStepsHost } from "./components/access/AccessStepsHost";
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -293,6 +294,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
           }}
         >
           {children}
+          <PlannerHost />
         </div>
       </div>
 
