@@ -142,10 +142,10 @@ export function tripHosCheck(o: { driveLeftMin: number | null; dutyLeftMin: numb
     return { level: "bad", text: `Finishing this trip takes about ${h(needWindow)} including stops and your window has ${h(o.dutyLeftMin)} left.` };
   }
   if (o.driveLeftMin != null && o.driveLeftMin - o.remainingDriveMin < 30) {
-    return { level: "warn", text: `Tight: about ${h(o.driveLeftMin - o.remainingDriveMin)} of driving to spare on this trip.` };
+    return { level: "warn", text: `Tight: about ${h(o.driveLeftMin - o.remainingDriveMin)} of driving to spare. Trip needs about ${h(o.remainingDriveMin)}, you have ${h(o.driveLeftMin)}.` };
   }
   if (o.dutyLeftMin != null && o.dutyLeftMin - needWindow < 30) {
-    return { level: "warn", text: `Tight: about ${h(o.dutyLeftMin - needWindow)} to spare in your window for this trip.` };
+    return { level: "warn", text: `Tight: about ${h(o.dutyLeftMin - needWindow)} to spare in your window. Trip needs about ${h(o.remainingDriveMin)} driving + ${h(o.stopMin)} at stops, window has ${h(o.dutyLeftMin)}.` };
   }
   return null;
 }
