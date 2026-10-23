@@ -5,7 +5,7 @@
 // planner's drag handle on each bar now handles temporary per-load
 // adjustments directly, so there's no longer a "settings" concern here.
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import ManageTerminalProductsModal from "./ManageTerminalProductsModal";
 
@@ -23,6 +23,14 @@ export default function CompartmentModal({
   terminalName,
   onTerminalProductsChanged,
   myRole,
+  searchable,
+  pinnedProductIds,
+  onPicked,
+  title,
+  extra,
+  footer,
+  hideCloseButton,
+  autoFocusSearch,
 }: {
   open: boolean;
   compNumber: number | null;
@@ -37,13 +45,41 @@ export default function CompartmentModal({
   terminalName?: string;
   onTerminalProductsChanged?: () => void;
   myRole?: string | null;
+  // Plan Builder / catalog use: a search box over the list, products picked
+  // earlier floated to the top (right under "Leave empty"), and a callback
+  // that replaces the default close-after-pick (so a wizard can advance).
+  searchable?: boolean;
+  pinnedProductIds?: string[];
+  onPicked?: (productId: string | null) => void;
+  title?: string;
+  extra?: React.ReactNode;
+  footer?: React.ReactNode | null;
+  hideCloseButton?: boolean;
+  autoFocusSearch?: boolean;
 }) {
   // Curating a terminal's active product list affects every driver who loads
   // there company-wide -- matches the equipment-cap gating precedent, not a
   // per-driver preference.
   const canManageProducts = myRole === "admin" || myRole === "dispatch" || myRole === "lead";
   const [manageOpen, setManageOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  useEffect(() => { setQuery(""); }, [open, compNumber]);
+
+  const visibleProducts = useMemo(() => {
+    const pins = pinnedProductIds ?? [];
+    const rank = (id: string) => { const i = pins.indexOf(id); return i === -1 ? Infinity : i; };
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const list = (terminalProducts as any[]).filter((p) => {
+      if (!tokens.length) return true;
+      const hay = `${p.product_name ?? ""} ${p.display_name ?? ""} ${p.button_code ?? ""} ${p.product_code ?? ""} ${p.description ?? ""}`.toLowerCase();
+      return tokens.every((t) => hay.includes(t));
+    });
+    // Stable: pinned (most recent first) then the original order.
+    return list.map((p, i) => ({ p, i })).sort((a, b) => (rank(a.p.product_id) - rank(b.p.product_id)) || (a.i - b.i)).map((x) => x.p);
+  }, [terminalProducts, pinnedProductIds, query]);
+
   if (compNumber == null) return null;
+  const done = (id: string | null) => { if (onPicked) onPicked(id); else onClose(); };
 
   const sel = compPlan?.[compNumber];
   const isEmpty = !!sel?.empty || !sel?.productId;
@@ -62,7 +98,7 @@ export default function CompartmentModal({
   });
 
   return (
-    <FullscreenModal open={open} title={`Compartment ${compNumber}`} onClose={onClose}>
+    <FullscreenModal open={open} title={title ?? `Compartment ${compNumber}`} onClose={onClose} footer={footer} hideCloseButton={hideCloseButton}>
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
           Product for Comp {compNumber}
@@ -72,25 +108,41 @@ export default function CompartmentModal({
             ⚠ Product Not Available at this terminal — choose a replacement below.
           </div>
         )}
+        {extra}
+        {searchable && (
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus={autoFocusSearch}
+            placeholder="Search products (try “die”)"
+            enterKeyHint="search"
+            style={{
+              width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 2,
+              border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)",
+              color: "#fff", fontSize: 15, outline: "none",
+            }}
+          />
+        )}
         <div style={{ display: "grid", gap: 6 }}>
 
           {/* MT / Empty */}
           <button
-            style={rowStyle(isEmpty)}
+            style={rowStyle(isEmpty && (!searchable || sel != null))}
             onClick={() => {
               setCompPlan((prev: any) => ({ ...prev, [compNumber]: { ...(prev[compNumber] ?? {}), empty: true, productId: "" } }));
-              onClose();
+              done(null);
             }}
           >
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
             <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-              <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>MT (Empty)</div>
+              <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{searchable ? "Leave empty" : "MT (Empty)"}</div>
               <div style={{ opacity: 0.5, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>Leave this compartment empty</div>
             </div>
-            {isEmpty && <span style={{ fontSize: 15, color: "#fff", flexShrink: 0 }}>✓</span>}
+            {isEmpty && (!searchable || sel != null) && <span style={{ fontSize: 15, color: "#fff", flexShrink: 0 }}>✓</span>}
           </button>
 
-          {terminalProducts.map((p: any) => {
+          {visibleProducts.map((p: any) => {
             const selected = !isEmpty && sel?.productId === p.product_id;
             const btnCode = ((p.button_code ?? p.product_code ?? "").trim() || "PRD").toUpperCase();
             const btnColor = (p.hex_code ?? "").trim() || "rgba(255,255,255,0.85)";
@@ -102,7 +154,7 @@ export default function CompartmentModal({
                 style={rowStyle(selected)}
                 onClick={() => {
                   setCompPlan((prev: any) => ({ ...prev, [compNumber]: { ...(prev[compNumber] ?? {}), empty: false, productId: p.product_id } }));
-                  onClose();
+                  done(p.product_id);
                 }}
                 title={name}
               >
@@ -129,6 +181,9 @@ export default function CompartmentModal({
               </button>
             );
           })}
+          {searchable && query && visibleProducts.length === 0 && (
+            <div style={{ padding: "14px 4px", fontSize: 13, color: "rgba(255,255,255,0.5)" }}>No products match “{query}”.</div>
+          )}
         </div>
 
         {selectedRackId && canManageProducts && (

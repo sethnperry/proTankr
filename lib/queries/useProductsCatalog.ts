@@ -45,6 +45,10 @@ export type CatalogProduct = {
   api_60: number | null;
   alpha_per_f: number | null;
   canonical_product_id: string | null;
+  // Published API range; api_min (heaviest) is what the Planner uses at 60 F
+  // when there is no terminal reading (Plan Builder / Plan page).
+  api_min: number | null;
+  api_max: number | null;
 };
 
 export const PRODUCTS_CATALOG_QUERY_KEY = ["productsCatalog"] as const;
@@ -54,7 +58,7 @@ export async function fetchProductsCatalog(): Promise<CatalogProduct[]> {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "product_id, product_name, display_name, button_code, hex_code, description, un_number, active, is_dyed, api_60, alpha_per_f, canonical_product_id"
+      "product_id, product_name, display_name, button_code, hex_code, description, un_number, active, is_dyed, api_60, alpha_per_f, canonical_product_id, api_min, api_max"
     )
     .order("product_name");
   if (error) throw error;

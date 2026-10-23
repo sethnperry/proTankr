@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import ValueEntryOverlay from "../components/ValueEntryOverlay";
+import { HEADSPACE_SCALE } from "../utils/headspace";
 
 /**
  * PlannerControls - compartment strip.
@@ -57,14 +58,7 @@ export default function PlannerControls(props: any) {
       {compError && <div style={styles.error}>Error loading compartments: {compError}</div>}
 
       {selectedTrailerId && !compLoading && !compError && compartments.length > 0 && (
-        <div style={{ marginTop: 6, marginBottom: 2, position: "relative" as const, opacity: selectedTerminalId ? 1 : 0.45, transition: "opacity 200ms" }}>
-          {!selectedTerminalId && (
-            <div style={{ position: "absolute" as const, inset: 0, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" as const }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", background: "rgba(0,0,0,0.55)", borderRadius: 2, padding: "4px 10px" }}>
-                Select a terminal first
-              </div>
-            </div>
-          )}
+        <div style={{ marginTop: 6, marginBottom: 2, position: "relative" as const }}>
           <div style={{
             display: "flex",
             justifyContent: "center",
@@ -97,9 +91,13 @@ export default function PlannerControls(props: any) {
               // by WIDTH, so the two compounded into a shape that changed
               // with screen size instead of staying locked. 100px is the
               // reference value the outer scale multiplies from.
+              // Drawn HEADSPACE_SCALE (110%) taller than the old bars: the
+              // fill and cap handle below are measured against this scaled
+              // height, so a full compartment stops short of the top and the
+              // headspace is visible.
               const barH = isLandscape
-                ? "100px"
-                : n >= 5 ? "min(110px, 20vw)" : n >= 4 ? "min(120px, 22vw)" : "min(130px, 25vw)";
+                ? `${Math.round(100 * HEADSPACE_SCALE)}px`
+                : n >= 5 ? `calc(min(110px, 20vw) * ${HEADSPACE_SCALE})` : n >= 4 ? `calc(min(120px, 22vw) * ${HEADSPACE_SCALE})` : `calc(min(130px, 25vw) * ${HEADSPACE_SCALE})`;
 
               const ordered = [...compartments]
                 .sort((a: any, b: any) => Number(a.comp_number) - Number(b.comp_number))
@@ -120,12 +118,12 @@ export default function PlannerControls(props: any) {
                 const effMax = effectiveMaxGallonsForComp(compNumber, persistedCap);
                 const hasOverride = compPlan?.[compNumber]?.capOverride != null;
                 const planned = plannedGallonsByComp?.[compNumber] ?? 0;
-                const plannedPct = trueMax > 0 ? Math.max(0, Math.min(1, planned / trueMax)) : 0;
-                const capPct = trueMax > 0 ? Math.max(0, Math.min(1, effMax / trueMax)) : 0;
-
-                // Fill % — small gap at top so bar never looks 100% full
-                const visualTopGap = 0.04;
-                const fillPct = Math.max(0, Math.min(1, Math.min(plannedPct, capPct) * (1 - visualTopGap)));
+                // Percentages are of the SCALED bar (trueMax * 110%), which is
+                // what leaves visible headspace above a full compartment.
+                const scaledMax = trueMax * HEADSPACE_SCALE;
+                const plannedPct = scaledMax > 0 ? Math.max(0, Math.min(1, planned / scaledMax)) : 0;
+                const capPct = scaledMax > 0 ? Math.max(0, Math.min(1, effMax / scaledMax)) : 0;
+                const fillPct = Math.max(0, Math.min(plannedPct, capPct));
 
                 const sel = compPlan?.[compNumber];
                 const isEmpty = !!sel?.empty || !sel?.productId;
@@ -159,7 +157,7 @@ export default function PlannerControls(props: any) {
                   const rect = barEl.getBoundingClientRect();
                   const relY = (clientY - rect.top) / rect.height;
                   const frac = Math.max(0, Math.min(1, 1 - relY));
-                  const gallons = Math.max(0, Math.min(persistedCap, Math.round(frac * trueMax)));
+                  const gallons = Math.max(0, Math.min(persistedCap, Math.round(frac * scaledMax)));
                   setDragGallonsText(gallons);
                   setCompPlan((prev: any) => ({
                     ...prev,
@@ -170,11 +168,8 @@ export default function PlannerControls(props: any) {
                 return (
                   <div
                     key={String(c.comp_number)}
-                    onClick={() => {
-                      if (!selectedTerminalId) return;
-                      onSelectComp?.(compNumber);
-                    }}
-                    title={!selectedTerminalId ? "Select a terminal first" : `Comp ${compNumber}`}
+                    onClick={() => onSelectComp?.(compNumber)}
+                    title={`Comp ${compNumber}`}
                     style={{
                       display: "flex", flexDirection: "column", alignItems: "center",
                       cursor: "pointer", userSelect: "none",
@@ -247,7 +242,7 @@ export default function PlannerControls(props: any) {
                           position: "absolute", left: 0, right: 0, bottom: 0,
                           height: `${fillPct * 100}%`,
                           background: fillColor,
-                          transition: isDragging ? "none" : "height 300ms ease",
+                          transition: isDragging ? "none" : "height 300ms ease, background 200ms ease",
                         }} />
                       </div>
 
@@ -314,7 +309,6 @@ export default function PlannerControls(props: any) {
                     <div
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!selectedTerminalId) return;
                         setCapInput({ comp: compNumber, value: String(effMax), max: persistedCap });
                       }}
                       style={{

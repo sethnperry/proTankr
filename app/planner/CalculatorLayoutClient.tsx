@@ -71,7 +71,9 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
   const pathname = usePathname();
   // The Driver Dashboard shows every expiration alert itself (Expirations
   // row, Truck/Trailer squares, the access strip), so the bell is retired there.
-  const showBell = !pathname?.startsWith("/planner/home");
+  // No bell on the Driver Dashboard (it has its own Expirations card) or on the
+  // Plan page (bare /planner), which is a plan editor.
+  const showBell = !pathname?.startsWith("/planner/home") && pathname !== "/planner";
 
   // The OS status bar / PWA chrome strip above this header is drawn by the
   // browser from <meta name="theme-color">, not from any CSS on the page --

@@ -125,7 +125,7 @@ type Props = {
 };
 
 export function usePlanSlots({
-  authUserId, selectedTerminalId, selectedComboId,
+  authUserId, selectedTerminalId: selectedTerminalIdRaw, selectedComboId,
   tempF, compPlan,
   setCompPlan,
   cgSlider, setCgSlider,
@@ -135,6 +135,11 @@ export function usePlanSlots({
   onPlanRestored,
   onRestoreAttempted,
 }: Props) {
+  // Plans are terminal-independent (see planScopeKey), so a missing terminal
+  // must not switch the slot machinery off: the Plan page and the Plan Builder
+  // run with no terminal selected. "__universal__" is only the label stored in
+  // a snapshot's informational terminalId field.
+  const selectedTerminalId = selectedTerminalIdRaw || UNIVERSAL_SCOPE;
   const activeSlotLetterRef = useRef<number | null | undefined>(activeSlotLetter);
   useEffect(() => { activeSlotLetterRef.current = activeSlotLetter; }, [activeSlotLetter]);
   const onPlanRestoredRef = useRef<typeof onPlanRestored>(onPlanRestored);
@@ -1077,6 +1082,27 @@ export function usePlanSlots({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTerminalId, selectedComboId, buildSnapshot, safeWrite, planStoreKey, refreshSlotHas, readSlot]);
 
+  // Writes an explicit plan to a slot (Plan Builder). Unlike saveToSlot this
+  // does not read the live plan, so it can be called in the same tick the
+  // wizard finishes. Optionally also makes it the live plan. Returns the
+  // snapshot, or null when there is no combo to scope it to.
+  const saveSnapshotToSlot = useCallback((slot: number, input: { compPlan: Record<number, CompPlanInput>; cgSlider?: number; name?: string }, opts?: { makeLive?: boolean }): PlanSnapshot | null => {
+    if (!canUseSlot(slot) || slot === 0) return null;
+    const snap: PlanSnapshot = {
+      v: 1, savedAt: Date.now(), terminalId: UNIVERSAL_SCOPE,
+      tempF: 60,
+      cgSlider: input.cgSlider ?? Number(cgSlider),
+      compPlan: input.compPlan,
+      ...(input.name ? { name: input.name } : {}),
+    };
+    safeWrite(planStoreKey(slot), snap);
+    refreshSlotHas();
+    afterLocalSlotWrite(slot);
+    if (opts?.makeLive) applySnapshot(snap, { restoreCg: true, force: true });
+    return snap;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedComboId, cgSlider, safeWrite, planStoreKey, refreshSlotHas, applySnapshot]);
+
   // Renames a preset WITHOUT touching its saved plan -- deliberately never
   // calls buildSnapshot (which pulls the CURRENTLY LIVE compPlan/cgSlider/
   // tempF), only merges a new `name` into whatever that slot's own existing
@@ -1231,6 +1257,7 @@ export function usePlanSlots({
     lastLoadReport,
     fetchLastProductPerComp,
     saveToSlot,
+    saveSnapshotToSlot,
     clearSlot,
     loadFromSlot,
     peekSlot,

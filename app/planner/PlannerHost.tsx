@@ -78,6 +78,8 @@ import { reportDelayIssue, submitOutageReport, type OutageReportType } from "./h
 import { isTerminalIssueCode, issueChoiceValue } from "@/lib/trips/terminalIssues";
 import ProductTempModal from "./modals/ProductTempModal";
 import CompartmentModal from "./modals/CompartmentModal";
+import PlanWizard from "./components/PlanWizard";
+import CompartmentDetailModal from "./components/CompartmentDetailModal";
 
 // ── UI ─────────────────────────────────────────────────────────────────────────
 import { styles } from "./ui/styles";
@@ -631,7 +633,19 @@ export default function PlannerHost() {
   }, [selectedTruckId]);
 
   // ── Terminal products ──────────────────────────────────────────────────────
-  const [terminalProducts, setTerminalProducts] = useState<ProductRow[]>([]);
+  const [terminalProductsRaw, setTerminalProducts] = useState<ProductRow[]>([]);
+  const { data: catalogProducts } = useProductsCatalog();
+  // The Plan page needs no terminal: it lays plans out from the whole catalog
+  // at each product's published minimum API (heaviest) and 60 F, so there is
+  // always an example layout. Plan Review / loading, which run over other
+  // screens, keep using the selected terminal's own products and readings.
+  const planCatalogProducts = useMemo(
+    () => (catalogProducts ?? [])
+      .filter((p) => p.active !== false && p.api_60 != null && p.alpha_per_f != null)
+      .map((p) => ({ ...p, last_api: null, last_temp_f: null, last_api_updated_at: null, min_api_observed: null })) as unknown as ProductRow[],
+    [catalogProducts],
+  );
+  const terminalProducts = useMemo(() => (active ? planCatalogProducts : terminalProductsRaw), [active, planCatalogProducts, terminalProductsRaw]);
 
   // Extract terminal products fetch as a named callback so it can be called post-load.
   //
@@ -1109,15 +1123,15 @@ export default function PlannerHost() {
       lastApi: p.last_api != null ? Number(p.last_api) : null,
       lastTempF: p.last_temp_f != null ? Number(p.last_temp_f) : null,
       lastApiUpdatedAt: (p as any).last_api_updated_at ?? null,
-      tuned: tunedApiTempByProduct[productId] ?? null,
+      tuned: active ? null : (tunedApiTempByProduct[productId] ?? null),
       nowMs: Date.now(),
     });
     const overrideApi60 = apiSafetyOverride[productId];
-    if (basis.tier !== "tuned" && overrideApi60 != null && Number.isFinite(overrideApi60)) {
+    if (!active && basis.tier !== "tuned" && overrideApi60 != null && Number.isFinite(overrideApi60)) {
       return { ...basis, api60: Number(overrideApi60), displayApi: Number(overrideApi60) };
     }
     return basis;
-  }, [terminalProducts, apiSafetyOverride, tunedApiTempByProduct]);
+  }, [terminalProducts, apiSafetyOverride, tunedApiTempByProduct, active]);
 
   const lbsPerGalForProductId = useCallback((productId: string): number | null => {
     const p = terminalProducts.find((x) => x.product_id === productId);
@@ -1126,9 +1140,9 @@ export default function PlannerHost() {
     // A tuned reading is density at the temp it was read at; otherwise at
     // this product's planned temp.
     const tuned = tunedApiTempByProduct[productId];
-    const t = basis.tier === "tuned" && tuned ? Number(tuned.tempF) : (productTempF[productId] ?? tempF);
+    const t = active ? 60 : basis.tier === "tuned" && tuned ? Number(tuned.tempF) : (productTempF[productId] ?? tempF);
     return lbsPerGallonAtTemp(basis.api60, Number(p.alpha_per_f), t);
-  }, [terminalProducts, tempF, productTempF, apiBasisForProduct, tunedApiTempByProduct]);
+  }, [terminalProducts, tempF, productTempF, apiBasisForProduct, tunedApiTempByProduct, active]);
 
   // ── Active compartments ────────────────────────────────────────────────────
   const activeComps = useMemo<ActiveComp[]>(() => {
@@ -1183,7 +1197,6 @@ export default function PlannerHost() {
   // of the tare, so the plan fills the rest up to the target and the gross
   // includes everything on the trailer.
   const tripStoreHook = useTripStore(effectiveUserId || null);
-  const { data: catalogProducts } = useProductsCatalog();
   const tripPartial = useMemo(() => {
     if (!effectiveUserId) return null;
     const rows = tripStoreHook.state.rows;
@@ -3180,6 +3193,52 @@ const lastProductInfoById = useMemo(() => {
     </div>
   );
 
+  // ── Plan Builder (wizard) + compartment detail ─────────────────────────────
+  // Every coupled trailer must have at least one plan. With none (no preset
+  // 1-5 holding a product and nothing live), the Plan Builder opens by itself
+  // and cannot be dismissed; "New Plan" on the Plan page opens it on request.
+  const [wizardNew, setWizardNew] = useState(false);
+  const [detailComp, setDetailComp] = useState<number | null>(null);
+  const hasAnyPlan = useMemo(() => {
+    const holds = (plan: any) => Object.values(plan ?? {}).some((v: any) => v && !v.empty && v.productId);
+    if (holds(compPlan)) return true;
+    for (let n = 1; n <= 5; n++) { const snap = planSlots.peekSlot(n); if (snap && holds(snap.compPlan)) return true; }
+    return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compPlan, planSlots.slotHas, planSlots.presetsReady, equipment.selectedComboId]);
+  const wizardAuto = !!equipment.selectedComboId && !equipment.isBobtail && !equipment.isTrailerOnly
+    && !!selectedTrailerId && !compLoading && compartments.length > 0
+    && planSlots.presetsReady && planRestoreAttempted
+    && !onboardingActive && !setupSession && !hasAnyPlan
+    && !loadWorkflow.loadingOpen && !loadWorkflow.activeLoadId;
+  const wizardOpen = wizardNew || wizardAuto;
+  const canSetCap = shell.isSuperAdmin || shell.role === "admin" || shell.role === "lead" || shell.role === "dispatch";
+
+  const handleWizardSaveCaps = useCallback(async (changes: Record<number, number>) => {
+    if (!selectedTrailerId) return;
+    for (const [n, cap] of Object.entries(changes)) {
+      const { data, error } = await supabase.from("trailer_compartments").update({ cap_gallons: cap })
+        .eq("trailer_id", selectedTrailerId).eq("comp_number", Number(n)).select("comp_number");
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) throw new Error("not allowed to change this cap");
+    }
+    setCompartments((prev) => prev.map((c) => (changes[Number(c.comp_number)] != null ? { ...c, cap_gallons: changes[Number(c.comp_number)] } : c)));
+  }, [selectedTrailerId]);
+
+  const handleWizardFinish = useCallback((plan: Record<number, any>) => {
+    const slotFilled = (n: number) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); };
+    const empty = [1, 2, 3, 4, 5].find((n) => !slotFilled(n));
+    const target = empty ?? activeSlotLetter;
+    const first = !hasAnyPlan;
+    planSlots.saveSnapshotToSlot(target, { compPlan: plan, name: first ? "Default" : undefined }, { makeLive: true });
+    setActiveSlotLetter(target);
+    setCaptureBaselineNext(true);
+    setBaselineOverrides(overridesSnapshot(plan, cgSlider));
+    setWizardNew(false);
+    if (!wizardNew && !active) router.push("/planner?plan=1");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planSlots, activeSlotLetter, hasAnyPlan, cgSlider, wizardNew, active, router]);
+
   // ── Partial equipment (Phase 2: persistent bobtail / trailer-only) ────────
   // A driver can hold just a truck (bobtail) or just a trailer (via a
   // per-unit take-over) with no full combo. The setup gate is satisfied by
@@ -3355,74 +3414,11 @@ const lastProductInfoById = useMemo(() => {
           this one) needed no change to how either block's own internals
           are written. */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
-      {!isPartialEquipment && !setupGuideAcknowledged && (
-        allSetupStepsDone ? (
-          // Closing message -- replaces the checklist card the instant every
-          // step is done, same slot. Stays up until explicitly dismissed
-          // (not auto-hidden the moment allSetupStepsDone flips true) so a
-          // driver who glances away still sees it on their next render; the
-          // Learn page's "Guided tours" recap reads the same acknowledged
-          // flag this Got it button writes.
-          <div style={{
-            marginBottom: 14, borderRadius: 2, padding: "14px 16px",
-            border: "1px solid rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.07)",
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 6 }}>✓ Setup guide complete</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, marginBottom: 10 }}>
-              That's it! You are now ready to match the plan to your dispatch and get loaded. Just pick a terminal and compartment plan then tap LOAD.
-            </div>
-            <button
-              type="button"
-              onClick={() => { markSetupGuideAcknowledged(effectiveUserId); setGuideAckDismissedLocal(true); }}
-              style={{ fontSize: 13, fontWeight: 800, color: "#4ade80", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-            >
-              Got it
-            </button>
-          </div>
-        ) : (
-          <SetupChecklist steps={setupChecklistSteps} onCollapsedChange={setChecklistCollapsed} />
-        )
-      )}
-      {setupSpotlightEl}
-      <TripStepBanner userId={effectiveUserId || null} />
-      {tripPartial && (tripPartial.aboard.length > 0 || tripPartial.planned.length < compartments.length) && (
-        <div style={{
-          border: "1px solid rgba(147,197,253,0.45)", background: "rgba(147,197,253,0.08)", color: "#fff",
-          borderRadius: 2, padding: "8px 12px", marginTop: 8, fontSize: 14,
-        }}>
-          <b style={{ color: "#93c5fd" }}>Loading C{tripPartial.planned.map((p) => p.comp_number).join(", C")} only</b>
-          {tripPartial.aboard.length > 0 && (
-            <span style={{ color: "rgba(255,255,255,0.6)" }}>
-              {" "}· C{[...new Set(tripPartial.aboard.map((c) => c.comp_number))].sort((a, b) => a - b).join(", C")} already aboard
-              {onBoardLbs > 0 ? ` (${onBoardLbs.toLocaleString("en-US")} lbs, counted in the weight)` : ""}
-            </span>
-          )}
-        </div>
-      )}
-      {tripEquip.truckChanged && (
-        <button
-          type="button"
-          onClick={tripEquip.reopenTruckChange}
-          style={{
-            display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", gap: 10,
-            border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.08)", color: "#fff",
-            borderRadius: 2, padding: "8px 12px", marginTop: 8, cursor: "pointer", textAlign: "left",
-          }}
-        >
-          <span style={{ fontSize: 14 }}>
-            <b style={{ color: "#fbbf24" }}>Truck changed</b>
-            <span style={{ color: "rgba(255,255,255,0.6)" }}> · record it and check the new gross</span>
-          </span>
-          <span style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>›</span>
-        </button>
-      )}
       <TripEquipmentSheets {...tripEquip.sheets} />
-      {locationLineEl}
       {isPartialEquipment ? partialPanelEl : (
       <>
       {stabilityBannerEl}
-      {actionRowEl}
-      <div ref={compartmentsAreaRef}>
+      <div ref={compartmentsAreaRef} style={{ marginTop: 16 }}>
       <PlannerControls
         styles={styles}
         selectedTrailerId={selectedTrailerId}
@@ -3436,10 +3432,7 @@ const lastProductInfoById = useMemo(() => {
         setCompPlan={setCompPlan}
         terminalProducts={terminalProducts}
         selectedComp={selectedComp}
-        onSelectComp={(n: number) => {
-          if (!location.selectedTerminalId) return;
-          setSelectedComp(n);
-        }}
+        onSelectComp={(n: number) => setDetailComp(n)}
         selectedTerminalId={location.selectedTerminalId ?? ""}
         isLandscape={isLandscape}
       />
@@ -3454,12 +3447,44 @@ const lastProductInfoById = useMemo(() => {
         styles={styles}
         setCompPlan={setCompPlan}
         onClose={() => { setCompModalOpen(false); setCompModalComp(null); setSelectedComp(null); }}
-        selectedRackId={location.selectedRackId ?? ""}
+        selectedRackId={active ? "" : (location.selectedRackId ?? "")}
         rackName={selectedRackName}
         terminalName={terminalLabel}
         onTerminalProductsChanged={fetchTerminalProducts}
         myRole={shell.role}
+        searchable
       />
+
+      {(() => {
+        const n = detailComp;
+        const c = n == null ? null : compartments.find((x) => Number(x.comp_number) === n);
+        if (n == null || !c) return null;
+        const trueMax = Number(c.max_gallons ?? 0);
+        const persisted = persistedCapForComp(n);
+        const sel = compPlan[n];
+        const isEmpty = !!sel?.empty || !sel?.productId;
+        const prod: any = !isEmpty ? terminalProducts.find((p) => p.product_id === sel?.productId) : null;
+        const name = prod ? String(prod.display_name || prod.product_name || "Product") : "Empty";
+        return (
+          <CompartmentDetailModal
+            open
+            compNumber={n}
+            trueMax={trueMax}
+            persistedCap={persisted}
+            capGallons={effectiveMaxGallonsForComp(n, persisted)}
+            plannedGallons={Number(plannedGallonsByComp?.[n] ?? 0)}
+            hasOverride={sel?.capOverride != null}
+            productLabel={name}
+            code={isEmpty ? "MT" : String(prod?.button_code ?? prod?.product_code ?? name.split(" ")[0]).trim().toUpperCase()}
+            color={(prod?.hex_code && String(prod.hex_code).trim()) || productColorFor(prod?.product_name ?? "")}
+            isEmpty={isEmpty}
+            onCapChange={(g) => setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: g } }))}
+            onResetCap={() => setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: null } }))}
+            onChangeProduct={() => { setDetailComp(null); setCompModalComp(n); setCompModalOpen(true); }}
+            onClose={() => setDetailComp(null)}
+          />
+        );
+      })()}
 
       {/* CG Slider — always visible. The "Unstable load" warning that used
           to render right here moved up to the top cluster (see
@@ -3562,7 +3587,7 @@ const lastProductInfoById = useMemo(() => {
           <>
             {(() => {
               const letter = String.fromCharCode(64 + activeSlotLetter);
-              const presetDisabled = !location.selectedTerminalId || !planSlots.presetsReady;
+              const presetDisabled = !planSlots.presetsReady;
               return (
                 <button
                   ref={planLetterIconRef}
@@ -3582,49 +3607,13 @@ const lastProductInfoById = useMemo(() => {
               );
             })()}
 
-            {(() => {
-              const equipBtnProps = {
-                type: "button" as const,
-                onClick: openEquipment,
-                title: "Equipment",
-                // boxShadow/borderRadius explicitly zeroed -- SetupGate's
-                // own version of this shared-layoutId button has a real
-                // card boxShadow (see SetupGate.tsx), and framer-motion's
-                // layoutId crossfade carries that value into whichever
-                // element the id lands on next unless the destination
-                // gives it something explicit to animate all the way to;
-                // without this it was a permanent, not just transient,
-                // faint box around "EQ" in the header.
-                style: { background: "none", border: "none", borderRadius: 0, boxShadow: "none", padding: 0, cursor: "pointer" as const, display: "flex", alignItems: "center" },
-              };
-              const equipChildren = <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.5, color: "rgba(255,255,255,0.55)" }}>EQ</span>;
-              return mounted ? (
-                <motion.button {...equipBtnProps} layoutId="setup-equipment-btn">{equipChildren}</motion.button>
-              ) : (
-                <button {...equipBtnProps}>{equipChildren}</button>
-              );
-            })()}
-
-            {(() => {
-              const step: "location" | "terminal" = locationSelected ? "terminal" : "location";
-              const locTermBtnProps = {
-                type: "button" as const,
-                onClick: () => { if (step === "location") setLocOpen(true); else setTermOpen(true); },
-                title: "Location",
-                // Same boxShadow/borderRadius zeroing as the Equipment
-                // button above, same reason -- this shares SetupGate's
-                // card layoutId too.
-                style: { background: "none", border: "none", borderRadius: 0, boxShadow: "none", padding: 0, cursor: "pointer" as const, display: "flex", alignItems: "center" },
-              };
-              // White, not red, per explicit same-day follow-up ("the
-              // location icon can go white instead of red").
-              const locTermChildren = <SolidPinIcon color="#ffffff" size={19} />;
-              return mounted ? (
-                <motion.button {...locTermBtnProps} ref={locationIconRef} layoutId={step === "location" ? "setup-location-btn" : "setup-terminal-btn"}>{locTermChildren}</motion.button>
-              ) : (
-                <button {...locTermBtnProps} ref={locationIconRef}>{locTermChildren}</button>
-              );
-            })()}
+            {/* Trailer number, gray. Equipment, terminal and the bell are not
+                needed on the Plan page. */}
+            {equipmentDetails.trailerName ? (
+              <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.3, color: "rgba(255,255,255,0.5)" }}>
+                {equipmentDetails.trailerName}
+              </span>
+            ) : null}
           </>
         );
 
@@ -3657,7 +3646,7 @@ const lastProductInfoById = useMemo(() => {
               <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{plannedGalText}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: grossColor, textAlign: "right" as const }}>{grossText}</div>
             </div>
-            {planUsesReferenceApi && planRows.length > 0 && (
+            {!active && planUsesReferenceApi && planRows.length > 0 && (
               <div style={{ fontSize: 10, fontWeight: 700, color: "#fb923c", marginTop: 4 }}>⚠ using ref API</div>
             )}
           </div>
@@ -3733,6 +3722,29 @@ const lastProductInfoById = useMemo(() => {
           </button>
         );
 
+        // The Plan page's button: "New Plan" starts the Plan Builder; once the
+        // driver changes anything it becomes "Save Plan" and goes back to
+        // "New Plan" after saving.
+        const planButtonEl = (
+          <button ref={savePlanButtonRef} type="button"
+            onClick={() => {
+              if (isDirty) { planSlots.saveToSlot(activeSlotLetter); setBaselineOverrides(currentOverrides); }
+              else setWizardNew(true);
+            }}
+            style={{ borderRadius: 2, border: "none", background: "#ffffff", padding: "12px 14px", width: "100%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: "#000000", letterSpacing: 0.3 }}>{isDirty ? "Save Plan" : "New Plan"}</span>
+          </button>
+        );
+        const closeButtonEl = (
+          <button type="button" aria-busy={!!leaving}
+            onClick={() => leaveTo("/planner/home", "Opening dashboard…")}
+            style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.04)", padding: "12px 14px", width: "100%", cursor: "pointer", color: "rgba(255,255,255,0.85)", fontSize: 15, fontWeight: 700, letterSpacing: 0.3 }}
+          >
+            Close
+          </button>
+        );
+
         const loadBlockedMsgEl = loadBlockedMsg ? (
           <div style={{ ...styles.error, textAlign: "center" as const }}>{loadBlockedMsg}</div>
         ) : null;
@@ -3788,9 +3800,9 @@ const lastProductInfoById = useMemo(() => {
         return (
           <>
             <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto", marginTop: 14, display: "flex", flexDirection: "column", gap: 12 } : { marginTop: 18, display: "flex", flexDirection: "column", gap: 16 }}>
-              {statsAndLoadEl}
-              {loadBlockedMsgEl}
-              {footnoteEl}
+              {recapCard}
+              {planButtonEl}
+              {closeButtonEl}
             </div>
             {active && headerIconsSlot && createPortal(headerIconsEl, headerIconsSlot)}
           </>
@@ -3814,8 +3826,8 @@ const lastProductInfoById = useMemo(() => {
       ) : (
         <SetupGate
           comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}
-          locationSelected={!!(location.selectedState && location.selectedCity)}
-          terminalSelected={!!location.selectedTerminalId}
+          locationSelected={!!(location.selectedState && location.selectedCity) || active}
+          terminalSelected={!!location.selectedTerminalId || active}
           equipmentLabel={equipment.equipmentLabel}
           locationLabel={location.locationLabel}
           terminalLabel={terminalLabel}
@@ -3827,6 +3839,17 @@ const lastProductInfoById = useMemo(() => {
 
     </div>
       {/* ── Modals ── (outside the page div, so they still show while the Planner itself is hidden) */}
+      <PlanWizard
+        open={wizardOpen}
+        mode={wizardNew ? "new" : "first"}
+        compartments={compartments}
+        products={planCatalogProducts}
+        canSetCap={canSetCap}
+        replacingLetter={wizardNew && [1, 2, 3, 4, 5].every((n) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); }) ? String.fromCharCode(64 + activeSlotLetter) : null}
+        onSaveCaps={handleWizardSaveCaps}
+        onFinish={handleWizardFinish}
+        onCancel={() => setWizardNew(false)}
+      />
       <LoadingModal
         supplierSection={supplierPanelEl}
         open={loadWorkflow.loadingOpen} onClose={() => { /* no accidental dismissal -- exits are the explicit buttons */ }}
