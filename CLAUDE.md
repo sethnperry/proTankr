@@ -10385,6 +10385,9 @@ Add to this as more turn up.
   the old `companies`/`user_companies` rows, per explicit product decision
   (see "Fleet Tier — Build Spec" → solo→fleet join flow).
 
+## Side notes (not scheduled work)
+- `docs/eld-notes.md`: running notes on building our own ELD (rules, Geotab behavior, ideas). Nothing built. When the user says to flag something for the ELD, append it there from any session.
+
 ## Files safe to delete
 - `supabase/migrations_old/` — **already gone**, confirmed 2026-09-23 (no
   longer present in the repo; nothing left to do here).
