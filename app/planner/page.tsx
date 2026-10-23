@@ -359,10 +359,16 @@ export default function CalculatorPage() {
     if (shell.role == null) return;
     if (!shell.isSuperAdminResolved) return;
     if (shell.isSolo === null) return; // wait for solo resolution -- a solo admin must not be redirected off the driver Planner
-    hasCheckedDefaultLanding = true;
+    // A deliberate visit (dashboard Plan tool, Begin Loading, a load report)
+    // carries a query flag and stays on the Planner.
+    const qs = new URLSearchParams(window.location.search);
     const target = defaultLandingPath(shell.role, shell.isSuperAdmin, shell.isSolo === true);
+    // A solo driver finishes first-run onboarding here before landing anywhere else.
+    if (target && shell.isSolo === true && !onboardingDone) return;
+    hasCheckedDefaultLanding = true;
+    if (qs.get("begin") || qs.get("report") || qs.get("plan")) return;
     if (target) router.replace(target);
-  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
+  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, onboardingDone, router]);
 
   // ── Card data (card number + PIN + private note, per terminal, per user) ──
   // Owned in CalculatorShellContext now -- the new Cards tab route needs the

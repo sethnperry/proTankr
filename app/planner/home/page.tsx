@@ -2131,6 +2131,7 @@ export default function HomePage() {
       <SectionLabel>Tools</SectionLabel>
       {(() => {
         const tools: ToolItem[] = [
+          { icon: "plan", label: "Plan", sub: "Set up load plans", onClick: () => nav.go("plan", "/planner?plan=1"), busy: nav.is("plan") },
           { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
           { icon: "terminal", label: "Terminal", sub: statusTerminalName ?? "Not set",
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,

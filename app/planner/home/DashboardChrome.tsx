@@ -170,7 +170,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenStep
 
 // ── Tool tiles ──────────────────────────────────────────────────────────────
 
-export type ToolIcon = "truck" | "terminal" | "store" | "card" | "route" | "chart" | "fuel" | "people" | "locate";
+export type ToolIcon = "truck" | "terminal" | "store" | "card" | "route" | "chart" | "fuel" | "people" | "locate" | "plan";
 
 function Icon({ name, color }: { name: ToolIcon; color: string }) {
   const p = { fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -184,6 +184,7 @@ function Icon({ name, color }: { name: ToolIcon; color: string }) {
       {name === "fuel" && (<g {...p}><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16" /><path d="M3 21h12" /><path d="M7 8h4" /><path d="M14 11h2a2 2 0 0 1 2 2v3a1.5 1.5 0 0 0 3 0V9l-3-3" /></g>)}
       {name === "people" && (<g {...p}><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a5 5 0 0 1 10 0v1" /><circle cx="17" cy="9" r="2.4" /><path d="M16 14.2a4 4 0 0 1 5 3.8V20" /></g>)}
       {name === "locate" && (<g {...p}><circle cx="12" cy="12" r="3.2" /><circle cx="12" cy="12" r="7.5" /><path d="M12 2v3" /><path d="M12 19v3" /><path d="M2 12h3" /><path d="M19 12h3" /></g>)}
+      {name === "plan" && (<g {...p}><rect x="5" y="4" width="14" height="17" rx="1.5" /><path d="M9 4V3h6v1" /><path d="M8.5 10h7" /><path d="M8.5 14h7" /><path d="M8.5 18h4" /></g>)}
       {name === "chart" && (<g {...p}><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M21 20H3" /></g>)}
     </svg>
   );

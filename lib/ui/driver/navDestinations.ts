@@ -64,7 +64,8 @@ export function canReachDestination(
 // admin's Planner IS the Dispatch page, not a shared page with both.
 export function defaultLandingPath(role: Role | null, isSuperAdmin: boolean, isSolo: boolean = false): string | null {
   if (isSuperAdmin) return null;
-  if (isSolo) return null; // solo = driver-style, stays on the driver Planner
+  if (isSolo) return "/planner/home"; // solo drivers get the Driver Dashboard too
   if (role === "admin" || role === "dispatch") return "/planner/dispatch";
+  if (role === "driver" || role === "lead") return "/planner/home"; // the Planner is now a tool opened from the dashboard
   return null;
 }

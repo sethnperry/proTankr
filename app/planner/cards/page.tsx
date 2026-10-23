@@ -434,7 +434,7 @@ export default function CardsPage() {
     // multi-rack terminal -- see CalculatorShellContext.tsx's "rack-aware loading".
     shell.chooseTerminal(tid);
     handleFlipClose();
-    router.push("/planner");
+    router.push("/planner?plan=1");
   };
   const handleDeactivate = async (tid: string) => {
     // Was activeTerminals.setAccessDateForTerminal(tid, "") -- a real,

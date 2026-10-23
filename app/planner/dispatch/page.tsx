@@ -216,7 +216,7 @@ export default function DispatchPage() {
     if (!shell.isSuperAdminResolved) return;
     if (shell.isSolo === null) return; // a solo admin is NOT a dispatcher -- wait for resolution, then bounce to /planner
     if (!canReachDestination("dispatch", shell.role, shell.isSuperAdmin, shell.isSolo)) {
-      router.replace("/planner");
+      router.replace("/planner/home");
     }
   }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, router]);
   // Sourced from the shared cached catalog (lib/queries/useTerminalsCatalog.ts)
@@ -970,7 +970,7 @@ export default function DispatchPage() {
             // live: content stayed the admin's own equipment/terminal data
             // after a router.push here). Matches JoinFleetView.tsx's own
             // same-class fix for the identical problem.
-            window.location.href = "/planner";
+            window.location.href = "/planner?plan=1";
           }}
           style={{
             width: "100%", textAlign: "left" as const, padding: "12px 14px", borderRadius: 2, marginBottom: 14,

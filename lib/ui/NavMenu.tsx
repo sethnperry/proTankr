@@ -252,9 +252,6 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
             {isSuperAdmin && !isSuperAdmin_ && (
               <NavLink href="/superadmin" icon="◈" label="ProTankr Dashboard" />
             )}
-            {canReachDestination("planner", role, isSuperAdmin, isSolo) && !isPlannerPage && (
-              <NavLink href="/planner" icon="▤" label="Planner" />
-            )}
             {canReachDestination("cards", role, isSuperAdmin, isSolo) && !isCardsPage && (
               <NavLink href="/planner/cards" icon="▥" label="Cards" />
             )}
@@ -262,7 +259,9 @@ export default function NavMenu({ darkMode, anchor, onOpenSettings }: { darkMode
               <NavLink href="/planner/vault" icon="🔒" label="Vault" />
             )}
             {!isPlanner && (
-              <NavLink href="/planner" icon="⟵" label="Back to Planner" />
+              <NavLink
+                href={canReachDestination("home", role, isSuperAdmin, isSolo) ? "/planner/home" : canReachDestination("dispatch", role, isSuperAdmin, isSolo) ? "/planner/dispatch" : "/planner"}
+                icon="⟵" label="Back to Dashboard" />
             )}
             {!isReports_ && (
               <NavLink href="/planner/reports" icon="▤" label="Reports" />
