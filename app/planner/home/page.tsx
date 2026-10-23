@@ -45,6 +45,7 @@ import {
   beginDispatched,
   truckBeginMiles,
   tripChildren,
+  unlinkCancelledLoad,
   type StartLoadDelivery,
 } from "@/lib/trips/tripLogic";
 import {
@@ -1150,8 +1151,28 @@ export default function HomePage() {
       case "planner":
         setOpeningPlanner(true);
         // Arrived with no load yet: straight to Plan Review (the Planner skips
-        // ahead when a plan exists). Already loading: back to the Planner.
-        router.push(step.label === "Begin Loading" ? "/planner?begin=1" : "/planner");
+        // ahead when a plan exists). A load already started can't be resumed
+        // once the Planner has been left (its state lives only on that page),
+        // so it is released and Plan Review reopens on the same pickup.
+        // Otherwise the Planner showed a plain LOAD and began an out-of-trip load.
+        (async () => {
+          const pk = snap ? activePickup(snap.pickups) : null;
+          if (pk?.load_id) {
+            let status: string | null = null;
+            try {
+              const { data } = await supabase.from("load_log").select("status").eq("load_id", pk.load_id).maybeSingle();
+              status = (data as { status?: string } | null)?.status ?? null;
+            } catch { /* offline: treat as still planned */ }
+            if (status === "loaded" || status === "completed") {
+              router.push(`/planner?report=${pk.load_id}`);
+              return;
+            }
+            try { await cancelPlannedLoad(pk.load_id); } catch (e) { console.warn("[trips] release planned load failed (non-fatal):", e); }
+            clearActivePlannedLoad(userId);
+            unlinkCancelledLoad(store, { userId, loadId: pk.load_id, now: new Date(), newId });
+          }
+          router.push("/planner?begin=1");
+        })();
         break;
       case "arrive_pickup": {
         endDelay();
