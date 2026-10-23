@@ -32,7 +32,7 @@ export type HosAvailability = {
   statusSince?: string | null; // ISO time the current status began
   offSince?: string | null;    // ISO time the current unbroken off-duty stretch began (null when not off duty)
   breakLeftMin?: number | null; // driving left before the 30-minute break rule (worked out from duty logs)
-  recap?: { days: { date: string; minutes: number }[]; usedMin: number; availableTomorrowMin: number; limitMin: number } | null;
+  recap?: { days: { date: string; minutes: number }[]; usedMin: number; availableTomorrowMin: number; limitMin: number; restartAt?: string | null } | null;
   debug?: Record<string, string> | null; // raw availability fields and log counts, shown in the recap while hours are being verified
   at: string;                  // ISO time this was read
 };

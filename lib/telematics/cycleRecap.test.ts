@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cycleRecap, breakLeftMin, workdayLeftMin } from "./cycleRecap.ts";
+import { cycleRecap, breakLeftMin, workdayLeftMin, lastRestartEnd } from "./cycleRecap.ts";
 
 const L = (status: string, dateTime: string) => ({ status, dateTime, eventType: 1 });
 const NOW = Date.parse("2026-10-22T20:00:00Z");
@@ -17,11 +17,14 @@ test("on-duty minutes split at local midnight", () => {
 });
 
 test("off duty and sleeper don't count; available tomorrow drops the oldest day", () => {
-  const r = cycleRecap([L("D", "2026-10-15T10:00:00Z"), L("OFF", "2026-10-15T20:00:00Z"), L("SB", "2026-10-22T01:00:00Z")], NOW, "UTC");
+  const logs = [L("D", "2026-10-15T10:00:00Z"), L("OFF", "2026-10-15T20:00:00Z")];
+  for (let d = 16; d <= 22; d++) { logs.push(L("ON", `2026-10-${d}T12:00:00Z`)); logs.push(L("SB", `2026-10-${d}T12:30:00Z`)); }
+  const r = cycleRecap(logs, NOW, "UTC");
   assert.equal(r.days[0].date, "2026-10-15");
   assert.equal(r.days[0].minutes, 600);
-  // the 15th falls outside tomorrow's 7-day window
-  assert.equal(r.availableTomorrowMin, 70 * 60);
+  // the 15th (10h) falls outside tomorrow's 7-day window; the 16th-22nd are 30 min each
+  assert.equal(r.availableTomorrowMin, 70 * 60 - 7 * 30);
+  assert.equal(r.restartAt, null);
 });
 
 test("break clock: 8 h of driving resets after a 30 min stop", () => {
@@ -39,4 +42,20 @@ test("workday: 14 h from the first on-duty after a 10 h reset; a short rest does
   // 10 h off then back on resets the window
   assert.equal(workdayLeftMin([L("D", "2026-10-21T20:00:00Z"), L("SB", "2026-10-22T02:00:00Z"), L("D", "2026-10-22T12:30:00Z")], NOW), 14 * 60 - Math.round((NOW - Date.parse("2026-10-22T12:30:00Z")) / 60000));
   assert.equal(workdayLeftMin([], NOW), null);
+});
+
+test("34-hour restart: days before it drop out of the cycle", () => {
+  const logs = [
+    L("D", "2026-10-15T10:00:00Z"), L("OFF", "2026-10-15T22:00:00Z"),   // 12h on the 15th
+    L("D", "2026-10-18T14:00:00Z"), L("OFF", "2026-10-18T23:00:00Z"),   // 9h on the 18th, after 64h off
+  ];
+  const now = Date.parse("2026-10-18T23:30:00Z");
+  assert.equal(lastRestartEnd(logs, now), Date.parse("2026-10-18T14:00:00Z"));
+  const r = cycleRecap(logs, now, "UTC");
+  assert.equal(r.days[0].date, "2026-10-18");
+  assert.equal(r.days.length, 1);
+  assert.equal(r.usedMin, 540);
+  assert.equal(r.availableTomorrowMin, 70 * 60 - 540);
+  // a 20h rest is not a restart
+  assert.equal(lastRestartEnd([L("D", "2026-10-15T10:00:00Z"), L("OFF", "2026-10-15T22:00:00Z"), L("D", "2026-10-16T18:00:00Z")], now), null);
 });

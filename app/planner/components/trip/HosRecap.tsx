@@ -51,6 +51,7 @@ export function HosRecapModal({ open, hos, onClose }: { open: boolean; hos: HosA
                 {hos.cycleLeftMin != null && <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>Cycle left now: {clockHM(hos.cycleLeftMin)}</div>}
               </div>
             </div>
+            {r.restartAt && <div style={{ fontSize: 11, color: MUTED, marginTop: 12 }}>34-hour restart ended {new Date(r.restartAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}. Earlier days don't count.</div>}
             <div style={{ fontSize: 11, color: MUTED, marginTop: 12 }}>Worked out from your logged driving and on-duty time. Your logbook is the record.</div>
           </>
         ) : (

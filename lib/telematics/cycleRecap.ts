@@ -12,7 +12,7 @@ export const BREAK_AFTER_DRIVE_MIN = 8 * 60;
 export const BREAK_REST_MIN = 30;
 
 export type RecapDay = { date: string; minutes: number };
-export type CycleRecap = { days: RecapDay[]; usedMin: number; availableTomorrowMin: number; limitMin: number };
+export type CycleRecap = { days: RecapDay[]; usedMin: number; availableTomorrowMin: number; limitMin: number; restartAt?: string | null };
 
 type Seg = { code: DutyCode; from: number; to: number };
 
@@ -37,11 +37,36 @@ function dayKey(ms: number, tz: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 }
 
+export const RESTART_OFF_MIN = 34 * 60;
+
+/** End of the latest 34+ consecutive hours off duty (Off, Sleeper, Personal Conveyance): the cycle starts over there.
+ * If the driver is still inside such a stretch, it is "now". Null if there has been none in the logs. */
+export function lastRestartEnd(logs: any[], nowMs: number): number | null {
+  const segs = segments(logs, nowMs);
+  let best: number | null = null;
+  let runStart: number | null = null;
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    if (!ONDUTY.has(s.code)) {
+      if (runStart == null) runStart = s.from;
+      const last = i === segs.length - 1 || ONDUTY.has(segs[i + 1].code);
+      if (last && s.to - runStart >= RESTART_OFF_MIN * 60000) best = s.to;
+    } else {
+      runStart = null;
+    }
+  }
+  return best;
+}
+
 /** Minutes of on-duty time per local day for the last `dayCount` days, oldest first, today last. */
 export function cycleRecap(logs: any[], nowMs: number, tz: string, dayCount = 8, limitMin = CYCLE_LIMIT_MIN): CycleRecap {
   const per = new Map<string, number>();
-  for (const s of segments(logs, nowMs)) {
-    if (!ONDUTY.has(s.code)) continue;
+  // Time before the last 34-hour restart no longer counts toward the cycle.
+  const restart = lastRestartEnd(logs, nowMs);
+  for (const raw of segments(logs, nowMs)) {
+    if (!ONDUTY.has(raw.code)) continue;
+    const s = { ...raw, from: restart != null ? Math.max(raw.from, restart) : raw.from };
+    if (s.from >= s.to) continue;
     // walk the segment in hour-ish steps so a midnight inside it splits correctly
     let t = s.from;
     while (t < s.to) {
@@ -58,14 +83,16 @@ export function cycleRecap(logs: any[], nowMs: number, tz: string, dayCount = 8,
     }
   }
   const days: RecapDay[] = [];
+  const restartDay = restart != null ? dayKey(restart, tz) : null;
   for (let i = dayCount - 1; i >= 0; i--) {
     const k = dayKey(nowMs - i * 86400_000, tz);
+    if (restartDay != null && k < restartDay) continue; // before the restart: not part of this cycle
     days.push({ date: k, minutes: Math.round(per.get(k) ?? 0) });
   }
   const usedMin = days.reduce((a, d) => a + d.minutes, 0);
   // Tomorrow's window is tomorrow plus the 7 days up to and including today.
   const lastSeven = days.slice(-7).reduce((a, d) => a + d.minutes, 0);
-  return { days, usedMin, availableTomorrowMin: Math.max(0, limitMin - lastSeven), limitMin };
+  return { days, usedMin, availableTomorrowMin: Math.max(0, limitMin - lastSeven), limitMin, restartAt: restart != null ? new Date(restart).toISOString() : null };
 }
 
 /** Driving time left before the 30-minute break rule bites: 8 h of driving since the last 30+ min stretch of not driving. */
