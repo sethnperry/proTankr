@@ -37,6 +37,7 @@ import type { TerminalRow, TerminalCatalogRow } from "./types";
 import { isRole, type Role } from "@/lib/ui/driver/role";
 
 export type CardData = { cardNumber: string; privateNote: string; pin: string };
+export type PlannerIntent = { id: number; kind: "begin" | "report"; loadId?: string };
 
 type ShellValue = {
   authEmail: string;
@@ -129,6 +130,16 @@ type ShellValue = {
   // terminal leaves the rack blank instead of asking; askRack asks later
   // (on Arrive). Resolves with the rack id ("" when the terminal has none).
   setDeferRackPick: (defer: boolean) => void;
+  // The Planner host lives in the layout for the whole session (see
+  // PlannerHost.tsx), so other screens ask it to open Plan Review or a load
+  // report over themselves instead of navigating to the Planner page.
+  plannerIntent: PlannerIntent | null;
+  postPlannerIntent: (kind: PlannerIntent["kind"], loadId?: string) => void;
+  consumePlannerIntent: (id: number) => void;
+  // True while Plan Review or a load report is up, so the screen underneath
+  // can drop its "Opening…" spinner.
+  loadOverlayOpen: boolean;
+  setLoadOverlayOpen: (open: boolean) => void;
   askRack: (terminalId: string) => Promise<string>;
   rackPickerOpen: boolean;
   rackPickerRacks: { rack_id: string; rack_name: string }[];
@@ -482,6 +493,17 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
   // picker briefly showed at the same time) before this flag was added.
   const [rackResolving, setRackResolving] = useState(false);
 
+  const [plannerIntent, setPlannerIntent] = useState<PlannerIntent | null>(null);
+  const intentIdRef = useRef(0);
+  const postPlannerIntent = useCallback((kind: PlannerIntent["kind"], loadId?: string) => {
+    intentIdRef.current += 1;
+    setPlannerIntent({ id: intentIdRef.current, kind, loadId });
+  }, []);
+  const consumePlannerIntent = useCallback((id: number) => {
+    setPlannerIntent((cur) => (cur && cur.id === id ? null : cur));
+  }, []);
+  const [loadOverlayOpen, setLoadOverlayOpen] = useState(false);
+
   const deferRackRef = useRef(false);
   const setDeferRackPick = useCallback((defer: boolean) => { deferRackRef.current = defer; }, []);
   const rackWaiterRef = useRef<((rackId: string) => void) | null>(null);
@@ -578,7 +600,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
-    chooseTerminal, setDeferRackPick, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
+    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
   }), [
     authEmail, authUserId, setupSession, effectiveUserId,
     equipment, location, terminals, expirations,
@@ -594,7 +616,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
-    chooseTerminal, setDeferRackPick, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
+    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
   ]);
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;

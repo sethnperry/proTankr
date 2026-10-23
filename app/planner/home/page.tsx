@@ -262,6 +262,23 @@ export default function HomePage() {
   // Set while routing to the Planner, so the button doesn't flash the next
   // step's label ("Continue Trip") during the navigation.
   const [openingPlanner, setOpeningPlanner] = useState(false);
+  // Plan Review / a load report open over this screen (Planner host, see
+  // PlannerHost.tsx). Drop the "Opening…" state once they're up, or give up.
+  const [openingReport, setOpeningReport] = useState(false);
+  useEffect(() => {
+    if (shell.loadOverlayOpen) { setOpeningPlanner(false); setOpeningReport(false); }
+  }, [shell.loadOverlayOpen]);
+  useEffect(() => {
+    if (!openingPlanner && !openingReport) return;
+    const t = window.setTimeout(() => { setOpeningPlanner(false); setOpeningReport(false); }, 10000);
+    return () => window.clearTimeout(t);
+  }, [openingPlanner, openingReport]);
+  // "Arrived at Delivery" from the load report, opened over this screen.
+  useEffect(() => {
+    const h = () => setAutoArrive(true);
+    window.addEventListener("protankr:arrive", h);
+    return () => window.removeEventListener("protankr:arrive", h);
+  }, []);
   const handoff = !openTrip && userId ? handoffCandidate(trips, trailerId, userId) : null;
   // A load parked on the trailer this driver holds (theirs after a layover, or
   // someone else's for a slip seat).
@@ -1150,29 +1167,10 @@ export default function HomePage() {
         break;
       case "planner":
         setOpeningPlanner(true);
-        // Arrived with no load yet: straight to Plan Review (the Planner skips
-        // ahead when a plan exists). A load already started can't be resumed
-        // once the Planner has been left (its state lives only on that page),
-        // so it is released and Plan Review reopens on the same pickup.
-        // Otherwise the Planner showed a plain LOAD and began an out-of-trip load.
-        (async () => {
-          const pk = snap ? activePickup(snap.pickups) : null;
-          if (pk?.load_id) {
-            let status: string | null = null;
-            try {
-              const { data } = await supabase.from("load_log").select("status").eq("load_id", pk.load_id).maybeSingle();
-              status = (data as { status?: string } | null)?.status ?? null;
-            } catch { /* offline: treat as still planned */ }
-            if (status === "loaded" || status === "completed") {
-              router.push(`/planner?report=${pk.load_id}`);
-              return;
-            }
-            try { await cancelPlannedLoad(pk.load_id); } catch (e) { console.warn("[trips] release planned load failed (non-fatal):", e); }
-            clearActivePlannedLoad(userId);
-            unlinkCancelledLoad(store, { userId, loadId: pk.load_id, now: new Date(), newId });
-          }
-          router.push("/planner?begin=1");
-        })();
+        // Plan Review opens right over this screen (the Planner host stays
+        // mounted in the layout). If there is no plan, or it can't start, the
+        // host sends the driver to the Planner instead.
+        shell.postPlannerIntent("begin");
         break;
       case "arrive_pickup": {
         endDelay();
@@ -1202,7 +1200,7 @@ export default function HomePage() {
             }
           } finally {
             void syncNow();
-            router.push("/planner?begin=1");
+            shell.postPlannerIntent("begin");
           }
         })();
         break;
@@ -1751,7 +1749,7 @@ export default function HomePage() {
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
             {lastLoadId && (
-              <button type="button" onClick={() => nav.go("report", `/planner?report=${encodeURIComponent(lastLoadId)}`)} {...busyProps(nav.is("report"))} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {nav.is("report") ? <Spinner size={11} /> : "›"}</button>
+              <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", lastLoadId); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
             )}
             {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
               <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
