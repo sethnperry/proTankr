@@ -313,9 +313,9 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
             {(d.drops.length > 0 || d.otherTanks.length > 0) && (
               <div style={{ marginTop: 4 }}>
                 {d.drops.map((x) => (
-                  <div key={x.comp} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
+                  <div key={`${x.comp}-${x.tank ?? ""}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
                     <b>C{x.comp} → {x.tank ? `Tank ${x.tank}` : "Tank —"}</b>
-                    <span style={{ color: faint }}>{x.product}{x.net != null ? ` · ${gal(x.net)} net` : ""}</span>
+                    <span style={{ color: faint }}>{x.product}{x.gallons != null ? ` · ${gal(x.gallons)} gal into this tank` : x.net != null ? ` · ${gal(x.net)} net` : ""}</span>
                     <Item label="Before" value={reading(x.before, x.unit)} />
                     <Item label="After" value={reading(x.after, x.unit)} />
                     <Item label="Water" value={x.water == null ? "" : `${dec(x.water)} in`} />

@@ -37,3 +37,9 @@ test("sold per hour: after of last drop down to before of this one", () => {
   assert.equal(soldPerHour(8000, "2026-10-19T00:00:00Z", 9000, "2026-10-19T10:00:00Z"), null);
   assert.equal(soldPerHour(null, "2026-10-19T00:00:00Z", 6000, "2026-10-19T10:00:00Z"), null);
 });
+
+test("details: splits come back cleaned and survive the payload", () => {
+  const events = [ev("d1", "2026-10-19T10:00:00Z", { splits: [{ comp: 1, tank: "2", gallons: 4245 }, { comp: 1, tank: "3", gallons: "1000" }, { comp: "x", tank: "4", gallons: 5 }] })];
+  const d = deliveryDetailsFor(events, "d1")!;
+  assert.deepEqual(d.splits, [{ comp: 1, tank: "2", gallons: 4245 }, { comp: 1, tank: "3", gallons: 1000 }]);
+});

@@ -159,10 +159,19 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       }));
     const here = compartments.filter((c) => loads.find((l) => l.comp_number === c.comp)?.delivery_id === d.delivery_id);
     const used = new Set<string>();
-    const drops = here.map((c) => {
+    const splits = deliveryDetailsFor(input.events, d.delivery_id)?.splits ?? [];
+    const drops = here.flatMap((c) => {
+      const sp = splits.filter((x) => x.comp === c.comp);
+      if (sp.length > 1) {
+        return sp.map((x) => {
+          const t = tanks.find((y) => y.tank === x.tank) ?? null;
+          if (t) used.add(t.tank);
+          return { comp: c.comp, product: c.product, net: c.net, tank: x.tank, gallons: x.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
+        });
+      }
       const t = c.tank ? tanks.find((x) => x.tank === c.tank) ?? null : null;
       if (t) used.add(t.tank);
-      return { comp: c.comp, product: c.product, net: c.net, tank: c.tank, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
+      return [{ comp: c.comp, product: c.product, net: c.net, tank: c.tank, gallons: null as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" }];
     });
     return { compartments: here.map((c) => c.comp), drops, tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
   };

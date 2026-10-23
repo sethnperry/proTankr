@@ -36,6 +36,8 @@ export type DeliveryDetails = {
   additiveNote: string | null;
   issues: string[];
   issueNote: string | null;
+  // A compartment poured into more than one tank: where and how much.
+  splits?: { comp: number; tank: string; gallons: number }[];
 };
 
 const ADDITIVE_LABEL: Record<string, string> = Object.fromEntries(ADDITIVES.map((a) => [a.code, a.label]));
@@ -45,7 +47,7 @@ export const additiveLabel = (c: string) => ADDITIVE_LABEL[c] ?? c;
 export const issueLabel = (c: string) => ISSUE_LABEL[c] ?? c;
 
 export function hasDetails(d: DeliveryDetails): boolean {
-  return d.odometer != null || d.additives.length > 0 || !!d.additiveNote || d.issues.length > 0 || !!d.issueNote;
+  return d.odometer != null || d.additives.length > 0 || !!d.additiveNote || d.issues.length > 0 || !!d.issueNote || (d.splits?.length ?? 0) > 0;
 }
 
 // The newest details event for one delivery.
@@ -64,6 +66,10 @@ export function deliveryDetailsFor(events: TripEventRow[], deliveryId: string): 
     additiveNote: text(p.additive_note),
     issues: list(p.issues),
     issueNote: text(p.issue_note),
+    splits: Array.isArray(p.splits)
+      ? (p.splits as any[]).map((x) => ({ comp: Number(x?.comp), tank: String(x?.tank ?? ""), gallons: Number(x?.gallons) }))
+          .filter((x) => Number.isFinite(x.comp) && x.tank && Number.isFinite(x.gallons))
+      : [],
   };
 }
 
@@ -74,6 +80,7 @@ export function detailsPayload(d: DeliveryDetails): Record<string, unknown> {
     additive_note: d.additiveNote,
     issues: d.issues,
     issue_note: d.issueNote,
+    splits: d.splits ?? [],
   };
 }
 

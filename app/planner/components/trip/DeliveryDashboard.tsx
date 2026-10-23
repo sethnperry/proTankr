@@ -20,6 +20,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
+import { TankMap, type MapComp, type MapTank } from "./TankMap";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { useIsLandscape } from "@/app/planner/hooks/useOrientation";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -126,6 +127,7 @@ type Draft = {
   issues?: string[];
   issueNote?: string;
   signedMine?: boolean;
+  splits?: Record<string, { tank: string; gallons: number }[]>;
 };
 
 const draftKey = (deliveryId: string) => `proTankr:delivery:${deliveryId}`;
@@ -278,6 +280,10 @@ export function DeliveryDashboard({
   const [issues, setIssues] = useState<string[]>([]);
   const [issueNote, setIssueNote] = useState("");
   const [signedMine, setSignedMine] = useState(false);
+  // A compartment poured into more than one tank (only set when it has 2 or more).
+  const [splits, setSplits] = useState<Record<string, { tank: string; gallons: number }[]>>({});
+  const [armedId, setArmedId] = useState<string | null>(null);
+  const [splitId, setSplitId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
@@ -368,6 +374,9 @@ export function DeliveryDashboard({
     setIssues(d?.issues ?? []);
     setIssueNote(d?.issueNote ?? "");
     setSignedMine(!!d?.signedMine);
+    setSplits(d?.splits ?? {});
+    setArmedId(null);
+    setSplitId(null);
     const ch: Record<string, string> = {};
     for (const c of compartments) {
       ch[c.compartment_load_id] = d?.choice?.[c.compartment_load_id]
@@ -407,10 +416,10 @@ export function DeliveryDashboard({
     if (!open || !hydrated) return;
     writeDraft(delivery.delivery_id, {
       choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig,
-      odometer, bio, additives, additiveNote, issues, issueNote, signedMine,
+      odometer, bio, additives, additiveNote, issues, issueNote, signedMine, splits,
     });
   }, [open, hydrated, delivery.delivery_id, choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig,
-    odometer, bio, additives, additiveNote, issues, issueNote, signedMine]);
+    odometer, bio, additives, additiveNote, issues, issueNote, signedMine, splits]);
 
   const rows = useMemo(() => [...compartments].sort((a, b) => a.comp_number - b.comp_number), [compartments]);
   const gross = (c: TripCompartmentLoadRow) => Number(c.gross_gallons ?? c.net_gallons ?? 0);
@@ -433,16 +442,22 @@ export function DeliveryDashboard({
       const comps = delivered.filter((c) => c.product_id === pid);
       const tanks = tanksForProduct(pid, locationTanks, extraTanks);
       for (const c of comps) {
-        const t = choice[c.compartment_load_id];
-        if (t && !tanks.includes(t)) tanks.push(t);
+        for (const x of targetsFor(c)) if (!tanks.includes(x.tank)) tanks.push(x.tank);
       }
       return { productId: pid, comps, tanks, gallons: comps.reduce((t, c) => t + gross(c), 0) };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [delivered.map((c) => `${c.compartment_load_id}:${choice[c.compartment_load_id]}`).join("|"), locationTanks, extraTanks]);
+  }, [delivered.map((c) => `${c.compartment_load_id}:${choice[c.compartment_load_id]}`).join("|"), JSON.stringify(splits), locationTanks, extraTanks]);
   const allTanks = useMemo(() => [...new Set(products.flatMap((p) => p.tanks))], [products]);
 
-  const intoTank = (n: string) => delivered.filter((c) => choice[c.compartment_load_id] === n).reduce((t, c) => t + gross(c), 0);
+  // Where a compartment goes: its split, or its one tank with all the gallons.
+  const targetsFor = (c: TripCompartmentLoadRow): { tank: string; gallons: number }[] => {
+    const sp = splits[c.compartment_load_id];
+    if (sp && sp.length > 1) return sp;
+    const t = choice[c.compartment_load_id];
+    return t && t !== RETAIN ? [{ tank: t, gallons: gross(c) }] : [];
+  };
+  const intoTank = (n: string) => delivered.reduce((t, c) => t + targetsFor(c).filter((x) => x.tank === n).reduce((a, b) => a + b.gallons, 0), 0);
   const pairsFor = (tanks: string[]) => tanks.map((n) => ({ before: numOrNull(readings[n]?.before ?? ""), after: numOrNull(readings[n]?.after ?? "") }));
   const discrepancyFor = (p: (typeof products)[number]) => tankDiscrepancy(p.gallons, pairsFor(p.tanks), unit);
   const readingsDone = (p: (typeof products)[number]) =>
@@ -507,10 +522,51 @@ export function DeliveryDashboard({
       })()
     : [];
   const choose = (id: string, v: string) => {
+    setSplits((m) => { if (!m[id]) return m; const { [id]: _drop, ...rest } = m; return rest; });
+    setSplitId(null);
     setChoice((m) => ({ ...m, [id]: v }));
     setPickFor(null);
     setErr(null);
     onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: v === RETAIN ? null : v }] });
+  };
+  // Tank map: connect a compartment to a tank (replace, or add when splitting).
+  const tankProduct = (tank: string): string | null =>
+    locationTanks.find((t) => t.tank_number === tank)?.product_id ?? extraTanks.find((t) => t.tank_number === tank)?.product_id ?? null;
+  const linkComp = (id: string, tank: string) => {
+    const row = rows.find((c) => c.compartment_load_id === id);
+    if (!row) return;
+    const tp = tankProduct(tank);
+    if (tp && row.product_id && tp !== row.product_id) {
+      setErr(`Tank ${tank} is saved as ${productInfo(tp).name}. This compartment is ${productInfo(row.product_id).name}.`);
+      return;
+    }
+    setErr(null);
+    setArmedId(null);
+    if (splitId === id) {
+      const cur = targetsFor(row);
+      if (cur.some((x) => x.tank === tank)) return setSplitId(null);
+      const total = gross(row);
+      const n = cur.length + 1;
+      const share = Math.round(total / n);
+      const next = [...cur.map((x) => ({ tank: x.tank, gallons: share })), { tank, gallons: Math.round(total - share * (n - 1)) }];
+      setSplits((m) => ({ ...m, [id]: next }));
+      setSplitId(null);
+      onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: next[0].tank }] });
+      return;
+    }
+    choose(id, tank);
+  };
+  const setSplitGallons = (id: string, tank: string, gallons: number) =>
+    setSplits((m) => ({ ...m, [id]: (m[id] ?? []).map((x) => (x.tank === tank ? { ...x, gallons } : x)) }));
+  const unlinkComp = (id: string, tank: string) => {
+    const row = rows.find((c) => c.compartment_load_id === id);
+    if (!row) return;
+    const left = targetsFor(row).filter((x) => x.tank !== tank);
+    setSplitId(null);
+    if (left.length > 1) return setSplits((m) => ({ ...m, [id]: left }));
+    setSplits((m) => { const { [id]: _drop, ...rest } = m; return rest; });
+    setChoice((m) => ({ ...m, [id]: left[0]?.tank ?? "" }));
+    onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: left[0]?.tank ?? null }] });
   };
   const addNewTank = () => {
     const n = newTankText.trim();
@@ -666,6 +722,12 @@ export function DeliveryDashboard({
     if (wstep === "tanks") {
       if (unpicked.length) return setErr(`Pick a tank or Retain for C${unpicked.map((c) => c.comp_number).join(", C")}.`);
       if (delivered.length === 0 && retained.length === 0) return setErr("Pick a tank for at least one compartment.");
+      for (const c of delivered) {
+        const sp = splits[c.compartment_load_id];
+        if (sp && sp.length > 1 && Math.abs(sp.reduce((t, x) => t + x.gallons, 0) - gross(c)) > 1) {
+          return setErr(`C${c.comp_number}: the gallons in each tank have to add up to ${Math.round(gross(c)).toLocaleString("en-US")}.`);
+        }
+      }
       return setWstep("details");
     }
     if (wstep === "details") {
@@ -730,6 +792,10 @@ export function DeliveryDashboard({
         additiveNote: additiveNote.trim() || null,
         issues,
         issueNote: issueNote.trim() || null,
+        splits: delivered.flatMap((c) => {
+          const sp = splits[c.compartment_load_id];
+          return sp && sp.length > 1 ? sp.map((x) => ({ comp: c.comp_number, tank: x.tank, gallons: Math.round(x.gallons) })) : [];
+        }),
       },
     });
   };
@@ -747,55 +813,29 @@ export function DeliveryDashboard({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerComps, rows, laterAboard]);
-  const totalMax = barSlots.reduce((t, s) => t + s.max, 0) || 1;
-  const nBars = barSlots.length || 1;
-  const gap = landscape ? 12 : nBars >= 5 ? 10 : 16;
-  const barH = landscape ? "70px" : nBars >= 5 ? "min(80px, 16vw)" : "min(90px, 18vw)";
 
-  const bars = (withPickers: boolean) => barSlots.length === 0 ? (
-    <div style={{ fontSize: 14, color: muted }}>Nothing aboard for this delivery.</div>
-  ) : (
-    <div style={{ display: "flex", justifyContent: "center", gap, alignItems: "flex-start", width: "100%" }}>
-      {barSlots.map((s) => {
-        const row = s.here ?? s.later;
-        const info = row ? productInfo(row.product_id) : null;
-        const color = info ? info.hex ?? productColorFor(info.name) : "rgba(255,255,255,0.08)";
-        const g = row ? gross(row) : 0;
-        const fill = row ? Math.max(0, Math.min(1, g / s.max)) * 0.96 : 0;
-        const w = `calc(${((s.max / totalMax) * 100).toFixed(4)}% - ${(((nBars - 1) * gap) / nBars).toFixed(2)}px)`;
-        const ch = s.here ? choice[s.here.compartment_load_id] ?? "" : "";
-        return (
-          <div key={s.n} style={{ width: w, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", opacity: s.here ? 1 : 0.4 }}>
-            <div style={{ fontSize: "clamp(11px, 2.4vw, 13px)", fontWeight: 700, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>{s.n}</div>
-            <div style={{ width: "100%", height: barH, background: "rgba(255,255,255,0.06)", position: "relative", overflow: "hidden" }}>
-              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: `${fill * 100}%`, background: color }} />
-            </div>
-            <div style={{ marginTop: 5, fontSize: "clamp(11px, 2.8vw, 14px)", fontWeight: 800, color: info ? info.hex ?? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.3)", letterSpacing: 0.3 }}>
-              {info ? info.code : "MT"}
-            </div>
-            <div style={{ marginTop: 2, fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 600, color: g > 0 ? "rgba(140,140,140,0.9)" : "rgba(255,255,255,0.12)" }}>
-              {g > 0 ? Math.round(g).toLocaleString("en-US") : "—"}
-            </div>
-            {withPickers && (s.here ? (
-              <button type="button" onClick={() => setPickFor(s.here!.compartment_load_id)}
-                style={{
-                  marginTop: 8, width: "100%", minWidth: 0, padding: "8px 2px", borderRadius: 2, cursor: "pointer",
-                  fontSize: "clamp(11px, 2.8vw, 13px)", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  border: ch ? "1px solid rgba(255,255,255,0.25)" : "1px solid #fbbf24",
-                  background: ch === RETAIN ? "rgba(147,197,253,0.12)" : "rgba(255,255,255,0.04)",
-                  color: ch === RETAIN ? "#93c5fd" : ch ? "#fff" : "#fbbf24",
-                }}>
-                {ch === RETAIN ? "Retain" : ch ? `Tank ${ch}` : "Tank ▾"}
-              </button>
-            ) : (
-              <div style={{ marginTop: 8, fontSize: 11, color: muted, padding: "8px 0" }}>{s.later ? "Next stop" : ""}</div>
-            ))}
-            {!withPickers && s.later && <div style={{ marginTop: 4, fontSize: 11, color: muted }}>Next stop</div>}
-          </div>
-        );
-      })}
-    </div>
-  );
+  const mapComps: MapComp[] = rows.map((c) => {
+    const info = productInfo(c.product_id);
+    const slot = barSlots.find((b) => b.n === c.comp_number);
+    return {
+      id: c.compartment_load_id, n: c.comp_number, productId: c.product_id, code: info.code,
+      color: info.hex ?? productColorFor(info.name), gallons: gross(c), max: slot?.max ?? gross(c),
+      retained: choice[c.compartment_load_id] === RETAIN, targets: targetsFor(c),
+    };
+  });
+  const mapTanks: MapTank[] = (() => {
+    const seen = new Map<string, MapTank>();
+    const add = (tank: string, pid: string | null, cap: number | null) => {
+      const n = tank.trim();
+      if (!n || seen.has(n)) return;
+      const info = pid ? productInfo(pid) : null;
+      seen.set(n, { tank: n, productId: pid, code: info?.code ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, capacity: cap });
+    };
+    for (const t of locationTanks) if (t.is_active !== false) add(t.tank_number, t.product_id, t.capacity_gallons);
+    for (const t of extraTanks) add(t.tank_number, t.product_id, null);
+    for (const c of rows) for (const x of targetsFor(c)) add(x.tank, c.product_id, null);
+    return [...seen.values()].sort((a, b) => a.tank.localeCompare(b.tank, undefined, { numeric: true }));
+  })();
 
   // ── Before getting out ─────────────────────────────────────────────────────
   // Hose length is per tank (fills sit at different distances). Tanks for
@@ -962,7 +1002,16 @@ export function DeliveryDashboard({
               {knowCard}
             </Section>
           </div>
-          <div style={{ ...sectionCard, padding: "14px 10px" }}>{bars(true)}</div>
+          <div style={{ ...sectionCard, padding: "14px 10px" }}>
+            {rows.length === 0
+              ? <div style={{ fontSize: 14, color: muted }}>Nothing aboard for this delivery.</div>
+              : (
+                <TankMap comps={mapComps} tanks={mapTanks} kind={pumpOff ? "cap" : "dome"}
+                  armedId={armedId} splitId={splitId} onArm={setArmedId} onLink={linkComp}
+                  onPick={(id) => setPickFor(id)} onSplitStart={(id) => setSplitId((s) => (s === id ? null : id))}
+                  onSplitGallons={setSplitGallons} onUnlink={unlinkComp} />
+              )}
+          </div>
           {retained.length > 0 && (
             <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, textAlign: "center" }}>
               Retained compartments stay aboard. Finish, then pick the next delivery or Park preloaded.
