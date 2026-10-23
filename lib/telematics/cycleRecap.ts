@@ -112,6 +112,19 @@ export function breakLeftMin(logs: any[], nowMs: number): number | null {
   return Math.max(0, Math.round(BREAK_AFTER_DRIVE_MIN - drove));
 }
 
+/** When the current stretch of not driving began (ms), or null while driving or with nothing to go on.
+ * On-duty-not-driving counts toward the 30-minute break, so loading and pumping are part of it. */
+export function nonDrivingSinceMs(logs: any[], nowMs: number): number | null {
+  const segs = segments(logs, nowMs);
+  if (!segs.length) return null;
+  let since: number | null = null;
+  for (const s of segs) {
+    if (s.code === "D") since = null;
+    else if (since == null) since = s.from;
+  }
+  return since;
+}
+
 export const WORKDAY_MIN = 14 * 60;
 export const RESET_OFF_MIN = 10 * 60;
 

@@ -93,6 +93,7 @@ import { useMyHos } from "@/lib/telematics/useMyHos";
 import { shouldNotifyHosTrip, type Level } from "@/lib/telematics/hosTripNotify";
 import { notifyPermission, showNotification, type NotifyPermission } from "@/lib/ui/notify";
 import { enablePush, pushEnabledHere } from "@/lib/push/subscribe";
+import { BREAK_REST_MIN } from "@/lib/telematics/cycleRecap";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
@@ -673,6 +674,16 @@ export default function HomePage() {
     });
   }, [myHos, openTrip, snap, livePos, terminalCatalog, locations]);
   // Tell the driver (once per change) when the clocks stop covering the trip. The first look is a baseline.
+  // Break chip helpers. Driving this far since the last 30-minute break is when waiting a few
+  // minutes before starting the next load starts to matter, so that's when the sheet mentions it.
+  const BREAK_DONE_MIN = BREAK_REST_MIN;
+  const BREAK_NOTE_WHEN_LEFT_MIN = 180;
+  const breakRestMin = myHos?.nonDrivingSince ? Math.max(0, Math.floor((Date.now() - Date.parse(myHos.nonDrivingSince)) / 60000)) : null;
+  const breakCountsRed = !!openTrip && !!myHos?.nonDrivingSince && breakRestMin != null && breakRestMin < BREAK_DONE_MIN
+    && !!openTrip.started_at && Date.parse(openTrip.started_at) >= Date.parse(myHos.nonDrivingSince);
+  const breakNote = breakRestMin != null && breakRestMin < BREAK_DONE_MIN && myHos?.breakLeftMin != null && myHos.breakLeftMin <= BREAK_NOTE_WHEN_LEFT_MIN
+    ? `Your 30-minute break is ${breakRestMin} min in. Wait ${BREAK_DONE_MIN - breakRestMin} more minute${BREAK_DONE_MIN - breakRestMin === 1 ? "" : "s"} and it's done.`
+    : null;
   const hosLevel: Level | null = !myHos || !livePos ? null : hosVsTrip ? hosVsTrip.level : "ok";
   const lastHosLevel = useRef<Level | null>(null);
   const serverPushOn = useRef(false);
@@ -1251,6 +1262,12 @@ export default function HomePage() {
   const [terminalNowOpen, setTerminalNowOpen] = useState(false);
   const [dropNowOpen, setDropNowOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
+  // Re-render every 30 s so the Break chip counts up between hours reads.
+  const [, setBreakTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setBreakTick((t) => t + 1), 30000);
+    return () => window.clearInterval(id);
+  }, []);
   // Truck / trailer alert squares: permits + service coming due.
   const truckAlerts = useUnitAlerts("truck", truckId, companyId, undefined, hookup?.engineHours ?? null);
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
@@ -1499,6 +1516,20 @@ export default function HomePage() {
           </div>
         );
         const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(myHos.at)) / 60000));
+        // Break: loading and pumping count toward it. While not driving it counts up to 30 min, then a
+        // green check. Red if a new trip was begun before it finished.
+        const restMin = myHos.nonDrivingSince ? Math.max(0, Math.floor((Date.now() - Date.parse(myHos.nonDrivingSince)) / 60000)) : null;
+        const breakCell = restMin != null && restMin >= BREAK_DONE_MIN ? (
+          <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+            <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, color: "#22c55e", lineHeight: 1.1 }}>✓</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: L.muted, marginTop: 3, whiteSpace: "nowrap" }}>Break done</div>
+          </div>
+        ) : restMin != null ? (
+          <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+            <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, color: breakCountsRed ? "#f87171" : "#fff", lineHeight: 1.1 }}>{restMin}m</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: L.muted, marginTop: 3, whiteSpace: "nowrap" }}>Break · of {BREAK_DONE_MIN}m</div>
+          </div>
+        ) : cell("Break in", myHos.breakLeftMin);
         return (
           <div style={{ ...L.secondary, padding: "12px 14px", marginBottom: 14 }}>
             <div role="button" tabIndex={0} onClick={() => setRecapOpen(true)} onKeyDown={(e) => { if (e.key === "Enter") setRecapOpen(true); }} style={{ cursor: "pointer" }}>
@@ -1510,7 +1541,7 @@ export default function HomePage() {
                 <span style={{ color: L.faint }}>›</span>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                {cell("Break in", myHos.breakLeftMin)}
+                {breakCell}
                 {cell("Driving left", myHos.driveLeftMin)}
                 {cell("Workday left", myHos.dutyLeftMin)}
                 {cell("Cycle left", myHos.cycleLeftMin)}
@@ -2099,6 +2130,7 @@ export default function HomePage() {
       </div>
 
       <StartLoadSheet
+        breakNote={breakNote}
         open={sheetOpen}
         editing={editing}
         initial={initialValues}

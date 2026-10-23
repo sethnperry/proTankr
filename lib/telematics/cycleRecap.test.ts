@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cycleRecap, breakLeftMin, workdayLeftMin, lastRestartEnd } from "./cycleRecap.ts";
+import { cycleRecap, breakLeftMin, workdayLeftMin, lastRestartEnd, nonDrivingSinceMs } from "./cycleRecap.ts";
 
 const L = (status: string, dateTime: string) => ({ status, dateTime, eventType: 1 });
 const NOW = Date.parse("2026-10-22T20:00:00Z");
@@ -58,4 +58,14 @@ test("34-hour restart: days before it drop out of the cycle", () => {
   assert.equal(r.availableTomorrowMin, 70 * 60 - 540);
   // a 20h rest is not a restart
   assert.equal(lastRestartEnd([L("D", "2026-10-15T10:00:00Z"), L("OFF", "2026-10-15T22:00:00Z"), L("D", "2026-10-16T18:00:00Z")], now), null);
+});
+
+test("non-driving stretch: starts when driving ends, counts on-duty, null while driving", () => {
+  const T = Date.parse("2026-10-23T15:00:00Z");
+  const log = (iso: string, status: string) => L(status, iso);
+  // driving 08:00-12:00, then on duty (unloading) since 12:00
+  const logs = [log("2026-10-23T08:00:00Z", "D"), log("2026-10-23T12:00:00Z", "ON")];
+  assert.equal(nonDrivingSinceMs(logs, T), Date.parse("2026-10-23T12:00:00Z"));
+  const driving = [log("2026-10-23T08:00:00Z", "D")];
+  assert.equal(nonDrivingSinceMs(driving, T), null);
 });

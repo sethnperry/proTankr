@@ -81,7 +81,10 @@ export function StartLoadSheet({
   onSubmit,
   suggestStart,
   liveMiles,
+  breakNote,
 }: {
+  // Shown only when the 30-minute break isn't done and driving is already well along since the last one.
+  breakNote?: string | null;
   // The truck's odometer from telematics. Fills beginning miles unless one was typed.
   liveMiles?: number | null;
   open: boolean;
@@ -109,6 +112,8 @@ export function StartLoadSheet({
   // Prefill for "Starting from" when the card opens with it blank.
   suggestStart?: () => Promise<StartPlace | null>;
 }) {
+  const [breakAck, setBreakAck] = useState(false);
+  useEffect(() => { if (open) setBreakAck(false); }, [open]);
   const [v, setV] = useState<StartLoadValues>(initial);
   const orderRef = useRef<HTMLInputElement | null>(null);
   const [orderAlpha, setOrderAlpha] = useState(false);
@@ -204,6 +209,15 @@ export function StartLoadSheet({
     >
       <div style={{ padding: "4px 16px 24px" }}>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 }}>{equipmentLabel}</div>
+        {breakNote && !breakAck && !editing && (
+          <div style={{ border: "1px solid rgba(251,191,36,0.55)", background: "rgba(251,191,36,0.08)", padding: "10px 12px", marginBottom: 16, borderRadius: 2 }}>
+            <div style={{ fontSize: 14, color: "#fff", lineHeight: 1.4 }}>{breakNote}</div>
+            <button type="button" onClick={() => setBreakAck(true)}
+              style={{ marginTop: 8, padding: "7px 14px", borderRadius: 2, border: "1px solid rgba(251,191,36,0.7)", background: "transparent", color: "#fbbf24", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+              Got it
+            </button>
+          </div>
+        )}
 
         <div style={row}>
           <div style={label}>Beginning miles</div>
