@@ -436,6 +436,13 @@ export function DeliveryDashboard({
   const arrivedAt = delivery.arrived_at ?? delivery.begin_at ?? new Date().toISOString();
   const miles = numOrNull(odometer);
 
+  // Where a compartment goes: its split, or its one tank with all the gallons.
+  const targetsFor = (c: TripCompartmentLoadRow): { tank: string; gallons: number }[] => {
+    const sp = splits[c.compartment_load_id];
+    if (sp && sp.length > 1) return sp;
+    const t = choice[c.compartment_load_id];
+    return t && t !== RETAIN ? [{ tank: t, gallons: gross(c) }] : [];
+  };
   // Products dropped here, each with every store tank that holds it plus any
   // tank a compartment was sent into.
   const products = useMemo(() => {
@@ -453,13 +460,6 @@ export function DeliveryDashboard({
   }, [delivered.map((c) => `${c.compartment_load_id}:${choice[c.compartment_load_id]}`).join("|"), JSON.stringify(splits), locationTanks, extraTanks]);
   const allTanks = useMemo(() => [...new Set(products.flatMap((p) => p.tanks))], [products]);
 
-  // Where a compartment goes: its split, or its one tank with all the gallons.
-  const targetsFor = (c: TripCompartmentLoadRow): { tank: string; gallons: number }[] => {
-    const sp = splits[c.compartment_load_id];
-    if (sp && sp.length > 1) return sp;
-    const t = choice[c.compartment_load_id];
-    return t && t !== RETAIN ? [{ tank: t, gallons: gross(c) }] : [];
-  };
   const intoTank = (n: string) => delivered.reduce((t, c) => t + targetsFor(c).filter((x) => x.tank === n).reduce((a, b) => a + b.gallons, 0), 0);
   const pairsFor = (tanks: string[]) => tanks.map((n) => ({ before: numOrNull(readings[n]?.before ?? ""), after: numOrNull(readings[n]?.after ?? "") }));
   const discrepancyFor = (p: (typeof products)[number]) => tankDiscrepancy(p.gallons, pairsFor(p.tanks), unit);
