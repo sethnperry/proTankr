@@ -23,6 +23,7 @@ import FleetCardsModal from "./FleetCardsModal";
 import PayrollReportModal from "./PayrollReportModal";
 import FleetUtilizationModal from "./FleetUtilizationModal";
 import TripSettingsModal from "./TripSettingsModal";
+import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TelematicsModal from "./TelematicsModal";
 import IftaModal from "./IftaModal";
@@ -1249,6 +1250,7 @@ export default function AdminPage() {
   const [payrollReportOpen, setPayrollReportOpen] = useState(false);
   const [fleetUtilOpen, setFleetUtilOpen] = useState(false);
   const [tripSettingsOpen, setTripSettingsOpen] = useState(false);
+  const [delaysOpen, setDelaysOpen] = useState(false);
   const [fuelSettingsOpen, setFuelSettingsOpen] = useState(false);
   const [telematicsOpen, setTelematicsOpen] = useState(false);
   const [iftaOpen, setIftaOpen] = useState(false);
@@ -2061,6 +2063,11 @@ export default function AdminPage() {
           </button>
         )}
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setDelaysOpen(true)}>
+            Delays
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setTripSettingsOpen(true)}>
             Trip Settings
           </button>
@@ -2513,6 +2520,7 @@ export default function AdminPage() {
       <IftaModal open={iftaOpen} onClose={() => setIftaOpen(false)} companyId={companyId!} />
       <TelematicsModal open={telematicsOpen} onClose={() => setTelematicsOpen(false)} companyId={companyId!} />
       <FuelSettingsModal open={fuelSettingsOpen} onClose={() => setFuelSettingsOpen(false)} companyId={companyId!} />
+      <DelaysModal open={delaysOpen} onClose={() => setDelaysOpen(false)} companyId={companyId!} />
       <TripSettingsModal open={tripSettingsOpen} onClose={() => setTripSettingsOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
       <TargetWeightPolicyModal open={targetWeightPolicyOpen} onClose={() => setTargetWeightPolicyOpen(false)} companyId={companyId!} />
       <SettingsModal
