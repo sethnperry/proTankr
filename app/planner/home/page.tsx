@@ -23,6 +23,11 @@ import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
+import { DelayButton } from "../components/trip/DelayButton";
+import {
+  DELAY_EVENT, delayEventPayload, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
+  dropDelayMinutes, type RunningDelay,
+} from "@/lib/trips/delays";
 import { newId } from "@/lib/trips/tripStore";
 import { useTripHydration } from "@/lib/trips/useTripHydration";
 import { rememberTanks, useDeliveryLocationList, useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
@@ -217,6 +222,41 @@ export default function HomePage() {
     [store, openTrip?.trip_id, state],
   );
   const step = nextStep(openTrip, snap, deliveryName);
+
+  // ── Delay button: one delay running at a time, ended by a second tap, Arrive or Finish.
+  const [runningDelay, setRunningDelay] = useState<RunningDelay | null>(null);
+  useEffect(() => {
+    if (userId) setRunningDelay(readRunningDelay(userId));
+  }, [userId]);
+  const delayLeg = openTrip ? legForStep(step.kind) : null;
+  const endDelay = (atIso?: string) => {
+    if (!store || !userId) return;
+    const d = runningDelay ?? readRunningDelay(userId);
+    if (!d) return;
+    const at = atIso ?? new Date().toISOString();
+    store.put("trip_events", {
+      event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: at, actor_id: userId,
+      pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, at),
+    });
+    writeRunningDelay(userId, null);
+    setRunningDelay(null);
+    void syncNow();
+  };
+  const startDelay = (code: string, note: string | null) => {
+    if (!userId || !openTrip || !delayLeg) return;
+    const d: RunningDelay = {
+      tripId: openTrip.trip_id, leg: delayLeg, code, note, startedAt: new Date().toISOString(),
+      pickupId: "pickup" in step ? step.pickup.pickup_id : null,
+      deliveryId: "delivery" in step ? step.delivery.delivery_id : null,
+    };
+    writeRunningDelay(userId, d);
+    setRunningDelay(d);
+  };
+  const tripDelays = useMemo(
+    () => (store && openTrip ? loggedDelays(store.list("trip_events", (e) => e.trip_id === openTrip.trip_id)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store, openTrip?.trip_id, state],
+  );
   // Set while routing to the Planner, so the button doesn't flash the next
   // step's label ("Continue Trip") during the navigation.
   const [openingPlanner, setOpeningPlanner] = useState(false);
@@ -709,6 +749,7 @@ export default function HomePage() {
       userId, companyId, trailerId, delivery: finishDeliveryRow, ...v, ...clock(),
     });
     clearDeliveryDraft(finishDeliveryRow.delivery_id);
+    endDelay();
     setFinishOpen(false);
     const orderNo = children?.primaryOrder?.order_number;
     setNotice(tripComplete
@@ -1067,6 +1108,7 @@ export default function HomePage() {
     } else if (step.kind === "arrive_delivery") {
       arriveDelivery(store, { userId, delivery: step.delivery, now: at, newId });
     } else return;
+    endDelay(at.toISOString());
     void syncNow();
     setNotice({ text: `Arrived at ${arrivalTarget.name} at ${when}, from your truck's position.`, tripId: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1101,6 +1143,7 @@ export default function HomePage() {
         router.push(step.label === "Begin Loading" ? "/planner?begin=1" : "/planner");
         break;
       case "arrive_pickup": {
+        endDelay();
         learnArrival();
         // Arrived: straight to the Planner to build the load, on this
         // pickup's terminal (the Planner may still be on an earlier one).
@@ -1144,6 +1187,7 @@ export default function HomePage() {
         setPicker({ mode: "add" });
         break;
       case "arrive_delivery":
+        endDelay();
         learnArrival();
         // Arrived: only the time is stamped. Nothing opens; the button becomes
         // Finish Delivery, and the sequence starts when the driver taps it.
@@ -1754,6 +1798,9 @@ export default function HomePage() {
       {step.kind !== "start" && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
+      {delayLeg && !openingPlanner && (
+        <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />
+      )}
       {undoable && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, marginTop: 8 }}>
           {!undoConfirm ? (
@@ -2143,6 +2190,8 @@ export default function HomePage() {
             liveOdometer={truckReading?.odometerMi ?? null}
             productInfo={productInfo}
             signature={signature.svg}
+            recordedDelayMin={dropDelayMinutes(tripDelays, finishDeliveryRow.delivery_id)}
+            recordedDelayLabels={tripDelays.filter((d) => d.deliveryId === finishDeliveryRow.delivery_id && d.leg === "at_drop").map((d) => `${d.label} ${d.minutes} min`)}
             onSaveSignature={signature.save}
             onSaveProgress={onDeliveryProgress}
             onSubmit={(v) => void onFinishSubmit(v)}

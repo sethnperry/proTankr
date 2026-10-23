@@ -237,7 +237,7 @@ const fmtDayTime = (iso: string | null) => {
 
 export function DeliveryDashboard({
   open, title, delivery, location, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
-  otherPlanned, beginMiles, liveOdometer, productInfo, signature, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
+  otherPlanned, beginMiles, liveOdometer, productInfo, signature, recordedDelayMin = 0, recordedDelayLabels = [], onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
 }: {
   // The loading BOL / supplier / signature were left for later (Finish Later): finishing the delivery waits for them.
   // Park Preloaded, offered until the delivery begins.
@@ -258,6 +258,9 @@ export function DeliveryDashboard({
   liveOdometer?: number | null; // from the truck's telematics, when connected
   productInfo: (id: string | null) => ProductInfo;
   signature: string | null;
+  // Delay the driver already logged at this drop (the Delay button), subtracted before asking.
+  recordedDelayMin?: number;
+  recordedDelayLabels?: string[];
   onSaveSignature: (path: string) => Promise<void>;
   onSaveProgress: (p: DeliveryProgress) => void;
   onSubmit: (v: FinishDeliverySubmit) => void;
@@ -585,7 +588,7 @@ export function DeliveryDashboard({
   const beginIso = fromLocalInput(beginText) || "";
   const finishIso = fromLocalInput(finishText) || "";
   const timesNow: StepTimes = { arrivedAt, beginAt: beginIso || arrivedAt, leftAt: finishIso || arrivedAt };
-  const outcome = finishIso ? dropOutcome({ expectedEndAt: est.expectedEndAt, finishAt: finishIso, graceMin: rules.graceMin }) : null;
+  const outcome = finishIso ? dropOutcome({ expectedEndAt: est.expectedEndAt, finishAt: finishIso, recordedDelayMin, graceMin: rules.graceMin }) : null;
   const preDropLate = needsDelayReason(delayMinutes(arrivedAt, beginIso || null), settings.delivery_delay_threshold_minutes);
   const milesProblem = (): string | null => {
     if (miles == null) return isLast ? "Enter ending miles." : null;
@@ -1164,6 +1167,11 @@ export function DeliveryDashboard({
             )}
           </div>
 
+          {recordedDelayMin > 0 && (
+            <div style={{ fontSize: 13, color: muted, textAlign: "center", margin: "0 0 6px" }}>
+              Delay you logged: {recordedDelayLabels.join(", ") || `${recordedDelayMin} min`}
+            </div>
+          )}
           {outcome && outcome.kind !== "over" && (
             <div style={{ fontSize: 14, fontWeight: 700, color: "#22c55e", textAlign: "center", margin: "4px 0 6px" }}>
               {outcome.kind === "ahead" && outcome.minutes > 0
@@ -1174,9 +1182,9 @@ export function DeliveryDashboard({
           {outcome && outcome.kind === "over" && (
             <div style={{ ...sectionCard }}>
               <div style={{ fontSize: 15, color: "#fff", lineHeight: 1.45 }}>
-                This took about <b>{fmtMin(outcome.minutes)}</b> longer than expected
+                This took about <b>{fmtMin(outcome.minutes)}</b> longer than expected{recordedDelayMin > 0 ? `, even after the ${fmtMin(recordedDelayMin)} you logged` : ""}
                 <span style={{ color: muted }}> ({dropGallons.toLocaleString("en-US")} gal at {rules.gallonsPerMin} gal/min, plus {rules.prepMin} min to get started)</span>.
-                Was there a delay?
+                {recordedDelayMin > 0 ? "Was there more delay?" : "Was there a delay?"}
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
                 <button type="button" style={{ ...pill(lateAnswer === "yes"), flex: 1, padding: "12px 0", fontSize: 15 }} onClick={() => setLateAnswer("yes")}>Yes</button>
