@@ -100,3 +100,31 @@ export function markTripPlanApplied(userId: string, tripId: string) {
     window.localStorage.setItem(planKey(userId, tripId), JSON.stringify({ slot: v.slot, applied: true }));
   } catch {}
 }
+
+/** Where a plan from dispatch would be saved: the first empty slot, else it replaces the last one. */
+export function nextSaveSlot(presets: PresetSummary[]): { slot: number; replacing: boolean } {
+  const free = PLAN_SLOTS.find((s) => !presets.some((p) => p.slot === s));
+  return free ? { slot: free, replacing: false } : { slot: PLAN_SLOTS[PLAN_SLOTS.length - 1], replacing: true };
+}
+
+/**
+ * Saves a plan (product per compartment) into a plan slot for this driver and
+ * trailer pairing: this phone first, then the server. Same keys and shape the
+ * Planner's own plan slots use, so it shows up there on the next open.
+ */
+export async function savePresetPlan(
+  userId: string, comboId: string, slot: number,
+  products: Record<number, string>, name?: string,
+): Promise<void> {
+  const compPlan: Record<number, { empty: boolean; productId: string }> = {};
+  for (const [n, pid] of Object.entries(products)) compPlan[Number(n)] = { empty: !pid, productId: pid || "" };
+  const snap = { v: 1, savedAt: Date.now(), terminalId: UNIVERSAL, tempF: 60, cgSlider: 0.5, compPlan, ...(name ? { name } : {}) };
+  try { window.localStorage.setItem(`proTankr:u:${userId}:c:${comboId}:preset:slot:${slot}`, JSON.stringify(snap)); } catch {}
+  try {
+    const { supabase } = await import("@/lib/supabase/client");
+    await supabase.from("user_plan_slots").upsert(
+      { user_id: userId, terminal_id: UNIVERSAL, combo_id: comboId, slot, payload: snap },
+      { onConflict: "user_id,terminal_id,combo_id,slot" },
+    );
+  } catch {}
+}

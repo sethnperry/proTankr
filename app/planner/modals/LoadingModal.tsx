@@ -1207,23 +1207,20 @@ export default function LoadingModal(props: {
                         onClick={() => openGallonsOverlay(x.comp, x.productId, x.gallons)}
                         style={{ background: "none", border: "none", padding: "2px 6px", cursor: "pointer", textAlign: "right" as const, flexShrink: 0 }}
                       >
-                        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 0.4 }}>GAL</div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{Math.round(x.gallons)}</div>
                       </button>
                     </div>
                   );
                 })}
 
-                {/* Total -- boxed the same way as Load Report's own totals
-                    section, so it reads as a distinct summary rather than
-                    another compartment in the list above. */}
+                {/* Total: same card as the compartments above. */}
                 <div style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  marginTop: 2, padding: "8px 10px", borderRadius: 2,
-                  border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "10px 12px", borderRadius: 2,
+                  border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
                 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>Total</span>
-                  <span style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>{Math.round(totalPlannedGallons)} gal</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", flex: "1 1 auto" }}>Total Gallons</span>
+                  <span style={{ padding: "2px 6px", fontSize: 18, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{Math.round(totalPlannedGallons)}</span>
                 </div>
               </div>
             )}

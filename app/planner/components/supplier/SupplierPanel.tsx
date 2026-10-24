@@ -86,7 +86,7 @@ export function SupplierPanel({
   const [editSteps, setEditSteps] = useState<{ supplier_id: string; name: string } | null>(null);
   const [editNote, setEditNote] = useState(false);
   const [switching, setSwitching] = useState<{ supplier_id: string | null; name: string; productIds: string[] } | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [busyError, setBusyError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -138,6 +138,17 @@ export function SupplierPanel({
 
   return (
     <div style={{ marginTop: 6, marginBottom: 12, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "10px 12px", background: "rgba(255,255,255,0.02)" }}>
+      {collapsed && groups.length > 0 ? (
+        <button type="button" onClick={() => setCollapsed(false)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, border: "none", background: "transparent", padding: 0, cursor: "pointer", color: "#fff" }}>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: MUTED }}>Supplier</span>
+          <span style={{ fontSize: 16, fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {groups.some((g) => g.supplier_id && data.bySupplier.get(g.supplier_id)?.issue_at) ? <span style={{ color: AMBER }}>⚠ </span> : null}
+            {groups.map((g) => g.name).join(", ")} <span style={{ color: MUTED }}>›</span>
+          </span>
+        </button>
+      ) : (
+      <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <button type="button" onClick={() => setCollapsed((v) => !v)}
           style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", color: MUTED, fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>
@@ -185,7 +196,10 @@ export function SupplierPanel({
         </div>
       )}
 
-      {!collapsed && (
+      </>
+      )}
+
+      {(!collapsed || groups.length === 0) && (
         <button type="button" onClick={() => setEditNote(true)}
           style={{ marginTop: 10, width: "100%", textAlign: "left", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", background: "transparent", padding: "8px 0 0", cursor: "pointer", color: "#fff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: MUTED }}>

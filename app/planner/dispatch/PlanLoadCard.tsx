@@ -12,6 +12,7 @@ import { EXPIRY_COLOR } from "@/lib/expiry";
 import type { PlanDriver, PlanLoadResult } from "@/lib/dispatch/planLoad";
 import { locationPlace, locationTitle, type DeliveryLocation } from "@/lib/trips/deliveryLocations";
 import { fieldInput } from "../components/trip/tripUi";
+import ValueEntryOverlay from "../components/ValueEntryOverlay";
 import type { TrailerCert } from "@/lib/dispatch/certs";
 import { certBlocks } from "@/lib/dispatch/certs";
 
@@ -144,10 +145,13 @@ export function PlanLoadCard(props: {
   selectedDriverId?: string | null;
   onSelectDriver?: (userId: string) => void;
   timeline?: React.ReactNode; // the selected driver's timeline
+  parties?: { shipper: string; customer: string; onShipper: (v: string) => void; onCustomer: (v: string) => void };
 }) {
   const L = useDashLook();
   const p = props;
   const [termOpen, setTermOpen] = useState(false);
+  const [partyEdit, setPartyEdit] = useState<"shipper" | "customer" | null>(null);
+  const [partyDraft, setPartyDraft] = useState("");
   const [q, setQ] = useState("");
   // Same shape as the driver's terminal picker: terminals in one city, Change to pick another city.
   const [cityKey, setCityKey] = useState<string | null>(null);
@@ -173,6 +177,27 @@ export function PlanLoadCard(props: {
 
   return (
     <div style={{ marginBottom: 6 }}>
+      {p.parties && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 13 }}>
+          {(["shipper", "customer"] as const).map((k, i) => {
+            const val = p.parties![k];
+            return (
+              <button key={k} type="button" className="dash-press" onClick={() => { setPartyDraft(val); setPartyEdit(k); }}
+                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: i ? "right" : "left", color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ color: L.muted }}>{k === "shipper" ? "Shipper" : "Customer"}: </span>
+                <span style={{ fontWeight: 700, textDecoration: "underline", textDecorationColor: L.faint }}>{val || "Add"}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {p.parties && (
+        <ValueEntryOverlay open={partyEdit != null} title={partyEdit === "customer" ? "Customer" : "Shipper"}
+          fields={[{ key: "v", label: partyEdit === "customer" ? "Customer" : "Shipper", value: partyDraft, onChange: setPartyDraft, plain: true }]}
+          hint={partyEdit === "customer" ? "Who it's for" : "From the BOL"}
+          onCancel={() => setPartyEdit(null)}
+          onSubmit={() => { if (partyEdit === "shipper") p.parties!.onShipper(partyDraft.trim()); else p.parties!.onCustomer(partyDraft.trim()); setPartyEdit(null); }} />
+      )}
       <PickRow label="Drop location" value={p.location ? locationTitle(p.location) : null} sub={p.location ? locationPlace(p.location) : null}
         onPick={p.onPickLocation} onClear={p.onClearLocation} />
       <PickRow label="Terminal" value={p.terminal?.name ?? null} sub={p.terminal?.place ?? null}

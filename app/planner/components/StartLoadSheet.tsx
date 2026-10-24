@@ -10,7 +10,7 @@
 // dashboard, with "+ New location"), never typed as free text.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { KeypadToggle, keypadInputProps } from "@/lib/ui/KeypadToggle";
+import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
@@ -35,26 +35,46 @@ export type StartLoadValues = {
   planSlot: number | null;
   // Supplier dispatch named. Preset at every rack on the trip; changeable there.
   supplier: TripSupplier | null;
+  // Dispatch's plan only: save it as a plan slot (optionally opening the Planner to change it first). null = run it as a temporary plan.
+  savePlan: { modify: boolean } | null;
 };
 
-const label: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)",
-  textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6,
-};
-const input: React.CSSProperties = {
-  width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)", padding: "12px 12px", fontSize: 16,
-  color: "#fff", boxSizing: "border-box",
-};
-const row: React.CSSProperties = { marginBottom: 16 };
 const addBtn: React.CSSProperties = {
   flex: 1, padding: "10px 0", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.25)",
   background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
+
+const hair = "1px solid rgba(255,255,255,0.08)";
+const lineLabel: React.CSSProperties = {
+  fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase",
+  color: "rgba(255,255,255,0.45)", flexShrink: 0, width: 92,
+};
 const removeBtn: React.CSSProperties = {
   border: "none", background: "transparent", color: "rgba(255,255,255,0.45)",
-  fontSize: 20, cursor: "pointer", padding: "0 6px", lineHeight: 1,
+  fontSize: 13, cursor: "pointer", padding: 0, fontWeight: 700,
 };
+
+// One line of the report: label on the left, the value (tap to change) on the right.
+function Line({ label, value, onTap, missing, sub, last }: {
+  label: string; value: string | null; onTap: () => void; missing?: boolean; sub?: string | null; last?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onTap}
+      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 0", border: "none", borderBottom: last ? "none" : hair, background: "transparent", cursor: "pointer", textAlign: "left", color: "#fff" }}>
+      <span style={lineLabel}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+        <span style={{ display: "block", fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: value ? "#fff" : missing ? "#fbbf24" : "rgba(255,255,255,0.4)" }}>
+          {value || (missing ? "Add" : "None")}
+        </span>
+        {sub && <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
+      </span>
+      <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
+    </button>
+  );
+}
+
+type EditKey = "miles" | "order" | "shipper" | "customer" | "start" | `order:${number}`;
+const AUTO_KEYS: EditKey[] = ["miles", "order"];
 
 export function StartLoadSheet({
   open,
@@ -66,6 +86,8 @@ export function StartLoadSheet({
   suppliers,
   onAddSupplier,
   presets,
+  dispatchPlan,
+  saveSlot,
   productColor,
   equipmentLabel,
   locations,
@@ -96,6 +118,10 @@ export function StartLoadSheet({
   suppliers: SupplierRow[];
   onAddSupplier: (name: string) => SupplierRow | null;
   presets: PresetSummary[];
+  // The plan dispatch sent (product per compartment, highest comp first). Replaces the plan list.
+  dispatchPlan?: (string | null)[] | null;
+  // Where "save as a plan slot" would go.
+  saveSlot?: { slot: number; replacing: boolean } | null;
   productColor: (productId: string) => string;
   equipmentLabel: string;
   locations: DeliveryLocation[];
@@ -115,12 +141,34 @@ export function StartLoadSheet({
   const [breakAck, setBreakAck] = useState(false);
   useEffect(() => { if (open) setBreakAck(false); }, [open]);
   const [v, setV] = useState<StartLoadValues>(initial);
-  const orderRef = useRef<HTMLInputElement | null>(null);
-  const [orderAlpha, setOrderAlpha] = useState(false);
+
+  // Pop-out editing: one value at a time. A new trip opens the first thing
+  // still missing (miles, then the order number) so the driver just types,
+  // then skims the rest.
+  const [edit, setEdit] = useState<EditKey | null>(null);
+  const [draft, setDraft] = useState("");
+  const [draft2, setDraft2] = useState("");
+  const [queue, setQueue] = useState<EditKey[]>([]);
+  const [planOpen, setPlanOpen] = useState(false);
+
+  const openEdit = (k: EditKey, vals: StartLoadValues = v) => {
+    setEdit(k);
+    if (k === "miles") setDraft(vals.beginMiles);
+    else if (k === "order") setDraft(vals.orderNumber);
+    else if (k === "shipper") setDraft(vals.shipper);
+    else if (k === "customer") setDraft(vals.customer);
+    else if (k === "start") { setDraft(vals.startCity); setDraft2(vals.startState); }
+    else if (k.startsWith("order:")) setDraft(vals.extraOrderNumbers[Number(k.slice(6))] ?? "");
+  };
 
   // Re-seed each time the card opens, so a reopen reflects the current trip.
   useEffect(() => {
-    if (open) setV(initial);
+    if (!open) { setEdit(null); setQueue([]); return; }
+    setV(initial);
+    if (!editing) {
+      const missing = AUTO_KEYS.filter((k) => (k === "miles" ? !initial.beginMiles.trim() : !initial.orderNumber.trim()));
+      if (missing.length) { setQueue(missing.slice(1)); openEdit(missing[0], initial); }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -128,6 +176,7 @@ export function StartLoadSheet({
   useEffect(() => {
     if (!open || liveMiles == null || editing) return;
     setV((s) => (s.beginMiles === initialMiles ? { ...s, beginMiles: String(liveMiles) } : s));
+    setDraft((d) => (edit === "miles" && !d.trim() ? String(liveMiles) : d));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, liveMiles]);
 
@@ -157,7 +206,7 @@ export function StartLoadSheet({
     setLocating(true);
     const p = await currentCity();
     setLocating(false);
-    if (p) setV((s) => ({ ...s, startCity: p.city, startState: p.state ?? "" }));
+    if (p) { setDraft(p.city); setDraft2(p.state ?? ""); }
   };
 
   const byId = useMemo(() => new Map(locations.map((l) => [l.location_id, l])), [locations]);
@@ -183,6 +232,37 @@ export function StartLoadSheet({
 
   const milesOk = v.beginMiles.trim() === "" || Number.isFinite(Number(v.beginMiles));
 
+  // Pop-out save: write the value, then move to the next missing one.
+  const commitEdit = () => {
+    if (!edit) return;
+    setV((s) => {
+      if (edit === "miles") return { ...s, beginMiles: draft.trim() };
+      if (edit === "order") return { ...s, orderNumber: draft.trim() };
+      if (edit === "shipper") return { ...s, shipper: draft.trim() };
+      if (edit === "customer") return { ...s, customer: draft.trim() };
+      if (edit === "start") return { ...s, startCity: draft.trim(), startState: draft2.trim().toUpperCase().slice(0, 2) };
+      const i = Number(edit.slice(6));
+      return { ...s, extraOrderNumbers: s.extraOrderNumbers.map((x, j) => (j === i ? draft.trim() : x)) };
+    });
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    if (next) openEdit(next, { ...v, beginMiles: edit === "miles" ? draft.trim() : v.beginMiles });
+    else setEdit(null);
+  };
+  const cancelEdit = () => { setEdit(null); setQueue([]); };
+
+  const title = (k: EditKey) =>
+    k === "miles" ? "Beginning miles" : k === "order" ? "Order number" : k === "shipper" ? "Shipper" : k === "customer" ? "Customer" : k === "start" ? "Starting from" : `Order number ${Number(k.slice(6)) + 2}`;
+
+  const chosenPreset = presets.find((p) => p.slot === v.planSlot) ?? null;
+  const dots = (comps: (string | null)[]) => (
+    <span style={{ display: "inline-flex", gap: 5, verticalAlign: "middle" }}>
+      {comps.map((c, i) => (
+        <span key={i} style={{ width: 11, height: 11, borderRadius: "50%", background: c ? productColor(c) : "#000", border: "1px solid rgba(255,255,255,0.25)" }} />
+      ))}
+    </span>
+  );
+
   return (
     <>
     <FullscreenModal
@@ -207,10 +287,10 @@ export function StartLoadSheet({
         </div>
       }
     >
-      <div style={{ padding: "4px 16px 24px" }}>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 }}>{equipmentLabel}</div>
+      <div style={{ padding: "0 16px 16px" }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>{equipmentLabel} · tap any value to change it</div>
         {breakNote && !breakAck && !editing && (
-          <div style={{ border: "1px solid rgba(251,191,36,0.55)", background: "rgba(251,191,36,0.08)", padding: "10px 12px", marginBottom: 16, borderRadius: 2 }}>
+          <div style={{ border: "1px solid rgba(251,191,36,0.55)", background: "rgba(251,191,36,0.08)", padding: "10px 12px", marginBottom: 8, borderRadius: 2 }}>
             <div style={{ fontSize: 14, color: "#fff", lineHeight: 1.4 }}>{breakNote}</div>
             <button type="button" onClick={() => setBreakAck(true)}
               style={{ marginTop: 8, padding: "7px 14px", borderRadius: 2, border: "1px solid rgba(251,191,36,0.7)", background: "transparent", color: "#fbbf24", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
@@ -219,170 +299,129 @@ export function StartLoadSheet({
           </div>
         )}
 
-        <div style={row}>
-          <div style={label}>Beginning miles</div>
-          <input
-            style={{ ...input, borderColor: milesOk ? "rgba(255,255,255,0.14)" : "#f87171" }}
-            value={v.beginMiles}
-            onChange={(e) => setV((s) => ({ ...s, beginMiles: e.target.value }))}
-            placeholder="Odometer"
-            inputMode="decimal"
-          />
-        </div>
-
-        <div style={row}>
-          <div style={label}>Order number</div>
-          <div style={{ position: "relative" }}>
-            <input
-              ref={orderRef}
-              style={{ ...input, paddingRight: 64 }}
-              value={v.orderNumber}
-              onChange={(e) => setV((s) => ({ ...s, orderNumber: e.target.value }))}
-              placeholder="Order #"
-              autoFocus={!editing}
-              {...keypadInputProps(orderAlpha)}
-            />
-            <KeypadToggle alpha={orderAlpha} onToggle={setOrderAlpha} inputRef={orderRef}
-              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }} />
-          </div>
-        </div>
-
-        {v.extraOrderNumbers.map((n, i) => (
-          <div key={`order-${i}`} style={row}>
-            <div style={label}>Order number {i + 2}</div>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <input
-                style={input}
-                value={n}
-                onChange={(e) => setV((s) => ({ ...s, extraOrderNumbers: s.extraOrderNumbers.map((x, j) => (j === i ? e.target.value : x)) }))}
-                placeholder="Order #"
-                {...keypadInputProps(orderAlpha)}
-              />
-              <button type="button" aria-label="Remove order number" style={removeBtn}
-                onClick={() => setV((s) => ({ ...s, extraOrderNumbers: s.extraOrderNumbers.filter((_, j) => j !== i) }))}>×</button>
-            </div>
-          </div>
-        ))}
-
-        <div style={{ display: "flex", gap: 10, ...row }}>
-          <div style={{ flex: 1 }}>
-            <div style={label}>Shipper</div>
-            <input style={input} value={v.shipper} onChange={(e) => setV((s) => ({ ...s, shipper: e.target.value }))} placeholder="Shipper" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={label}>Customer</div>
-            <input style={input} value={v.customer} onChange={(e) => setV((s) => ({ ...s, customer: e.target.value }))} placeholder="Customer" />
-          </div>
-        </div>
-
-        <div style={row}>
-          <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
-            <span>Starting from</span>
-            <button aria-busy={!!(locating)} type="button" onClick={() => void locateMe()} disabled={locating}
-              style={{ ...removeBtn, fontSize: 12, padding: 0, color: "rgba(255,255,255,0.75)", fontWeight: 700 }}>
-              {locating ? "Locating…" : "Use my location"}
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <input style={{ ...input, flex: 3 }} value={v.startCity}
-              onChange={(e) => setV((s) => ({ ...s, startCity: e.target.value }))} placeholder="City" />
-            <input style={{ ...input, flex: 1, textTransform: "uppercase" }} value={v.startState} maxLength={2}
-              onChange={(e) => setV((s) => ({ ...s, startState: e.target.value.toUpperCase() }))} placeholder="ST" />
-          </div>
-        </div>
-
-        <div style={row}>
-          <div style={label}>Pickup</div>
-          <button type="button" onClick={onChangePickup}
-            style={{ ...input, textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: pickupLabel ? "#fff" : "rgba(255,255,255,0.45)" }}>{pickupLabel ?? "Select a terminal"}</span>
-            <span style={{ color: "rgba(255,255,255,0.4)" }}>›</span>
-          </button>
-        </div>
-
-        <div style={row}>
-          <div style={label}>Supplier</div>
-          <button type="button" onClick={() => setSupplierOpen(true)}
-            style={{ ...input, textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: v.supplier ? "#fff" : "rgba(255,255,255,0.45)" }}>{v.supplier?.name ?? "Supplier from dispatch"}</span>
-            <span style={{ color: "rgba(255,255,255,0.4)" }}>›</span>
-          </button>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 6 }}>
-            {v.supplier ? "Preset at the rack for the whole trip. You can change it there." : "Optional. Type it exactly as dispatch shows it."}
-          </div>
-        </div>
-
-        {v.deliveries.map((d, i) => {
-          const loc = d.locationId ? byId.get(d.locationId) : null;
-          const text = loc ? locationTitle(loc) : d.locationId ? "Saved location" : d.oneOffName?.trim() ? `${d.oneOffName.trim()} (not saved)` : null;
-          const sub = loc ? [locationPlace(loc), loc.delivery_type === "pump_off" ? "Pump off" : "Drop"].filter(Boolean).join(" · ") : null;
-          return (
-            <div key={`delivery-${i}`} style={row}>
-              <div style={{ ...label, display: "flex", justifyContent: "space-between" }}>
-                <span>Delivery{v.deliveries.length > 1 ? ` ${i + 1}` : ""}</span>
+        <div style={{ borderTop: hair }}>
+          <Line label="Begin miles" value={v.beginMiles || null} missing onTap={() => openEdit("miles")} />
+          <Line label="Order #" value={v.orderNumber || null} missing onTap={() => openEdit("order")} />
+          {v.extraOrderNumbers.map((n, i) => (
+            <Line key={`order-${i}`} label={`Order # ${i + 2}`} value={n || null} missing onTap={() => openEdit(`order:${i}`)} />
+          ))}
+          <Line label="Shipper" value={v.shipper || null} onTap={() => openEdit("shipper")} />
+          <Line label="Customer" value={v.customer || null} onTap={() => openEdit("customer")} />
+          <Line label="Starting from" value={[v.startCity, v.startState].filter((x) => x.trim()).join(", ") || null} missing onTap={() => openEdit("start")} />
+          <Line label="Pickup" value={pickupLabel} missing onTap={onChangePickup} />
+          <Line label="Supplier" value={v.supplier?.name ?? null} onTap={() => setSupplierOpen(true)} />
+          {v.deliveries.map((d, i) => {
+            const loc = d.locationId ? byId.get(d.locationId) : null;
+            const text = loc ? locationTitle(loc) : d.locationId ? "Saved location" : d.oneOffName?.trim() ? `${d.oneOffName.trim()} (not saved)` : null;
+            const sub = loc ? [locationPlace(loc), loc.delivery_type === "pump_off" ? "Pump off" : "Drop"].filter(Boolean).join(" · ") : null;
+            return (
+              <div key={`delivery-${i}`} style={{ display: "flex", alignItems: "center", borderBottom: hair }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Line label={`Delivery${v.deliveries.length > 1 ? ` ${i + 1}` : ""}`} value={text} sub={sub} missing onTap={() => setPicking(i)} last />
+                </div>
                 {i > 0 && (
-                  <button type="button" aria-label="Remove delivery" style={{ ...removeBtn, fontSize: 16, padding: 0 }}
+                  <button type="button" aria-label="Remove delivery" style={{ ...removeBtn, paddingLeft: 10 }}
                     onClick={() => setV((s) => ({ ...s, deliveries: s.deliveries.filter((_, j) => j !== i) }))}>Remove</button>
                 )}
               </div>
-              <button type="button" onClick={() => setPicking(i)}
-                style={{ ...input, textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: "block", color: text ? "#fff" : "rgba(255,255,255,0.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {text ?? "Choose a delivery location"}
-                  </span>
-                  {sub && <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{sub}</span>}
-                </span>
-                <span style={{ color: "rgba(255,255,255,0.4)" }}>›</span>
-              </button>
-            </div>
-          );
-        })}
-
-        <div style={row}>
-          <div style={label}>Plan</div>
-          {presets.length === 0 ? (
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)" }}>No saved plans for this equipment yet. Set it in the Planner.</div>
+            );
+          })}
+          {dispatchPlan ? (
+            <Line label="Plan" value="Sent by dispatch" last onTap={() => undefined} sub={null} />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {presets.map((p) => {
-                const on = v.planSlot === p.slot;
-                return (
-                  <button key={p.slot} type="button"
-                    onClick={() => setV((s) => ({ ...s, planSlot: on ? null : p.slot }))}
-                    style={{
-                      ...input, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left",
-                      borderColor: on ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.14)",
-                      background: on ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)",
-                    }}>
-                    <span style={{ fontWeight: 800, color: on ? "#fff" : "rgba(255,255,255,0.6)", width: 14 }}>{slotLetter(p.slot)}</span>
-                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(255,255,255,0.85)" }}>
-                      {p.name ?? `Plan ${slotLetter(p.slot)}`}
-                    </span>
-                    <span style={{ display: "flex", gap: 5 }}>
-                      {p.comps.map((c, i) => (
-                        <span key={i} style={{ width: 11, height: 11, borderRadius: "50%", background: c ? productColor(c) : "#000", border: "1px solid rgba(255,255,255,0.25)" }} />
-                      ))}
-                    </span>
-                    {on && <span style={{ color: "#fff", fontWeight: 800 }}>✓</span>}
-                  </button>
-                );
-              })}
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-                {v.planSlot ? "The Planner opens with this plan. You can still change it before loading." : "Optional. Tap a plan to have it ready in the Planner."}
-              </div>
-            </div>
+            <Line label="Plan" value={chosenPreset ? `${slotLetter(chosenPreset.slot)}${chosenPreset.name ? ` · ${chosenPreset.name}` : ""}` : presets.length ? null : "No saved plans"}
+              onTap={() => presets.length && setPlanOpen(true)} last />
           )}
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        {dispatchPlan && (
+          <div style={{ marginTop: 8, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Dispatch's plan</span>
+              {dots(dispatchPlan)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+              <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: null }))}
+                style={{ padding: "10px 6px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: `1px solid ${!v.savePlan ? "#fff" : "rgba(255,255,255,0.14)"}`, background: !v.savePlan ? "#fff" : "transparent", color: !v.savePlan ? "#000" : "#fff" }}>
+                Run once
+              </button>
+              <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: s.savePlan ?? { modify: false } }))}
+                style={{ padding: "10px 6px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: `1px solid ${v.savePlan ? "#fff" : "rgba(255,255,255,0.14)"}`, background: v.savePlan ? "#fff" : "transparent", color: v.savePlan ? "#000" : "#fff" }}>
+                {saveSlot ? `Save as Plan ${slotLetter(saveSlot.slot)}` : "Save as a plan"}
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>
+              {v.savePlan
+                ? saveSlot?.replacing ? `All plan slots are full, so this replaces Plan ${slotLetter(saveSlot.slot)}.` : "It goes in the next empty plan slot."
+                : "Runs as a temporary plan for this load. Nothing is saved."}
+            </div>
+            {v.savePlan && (
+              <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: { modify: !s.savePlan?.modify } }))}
+                style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                <span style={{ width: 16, height: 16, border: "1px solid rgba(255,255,255,0.5)", borderRadius: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>{v.savePlan.modify ? "✓" : ""}</span>
+                Change it in the Planner first
+              </button>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
           <button type="button" style={addBtn}
-            onClick={() => setV((s) => ({ ...s, extraOrderNumbers: [...s.extraOrderNumbers, ""] }))}>+ Order number</button>
+            onClick={() => { setV((s) => ({ ...s, extraOrderNumbers: [...s.extraOrderNumbers, ""] })); openEdit(`order:${v.extraOrderNumbers.length}`, { ...v, extraOrderNumbers: [...v.extraOrderNumbers, ""] }); }}>+ Order number</button>
           <button type="button" style={addBtn}
             onClick={() => setV((s) => ({ ...s, deliveries: [...s.deliveries, { locationId: null, oneOffName: "", deliveryType: "drop" }] }))}>+ Delivery</button>
         </div>
       </div>
     </FullscreenModal>
+
+    <ValueEntryOverlay
+      open={open && edit != null}
+      title={edit ? title(edit) : ""}
+      fields={edit === "start"
+        ? [
+            { key: "city", label: "City", value: draft, onChange: setDraft, plain: true },
+            { key: "st", label: "State", value: draft2, onChange: (x: string) => setDraft2(x.toUpperCase().slice(0, 2)), plain: true },
+          ]
+        : edit === "shipper" || edit === "customer"
+          ? [{ key: "v", label: title(edit), value: draft, onChange: setDraft, plain: true }]
+          : edit === "miles"
+            ? [{ key: "v", label: "Odometer", value: draft, onChange: setDraft, decimal: true, showLabel: true }]
+            : [{ key: "v", label: "Order #", value: draft, onChange: setDraft, text: true, showLabel: true }]}
+      footer={edit === "start" ? (
+        <button type="button" onClick={() => void locateMe()} disabled={locating} aria-busy={locating}
+          style={{ ...removeBtn, color: "rgba(255,255,255,0.75)" }}>{locating ? "Locating…" : "Use my location"}</button>
+      ) : edit && edit.startsWith("order:") ? (
+        <button type="button" style={removeBtn}
+          onClick={() => { const i = Number(edit.slice(6)); setV((s) => ({ ...s, extraOrderNumbers: s.extraOrderNumbers.filter((_, j) => j !== i) })); cancelEdit(); }}>Remove this order number</button>
+      ) : undefined}
+      cancelLabel={queue.length || edit === "order" || edit === "miles" ? "Skip" : "Cancel"}
+      submitLabel={queue.length ? "Next" : "Set"}
+      onCancel={() => { const [next, ...rest] = queue; if (next && (edit === "miles")) { setQueue(rest); openEdit(next); } else cancelEdit(); }}
+      onSubmit={commitEdit}
+    />
+
+    <FullscreenModal open={open && planOpen} title="Plan" onClose={() => setPlanOpen(false)}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+        <button type="button" onClick={() => { setV((s) => ({ ...s, planSlot: null })); setPlanOpen(false); }}
+          style={{ padding: "12px", borderRadius: 2, textAlign: "left", cursor: "pointer", border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 15 }}>
+          Leave the Planner as it is
+        </button>
+        {presets.map((p) => {
+          const on = v.planSlot === p.slot;
+          return (
+            <button key={p.slot} type="button" onClick={() => { setV((s) => ({ ...s, planSlot: p.slot })); setPlanOpen(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 2, cursor: "pointer", textAlign: "left", color: "#fff", fontSize: 15,
+                border: `1px solid ${on ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.14)"}`, background: on ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)" }}>
+              <span style={{ fontWeight: 800, width: 14 }}>{slotLetter(p.slot)}</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name ?? `Plan ${slotLetter(p.slot)}`}</span>
+              {dots(p.comps)}
+              {on && <span style={{ fontWeight: 800 }}>✓</span>}
+            </button>
+          );
+        })}
+      </div>
+    </FullscreenModal>
+
     <SupplierPicker
       open={open && supplierOpen}
       title="Supplier from dispatch"

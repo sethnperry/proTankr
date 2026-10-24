@@ -577,7 +577,7 @@ export default function DispatchPage() {
 
   const addLeg = () => {
     const leg = buildLeg();
-    if (!leg || !tlDriverId || blockMsg) return;
+    if (!leg || !tlDriverId || blockMsg || planGroups.length === 0) return;
     setDayPlan((m) => ({ ...m, [tlDriverId]: [...(m[tlDriverId] ?? []), leg] }));
     setTlStart(null); // the next load starts when this one ends
     setOrderNumber(""); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
@@ -586,6 +586,7 @@ export default function DispatchPage() {
     const leg = buildLeg();
     if (!leg || !tlDriverId || !companyId || !authUserId) return;
     if (blockMsg) { setDispatchMsg({ ok: false, text: blockMsg }); return; }
+    if (planGroups.length === 0) { setDispatchMsg({ ok: false, text: "Pick a product for at least one compartment first." }); return; }
     const legs = [...dayLegs, leg];
     setDispatching(true); setDispatchMsg(null);
     try {
@@ -832,6 +833,7 @@ export default function DispatchPage() {
       { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
       { icon: "locate" as const, label: "Track", onClick: () => setFindTruckOpen(true) },
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
+      { icon: "store" as const, label: "Locations", busy: nav.is("locations"), onClick: () => nav.go("locations", "/planner/locations") },
       { icon: "terminal" as const, label: "Suppliers", onClick: () => setSuppliersOpen("manage") },
       { icon: "chart", label: "Reports", busy: nav.is("reports"), onClick: () => nav.go("reports", "/planner/reports") },
       ...(shell.role === "admin" || shell.isSuperAdmin
@@ -858,6 +860,7 @@ export default function DispatchPage() {
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
             onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
+            parties={{ shipper, customer, onShipper: setShipper, onCustomer: setCustomer }}
             timeline={tlDriverId && planLocation && planTerminalId ? (
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={allLegs.length > 0 && tlStart == null} lockedCount={priorLegs.length} blockMsg={blockMsg} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
@@ -885,7 +888,7 @@ export default function DispatchPage() {
                     }}
                     onPickSupplier={(pid) => { setSupPickFor(pid); setSuppliersOpen("pick"); }} />
                 )}
-                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} shipper={shipper} customer={customer} onShipper={setShipper} onCustomer={setCustomer} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
+                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} needProduct={planGroups.length === 0} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}

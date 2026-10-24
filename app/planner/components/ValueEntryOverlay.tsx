@@ -28,6 +28,8 @@ export type ValueEntryField = {
   showLabel?: boolean;
   /** Free text (a BOL number): no number filtering, text keyboard. */
   text?: boolean;
+  /** Names and other plain text: normal keyboard, words capitalized, no number-pad toggle. */
+  plain?: boolean;
   /** Shown after this field (e.g. the supplier button between BOL and gross). */
   after?: React.ReactNode;
   /** Keypad Next/Enter on this field. Return true when handled (e.g. it
@@ -153,24 +155,24 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                 <input
                   ref={(el) => { inputRefs.current[f.key] = el; }}
                   type="text"
-                  inputMode={f.text ? (alphaKeys[f.key] ? "text" : "numeric") : f.decimal ? "decimal" : "numeric"}
-                  pattern={(f.text && alphaKeys[f.key]) || f.decimal ? undefined : "[0-9]*"}
-                  autoCapitalize={f.text ? "characters" : undefined}
-                  autoCorrect={f.text ? "off" : undefined}
+                  inputMode={f.plain ? "text" : f.text ? (alphaKeys[f.key] ? "text" : "numeric") : f.decimal ? "decimal" : "numeric"}
+                  pattern={f.plain || (f.text && alphaKeys[f.key]) || f.decimal ? undefined : "[0-9]*"}
+                  autoCapitalize={f.plain ? "words" : f.text ? "characters" : undefined}
+                  autoCorrect={f.text && !f.plain ? "off" : undefined}
                   autoFocus={i === 0 && !focusKey}
                   enterKeyHint={i < fields.length - 1 ? "next" : "done"}
                   value={f.value}
-                  onChange={(e) => f.onChange(f.text ? e.target.value : sanitize(e.target.value, !!f.decimal))}
+                  onChange={(e) => f.onChange(f.text || f.plain ? e.target.value : sanitize(e.target.value, !!f.decimal))}
                   onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onFieldEnter(i); } }}
                   style={{
                     width: "100%", textAlign: "center" as const,
                     background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.20)",
                     color: "#fff", fontSize: compact ? 26 : 40, fontWeight: 700, padding: compact ? "2px 0" : "4px 0",
-                    ...(f.text ? { paddingLeft: 48, paddingRight: 48, boxSizing: "border-box" as const } : {}),
+                    ...(f.text && !f.plain ? { paddingLeft: 48, paddingRight: 48, boxSizing: "border-box" as const } : {}),
                   }}
                 />
-                {f.text && (
+                {f.text && !f.plain && (
                   <KeypadToggle
                     alpha={!!alphaKeys[f.key]}
                     onToggle={(next) => setAlphaKeys((m) => ({ ...m, [f.key]: next }))}

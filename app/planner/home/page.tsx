@@ -97,7 +97,7 @@ import { enablePush, pushEnabledHere } from "@/lib/push/subscribe";
 import { BREAK_REST_MIN } from "@/lib/telematics/cycleRecap";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
-import { fetchPresets, getTripPlan, setTripPlan, type PresetSummary } from "@/lib/trips/tripPlan";
+import { fetchPresets, getTripPlan, setTripPlan, nextSaveSlot, savePresetPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
 import { getTripSupplier, sameSupplier, seedTerminalPicks, setTripSupplier, type TripSupplier } from "@/lib/trips/tripSupplier";
@@ -501,6 +501,7 @@ export default function HomePage() {
         startState: openTrip.start_state ?? "",
         planSlot: getTripPlan(userId, openTrip.trip_id)?.slot ?? null,
         supplier: getTripSupplier(userId, openTrip.trip_id),
+        savePlan: null,
       };
     }
     const prev = userId ? lastShipperCustomer(trips, userId) : { shipper: null, customer: null };
@@ -516,6 +517,7 @@ export default function HomePage() {
       startState: "",
       planSlot: null,
       supplier: currentTerminalSupplier(),
+      savePlan: null,
     };
 
     // A supplier already picked at the Planner's terminal this visit, if it's one supplier.
@@ -601,7 +603,19 @@ export default function HomePage() {
         },
       );
       applyStartLoad(store, rows);
-      if (v.planSlot !== (getTripPlan(userId, rows.trip.trip_id)?.slot ?? null)) setTripPlan(userId, rows.trip.trip_id, v.planSlot);
+      // Dispatch's plan: save it as a plan slot when asked (optionally changing it in the Planner first).
+      let planSlot = v.planSlot;
+      let openPlanner = false;
+      if (v.savePlan && dispatchedPickup && equipment.selectedComboId) {
+        const target = nextSaveSlot(sheetPresets);
+        const products: Record<number, string> = {};
+        for (const [n, m] of readPlannedMeta(dispatchedPickup.planned_comps).entries()) products[n] = m.product_id;
+        for (const n of Object.keys(compSizes).map(Number)) if (!(n in products)) products[n] = "";
+        await savePresetPlan(userId, equipment.selectedComboId, target.slot, products);
+        planSlot = target.slot;
+        openPlanner = v.savePlan.modify;
+      }
+      if (planSlot !== (getTripPlan(userId, rows.trip.trip_id)?.slot ?? null)) setTripPlan(userId, rows.trip.trip_id, planSlot);
       // Supplier: kept on the trip, and preset at the pickup rack now (the
       // Planner presets it at any later rack on the trip too).
       const prevSupplier = getTripSupplier(userId, rows.trip.trip_id);
@@ -615,6 +629,7 @@ export default function HomePage() {
       setSheetOpen(false);
       setVerifyActive(false);
       void syncNow();
+      if (openPlanner) router.push("/planner?plan=1");
     } catch (e: any) {
       setError(e?.message ?? "Couldn't save the load.");
     } finally {
@@ -2160,6 +2175,13 @@ export default function HomePage() {
         suppliers={suppliers}
         onAddSupplier={addSupplier}
         presets={sheetPresets}
+        dispatchPlan={dispatchedPickup ? (() => {
+          const meta = readPlannedMeta(dispatchedPickup.planned_comps);
+          if (!meta.size) return null;
+          const nums = [...new Set([...Object.keys(compSizes).map(Number), ...meta.keys()])].sort((a, b) => b - a);
+          return nums.map((n) => meta.get(n)?.product_id ?? null);
+        })() : null}
+        saveSlot={nextSaveSlot(sheetPresets)}
         productColor={(id) => { const p = productInfo(id); return p.hex ?? productColorFor(p.name); }}
         equipmentLabel={equipmentLabel}
         locations={locations}

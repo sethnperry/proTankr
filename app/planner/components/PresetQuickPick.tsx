@@ -102,9 +102,30 @@ export default function PresetQuickPick({
         borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.1)",
         padding: "18px 16px calc(18px + env(safe-area-inset-bottom))",
       }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 12 }}>
-          Presets
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
+            Plan Slots
+          </span>
+          {slotHas[activeSlot] && (
+            <button type="button" disabled={disabled}
+              onClick={() => { setDraftName(getName(activeSlot) ?? ""); setRenamingSlot(activeSlot); }}
+              style={{ border: "none", background: "none", padding: 0, cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+              {getName(activeSlot) || "Name this plan"} ›
+            </button>
+          )}
         </div>
+        {renamingSlot != null && (
+          <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
+            <input
+              autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") commitRename(renamingSlot); if (e.key === "Escape") setRenamingSlot(null); }}
+              placeholder="Name this plan"
+              style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 15, fontWeight: 600 }}
+            />
+            <button type="button" onClick={() => commitRename(renamingSlot)}
+              style={{ padding: "0 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Save</button>
+          </div>
+        )}
 
         {disabled && (
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 12 }}>{disabledReason}</div>
@@ -115,8 +136,7 @@ export default function PresetQuickPick({
             const letter = String.fromCharCode(64 + slot);
             const has = !!slotHas[slot];
             const isActive = slot === activeSlot;
-            const isRenaming = renamingSlot === slot;
-            const name = getName(slot);
+                        const name = getName(slot);
             const colors = has ? getColors(slot) : [];
 
             const onPressStart = () => {
@@ -131,7 +151,7 @@ export default function PresetQuickPick({
               if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
             };
             const onTap = () => {
-              if (disabled || isRenaming) return;
+              if (disabled) return;
               if (didLongPressRef.current) { didLongPressRef.current = false; return; }
               if (has) onLoad(slot); else onSaveEmpty(slot);
             };
@@ -161,16 +181,7 @@ export default function PresetQuickPick({
                     {letter}
                   </span>
                   <span style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-                    {isRenaming ? (
-                      <input
-                        autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => { if (e.key === "Enter") commitRename(slot); if (e.key === "Escape") setRenamingSlot(null); }}
-                        onBlur={() => commitRename(slot)}
-                        placeholder="Name this preset"
-                        style={{ width: "100%", boxSizing: "border-box" as const, padding: "4px 6px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontWeight: 600 }}
-                      />
-                    ) : (
+                    {(
                       // Name and dots share one row now (was name, then a
                       // second line of dots underneath) -- dots sized up a
                       // little (9px -> 12px). Gap widened again the same
@@ -196,21 +207,6 @@ export default function PresetQuickPick({
                   </span>
                 </button>
 
-                {/* Rename affordance -- only meaningful once a slot has real
-                    saved content (see usePlanSlots.ts's renameSlot, which
-                    has nothing to attach a name to otherwise). */}
-                {has && !isRenaming && (
-                  <button
-                    type="button" disabled={disabled}
-                    onClick={(e) => { e.stopPropagation(); setDraftName(name ?? ""); setRenamingSlot(slot); }}
-                    aria-label={`Rename Preset ${letter}`}
-                    style={{ flexShrink: 0, border: "none", background: "none", padding: 6, cursor: disabled ? "not-allowed" : "pointer", color: "rgba(255,255,255,0.35)" }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
-                    </svg>
-                  </button>
-                )}
               </div>
             );
           })}

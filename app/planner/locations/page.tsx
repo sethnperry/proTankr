@@ -63,7 +63,7 @@ export default function LocationsPage() {
   // ── List ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "12px 16px 40px", maxWidth: 640, margin: "0 auto", color: "#fff" }}>
-      <button type="button" onClick={() => nav.go("back", "/planner/home")} aria-busy={nav.is("back")} style={{ ...linkBtn, marginBottom: 12 }}>‹ Driver Dashboard</button>
+      <button type="button" onClick={() => { if (typeof window !== "undefined" && window.history.length > 1) router.back(); else nav.go("back", shell.role === "dispatch" || shell.role === "admin" ? "/planner/dispatch" : "/planner/home"); }} aria-busy={nav.is("back")} style={{ ...linkBtn, marginBottom: 12 }}>‹ Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>Delivery Locations</h1>
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search number, name or city" style={{ ...fieldInput, marginBottom: 10 }} />
       <button type="button" onClick={() => open(null)} style={{ ...dashedBtn, marginBottom: 12 }}>+ New location</button>

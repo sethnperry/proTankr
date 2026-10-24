@@ -11952,3 +11952,12 @@ The Planner page (`/planner`, opened from the dashboard's Plan tile) is now a pl
 - **Tapping a compartment** opens `CompartmentDetailModal`: the compartment drawn large with the cap handle, gallons readout, Change product and Close.
 - **Headspace.** Bars are 110% taller (`utils/headspace.ts`); fill and the cap handle are measured against `maxGallons * 1.1`, so a full compartment stops short of the top. Fill height has a transition.
 - Verified against the live DB with throwaway users: wizard (driver and admin, cap saved), Plan page, New Plan, Save Plan, Close, and a trip's Arrive -> Plan Review using terminal readings. Not verified: a Finish Loading after this change, or an iPhone/landscape layout. Test rows were deleted.
+
+### Punch list: dispatch + Begin Trip + delivery map (2026-10-24)
+
+Not click-tested; typecheck, 425 tests, and a static render of the tank map and date picker pass.
+- Dispatch: Locations tool (opens `/planner/locations`, back goes to the previous page); own date/time picker (`lib/ui/DateTimePopout.tsx`) for the driver's start; a product is required to add or dispatch a load; shipper and customer are one-line links above the drop location (pop-out, `ValueEntryOverlay` `plain` field).
+- Plan Slots sheet: heading "Plan Slots", the active plan's name is a link to rename it (inline per-row rename removed). Only the active plan can be renamed from there.
+- Begin Trip is a report: label left, value right, tap to edit in a pop-out. A new trip opens miles, then order number, automatically. Dispatched loads show "Sent by dispatch" with the plan dots and ask Run once / Save as Plan X (next empty slot, replaces E if full), optionally "Change it in the Planner first" (opens `/planner?plan=1`). `savePresetPlan` writes the same local key and `user_plan_slots` row the Planner uses.
+- Plan Review: supplier card is one collapsed line (tap to expand steps/change); Total is a card like the compartments ("Total Gallons", no "GAL" labels).
+- Delivery tank map: every trailer compartment is drawn (empty and next-stop ones dashed, not linkable); lids only for products aboard; lid labels use the product name.

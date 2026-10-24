@@ -22,8 +22,10 @@ export type MapComp = {
   max: number;
   retained: boolean;
   targets: { tank: string; gallons: number }[];
+  /** Not dropped here: shown in place but can't be linked. */
+  kind?: "empty" | "later";
 };
-export type MapTank = { tank: string; code: string | null; color: string | null; productId: string | null; capacity: number | null };
+export type MapTank = { tank: string; code: string | null; name?: string | null; color: string | null; productId: string | null; capacity: number | null };
 
 const VBW = 340;
 const TRAILER_X = 8;
@@ -52,6 +54,7 @@ export function TankMap({
   const [drag, setDrag] = useState<{ compId: string; x: number; y: number; sx: number; sy: number; moved: boolean } | null>(null);
 
   const sorted = [...comps].sort((a, b) => a.n - b.n);
+  const active = sorted.filter((c) => !c.kind);
   const H = Math.max(230, sorted.length * 64, tanks.length * 74) + 16;
   const top = 8;
   const trailerH = H - 16;
@@ -69,9 +72,9 @@ export function TankMap({
     return seg;
   });
   const tankPos = tanks.map((t, i) => ({ t, cy: top + (trailerH / Math.max(1, tanks.length)) * (i + 0.5) }));
-  const intoTank = (tank: string) => sorted.reduce((s, c) => s + c.targets.filter((x) => x.tank === tank).reduce((a, b) => a + b.gallons, 0), 0);
+  const intoTank = (tank: string) => active.reduce((s, c) => s + c.targets.filter((x) => x.tank === tank).reduce((a, b) => a + b.gallons, 0), 0);
 
-  const armed = sorted.find((c) => c.id === armedId) ?? null;
+  const armed = active.find((c) => c.id === armedId) ?? null;
   const dim = (t: MapTank) => !!armed && !!t.productId && armed.productId !== t.productId;
 
   const point = (e: React.PointerEvent) => {
@@ -155,6 +158,16 @@ export function TankMap({
         <rect x={TRAILER_X - 3} y={top - 3} width={TRAILER_W + 6} height={trailerH + 6} rx={14} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} />
         {segs.map(({ c, y: sy, h }) => {
           const on = armedId === c.id;
+          if (c.kind) {
+            return (
+              <g key={c.id} opacity={0.7}>
+                <rect x={TRAILER_X} y={sy} width={TRAILER_W} height={h} rx={6} fill="none"
+                  stroke={c.kind === "later" ? c.color : "rgba(255,255,255,0.25)"} strokeWidth={1.5} strokeDasharray="4 4" />
+                <text x={TRAILER_X + TRAILER_W / 2} y={sy + h / 2 - 2} textAnchor="middle" fontSize={12} fontWeight={800} fill="rgba(255,255,255,0.7)">C{c.n}</text>
+                <text x={TRAILER_X + TRAILER_W / 2} y={sy + h / 2 + 12} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.5)">{c.kind === "later" ? "Next stop" : "Empty"}</text>
+              </g>
+            );
+          }
           return (
             <g key={c.id} onPointerDown={(e) => down(e, c.id)} style={{ cursor: "pointer" }}>
               <rect x={TRAILER_X} y={sy} width={TRAILER_W} height={h} rx={6}
@@ -198,7 +211,7 @@ export function TankMap({
                 <text x={TANK_CX + R * 0.8 + 7} y={cy + 4} textAnchor="start" fontSize={12} fontWeight={800} fill="#fff" style={{ pointerEvents: "none" }}>T{t.tank}</text>
               )}
               <text x={TANK_CX} y={cy + R + 13} textAnchor="middle" fontSize={10} fontWeight={800} fill={c} style={{ pointerEvents: "none" }}>
-                {t.code ?? ""}{into > 0 ? `  +${g0(into)}` : ""}
+                {(t.name ?? t.code ?? "").slice(0, 12)}{into > 0 ? `  +${g0(into)}` : ""}
               </text>
             </g>
           );
@@ -213,7 +226,7 @@ export function TankMap({
 
       {/* readout, one row per compartment */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {sorted.map((c) => {
+        {active.map((c) => {
           const placed = c.targets.reduce((s, t) => s + t.gallons, 0);
           const off = Math.round(c.gallons - placed);
           const splitting = c.targets.length > 1 || splitId === c.id;

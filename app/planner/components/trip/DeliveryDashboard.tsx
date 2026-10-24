@@ -817,24 +817,35 @@ export function DeliveryDashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerComps, rows, laterAboard]);
 
-  const mapComps: MapComp[] = rows.map((c) => {
+  const mapComps: MapComp[] = barSlots.map((slot) => {
+    const c = slot.here;
+    if (!c) {
+      const l = slot.later;
+      const info = l ? productInfo(l.product_id) : null;
+      return {
+        id: `x-${slot.n}`, n: slot.n, productId: l?.product_id ?? null, code: info?.code ?? "",
+        color: info ? info.hex ?? productColorFor(info.name) : "#888", gallons: l ? gross(l) : 0, max: slot.max,
+        retained: false, targets: [], kind: l ? "later" : "empty",
+      } as MapComp;
+    }
     const info = productInfo(c.product_id);
-    const slot = barSlots.find((b) => b.n === c.comp_number);
     return {
       id: c.compartment_load_id, n: c.comp_number, productId: c.product_id, code: info.code,
-      color: info.hex ?? productColorFor(info.name), gallons: gross(c), max: slot?.max ?? gross(c),
+      color: info.hex ?? productColorFor(info.name), gallons: gross(c), max: slot.max,
       retained: choice[c.compartment_load_id] === RETAIN, targets: targetsFor(c),
     };
   });
+  // Only tanks for products on the trailer get a lid.
+  const hauledIds = new Set<string>([...rows, ...laterAboard].map((c) => c.product_id).filter(Boolean) as string[]);
   const mapTanks: MapTank[] = (() => {
     const seen = new Map<string, MapTank>();
     const add = (tank: string, pid: string | null, cap: number | null) => {
       const n = tank.trim();
       if (!n || seen.has(n)) return;
       const info = pid ? productInfo(pid) : null;
-      seen.set(n, { tank: n, productId: pid, code: info?.code ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, capacity: cap });
+      seen.set(n, { tank: n, productId: pid, code: info?.code ?? null, name: info?.name ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, capacity: cap });
     };
-    for (const t of locationTanks) if (t.is_active !== false) add(t.tank_number, t.product_id, t.capacity_gallons);
+    for (const t of locationTanks) if (t.is_active !== false && (!t.product_id || hauledIds.has(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
     for (const t of extraTanks) add(t.tank_number, t.product_id, null);
     for (const c of rows) for (const x of targetsFor(c)) add(x.tank, c.product_id, null);
     return [...seen.values()].sort((a, b) => a.tank.localeCompare(b.tank, undefined, { numeric: true }));
