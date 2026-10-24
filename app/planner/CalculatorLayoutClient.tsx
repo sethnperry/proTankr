@@ -21,7 +21,7 @@
 import PlannerHost from "./PlannerHost";
 import { AccessStepsHost } from "./components/access/AccessStepsHost";
 import React, { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import NavMenu from "@/lib/ui/NavMenu";
 import EquipmentModal from "./modals/EquipmentModal";
 import ExpirationModal from "./modals/ExpirationModal";
@@ -69,6 +69,17 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
   const { darkMode } = shell.theme;
   const iconStroke = themeIconStroke(darkMode);
   const pathname = usePathname();
+  const router = useRouter();
+  // The Plan page swaps the hamburger for a back arrow: back to whatever
+  // page the driver came from, or the dashboard if there is no history.
+  const onPlanPage = pathname === "/planner";
+  const navEl = onPlanPage ? (
+    <button type="button" aria-label="Back"
+      onClick={() => { if (typeof window !== "undefined" && window.history.length > 1) router.back(); else router.push("/planner/home"); }}
+      style={{ background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={iconStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+    </button>
+  ) : <NavMenu darkMode={darkMode} onOpenSettings={onOpenSettings} />;
   // The Driver Dashboard shows every expiration alert itself (Expirations
   // row, Truck/Trailer squares, the access strip), so the bell is retired there.
   // No bell on the Driver Dashboard (it has its own Expirations card) or on the
@@ -139,7 +150,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between",
         height: "100%",
       }}>
-        <NavMenu darkMode={darkMode} onOpenSettings={onOpenSettings} />
+        {navEl}
         {showBell && <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />}
         <div id="planner-header-icons-slot" style={{ display: "contents" }} />
       </div>
@@ -184,7 +195,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 calc(env(safe-area-inset-right, 0px) + 16px) 0 calc(env(safe-area-inset-left, 0px) + 16px)",
       }}>
-        <NavMenu darkMode={darkMode} onOpenSettings={onOpenSettings} />
+        {navEl}
         {showBell && <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />}
         {/* Portal target for the Planner page's own plan-letter/Equipment/
             Location/Temperature cluster -- per explicit direction to try

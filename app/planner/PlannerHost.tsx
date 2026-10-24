@@ -2877,10 +2877,13 @@ const lastProductInfoById = useMemo(() => {
   // place, open Plan Review right over the dashboard (what BEGIN LOADING would
   // do). With no plan, or if it can't start, go to the Planner so the driver
   // can see why. Waits for presets/equipment and gives up after 8 s.
-  const beginReadyRef = useRef({ go: false, plan: false });
+  const beginReadyRef = useRef({ go: false, plan: false, empty: false });
   beginReadyRef.current = {
     go: !loadDisabled && !tripNeedsArrive && !loadWorkflow.activeLoadId && unavailableComps.length === 0 && planSlots.presetsReady,
     plan: plannedProductIds.size > 0,
+    // presets are in, nothing is planned, and nothing else is pending: no
+    // plan to review, so don't wait for "go" (which can never become true)
+    empty: planSlots.presetsReady && plannedProductIds.size === 0 && !tripNeedsArrive && !loadWorkflow.activeLoadId,
   };
   const beginTickRef = useRef<number | null>(null);
   const startBeginWatch = useCallback(() => {
@@ -2898,6 +2901,8 @@ const lastProductInfoById = useMemo(() => {
         // give a just-applied trip plan a moment to land before deciding
         if (!r.plan && Date.now() - started < 1500) return;
         finish(r.plan);
+      } else if (r.empty && Date.now() - started > 1500) {
+        finish(false);
       } else if (Date.now() - started > 8000) {
         finish(false);
       }
@@ -3585,28 +3590,6 @@ const lastProductInfoById = useMemo(() => {
         // so there's no standalone always-on temp control in the header.
         const headerIconsEl = (
           <>
-            {(() => {
-              const letter = String.fromCharCode(64 + activeSlotLetter);
-              const presetDisabled = !planSlots.presetsReady;
-              return (
-                <button
-                  ref={planLetterIconRef}
-                  type="button"
-                  disabled={presetDisabled}
-                  onClick={() => setPresetQuickPickOpen(true)}
-                  title="Presets"
-                  style={{
-                    background: "none", border: "none", padding: 0, display: "flex", flexDirection: "column",
-                    alignItems: "center", gap: 3, cursor: presetDisabled ? "not-allowed" : "pointer",
-                    opacity: presetDisabled ? 0.4 : 1,
-                  }}
-                >
-                  <span style={{ fontSize: 19, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{letter}</span>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff" }} />
-                </button>
-              );
-            })()}
-
             {/* Trailer number, gray. Equipment, terminal and the bell are not
                 needed on the Plan page. */}
             {equipmentDetails.trailerName ? (
@@ -3725,6 +3708,14 @@ const lastProductInfoById = useMemo(() => {
         // The Plan page's button: "New Plan" starts the Plan Builder; once the
         // driver changes anything it becomes "Save Plan" and goes back to
         // "New Plan" after saving.
+        const planPickerEl = (
+          <button ref={planLetterIconRef} type="button" disabled={!planSlots.presetsReady}
+            onClick={() => setPresetQuickPickOpen(true)}
+            style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.04)", padding: "12px 14px", width: "100%", cursor: planSlots.presetsReady ? "pointer" : "not-allowed", opacity: planSlots.presetsReady ? 1 : 0.4, color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: 0.3 }}
+          >
+            Plan {String.fromCharCode(64 + activeSlotLetter)} ▾
+          </button>
+        );
         const planButtonEl = (
           <button ref={savePlanButtonRef} type="button"
             onClick={() => {
@@ -3801,6 +3792,7 @@ const lastProductInfoById = useMemo(() => {
           <>
             <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto", marginTop: 14, display: "flex", flexDirection: "column", gap: 12 } : { marginTop: 18, display: "flex", flexDirection: "column", gap: 16 }}>
               {recapCard}
+              {planPickerEl}
               {planButtonEl}
               {closeButtonEl}
             </div>
