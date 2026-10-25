@@ -25,7 +25,7 @@ import { useCalculatorShell } from "./CalculatorShellContext";
 
 
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase/client";
 import { defaultLandingPath } from "@/lib/ui/driver/navDestinations";
@@ -43,6 +43,7 @@ let hasCheckedDefaultLanding = false;
 import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
+import { useLoadReportLauncher } from "./hooks/useLoadReportLauncher";
 import { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDuringLoad";
 import { usePlanRows } from "./hooks/usePlanRows";
 import {
@@ -121,7 +122,7 @@ export default function PlannerHost() {
   // bell icons and this page's own planning logic never see two
   // independently-hydrated copies of the same selection state.
   const shell = useCalculatorShell();
-  const { authUserId, setupSession, effectiveUserId, equipment, location, terminals } = shell;
+  const { setupSession, effectiveUserId, equipment, location, terminals } = shell;
   const router = useRouter();
   // This host stays mounted for every /planner screen; the Planner page itself
   // shows only on the bare /planner route. Modals (Plan Review, load report,
@@ -248,8 +249,6 @@ export default function PlannerHost() {
   // 255, 0.45)"), which is a real, uncorrected hydration mismatch React won't
   // patch up. Render plain <button>s for SSR/first paint and only swap to
   // motion.button post-mount, so hydration always diffs identical DOM.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
 
   // Portal target for the plan-letter/Equipment/Location/Temperature
   // cluster, rendered by CalculatorLayoutClient.tsx's shared Header --
@@ -1643,101 +1642,7 @@ export default function PlannerHost() {
   // display in Plan Review's own Load Report mode. Scoped to the CURRENT
   // terminal (per explicit direction: "reopen the last load at that
   // terminal"), not just this combo's most recent load anywhere.
-  const [viewLastLoadMsg, setViewLastLoadMsg] = useState<string | null>(null);
-  const [viewLastLoadBusy, setViewLastLoadBusy] = useState(false);
-  const openLoadReportAtTerminal = useCallback(async (byLoadId?: string) => {
-    if (!byLoadId && (!equipment.selectedComboId || !location.selectedTerminalId)) return;
-    setViewLastLoadBusy(true);
-    setViewLastLoadMsg(null);
-    try {
-      // A known load id: both reads at once (the dashboard's Load Report link).
-      const linesQuery = (id: string) => supabase
-        .from("load_lines")
-        .select("comp_number, product_id, actual_gallons, actual_lbs, actual_api, temp_f")
-        .eq("load_id", id)
-        .order("comp_number", { ascending: true });
-      const linesEarly = byLoadId ? linesQuery(byLoadId) : null;
-      const { data: loadRow, error: loadErr } = byLoadId
-        ? await supabase.from("load_log").select("load_id, completed_at, plan_slot").eq("load_id", byLoadId).maybeSingle()
-        : await supabase
-        .from("load_log")
-        .select("load_id, completed_at, plan_slot")
-        .eq("combo_id", equipment.selectedComboId)
-        .eq("terminal_id", location.selectedTerminalId)
-        .eq("status", "loaded")
-        .order("completed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (loadErr) throw loadErr;
-      if (!loadRow) { setViewLastLoadMsg("No completed load at this terminal yet."); return; }
-
-      const { data: lineRows, error: lineErr } = await (linesEarly ?? linesQuery(String(loadRow.load_id)));
-      if (lineErr) throw lineErr;
-
-      const lines = (lineRows ?? [])
-        .filter((l: any) => l.product_id && Number(l.actual_gallons ?? 0) > 0)
-        .map((l: any) => ({
-          comp: Number(l.comp_number),
-          productId: String(l.product_id),
-          gallons: Number(l.actual_gallons ?? 0),
-          lbs: l.actual_lbs != null ? Number(l.actual_lbs) : null,
-          api: l.actual_api != null ? Number(l.actual_api) : null,
-          tempF: l.temp_f != null ? Number(l.temp_f) : null,
-        }));
-
-      if (lines.length === 0) { setViewLastLoadMsg("No completed load at this terminal yet."); return; }
-
-      loadWorkflow.openLoadReport({
-        loadId: String(loadRow.load_id),
-        lines,
-        completedAt: loadRow.completed_at ?? null,
-        planSlot: loadRow.plan_slot ?? null,
-      });
-    } catch (e) {
-      console.error("openLoadReportAtTerminal failed:", e);
-      setViewLastLoadMsg("Could not load that report.");
-    } finally {
-      setViewLastLoadBusy(false);
-    }
-  }, [equipment.selectedComboId, location.selectedTerminalId, loadWorkflow]);
-
-  // /planner?report=<load_id> (the dashboard's Load Report link) opens that
-  // load's report once.
-  const reportParamDone = useRef(false);
-  // While that report loads, a plain cover hides the Planner so the driver
-  // goes straight from the dashboard to the report. Set before first paint.
-  const [reportPending, setReportPending] = useState(false);
-  // Report opened from the dashboard: closing it (any button) goes straight
-  // back there, under the same cover, so the Planner never shows.
-  const reportFromDashboardRef = useRef(false);
-  const reportShownRef = useRef(false);
-  const [reportFromDashboard, setReportFromDashboard] = useState(false);
-  useLayoutEffect(() => {
-    if (new URLSearchParams(window.location.search).get("report")) {
-      setReportPending(true);
-      reportFromDashboardRef.current = true;
-      setReportFromDashboard(true);
-    }
-  }, []);
-  useLayoutEffect(() => {
-    if (!reportFromDashboardRef.current || reportPending) return;
-    if (loadWorkflow.loadingOpen || loadWorkflow.reportLines) { reportShownRef.current = true; return; }
-    if (!reportShownRef.current) return; // report never opened (error): stay
-    reportFromDashboardRef.current = false;
-    setReportFromDashboard(false);
-    leaveTo("/planner/home", "Opening dashboard…");
-  }, [loadWorkflow.loadingOpen, loadWorkflow.reportLines, reportPending, leaveTo]);
-  useEffect(() => {
-    if (reportParamDone.current || typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("report");
-    if (!id) return;
-    reportParamDone.current = true;
-    params.delete("report");
-    const qs = params.toString();
-    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
-    void openLoadReportAtTerminal(id).finally(() => setReportPending(false));
-  }, [openLoadReportAtTerminal]);
+  const { reportPending, reportFromDashboard, openLoadReportAtTerminal } = useLoadReportLauncher({ shell, loadWorkflow, leaveTo });
 
   // Deliberately does NOT claim/switch equipment -- per explicit follow-up,
   // someone else could genuinely be running that truck/trailer right now,
@@ -1776,22 +1681,6 @@ export default function PlannerHost() {
   // expirations all come from `shell` now.
   const { myTerminalIdSet, terminalFilters } = shell;
   const { catalogTerminalsInCity } = terminalFilters;
-
-  // Fetch terminal access dates for city terminals
-  useEffect(() => {
-    (async () => {
-      if (!authUserId || !location.selectedState || !location.selectedCity) return;
-      const ids = catalogTerminalsInCity.map((t) => String(t.terminal_id));
-      if (ids.length === 0) return;
-      const { data, error } = await supabase
-        .from("terminal_access").select("terminal_id, carded_on")
-        .eq("user_id", effectiveUserId).in("terminal_id", ids);
-      if (error) return;
-      const map: Record<string, string> = {};
-      (data ?? []).forEach((r: any) => { if (r?.terminal_id && r?.carded_on) map[String(r.terminal_id)] = String(r.carded_on); });
-      // Note: access date map lives in useTerminals; this local fetch augments the catalog view
-    })();
-  }, [authUserId, location.selectedState, location.selectedCity, catalogTerminalsInCity]);
 
   // ── Derived labels ─────────────────────────────────────────────────────────
   const terminalLabel = useMemo(() => {
@@ -2071,11 +1960,6 @@ const lastProductInfoById = useMemo(() => {
     !location.selectedCity ||
     !location.selectedCityId ||
     planRows.length === 0;
-
-  const [loadBlockedMsg, setLoadBlockedMsg] = useState<string | null>(null);
-  useEffect(() => {
-    if (unavailableComps.length === 0) setLoadBlockedMsg(null);
-  }, [unavailableComps]);
 
   // "RELOAD" used to mean "the plan I'm about to submit is the same one
   // already on file as the last load," tracked via recapValid -- removed
