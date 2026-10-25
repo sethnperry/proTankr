@@ -42,6 +42,8 @@ let hasCheckedDefaultLanding = false;
 import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
+import { usePlanInputs } from "./hooks/usePlanInputs";
+import { usePlanDirty } from "./hooks/usePlanDirty";
 import CgSlider from "./components/CgSlider";
 import SetupSessionBanner from "./components/SetupSessionBanner";
 import PlanSummaryCard from "./components/PlanSummaryCard";
@@ -422,66 +424,7 @@ export default function PlannerHost() {
   // ── Persisted plan state — survives page refresh ─────────────────────────
   // All initialized to defaults; hydrated from localStorage in useEffect after mount
   // (avoids SSR hydration mismatch — localStorage is client-only)
-  const [tempF, setTempFRaw] = useState<number>(60);
-
-  // Per-product planned temp -- split load (e.g. diesel + regular in the same
-  // trailer) genuinely have different temps (different tanks), so a single
-  // shared tempF was wrong the moment more than one product was in the plan.
-  // tempF is kept as the dial's own "reference" value; every existing way of
-  // moving it (drag, type-in, quick +/-, snap buttons) now also shifts every
-  // product's own temp by the same delta, applied once here so none of those
-  // call sites needed to change. Setting one product directly (tapping its
-  // row in the modal) bypasses this and only touches that product -- see
-  // setSingleProductTempF below. Deliberately NOT persisted to localStorage
-  // like tempF is -- same "always re-seeded from the live prediction, never
-  // restored from a snapshot" rule tempF itself already follows.
-  const [productTempF, setProductTempF] = useState<Record<string, number>>({});
-
-  // Kept in sync synchronously (not via a useEffect) so setTempF can always
-  // read "prev" without nesting a second setState call inside setTempFRaw's
-  // own updater. That nested-call version worked in production but silently
-  // double-applied the delta in dev: React 18 StrictMode double-invokes
-  // updater functions to catch impure ones, and an updater that calls
-  // setProductTempF as a side effect isn't pure -- both invocations actually
-  // fired the nested update, doubling the shift. Caught this live testing
-  // the split-load dial (a single +5.8° drag was landing as +11.6°).
-  const tempFRef = useRef(60);
-
-  const setTempF = useCallback((v: number | ((prev: number) => number)) => {
-    const prev = tempFRef.current;
-    const next = typeof v === "function" ? v(prev) : v;
-    const delta = Math.round((next - prev) * 10) / 10;
-    tempFRef.current = next;
-    if (delta !== 0) {
-      setProductTempF((prevProd) => {
-        if (Object.keys(prevProd).length === 0) return prevProd;
-        const out: Record<string, number> = {};
-        for (const [pid, val] of Object.entries(prevProd)) out[pid] = Math.round((val + delta) * 10) / 10;
-        return out;
-      });
-    }
-    try { localStorage.setItem("protankr_tempF_v1", String(next)); } catch {}
-    setTempFRaw(next);
-  }, []);
-
-  // Safety net for the one path that sets tempF directly (localStorage
-  // hydration on mount, below) instead of through setTempF -- keeps the ref
-  // truthful even then, so a delta computed right after mount is never based
-  // on the stale initial 60 default.
-  useEffect(() => { tempFRef.current = tempF; }, [tempF]);
-
-  const setSingleProductTempF = useCallback((productId: string, value: number) => {
-    setProductTempF((prev) => ({ ...prev, [productId]: Math.round(value * 10) / 10 }));
-  }, []);
-
-  const [cgSlider, setCgSliderRaw] = useState<number>(0.5);
-  const setCgSlider = useCallback((v: number | ((prev: number) => number)) => {
-    setCgSliderRaw(prev => {
-      const next = typeof v === "function" ? v(prev) : v;
-      try { localStorage.setItem("protankr_cgSlider_v1", String(next)); } catch {}
-      return next;
-    });
-  }, []);
+  const { tempF, setTempF, tempFRef, productTempF, setProductTempF, setSingleProductTempF, cgSlider, setCgSlider } = usePlanInputs();
 
   // Real bug found chasing a "plan toggles between the last two setups on
   // every refresh" report: this used to be a SECOND, fully independent
@@ -530,33 +473,7 @@ export default function PlannerHost() {
     shell.setPlannedProductIds(new Set(ids));
   }, [compPlan, shell.setPlannedProductIds]);
 
-  // "Save plan {letter}" is dirty-tracked against a baseline snapshot taken
-  // right after the last load/save -- it only shows when the current plan
-  // actually diverges from what's saved, and hides itself immediately after
-  // a successful save (per explicit feedback: no button when there's nothing
-  // new to save). Covers everything buildSnapshot()/saveToSlot() actually
-  // persist -- product selection + empty flag + cap override per comp, and
-  // the CG slider -- not just cap overrides, so picking a different product
-  // or sliding CG also surfaces the button.
-  const overridesSnapshot = useCallback((plan: Record<number, CompPlanInput>, cg: number) => {
-    const comps: Record<number, { productId: string; empty: boolean; capOverride: number | null }> = {};
-    for (const k of Object.keys(plan || {})) {
-      const v = (plan as any)[k] ?? {};
-      comps[Number(k)] = {
-        productId: v.productId ?? "",
-        empty: !!v.empty,
-        capOverride: v.capOverride ?? null,
-      };
-    }
-    return JSON.stringify({ comps, cg: Math.round((Number(cg) || 0) * 1000) / 1000 });
-  }, []);
-  // Lazy initializer (not a literal "{}") so the baseline matches whatever
-  // compPlan/cgSlider actually start as -- broadening the snapshot to include
-  // productId/empty/cg means a hardcoded "{}" no longer matches an empty
-  // plan's real serialized shape, which made "Save plan" appear spuriously
-  // on a completely fresh mount.
-  const [baselineOverrides, setBaselineOverrides] = useState(() => overridesSnapshot(compPlan, cgSlider));
-  const [captureBaselineNext, setCaptureBaselineNext] = useState(false);
+  const { overridesSnapshot, baselineOverrides, setBaselineOverrides, setCaptureBaselineNext } = usePlanDirty(compPlan, cgSlider);
   // Which preset slot (1-5) the action sheet is open for, if any -- set by
   // PresetQuickPick's long-press on a filled row (same reuse the sheet's
   // predecessor, the swipeable PresetDial, already established).
@@ -564,27 +481,6 @@ export default function PlannerHost() {
   // Opens PresetQuickPick -- the plan-letter icon's tap target, replacing
   // the old dial entirely.
   const [presetQuickPickOpen, setPresetQuickPickOpen] = useState(false);
-
-  // Fires once compPlan has actually re-rendered post-load (loadFromSlot
-  // applies asynchronously via the hook's own setCompPlan), so the baseline
-  // reflects what was really loaded, not what was on screen before it.
-  //
-  // Re-captures on every compPlan/cgSlider change while the flag is set,
-  // and only clears it after a short quiet period (debounced, same idea as
-  // usePlanSlots' own 350ms autosave debounce) rather than immediately on
-  // the first change. usePlanSlots' automatic restores (slot-0-on-terminal-
-  // change, last-load-from-log-on-combo-claim) hit the DB first and call
-  // setCompPlan/setCgSlider only once that resolves -- consuming the flag
-  // on the very next render (the pre-restore value) meant the baseline got
-  // locked in *before* the real restore landed, so the button showed
-  // "dirty" the instant equipment/terminal was picked, before the user had
-  // touched anything.
-  useEffect(() => {
-    if (!captureBaselineNext) return;
-    setBaselineOverrides(overridesSnapshot(compPlan, cgSlider));
-    const t = setTimeout(() => setCaptureBaselineNext(false), 600);
-    return () => clearTimeout(t);
-  }, [compPlan, cgSlider, captureBaselineNext, overridesSnapshot]);
 
   // Terminal/combo switches trigger usePlanSlots' own automatic restores
   // (slot-0-on-terminal-change, last-load-from-log-on-combo-claim) -- those
@@ -595,16 +491,6 @@ export default function PlannerHost() {
   useEffect(() => {
     setCaptureBaselineNext(true);
   }, [location.selectedTerminalId, equipment.selectedComboId]);
-
-  // Hydrate tempF and cgSlider once on mount
-  useEffect(() => {
-    try {
-      const t = localStorage.getItem("protankr_tempF_v1");
-      if (t != null && Number.isFinite(Number(t))) setTempFRaw(Number(t));
-      const cg = localStorage.getItem("protankr_cgSlider_v1");
-      if (cg != null && Number.isFinite(Number(cg))) setCgSliderRaw(Number(cg));
-    } catch {}
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nothing else clears compPlan when equipment is deselected --
   // usePlanSlots' own restoreLivePlan/comboClaim effects only ever run
