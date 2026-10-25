@@ -43,6 +43,9 @@ let hasCheckedDefaultLanding = false;
 import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
+import { usePlannerSuppliers } from "./hooks/usePlannerSuppliers";
+import { usePlannerEquipment } from "./hooks/usePlannerEquipment";
+import { useTerminalProducts } from "./hooks/useTerminalProducts";
 import { useLoadReportLauncher } from "./hooks/useLoadReportLauncher";
 import { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDuringLoad";
 import { usePlanRows } from "./hooks/usePlanRows";
@@ -100,15 +103,13 @@ import { readPlannedComps } from "@/lib/trips/addPickupCheck";
 import { productLbsOnBoard } from "@/lib/trips/truckChange";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
-import { SupplierPanel, type PanelProduct, type SupplierSwitchEvent } from "./components/supplier/SupplierPanel";
+import { SupplierPanel } from "./components/supplier/SupplierPanel";
 import { useSupplierPicks } from "@/lib/suppliers/useSupplierPicks";
-import { resolvePicks, readPicks, groupPicks, type SupplierPick } from "@/lib/suppliers/picks";
-import { getTripSupplier, setTripSupplier, tripSupplierPicks } from "@/lib/trips/tripSupplier";
 import { markSuppliersLoaded } from "@/lib/suppliers/useTerminalSuppliers";
 import { Spinner } from "@/lib/ui/pending";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
+import type { ActiveComp, CompPlanInput, ProductRow } from "./types";
 
 
 
@@ -395,83 +396,13 @@ export default function PlannerHost() {
 
   // Resolve timezone after both hooks exist
   // ── Compartments ───────────────────────────────────────────────────────────
-  const [compartments, setCompartments] = useState<CompRow[]>([]);
-  const [compLoading, setCompLoading] = useState(false);
-  const [compError, setCompError] = useState<string | null>(null);
-
-  const selectedTrailerId = equipment.selectedCombo?.trailer_id ?? null;
-
-  useEffect(() => {
-    (async () => {
-      setCompError(null);
-      setCompartments([]);
-      if (!selectedTrailerId) return;
-      setCompLoading(true);
-      const { data, error } = await supabase
-        .from("trailer_compartments")
-        .select("trailer_id, comp_number, max_gallons, cap_gallons, position, active")
-        .eq("trailer_id", selectedTrailerId)
-        .order("comp_number", { ascending: true });
-      if (error) { setCompError(error.message); setCompartments([]); }
-      else { setCompartments(((data ?? []) as CompRow[]).filter((c) => c.active !== false)); }
-      setCompLoading(false);
-    })();
-  }, [selectedTrailerId]);
-
-  // ── Equipment details (truck/trailer name + make, for the Equipment info card) ──
-  const [equipmentDetails, setEquipmentDetails] = useState({ truckName: "", truckMake: "", trailerName: "", trailerMake: "" });
-  const selectedTruckId = equipment.selectedCombo?.truck_id ?? null;
-
-  useEffect(() => {
-    (async () => {
-      if (!selectedTruckId && !selectedTrailerId) {
-        setEquipmentDetails({ truckName: "", truckMake: "", trailerName: "", trailerMake: "" });
-        return;
-      }
-      const [truckRes, trailerRes] = await Promise.all([
-        selectedTruckId ? supabase.from("trucks").select("truck_name, make").eq("truck_id", selectedTruckId).maybeSingle() : Promise.resolve({ data: null }),
-        selectedTrailerId ? supabase.from("trailers").select("trailer_name, make").eq("trailer_id", selectedTrailerId).maybeSingle() : Promise.resolve({ data: null }),
-      ]);
-      setEquipmentDetails({
-        truckName: (truckRes as any)?.data?.truck_name ?? "",
-        truckMake: (truckRes as any)?.data?.make ?? "",
-        trailerName: (trailerRes as any)?.data?.trailer_name ?? "",
-        trailerMake: (trailerRes as any)?.data?.make ?? "",
-      });
-    })();
-  }, [selectedTruckId, selectedTrailerId]);
-
-  // ── Saddle-tank size for the Load Report's fuel-burn correction ──
-  // Its own query, deliberately NOT added to the equipmentDetails select above:
-  // if the fuel_tank_gallons migration hasn't run, a missing column 400s the
-  // WHOLE query (this repo's stale-column bug class), which would blank the
-  // truck name too. This one just fails to null.
-  const [fuelTankGallons, setFuelTankGallons] = useState<number | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    setFuelTankGallons(null);
-    if (!selectedTruckId) return;
-    (async () => {
-      const { data, error } = await supabase.from("trucks").select("fuel_tank_gallons").eq("truck_id", selectedTruckId).maybeSingle();
-      if (cancelled || error) return;
-      const v = Number((data as any)?.fuel_tank_gallons);
-      setFuelTankGallons(Number.isFinite(v) && v > 0 ? v : null);
-    })();
-    return () => { cancelled = true; };
-  }, [selectedTruckId]);
-
-  const saveFuelTankGallons = useCallback(async (gallons: number) => {
-    if (!selectedTruckId) throw new Error("No truck selected");
-    // .select() so an RLS-filtered update (0 rows, no error) is caught instead
-    // of looking like a save.
-    const { data, error } = await supabase.from("trucks").update({ fuel_tank_gallons: gallons }).eq("truck_id", selectedTruckId).select("truck_id");
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) throw new Error("not allowed to edit this truck");
-    setFuelTankGallons(gallons);
-  }, [selectedTruckId]);
+  const {
+    compartments, setCompartments, compLoading, compError, selectedTrailerId,
+    equipmentDetails, selectedTruckId, fuelTankGallons, saveFuelTankGallons,
+  } = usePlannerEquipment(equipment);
 
   // ── Terminal products ──────────────────────────────────────────────────────
-  const [terminalProductsRaw, setTerminalProducts] = useState<ProductRow[]>([]);
+  const { terminalProductsRaw, fetchTerminalProducts, selectedRackName } = useTerminalProducts(location);
   const { data: catalogProducts } = useProductsCatalog();
   // The Plan page needs no terminal: it lays plans out from the whole catalog
   // at each product's published minimum API (heaviest) and 60 F, so there is
@@ -484,77 +415,6 @@ export default function PlannerHost() {
     [catalogProducts],
   );
   const terminalProducts = useMemo(() => (active ? planCatalogProducts : terminalProductsRaw), [active, planCatalogProducts, terminalProductsRaw]);
-
-  // Extract terminal products fetch as a named callback so it can be called post-load.
-  //
-  // Reads rack_product_status only -- every terminal always has at least
-  // one rack now (auto-named "Main Rack" for terminals that never touched
-  // the Terminal tab, see the "unify_terminals_onto_racks" migration), so
-  // there's no more terminal-wide-pool-with-optional-rack-override dual
-  // path: a rack IS the terminal's product list and reference reading, full
-  // stop. Waits for location.selectedRackId to resolve (chooseTerminal sets
-  // it async, right after selectedTerminalId) rather than reading anything
-  // terminal-scoped in the meantime -- a brief empty list while it resolves
-  // beats a stale/wrong terminal's data flashing first.
-  const fetchTerminalProducts = useCallback(async () => {
-    if (!location.selectedTerminalId || !location.selectedRackId) { setTerminalProducts([]); return; }
-    const { data, error } = await supabase
-      .from("rack_product_status")
-      .select(`active, last_api, last_temp_f, updated_at, min_api_observed,
-        products (product_id, product_name, display_name, description, product_code, button_code, hex_code, api_60, alpha_per_f, api_min, api_max, un_number, is_dyed, canonical_product_id)`)
-      .eq("rack_id", location.selectedRackId);
-    if (error) { setTerminalProducts([]); return; }
-    // Stats lookup by product_id across ALL rows on this rack (not just
-    // active ones) -- a rack-injected-variance product (e.g. dyed diesel)
-    // pools its tracking onto the canonical product's row, which needs to
-    // be found here even if the canonical product itself isn't separately
-    // offered/active on this rack's driver-facing list.
-    const statsByProductId: Record<string, { last_api: number | null; last_api_updated_at: string | null; last_temp_f: number | null; last_loaded_at: string | null; min_api_observed: number | null }> = {};
-    for (const row of (data ?? []) as any[]) {
-      const pid = row.products?.product_id;
-      if (!pid) continue;
-      statsByProductId[pid] = {
-        last_api: row.last_api ?? null,
-        last_api_updated_at: row.updated_at ?? null,
-        last_temp_f: row.last_temp_f ?? null,
-        last_loaded_at: row.updated_at ?? null,
-        min_api_observed: row.min_api_observed ?? null,
-      };
-    }
-
-    const products = (data ?? []).filter((row: any) => row.active !== false)
-      .map((row: any) => {
-        if (!row.products) return null;
-        const own = statsByProductId[row.products.product_id];
-        const canonicalId = row.products.canonical_product_id as string | null | undefined;
-        const stats = (canonicalId && statsByProductId[canonicalId]) ? statsByProductId[canonicalId] : own;
-        return { ...row.products, ...stats };
-      })
-      .filter(Boolean);
-    setTerminalProducts(products as ProductRow[]);
-  }, [location.selectedTerminalId, location.selectedRackId]);
-
-  // Rack's own name, for ManageTerminalProductsModal's "Active products at
-  // {terminal} — {rack}" label (hidden there for the generic "Main Rack"
-  // default). Cheap, separate fetch rather than piggybacking on
-  // shell.rackPickerRacks -- that list only exists transiently while the
-  // rack-select sheet is open, not for whatever rack ends up selected.
-  const [selectedRackName, setSelectedRackName] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (!location.selectedRackId) { setSelectedRackName(undefined); return; }
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("terminal_racks")
-        .select("rack_name")
-        .eq("rack_id", location.selectedRackId)
-        .maybeSingle();
-      if (!cancelled) setSelectedRackName((data as any)?.rack_name ?? undefined);
-    })();
-    return () => { cancelled = true; };
-  }, [location.selectedRackId]);
-
-  useEffect(() => { fetchTerminalProducts(); }, [fetchTerminalProducts]);
 
   // ── Planning inputs ────────────────────────────────────────────────────────
   // ── Persisted plan state — survives page refresh ─────────────────────────
@@ -1745,61 +1605,10 @@ const lastProductInfoById = useMemo(() => {
     return rec;
   }, [terminalProducts]);
 
-  // ── Supplier card ─────────────────────────────────────────────────────────
-  const supplierPanelProducts = useMemo<PanelProduct[]>(() => [...plannedProductIds].map((pid) => ({
-    id: pid,
-    code: productCodeById[pid] || (productNameById.get(pid) ?? "Product"),
-    color: productHexCodeById[pid] || productColorFor(productNameById.get(pid) ?? ""),
-  })), [plannedProductIds, productCodeById, productNameById, productHexCodeById]);
-  const resolvedSupplierPicks = useMemo(
-    () => resolvePicks(supplierPicks.picks, supplierPanelProducts.map((p) => p.id)),
-    [supplierPicks.picks, supplierPanelProducts],
-  );
-  resolvedSupplierPicksRef.current = resolvedSupplierPicks;
-  const [supplierPromptToken, setSupplierPromptToken] = useState(0);
-  const needsSupplierPick = supplierPicks.loaded && !supplierPicks.skipped && resolvedSupplierPicks.length === 0;
-  // The supplier picked on Begin Trip is preset at every rack on the trip
-  // (rack hops, a later visit). Reads storage directly so it never overwrites
-  // a pick or a skip already saved for this terminal.
-  const openTripIdForSupplier = useMemo(() => {
-    if (!effectiveUserId) return null;
-    const trip = openTripForDriver(Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[], effectiveUserId);
-    return trip && trip.status !== "complete" && trip.status !== "cancelled" ? trip.trip_id : null;
-  }, [effectiveUserId, tripStoreHook.state]);
-  // Which supplier is asked once loading begins (Plan Review), not while
-  // planning: open the picker then if none is set yet. The token resets when
-  // Plan Review closes so the next load asks fresh.
-  useEffect(() => {
-    if (!loadWorkflow.loadingOpen) { setSupplierPromptToken(0); return; }
-    if (loadWorkflow.reportLines || !needsSupplierPick || !location.selectedTerminalId) return;
-    setSupplierPromptToken((n) => n + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadWorkflow.loadingOpen]);
-  useEffect(() => {
-    const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
-    if (!openTripIdForSupplier || !tid || !effectiveUserId) return;
-    if (readPicks(effectiveUserId, tid)) return;
-    const ts = getTripSupplier(effectiveUserId, openTripIdForSupplier);
-    if (ts) supplierPicks.setPicks(tripSupplierPicks(ts));
-  }, [openTripIdForSupplier, location.selectedTerminalId, effectiveUserId, supplierPicks.picks, supplierPicks.setPicks]);
-  // A change at the rack carries forward on the trip when it's one supplier.
-  const onSupplierPicks = useCallback((next: SupplierPick[]) => {
-    supplierPicks.setPicks(next);
-    const groups = groupPicks(next);
-    if (openTripIdForSupplier && effectiveUserId && groups.length === 1) {
-      setTripSupplier(effectiveUserId, openTripIdForSupplier, { supplier_id: groups[0].supplier_id, name: groups[0].name });
-    }
-  }, [supplierPicks.setPicks, openTripIdForSupplier, effectiveUserId]);
-  const onSupplierSwitched = useCallback((e: SupplierSwitchEvent) => {
-    const pk = tripPickup ?? tripWaitingPickup;
-    if (!pk || !tripStoreObj || !effectiveUserId) return;
-    tripStoreObj.put("trip_events", {
-      event_id: newTripId(), trip_id: pk.trip_id, event_type: "supplier_switch", occurred_at: new Date().toISOString(),
-      actor_id: effectiveUserId, pickup_id: pk.pickup_id, delivery_id: null,
-      payload: { from: e.from, to: e.to, reason: e.reason, note: e.note || null, product_ids: e.productIds },
-    });
-    void tripStoreHook.syncNow();
-  }, [tripPickup, tripWaitingPickup, tripStoreObj, effectiveUserId, tripStoreHook]);
+  const { supplierPanelProducts, resolvedSupplierPicks, supplierPromptToken, onSupplierPicks, onSupplierSwitched } = usePlannerSuppliers({
+    shell, effectiveUserId, loadWorkflow, tripStoreHook, tripStoreObj, tripPickup, tripWaitingPickup,
+    supplierPicks, resolvedSupplierPicksRef, plannedProductIds, productCodeById, productNameById, productHexCodeById,
+  });
 
   // Confidence -> temp color (same palette as the temp prediction, so the Tune
   // panel's temp keeps the confidence color the driver already knows).
