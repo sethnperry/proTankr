@@ -128,3 +128,30 @@ export async function savePresetPlan(
     );
   } catch {}
 }
+
+const quickKey = (userId: string, tripId: string) => `proTankr:u:${userId}:tripQuick:${tripId}`;
+
+/**
+ * Marks a trip as a Quick load: the Planner runs its layout with no caps and
+ * CG centered, once, and saves nothing. Once the Planner has done that the
+ * marker stays "done", so editing the trip later can't wipe the driver's caps.
+ */
+export function setTripQuick(userId: string, tripId: string, on: boolean) {
+  try {
+    const k = quickKey(userId, tripId);
+    if (window.localStorage.getItem(k) === "done") return;
+    if (on) window.localStorage.setItem(k, "1");
+    else window.localStorage.removeItem(k);
+  } catch {}
+}
+
+/** True the first time it is asked for a Quick load trip, then false. */
+export function takeTripQuick(userId: string | null, tripId: string | null): boolean {
+  if (!userId || !tripId) return false;
+  try {
+    const k = quickKey(userId, tripId);
+    if (window.localStorage.getItem(k) !== "1") return false;
+    window.localStorage.setItem(k, "done");
+    return true;
+  } catch { return false; }
+}

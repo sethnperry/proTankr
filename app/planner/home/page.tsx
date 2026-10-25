@@ -97,7 +97,8 @@ import { enablePush, pushEnabledHere } from "@/lib/push/subscribe";
 import { BREAK_REST_MIN } from "@/lib/telematics/cycleRecap";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
-import { fetchPresets, getTripPlan, setTripPlan, nextSaveSlot, savePresetPlan, type PresetSummary } from "@/lib/trips/tripPlan";
+import { fetchPresets, getTripPlan, setTripPlan, setTripQuick, nextSaveSlot, savePresetPlan, type PresetSummary } from "@/lib/trips/tripPlan";
+import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
 import { getTripSupplier, sameSupplier, seedTerminalPicks, setTripSupplier, type TripSupplier } from "@/lib/trips/tripSupplier";
@@ -606,7 +607,14 @@ export default function HomePage() {
       // Dispatch's plan: save it as a plan slot when asked (optionally changing it in the Planner first).
       let planSlot = v.planSlot;
       let openPlanner = false;
-      if (v.savePlan && dispatchedPickup && equipment.selectedComboId) {
+      const sentLayout = dispatchedPickup
+        ? layoutFromProducts(Object.fromEntries([...readPlannedMeta(dispatchedPickup.planned_comps).entries()].map(([n, m]) => [n, m.product_id])), Object.keys(compSizes).map(Number))
+        : null;
+      const matched = sentLayout ? findMatchingPlan(sheetPresets, sentLayout) : null;
+      // Dispatch sent a layout the driver already has: their plan (caps and CG) applies.
+      // No match: Customize saves it and opens the Planner; Quick load runs it with no caps and CG centered.
+      if (dispatchedPickup && matched) planSlot = matched.slot;
+      if (v.savePlan && dispatchedPickup && !matched && equipment.selectedComboId) {
         const target = nextSaveSlot(sheetPresets);
         const products: Record<number, string> = {};
         for (const [n, m] of readPlannedMeta(dispatchedPickup.planned_comps).entries()) products[n] = m.product_id;
@@ -615,6 +623,7 @@ export default function HomePage() {
         planSlot = target.slot;
         openPlanner = v.savePlan.modify;
       }
+      setTripQuick(userId, rows.trip.trip_id, !!dispatchedPickup && !matched && !v.savePlan);
       if (planSlot !== (getTripPlan(userId, rows.trip.trip_id)?.slot ?? null)) setTripPlan(userId, rows.trip.trip_id, planSlot);
       // Supplier: kept on the trip, and preset at the pickup rack now (the
       // Planner presets it at any later rack on the trip too).
@@ -2180,6 +2189,11 @@ export default function HomePage() {
           if (!meta.size) return null;
           const nums = [...new Set([...Object.keys(compSizes).map(Number), ...meta.keys()])].sort((a, b) => b - a);
           return nums.map((n) => meta.get(n)?.product_id ?? null);
+        })() : null}
+        dispatchMatch={dispatchedPickup ? (() => {
+          const meta = readPlannedMeta(dispatchedPickup.planned_comps);
+          if (!meta.size) return null;
+          return findMatchingPlan(sheetPresets, layoutFromProducts(Object.fromEntries([...meta.entries()].map(([n, m]) => [n, m.product_id])), Object.keys(compSizes).map(Number)));
         })() : null}
         saveSlot={nextSaveSlot(sheetPresets)}
         productColor={(id) => { const p = productInfo(id); return p.hex ?? productColorFor(p.name); }}

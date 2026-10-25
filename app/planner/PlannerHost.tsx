@@ -59,7 +59,8 @@ import PlannerControls from "./sections/PlannerControls";
 import { useIsLandscape } from "./hooks/useOrientation";
 import TempDial from "./components/TempDial";
 import PresetActionSheet from "./components/PresetActionSheet";
-import { getTripPlan, markTripPlanApplied } from "@/lib/trips/tripPlan";
+import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tripPlan";
+import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 import PresetQuickPick from "./components/PresetQuickPick";
 
 // ── Modals ─────────────────────────────────────────────────────────────────────
@@ -2087,7 +2088,34 @@ const lastProductInfoById = useMemo(() => {
     handlePresetLoad(pending.slot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveUserId, tripPlanTripId, planSlots.presetsReady, equipment.selectedComboId]);
+  // Quick load from dispatch: its layout runs with no caps and CG centered,
+  // once, and nothing is saved.
+  const quickTripId = tripWaitingPickup?.trip_id ?? null;
+  useEffect(() => {
+    if (!effectiveUserId || !quickTripId || !planSlots.presetsReady || !equipment.selectedComboId || compartments.length === 0) return;
+    if (!takeTripQuick(effectiveUserId, quickTripId)) return;
+    setCompPlan((prev: Record<number, CompPlanInput>) => {
+      const next: Record<number, CompPlanInput> = {};
+      for (const [k, v] of Object.entries(prev)) next[Number(k)] = { ...v, capOverride: undefined };
+      return next;
+    });
+    setCgSlider(0.5);
+    setCaptureBaselineNext(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveUserId, quickTripId, planSlots.presetsReady, equipment.selectedComboId, compartments.length]);
+  // No two plans share a layout (which product is in which compartment). Saving a
+  // layout you already have updates that plan instead of making a second one.
+  const planSlotWithLayout = (plan: Record<number, any>, except?: number): number | null => {
+    const nums = compartments.map((c) => Number(c.comp_number)).filter(Number.isFinite);
+    const toLayout = (p: Record<number, any> | undefined) => layoutFromProducts(
+      Object.fromEntries(Object.entries(p ?? {}).map(([n, v]: [string, any]) => [Number(n), v && !v.empty ? v.productId : null])), nums);
+    const mine = toLayout(plan);
+    const others = [1, 2, 3, 4, 5].filter((n) => n !== except).map((n) => ({ slot: n, comps: toLayout(planSlots.peekSlot(n)?.compPlan) }));
+    return findMatchingPlan(others, mine)?.slot ?? null;
+  };
   const handlePresetSaveEmpty = (n: number) => {
+    const dup = planSlotWithLayout(compPlan, n);
+    if (dup != null) n = dup;
     planSlots.saveToSlot(n);
     setBaselineOverrides(overridesSnapshot(compPlan, cgSlider));
     setActiveSlotLetter(n);
@@ -2170,7 +2198,8 @@ const lastProductInfoById = useMemo(() => {
   const handleWizardFinish = useCallback((plan: Record<number, any>) => {
     const slotFilled = (n: number) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); };
     const empty = [1, 2, 3, 4, 5].find((n) => !slotFilled(n));
-    const target = empty ?? activeSlotLetter;
+    const dupSlot = planSlotWithLayout(plan);
+    const target = dupSlot ?? empty ?? activeSlotLetter;
     const first = !hasAnyPlan;
     planSlots.saveSnapshotToSlot(target, { compPlan: plan, name: first ? "Default" : undefined }, { makeLive: true });
     setActiveSlotLetter(target);
@@ -2582,7 +2611,11 @@ const lastProductInfoById = useMemo(() => {
         const planButtonEl = (
           <button ref={savePlanButtonRef} type="button"
             onClick={() => {
-              if (isDirty) { planSlots.saveToSlot(activeSlotLetter); setBaselineOverrides(currentOverrides); }
+              if (isDirty) {
+                const dup = planSlotWithLayout(compPlan, activeSlotLetter);
+                const to = dup ?? activeSlotLetter;
+                planSlots.saveToSlot(to); setActiveSlotLetter(to); setBaselineOverrides(currentOverrides);
+              }
               else setWizardNew(true);
             }}
             style={{ borderRadius: 2, border: "none", background: "#ffffff", padding: "12px 14px", width: "100%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}

@@ -87,6 +87,7 @@ export function StartLoadSheet({
   onAddSupplier,
   presets,
   dispatchPlan,
+  dispatchMatch,
   saveSlot,
   productColor,
   equipmentLabel,
@@ -120,6 +121,8 @@ export function StartLoadSheet({
   presets: PresetSummary[];
   // The plan dispatch sent (product per compartment, highest comp first). Replaces the plan list.
   dispatchPlan?: (string | null)[] | null;
+  // The driver's own saved plan with the same layout as the one dispatch sent, if any.
+  dispatchMatch?: PresetSummary | null;
   // Where "save as a plan slot" would go.
   saveSlot?: { slot: number; replacing: boolean } | null;
   productColor: (productId: string) => string;
@@ -340,27 +343,29 @@ export function StartLoadSheet({
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Dispatch's plan</span>
               {dots(dispatchPlan)}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
-              <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: null }))}
-                style={{ padding: "10px 6px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: `1px solid ${!v.savePlan ? "#fff" : "rgba(255,255,255,0.14)"}`, background: !v.savePlan ? "#fff" : "transparent", color: !v.savePlan ? "#000" : "#fff" }}>
-                Run once
-              </button>
-              <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: s.savePlan ?? { modify: false } }))}
-                style={{ padding: "10px 6px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: `1px solid ${v.savePlan ? "#fff" : "rgba(255,255,255,0.14)"}`, background: v.savePlan ? "#fff" : "transparent", color: v.savePlan ? "#000" : "#fff" }}>
-                {saveSlot ? `Save as Plan ${slotLetter(saveSlot.slot)}` : "Save as a plan"}
-              </button>
-            </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>
-              {v.savePlan
-                ? saveSlot?.replacing ? `All plan slots are full, so this replaces Plan ${slotLetter(saveSlot.slot)}.` : "It goes in the next empty plan slot."
-                : "Runs as a temporary plan for this load. Nothing is saved."}
-            </div>
-            {v.savePlan && (
-              <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: { modify: !s.savePlan?.modify } }))}
-                style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>
-                <span style={{ width: 16, height: 16, border: "1px solid rgba(255,255,255,0.5)", borderRadius: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>{v.savePlan.modify ? "✓" : ""}</span>
-                Change it in the Planner first
-              </button>
+            {dispatchMatch ? (
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 8, lineHeight: 1.4 }}>
+                You already have this layout as <b>Plan {slotLetter(dispatchMatch.slot)}{dispatchMatch.name ? ` · ${dispatchMatch.name}` : ""}</b>.
+                Your caps and CG apply.
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+                  <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: null }))}
+                    style={{ padding: "10px 6px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: `1px solid ${!v.savePlan ? "#fff" : "rgba(255,255,255,0.14)"}`, background: !v.savePlan ? "#fff" : "transparent", color: !v.savePlan ? "#000" : "#fff" }}>
+                    Quick load
+                  </button>
+                  <button type="button" onClick={() => setV((s) => ({ ...s, savePlan: { modify: true } }))}
+                    style={{ padding: "10px 6px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: `1px solid ${v.savePlan ? "#fff" : "rgba(255,255,255,0.14)"}`, background: v.savePlan ? "#fff" : "transparent", color: v.savePlan ? "#000" : "#fff" }}>
+                    Customize
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>
+                  {v.savePlan
+                    ? `Opens the Planner to set your caps and CG, and saves it as Plan ${saveSlot ? slotLetter(saveSlot.slot) : ""}${saveSlot?.replacing ? " (all plan slots are full, so this replaces it)" : ""}.`
+                    : "Runs this load as a temporary plan: no caps, CG centered. Nothing is saved."}
+                </div>
+              </>
             )}
           </div>
         )}
