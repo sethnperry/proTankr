@@ -84,7 +84,8 @@ import { styles } from "./ui/styles";
 // ── Utils ──────────────────────────────────────────────────────────────────────
 import { addDaysISO_, formatMDYWithCountdown_, isPastISO_ } from "./utils/dates";
 import { cgSliderToBias, lbsPerGallonAtTemp, planForGallons, CG_NEUTRAL, backCorrectApiTo60 } from "./utils/planMath";
-import { resolveApiBasis, apiTierColor } from "./utils/apiBasis";
+import { resolveApiBasis } from "./utils/apiBasis";
+import { buildTuneRows } from "./utils/tuneRows";
 import { productColorFor } from "./utils/productColor";
 import { recordLocationForSwitchTracking } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
@@ -2110,59 +2111,19 @@ const lastProductInfoById = useMemo(() => {
   // · date. Minimal by design. The density (lbsPerGal) already reflects any
   // tune (lbsPerGalForProductId reads tunedApiTempByProduct), so the panel and
   // the planned gallons can never disagree.
-  const tuneRows = useMemo(() => {
-    const ids = Array.from(plannedProductIds);
-    const rows = ids.map((pid) => {
-      const tuned = tunedApiTempByProduct[pid] ?? null;
-      const p = terminalProducts.find((x) => x.product_id === pid);
-      const info = lastProductInfoById[pid];
-      const lpg = lbsPerGalForProductId(pid);
-      const tempVal = tuned ? tuned.tempF : (productTempF[pid] ?? tempF);
-
-      // The API the plan stands on (same helper as the density) and a color
-      // for how fresh the reading is: green <=6h, white <=12h, orange <=24h,
-      // red older or no reading. A tuned value is white.
-      let displayApi: number | null = tuned ? tuned.api : null;
-      let apiColor = "#ffffff";
-      const basis = apiBasisForProduct(pid);
-      if (basis) {
-        displayApi = basis.displayApi;
-        apiColor = apiTierColor(basis.tier);
-      }
-
-      // #2: short absolute date/time of the last physical update, or "no
-      // reading" if never updated. (Tuned rows show "edited · just now".)
-      let lastApiDateLabel: string | null = null;
-      if (info?.last_api_updated_at) {
-        const d = new Date(info.last_api_updated_at);
-        if (!Number.isNaN(d.getTime())) {
-          let h = d.getHours(); const mm = d.getMinutes();
-          const ap = h < 12 ? "AM" : "PM"; h = h % 12; if (h === 0) h = 12;
-          lastApiDateLabel = `${d.getMonth() + 1}/${d.getDate()} ${h}:${String(mm).padStart(2, "0")} ${ap}`;
-        }
-      }
-      const dateLabel = tuned ? "just now" : (lastApiDateLabel ?? "no reading");
-      // The last real network reading (independent of any tune), shown as
-      // context inside the Tune overlay.
-      const lastApi = p?.last_api != null && Number.isFinite(Number(p.last_api)) ? Number(p.last_api) : null;
-
-      return {
-        productId: pid,
-        code: productCodeById[pid] || (productNameById.get(pid) ?? pid),
-        dotColor: (productHexCodeById[pid] && productHexCodeById[pid].trim()) || "rgba(255,255,255,0.5)",
-        tempF: tempVal,
-        api: displayApi,
-        apiColor,
-        lbsPerGal: lpg != null && Number.isFinite(lpg) ? lpg : null,
-        dateLabel,
-        tuned: !!tuned,
-        lastApi,
-        lastApiDateLabel,
-      };
-    });
-    rows.sort((a, b) => a.code.localeCompare(b.code));
-    return rows;
-  }, [plannedProductIds, tunedApiTempByProduct, terminalProducts, lastProductInfoById, productTempF, tempF, lbsPerGalForProductId, apiBasisForProduct, productCodeById, productNameById, productHexCodeById]);
+  const tuneRows = useMemo(() => buildTuneRows({
+    productIds: plannedProductIds,
+    tuned: tunedApiTempByProduct,
+    productTempF,
+    tempF,
+    lastApiByProduct: Object.fromEntries(terminalProducts.map((p) => [p.product_id, p.last_api])),
+    lastInfoById: lastProductInfoById,
+    lbsPerGal: lbsPerGalForProductId,
+    basis: apiBasisForProduct,
+    codeById: productCodeById,
+    nameById: productNameById,
+    hexById: productHexCodeById,
+  }), [plannedProductIds, tunedApiTempByProduct, terminalProducts, lastProductInfoById, productTempF, tempF, lbsPerGalForProductId, apiBasisForProduct, productCodeById, productNameById, productHexCodeById]);
 
   // Apply a Tune-panel edit: drives the planning density (tunedApiTempByProduct
   // + productTempF) AND the submission inputs (productInputs) so the logged
