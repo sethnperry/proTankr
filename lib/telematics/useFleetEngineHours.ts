@@ -21,7 +21,8 @@ export function useFleetEngineHours(companyId: string | null): Map<string, numbe
           const token = data.session?.access_token;
           if (!token) return;
           const r = await fetch(`/api/telematics/engine-hours?companyId=${encodeURIComponent(companyId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-          const j = r.ok ? await r.json() : null;
+          if (!r.ok) throw new Error("telematics answered " + r.status); // a failed answer is not "no connection": keep the last values and ask again
+        const j = await r.json();
           if (off) return;
           if (!j?.connected) { setHours(new Map()); return; }
           setHours(new Map(Object.entries(j.hours as Record<string, number>)));

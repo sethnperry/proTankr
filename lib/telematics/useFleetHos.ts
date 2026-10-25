@@ -22,7 +22,8 @@ export function useFleetHos(companyId: string | null, enabled: boolean, nonce = 
           const token = data.session?.access_token;
           if (!token) return;
           const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}${nonce > 0 ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-          const j = r.ok ? await r.json() : null;
+          if (!r.ok) throw new Error("telematics answered " + r.status); // a failed answer is not "no connection": keep the last values and ask again
+          const j = await r.json();
           if (off) return;
           if (!j?.connected) { setHos(new Map()); return; }
           setHos(new Map(Object.entries(j.hos as Record<string, HosAvailability>)));

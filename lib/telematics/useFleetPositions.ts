@@ -22,7 +22,8 @@ export function useFleetPositions(companyId: string | null, enabled: boolean): M
         const token = data.session?.access_token;
         if (!token) return;
         const r = await fetch(`/api/telematics/fleet?companyId=${encodeURIComponent(companyId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-        const j = r.ok ? await r.json() : null;
+        if (!r.ok) throw new Error("telematics answered " + r.status); // a failed answer is not "no connection": keep the last values and ask again
+        const j = await r.json();
         if (off) return;
         if (!j?.connected) { setPos(new Map()); return; } // no connection: don't keep asking
         setPos(new Map(Object.entries(j.positions as Record<string, LivePos>)));

@@ -15,19 +15,24 @@ export type TruckReading = { odometerMi: number | null; fuelLevelPct?: number | 
   lastDriver?: { name: string; at: string } | null;
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; cycleLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null };
 
-export async function fetchTruckReading(truckId: string | null): Promise<TruckReading | null> {
-  if (!truckId) return null;
+/** The truck's reading, and whether asking failed (provider down, server hiccup) as opposed to "no connection". */
+export async function fetchTruckReadingResult(truckId: string | null): Promise<{ reading: TruckReading | null; failed: boolean }> {
+  if (!truckId) return { reading: null, failed: false };
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return null;
+    if (!token) return { reading: null, failed: false };
     const r = await fetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-    if (!r.ok) return null;
+    if (!r.ok) return { reading: null, failed: true };
     const j = await r.json();
-    return j?.connected ? (j as TruckReading) : null;
+    return { reading: j?.connected ? (j as TruckReading) : null, failed: false };
   } catch {
-    return null;
+    return { reading: null, failed: true };
   }
+}
+
+export async function fetchTruckReading(truckId: string | null): Promise<TruckReading | null> {
+  return (await fetchTruckReadingResult(truckId)).reading;
 }
 
 /** Why a vehicle has no position (Geotab's own answers), fetched on request. */
@@ -63,10 +68,18 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
     if (!active || !truckId) { setReading(null); return; }
     let cancelled = false;
     let timer: number | undefined;
+    let failures = 0;
     const run = () => {
       if (pollMs && document.visibilityState === "hidden") { timer = window.setTimeout(run, pollMs); return; }
-      void fetchTruckReading(truckId).then((r) => {
+      void fetchTruckReadingResult(truckId).then(({ reading: r, failed }) => {
         if (cancelled) return;
+        if (failed) {
+          // Keep the last reading and ask again soon, a few times, instead of going quiet for good.
+          failures += 1;
+          if (failures <= 5) timer = window.setTimeout(run, pollMs ?? 30_000);
+          return;
+        }
+        failures = 0;
         setReading(r);
         if (pollMs && r) timer = window.setTimeout(run, pollMs); // no telematics: stop asking
       });
