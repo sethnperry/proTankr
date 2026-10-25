@@ -86,6 +86,7 @@ import { addDaysISO_, formatMDYWithCountdown_, isPastISO_ } from "./utils/dates"
 import { cgSliderToBias, lbsPerGallonAtTemp, planForGallons, CG_NEUTRAL, backCorrectApiTo60 } from "./utils/planMath";
 import { resolveApiBasis } from "./utils/apiBasis";
 import { buildTuneRows } from "./utils/tuneRows";
+import { isStaleReading, pickSafest, pickSafe, pickIgnore } from "./utils/staleApi";
 import { productColorFor } from "./utils/productColor";
 import { recordLocationForSwitchTracking } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
@@ -2144,34 +2145,14 @@ const lastProductInfoById = useMemo(() => {
   // dashboard control later without hunting for a hardcoded 7 (see #2).
   const STALE_API_DAYS = DEFAULT_STALE_API_DAYS;
   const computeStalePlannedProducts = useCallback((): StaleProduct[] => {
-    const out: StaleProduct[] = [];
-    for (const pid of plannedProductIds) {
-      const info = lastProductInfoById[pid];
-      const lastApi = info?.last_api;
-      const ts = info?.last_api_updated_at;
-      let stale = false;
-      if (lastApi == null || !Number.isFinite(Number(lastApi))) {
-        // Never loaded here -> NOT prompted. lbsPerGalForProductId already
-        // defaults an unproven product to its published heaviest (api_min),
-        // so there's nothing to decide -- the safe assumption is automatic.
-        stale = false;
-      } else if (!ts) {
-        // A reading with no timestamp is unknown-age, not fresh -- we can't
-        // prove it's current, so treat it as stale and let the driver decide.
-        stale = true;
-      } else {
-        const d = new Date(ts);
-        stale = !Number.isNaN(d.getTime()) && (Date.now() - d.getTime()) > STALE_API_DAYS * 86400000;
-      }
-      if (stale) {
-        out.push({
-          productId: pid,
-          name: productNameById.get(pid) ?? pid,
-          dotColor: (productHexCodeById[pid] && productHexCodeById[pid].trim()) || "rgba(255,255,255,0.5)",
-        });
-      }
-    }
-    return out;
+    const now = Date.now();
+    return Array.from(plannedProductIds)
+      .filter((pid) => isStaleReading(lastProductInfoById[pid], STALE_API_DAYS, now))
+      .map((pid) => ({
+        productId: pid,
+        name: productNameById.get(pid) ?? pid,
+        dotColor: (productHexCodeById[pid] && productHexCodeById[pid].trim()) || "rgba(255,255,255,0.5)",
+      }));
   }, [plannedProductIds, lastProductInfoById, productNameById, productHexCodeById]);
 
   // What Log the Load starts each product's API box at: whatever the driver
@@ -2206,40 +2187,19 @@ const lastProductInfoById = useMemo(() => {
   }, [staleApiPrompt, terminalProducts]);
 
   const handleStaleSafest = useCallback(() => {
-    // Published heaviest -> api_min (fall back to api_60 if not seeded yet).
-    const map = buildStaleOverride((p) => (p.api_min != null ? Number(p.api_min) : (p.api_60 != null ? Number(p.api_60) : null)));
+    const map = buildStaleOverride(pickSafest);
     setStaleApiPrompt(null);
     requestBegin(map);
   }, [buildStaleOverride, requestBegin]);
 
   const handleStaleSafe = useCallback(() => {
-    // "Heaviest this terminal has seen" -> the lowest of min_api_observed and
-    // the last reading. Product min (api_min, else api_60) only when this
-    // terminal has no history at all -- that's what "Safest" is for. This used
-    // to clamp to min(observed, product min), which made Safe identical to
-    // Safest at any terminal lighter than the published minimum (2026-09-28,
-    // same fix as apiBasis.ts).
-    const map = buildStaleOverride((p) => {
-      const observed = [p.min_api_observed, p.last_api]
-        .filter((v) => v != null && Number.isFinite(Number(v)))
-        .map(Number);
-      if (observed.length > 0) return Math.min(...observed);
-      return p.api_min != null && Number.isFinite(Number(p.api_min)) ? Number(p.api_min)
-        : p.api_60 != null && Number.isFinite(Number(p.api_60)) ? Number(p.api_60)
-        : null;
-    });
+    const map = buildStaleOverride(pickSafe);
     setStaleApiPrompt(null);
     requestBegin(map);
   }, [buildStaleOverride, requestBegin]);
 
   const handleStaleIgnore = useCallback(() => {
-    // Proceed on the last-known reading. Past 7 days the default basis is the
-    // terminal min, so "Ignore" has to pin the reading explicitly.
-    const map = buildStaleOverride((p) => {
-      if (p.last_api == null || !Number.isFinite(Number(p.last_api)) || p.alpha_per_f == null) return null;
-      const t = p.last_temp_f != null && Number.isFinite(Number(p.last_temp_f)) ? Number(p.last_temp_f) : 60;
-      return backCorrectApiTo60(Number(p.last_api), t, Number(p.alpha_per_f));
-    });
+    const map = buildStaleOverride((p) => pickIgnore(p, backCorrectApiTo60));
     setStaleApiPrompt(null);
     requestBegin(map);
   }, [buildStaleOverride, requestBegin]);
