@@ -3,7 +3,6 @@ import { useTruckReading, fetchTruckShipments } from "@/lib/telematics/useTruckR
 import { shipmentsForPickup, type GeoShipment } from "@/lib/telematics/shipmentMatch";
 import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
 import { openAccessSteps } from "./components/access/useAccessSteps";
-import { motion } from "framer-motion";
 import { clearSetupSession } from "@/lib/setupSession";
 import { usePathname, useRouter } from "next/navigation";
 import SetupGate from "./components/SetupGate";
@@ -53,15 +52,14 @@ import {
   type CapacityCompartmentInput,
 } from "@/lib/capacity/computeAvailableCapacity";
 import { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
-import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "./cards/cardTheme";
 
 // ── Sections ───────────────────────────────────────────────────────────────────
 import PlannerControls from "./sections/PlannerControls";
 import { useIsLandscape } from "./hooks/useOrientation";
+import TempDial from "./components/TempDial";
 import PresetActionSheet from "./components/PresetActionSheet";
 import { getTripPlan, markTripPlanApplied } from "@/lib/trips/tripPlan";
 import PresetQuickPick from "./components/PresetQuickPick";
-import { SolidPinIcon } from "./components/PlannerIcons";
 
 // ── Modals ─────────────────────────────────────────────────────────────────────
 // LocationModal/MyTerminalsModal now mount once in ShellChrome
@@ -71,8 +69,6 @@ import LoadingModal from "./modals/LoadingModal";
 import CancelLoadSheet from "./components/CancelLoadSheet";
 import TerminalSwitchDuringLoadSheet from "./components/TerminalSwitchDuringLoadSheet";
 import RecallDifferentEquipmentSheet from "./components/RecallDifferentEquipmentSheet";
-import SetupChecklist from "./components/SetupChecklist";
-import Spotlight, { useSpotlightRect } from "./components/TourSpotlight";
 import StaleApiOverlay, { type StaleProduct } from "./components/StaleApiOverlay";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
 import { isTerminalIssueCode, issueChoiceValue } from "@/lib/trips/terminalIssues";
@@ -85,27 +81,21 @@ import CompartmentDetailModal from "./components/CompartmentDetailModal";
 import { styles } from "./ui/styles";
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
-import { addDaysISO_, daysUntilISO_, formatMDYWithCountdown_, isPastISO_ } from "./utils/dates";
-import { normState } from "./utils/normalize";
-import { cgSliderToBias, bestLbsPerGallon, lbsPerGallonAtTemp, planForGallons, CG_NEUTRAL, backCorrectApiTo60 } from "./utils/planMath";
+import { addDaysISO_, formatMDYWithCountdown_, isPastISO_ } from "./utils/dates";
+import { cgSliderToBias, lbsPerGallonAtTemp, planForGallons, CG_NEUTRAL, backCorrectApiTo60 } from "./utils/planMath";
 import { resolveApiBasis, apiTierColor } from "./utils/apiBasis";
 import { writeActivePlannedLoad } from "./utils/activePlannedLoad";
 import { productColorFor } from "./utils/productColor";
-import { computeSetupChecklistSteps } from "./utils/setupChecklist";
-import { computeSpotlightStep, type SpotlightTarget } from "./utils/setupChecklistSpotlight";
-import { isSetupGuideAcknowledged, markSetupGuideAcknowledged } from "./utils/tourProgress";
-import { recordLocationForSwitchTracking, hasSwitchedCity } from "./utils/locationSwitchProgress";
+import { recordLocationForSwitchTracking } from "./utils/locationSwitchProgress";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 import { getTripStore, useTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import { useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
-import { addPickup, arrivePickup, closePickupNoLoad, confirmLoaded, defaultStepTimes, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
-import { loadingOffset } from "@/lib/trips/useTripData";
+import { addPickup, closePickupNoLoad, confirmLoaded, pickupNeedsOdometer, tripSnapshot, updateLoadedCompartments, type LoadedCompartmentEdit, type StepTimes } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripPickupRow, TripRow } from "@/lib/trips/types";
-import type { LoadingTripMode, TripCompExtra, TripLoadExtras } from "./modals/LoadingModal";
-import { TripStepBanner } from "./components/trip/TripStepBanner";
+import type { LoadingTripMode, TripLoadExtras } from "./modals/LoadingModal";
 import { openTripForDriver, retagLoadPickup, retargetWaitingPickup, unlinkCancelledLoad } from "@/lib/trips/tripLogic";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
 import { clearActivePlannedLoad } from "./utils/activePlannedLoad";
@@ -127,145 +117,6 @@ import type { ActiveComp, CompPlanInput, CompRow, ProductRow } from "./types";
 
 // ─── Local UI helpers ─────────────────────────────────────────────────────────
 
-const clampNum = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-
-
-// TempDial component -- "moon" redesign: a glowing gradient orb with
-// scattered decorative tick marks around it (reference image supplied by
-// user), same drag-anywhere-in-the-widget sensitivity as the old ring/arc
-// version (the hit area is still the full outer box, not just the visible
-// orb, so dragging isn't harder to grab). Tapping without dragging opens a
-// centered numeric-keypad popup to type the value directly -- same pattern
-// as the compartment cap's precise-entry popup in PlannerControls.tsx.
-type TempDialProps = { value: number; min: number; max: number; step: number; onChange: (v: number) => void };
-
-const TEMP_DIAL_TICKS = Array.from({ length: 12 }, (_, i) => {
-  const angle = i * 30 + 9; // slight offset so ticks don't land exactly on the cardinal points
-  const big = i % 2 === 0;
-  const dist = big ? 116 : 108 + ((i * 37) % 9); // subtle scatter, not a perfect ring
-  const rad = (angle * Math.PI) / 180;
-  return { cx: 120 + Math.cos(rad) * dist, cy: 120 + Math.sin(rad) * dist, angle, big };
-});
-
-function TempDial({ value, min, max, step, onChange }: TempDialProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [typing, setTyping] = useState(false);
-  const [typedValue, setTypedValue] = useState("");
-  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
-  const movedRef = useRef(false);
-
-  const sweepStart = -135;
-  const sweepEnd = 135;
-  const sweep = sweepEnd - sweepStart;
-
-  const angleToValue = useCallback((deg: number) => {
-    const anchorAngle = -90;
-    const degPerUnit = sweep / (max - min || 1);
-    const raw = 60 + (clampNum(deg, sweepStart, sweepEnd) - anchorAngle) / (degPerUnit || 1);
-    return clampNum(Math.round((Math.round(raw / step) * step) * 10) / 10, min, max);
-  }, [min, max, step, sweep, sweepStart, sweepEnd]);
-
-  const setFromPointer = useCallback((clientX: number, clientY: number) => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const dx = clientX - (r.left + r.width / 2);
-    const dy = clientY - (r.top + r.height / 2);
-    onChange(angleToValue(clampNum((Math.atan2(dy, dx) * 180) / Math.PI, sweepStart, sweepEnd)));
-  }, [angleToValue, onChange, sweepStart, sweepEnd]);
-
-  function commitTyped() {
-    const parsed = clampNum(Math.round((Number(typedValue) || 0) * 10) / 10, min, max);
-    onChange(parsed);
-    setTyping(false);
-  }
-
-  return (
-    <div
-      ref={ref}
-      style={{ width: "100%", maxWidth: 420, margin: "0 auto", aspectRatio: "1/1", position: "relative", touchAction: "none" }}
-      onPointerDown={(e) => {
-        if (typing) return;
-        (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-        pointerDownRef.current = { x: e.clientX, y: e.clientY };
-        movedRef.current = false;
-        setDragging(true);
-      }}
-      onPointerMove={(e) => {
-        if (typing || !dragging) return;
-        const start = pointerDownRef.current;
-        if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) movedRef.current = true;
-        if (movedRef.current) setFromPointer(e.clientX, e.clientY);
-      }}
-      onPointerUp={() => {
-        if (typing) return;
-        setDragging(false);
-        if (!movedRef.current) { setTypedValue(String(value)); setTyping(true); }
-      }}
-      onPointerCancel={() => setDragging(false)}
-    >
-      <svg viewBox="0 0 240 240" style={{ width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}>
-        {TEMP_DIAL_TICKS.map((t, i) => t.big ? (
-          <rect key={i} x={t.cx - 1.5} y={t.cy - 8} width={3} height={16} rx={1.5}
-            fill="rgba(255,255,255,0.55)" transform={`rotate(${t.angle + 90} ${t.cx} ${t.cy})`} />
-        ) : (
-          <rect key={i} x={t.cx - 2} y={t.cy - 2} width={4} height={4}
-            fill="rgba(255,255,255,0.28)" transform={`rotate(45 ${t.cx} ${t.cy})`} />
-        ))}
-      </svg>
-      <div style={{ position: "absolute", top: 6, left: 0, right: 0, textAlign: "center", fontWeight: 900, fontSize: 14, color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>60°F</div>
-      <div style={{
-        position: "absolute", inset: 0, margin: "auto", width: "68%", height: "68%",
-        borderRadius: "50%", pointerEvents: "none",
-        background: "radial-gradient(circle at 34% 28%, #ffffff 0%, #f4f4f4 30%, #d9d9d9 62%, #b6b6b6 100%)",
-        boxShadow: "0 22px 48px rgba(0,0,0,0.55), inset 0 -12px 26px rgba(0,0,0,0.12)",
-        display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
-      }}>
-        <div style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: 900, letterSpacing: -0.6, color: "#181818" }}>
-          {value.toFixed(1)}°F
-        </div>
-      </div>
-
-      {/* Tap-to-type -- opens on a tap that didn't drag, anywhere in the widget */}
-      {typing && (
-        <div
-          onClick={(e) => { e.stopPropagation(); setTyping(false); }}
-          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 280, background: "#161616", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, textTransform: "uppercase" as const }}>
-              Set Temp (°F) for All Products
-            </div>
-            <input
-              type="text" inputMode="decimal" autoFocus
-              value={typedValue}
-              onChange={(e) => setTypedValue(e.target.value.replace(/[^0-9.\-]/g, ""))}
-              onKeyDown={(e) => { if (e.key === "Enter") commitTyped(); }}
-              style={{ width: "100%", textAlign: "center" as const, background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.20)", color: "#fff", fontSize: 40, fontWeight: 700, padding: "4px 0" }}
-            />
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{min}° to {max}°</div>
-            <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 4 }}>
-              <button type="button" onClick={() => setTyping(false)}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                Cancel
-              </button>
-              <button type="button" onClick={commitTyped}
-                style={{ flex: 1, padding: "12px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                Set
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 
@@ -275,7 +126,7 @@ export default function PlannerHost() {
   // bell icons and this page's own planning logic never see two
   // independently-hydrated copies of the same selection state.
   const shell = useCalculatorShell();
-  const { authUserId, setupSession, effectiveUserId, equipment, location, terminals, expirations } = shell;
+  const { authUserId, setupSession, effectiveUserId, equipment, location, terminals } = shell;
   const router = useRouter();
   // This host stays mounted for every /planner screen; the Planner page itself
   // shows only on the bare /planner route. Modals (Plan Review, load report,
@@ -317,7 +168,6 @@ export default function PlannerHost() {
   // one row of equal width and height for each"). Same hook, just a
   // second call with a bigger minWidth -- no changes needed in
   // useOrientation.ts itself.
-  const isUltraWideLandscape = useIsLandscape(1600);
 
   // Landscape composition, replacing the old fixed-width-two-column +
   // transform:scale system entirely (see CLAUDE.md's own landscape
@@ -396,7 +246,6 @@ export default function PlannerHost() {
   // Owned in CalculatorShellContext now -- the new Cards tab route needs the
   // same data, so it's shared rather than fetched twice (same pattern as
   // equipment/location/terminals above).
-  const { cardDataByTerminalId, setCardDataForTerminal_ } = shell;
 
   // Framer-motion's layoutId shared-element transitions render a differently
   // serialized `style` attribute server-side vs. after hydration (e.g. its
@@ -451,13 +300,7 @@ export default function PlannerHost() {
   // MyTerminalsModal instances (now mounted once in ShellChrome), so this
   // page and that one can't each carry an independent copy without risking
   // the two drifting out of sync.
-  const {
-    equipOpen, setEquipOpen, termOpen, setTermOpen,
-    locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
-    expandedTerminalId, setExpandedTerminalId,
-    isCityStarred, toggleCityStar,
-    stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
-  } = shell;
+  const { setEquipOpen, setTermOpen, setLocOpen } = shell;
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogExpandedId, setCatalogExpandedId] = useState<string | null>(null);
   const [catalogEditingDateId, setCatalogEditingDateId] = useState<string | null>(null);
@@ -1330,13 +1173,6 @@ export default function PlannerHost() {
     return m;
   }, [planRows]);
 
-  const plannedWeightLbs = useMemo(
-    () => planRows.reduce((sum, r: any) => sum + Number(r.planned_gallons ?? 0) * Number(r.lbsPerGal ?? 0), 0),
-    [planRows]
-  );
-
-  const plannedGallonsTotal = planRows.reduce((s, r) => s + r.planned_gallons, 0);
-
   // ── Loading modal: Plan Review gallons override ─────────────────────────────
   // Isolated per-compartment override, applied AFTER planRows is already
   // computed -- deliberately NOT compPlan.capOverride, which feeds INTO
@@ -1635,7 +1471,6 @@ export default function PlannerHost() {
       .filter((p) => p.trip_id === trip.trip_id && !p.load_id && !p.left_at)
       .sort((a, b) => a.seq - b.seq)[0] ?? null;
   }, [effectiveUserId, tripStoreHook.state]);
-  const tripAwaitingLoad = !!tripWaitingPickup;
   const tripNeedsArrive = !!tripWaitingPickup && !tripWaitingPickup.arrived_at;
   // Before the driver has arrived, the rack isn't known; it's asked on Arrive.
   useEffect(() => {
@@ -2151,28 +1986,6 @@ export default function PlannerHost() {
     return t?.terminal_name ? String(t.terminal_name) : "Terminal";
   }, [terminals.terminals, terminals.terminalCatalog, location.selectedTerminalId]);
 
-  const selectedTerminal = useMemo(
-    () => terminals.terminals.find((t) => String(t.terminal_id) === String(location.selectedTerminalId)) ?? null,
-    [terminals.terminals, location.selectedTerminalId]
-  );
-
-  // For display name only — also check catalog for terminals not yet visited
-  const selectedTerminalAny = useMemo(
-    () => selectedTerminal
-      ?? terminals.terminalCatalog.find((t) => String(t.terminal_id) === String(location.selectedTerminalId))
-      ?? null,
-    [selectedTerminal, terminals.terminalCatalog, location.selectedTerminalId]
-  );
-
-  const terminalDisplayISO = useMemo(() => {
-    if (!selectedTerminal) return null; // needs full TerminalRow for expiry calc
-    return terminals.terminalDisplayInfo(selectedTerminal, location.selectedTerminalId);
-  }, [selectedTerminal, terminals, location.selectedTerminalId]);
-
-  const terminalCardedText = terminalDisplayISO ? formatMDYWithCountdown_(terminalDisplayISO) : undefined;
-  const terminalCardedClass = terminalCardedText
-    ? (isPastISO_(terminalDisplayISO!) ? "text-red-500" : "text-white/50") : undefined;
-
   // ── Mid-load terminal switch (Plan Review's tappable terminal name) ────────
   // Per explicit direction: tapping the terminal name in LoadingModal opens
   // the shared location/terminal picker without leaving Plan Review. If
@@ -2422,35 +2235,6 @@ export default function PlannerHost() {
       console.warn("[trips] retarget pickup failed (non-fatal):", e);
     }
   }, [shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, loadWorkflow.activeLoadId, terminalSwitchWatch, terminalSwitchConfirm, tripWaitingPickup, effectiveUserId, tripStoreHook]);
-
-  // ARRIVE AT {terminal}: loading can't begin on a trip until the driver has
-  // arrived at the pickup. Arriving is at the terminal selected here; if
-  // that's not the one the pickup named, the pickup follows it first.
-  const handleArriveAtPickup = useCallback(() => {
-    const p = tripWaitingPickup;
-    if (!p || !effectiveUserId || !location.selectedTerminalId) return;
-    try {
-      const store = getTripStore(effectiveUserId);
-      const cur = String(location.selectedTerminalId);
-      if (p.terminal_id !== cur) {
-        retargetWaitingPickup(store, p.pickup_id, {
-          terminalId: cur, rackId: location.selectedRackId ? String(location.selectedRackId) : null,
-          name: terminalLabel || null, city: location.selectedCity, state: location.selectedState,
-        });
-      }
-      const fresh = store.list("trip_pickups", (x) => x.pickup_id === p.pickup_id)[0] ?? p;
-      arrivePickup(store, { userId: effectiveUserId, pickup: fresh, now: new Date(), newId: newTripId });
-      void tripStoreHook.syncNow();
-      // Which rack isn't known until the driver is here: ask now, record it on the pickup.
-      if (!fresh.rack_id) {
-        void shell.askRack(cur).then((rackId) => {
-          if (rackId) { store.put("trip_pickups", { pickup_id: p.pickup_id, rack_id: rackId }); void tripStoreHook.syncNow(); }
-        });
-      }
-    } catch (e) {
-      console.warn("[trips] arrive failed:", e);
-    }
-  }, [tripWaitingPickup, effectiveUserId, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, tripStoreHook, shell]);
 
   // Same-city silent refresh: waits for useFuelTempPrediction's own refetch
   // (already triggered automatically -- its signature includes terminalId,
@@ -2826,13 +2610,6 @@ const lastProductInfoById = useMemo(() => {
       active ? "border-yellow-400/40 text-yellow-300 hover:bg-yellow-400/10"
         : "border-white/10 text-white/40 hover:bg-white/5 hover:text-white/80"].join(" ");
 
-  // ── Plan styles ────────────────────────────────────────────────────────────
-  const planStyles = useMemo(() => ({
-    ...styles,
-    smallBtn: { ...styles.smallBtn, padding: "10px 14px", minWidth: 112, borderRadius: 2, letterSpacing: "0.4px" },
-    badge: { ...styles.badge, marginRight: 10 },
-  }), []);
-
   // ── Derived load state ─────────────────────────────────────────────────────
   // unavailableComps is deliberately NOT folded into loadDisabled -- per
   // spec, tapping LOAD while it's non-empty should produce an explicit
@@ -2866,12 +2643,6 @@ const lastProductInfoById = useMemo(() => {
   // now behind a different truck.
   const tripEquip = useTripEquipment(tripStoreHook, effectiveUserId || null);
   const openEquipment = tripEquip.openEquipment;
-
-  const loadLabel = loadWorkflow.beginLoadBusy ? "Starting…"
-    : loadWorkflow.activeLoadId ? "Load started"
-    : tripNeedsArrive ? `ARRIVE AT ${(terminalLabel || tripWaitingPickup?.name || "TERMINAL").toUpperCase()}`
-    : tripAwaitingLoad ? "BEGIN LOADING"
-    : "LOAD";
 
   // Begin Loading / Continue Trip from the dashboard: when a plan is already in
   // place, open Plan Review right over the dashboard (what BEGIN LOADING would
@@ -3020,151 +2791,9 @@ const lastProductInfoById = useMemo(() => {
     />
   );
 
-  // Passive, tappable location readout -- directly above the compartments,
-  // separate from the pin icon in the new compact row (which stays the
-  // "open the picker" action). Recommended and shipped as-is per the
-  // earlier design conversation: "it would be nice to at least display the
-  // location on the planner as that is the thing that changes most
-  // frequently" -- everywhere else tried didn't look right, this was the
-  // best-found position (since superseded, see below). Same step-based
-  // open logic as the old Location card (Select Location -> Select
-  // Terminal) so tapping the line behaves identically to tapping the pin
-  // icon.
-  //
-  // Restyled per the header-merge mockup into a 2-line block, then
-  // reordered again per explicit same-day follow-up ("put the terminal
-  // first and the city state separated by a dot"): terminal name leads,
-  // followed by "· City, State" (the "·" matches this app's own
-  // established separator convention -- e.g. the RECAP label's own
-  // "· {date}"). Rack name moved onto that SAME line per a further
-  // same-day follow-up ("put the rack on the same line with the
-  // terminal, all the way to the right, same weight") -- pushed to the
-  // far right via justify-content:space-between on the row, styled
-  // identically to the terminal/city-state (white, 700) instead of its
-  // old dim gray. The terminal+city/state pair gets its own
-  // overflow:hidden sub-wrapper so IT truncates first on a narrow screen
-  // (ellipsis) rather than squeezing the rack name, which stays
-  // flexShrink:0 so it's never the one that gets clipped. Rack name
-  // reuses selectedRackName (already fetched above for PlannerControls'
-  // own use), not a new query.
-  const locationStep: "location" | "terminal" = location.selectedCity && location.selectedState ? "terminal" : "location";
-  const locationLineEl = (
-    <button
-      type="button"
-      onClick={() => { if (locationStep === "location") setLocOpen(true); else setTermOpen(true); }}
-      style={{
-        width: "100%", boxSizing: "border-box" as const, textAlign: "left" as const,
-        border: "none", background: "none", padding: "0 2px", marginTop: 10, marginBottom: 18,
-        cursor: "pointer", display: "flex", minWidth: 0,
-      }}
-    >
-      {location.selectedTerminalId ? (
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, width: "100%", minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0, overflow: "hidden" }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-              {terminalLabel}
-            </span>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-              · {location.locationLabel}
-            </span>
-          </div>
-          {/* Reverted to gray/500 the same day -- "the rack label on the
-              right can go back to grey" -- stays on the same line, far
-              right (see the row's own justify-content:space-between),
-              just no longer white/700 like the terminal/city-state. */}
-          {selectedRackName && (
-            <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.45)", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-              {selectedRackName}
-            </span>
-          )}
-        </div>
-      ) : (
-        <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.35)" }}>
-          {locationStep === "location" ? "Select location" : "Select terminal"}
-        </span>
-      )}
-    </button>
-  );
-
-  // Extracted alongside presetDialEl for the same reason -- landscape
-  // renders it inside the compartments (right) column instead of
-  // full-width above the whole two-column row, per explicit follow-up:
-  // "the plan slot row extended all the way into the left column. it
-  // should only stretch across the right column. the save plan button
-  // should be on the right as well." Was two conditional render sites
-  // (portrait-only above locationLineEl, landscape-only inside the
-  // compartments column) -- now one unconditional render site inside the
-  // compartments column for both orientations, per the same-day follow-up
-  // below.
-  //
-  // stabilityBannerEl: moved up out of the CG-slider block into this same
-  // top cluster, per
-  // explicit direction ("this should be the top row [locationLineEl].
-  // everything else will be below it: the stability banner, then the
-  // save plan and edit product button") -- unstableLoad itself (computed
-  // above from cgSlider) is unchanged, only where the warning renders.
-  // Derived fresh every render from the driver's own saved presets (slot 1 =
-  // Plan A, slot 2 = Plan B -- same numbering actionRowEl's "Save plan
-  // {letter}" already uses) -- see utils/setupChecklist.ts's own header
-  // comment for why this is never a separately-tracked flag.
-  //
-  // Real DOM targets for the Setup Guide's "look here" spotlight -- see
-  // components/TourSpotlight.tsx's own header comment for why these are
-  // plain refs (reliable targeting) rather than a selector/coordinate
-  // guess. Attached below: locationIconRef on the header's pin button,
-  // planLetterIconRef on the header's plan-letter button, savePlanButtonRef
-  // on actionRowEl's "Save plan {letter}" button, compartmentsAreaRef
-  // wrapping <PlannerControls>.
-  const locationIconRef = useRef<HTMLButtonElement | null>(null);
   const planLetterIconRef = useRef<HTMLButtonElement | null>(null);
   const savePlanButtonRef = useRef<HTMLButtonElement | null>(null);
   const compartmentsAreaRef = useRef<HTMLDivElement | null>(null);
-  const [checklistCollapsed, setChecklistCollapsed] = useState(false);
-  const [guideAckDismissedLocal, setGuideAckDismissedLocal] = useState(false);
-  const [dismissedSpotlightTarget, setDismissedSpotlightTarget] = useState<SpotlightTarget | null>(null);
-
-  const setupChecklistSteps = computeSetupChecklistSteps(
-    compartments,
-    planSlots.peekSlot(1),
-    planSlots.peekSlot(2),
-    { hasTerminalSelected: !!location.selectedTerminalId, hasSwitchedCity: hasSwitchedCity(effectiveUserId) },
-    { activeSlotLetter, compPlan }
-  );
-  const allSetupStepsDone = setupChecklistSteps.every((s) => s.done);
-  const setupGuideAcknowledged = guideAckDismissedLocal || isSetupGuideAcknowledged(effectiveUserId);
-
-  // "Look here" spotlight -- continuously follows whichever sub-step is
-  // next-incomplete (see setupChecklistSpotlight.ts's own header comment
-  // for why this needs no separate step-sequencer state: it's just
-  // re-derived from the same ChecklistStep[] the card itself renders
-  // from). Tapping the caption's "Got it" only silences THIS target --
-  // dismissedSpotlightTarget resets the moment the real target changes
-  // (the driver did something), so it never permanently suppresses
-  // guidance for a later, different step.
-  // (isPartialEquipment itself isn't declared until further down in this
-  // function -- same underlying equipment.isBobtail/isTrailerOnly check,
-  // inlined here to avoid a temporal-dead-zone reference.)
-  const rawSpotlightStep = (!(equipment.isBobtail || equipment.isTrailerOnly) && !setupGuideAcknowledged && !checklistCollapsed)
-    ? computeSpotlightStep(setupChecklistSteps, activeSlotLetter)
-    : null;
-  const activeSpotlightStep = rawSpotlightStep && rawSpotlightStep.target !== dismissedSpotlightTarget ? rawSpotlightStep : null;
-  const locationSpotlightRect = useSpotlightRect(locationIconRef, activeSpotlightStep?.target === "location-icon");
-  const compartmentsSpotlightRect = useSpotlightRect(compartmentsAreaRef, activeSpotlightStep?.target === "compartments");
-  const savePlanSpotlightRect = useSpotlightRect(savePlanButtonRef, activeSpotlightStep?.target === "save-plan");
-  const planLetterSpotlightRect = useSpotlightRect(planLetterIconRef, activeSpotlightStep?.target === "switch-to-plan-b");
-  const setupSpotlightEl = activeSpotlightStep ? (
-    <Spotlight
-      rect={
-        activeSpotlightStep.target === "location-icon" ? locationSpotlightRect
-        : activeSpotlightStep.target === "compartments" ? compartmentsSpotlightRect
-        : activeSpotlightStep.target === "save-plan" ? savePlanSpotlightRect
-        : planLetterSpotlightRect
-      }
-      title={activeSpotlightStep.caption}
-      actionLabel="Got it"
-      onAction={() => setDismissedSpotlightTarget(activeSpotlightStep.target)}
-    />
-  ) : null;
 
   const stabilityBannerEl = unstableLoad ? (
     <div style={{ ...styles.error, marginTop: 0, marginBottom: 12, textAlign: "center" as const }}>
@@ -3174,29 +2803,6 @@ const lastProductInfoById = useMemo(() => {
 
   const currentOverrides = overridesSnapshot(compPlan, cgSlider);
   const isDirty = currentOverrides !== baselineOverrides;
-  const activeLetter = String.fromCharCode(64 + activeSlotLetter);
-  const actionRowEl = (!isDirty && selectedComp == null) ? null : (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, minHeight: 18 }}>
-      <div>
-        {isDirty && (
-          <button ref={savePlanButtonRef} type="button"
-            onClick={() => { planSlots.saveToSlot(activeSlotLetter); setBaselineOverrides(currentOverrides); }}
-            style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            Save plan {activeLetter}
-          </button>
-        )}
-      </div>
-      <div>
-        {selectedComp != null && (
-          <button type="button"
-            onClick={() => { setCompModalComp(selectedComp); setCompModalOpen(true); }}
-            style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            Edit Comp {selectedComp} Product
-          </button>
-        )}
-      </div>
-    </div>
-  );
 
   // ── Plan Builder (wizard) + compartment detail ─────────────────────────────
   // Every coupled trailer must have at least one plan. With none (no preset
@@ -3570,10 +3176,6 @@ const lastProductInfoById = useMemo(() => {
           : grossLbs >= targetWeight ? "#4ade80"
           : "#fff";
 
-        const locationSelected = Boolean(location.selectedCity && location.selectedState);
-        const terminalSelected = Boolean(location.selectedTerminalId);
-        const hasEquipment = Boolean(equipment.selectedCombo);
-
         // Plan-letter / Equipment / Location cluster -- portaled into the
         // shared header's slot div (see headerIconsSlot above and
         // CalculatorLayoutClient.tsx's own comment) instead of rendering as
@@ -3635,76 +3237,6 @@ const lastProductInfoById = useMemo(() => {
           </div>
         );
 
-        // ── "View Last Load" (replaces the old Payload utilization /
-        // recap-recall cards) ────────────────────────────────────────────
-        // Per explicit direction: no passive "last load" info on this page
-        // at all -- this is a plain button, that fetches and opens the most
-        // recent completed load AT THE CURRENT TERMINAL into Plan Review's
-        // own Load Report mode (see openLoadReportAtTerminal above). Never
-        // shows anything on its own until tapped. Sits directly below the
-        // Load button now (was beside the recap card) -- per explicit
-        // follow-up, styled to the same size/shape as loadButtonEl below
-        // (same border-radius/padding/font, full width of its own
-        // container) rather than the smaller graphite-card look it had
-        // before.
-        const viewLastLoadEl = (equipment.selectedComboId && location.selectedTerminalId) ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <button aria-busy={!!(viewLastLoadBusy)}
-              type="button"
-              onClick={() => void openLoadReportAtTerminal()}
-              disabled={viewLastLoadBusy}
-              style={{
-                borderRadius: 2, border: CARD_BORDER, background: CARD_BG, boxShadow: CARD_SHADOW,
-                padding: "10px 14px", width: "100%",
-                cursor: viewLastLoadBusy ? "not-allowed" : "pointer", opacity: viewLastLoadBusy ? 0.6 : 1,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.85)", letterSpacing: 0.3 }}>
-                {viewLastLoadBusy ? "Loading…" : "View Last Load"}
-              </span>
-            </button>
-            {viewLastLoadMsg && (
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center" as const }}>{viewLastLoadMsg}</div>
-            )}
-          </div>
-        ) : null;
-
-        const perfCard = viewLastLoadEl;
-
-        const loadButtonEl = (
-          <button type="button" aria-busy={loadWorkflow.beginLoadBusy}
-            onClick={() => {
-              if (unavailableComps.length > 0) {
-                setLoadBlockedMsg(`Cannot Load, all planned products are not available at ${terminalLabel || "this terminal"}`);
-                return;
-              }
-              // Temp + API are confirmed/tuned inside Plan Review's Tune panel
-              // now (no separate Confirm Temp step). Staleness is handled there
-              // too: the density falls back to the heaviest safe minimum for a
-              // stale/missing reading (see apiBasis.ts) and the Tune line colors
-              // the API by confidence, so the interrupting Good/Better/Best
-              // overlay is no longer needed -- begin straight into Plan Review.
-              if (tripNeedsArrive) { handleArriveAtPickup(); return; }
-              requestBegin({});
-            }}
-            disabled={tripNeedsArrive ? !location.selectedTerminalId : loadDisabled}
-            style={{
-              // Fixed white bg / black text now, per explicit direction --
-              // was themeFill/themeTextOnFill (graphite or accent-colored
-              // fill with white text in dark mode); this button no longer
-              // follows the accent color at all.
-              borderRadius: 2, border: "none", background: "#ffffff",
-              padding: "10px 14px", width: "100%", height: isUltraWideLandscape ? "100%" : undefined,
-              cursor: (tripNeedsArrive ? !location.selectedTerminalId : loadDisabled) ? "not-allowed" : "pointer",
-              opacity: (tripNeedsArrive ? !location.selectedTerminalId : loadDisabled) ? 0.5 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: "#000000", letterSpacing: 0.3 }}>{loadLabel}</span>
-          </button>
-        );
-
         // The Plan page's button: "New Plan" starts the Plan Builder; once the
         // driver changes anything it becomes "Save Plan" and goes back to
         // "New Plan" after saving.
@@ -3736,50 +3268,6 @@ const lastProductInfoById = useMemo(() => {
           </button>
         );
 
-        const loadBlockedMsgEl = loadBlockedMsg ? (
-          <div style={{ ...styles.error, textAlign: "center" as const }}>{loadBlockedMsg}</div>
-        ) : null;
-
-        const footnoteEl = (
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.32)", textAlign: "center" as const, lineHeight: 1.4 }}>
-            Product API & temp confirm automatically after this load, sharpening the number for the next driver at this terminal.
-          </div>
-        );
-
-        // Composition: portrait stacks recapCard/pointsCard exactly as
-        // it always has. Normal landscape places the same two cards SIDE
-        // BY SIDE instead (flex row, each card's own flex:1 splitting the
-        // width evenly) -- reverses the immediately preceding pass's
-        // "merge everything into one inline stats band" attempt, which
-        // looked bad live (confirmed via a real device screenshot: a lot
-        // of dead space, no visual separation between the two cards'
-        // figures). "View Last Load" (perfCard) now sits BELOW the Load
-        // button in every orientation, per explicit follow-up ("scoot the
-        // view last load down below the load button") -- portrait and
-        // normal landscape both just stack recapCard/loadButtonEl/perfCard
-        // in a single column now (nothing left to place side by side once
-        // perfCard moved out of the row), picking up the outer container's
-        // own gap for spacing. Ultra-wide landscape keeps recapCard and
-        // loadButtonEl as two equal-width/height grid cells
-        // (alignItems:"stretch" is what makes the Load button's own cell
-        // match the recap card's height -- paired with the button's own
-        // height:"100%" above -- not a hardcoded number), with perfCard as
-        // its own full-width row underneath.
-        const statsAndLoadEl = isUltraWideLandscape ? (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "stretch" }}>
-              {recapCard}
-              {loadButtonEl}
-            </div>
-            {perfCard}
-          </>
-        ) : (
-          <>
-            {recapCard}
-            {loadButtonEl}
-            {perfCard}
-          </>
-        );
         // Partial (bobtail / trailer-only): no full combo -> no recap, no
         // utilization, no LOAD. Only the header icon cluster (EQ / pin /
         // plan-letter) still portals in, so the driver can pick the missing
