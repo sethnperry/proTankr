@@ -1,7 +1,6 @@
 "use client";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { openAccessSteps } from "./components/access/useAccessSteps";
-import { clearSetupSession } from "@/lib/setupSession";
 import { usePathname, useRouter } from "next/navigation";
 import SetupGate from "./components/SetupGate";
 import SoloOnboarding from "./components/SoloOnboarding";
@@ -43,6 +42,9 @@ let hasCheckedDefaultLanding = false;
 import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
+import CgSlider from "./components/CgSlider";
+import SetupSessionBanner from "./components/SetupSessionBanner";
+import PlanSummaryCard from "./components/PlanSummaryCard";
 import { usePlannerSuppliers } from "./hooks/usePlannerSuppliers";
 import { usePlannerEquipment } from "./hooks/usePlannerEquipment";
 import { useTerminalProducts } from "./hooks/useTerminalProducts";
@@ -2111,31 +2113,7 @@ const lastProductInfoById = useMemo(() => {
         </div>,
         document.body,
       )}
-      {/* Admin setup session banner */}
-      {setupSession && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", marginBottom: 8, borderRadius: 2, background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.30)" }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "#fb923c", letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Setting up planner for</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.90)", marginTop: 1 }}>{setupSession.targetDisplayName}</div>
-          </div>
-          <button type="button"
-            onClick={() => {
-              clearSetupSession();
-              // Hard navigation -- when returnTo stays inside the
-              // /planner layout (e.g. "/planner/dispatch"),
-              // CalculatorShellProvider never unmounts on a router.push, so
-              // it never re-reads sessionStorage and the just-cleared
-              // session would silently stick (confirmed live: the "Setting
-              // up planner for" banner stayed visible after this click).
-              // Same fix as the Dispatch tab's own "Use app as X" entry
-              // point, applied symmetrically to the exit.
-              window.location.href = setupSession.returnTo ?? "/admin";
-            }}
-            style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 2, border: "1px solid rgba(251,146,60,0.40)", background: "rgba(251,146,60,0.15)", color: "#fb923c", cursor: "pointer", whiteSpace: "nowrap" as const }}>
-            ← Return to {setupSession.returnTo === "/planner/dispatch" ? "Dispatch" : "Admin"}
-          </button>
-        </div>
-      )}
+      {setupSession && <SetupSessionBanner targetDisplayName={setupSession.targetDisplayName} returnTo={setupSession.returnTo} />}
 
       {/* PresetQuickPick + PresetActionSheet -- both plain overlay sheets,
           position in the JSX tree doesn't matter functionally, rendered
@@ -2266,44 +2244,7 @@ const lastProductInfoById = useMemo(() => {
         );
       })()}
 
-      {/* CG Slider — always visible. The "Unstable load" warning that used
-          to render right here moved up to the top cluster (see
-          stabilityBannerEl, above locationLineEl/actionRowEl) per explicit
-          direction -- unstableLoad itself is unchanged, just read from a
-          different render site now. */}
-      <div style={{ marginTop: 18 }}>
-        <style jsx global>{`
-          input.cgRange { -webkit-appearance: none; appearance: none; background: transparent; height: 24px; }
-          input.cgRange:focus { outline: none; }
-          input.cgRange::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.10); border: none; }
-          input.cgRange::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; background: transparent; border: none; opacity: 0; }
-          input.cgRange::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.10); border: none; }
-          input.cgRange::-moz-range-thumb { width: 22px; height: 22px; background: transparent; border: none; opacity: 0; }
-        `}</style>
-        <div style={{ position: "relative", width: "100%" }}>
-          <input type="range" className="cgRange" min={0} max={1} step={0.005} value={cgSlider}
-            onChange={(e) => setCgSlider(Number(e.target.value))}
-            style={{ width: "100%" }} disabled={!equipment.selectedCombo}
-          />
-          {/* Puck — fixed white now, per explicit direction ("the CG
-              handle to white"), no longer accent/theme-driven. */}
-          <div aria-hidden style={{
-            position: "absolute",
-            left: `${Math.max(0, Math.min(1, cgSlider)) * 100}%`,
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            width: 22, height: 22,
-            borderRadius: "50%",
-            background: "#ffffff",
-            pointerEvents: "none",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
-          }} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "0 2px", marginTop: 2 }}>
-          <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.3)" }}>Rear</span>
-          <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.3)" }}>Front</span>
-        </div>
-      </div>
+      <CgSlider value={cgSlider} onChange={setCgSlider} disabled={!equipment.selectedCombo} />
       </>
       )}
       </div>
@@ -2386,24 +2327,8 @@ const lastProductInfoById = useMemo(() => {
         // them share width evenly when placed in a row; harmless (and
         // simply unused) when they're stacked in a column instead.
         const recapCard = (
-          <div style={{ borderRadius: 2, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0 }}>
-            {/* Plain status text now -- not a button, nothing to tap. See
-                this block's own comment above for why this used to
-                silently overwrite the live plan. */}
-            <div style={{
-              marginBottom: 6, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)",
-              textTransform: "uppercase" as const, letterSpacing: 0.4,
-            }}>
-              Plan
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{plannedGalText}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: grossColor, textAlign: "right" as const }}>{grossText}</div>
-            </div>
-            {!active && planUsesReferenceApi && planRows.length > 0 && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#fb923c", marginTop: 4 }}>⚠ using ref API</div>
-            )}
-          </div>
+          <PlanSummaryCard gallonsText={plannedGalText} grossText={grossText} grossColor={grossColor}
+            showRefApiWarning={!active && planUsesReferenceApi && planRows.length > 0} />
         );
 
         // The Plan page's button: "New Plan" starts the Plan Builder; once the
