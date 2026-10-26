@@ -59,15 +59,15 @@ import { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDuringLoad
 
 // ── Sections ───────────────────────────────────────────────────────────────────
 import { useIsLandscape } from "./hooks/useOrientation";
+import { useTripPlanApply } from "./hooks/useTripPlanApply";
+import { usePlannerWindowState } from "./hooks/usePlannerWindowState";
 import { useLeaveTo } from "./hooks/useLeaveTo";
 import { usePlannerLanding } from "./hooks/usePlannerLanding";
 import { useHeaderIconsSlot } from "./hooks/useHeaderIconsSlot";
-import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tripPlan";
 
 // ── Modals ─────────────────────────────────────────────────────────────────────
 // LocationModal/MyTerminalsModal now mount once in ShellChrome
 // (CalculatorLayoutClient.tsx) -- see the render-site comment further down.
-import { type StaleProduct } from "./components/StaleApiOverlay";
 
 // ── UI ─────────────────────────────────────────────────────────────────────────
 import { styles } from "./ui/styles";
@@ -112,49 +112,35 @@ export default function PlannerHost() {
 
   const headerIconsSlot = useHeaderIconsSlot(isLandscape);
 
-  // ── Window state ───────────────────────────────────────────────────────────
-  // The equipment, location, terminal and expirations windows are open/closed in the
-  // shell, because the header opens them too.
-  const [compModalOpen, setCompModalOpen] = useState(false);
-  const [compModalComp, setCompModalComp] = useState<number | null>(null);
-  const [tempDialOpen, setTempDialOpen] = useState(false);
-  // The Finish Loading choice sheet (log the load / update card only / keep editing).
-  const [cancelLoadConfirmOpen, setCancelLoadConfirmOpen] = useState(false);
-  // The terminal's access date before begin_load re-carded it, so "Back to Planner" can
-  // undo that. A null prevValue means there was no prior record.
-  const preLoadCardedOnRef = useRef<{ terminalId: string; prevValue: string | null } | null>(null);
-
-  // ── Stale-API safety ───────────────────────────────────────────────────────
-  // Per-product API override that forces a heavier density when the driver chose
-  // Safest/Safe for a stale reading. Cleared when Plan Review closes.
-  const [apiSafetyOverride, setApiSafetyOverride] = useState<Record<string, number>>({});
-  // Per-product API and temperature the driver tuned in Plan Review. Overrides the
-  // density basis for that product. Cleared when Plan Review closes.
-  const [tunedApiTempByProduct, setTunedApiTempByProduct] = useState<Record<string, { api: number; tempF: number }>>({});
-  // The stale-API decision overlay's own open state + which products it lists.
-  const [staleApiPrompt, setStaleApiPrompt] = useState<{ products: StaleProduct[] } | null>(null);
-  // A stale-API choice sets the override and flips this; an effect then begins the load
-  // on the next render, once the plan has recomputed against the override.
-  const [beginAfterOverride, setBeginAfterOverride] = useState(false);
-
-  // ── Action row state ───────────────────────────────────────────────────────
-  // activeSlotLetter is the plan letter on screen. Every load is tagged with it.
-  // selectedComp is the compartment last tapped.
-  const [activeSlotLetter, setActiveSlotLetter] = useState(1);
-  const [selectedComp, setSelectedComp] = useState<number | null>(null);
-  // usePlanSlots calls this when the live plan restores, to put the plan letter back.
-  const handlePlanRestored = useCallback((slot: number | null) => {
-    if (slot != null) setActiveSlotLetter(slot);
-  }, []);
-  // Holds back seeding blank compartment entries until usePlanSlots has tried to restore
-  // the saved plan for this combo; otherwise a blank plan could be autosaved over it.
-  const [planRestoreAttempted, setPlanRestoreAttempted] = useState(false);
-  const handleRestoreAttempted = useCallback(() => {
-    setPlanRestoreAttempted(true);
-  }, []);
-  // Recall Last Load found a load at this terminal under different equipment. Informational
-  // only: it links to that load's report and never switches equipment.
-  const [altEquipmentPrompt, setAltEquipmentPrompt] = useState<{ loadId: string; truckLabel: string; trailerLabel: string } | null>(null);
+  const {
+    compModalOpen,
+    setCompModalOpen,
+    compModalComp,
+    setCompModalComp,
+    tempDialOpen,
+    setTempDialOpen,
+    cancelLoadConfirmOpen,
+    setCancelLoadConfirmOpen,
+    apiSafetyOverride,
+    setApiSafetyOverride,
+    tunedApiTempByProduct,
+    setTunedApiTempByProduct,
+    staleApiPrompt,
+    setStaleApiPrompt,
+    beginAfterOverride,
+    setBeginAfterOverride,
+    activeSlotLetter,
+    setActiveSlotLetter,
+    selectedComp,
+    setSelectedComp,
+    planRestoreAttempted,
+    setPlanRestoreAttempted,
+    altEquipmentPrompt,
+    setAltEquipmentPrompt,
+    preLoadCardedOnRef,
+    handlePlanRestored,
+    handleRestoreAttempted
+  } = usePlannerWindowState();
 
   // ── Feature hooks ──────────────────────────────────────────────────────────
   // equipment/location/terminals come from the shared shell context (see above).
@@ -421,33 +407,10 @@ export default function PlannerHost() {
   });
   // (closes the compartment window; kept next to its state)
   const closeCompModal = () => { setCompModalOpen(false); setCompModalComp(null); setSelectedComp(null); };
-  // The plan picked on Begin Trip: loaded the first time the Planner opens
-  // for that trip (once presets have synced), then left alone.
-  const tripPlanTripId = tripWaitingPickup?.trip_id ?? null;
-  useEffect(() => {
-    if (!effectiveUserId || !tripPlanTripId || !planSlots.presetsReady || !equipment.selectedComboId) return;
-    const pending = getTripPlan(effectiveUserId, tripPlanTripId);
-    if (!pending || pending.applied) return;
-    markTripPlanApplied(effectiveUserId, tripPlanTripId);
-    if (!planSlots.peekSlot(pending.slot)) return;
-    handlePresetLoad(pending.slot);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveUserId, tripPlanTripId, planSlots.presetsReady, equipment.selectedComboId]);
-  // Quick load from dispatch: its layout runs with no caps and CG centered,
-  // once, and nothing is saved.
-  const quickTripId = tripWaitingPickup?.trip_id ?? null;
-  useEffect(() => {
-    if (!effectiveUserId || !quickTripId || !planSlots.presetsReady || !equipment.selectedComboId || compartments.length === 0) return;
-    if (!takeTripQuick(effectiveUserId, quickTripId)) return;
-    setCompPlan((prev: Record<number, CompPlanInput>) => {
-      const next: Record<number, CompPlanInput> = {};
-      for (const [k, v] of Object.entries(prev)) next[Number(k)] = { ...v, capOverride: undefined };
-      return next;
-    });
-    setCgSlider(0.5);
-    setCaptureBaselineNext(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveUserId, quickTripId, planSlots.presetsReady, equipment.selectedComboId, compartments.length]);
+  useTripPlanApply({
+    effectiveUserId, tripId: tripWaitingPickup?.trip_id ?? null, planSlots, comboId: equipment.selectedComboId,
+    compartmentCount: compartments.length, handlePresetLoad, setCompPlan, setCgSlider, setCaptureBaselineNext,
+  });
 
   const stabilityBannerEl = unstableLoad ? (
     <div style={{ ...styles.error, marginTop: 0, marginBottom: 12, textAlign: "center" as const }}>
