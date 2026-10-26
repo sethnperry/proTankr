@@ -95,6 +95,7 @@ import { shouldNotifyHosTrip, type Level } from "@/lib/telematics/hosTripNotify"
 import { notifyPermission, showNotification, type NotifyPermission } from "@/lib/ui/notify";
 import { enablePush, pushEnabledHere } from "@/lib/push/subscribe";
 import { BREAK_REST_MIN } from "@/lib/telematics/cycleRecap";
+import { CYCLE_LIMIT_MIN } from "@/lib/telematics/cycleRecap";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, setTripQuick, nextSaveSlot, savePresetPlan, type PresetSummary } from "@/lib/trips/tripPlan";
@@ -1571,8 +1572,9 @@ export default function HomePage() {
 
       {myHos && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null) && (() => {
         const least = Math.min(myHos.driveLeftMin ?? Infinity, myHos.dutyLeftMin ?? Infinity);
-        const clock = (label: string, min: number | null | undefined) => ({
-          label, value: clockHM(min ?? null), color: clockColor(min ?? null), onClick: () => setRecapOpen(true),
+        // Geotab gives time left; the chips show time used (limit minus left), colored by what is left.
+        const clock = (label: string, left: number | null | undefined, limit: number) => ({
+          label, value: left == null ? "—" : clockHM(Math.max(0, limit - left)), color: clockColor(left ?? null), onClick: () => setRecapOpen(true),
         });
         // Break: loading and pumping count toward it. While not driving it counts up to 30 min, then a
         // green check. Red if a new trip was begun before it finished.
@@ -1581,14 +1583,14 @@ export default function HomePage() {
           ? { label: "Break", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) }
           : restMin != null
           ? { label: "Break", value: `${restMin}m`, color: breakCountsRed ? "#f87171" : "#fff", onClick: () => setRecapOpen(true) }
-          : clock("Break In", myHos.breakLeftMin);
+          : clock("Break", myHos.breakLeftMin, 8 * 60);
         return (
           <div style={{ marginBottom: 14 }}>
             <GaugePanel top={0} labelBelow cells={[
               breakCell,
-              clock("DR Left", myHos.driveLeftMin),
-              clock("WD Left", myHos.dutyLeftMin),
-              clock("Cycle Left", myHos.cycleLeftMin),
+              clock("Driving", myHos.driveLeftMin, 11 * 60),
+              clock("Working", myHos.dutyLeftMin, 14 * 60),
+              clock("Cycle", myHos.cycleLeftMin, CYCLE_LIMIT_MIN),
             ]} />
             <HosRecapModal open={recapOpen} hos={myHos} onClose={() => setRecapOpen(false)} />
             {hosVsTrip && (

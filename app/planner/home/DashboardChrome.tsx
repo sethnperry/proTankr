@@ -236,7 +236,6 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12 }: { cells: Gaug
           {(() => {
             const label = (
               <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-                <span aria-hidden style={{ width: 6, height: 6, background: c.color ?? "rgba(255,255,255,0.5)", flexShrink: 0 }} />
                 <span style={{ fontSize: labelSize, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.label}</span>
               </div>
             );
