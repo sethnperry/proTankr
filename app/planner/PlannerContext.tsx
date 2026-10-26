@@ -23,7 +23,8 @@ import type { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
 import type { usePlanInputs } from "./hooks/usePlanInputs";
 import type { OutageReportType } from "./hooks/useTerminalOutageReports";
 import type { StaleProduct } from "./components/StaleApiOverlay";
-import type { CompPlanInput } from "./types";
+import type { usePlanSlots } from "./hooks/usePlanSlots";
+import type { CompPlanInput, ProductRow } from "./types";
 
 type Math = ReturnType<typeof usePlanMath>;
 type Trip = ReturnType<typeof useTripLoading>;
@@ -89,7 +90,10 @@ export type PlannerCtx = {
   cancelLoadConfirmOpen: boolean;
   setCancelLoadConfirmOpen: Dispatch<SetStateAction<boolean>>;
   handleSubmitOutageReport: (
-    reportType: OutageReportType, productIds: string[], overrideTerminalId?: string, overrideRackId?: string | null,
+    reportType: OutageReportType,
+    productIds: string[],
+    overrideTerminalId?: string,
+    overrideRackId?: string | null,
   ) => Promise<{ error: string | null }>;
 
   // stale API choice
@@ -118,6 +122,44 @@ export type PlannerCtx = {
   setTempF: Inputs["setTempF"];
   setSingleProductTempF: Inputs["setSingleProductTempF"];
   tempModalProductGroups: { productId: string; name: string; hex: string; tempF: number }[];
+
+  // saved plans A-E
+  planSlots: ReturnType<typeof usePlanSlots>;
+  activeSlotLetter: number;
+  presetQuickPickOpen: boolean;
+  setPresetQuickPickOpen: Dispatch<SetStateAction<boolean>>;
+  summaryForSlot: (slot: number) => string;
+  nameForSlot: (slot: number) => string | undefined;
+  colorsForSlot: (slot: number) => string[];
+  handlePresetLoad: (slot: number) => void;
+  handlePresetSaveEmpty: (slot: number) => void;
+  setPresetSheetSlot: Dispatch<SetStateAction<number | null>>;
+  handleRecallLastLoad: () => Promise<void>;
+  presetSheetSlot: number | null;
+  presetSheetSummary: string;
+  handlePresetSheetLoad: () => void;
+  handlePresetSheetEdit: () => void;
+  handlePresetSheetClear: () => void;
+  closePresetSheet: () => void;
+
+  // compartment product choice
+  active: boolean;
+  compModalOpen: boolean;
+  compModalComp: number | null;
+  compartments: Equip["compartments"];
+  compPlan: Record<number, CompPlanInput>;
+  terminalProducts: ProductRow[];
+  closeCompModal: () => void;
+  fetchTerminalProducts: Products["fetchTerminalProducts"];
+
+  // Plan Builder
+  wizardOpen: boolean;
+  wizardNew: boolean;
+  setWizardNew: Dispatch<SetStateAction<boolean>>;
+  planCatalogProducts: ProductRow[];
+  canSetCap: boolean;
+  handleWizardSaveCaps: (changes: Record<number, number>) => Promise<void>;
+  handleWizardFinish: (plan: Record<number, any>) => void;
 
   // parts the host still builds
   supplierPanel: ReactNode;

@@ -45,6 +45,9 @@ import { useTripLoading } from "./hooks/useTripLoading";
 import { usePlanMath } from "./hooks/usePlanMath";
 import { PlannerProvider, type PlannerCtx } from "./PlannerContext";
 import PlanReviewFlow from "./flows/PlanReviewFlow";
+import PlanSlotsFlow from "./flows/PlanSlotsFlow";
+import CompartmentFlow from "./flows/CompartmentFlow";
+import PlanBuilderFlow from "./flows/PlanBuilderFlow";
 import TerminalSwitchFlow from "./flows/TerminalSwitchFlow";
 import ReportIssueFlow from "./flows/ReportIssueFlow";
 import StaleApiFlow from "./flows/StaleApiFlow";
@@ -65,18 +68,14 @@ import { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
 // ── Sections ───────────────────────────────────────────────────────────────────
 import PlannerControls from "./sections/PlannerControls";
 import { useIsLandscape } from "./hooks/useOrientation";
-import PresetActionSheet from "./components/PresetActionSheet";
 import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tripPlan";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
-import PresetQuickPick from "./components/PresetQuickPick";
 
 // ── Modals ─────────────────────────────────────────────────────────────────────
 // LocationModal/MyTerminalsModal now mount once in ShellChrome
 // (CalculatorLayoutClient.tsx) -- see the render-site comment further down.
 import { type StaleProduct } from "./components/StaleApiOverlay";
 import { submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
-import CompartmentModal from "./modals/CompartmentModal";
-import PlanWizard from "./components/PlanWizard";
 import CompartmentDetailModal from "./components/CompartmentDetailModal";
 
 // ── UI ─────────────────────────────────────────────────────────────────────────
@@ -1468,6 +1467,29 @@ const lastProductInfoById = useMemo(() => {
     const others = [1, 2, 3, 4, 5].filter((n) => n !== except).map((n) => ({ slot: n, comps: toLayout(planSlots.peekSlot(n)?.compPlan) }));
     return findMatchingPlan(others, mine)?.slot ?? null;
   };
+  // PresetActionSheet (long-press on a saved plan): Load, Edit (save over it) or Clear.
+  const handlePresetSheetLoad = () => {
+    if (presetSheetSlot != null) {
+      planSlots.loadFromSlot(presetSheetSlot);
+      setActiveSlotLetter(presetSheetSlot);
+      setCaptureBaselineNext(true);
+      setCheckAvailabilityNext(true);
+    }
+    setPresetSheetSlot(null);
+  };
+  const handlePresetSheetEdit = () => {
+    if (presetSheetSlot != null) {
+      planSlots.saveToSlot(presetSheetSlot);
+      setBaselineOverrides(overridesSnapshot(compPlan, cgSlider));
+    }
+    setPresetSheetSlot(null);
+  };
+  const handlePresetSheetClear = () => {
+    if (presetSheetSlot != null) planSlots.clearSlot(presetSheetSlot);
+    setPresetSheetSlot(null);
+  };
+  const closePresetSheet = () => setPresetSheetSlot(null);
+  const closeCompModal = () => { setCompModalOpen(false); setCompModalComp(null); setSelectedComp(null); };
   const handlePresetSaveEmpty = (n: number) => {
     const dup = planSlotWithLayout(compPlan, n);
     if (dup != null) n = dup;
@@ -1476,34 +1498,6 @@ const lastProductInfoById = useMemo(() => {
     setActiveSlotLetter(n);
     setPresetQuickPickOpen(false);
   };
-
-  // Extracted to a const purely for readability -- rendered in exactly one
-  // spot, full-width, in every orientation (see the render below for why).
-  const presetQuickPickEl = (
-    <PresetQuickPick
-      open={presetQuickPickOpen}
-      onClose={() => setPresetQuickPickOpen(false)}
-      slots={planSlots.PLAN_SLOTS}
-      slotHas={planSlots.slotHas}
-      activeSlot={activeSlotLetter}
-      // Also gated on presetsReady -- until the initial server sync for
-      // this equipment combo has actually completed, a slot that reads
-      // "empty" might just be unsynced, not really empty, and tapping it
-      // would treat it as an implicit save. Interacting during that
-      // window silently overwrote real presets with whatever was
-      // on-screen at the time -- see usePlanSlots.ts.
-      disabled={!location.selectedTerminalId || !planSlots.presetsReady}
-      disabledReason={!location.selectedTerminalId ? "Select a terminal first" : "Syncing presets…"}
-      getSummary={summaryForSlot}
-      getName={nameForSlot}
-      getColors={colorsForSlot}
-      onLoad={handlePresetLoad}
-      onSaveEmpty={handlePresetSaveEmpty}
-      onOpenActions={(n) => setPresetSheetSlot(n)}
-      onRename={(n, name) => planSlots.renameSlot(n, name)}
-      onRecallLastLoad={handleRecallLastLoad}
-    />
-  );
 
   const planLetterIconRef = useRef<HTMLButtonElement | null>(null);
   const savePlanButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1667,6 +1661,13 @@ const lastProductInfoById = useMemo(() => {
     handleConfirmTempReconfirm, handleConfirmTempAndBeginLoad,
     fuelTempLoading, fuelTempConfidence, predictedFuelTempF, tempF, setTempF, setSingleProductTempF,
     tempModalProductGroups,
+    planSlots, activeSlotLetter, presetQuickPickOpen, setPresetQuickPickOpen,
+    summaryForSlot, nameForSlot, colorsForSlot, handlePresetLoad, handlePresetSaveEmpty,
+    setPresetSheetSlot, handleRecallLastLoad, presetSheetSlot, presetSheetSummary,
+    handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
+    active, compModalOpen, compModalComp, compartments, compPlan, terminalProducts, closeCompModal,
+    fetchTerminalProducts,
+    wizardOpen, wizardNew, setWizardNew, planCatalogProducts, canSetCap, handleWizardSaveCaps, handleWizardFinish,
     supplierPanel: supplierPanelEl,
   };
 
@@ -1691,34 +1692,7 @@ const lastProductInfoById = useMemo(() => {
           element (portrait) or inside the compartments column (landscape).
           Both those render sites are gone; this is purely the sheet
           itself now, not a visible-by-default element. */}
-      {presetQuickPickEl}
 
-      <PresetActionSheet
-        open={presetSheetSlot != null}
-        letter={presetSheetSlot != null ? String.fromCharCode(64 + presetSheetSlot) : ""}
-        summary={presetSheetSummary}
-        onLoad={() => {
-          if (presetSheetSlot != null) {
-            planSlots.loadFromSlot(presetSheetSlot);
-            setActiveSlotLetter(presetSheetSlot);
-            setCaptureBaselineNext(true);
-            setCheckAvailabilityNext(true);
-          }
-          setPresetSheetSlot(null);
-        }}
-        onConfirmEdit={() => {
-          if (presetSheetSlot != null) {
-            planSlots.saveToSlot(presetSheetSlot);
-            setBaselineOverrides(overridesSnapshot(compPlan, cgSlider));
-          }
-          setPresetSheetSlot(null);
-        }}
-        onConfirmClear={() => {
-          if (presetSheetSlot != null) planSlots.clearSlot(presetSheetSlot);
-          setPresetSheetSlot(null);
-        }}
-        onClose={() => setPresetSheetSlot(null)}
-      />
 
       {/* Action row ("Save plan {letter}" / "Edit Comp N Product") used to
           render here, portrait-only, ahead of locationLineEl/compartments
@@ -1763,22 +1737,6 @@ const lastProductInfoById = useMemo(() => {
       />
       </div>
 
-      <CompartmentModal
-        open={compModalOpen}
-        compNumber={compModalComp}
-        compartments={compartments}
-        compPlan={compPlan}
-        terminalProducts={terminalProducts}
-        styles={styles}
-        setCompPlan={setCompPlan}
-        onClose={() => { setCompModalOpen(false); setCompModalComp(null); setSelectedComp(null); }}
-        selectedRackId={active ? "" : (location.selectedRackId ?? "")}
-        rackName={selectedRackName}
-        terminalName={terminalLabel}
-        onTerminalProductsChanged={fetchTerminalProducts}
-        myRole={shell.role}
-        searchable
-      />
 
       {(() => {
         const n = detailComp;
@@ -1984,18 +1942,10 @@ const lastProductInfoById = useMemo(() => {
 
     </div>
       {/* ── Modals ── (outside the page div, so they still show while the Planner itself is hidden) */}
-      <PlanWizard
-        open={wizardOpen}
-        mode={wizardNew ? "new" : "first"}
-        compartments={compartments}
-        products={planCatalogProducts}
-        canSetCap={canSetCap}
-        replacingLetter={wizardNew && [1, 2, 3, 4, 5].every((n) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); }) ? String.fromCharCode(64 + activeSlotLetter) : null}
-        onSaveCaps={handleWizardSaveCaps}
-        onFinish={handleWizardFinish}
-        onCancel={() => setWizardNew(false)}
-      />
       <PlanReviewFlow />
+      <PlanSlotsFlow />
+      <CompartmentFlow />
+      <PlanBuilderFlow />
       <TerminalSwitchFlow />
       <ReportIssueFlow />
       <StaleApiFlow />

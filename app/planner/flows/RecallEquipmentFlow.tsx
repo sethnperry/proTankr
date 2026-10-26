@@ -11,14 +11,14 @@ export default function RecallEquipmentFlow() {
   const { shell, altEquipmentPrompt, setAltEquipmentPrompt, handleViewAltLoadInReports } = usePlanner();
 
   return (
-        <RecallDifferentEquipmentSheet
-          open={!!altEquipmentPrompt}
-          truckLabel={altEquipmentPrompt?.truckLabel ?? ""}
-          trailerLabel={altEquipmentPrompt?.trailerLabel ?? ""}
-          onViewInReports={handleViewAltLoadInReports}
-          onCancel={() => setAltEquipmentPrompt(null)}
-          darkMode={shell.theme.darkMode}
-          accentColor={shell.theme.accentColor}
-        />
+    <RecallDifferentEquipmentSheet
+      open={!!altEquipmentPrompt}
+      truckLabel={altEquipmentPrompt?.truckLabel ?? ""}
+      trailerLabel={altEquipmentPrompt?.trailerLabel ?? ""}
+      onViewInReports={handleViewAltLoadInReports}
+      onCancel={() => setAltEquipmentPrompt(null)}
+      darkMode={shell.theme.darkMode}
+      accentColor={shell.theme.accentColor}
+    />
   );
 }

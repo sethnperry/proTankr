@@ -11,13 +11,13 @@ export default function StaleApiFlow() {
   const { staleApiPrompt, setStaleApiPrompt, handleStaleSafest, handleStaleSafe, handleStaleIgnore } = usePlanner();
 
   return (
-        <StaleApiOverlay
-          open={!!staleApiPrompt}
-          products={staleApiPrompt?.products ?? []}
-          onSafest={handleStaleSafest}
-          onSafe={handleStaleSafe}
-          onIgnore={handleStaleIgnore}
-          onCancel={() => setStaleApiPrompt(null)}
-        />
+    <StaleApiOverlay
+      open={!!staleApiPrompt}
+      products={staleApiPrompt?.products ?? []}
+      onSafest={handleStaleSafest}
+      onSafe={handleStaleSafe}
+      onIgnore={handleStaleIgnore}
+      onCancel={() => setStaleApiPrompt(null)}
+    />
   );
 }

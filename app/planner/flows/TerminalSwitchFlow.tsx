@@ -8,25 +8,38 @@ import TerminalSwitchDuringLoadSheet from "../components/TerminalSwitchDuringLoa
 import { usePlanner } from "../PlannerContext";
 
 export default function TerminalSwitchFlow() {
-  const { shell, loadWorkflow, effectivePlanRows, productNameById, terminalSwitchConfirm, handleUpdateCardAtPrevious, handleSwitchWithoutUpdating, handleSubmitOutageReportForPreviousTerminal, switchReportedIssueRef, switchReasonNoteRef, tripPickup, tripWaitingPickup } = usePlanner();
+  const {
+    shell,
+    loadWorkflow,
+    effectivePlanRows,
+    productNameById,
+    terminalSwitchConfirm,
+    handleUpdateCardAtPrevious,
+    handleSwitchWithoutUpdating,
+    handleSubmitOutageReportForPreviousTerminal,
+    switchReportedIssueRef,
+    switchReasonNoteRef,
+    tripPickup,
+    tripWaitingPickup,
+  } = usePlanner();
 
   return (
-        <TerminalSwitchDuringLoadSheet
-          open={!!terminalSwitchConfirm}
-          prevTerminalName={terminalSwitchConfirm?.prev.terminalName ?? ""}
-          newTerminalName={terminalSwitchConfirm?.next.terminalName ?? ""}
-          onUpdateCardAtPrevious={handleUpdateCardAtPrevious}
-          onSwitchWithoutUpdating={handleSwitchWithoutUpdating}
-          darkMode={shell.theme.darkMode}
-          accentColor={shell.theme.accentColor}
-          planRows={effectivePlanRows as any[]}
-          productNameById={productNameById}
-          onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
-          requireReason={!!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}
-          onReasonPicked={(code, note) => {
-            if (!switchReportedIssueRef.current) switchReportedIssueRef.current = code;
-            switchReasonNoteRef.current = note;
-          }}
-        />
+    <TerminalSwitchDuringLoadSheet
+      open={!!terminalSwitchConfirm}
+      prevTerminalName={terminalSwitchConfirm?.prev.terminalName ?? ""}
+      newTerminalName={terminalSwitchConfirm?.next.terminalName ?? ""}
+      onUpdateCardAtPrevious={handleUpdateCardAtPrevious}
+      onSwitchWithoutUpdating={handleSwitchWithoutUpdating}
+      darkMode={shell.theme.darkMode}
+      accentColor={shell.theme.accentColor}
+      planRows={effectivePlanRows as any[]}
+      productNameById={productNameById}
+      onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
+      requireReason={!!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}
+      onReasonPicked={(code, note) => {
+        if (!switchReportedIssueRef.current) switchReportedIssueRef.current = code;
+        switchReasonNoteRef.current = note;
+      }}
+    />
   );
 }
