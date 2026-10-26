@@ -1586,7 +1586,7 @@ export default function HomePage() {
           : { label: "Break", value: "0m", color: "#fff", onClick: () => setRecapOpen(true) }; // driving: zero until stopped
         return (
           <div style={{ marginBottom: 14 }}>
-            <GaugePanel top={0} labelBelow small cells={[
+            <GaugePanel top={0} labelBelow cells={[
               breakCell,
               clock("Driving", myHos.driveLeftMin, 11 * 60),
               clock("Working", myHos.dutyLeftMin, 14 * 60),
