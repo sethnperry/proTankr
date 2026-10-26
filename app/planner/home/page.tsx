@@ -1583,10 +1583,10 @@ export default function HomePage() {
           ? { label: "Break", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) }
           : restMin != null
           ? { label: "Break", value: `${restMin}m`, color: breakCountsRed ? "#f87171" : "#fff", onClick: () => setRecapOpen(true) }
-          : clock("Break", myHos.breakLeftMin, 8 * 60);
+          : { label: "Break", value: "0m", color: "#fff", onClick: () => setRecapOpen(true) }; // driving: zero until stopped
         return (
           <div style={{ marginBottom: 14 }}>
-            <GaugePanel top={0} labelBelow cells={[
+            <GaugePanel top={0} labelBelow small cells={[
               breakCell,
               clock("Driving", myHos.driveLeftMin, 11 * 60),
               clock("Working", myHos.dutyLeftMin, 14 * 60),

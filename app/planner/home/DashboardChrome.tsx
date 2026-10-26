@@ -216,13 +216,13 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
 
 // A row of big readouts under the main button.
 export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean; wide?: boolean };
-export function GaugePanel({ cells, equal, labelBelow, top = 12 }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number }) {
+export function GaugePanel({ cells, equal, labelBelow, top = 12, small }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number; small?: boolean }) {
   const L = useDashLook();
   // equal: every cell the same width, the whole set scaling with its width
   // (text sized from the panel via container units) up to the screen height,
   // and labels truncating once they no longer fit.
-  const labelSize = equal ? "clamp(8px, 2.6cqw, 11px)" : 9;
-  const valueSize = equal ? "clamp(16px, 7cqw, 30px)" : 24;
+  const labelSize = equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
+  const valueSize = equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
   return (
     <div style={{
       display: "grid",
@@ -232,7 +232,7 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12 }: { cells: Gaug
     }}>
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
-          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>
+          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: small ? "7px 8px 6px" : "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>
           {(() => {
             const label = (
               <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
