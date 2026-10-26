@@ -71,9 +71,14 @@ Rules for a split modal:
 except the files listed there with their current size as a ceiling. They may shrink, never grow.
 When you touch one of them for real work, split it and delete its entry.
 
-Still to split: `usePlanSlots`, `useLoadWorkflow`, `DecoupleModal`, `RecordHistoryModal`,
-`MyLoadsModal`, `SoloOnboarding`, `ServiceTypeManager`, `ScaleHistoryModal`, `EditTerminalModal`,
-`MyTerminalsModal`, `useLocation`, `StartLoadSheet`.
+Big hooks get the same treatment. `usePlanSlots` and `useLoadWorkflow` are thin compositions of
+layers in `hooks/planSlots/` and `hooks/loadWorkflow/`; the work that does not need React state
+(storage parsing, server access, load_log reads, post-load writes) lives in `utils/`
+(`planSlotStorage`, `planSlotServer`, `lastLoadLog`, `loadSideEffects`) where it can be tested.
+
+Still to split: `DecoupleModal`, `RecordHistoryModal`, `MyLoadsModal`, `SoloOnboarding`,
+`ServiceTypeManager`, `ScaleHistoryModal`, `EditTerminalModal`, `MyTerminalsModal`, `useLocation`,
+`StartLoadSheet`.
 
 ## Known leftovers
 
