@@ -1205,6 +1205,7 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id]);
   const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[] } | null>(null);
+  const arriveCardPending = !!dutyStop && !arrival.suggest && !!arrivalTarget && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
   const logDutyDelay = (code: string, note: string | null) => {
     if (!store || !userId || !openTrip || !dutyStop || !delayLeg) return;
@@ -1919,8 +1920,8 @@ export default function HomePage() {
       )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>
-      {/* Next step */}
-      <button
+      {/* Next step. Hidden while the "Did you arrive?" card is waiting for an answer. */}
+      {!arriveCardPending && <button
         type="button"
         onClick={onBigButton}
         className="dash-press"
@@ -1933,8 +1934,8 @@ export default function HomePage() {
           ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
           : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
           : step.label}
-      </button>
-      {step.kind !== "start" && !openingPlanner && (
+      </button>}
+      {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
       {delayLeg && !openingPlanner && (
