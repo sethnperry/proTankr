@@ -92,173 +92,68 @@ import type { CompPlanInput, ProductRow } from "./types";
 
 export default function PlannerHost() {
   // ── Shared shell state (equipment/location/terminals/expirations) ──────────
-  // Owned once in CalculatorShellContext (layout.tsx) so the header's gear/
-  // bell icons and this page's own planning logic never see two
-  // independently-hydrated copies of the same selection state.
+  // Equipment, location and terminals are owned once in CalculatorShellContext, so the
+  // header and this host never hold two copies of the same selection.
   const shell = useCalculatorShell();
   const { setupSession, effectiveUserId, equipment, location, terminals } = shell;
   const router = useRouter();
-  // This host stays mounted for every /planner screen; the Planner page itself
-  // shows only on the bare /planner route. Modals (Plan Review, load report,
-  // sheets) work on any screen.
+  // This host stays mounted for every /planner screen; the plan page itself shows only
+  // on bare /planner. The windows (Plan Review, load report, sheets) work on any screen.
   const pathname = usePathname();
   const active = pathname === "/planner";
   const { leaving, leaveTo } = useLeaveTo(pathname);
-  // Wider-than-tall with enough room for a real two-column layout -- see
-  // useOrientation.ts. Computed once here and passed down (to
-  // PlannerControls) rather than each consumer calling matchMedia itself.
+  // Wider than tall with room for the side rail (see useOrientation.ts).
   const isLandscape = useIsLandscape();
-  // A second, much wider threshold -- tablet/desktop, not just a phone
-  // turned sideways (the largest real phones still land under ~930px in
-  // landscape). Below this, recap/points stay merged into one inline
-  // stats row with the Load button on its own row below (see
-  // recapPointsEl's "row" mode); at or above it there's enough real
-  // width to give recap, points, and the Load button one equal-width/
-  // equal-height row each, per explicit direction ("on obnoxiously wide
-  // screens we can shift the load button over to the right of points...
-  // one row of equal width and height for each"). Same hook, just a
-  // second call with a bigger minWidth -- no changes needed in
-  // useOrientation.ts itself.
-
-  // Landscape composition, replacing the old fixed-width-two-column +
-  // transform:scale system entirely (see CLAUDE.md's own landscape
-  // history for how many rounds that took to land -- REF_COMPARTMENTS_W/
-  // REF_SIDE_W/rowScale/useElementWidth/useNaturalHeight and the whole
-  // measured-then-scaled machinery are gone). With Equipment/Location/
-  // Temperature/the plan-letter cluster moved OUT of this page into the
-  // shared header's own vertical rail in landscape
-  // (CalculatorLayoutClient.tsx), there's no second column left to keep
-  // legible alongside compartments -- this can just be ONE flowing
-  // column now, compartments/CG-slider/recap+points/Load button in that
-  // order, same as portrait, capped at a fixed max width so nothing
-  // stretches to an absurd size on a huge monitor ("stretch the comps
-  // and load button to fit, up to a reasonable width"). Per explicit
-  // direction: "move the icon strip into a vertical column and put it
-  // all the way left... keep everything else on the right and take all
-  // (most) space out between cards and comp/location etc." Compartment
-  // bars themselves need no special width handling here -- they're
-  // already percentage-of-container (PlannerControls.tsx), so they
-  // naturally stretch to fill whatever width this column has; barH's
-  // own fixed 100px landscape height (unchanged) is what keeps them a
-  // sensible rectangular shape instead of growing tall as they widen.
+  // In landscape the plan is one column, capped so it does not stretch across a
+  // large monitor. Compartment bars are a percentage of the column; their height is fixed.
   const LANDSCAPE_MAX_W = 1100;
 
   const { setOnboardingDone, onboardingActive } = usePlannerLanding(active);
 
-  // ── Card data (card number + PIN + private note, per terminal, per user) ──
-  // Owned in CalculatorShellContext now -- the new Cards tab route needs the
-  // same data, so it's shared rather than fetched twice (same pattern as
-  // equipment/location/terminals above).
-
-  // Framer-motion's layoutId shared-element transitions render a differently
-  // serialized `style` attribute server-side vs. after hydration (e.g. its
-  // color values gain spaces: "rgba(255,255,255,0.45)" -> "rgba(255, 255,
-  // 255, 0.45)"), which is a real, uncorrected hydration mismatch React won't
-  // patch up. Render plain <button>s for SSR/first paint and only swap to
-  // motion.button post-mount, so hydration always diffs identical DOM.
-
   const headerIconsSlot = useHeaderIconsSlot(isLandscape);
 
-  // ── Modal open/close flags ─────────────────────────────────────────────────
-  // equipOpen/expModalOpen/termOpen live in the shared shell context now --
-  // the header (layout.tsx) needs to trigger the same Equipment/Expirations/
-  // Terminals sheets this page renders (ExpirationModal's "resolve" links
-  // open Terminals, so it has to be a shared boolean, not local to either).
-  // locOpen/statePickerOpen/expandedTerminalId and the city-star/stateOptions/
-  // cities derived values also live in shell now (see CalculatorShellContext) --
-  // the Terminal tab's own identity header opens the same LocationModal/
-  // MyTerminalsModal instances (now mounted once in ShellChrome), so this
-  // page and that one can't each carry an independent copy without risking
-  // the two drifting out of sync.
+  // ── Window state ───────────────────────────────────────────────────────────
+  // The equipment, location, terminal and expirations windows are open/closed in the
+  // shell, because the header opens them too.
   const [compModalOpen, setCompModalOpen] = useState(false);
   const [compModalComp, setCompModalComp] = useState<number | null>(null);
   const [tempDialOpen, setTempDialOpen] = useState(false);
-  // The Loading modal's single exit point -- opened by its bottom button
-  // (renamed from "LOADED" to "Complete") or by FullscreenModal's own
-  // backdrop-click/Escape (the header Close button is hidden now, see
-  // hideCloseButton in LoadingModal.tsx). Offers Log the Load / Update
-  // Card Only / Keep Editing -- see CancelLoadSheet.tsx for why the
-  // "update card only" branch is real, not just a courtesy: begin_load
-  // already re-cards the terminal on LOAD tap, before this modal ever
-  // opens.
+  // The Finish Loading choice sheet (log the load / update card only / keep editing).
   const [cancelLoadConfirmOpen, setCancelLoadConfirmOpen] = useState(false);
-  // Captured the instant LOAD/RELOAD is tapped -- whatever this terminal's
-  // access date was *before* begin_load's silent re-card, so "Back to
-  // Planner" can genuinely undo it (see handleBackToPlannerNoUpdate below).
-  // null prevValue means the terminal had no prior access record at all.
+  // The terminal's access date before begin_load re-carded it, so "Back to Planner" can
+  // undo that. A null prevValue means there was no prior record.
   const preLoadCardedOnRef = useRef<{ terminalId: string; prevValue: string | null } | null>(null);
 
-  // ── Stale-API safety (Good / Better / Best on LOAD) ──────────────────────
-  // Per-product API_60 override that forces the plan's density calc heavier
-  // when the driver chose "Safest"/"Safe" for a stale product at LOAD time.
-  // Empty = use the normal last-observed/reference density (the "Ignore"
-  // choice, and every product with a fresh reading). Cleared whenever the
-  // Loading modal closes so it can never leak into the planner view.
+  // ── Stale-API safety ───────────────────────────────────────────────────────
+  // Per-product API override that forces a heavier density when the driver chose
+  // Safest/Safe for a stale reading. Cleared when Plan Review closes.
   const [apiSafetyOverride, setApiSafetyOverride] = useState<Record<string, number>>({});
-  // Per-product driver-tuned observed API + the temp it was read at, entered in
-  // Plan Review's Tune panel. When present it OVERRIDES the density basis for
-  // that product (see lbsPerGalForProductId's first branch), so tuning
-  // recomputes planned gallons live; onTuneProduct also writes the submission
-  // inputs (productInputs) so the logged weight matches what the driver tuned.
-  // Cleared when the Loading modal closes (same as apiSafetyOverride).
+  // Per-product API and temperature the driver tuned in Plan Review. Overrides the
+  // density basis for that product. Cleared when Plan Review closes.
   const [tunedApiTempByProduct, setTunedApiTempByProduct] = useState<Record<string, { api: number; tempF: number }>>({});
   // The stale-API decision overlay's own open state + which products it lists.
   const [staleApiPrompt, setStaleApiPrompt] = useState<{ products: StaleProduct[] } | null>(null);
-  // Deferred begin: a choice sets the override AND flips this true; an effect
-  // then begins the load on the NEXT render, once planRows has recomputed
-  // against the new override (see the effect below -- begins with fresh
-  // planRows, not the stale pre-override closure).
+  // A stale-API choice sets the override and flips this; an effect then begins the load
+  // on the next render, once the plan has recomputed against the override.
   const [beginAfterOverride, setBeginAfterOverride] = useState(false);
 
-  // ── Action row state ────────────────────────────────────────────────────────
-  // activeSlotLetter mirrors PresetDial's own (cosmetic) centered/last-tapped
-  // slot, so "Save plan {letter}" always names the right preset. selectedComp
-  // is which compartment bar was last tapped (tapping a bar now selects it
-  // instead of opening the product picker directly -- the picker only opens
-  // via the "Edit Comp N Product" action button, per the design handoff).
+  // ── Action row state ───────────────────────────────────────────────────────
+  // activeSlotLetter is the plan letter on screen. Every load is tagged with it.
+  // selectedComp is the compartment last tapped.
   const [activeSlotLetter, setActiveSlotLetter] = useState(1);
-  // activeSlotLetter is the plan letter on screen, and it's what gets tagged
-  // onto load_log.plan_slot. There is always one (default A), so every load
-  // is tagged with a preset. (A separate "lastLoadedSlot", set only by an
-  // explicit preset tap, used to do the tagging -- left over from the swipe
-  // dial, where scrolling moved the letter. With the dial gone it only meant
-  // a load logged after a refresh or a save-into-empty-slot was tagged null
-  // while a letter was showing, and the next plan came back with every
-  // compartment pinned at last load's gallons. Found live 2026-10-09.)
   const [selectedComp, setSelectedComp] = useState<number | null>(null);
-  // Fired by usePlanSlots whenever slot 0 restores from a genuine local
-  // draft -- restores the plan-letter highlight from whatever that draft's
-  // own activeSlot says was on screen right before the refresh. This is
-  // now the ONLY thing that sets activeSlotLetter on mount
-  // -- the sibling "fall back to the last COMPLETED load's plan_slot"
-  // effect that used to also feed these (and passively surfaced "last
-  // load" info on the Planner page) was removed entirely per explicit
-  // direction: no last-load info anywhere on this page anymore.
+  // usePlanSlots calls this when the live plan restores, to put the plan letter back.
   const handlePlanRestored = useCallback((slot: number | null) => {
     if (slot != null) setActiveSlotLetter(slot);
   }, []);
-  // Real bug found via a live debug capture: the "initialize compPlan
-  // entries when compartments change" effect below fills in a blank entry
-  // for any real compartment that doesn't have one yet -- fine for a
-  // genuinely fresh combo, but if it runs BEFORE usePlanSlots' own
-  // mount-time restore has had a chance to apply the real saved plan
-  // (e.g. compartments happen to resolve before the combo does), it seeds
-  // an all-blank compPlan, which the debounced autosave can then persist,
-  // permanently clobbering a real saved plan with an empty one the next
-  // time this combo loads. Gates that effect until usePlanSlots signals
-  // its own restore attempt (successful or not) has already happened for
-  // the current combo -- reset on every combo change so it re-gates for
-  // the next one, not left permanently true from a previous combo.
+  // Holds back seeding blank compartment entries until usePlanSlots has tried to restore
+  // the saved plan for this combo; otherwise a blank plan could be autosaved over it.
   const [planRestoreAttempted, setPlanRestoreAttempted] = useState(false);
   const handleRestoreAttempted = useCallback(() => {
     setPlanRestoreAttempted(true);
   }, []);
-  // "Recall Last Load" found a completed load at this terminal, but under
-  // different equipment than what's currently selected -- per explicit
-  // follow-up. See handleRecallLastLoad/handleViewAltLoadInReports below.
-  // Purely informational (links to the load's read-only report view) --
-  // never claims/switches equipment, see handleViewAltLoadInReports' own
-  // comment for why.
+  // Recall Last Load found a load at this terminal under different equipment. Informational
+  // only: it links to that load's report and never switches equipment.
   const [altEquipmentPrompt, setAltEquipmentPrompt] = useState<{ loadId: string; truckLabel: string; trailerLabel: string } | null>(null);
 
   // ── Feature hooks ──────────────────────────────────────────────────────────
@@ -292,40 +187,12 @@ export default function PlannerHost() {
   // (avoids SSR hydration mismatch — localStorage is client-only)
   const { tempF, setTempF, tempFRef, productTempF, setProductTempF, setSingleProductTempF, cgSlider, setCgSlider } = usePlanInputs();
 
-  // Real bug found chasing a "plan toggles between the last two setups on
-  // every refresh" report: this used to be a SECOND, fully independent
-  // compPlan cache, keyed per combo+TERMINAL (`protankr_compPlan_v1:{combo}
-  // :{terminal}`) and hydrated by its own effect below -- a leftover from
-  // before usePlanSlots' slot 0 became the combo-scoped, terminal-
-  // independent source of truth for the live plan (see that file's own
-  // 2026-08-27 "one setup persists across all terminals" rework). Nothing
-  // ever removed this parallel system when that landed, so BOTH restores
-  // fired on every mount -- and because this one's own key depends on the
-  // TERMINAL resolving (not just the combo), it frequently finished AFTER
-  // usePlanSlots' own restoreLivePlan effect had already correctly applied
-  // the right plan, silently overwriting it with whatever this terminal's
-  // own stale, terminal-scoped cache happened to hold. That's the literal
-  // "toggles between two plans" symptom: which one won was purely a
-  // function of which terminal you'd last used, and exactly when its
-  // hydration effect happened to resolve relative to usePlanSlots' own.
-  // usePlanSlots already owns save/restore for this entirely now -- no
-  // separate key, no separate hydration effect needed here at all.
+  // The live plan. usePlanSlots owns saving and restoring it (combo-scoped, not per
+  // terminal), so there is no separate cache here.
   const [compPlan, setCompPlan] = useState<Record<number, CompPlanInput>>({});
 
-  // Shares "what's the driver actually planning to load" up into the shell
-  // context -- the terminal outage banner (mounted in the shared header,
-  // visible on every tab) filters to only relevant reports off this, per
-  // explicit direction ("only want to show people it is out of product or
-  // out of allocation if they are trying to load that specific product").
-  //
-  // Guarded to only push a NEW state update when the actual set of product
-  // ids changes, not on every compPlan object change (cap-override edits,
-  // fill-level drags, etc. all change compPlan's reference without
-  // changing which products are selected) -- CalculatorShellContext's own
-  // `value` object is a plain literal, not memoized, so any state update
-  // there re-renders the whole shell tree; pushing on every compPlan
-  // change would have made that re-render fire far more often than
-  // before this feature existed, on every keystroke-level plan edit.
+  // Shares the planned product ids with the shell so the outage banner can show only
+  // relevant reports. Pushed only when the set changes, not on every plan edit.
   const plannedProductIdsSigRef = useRef<string>("");
   useEffect(() => {
     const ids = Array.from(new Set(
@@ -340,36 +207,21 @@ export default function PlannerHost() {
   }, [compPlan, shell.setPlannedProductIds]);
 
   const { overridesSnapshot, baselineOverrides, setBaselineOverrides, setCaptureBaselineNext } = usePlanDirty(compPlan, cgSlider);
-  // Terminal/combo switches trigger usePlanSlots' own automatic restores
-  // (slot-0-on-terminal-change, last-load-from-log-on-combo-claim) -- those
-  // land asynchronously via that hook's own setCompPlan/setCgSlider calls,
-  // not through the explicit "Load {letter}" path. Reuse the same
-  // captureBaselineNext mechanism so the baseline is recaptured once that
-  // restore actually lands, instead of comparing against pre-restore state.
+  // A terminal or combo switch restores the plan asynchronously; recapture the unsaved-
+  // changes baseline once it lands instead of comparing against the old plan.
   useEffect(() => {
     setCaptureBaselineNext(true);
   }, [location.selectedTerminalId, equipment.selectedComboId]);
 
-  // Nothing else clears compPlan when equipment is deselected --
-  // usePlanSlots' own restoreLivePlan/comboClaim effects only ever run
-  // while a real combo IS selected (both start with `if (!selectedComboId)
-  // return`), so this is the one remaining job the old hydration effect
-  // above did that still needs doing.
+  // usePlanSlots only restores while a combo is selected, so clear the plan when none is.
   useEffect(() => {
     if (!equipment.selectedComboId) setCompPlan({});
   }, [equipment.selectedComboId]);
-  // Re-gate the compartments-init effect below for every new combo -- see
-  // planRestoreAttempted's own declaration for why it must wait for
-  // usePlanSlots' restore attempt before seeding blank comp entries.
+  // Re-gate seeding for every new combo.
   useEffect(() => {
     setPlanRestoreAttempted(false);
   }, [equipment.selectedComboId]);
   const [productInputs, setProductInputs] = useState<Record<string, { api?: string; tempF?: number }>>({});
-  // Named (not inline) so the mid-load terminal-switch handlers further
-  // down can call these imperatively too, not just pass them as JSX props
-  // to LoadingModal (which is all these ever were before the 2026-09-05
-  // terminal-switch feature needed to write into productInputs from
-  // outside a render).
   const setProductApi = useCallback((productId: string, api: string) => {
     setProductInputs((prev) => ({ ...prev, [productId]: { ...(prev[productId] ?? {}), api } }));
   }, []);
@@ -381,15 +233,8 @@ export default function PlannerHost() {
     predictedFuelTempF, fuelTempConfidence, fuelTempLoading, fuelTempAmbientF, fuelTempUnbiasedF, refreshFuelTemp, userAdjustedTempRef,
   } = usePlanTemperature({ location, effectiveUserId, tempF, setTempF });
 
-  // Initialize compPlan entries when compartments change (adds a blank
-  // entry for a real compartment that doesn't have one yet, drops any
-  // entry for a compartment that no longer exists) -- built on top of
-  // whatever compPlan already is, which usePlanSlots' own restore effects
-  // are solely responsible for populating now (see compPlan's own
-  // declaration above). Gated on planRestoreAttempted (see its own
-  // declaration) so this can never seed blank entries -- which the
-  // debounced autosave would then persist -- before usePlanSlots has had
-  // its own chance to restore the real saved plan for this combo.
+  // Seed a blank entry for each real compartment and drop entries for ones that no
+  // longer exist. Waits for the restore attempt (see planRestoreAttempted).
   useEffect(() => {
     if (!planRestoreAttempted) return;
     setCompPlan((prev: Record<number, CompPlanInput>) => {
@@ -399,24 +244,7 @@ export default function PlannerHost() {
         if (!Number.isFinite(n)) continue;
         if (!next[n]) next[n] = { empty: false, productId: "" };
       }
-      // Real bug found via a live debug capture: `compartments` itself
-      // starts as [] every time the trailer changes and only gets its real
-      // rows once its OWN separate fetch effect resolves (see the
-      // "Compartments" fetch above) -- a async gap that has nothing to do
-      // with planRestoreAttempted. This effect can genuinely run with
-      // compartments still empty even AFTER a real restore has landed (the
-      // restore's own setCompPlan flips planRestoreAttempted true, which
-      // re-triggers this effect immediately, often before the compartments
-      // fetch has finished). Deleting "stale" entries against a transiently
-      // empty compartments array wiped out a plan that had JUST been
-      // restored, in the exact sequence a real capture showed: this ran
-      // once with compartments=0 (deleting all 3 just-restored entries),
-      // then again moments later once compartments genuinely loaded --
-      // rebuilding them as blank instead of recovering what had just been
-      // deleted. Only prune once there's a REAL, loaded compartment list to
-      // compare against; an empty compartments array means "don't know
-      // yet," not "this trailer has none" -- leaves compPlan untouched
-      // rather than guessing.
+      // Only prune against a loaded compartment list; an empty one means "not loaded yet".
       if (compartments.length > 0) {
         for (const key of Object.keys(next)) {
           const n = Number(key);
@@ -466,9 +294,8 @@ export default function PlannerHost() {
     setLoadingGallonsOverride,
     onRefreshTerminalProducts: fetchTerminalProducts,
     onRefreshTerminalAccess: terminals.refreshTerminalAccessForUser,
-    // After a load is logged, the temp just entered becomes the anchor for the
-    // next plan (route.ts). Clear any earlier manual dial nudge so the fresh
-    // anchored prediction is allowed to apply, and refetch it right away.
+      // After a load is logged the temp entered becomes the next plan's anchor: clear any
+    // manual dial nudge and refetch the prediction.
     onPostLoadComplete: async () => {
       // The suppliers this load ran on worked here: stamp them and clear any
       // "not working" flag, then forget the picks for the next visit.
@@ -497,59 +324,17 @@ export default function PlannerHost() {
     tripPickup, tripWaitingPickup, tripNeedsArrive, tripModeForLoading, recordTripLoaded,
   } = useTripLoading({ shell, active, effectiveUserId, loadWorkflow, tripStoreHook, supplierPicks, plannedProductIds, compPlan, leaveTo });
 
-  // ── Incentive running-average card ────────────────────────────────────────
-  // Left side is this load's own recovered points; right side is the
-  // average recovered points per load across the current report period.
-  // The old separate "You earned X points" confirmation line was removed
-  // 2026-08-20 as redundant with this card's own "This Load" figure.
-  // Running average uses the SAME report period the admin already
-  // configures for the Period Report (pay_period_type/pay_period_anchor_date)
-  // -- no separate averaging-period concept. Simplified 2026-08-17 per
-  // explicit follow-up ("if we are keeping the report period and anchor
-  // date thing we can just match the averaging period for the planner card
-  // to that same period") -- this reverses the same-day decision to add an
-  // independent, anchor-less averaging period. Whole card only renders once
-  // incentive_settings.enabled is confirmed true for this company.
-  // Payload-utilization driver card (Phase 2) removed from this page
-  // entirely per explicit direction -- utilization reporting still exists
-  // (Reports hub, admin Fleet dashboard), it's just no longer shown here
-  // alongside "what am I planning right now."
-
   const { handleBackToPlannerNoUpdate, handleRecallLastLoad, handleSubmitOutageReport, requestBegin } = useLoadBegin({ beginAfterOverride, effectiveUserId, loadWorkflow, planSlots, preLoadCardedOnRef, predictedFuelTempF, refreshFuelTemp, resolvedSupplierPicksRef, setActiveSlotLetter, setAltEquipmentPrompt, setApiSafetyOverride, setBeginAfterOverride, setCancelLoadConfirmOpen, setCaptureBaselineNext, setProductTempF, setTempF, setTunedApiTempByProduct, shell, tempFRef, userAdjustedTempRef });
 
   const { reportPending, reportFromDashboard, openLoadReportAtTerminal } = useLoadReportLauncher({ shell, loadWorkflow, leaveTo });
 
-  // Deliberately does NOT claim/switch equipment -- per explicit follow-up,
-  // someone else could genuinely be running that truck/trailer right now,
-  // and force-claiming it out from under them just to satisfy a "let me
-  // peek at my last load" convenience is a real, disruptive side effect
-  // (an earlier version of this did claim it directly; reversed). Instead
-  // links to the load's own read-only report view -- Reports already
-  // knows how to show a single load's detail without touching any
-  // equipment-claim state at all.
+  // Never claims or switches equipment (someone else may be driving it); links to the
+  // load's read-only report instead.
   const handleViewAltLoadInReports = useCallback(() => {
     if (!altEquipmentPrompt) return;
     router.push(`/planner/reports?loadId=${encodeURIComponent(altEquipmentPrompt.loadId)}`);
     setAltEquipmentPrompt(null);
   }, [altEquipmentPrompt, router]);
-
-  // The effect that used to live here seeded loadWorkflow.loadReport (and
-  // the plan-letter highlight) from usePlanSlots' own "last completed
-  // load" fallback on every mount -- removed entirely per explicit
-  // direction: no last-load info anywhere on the Planner page anymore,
-  // passively or otherwise. loadReport is now set only by a real
-  // completion or by explicitly opening a load's report (see
-  // openLoadReportAtTerminal below); the plan-letter highlight is fully
-  // owned by handlePlanRestored (a real local draft) and the explicit
-  // preset-tap/recall handlers.
-
-  // recapBaseline/recapValid (the "is the recap card's data still valid"
-  // freshness check) removed entirely -- see the recap card's own comment
-  // further down for why it was a real bug, not just an edge case: it
-  // compared the live plan against a baseline captured whenever
-  // loadReport happened to change, which trivially matched itself
-  // regardless of whether loadReport actually described that plan. The
-  // recap card no longer reads from loadReport at all.
 
   // ── Derived labels ─────────────────────────────────────────────────────────
   const terminalLabel = useMemo(() => {
@@ -577,23 +362,19 @@ export default function PlannerHost() {
     handleSubmitOutageReport,
   });
 
-  // ── lastProductInfoById ────────────────────────────────────────────────────
-// IMPORTANT: derive from `terminalProducts` because that list is refreshed after LOADED.
-const lastProductInfoById = useMemo(() => {
-  const out: Record<string, { last_api: number | null; last_api_updated_at: string | null }> = {};
-  for (const p of terminalProducts) {
-    const pid = String((p as any).product_id ?? "");
-    if (!pid) continue;
-    out[pid] = {
-      last_api: (p as any).last_api ?? null,
-      last_api_updated_at: (p as any).last_api_updated_at ?? null,
-    };
-  }
-  return out;
-}, [terminalProducts]);
-
-  // ── Placard data ──────────────────────────────────────────────────────────
-
+  // Last API reading per product, from terminalProducts (refreshed after a load is logged).
+  const lastProductInfoById = useMemo(() => {
+    const out: Record<string, { last_api: number | null; last_api_updated_at: string | null }> = {};
+    for (const p of terminalProducts) {
+      const pid = String((p as any).product_id ?? "");
+      if (!pid) continue;
+      out[pid] = {
+        last_api: (p as any).last_api ?? null,
+        last_api_updated_at: (p as any).last_api_updated_at ?? null,
+      };
+    }
+    return out;
+  }, [terminalProducts]);
 
   const productHexCodeById = useMemo(() => {
     const rec: Record<string, string> = {};
@@ -677,45 +458,12 @@ const lastProductInfoById = useMemo(() => {
   const currentOverrides = overridesSnapshot(compPlan, cgSlider);
   const isDirty = currentOverrides !== baselineOverrides;
 
-  // ── Partial equipment (Phase 2: persistent bobtail / trailer-only) ────────
-  // A driver can hold just a truck (bobtail) or just a trailer (via a
-  // per-unit take-over) with no full combo. The setup gate is satisfied by
-  // that held unit (see comboSelected below), so the planner body renders --
-  // but there's no tare and no compartments, so the whole plan/compartments/
-  // CG/recap/LOAD apparatus is hidden and replaced with a prompt to pick the
-  // missing unit. A partial state literally cannot load, by construction:
-  // there is no full combo for beginLoadToSupabase to snapshot.
+  // A driver holding only a truck or only a trailer has no tare or compartments, so the
+  // plan is replaced by a prompt to pick the missing unit and cannot load.
   const isPartialEquipment = equipment.isBobtail || equipment.isTrailerOnly;
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  // Landscape: trim the page's own side padding (16px -> 6px each side) so
-  // the two-column row below reclaims that width instead of leaving it as
-  // unused margin -- symmetric either way, so the preset dial's own
-  // "center within this content width" math (see below) still lands
-  // exactly on the viewport center, same as the tab bar's own centering,
-  // regardless of how much padding there is. Portrait keeps the original
-  // 16px unchanged.
-  //
-  // Landscape also raises styles.page's own maxWidth (1100, shared by
-  // every page in the app) -- missed in an earlier pass, and the real
-  // reason a three-column row once measured only ~1088px wide on a
-  // 1400px-wide viewport (156px of dead margin on each side,
-  // `margin:"0 auto"` centering a page that was still capped at 1100
-  // regardless of the padding fix). 1100 stays exactly as-is for
-  // portrait. Safe to raise unconditionally for every landscape width
-  // now (not gated behind a wide-only threshold) -- the row's own
-  // transform:scale is what actually bounds its rendered size (capped at
-  // 1.6x, see rowScale above), so a generous maxWidth here just means a
-  // narrow phone's own physical width remains the real limit, same as
-  // before.
-  // paddingTop/paddingBottom are ALSO trimmed here now (6px, was still the
-  // original 16px -- a real, found-live gap, not a guess: `...styles.page`
-  // spreads padding:16 on all four sides first, and the paddingLeft/Right
-  // override above only ever touched two of them, silently leaving 16px
-  // of unclaimed vertical space above the preset dial on every landscape
-  // load). Per explicit follow-up: "there's a bunch of empty space above
-  // the equipment button... shift the whole thing up to just below the
-  // header."
+  // Landscape trims the page padding and raises the max width (1100 elsewhere).
   const pageStyle = isLandscape
     ? { ...styles.page, padding: 6, maxWidth: 1800 }
     : styles.page;
@@ -780,35 +528,7 @@ const lastProductInfoById = useMemo(() => {
       )}
       {setupSession && <SetupSessionBanner targetDisplayName={setupSession.targetDisplayName} returnTo={setupSession.returnTo} />}
 
-      {/* PresetQuickPick + PresetActionSheet -- both plain overlay sheets,
-          position in the JSX tree doesn't matter functionally, rendered
-          together here. The plan-letter icon that opens PresetQuickPick
-          lives in the new compact icon row inside mainInfoStack below (see
-          that row's own definition) -- replacing the old swipeable
-          PresetDial, which used to render here as its own full-width
-          element (portrait) or inside the compartments column (landscape).
-          Both those render sites are gone; this is purely the sheet
-          itself now, not a visible-by-default element. */}
-
-
-      {/* Action row ("Save plan {letter}" / "Edit Comp N Product") used to
-          render here, portrait-only, ahead of locationLineEl/compartments
-          -- now renders as part of the single top cluster inside the
-          compartments column below (locationLineEl -> stabilityBannerEl
-          -> actionRowEl -> PlannerControls), unconditional on orientation,
-          per explicit direction that locationLineEl should be the top row
-          with everything else -- including this -- below it. */}
-
-      {/* Single content column, both orientations -- see LANDSCAPE_MAX_W's
-          own comment above for why the old fixed-width two-column +
-          transform:scale system is gone. locationLineEl/stabilityBannerEl/
-          actionRowEl/compartments/CG-slider all live in this first block;
-          recap+points/Load button are a second sibling block below (see
-          the IIFE further down) -- two adjacent margin:auto divs at the
-          same maxWidth read as one continuous column, so splitting them
-          this way (rather than merging the second IIFE's body up into
-          this one) needed no change to how either block's own internals
-          are written. */}
+      {/* One content column in both orientations (capped in landscape). */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
       <TripEquipmentSheets {...tripEquip.sheets} />
       {isPartialEquipment ? (
@@ -882,32 +602,17 @@ const lastProductInfoById = useMemo(() => {
         terminalLabel={terminalLabel ?? ""}
         onOnboardingComplete={() => setOnboardingDone(true)}
       />
-
     </div>
-      {/* ── Modals ── (outside the page div, so they still show while the Planner itself is hidden) */}
-      <PlanReviewFlow />
-      <PlanSlotsFlow />
-      <CompartmentFlow />
-      <PlanBuilderFlow />
-      <TerminalSwitchFlow />
-      <ReportIssueFlow />
-      <StaleApiFlow />
-      <RecallEquipmentFlow />
-      <TempConfirmFlow />
-
-
-      {/* Opened only from the Loading modal's "Report Terminal Issue" button
-          now (the other three actions are the modal's own buttons), so it
-          opens straight into the outage-report flow. */}
-
-
-
-
-      {/* LocationModal/MyTerminalsModal now mount once in ShellChrome (see
-          CalculatorLayoutClient.tsx) -- shared with the Terminal tab's own
-          identity header, both reading/writing the one shell.location. */}
-
-
+    {/* Windows sit outside the page div so they still show while the plan page is hidden. */}
+    <PlanReviewFlow />
+    <PlanSlotsFlow />
+    <CompartmentFlow />
+    <PlanBuilderFlow />
+    <TerminalSwitchFlow />
+    <ReportIssueFlow />
+    <StaleApiFlow />
+    <RecallEquipmentFlow />
+    <TempConfirmFlow />
     </>
     </PlannerProvider>
   );

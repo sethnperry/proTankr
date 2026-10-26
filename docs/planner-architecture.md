@@ -40,16 +40,13 @@ flow in `app/planner/flows/` that reads `usePlanner()`:
 
 ## What is left
 
-`PlannerHost.tsx` is about 1,050 lines (down from about 4,000). The handlers for
-plan slots, beginning a load, temperature, stale API and unavailable products now
-live in hooks (`usePlanSlotsView`, `useLoadBegin`, `useLoadPrep`,
-`usePlanTemperature`, `useUnavailableProducts`, `usePlannerIntents`), and the plan
-page is built from `PlanCompartmentsSection` and `PlanActionsSection`. What remains
-in the host: the top-of-file state declarations, the `usePlanSlots` and load
-workflow wiring, the partial-equipment panel, onboarding, and the render. Next:
+`PlannerHost.tsx` is about 620 lines (down from about 4,000). Handlers live in hooks
+(`usePlanSlotsView`, `useLoadBegin`, `useLoadPrep`, `usePlanTemperature`,
+`useUnavailableProducts`, `usePlannerIntents`, `usePlannerLanding`, `useLeaveTo`,
+`useHeaderIconsSlot`); the plan page is `PlanCompartmentsSection` and
+`PlanActionsSection`; `PlannerGates` and `PartialEquipmentPanel` are components.
+What remains in the host: the state declarations, the `usePlanSlots` and
+`useLoadWorkflow` wiring, and the context object. To get under 300:
 
-1. Group the remaining state declarations into the hooks that own them.
-2. Move the partial-equipment panel and onboarding gate into their own components.
-3. `PlannerHost` becomes the provider plus the list of mounted flows (under 300 lines).
-
-Each step ships on its own and is checked in a browser before the next.
+1. Move the stale-API / tune / modal state declarations into the hooks that use them.
+2. Build `plannerCtx` inside a `usePlannerContext` hook.
