@@ -78,7 +78,9 @@ layers in `hooks/planSlots/` and `hooks/loadWorkflow/`; the work that does not n
 
 Nothing is grandfathered now: every file in `modals/`, `components/` and `hooks/` is under the limit.
 
-## Known leftovers
+## Hooks and components
 
-Several older hooks still import from `components/` (`useLoadBegin`, `usePlannerSuppliers`,
-`useTripEquipment`). Rule 4 applies to `model/` only for now.
+Hooks (`hooks/`, including subfolders) import only **types** from `components/`, `flows/` and `modals/`;
+the test enforces it. A hook that needs to render something returns props, and a component under
+`components/` renders them (see `useTripEquipment` and `TripEquipmentSheets`). Event bridges that
+both hooks and components use live in `utils/` (`openAccessSteps`).

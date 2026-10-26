@@ -50,6 +50,17 @@ const MAX = 450;
 const GRANDFATHERED: Record<string, number> = {
 };
 
+test("hooks only import types from components, flows and modals", () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${dir}/${e.name}`] : [],
+    );
+  for (const rel of walk("hooks")) {
+    const bad = read(rel).split("\n").filter((l) => /from "(\.\.\/)+(components|flows|modals)\//.test(l) && !/^\s*import type\b/.test(l));
+    assert.deepEqual(bad, [], `${rel} must only import types from components, flows or modals`);
+  }
+});
+
 test("planner files stay under the size limit (or shrink toward it)", () => {
   for (const dir of ["modals", "components", "hooks"]) {
     for (const f of files(dir, /\.tsx?$/)) {

@@ -15,7 +15,7 @@ import { useTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import type { TripPickupRow, TripRow } from "@/lib/trips/types";
 import { openTripForDriver } from "@/lib/trips/tripLogic";
-import { type PanelProduct, type SupplierSwitchEvent } from "../components/supplier/SupplierPanel";
+import type { PanelProduct, SupplierSwitchEvent } from "../components/supplier/SupplierPanel";
 import { useSupplierPicks } from "@/lib/suppliers/useSupplierPicks";
 import { resolvePicks, readPicks, groupPicks, type SupplierPick } from "@/lib/suppliers/picks";
 import { getTripSupplier, setTripSupplier, tripSupplierPicks } from "@/lib/trips/tripSupplier";

@@ -7,7 +7,7 @@
 
 import { createPortal } from "react-dom";
 import { Spinner } from "@/lib/ui/pending";
-import { TripEquipmentSheets } from "../hooks/useTripEquipment";
+import { TripEquipmentSheets } from "./trip/TripEquipmentSheets";
 import { styles } from "../ui/styles";
 import { usePlanner } from "../PlannerContext";
 import PlanCompartmentsSection from "./PlanCompartmentsSection";

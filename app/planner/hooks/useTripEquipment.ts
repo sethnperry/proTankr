@@ -1,5 +1,5 @@
 "use client";
-// app/planner/hooks/useTripEquipment.tsx
+// app/planner/hooks/useTripEquipment.ts
 //
 // Mid-trip equipment changes, shared by the Driver Dashboard and the Planner.
 // - Tapping Equipment while product is on board (or a load is in progress)
@@ -7,9 +7,9 @@
 // - A loaded trailer now behind a different truck opens the truck-change
 //   window: records the swap on the trip and shows the gross with the new
 //   truck's tare (lib/trips/truckChange.ts).
-// Render <TripEquipmentSheets {...sheets} /> once on the page.
+// Render <TripEquipmentSheets {...sheets} /> (components/trip) once on the page.
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
@@ -19,8 +19,8 @@ import { openTripForDriver } from "@/lib/trips/tripLogic";
 import { onBoard, tripSnapshot } from "@/lib/trips/tripFlow";
 import { grossWithTare, needsTruckChange, productLbsOnBoard, recordTruckChange } from "@/lib/trips/truckChange";
 import type { TripRow } from "@/lib/trips/types";
-import { EquipmentChangeWarning } from "../components/trip/EquipmentChangeWarning";
-import { TruckChangeSheet, type TruckChangeView } from "../components/trip/TruckChangeSheet";
+import type { TruckChangeView } from "../components/trip/TruckChangeSheet";
+import type { TripEquipmentSheetsProps } from "../components/trip/TripEquipmentSheets";
 
 type StoreHook = Pick<ReturnType<typeof useTripStore>, "state" | "store" | "syncNow">;
 
@@ -144,34 +144,4 @@ export function useTripEquipment(storeHook: StoreHook, userId: string | null) {
     reopenTruckChange: () => setTruckSheetDismissed(null),
     sheets,
   };
-}
-
-export type TripEquipmentSheetsProps = {
-  warnOpen: boolean;
-  trailerName: string | null;
-  truckName: string | null;
-  loaded: boolean;
-  onWarnContinue: () => void;
-  onWarnClose: () => void;
-  truckOpen: boolean;
-  truckView: TruckChangeView | null;
-  truckBusy: boolean;
-  onRecord: (fromOdo: number | null, toOdo: number | null) => void;
-  onTruckClose: () => void;
-};
-
-export function TripEquipmentSheets(p: TripEquipmentSheetsProps) {
-  return (
-    <>
-      <TruckChangeSheet open={p.truckOpen} view={p.truckView} busy={p.truckBusy} onRecord={p.onRecord} onClose={p.onTruckClose} />
-      <EquipmentChangeWarning
-        open={p.warnOpen}
-        trailerName={p.trailerName}
-        truckName={p.truckName}
-        loaded={p.loaded}
-        onContinue={p.onWarnContinue}
-        onClose={p.onWarnClose}
-      />
-    </>
-  );
 }

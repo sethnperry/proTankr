@@ -5,7 +5,7 @@
 // card), the begin sequence after the stale-API choice, reporting a terminal issue,
 // and recalling the last load. Lifted out of PlannerHost unchanged.
 
-import { openAccessSteps } from "../components/access/useAccessSteps";
+import { openAccessSteps } from "../utils/openAccessSteps";
 import { useCallback, useEffect, useRef } from "react";
 import { submitOutageReport, type OutageReportType } from "./useTerminalOutageReports";
 
