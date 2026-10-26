@@ -7,7 +7,7 @@ const NOW = Date.parse("2026-10-26T18:00:00Z");
 
 test("a change away from driving is a stop, with when driving resumed", () => {
   const s = drivingStops([log("2026-10-26T12:00:00Z", "D"), log("2026-10-26T14:00:00Z", "ON"), log("2026-10-26T15:00:00Z", "D")], NOW);
-  assert.deepEqual(s, [{ at: "2026-10-26T14:00:00.000Z", code: "ON", resumedAt: "2026-10-26T15:00:00.000Z" }]);
+  assert.deepEqual(s, [{ at: "2026-10-26T14:00:00.000Z", code: "ON", droveFrom: "2026-10-26T12:00:00.000Z", resumedAt: "2026-10-26T15:00:00.000Z" }]);
 });
 test("still stopped has no resume time", () => {
   const s = drivingStops([log("2026-10-26T12:00:00Z", "D"), log("2026-10-26T16:30:00Z", "OFF")], NOW);

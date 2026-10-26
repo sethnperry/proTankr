@@ -870,7 +870,13 @@ export default function HomePage() {
 
   const addAnotherPickup = () => {
     if (!store || !userId || !openTrip) return;
-    addPickup(store, {
+    const hop = hopRef.current;
+    hopRef.current = null;
+    if (hop) {
+      if (hop.pickup.load_id) { void cancelPlannedLoad(hop.pickup.load_id).catch(() => {}); clearActivePlannedLoad(userId); }
+      closePickupNoLoad(store, { userId, pickup: hop.pickup, reason: hop.reason, note: null, arrivedAt: null, leftAt: hop.stop.droveFrom ?? hop.stop.at, ...clock() });
+    }
+    const newPickupId = addPickup(store, {
       userId, tripId: openTrip.trip_id,
       terminalId: location.selectedTerminalId || null,
       rackId: location.selectedRackId || null,
@@ -879,6 +885,7 @@ export default function HomePage() {
       state: location.selectedState || null,
       ...clock(),
     });
+    if (hop) arrivePickup(store, { userId, pickup: { pickup_id: newPickupId, trip_id: openTrip.trip_id } as TripPickupRow, ...clock(), now: new Date(hop.stop.at) });
     void syncNow();
   };
 
@@ -1181,13 +1188,16 @@ export default function HomePage() {
   // Duty-log stops: the ELD's own time for "stopped driving", asked about once we can see it.
   const [handledStops, setHandledStops] = useState<Set<string>>(new Set());
   useEffect(() => { if (userId) setHandledStops(readHandledStops(userId)); }, [userId]);
+  const hopPickup = snap && step.kind === "planner" ? snap.pickups.find((p) => p.arrived_at && !p.left_at && p.outcome !== "no_load") ?? null : null;
   const dutyStop = useMemo(() => {
-    if (!openTrip || !snap || !arrivalTarget || (step.kind !== "arrive_pickup" && step.kind !== "arrive_delivery")) return null;
+    const waiting = !!arrivalTarget && (step.kind === "arrive_pickup" || step.kind === "arrive_delivery");
+    if (!openTrip || !snap || (!waiting && !hopPickup)) return null;
     const stamps = [openTrip.started_at, ...snap.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...snap.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
       .filter(Boolean).map((t) => Date.parse(t as string));
     return pendingStop(myHos?.stops, { afterMs: Math.max(0, ...stamps), handled: handledStops });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops]);
+  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id]);
+  const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string } | null>(null);
   const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
   const logDutyDelay = (code: string, note: string | null) => {
     if (!store || !userId || !openTrip || !dutyStop || !delayLeg) return;
@@ -1199,6 +1209,15 @@ export default function HomePage() {
     store.put("trip_events", { event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: end, actor_id: userId, pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, end) });
     answerStop(dutyStop.at);
     void syncNow();
+  };
+  // Rack hopping: the rack is closed with the reason, the next one is picked, and it starts at the stop's time.
+  const hopToAnotherRack = (reason: string) => {
+    if (!dutyStop || !hopPickup) return;
+    const st = (myHos?.stops ?? []).find((x) => x.at === dutyStop.at);
+    hopRef.current = { stop: { at: dutyStop.at, droveFrom: st?.droveFrom }, pickup: hopPickup, reason };
+    answerStop(dutyStop.at);
+    setNextRackPending(true);
+    if (location.selectedCity) shell.setTermOpen(true); else shell.setLocOpen(true);
   };
   const confirmDutyArrival = () => {
     if (!dutyStop) return;
@@ -1886,9 +1905,10 @@ export default function HomePage() {
         </div>
       )}
 
-      {dutyStop && !arrival.suggest && arrivalTarget && delayLeg && (
-        <DutyStopCard stop={dutyStop} targetName={arrivalTarget.name} leg={delayLeg}
-          onArrived={confirmDutyArrival} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
+      {dutyStop && !arrival.suggest && (arrivalTarget || hopPickup) && delayLeg && (
+        <DutyStopCard stop={dutyStop} targetName={arrivalTarget?.name ?? "the stop"} leg={delayLeg}
+          hop={hopPickup ? { rackName: hopPickup.name ?? "the rack" } : null}
+          onArrived={confirmDutyArrival} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>

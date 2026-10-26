@@ -8,25 +8,37 @@
 import React, { useState } from "react";
 import { DELAY_REASONS, LEG_LABEL, OTHER_CODE, type DelayLeg } from "@/lib/trips/delays";
 import { DUTY_NAME } from "@/lib/trips/stopPrompt";
+import { OTHER_NO_LOAD_REASONS, TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
 import { LOOK } from "./dashLook";
 
 const hm = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export function DutyStopCard({ stop, targetName, leg, onArrived, onDelay, onDismiss }: {
+export function DutyStopCard({ stop, targetName, leg, hop, onArrived, onHop, onDelay, onDismiss }: {
   stop: { at: string; code: string; resumedAt: string | null }; targetName: string; leg: DelayLeg;
-  onArrived: () => void; onDelay: (code: string, note: string | null) => void; onDismiss: () => void;
+  /** Set when the driver was at a rack and has driven elsewhere: the rack they left. */
+  hop?: { rackName: string } | null;
+  onArrived: () => void; onHop?: (reason: string) => void; onDelay: (code: string, note: string | null) => void; onDismiss: () => void;
 }) {
   const [picking, setPicking] = useState(false);
+  const [why, setWhy] = useState(false);
   const btn: React.CSSProperties = { padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 };
   return (
     <div style={{ ...LOOK.primary, padding: 14, marginBottom: 10, borderColor: "rgba(147,197,253,0.5)" }}>
       <div style={{ fontSize: 14, fontWeight: 800 }}>You stopped driving at {hm(stop.at)}</div>
       <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
-        Your log changed to {DUTY_NAME[stop.code] ?? stop.code}{stop.resumedAt ? ` and you were driving again at ${hm(stop.resumedAt)}` : ""}. Was that {targetName}, or a delay?
+        Your log changed to {DUTY_NAME[stop.code] ?? stop.code}{stop.resumedAt ? ` and you were driving again at ${hm(stop.resumedAt)}` : ""}. {hop ? `You left ${hop.rackName}. Another rack, or a delay?` : `Was that ${targetName}, or a delay?`}
       </div>
-      {!picking ? (
+      {why ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Why did you leave {hop?.rackName}?</div>
+          {[...TERMINAL_ISSUES, ...OTHER_NO_LOAD_REASONS].map((r) => (
+            <button key={r.code} type="button" className="dash-press" onClick={() => onHop?.(r.code)} style={{ ...btn, width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 6 }}>{r.label}</button>
+          ))}
+          <button type="button" onClick={() => setWhy(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 13, cursor: "pointer", padding: 0 }}>‹ Back</button>
+        </div>
+      ) : !picking ? (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button type="button" className="dash-press" onClick={onArrived} style={{ flex: 2, padding: "11px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", ...LOOK.cta }}>Arrived · {hm(stop.at)}</button>
+          <button type="button" className="dash-press" onClick={hop ? () => setWhy(true) : onArrived} style={{ flex: 2, padding: "11px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", ...LOOK.cta }}>{hop ? `Another rack · ${hm(stop.at)}` : `Arrived · ${hm(stop.at)}`}</button>
           <button type="button" className="dash-press" onClick={() => setPicking(true)} style={{ ...btn, flex: 1 }}>A delay</button>
           <button type="button" onClick={onDismiss} style={{ ...btn, flex: 1 }}>Neither</button>
         </div>

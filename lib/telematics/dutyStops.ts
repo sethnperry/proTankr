@@ -15,6 +15,8 @@ export type DrivingStop = {
   code: DutyCode;
   /** ISO time driving started again, or null while still stopped. */
   resumedAt: string | null;
+  /** ISO time the drive that ended in this stop began (when the truck left where it was). */
+  droveFrom: string;
 };
 
 /** Stops from the last `windowMs`, oldest first. Very short ones (under `minSec`) are ignored as log noise. */
@@ -27,7 +29,7 @@ export function drivingStops(logs: any[], nowMs: number, windowMs = 24 * 3600_00
     if (nowMs - at > windowMs) continue;
     const next = segs.slice(i + 2).find((s) => s.code === "D");
     if (next && next.from - at < minSec * 1000) continue;
-    out.push({ at: new Date(at).toISOString(), code: segs[i + 1].code, resumedAt: next ? new Date(next.from).toISOString() : null });
+    out.push({ at: new Date(at).toISOString(), code: segs[i + 1].code, droveFrom: new Date(segs[i].from).toISOString(), resumedAt: next ? new Date(next.from).toISOString() : null });
   }
   return out;
 }
