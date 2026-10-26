@@ -48,7 +48,6 @@ test("the context type comes from the model", () => {
 // its entry here.
 const MAX = 450;
 const GRANDFATHERED: Record<string, number> = {
-  "components/SoloOnboarding.tsx": 741,
   "modals/ScaleHistoryModal.tsx": 465,
   "modals/MyTerminalsModal.tsx": 457,
   "hooks/useLocation.ts": 494,
