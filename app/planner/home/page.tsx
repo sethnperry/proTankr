@@ -1197,7 +1197,7 @@ export default function HomePage() {
   useEffect(() => { if (userId) setHandledStops(readHandledStops(userId)); }, [userId]);
   const hopPickup = snap && step.kind === "planner" ? snap.pickups.find((p) => p.arrived_at && !p.left_at && p.outcome !== "no_load") ?? null : null;
   const dutyStop = useMemo(() => {
-    const waiting = !!arrivalTarget && (step.kind === "arrive_pickup" || step.kind === "arrive_delivery");
+    const waiting = step.kind === "arrive_pickup" || step.kind === "arrive_delivery";
     if (!openTrip || !snap || (!waiting && !hopPickup)) return null;
     const stamps = [openTrip.started_at, ...snap.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...snap.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
       .filter(Boolean).map((t) => Date.parse(t as string));
@@ -1205,7 +1205,9 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id]);
   const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[] } | null>(null);
-  const arriveCardPending = !!dutyStop && !arrival.suggest && !!arrivalTarget && !!delayLeg && !hopPickup;
+  // Name for the card: a store picked by name only (no saved location) has no geofence target but still gets asked.
+  const stopName = arrivalTarget?.name ?? (step.kind === "arrive_delivery" ? deliveryName(step.delivery) : null);
+  const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
   const logDutyDelay = (code: string, note: string | null) => {
     if (!store || !userId || !openTrip || !dutyStop || !delayLeg) return;
@@ -1913,8 +1915,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {dutyStop && !arrival.suggest && (arrivalTarget || hopPickup) && delayLeg && (
-        <DutyStopCard stop={dutyStop} targetName={arrivalTarget?.name ?? "the stop"} leg={delayLeg}
+      {dutyStop && !arrival.suggest && (stopName || hopPickup) && delayLeg && (
+        <DutyStopCard stop={dutyStop} targetName={stopName ?? "the stop"} leg={delayLeg}
           hop={hopPickup ? { rackName: hopPickup.name ?? "the rack" } : null}
           onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}

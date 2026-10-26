@@ -323,8 +323,9 @@ export function DeliveryDashboard({
 
   // The truck's own odometer fills ending miles when empty. Never overwrites a typed value.
   useEffect(() => {
-    if (open && liveOdometer != null) setOdometer((o) => (o.trim() ? o : String(liveOdometer)));
-  }, [open, liveOdometer, delivery.delivery_id]);
+    // After the saved progress is loaded, which would otherwise wipe the fill when the reading is already here.
+    if (open && hydrated && liveOdometer != null) setOdometer((o) => (o.trim() ? o : String(liveOdometer)));
+  }, [open, hydrated, liveOdometer, delivery.delivery_id]);
 
   // Every carrier's recent drops at this store.
   const store = useStoreDeliveries(open ? delivery.location_id : null, open, 10);
