@@ -19,6 +19,10 @@ import type { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDurin
 import type { useTerminalProducts } from "./hooks/useTerminalProducts";
 import type { usePlannerEquipment } from "./hooks/usePlannerEquipment";
 import type { TuneRow } from "./utils/tuneRows";
+import type { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
+import type { usePlanInputs } from "./hooks/usePlanInputs";
+import type { OutageReportType } from "./hooks/useTerminalOutageReports";
+import type { StaleProduct } from "./components/StaleApiOverlay";
 import type { CompPlanInput } from "./types";
 
 type Math = ReturnType<typeof usePlanMath>;
@@ -26,6 +30,8 @@ type Trip = ReturnType<typeof useTripLoading>;
 type Switch = ReturnType<typeof useTerminalSwitchDuringLoad>;
 type Equip = ReturnType<typeof usePlannerEquipment>;
 type Products = ReturnType<typeof useTerminalProducts>;
+type Temp = ReturnType<typeof useFuelTempPrediction>;
+type Inputs = ReturnType<typeof usePlanInputs>;
 
 export type PlannerCtx = {
   shell: ReturnType<typeof useCalculatorShell>;
@@ -68,6 +74,50 @@ export type PlannerCtx = {
   handleTapTerminalInLoadingModal: Switch["handleTapTerminalInLoadingModal"];
   handleBackToPlannerNoUpdate: () => Promise<void>;
   openCancelLoadSheet: () => void;
+
+  // leaving a rack mid-load
+  terminalSwitchConfirm: Switch["terminalSwitchConfirm"];
+  handleUpdateCardAtPrevious: Switch["handleUpdateCardAtPrevious"];
+  handleSwitchWithoutUpdating: Switch["handleSwitchWithoutUpdating"];
+  handleSubmitOutageReportForPreviousTerminal: Switch["handleSubmitOutageReportForPreviousTerminal"];
+  switchReportedIssueRef: Switch["switchReportedIssueRef"];
+  switchReasonNoteRef: Switch["switchReasonNoteRef"];
+  tripPickup: Trip["tripPickup"];
+  tripWaitingPickup: Trip["tripWaitingPickup"];
+
+  // report a terminal issue
+  cancelLoadConfirmOpen: boolean;
+  setCancelLoadConfirmOpen: Dispatch<SetStateAction<boolean>>;
+  handleSubmitOutageReport: (
+    reportType: OutageReportType, productIds: string[], overrideTerminalId?: string, overrideRackId?: string | null,
+  ) => Promise<{ error: string | null }>;
+
+  // stale API choice
+  staleApiPrompt: { products: StaleProduct[] } | null;
+  setStaleApiPrompt: Dispatch<SetStateAction<{ products: StaleProduct[] } | null>>;
+  handleStaleSafest: () => void;
+  handleStaleSafe: () => void;
+  handleStaleIgnore: () => void;
+
+  // equipment differs from the last load here
+  altEquipmentPrompt: { loadId: string; truckLabel: string; trailerLabel: string } | null;
+  setAltEquipmentPrompt: Dispatch<SetStateAction<{ loadId: string; truckLabel: string; trailerLabel: string } | null>>;
+  handleViewAltLoadInReports: () => void;
+
+  // temperature confirm
+  tempDialOpen: boolean;
+  setTempDialOpen: Dispatch<SetStateAction<boolean>>;
+  tempReconfirmProductIds: Switch["tempReconfirmProductIds"];
+  setTempReconfirmProductIds: Switch["setTempReconfirmProductIds"];
+  handleConfirmTempReconfirm: Switch["handleConfirmTempReconfirm"];
+  handleConfirmTempAndBeginLoad: () => void;
+  fuelTempLoading: Temp["loading"];
+  fuelTempConfidence: Temp["confidence"];
+  predictedFuelTempF: Temp["predictedFuelTempF"];
+  tempF: Inputs["tempF"];
+  setTempF: Inputs["setTempF"];
+  setSingleProductTempF: Inputs["setSingleProductTempF"];
+  tempModalProductGroups: { productId: string; name: string; hex: string; tempF: number }[];
 
   // parts the host still builds
   supplierPanel: ReactNode;

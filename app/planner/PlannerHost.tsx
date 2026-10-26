@@ -45,6 +45,11 @@ import { useTripLoading } from "./hooks/useTripLoading";
 import { usePlanMath } from "./hooks/usePlanMath";
 import { PlannerProvider, type PlannerCtx } from "./PlannerContext";
 import PlanReviewFlow from "./flows/PlanReviewFlow";
+import TerminalSwitchFlow from "./flows/TerminalSwitchFlow";
+import ReportIssueFlow from "./flows/ReportIssueFlow";
+import StaleApiFlow from "./flows/StaleApiFlow";
+import RecallEquipmentFlow from "./flows/RecallEquipmentFlow";
+import TempConfirmFlow from "./flows/TempConfirmFlow";
 import { usePlanInputs } from "./hooks/usePlanInputs";
 import { usePlanDirty } from "./hooks/usePlanDirty";
 import CgSlider from "./components/CgSlider";
@@ -60,7 +65,6 @@ import { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
 // ── Sections ───────────────────────────────────────────────────────────────────
 import PlannerControls from "./sections/PlannerControls";
 import { useIsLandscape } from "./hooks/useOrientation";
-import TempDial from "./components/TempDial";
 import PresetActionSheet from "./components/PresetActionSheet";
 import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tripPlan";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
@@ -69,13 +73,8 @@ import PresetQuickPick from "./components/PresetQuickPick";
 // ── Modals ─────────────────────────────────────────────────────────────────────
 // LocationModal/MyTerminalsModal now mount once in ShellChrome
 // (CalculatorLayoutClient.tsx) -- see the render-site comment further down.
-import TerminalCatalogModal from "./modals/TerminalCatalogModal";
-import CancelLoadSheet from "./components/CancelLoadSheet";
-import TerminalSwitchDuringLoadSheet from "./components/TerminalSwitchDuringLoadSheet";
-import RecallDifferentEquipmentSheet from "./components/RecallDifferentEquipmentSheet";
-import StaleApiOverlay, { type StaleProduct } from "./components/StaleApiOverlay";
+import { type StaleProduct } from "./components/StaleApiOverlay";
 import { submitOutageReport, type OutageReportType } from "./hooks/useTerminalOutageReports";
-import ProductTempModal from "./modals/ProductTempModal";
 import CompartmentModal from "./modals/CompartmentModal";
 import PlanWizard from "./components/PlanWizard";
 import CompartmentDetailModal from "./components/CompartmentDetailModal";
@@ -84,7 +83,6 @@ import CompartmentDetailModal from "./components/CompartmentDetailModal";
 import { styles } from "./ui/styles";
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
-import { addDaysISO_, formatMDYWithCountdown_, isPastISO_ } from "./utils/dates";
 import { backCorrectApiTo60 } from "./utils/planMath";
 import { buildTuneRows } from "./utils/tuneRows";
 import { isStaleReading, pickSafest, pickSafe, pickIgnore } from "./utils/staleApi";
@@ -293,9 +291,6 @@ export default function PlannerHost() {
   // page and that one can't each carry an independent copy without risking
   // the two drifting out of sync.
   const { setEquipOpen, setTermOpen, setLocOpen } = shell;
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const [catalogExpandedId, setCatalogExpandedId] = useState<string | null>(null);
-  const [catalogEditingDateId, setCatalogEditingDateId] = useState<string | null>(null);
   const [compModalOpen, setCompModalOpen] = useState(false);
   const [compModalComp, setCompModalComp] = useState<number | null>(null);
   const [tempDialOpen, setTempDialOpen] = useState(false);
@@ -1103,12 +1098,6 @@ export default function PlannerHost() {
   // regardless of whether loadReport actually described that plan. The
   // recap card no longer reads from loadReport at all.
 
-  // ── Terminal filters / expirations ────────────────────────────────────────
-  // Also shared via context (see above) -- myTerminalIdSet, terminalFilters,
-  // expirations all come from `shell` now.
-  const { myTerminalIdSet, terminalFilters } = shell;
-  const { catalogTerminalsInCity } = terminalFilters;
-
   // ── Derived labels ─────────────────────────────────────────────────────────
   const terminalLabel = useMemo(() => {
     if (!location.selectedTerminalId) return undefined;
@@ -1312,15 +1301,6 @@ const lastProductInfoById = useMemo(() => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [plannedProductIds, productNameById, productHexCodeById, productTempF, tempF]);
 
-  // City starring, stateOptions/selectedStateLabel/selectedStateName/cities/
-  // topCities/allCities all live in shell now (see the destructure above) --
-  // TerminalCatalogModal below is Planner-only dead code (never opened, see
-  // this file's own git history) so its starBtnClass stays local; nothing
-  // else here needs a second copy of the picker-list logic.
-  const starBtnClass = (active: boolean) =>
-    ["h-8 w-8 flex items-center justify-center rounded-[2px] border transition",
-      active ? "border-yellow-400/40 text-yellow-300 hover:bg-yellow-400/10"
-        : "border-white/10 text-white/40 hover:bg-white/5 hover:text-white/80"].join(" ");
 
   // ── Derived load state ─────────────────────────────────────────────────────
   // unavailableComps is deliberately NOT folded into loadDisabled -- per
@@ -1677,6 +1657,16 @@ const lastProductInfoById = useMemo(() => {
     tripModeForLoading, recordTripLoaded, loadGeoShips, reportFromDashboard,
     handleTapTerminalInLoadingModal, handleBackToPlannerNoUpdate,
     openCancelLoadSheet: () => setCancelLoadConfirmOpen(true),
+    terminalSwitchConfirm, handleUpdateCardAtPrevious, handleSwitchWithoutUpdating,
+    handleSubmitOutageReportForPreviousTerminal, switchReportedIssueRef, switchReasonNoteRef,
+    tripPickup, tripWaitingPickup,
+    cancelLoadConfirmOpen, setCancelLoadConfirmOpen, handleSubmitOutageReport,
+    staleApiPrompt, setStaleApiPrompt, handleStaleSafest, handleStaleSafe, handleStaleIgnore,
+    altEquipmentPrompt, setAltEquipmentPrompt, handleViewAltLoadInReports,
+    tempDialOpen, setTempDialOpen, tempReconfirmProductIds, setTempReconfirmProductIds,
+    handleConfirmTempReconfirm, handleConfirmTempAndBeginLoad,
+    fuelTempLoading, fuelTempConfidence, predictedFuelTempF, tempF, setTempF, setSingleProductTempF,
+    tempModalProductGroups,
     supplierPanel: supplierPanelEl,
   };
 
@@ -2006,116 +1996,24 @@ const lastProductInfoById = useMemo(() => {
         onCancel={() => setWizardNew(false)}
       />
       <PlanReviewFlow />
+      <TerminalSwitchFlow />
+      <ReportIssueFlow />
+      <StaleApiFlow />
+      <RecallEquipmentFlow />
+      <TempConfirmFlow />
 
-      <TerminalSwitchDuringLoadSheet
-        open={!!terminalSwitchConfirm}
-        prevTerminalName={terminalSwitchConfirm?.prev.terminalName ?? ""}
-        newTerminalName={terminalSwitchConfirm?.next.terminalName ?? ""}
-        onUpdateCardAtPrevious={handleUpdateCardAtPrevious}
-        onSwitchWithoutUpdating={handleSwitchWithoutUpdating}
-        darkMode={shell.theme.darkMode}
-        accentColor={shell.theme.accentColor}
-        planRows={effectivePlanRows as any[]}
-        productNameById={productNameById}
-        onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
-        requireReason={!!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}
-        onReasonPicked={(code, note) => {
-          if (!switchReportedIssueRef.current) switchReportedIssueRef.current = code;
-          switchReasonNoteRef.current = note;
-        }}
-      />
 
       {/* Opened only from the Loading modal's "Report Terminal Issue" button
           now (the other three actions are the modal's own buttons), so it
           opens straight into the outage-report flow. */}
-      <CancelLoadSheet
-        open={cancelLoadConfirmOpen}
-        initialMode="reportType"
-        onDismiss={() => setCancelLoadConfirmOpen(false)}
-        onBackToPlanner={() => { setCancelLoadConfirmOpen(false); handleBackToPlannerNoUpdate(); }}
-        onLogTheLoad={() => { setCancelLoadConfirmOpen(false); loadWorkflow.onLoadedFromLoadingModal({}); }}
-        onUpdateCardOnly={() => { setCancelLoadConfirmOpen(false); loadWorkflow.cancelActiveLoad(); }}
-        darkMode={shell.theme.darkMode}
-        accentColor={shell.theme.accentColor}
-        planRows={effectivePlanRows as any[]}
-        productNameById={productNameById}
-        onSubmitOutageReport={handleSubmitOutageReport}
-      />
 
-      <StaleApiOverlay
-        open={!!staleApiPrompt}
-        products={staleApiPrompt?.products ?? []}
-        onSafest={handleStaleSafest}
-        onSafe={handleStaleSafe}
-        onIgnore={handleStaleIgnore}
-        onCancel={() => setStaleApiPrompt(null)}
-      />
 
-      <RecallDifferentEquipmentSheet
-        open={!!altEquipmentPrompt}
-        truckLabel={altEquipmentPrompt?.truckLabel ?? ""}
-        trailerLabel={altEquipmentPrompt?.trailerLabel ?? ""}
-        onViewInReports={handleViewAltLoadInReports}
-        onCancel={() => setAltEquipmentPrompt(null)}
-        darkMode={shell.theme.darkMode}
-        accentColor={shell.theme.accentColor}
-      />
 
-      <ProductTempModal
-        open={tempDialOpen}
-        onClose={() => { setTempDialOpen(false); setTempReconfirmProductIds(null); }}
-        // Two callers share this instance: the LOAD flow's pre-load temp
-        // confirm (tempReconfirmProductIds null -> confirm temp, then
-        // stale-API check, then begin) and the mid-load terminal-switch
-        // different-city reconfirm (tempReconfirmProductIds set -> propagate
-        // the confirmed temp into the in-progress plan and return to Plan
-        // Review).
-        onConfirm={tempReconfirmProductIds != null ? handleConfirmTempReconfirm : handleConfirmTempAndBeginLoad}
-        styles={styles}
-        selectedCity={location.selectedCity}
-        selectedState={location.selectedState}
-        selectedTerminalId={location.selectedTerminalId}
-        ambientTempLoading={fuelTempLoading && fuelTempAmbientF == null}
-        ambientTempF={fuelTempAmbientF}
-        tempF={tempF}
-        setTempF={setTempF}
-        productGroups={tempModalProductGroups}
-        onSetProductTemp={setSingleProductTempF}
-        predictedFuelTempF={predictedFuelTempF}
-        fuelTempConfidence={fuelTempConfidence}
-        fuelTempLoading={fuelTempLoading}
-        TempDial={TempDial}
-      />
 
       {/* LocationModal/MyTerminalsModal now mount once in ShellChrome (see
           CalculatorLayoutClient.tsx) -- shared with the Terminal tab's own
           identity header, both reading/writing the one shell.location. */}
 
-      <TerminalCatalogModal
-        open={catalogOpen}
-        onClose={() => { setCatalogOpen(false); setTermOpen(true); }}
-        selectedState={location.selectedState}
-        selectedCity={location.selectedCity}
-        termError={terminals.termError}
-        catalogError={terminals.catalogError}
-        catalogTerminalsInCity={catalogTerminalsInCity}
-        myTerminalIds={myTerminalIdSet}
-        setMyTerminalIds={() => {}}
-        catalogExpandedId={catalogExpandedId}
-        setCatalogExpandedId={setCatalogExpandedId}
-        catalogEditingDateId={catalogEditingDateId}
-        setCatalogEditingDateId={setCatalogEditingDateId}
-        accessDateByTerminalId={terminals.accessDateByTerminalId}
-        setAccessDateForTerminal_={terminals.setAccessDateForTerminal}
-        isoToday_={(tz) => { const p = new Intl.DateTimeFormat("en-CA", { timeZone: tz || "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); return `${p.find(x=>x.type==="year")?.value}-${p.find(x=>x.type==="month")?.value}-${p.find(x=>x.type==="day")?.value}`; }}
-        toggleTerminalStar={terminals.toggleTerminalStar}
-        starBtnClass={starBtnClass}
-        addDaysISO_={addDaysISO_}
-        isPastISO_={isPastISO_}
-        formatMDYWithCountdown_={formatMDYWithCountdown_}
-        setCatalogOpen={setCatalogOpen}
-        setTermOpen={setTermOpen}
-      />
 
     </>
     </PlannerProvider>
