@@ -76,8 +76,8 @@ layers in `hooks/planSlots/` and `hooks/loadWorkflow/`; the work that does not n
 (storage parsing, server access, load_log reads, post-load writes) lives in `utils/`
 (`planSlotStorage`, `planSlotServer`, `lastLoadLog`, `loadSideEffects`) where it can be tested.
 
-Still to split: `DecoupleModal`, `RecordHistoryModal`, `MyLoadsModal`, `SoloOnboarding`,
-`ServiceTypeManager`, `ScaleHistoryModal`, `EditTerminalModal`, `MyTerminalsModal`, `useLocation`,
+Still to split: `DecoupleModal`, `RecordHistoryModal`, `SoloOnboarding`,
+`ScaleHistoryModal`, `MyTerminalsModal`, `useLocation`,
 `StartLoadSheet`.
 
 ## Known leftovers

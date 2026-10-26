@@ -1,9 +1,8 @@
 "use client";
 // modals/DecoupleModal.tsx
 
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { supabase } from "@/lib/supabase/client";
+
+
 
 // ─── Status codes ─────────────────────────────────────────────────────────────
 // Fleet status is now a single 3-value vocabulary shared with the Equipment
@@ -14,253 +13,20 @@ import { supabase } from "@/lib/supabase/client";
 // 20260919000000_equipment_fleet_status.sql's own backfill mapping for the
 // exact old-code -> new-status table).
 
-export type TruckStatus   = "in_use" | "deadline" | "readyline";
-export type TrailerStatus = "in_use" | "deadline" | "readyline";
+import React, { useState } from "react";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { supabase } from "@/lib/supabase/client";
 
-const TRUCK_STATUSES: { code: TruckStatus; label: string; sub: string; warn?: boolean }[] = [
-  { code: "in_use",    label: "In Use",    sub: "Actively in service (coupled, bobtailing, or otherwise deployed)" },
-  { code: "readyline", label: "Readyline", sub: "Ready to couple and run" },
-  { code: "deadline",  label: "Deadline",  sub: "Down for repairs or inspection — do not couple", warn: true },
-];
-
-const TRAILER_STATUSES: { code: TrailerStatus; label: string; sub: string; warn?: boolean }[] = [
-  { code: "in_use",    label: "In Use",    sub: "Actively in service (coupled, loaded, or otherwise deployed)" },
-  { code: "readyline", label: "Readyline", sub: "Ready to couple and load" },
-  { code: "deadline",  label: "Deadline",  sub: "Down for repairs, inspection, or cleaning — do not couple", warn: true },
-];
-
-// ─── Shared styles ────────────────────────────────────────────────────────────
-
-const D = {
-  label: {
-    fontSize: 12, fontWeight: 800, letterSpacing: 0.5,
-    color: "rgba(255,255,255,0.45)", textTransform: "uppercase",
-    marginBottom: 6, display: "block",
-  } as React.CSSProperties,
-  input: {
-    width: "100%", borderRadius: 2, padding: "10px 12px",
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.35)", color: "rgba(255,255,255,0.92)",
-    fontSize: 14, outline: "none", boxSizing: "border-box",
-  } as React.CSSProperties,
-  inputErr: {
-    border: "1px solid rgba(248,113,113,0.55)",
-    backgroundColor: "rgba(180,30,30,0.15)",
-  } as React.CSSProperties,
-  select: {
-    width: "100%", borderRadius: 2, padding: "10px 12px",
-    border: "1px solid rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(0,0,0,0.40)", color: "rgba(255,255,255,0.92)",
-    fontSize: 14, outline: "none", boxSizing: "border-box",
-    appearance: "none",
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.4)' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-    backgroundRepeat: "no-repeat",
-    backgroundPosition: "right 14px center",
-    paddingRight: 36,
-  } as React.CSSProperties,
-  textarea: {
-    width: "100%", borderRadius: 2, padding: "12px 14px",
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.35)", color: "rgba(255,255,255,0.92)",
-    fontSize: 14, outline: "none", boxSizing: "border-box",
-    resize: "vertical", minHeight: 72,
-  } as React.CSSProperties,
-  btn: {
-    borderRadius: 2, padding: "10px 16px", fontWeight: 900,
-    fontSize: 13, letterSpacing: 0.5, cursor: "pointer",
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.09)",
-    color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap",
-  } as React.CSSProperties,
-  btnPrimary: {
-    background: "rgba(255,255,255,0.13)",
-    border: "1px solid rgba(255,255,255,0.22)",
-  } as React.CSSProperties,
-  btnDestructive: {
-    background: "rgba(180,50,20,0.22)",
-    border: "1px solid rgba(220,80,40,0.40)",
-    color: "rgba(255,180,140,0.95)",
-  } as React.CSSProperties,
-  err: {
-    borderRadius: 2, padding: "10px 14px",
-    background: "rgba(180,40,40,0.18)",
-    border: "1px solid rgba(180,40,40,0.32)",
-    color: "rgba(255,255,255,0.88)", fontSize: 13, marginBottom: 12,
-  } as React.CSSProperties,
-  divider: { height: 1, background: "rgba(255,255,255,0.08)", margin: "16px 0 20px" },
-  sectionTitle: {
-    fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
-    color: "rgba(255,255,255,0.35)", textTransform: "uppercase",
-    marginBottom: 6,
-  } as React.CSSProperties,
-};
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function BackBtn({ onClick }: { onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick}
-      style={{ ...D.btn, background: "transparent", border: "none", padding: "0 0 16px", fontSize: 13, color: "rgba(255,255,255,0.45)" }}>
-      ← Back
-    </button>
-  );
-}
-
-function ScenarioCard({ emoji, title, sub, onClick }: {
-  emoji: string; title: string; sub: string; onClick: () => void;
-}) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      padding: "12px 14px", borderRadius: 2, cursor: "pointer",
-      textAlign: "left" as const, border: "1px solid rgba(255,255,255,0.12)",
-      background: "rgba(255,255,255,0.05)", transition: "all 120ms ease", width: "100%",
-    }}>
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 3, display: "flex", alignItems: "center", gap: 8 }}><span>{emoji}</span><span>{title}</span></div>
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.4 }}>{sub}</div>
-    </button>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label style={D.label}>{children}</label>;
-}
-
-function LocationField({ value, onChange, onGeoTag, geoLoading, isError }: {
-  value: string; onChange: (v: string) => void;
-  onGeoTag: () => void; geoLoading: boolean; isError?: boolean;
-}) {
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <FieldLabel>Location *</FieldLabel>
-        <button aria-busy={!!(geoLoading)} type="button" onClick={onGeoTag} disabled={geoLoading} style={{
-          fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
-          color: geoLoading ? "rgba(255,255,255,0.30)" : "#67e8f9",
-          background: "none", border: "none", cursor: geoLoading ? "default" : "pointer", padding: 0,
-        }}>
-          {geoLoading ? "Getting location…" : "📍 Use my location"}
-        </button>
-      </div>
-      <input type="text" placeholder="e.g. Bay 4, North lot, Shop dock 2"
-        value={value} onChange={(e) => onChange(e.target.value)}
-        style={{ ...D.input, ...(isError ? D.inputErr : {}) }} />
-      <div style={{ fontSize: 11, color: isError ? "#f87171" : "rgba(255,255,255,0.28)", marginTop: 4 }}>
-        {isError ? "Please enter a location before continuing." : "Be specific — yard name, bay number, or street address."}
-      </div>
-    </div>
-  );
-}
-
-function useGeoTag(onResult: (location: string, lat: number, lon: number) => void) {
-  const [geoLoading, setGeoLoading] = useState(false);
-  // Keep a ref to the latest onResult so the trigger callback is always stable
-  const onResultRef = useRef(onResult);
-  useEffect(() => { onResultRef.current = onResult; });
-
-  const trigger = useCallback(() => {
-    if (!navigator.geolocation) return;
-    setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lon } = pos.coords;
-        try {
-          const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, { headers: { "Accept-Language": "en" } });
-          const data = await res.json();
-          const addr = data?.address ?? {};
-          const parts = [
-            addr.house_number && addr.road ? `${addr.house_number} ${addr.road}` : addr.road,
-            addr.city || addr.town || addr.village || addr.county,
-            addr.state,
-          ].filter(Boolean);
-          const shortAddr = parts.length >= 2 ? parts.join(", ") : data?.display_name ?? `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-          onResultRef.current(shortAddr, lat, lon);
-        } catch { onResultRef.current(`${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon); }
-        setGeoLoading(false);
-      },
-      () => setGeoLoading(false),
-      { timeout: 8000, enableHighAccuracy: true }
-    );
-  }, []); // stable — never recreated
-  return { geoLoading, trigger };
-}
-
-function StatusPicker<T extends string>({ options, value, onChange }: {
-  options: { code: T; label: string; sub: string; warn?: boolean }[];
-  value: T; onChange: (v: T) => void;
-}) {
-  return (
-    <div style={{ display: "grid", gap: 7 }}>
-      {options.map((o) => {
-        const sel = value === o.code;
-        return (
-          <button key={o.code} type="button" onClick={() => onChange(o.code)} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "7px 10px",
-            borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
-            border: sel ? (o.warn ? "1px solid rgba(220,80,40,0.55)" : "1px solid rgba(64,180,255,0.45)") : "1px solid rgba(255,255,255,0.10)",
-            background: sel ? (o.warn ? "rgba(180,50,20,0.20)" : "rgba(32,100,200,0.18)") : "rgba(255,255,255,0.04)",
-            transition: "all 120ms ease",
-          }}>
-            <div style={{
-              flexShrink: 0, width: 60, textAlign: "center" as const,
-              fontSize: 10, fontWeight: 900, letterSpacing: 1, padding: "3px 0", borderRadius: 2,
-              background: sel ? (o.warn ? "rgba(220,80,40,0.25)" : "rgba(64,180,255,0.18)") : "rgba(255,255,255,0.08)",
-              color: sel ? (o.warn ? "#fb923c" : "#67e8f9") : "rgba(255,255,255,0.50)",
-            }}>{o.code}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: o.warn && sel ? "#fb923c" : "rgba(255,255,255,0.88)" }}>{o.label}</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 1 }}>{o.sub}</div>
-            </div>
-            {sel && <div style={{ flexShrink: 0, fontSize: 14, color: o.warn ? "#fb923c" : "#67e8f9" }}>✓</div>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function SummaryRow({ label, code, location, notes }: { label: string; code: string; location: string; notes: string }) {
-  const allStatuses = [...TRUCK_STATUSES, ...TRAILER_STATUSES];
-  const def = allStatuses.find((s) => s.code === code);
-  const isWarn = def?.warn;
-  return (
-    <div style={{ padding: "9px 11px", borderRadius: 2, marginBottom: 8,
-      border: isWarn ? "1px solid rgba(220,80,40,0.35)" : "1px solid rgba(255,255,255,0.10)",
-      background: isWarn ? "rgba(180,50,20,0.12)" : "rgba(255,255,255,0.04)" }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 4 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "2px 7px", borderRadius: 2,
-          background: isWarn ? "rgba(220,80,40,0.20)" : "rgba(255,255,255,0.10)",
-          color: isWarn ? "#fb923c" : "rgba(255,255,255,0.75)" }}>{code}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: isWarn ? "#fb923c" : "rgba(255,255,255,0.75)" }}>{def?.label ?? code}</span>
-      </div>
-      {location && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.50)" }}>📍 {location}</div>}
-      {notes    && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", marginTop: 2 }}>{notes}</div>}
-    </div>
-  );
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Scenario = "swap_truck" | "swap_trailer" | "drop_trailer" | "park_both" | null;
-type Step     = "scenario" | "details" | "confirm";
-
-type UnitRow = { id: string; name: string };
-
-type Props = {
-  open: boolean;
-  onClose: () => void;
-  comboId: string;
-  truckId: string;
-  trailerId: string;
-  truckName: string;
-  trailerName: string;
-  companyId: string | null;
-  uncoupledTrucks: UnitRow[];
-  uncoupledTrailers: UnitRow[];
-  onDecoupled: (newComboId?: string) => void;
-};
-
-// ─── Main modal ───────────────────────────────────────────────────────────────
+import type { TruckStatus, TrailerStatus, Scenario, Step, Props } from "./decouple/types";
+import { TRUCK_STATUSES, TRAILER_STATUSES, D, useGeoTag } from "./decouple/helpers";
+import { BackBtn } from "./decouple/BackBtn";
+import { ScenarioCard } from "./decouple/ScenarioCard";
+import { FieldLabel } from "./decouple/FieldLabel";
+import { LocationField } from "./decouple/LocationField";
+import { StatusPicker } from "./decouple/StatusPicker";
+import { SummaryRow } from "./decouple/SummaryRow";
+export type { TruckStatus } from "./decouple/types";
+export type { TrailerStatus } from "./decouple/types";
 
 export default function DecoupleModal({
   open, onClose, comboId, truckId, trailerId, truckName, trailerName,

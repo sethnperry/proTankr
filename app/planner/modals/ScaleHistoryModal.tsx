@@ -10,80 +10,14 @@
 // Combo-level (not per-unit truck/trailer like Service/Wash History), so
 // rows are flat -- no grouping by unit, just by date.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase/client";
 import { generateWeightTicketPng, shareOrDownloadTicket } from "@/lib/ui/generateWeightTicket";
 
-type WeightRecordRaw = {
-  weight_record_id: string;
-  combo_id: string;
-  load_id: string | null;
-  heavy_weight_lbs: number;
-  light_weight_lbs: number;
-  net_weight_lbs: number;
-  planner_weight_lbs: number | null;
-  prior_tare_lbs: number | null;
-  tare_updated: boolean;
-  notes: string | null;
-  recorded_at: string;
-  created_by: string | null;
-};
+import type { WeightRecordRaw, Props } from "./scaleHistory/types";
+import { DATE_RANGES, fmtDate, fmtDateHeader, fmt, buildShareText, shareViaClipboard, shareViaSMS, shareViaEmail, editInputStyle, editLabelStyle } from "./scaleHistory/helpers";
 
-const DATE_RANGES: { label: string; days: number | null }[] = [
-  { label: "30d", days: 30 },
-  { label: "90d", days: 90 },
-  { label: "1y", days: 365 },
-  { label: "All", days: null },
-];
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  const mo = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  const yr = String(d.getFullYear()).slice(2);
-  return `${mo}/${dy}/${yr}`;
-}
-function fmtDateHeader(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-}
-function fmt(n: number | null | undefined): string {
-  return n == null ? "—" : Math.round(n).toLocaleString();
-}
-
-function buildShareText(rows: WeightRecordRaw[], title: string): string {
-  const divider = "─".repeat(40);
-  const lines: string[] = [title.toUpperCase(), divider];
-  let lastDate = "";
-  for (const r of rows) {
-    const day = r.recorded_at.slice(0, 10);
-    if (day !== lastDate) { lines.push(fmtDate(r.recorded_at)); lastDate = day; }
-    lines.push(`  Heavy ${fmt(r.heavy_weight_lbs)} · Light ${fmt(r.light_weight_lbs)} · Net ${fmt(r.net_weight_lbs)} lbs${r.tare_updated ? "  (tare updated)" : ""}`);
-    if (r.notes) lines.push(`    ${r.notes}`);
-  }
-  return lines.join("\n");
-}
-function shareViaClipboard(text: string, onCopied: () => void) {
-  navigator.clipboard.writeText(text).then(onCopied).catch(() => window.prompt("Copy this report:", text));
-}
-function shareViaSMS(text: string) { window.location.href = `sms:?&body=${encodeURIComponent(text)}`; }
-function shareViaEmail(subject: string, text: string) { window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`; }
-
-const editInputStyle: React.CSSProperties = {
-  width: "100%", borderRadius: 2, padding: "8px 10px", border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 13, boxSizing: "border-box",
-};
-const editLabelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 4, display: "block" };
-
-type Props = {
-  open: boolean;
-  onClose: () => void;
-  companyId: string;
-  comboId: string | null;
-  onChanged?: () => void;
-  truckName?: string | null;
-  trailerName?: string | null;
-};
 
 export default function ScaleHistoryModal({ open, onClose, companyId, comboId, onChanged, truckName, trailerName }: Props) {
   const [search, setSearch] = useState("");
