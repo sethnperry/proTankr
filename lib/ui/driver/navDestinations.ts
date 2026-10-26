@@ -59,13 +59,13 @@ export function canReachDestination(
 // Where a role lands on a bare app entry -- null means "no redirect, stay
 // put." A super admin is NEVER redirected either way (they get both Planner
 // and Dispatch reachable, on purpose, so land wherever they navigate to).
-// This reverses a 2026-08-04 decision that admin should never auto-redirect
-// off the driver-style Planner -- that reasoning is superseded now that
-// admin's Planner IS the Dispatch page, not a shared page with both.
+// Each role lands on its own dashboard: drivers/leads (and solo) the Driver
+// Dashboard, dispatch the Dispatch Dashboard, admin the Company Dashboard.
 export function defaultLandingPath(role: Role | null, isSuperAdmin: boolean, isSolo: boolean = false): string | null {
   if (isSuperAdmin) return null;
   if (isSolo) return "/planner/home"; // solo drivers get the Driver Dashboard too
-  if (role === "admin" || role === "dispatch") return "/planner/dispatch";
+  if (role === "admin") return "/admin"; // Company Dashboard
+  if (role === "dispatch") return "/planner/dispatch"; // Dispatch Dashboard
   if (role === "driver" || role === "lead") return "/planner/home"; // the Planner is now a tool opened from the dashboard
   return null;
 }

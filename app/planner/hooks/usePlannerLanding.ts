@@ -4,8 +4,8 @@
 // Where a person lands on bare /planner, and whether solo first-run onboarding
 // is still in the way.
 //
-// - Admin and dispatch have no driver Planner: their "Planner" is the Dispatch
-//   page, so they are redirected there once. A super admin is never redirected
+// - Each role lands on its own dashboard (see defaultLandingPath): admin goes to
+//   the Company Dashboard, dispatch to Dispatch, drivers to the Driver Dashboard. A super admin is never redirected
 //   (both screens stay reachable). A solo driver is role 'admin' but is not a
 //   fleet admin, so isSolo has to be known before deciding.
 // - The redirect decision waits for role, super-admin status and isSolo to all
