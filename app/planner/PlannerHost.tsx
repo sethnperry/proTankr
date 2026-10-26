@@ -3,7 +3,6 @@ import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { usePathname, useRouter } from "next/navigation";
 import { PartialEquipmentPanel } from "./components/PartialEquipmentPanel";
 import { PlannerGates } from "./components/PlannerGates";
-import { isOnboardingComplete } from "./utils/onboardingProgress";
 import { useCalculatorShell } from "./CalculatorShellContext";
 
 /**
@@ -25,16 +24,6 @@ import { useCalculatorShell } from "./CalculatorShellContext";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { defaultLandingPath } from "@/lib/ui/driver/navDestinations";
-
-// Module-level (not component state) so it survives this page component
-// unmounting/remounting on every route change, but still resets on a true
-// full reload -- exactly the "did we already do the once-per-session
-// landing redirect" flag needs. A ref/useState living inside the component
-// can't do this: this page genuinely remounts every time the user
-// navigates back to it, which would make a same-scope flag "fresh" again
-// on every visit, defeating the "once per session" intent below.
-let hasCheckedDefaultLanding = false;
 
 // ── Hooks ──────────────────────────────────────────────────────────────────────
 import { usePlanSlots } from "./hooks/usePlanSlots";
@@ -70,6 +59,9 @@ import { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDuringLoad
 
 // ── Sections ───────────────────────────────────────────────────────────────────
 import { useIsLandscape } from "./hooks/useOrientation";
+import { useLeaveTo } from "./hooks/useLeaveTo";
+import { usePlannerLanding } from "./hooks/usePlannerLanding";
+import { useHeaderIconsSlot } from "./hooks/useHeaderIconsSlot";
 import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tripPlan";
 
 // ── Modals ─────────────────────────────────────────────────────────────────────
@@ -111,26 +103,7 @@ export default function PlannerHost() {
   // sheets) work on any screen.
   const pathname = usePathname();
   const active = pathname === "/planner";
-  // Leaving the Planner for another screen: a plain cover (spinner + text)
-  // goes up in the same render the modal closes, so the Planner never
-  // flashes before the next screen opens.
-  const [leaving, setLeaving] = useState<string | null>(null);
-  useEffect(() => { if (pathname !== "/planner") setLeaving(null); }, [pathname]);
-  const leaveTo = useCallback((href: string, label: string) => {
-    // Plan Review / a report opened over another screen: that screen is
-    // already underneath, so there's nothing to cover or navigate to.
-    if (typeof window !== "undefined" && window.location.pathname !== "/planner") {
-      const path = href.split("?")[0];
-      if (path === window.location.pathname) {
-        if (href.includes("arrive=1")) window.dispatchEvent(new Event("protankr:arrive"));
-      } else {
-        router.push(href);
-      }
-      return;
-    }
-    setLeaving(label);
-    router.push(href);
-  }, [router]);
+  const { leaving, leaveTo } = useLeaveTo(pathname);
   // Wider-than-tall with enough room for a real two-column layout -- see
   // useOrientation.ts. Computed once here and passed down (to
   // PlannerControls) rather than each consumer calling matchMedia itself.
@@ -170,55 +143,7 @@ export default function PlannerHost() {
   // sensible rectangular shape instead of growing tall as they widen.
   const LANDSCAPE_MAX_W = 1100;
 
-  // Reverses a 2026-08-04 decision that only dispatch should ever redirect
-  // off bare /planner ("the only role that should default to the dispatch
-  // tab on open is the dispatch role. all other roles should open to the
-  // planner") -- that reasoning is superseded now that admin's Planner IS
-  // the Dispatch page (app/planner/dispatch/page.tsx), not a shared page
-  // admin and driver/lead both used to land on. admin now redirects the
-  // same way dispatch already did; isSuperAdmin never redirects either way
-  // (gets both /planner and /planner/dispatch reachable, on purpose, via
-  // NavMenu -- see lib/ui/driver/navDestinations.ts).
-  //
-  // Gated on shell.isSuperAdminResolved, not just shell.role != null --
-  // role and isSuperAdmin resolve via two fully independent effects in
-  // CalculatorShellContext.tsx with no ordering guarantee, so without this
-  // a real super admin whose own company role happens to be "admin" could
-  // get redirected to /planner/dispatch before their super-admin flag
-  // resolves true. This is the same "re-evaluation can silently re-fire the
-  // one-time redirect" class of bug the module-level hasCheckedDefaultLanding
-  // flag already exists to guard against, just a second, independent way
-  // for that guard's own precondition to be wrong -- worth closing properly
-  // rather than leaving a narrower version of the same bug in place.
-  // ── Solo first-run onboarding gate ─────────────────────────────────────────
-  // A brand-new (or partially-set-up) solo driver gets a guided setup flow
-  // instead of the raw SetupGate/equipment-management entry. Active only for a
-  // solo company that hasn't finished onboarding; the flow itself resolves the
-  // exact resume step from real DB state (see SoloOnboarding). While it's
-  // active, SetupGate is suppressed so the two gates never both show. `isSolo`
-  // also feeds the landing redirect below (a solo driver is role 'admin' but
-  // must NOT be bounced to /planner/dispatch like a fleet admin), which is why
-  // this block sits above that effect.
-  const [onboardingDone, setOnboardingDone] = useState(false);
-  useEffect(() => { setOnboardingDone(isOnboardingComplete(effectiveUserId || null)); }, [effectiveUserId]);
-  const onboardingActive = shell.isSolo === true && !onboardingDone && !!effectiveUserId && !!shell.companyId;
-
-  useEffect(() => {
-    if (hasCheckedDefaultLanding) return;
-    if (!active) { hasCheckedDefaultLanding = true; return; } // opened on another screen: no landing redirect
-    if (shell.role == null) return;
-    if (!shell.isSuperAdminResolved) return;
-    if (shell.isSolo === null) return; // wait for solo resolution -- a solo admin must not be redirected off the driver Planner
-    // A deliberate visit (dashboard Plan tool, Begin Loading, a load report)
-    // carries a query flag and stays on the Planner.
-    const qs = new URLSearchParams(window.location.search);
-    const target = defaultLandingPath(shell.role, shell.isSuperAdmin, shell.isSolo === true);
-    // A solo driver finishes first-run onboarding here before landing anywhere else.
-    if (target && shell.isSolo === true && !onboardingDone) return;
-    hasCheckedDefaultLanding = true;
-    if (qs.get("begin") || qs.get("report") || qs.get("plan")) return;
-    if (target) router.replace(target);
-  }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, onboardingDone, active, router]);
+  const { setOnboardingDone, onboardingActive } = usePlannerLanding(active);
 
   // ── Card data (card number + PIN + private note, per terminal, per user) ──
   // Owned in CalculatorShellContext now -- the new Cards tab route needs the
@@ -232,38 +157,7 @@ export default function PlannerHost() {
   // patch up. Render plain <button>s for SSR/first paint and only swap to
   // motion.button post-mount, so hydration always diffs identical DOM.
 
-  // Portal target for the plan-letter/Equipment/Location/Temperature
-  // cluster, rendered by CalculatorLayoutClient.tsx's shared Header --
-  // see that file's own comment on the slot div for why this is a portal
-  // rather than lifting this state into the shell context.
-  //
-  // Real bug, fixed 2026-09-15: this used to grab the slot element ONCE on
-  // mount (empty deps), on the assumption "Header is always already
-  // mounted above this page's own content." True, but Header itself
-  // renders TWO structurally separate branches for portrait vs. landscape
-  // (see CalculatorLayoutClient.tsx's own `if (isLandscape) { ... }`
-  // split), each with its OWN `<div id="planner-header-icons-slot">` --
-  // same id string, but a genuinely different DOM node per branch.
-  // Rotating the device swaps which branch is mounted, so the node this
-  // effect grabbed at mount time gets detached from the tree; the portal
-  // keeps rendering into that now-invisible orphan forever after, which is
-  // exactly the reported symptom (rotate to landscape: icons vanish;
-  // rotate back to portrait: still vanish, since a THIRD new node was
-  // created and this effect never re-ran to notice; only a full refresh,
-  // which reruns this effect fresh, brought them back). Fixed by
-  // re-running the lookup whenever isLandscape itself flips -- the actual
-  // signal that the branch (and therefore the slot node) just changed --
-  // plus one rAF-deferred re-check as a defensive fallback for the rare
-  // case this component's own isLandscape update lands a frame before
-  // Header's sibling instance of the same hook swaps in its new slot.
-  const [headerIconsSlot, setHeaderIconsSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setHeaderIconsSlot(document.getElementById("planner-header-icons-slot"));
-    const raf = requestAnimationFrame(() => {
-      setHeaderIconsSlot(document.getElementById("planner-header-icons-slot"));
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [isLandscape]);
+  const headerIconsSlot = useHeaderIconsSlot(isLandscape);
 
   // ── Modal open/close flags ─────────────────────────────────────────────────
   // equipOpen/expModalOpen/termOpen live in the shared shell context now --
