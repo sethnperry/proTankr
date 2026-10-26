@@ -6,6 +6,7 @@
 // usePlanner() and hands LoadingModal what it shows. Mount it anywhere under
 // PlannerProvider.
 
+import ConnectedSupplierPanel from "../components/ConnectedSupplierPanel";
 import LoadingModal from "../modals/LoadingModal";
 import { styles } from "../ui/styles";
 import { usePlanner } from "../PlannerContext";
@@ -42,12 +43,11 @@ export default function PlanReviewFlow() {
     handleTapTerminalInLoadingModal,
     handleBackToPlannerNoUpdate,
     openCancelLoadSheet,
-    supplierPanel,
   } = usePlanner();
 
   return (
     <LoadingModal
-      supplierSection={supplierPanel}
+      supplierSection={<ConnectedSupplierPanel />}
       open={loadWorkflow.loadingOpen}
       onClose={() => {
         /* no accidental dismissal -- exits are the explicit buttons */

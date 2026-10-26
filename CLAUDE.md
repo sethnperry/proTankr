@@ -31,6 +31,13 @@ Splitting into two tiers:
 - **Fleet (add-on, tier 2):** multi-driver sharing, status visibility across
   drivers, admin-managed. Full build spec below (§ Fleet Tier — Build Spec).
 
+## Planner code shape (rule, 2026-10-26)
+
+Planner work follows `docs/planner-architecture.md`: `PlannerHost` (under 60 lines, no state)
+-> `model/` layers (under 300 lines, no JSX) -> zero-prop `flows/` and `PlanPage` reading
+`usePlanner()`. `app/planner/architecture.test.ts` enforces it in `npm test`. When a limit
+fails, move code to the right layer; do not raise the limit.
+
 ## Fleet Tier — Build Spec (recorded 2026-07-29, not yet scoped into sprint work)
 
 Full spec pasted by user 2026-07-29. Nothing below is built yet — this is the

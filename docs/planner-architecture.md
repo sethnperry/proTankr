@@ -1,52 +1,52 @@
 # Planner architecture
 
-The goal: every Planner window (Plan Builder, Plan Review, load report, terminal
-switch, stale-API choice, temperature confirm, supplier picker) can be opened from
-any screen by rendering it. None of them is wired by props from one big component.
+The Planner (`app/planner/`) has one shape. Build new Planner work in it. A test
+(`app/planner/architecture.test.ts`, run by `npm test`) enforces the parts that can be checked.
 
-## Layers
+## The shape
 
-1. **Model** (`app/planner/hooks/`): state and derived values, one hook per concern.
-   Each takes explicit inputs and returns results. No hook reaches into another
-   hook's locals.
-   - `usePlannerEquipment` compartments, truck and trailer names, saddle tank
-   - `useTerminalProducts` rack products and readings
-   - `usePlanInputs` dial temperature, per-product temperature, CG
-   - `usePlanDirty` unsaved-changes check
-   - `usePlanMath` density, caps, weight limits, capacity, live weight
-   - `usePlanSlots` saved plans A-E, restore, trailer defaults
-   - `useTripLoading` how a load attaches to the open trip, Finish Loading prompts
-   - `usePlannerSuppliers` supplier picks and switching
-   - `useTerminalSwitchDuringLoad` leaving a rack mid-load
-   - `useLoadReportLauncher` opening a finished load's report
-2. **Pure logic** (`app/planner/utils/`, `lib/trips/`): no React, tested.
-   `tuneRows`, `staleApi`, `planMatch`, `apiBasis`, `planMath`.
-3. **Flows** (`app/planner/components/`, `app/planner/modals/`): one component per
-   window. Target: zero props for the data they need, read from the planner
-   context.
-4. **Host** (`PlannerHost.tsx`): mounts the flows. Target: under 300 lines.
+```
+PlannerHost.tsx            36 lines. usePlannerModel() -> <PlannerProvider> -> page + flows. No logic.
+model/                     The composition. Four layers plus the file that stitches them.
+  usePlannerModel.ts         calls the layers in order and merges their results
+  usePlannerView.ts          where we are: route, orientation, landing, leave-navigation
+  usePlanModel.ts            the live plan, its inputs, saved plans, density and weight math
+  useLoadModel.ts            beginning a load, Plan Review, suppliers, trip, terminal switch, reports
+  usePlanPageModel.ts        plan-slot view, plan builder, unsaved-changes state
+hooks/                     One concern each. Explicit inputs, explicit results. No JSX in .ts files.
+utils/, lib/               Pure logic, no React, tested.
+flows/                     One window each. Zero props. Read usePlanner(), render a modal component.
+components/                Presentational pieces. PlanPage and a few others read usePlanner() for layout.
+modals/                    Presentational windows: props in, events out. No data fetching of their own
+                           beyond what they already do; new ones should not fetch.
+PlannerContext.tsx         PlannerCtx = the type of what usePlannerModel() returns. Nothing declared twice.
+```
 
-## Where we are
+Data flows one way: shell -> view -> plan -> load -> page -> context -> flows and PlanPage.
+A layer may read earlier layers, never later ones.
 
-Layers 1 and 2 are done. Layer 3 is done: every Planner window is a zero-prop
-flow in `app/planner/flows/` that reads `usePlanner()`:
+## Rules
 
-- `PlanReviewFlow` (Plan Review and the load report)
-- `TerminalSwitchFlow`, `ReportIssueFlow`, `StaleApiFlow`, `RecallEquipmentFlow`,
-  `TempConfirmFlow`
-- `PlanSlotsFlow`, `CompartmentFlow`, `PlanBuilderFlow`
+1. **The host stays under 60 lines and has no state.** If it needs state, the state belongs in a hook.
+2. **A layer in `model/` stays under 300 lines.** Over that, split the layer by concern.
+3. **No JSX in `model/`.** Layers return values and actions. Elements are built by components.
+4. **`model/` imports only types from components and flows.**
+5. **A flow is a zero-prop component** that reads `usePlanner()` and renders a presentational modal.
+   Mount it in the host; it can then open from any screen.
+6. **A new hook does one thing**, takes its inputs as a typed object, and returns what callers need.
+   It does not reach into another hook's locals.
+7. **Do not add a field to the context by hand.** Return it from the layer that owns it.
+8. **Comments say why, briefly.** No history of how the code got here; that is in git.
 
-`PlannerContext.tsx` declares what the flows can read (`PlannerCtx`).
+## Adding something
 
-## What is left
+- A new window: write the modal (props in, events out), write a zero-prop flow, mount it in the host.
+- New plan state or math: add to the layer it belongs to, or a new hook that layer calls.
+- New page layout: a component that reads `usePlanner()`.
+- A new layer only when an existing one would pass 300 lines.
 
-`PlannerHost.tsx` is about 620 lines (down from about 4,000). Handlers live in hooks
-(`usePlanSlotsView`, `useLoadBegin`, `useLoadPrep`, `usePlanTemperature`,
-`useUnavailableProducts`, `usePlannerIntents`, `usePlannerLanding`, `useLeaveTo`,
-`useHeaderIconsSlot`); the plan page is `PlanCompartmentsSection` and
-`PlanActionsSection`; `PlannerGates` and `PartialEquipmentPanel` are components.
-What remains in the host: the state declarations, the `usePlanSlots` and
-`useLoadWorkflow` wiring, and the context object. To get under 300:
+## Known leftovers
 
-1. Move the stale-API / tune / modal state declarations into the hooks that use them.
-2. Build `plannerCtx` inside a `usePlannerContext` hook.
+Several older hooks still import from `components/` (`useLoadBegin`, `usePlannerSuppliers`,
+`useTripEquipment`). Rule 4 applies to `model/` only for now. Large modals
+(`SoloEquipmentModal`, `LoadingModal`, `BinderModal`) are not yet split.
