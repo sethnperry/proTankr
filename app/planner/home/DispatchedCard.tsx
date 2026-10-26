@@ -26,7 +26,7 @@ const when = (iso: string | null | undefined) => {
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
 
-export function DispatchedCard({ items, onSwap }: { items: DispatchedItem[]; onSwap?: (a: string, b: string) => void }) {
+export function DispatchedCard({ items, onSwap, onRun }: { items: DispatchedItem[]; onSwap?: (a: string, b: string) => void; onRun?: (tripId: string) => void }) {
   const L = useDashLook();
   if (items.length === 0) return null;
   return (
@@ -61,6 +61,12 @@ export function DispatchedCard({ items, onSwap }: { items: DispatchedItem[]; onS
             <span>Order {it.order ?? "to enter"}</span>
             {it.supplier && <span>Supplier {it.supplier}</span>}
           </div>
+          {onRun && (
+            <button type="button" onClick={() => onRun(it.trip.trip_id)}
+              style={{ marginTop: 10, width: "100%", border: i === 0 ? "none" : "1px solid rgba(255,255,255,0.3)", background: i === 0 ? "#fff" : "transparent", color: i === 0 ? "#000" : "#fff", padding: "10px 12px", fontSize: 13, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+              {i === 0 ? "Run this load" : "Run this load first"}
+            </button>
+          )}
           {it.plannedEquipment && (
             <div style={{ fontSize: 12, marginTop: 6, color: it.equipmentDiffers ? "#fb923c" : L.muted }}>
               {it.equipmentDiffers ? "⚠ Dispatch planned " : "Planned "}{it.plannedEquipment}{it.equipmentDiffers ? ". You're on different equipment." : ""}

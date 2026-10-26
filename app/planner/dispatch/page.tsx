@@ -555,12 +555,27 @@ export default function DispatchPage() {
   };
   // Shipper and customer: prefilled from this driver's last trip to the same drop (customer) or any last trip.
   const prefilledFor = useRef<string>("");
+  const customerTouched = useRef(false);
+  const readParties = (): { shipper: string; customerByLoc: Record<string, string> } => {
+    try { const j = JSON.parse(localStorage.getItem("proTankr:dispatchParties") || "{}"); return { shipper: j.shipper || "", customerByLoc: j.customerByLoc || {} }; } catch { return { shipper: "", customerByLoc: {} }; }
+  };
+  const rememberParties = (loc: string | null | undefined) => {
+    try {
+      const cur = readParties();
+      if (shipper.trim()) cur.shipper = shipper.trim();
+      if (loc && customer.trim()) cur.customerByLoc[loc] = customer.trim();
+      localStorage.setItem("proTankr:dispatchParties", JSON.stringify(cur));
+    } catch { /* ignore */ }
+  };
   useEffect(() => {
     if (!tlDriverId || !planLocation) return;
     const key = `${tlDriverId}|${planLocation.location_id}`;
     if (prefilledFor.current === key) return;
     prefilledFor.current = key;
-    setShipper(""); setCustomer("");
+    // Keep what's already typed; fill blanks from what was used last (this device), then from trip history.
+    const saved = readParties();
+    setShipper((s) => s || saved.shipper || "");
+    setCustomer((c) => (customerTouched.current ? c : saved.customerByLoc[planLocation.location_id] || c || ""));
     let off = false;
     void supabase.from("trips").select("shipper, customer, trip_deliveries(location_id)")
       .eq("driver_id", tlDriverId).or("shipper.not.is.null,customer.not.is.null").neq("status", "cancelled")
@@ -570,7 +585,7 @@ export default function DispatchPage() {
         const rows = (data ?? []) as { shipper: string | null; customer: string | null; trip_deliveries: { location_id: string | null }[] }[];
         const same = rows.find((r) => r.customer && r.trip_deliveries?.some((d) => d.location_id === planLocation.location_id));
         setShipper((s) => s || rows.find((r) => r.shipper)?.shipper || "");
-        setCustomer((c) => c || same?.customer || rows.find((r) => r.customer)?.customer || "");
+        setCustomer((c) => c || (customerTouched.current ? "" : same?.customer || rows.find((r) => r.customer)?.customer || ""));
       });
     return () => { off = true; };
   }, [tlDriverId, planLocation]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -578,7 +593,12 @@ export default function DispatchPage() {
   const addLeg = () => {
     const leg = buildLeg();
     if (!leg || !tlDriverId || blockMsg || planGroups.length === 0) return;
+    rememberParties(leg.locationId);
     setDayPlan((m) => ({ ...m, [tlDriverId]: [...(m[tlDriverId] ?? []), leg] }));
+    // Next load: shipper stays, customer re-fills for the next drop.
+    customerTouched.current = false; setCustomer(""); prefilledFor.current = "";
+    setPlanLocationId(null); setPlanTerminalId(null); setPlanSupplierId(null); setShowNotCarded(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
     setTlStart(null); // the next load starts when this one ends
     setOrderNumber(""); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
   };
@@ -588,6 +608,7 @@ export default function DispatchPage() {
     if (blockMsg) { setDispatchMsg({ ok: false, text: blockMsg }); return; }
     if (planGroups.length === 0) { setDispatchMsg({ ok: false, text: "Pick a product for at least one compartment first." }); return; }
     const legs = [...dayLegs, leg];
+    rememberParties(leg.locationId);
     setDispatching(true); setDispatchMsg(null);
     try {
       const nums = legs.flatMap((l) => (l.groups?.length ? distinctOrders(l.groups) : [l.orderNumber])).filter(Boolean);
@@ -860,7 +881,7 @@ export default function DispatchPage() {
             onPickLocation={() => setLocPickerOpen(true)}
             onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
             onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
-            parties={{ shipper, customer, onShipper: setShipper, onCustomer: setCustomer }}
+            parties={{ shipper, customer, onShipper: setShipper, onCustomer: (v: string) => { customerTouched.current = true; setCustomer(v); } }}
             timeline={tlDriverId && planLocation && planTerminalId ? (
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={allLegs.length > 0 && tlStart == null} lockedCount={priorLegs.length} blockMsg={blockMsg} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}

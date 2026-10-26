@@ -2,7 +2,7 @@
 // Cycle Recap: one day per row with a bar, today highlighted, total against the cycle limit.
 
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { clockHM } from "@/lib/telematics/progress";
+import { clockHM, STATUS_NAME } from "@/lib/telematics/progress";
 import type { HosAvailability } from "@/lib/telematics/types";
 
 const MUTED = "rgba(255,255,255,0.5)";
@@ -23,6 +23,12 @@ export function HosRecapModal({ open, hos, onClose }: { open: boolean; hos: HosA
   return (
     <FullscreenModal open={open} title="Cycle Recap" onClose={onClose} footer={null}>
       <div style={{ padding: "4px 2px 24px" }}>
+        {(hos.status || hos.at) && (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14, fontSize: 13 }}>
+            {hos.status && <span style={{ fontWeight: 800 }}>{STATUS_NAME[hos.status] ?? hos.status}</span>}
+            {hos.at && <span style={{ color: MUTED }}>{(() => { const m = Math.max(0, Math.round((Date.now() - Date.parse(hos.at)) / 60000)); return m < 2 ? "updated just now" : `updated ${m} min ago`; })()}</span>}
+          </div>
+        )}
         {r ? (
           <>
             <div style={{ border: "1px solid rgba(255,255,255,0.14)", background: "#121213", padding: 16, marginBottom: 14 }}>

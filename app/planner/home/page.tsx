@@ -95,7 +95,7 @@ import { shouldNotifyHosTrip, type Level } from "@/lib/telematics/hosTripNotify"
 import { notifyPermission, showNotification, type NotifyPermission } from "@/lib/ui/notify";
 import { enablePush, pushEnabledHere } from "@/lib/push/subscribe";
 import { BREAK_REST_MIN } from "@/lib/telematics/cycleRecap";
-import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, STATUS_NAME, tripHosCheck } from "@/lib/telematics/progress";
+import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
 import { fetchPresets, getTripPlan, setTripPlan, setTripQuick, nextSaveSlot, savePresetPlan, type PresetSummary } from "@/lib/trips/tripPlan";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
@@ -137,7 +137,8 @@ import { openAccessSteps, useAccessQualifications } from "../components/access/u
 import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/accessSteps";
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
-import { EXPIRY_COLOR } from "@/lib/expiry";
+import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
+import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
 import { HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
@@ -407,7 +408,7 @@ export default function HomePage() {
   }, []);
 
   // ── Loads dispatch planned for this driver ───────────────────────────────
-  const dispatchedList = useMemo(() => (userId && !openTrip ? dispatchedForDriver(trips, userId) : []), [trips, userId, openTrip]);
+  const dispatchedList = useMemo(() => (userId ? dispatchedForDriver(trips, userId) : []), [trips, userId]);
   const [plannedNames, setPlannedNames] = useState<Record<string, string>>({});
   useEffect(() => {
     const truckIds = [...new Set(dispatchedList.map((t) => t.planned_truck_id).filter(Boolean))] as string[];
@@ -446,9 +447,9 @@ export default function HomePage() {
     });
   }, [dispatchedList, store, suppliers, truckId, trailerId, state, plannedNames]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const beginDispatchedLoad = () => {
-    const trip = dispatchedList[0];
-    if (!store || !userId || !trip) return;
+  const beginDispatchedLoad = (tripId?: string) => {
+    const trip = tripId ? dispatchedList.find((t) => t.trip_id === tripId) : dispatchedList[0];
+    if (!store || !userId || !trip || openTrip) return;
     const miles = truckBeginMiles(trips, truckId);
     beginDispatched(store, { trip, userId, truckId: truckId ?? null, trailerId: trailerId ?? null, beginMiles: miles, now: new Date(), newId });
     // The supplier dispatch picked: kept on the trip and preset at the rack.
@@ -1317,11 +1318,8 @@ export default function HomePage() {
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
   const [unitAlertsOpen, setUnitAlertsOpen] = useState<"truck" | "trailer" | null>(null);
   useEffect(() => { setTruckSheetWatch(unitAlertsOpen === "truck"); }, [unitAlertsOpen]);
-  const unitCell = (label: string, s: UnitAlertSummary, which: "truck" | "trailer", has: boolean) => ({
-    label, value: has ? String(s.count) : "—", unit: has ? "due" : undefined,
-    color: s.worst ? EXPIRY_COLOR[s.worst] : LOOK.muted,
-    onClick: has ? () => setUnitAlertsOpen(which) : undefined,
-  });
+  const [expSheetOpen, setExpSheetOpen] = useState(false);
+  const [loadsSheetOpen, setLoadsSheetOpen] = useState(false);
   // Everyone in the company with the SELECTED store on their trip: delivering there, loaded and on the way, or
   // planned. My own trip is included (from the server list, or from this phone when it hasn't synced yet).
   const storeLive = useMemo(() => {
@@ -1394,6 +1392,25 @@ export default function HomePage() {
   const expired = expirations.expiredCount ?? 0;
   const warning = expirations.warningCount ?? 0;
   const soonCount = expirations.soonCount ?? 0;
+  // Every expiration in one chip, grouped by type. Truck and trailer come from
+  // their own alerts (permits plus service); the rest from the shared list.
+  const expGroups: ExpGroup[] = (() => {
+    const rows = (type: string): ExpRow[] => expirations.activeItems.filter((i) => i.entityType === type).map((i) => ({
+      key: i.id, name: i.entityName, sub: i.entitySubtitle,
+      detail: i.expired ? `Expired ${-i.daysLeft}d ago` : `${i.daysLeft} days`,
+      state: (i.expired ? "expired" : i.daysLeft <= EXP_WARN_DAYS ? "expiring" : "soon") as ExpiryState,
+    }));
+    const unit = (s: UnitAlertSummary, w: string): ExpRow[] => s.alerts.map((a, n) => ({ key: `${w}${n}`, name: a.name, sub: a.kind === "permit" ? "Permit" : "Service", detail: a.detail, state: a.state }));
+    return [
+      { title: "Terminal access", rows: rows("terminal") },
+      { title: "Credentials", rows: rows("credential") },
+      { title: "Badges", rows: rows("badge") },
+      { title: "Truck", rows: unit(truckAlerts, "truck"), more: { label: "Odometer & details", onClick: () => { setExpSheetOpen(false); setUnitAlertsOpen("truck"); } } },
+      { title: "Trailer", rows: unit(trailerAlerts, "trailer") },
+    ];
+  })();
+  const expTotal = expGroups.reduce((n, g) => n + g.rows.length, 0);
+  const expWorst = (["expired", "expiring", "soon"] as ExpiryState[]).find((st) => expGroups.some((g) => g.rows.some((r) => r.state === st))) ?? null;
   const canCards = canReachDestination("cards", shell.role, shell.isSuperAdmin, shell.isSolo ?? false);
 
   // ── Look (see dashLook.tsx) ───────────────────────────────────────────────
@@ -1542,8 +1559,9 @@ export default function HomePage() {
       {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
       <div style={{ marginBottom: 14 }}>
       <GaugePanel cells={[
-          unitCell("Truck", truckAlerts, "truck", !!truckId),
-          unitCell("Trailer", trailerAlerts, "trailer", !!trailerId),
+          { label: "Expiration", value: String(expTotal), color: expWorst ? EXPIRY_COLOR[expWorst] : LOOK.muted, onClick: () => setExpSheetOpen(true) },
+          { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
+            onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
           { label: "To Rack", value: String(rackCount), unit: rackCount === 1 ? "trk" : "trks",
             color: countColor(rackCount), onClick: () => setTerminalNowOpen(true) },
           { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount), unit: dropCount === 1 ? "load" : "loads",
@@ -1553,44 +1571,25 @@ export default function HomePage() {
 
       {myHos && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null) && (() => {
         const least = Math.min(myHos.driveLeftMin ?? Infinity, myHos.dutyLeftMin ?? Infinity);
-        const cell = (label: string, min: number | null | undefined) => (
-          <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-            <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, color: clockColor(min ?? null), lineHeight: 1.1 }}>{clockHM(min ?? null)}</div>
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: L.muted, marginTop: 3, whiteSpace: "nowrap" }}>{label}</div>
-          </div>
-        );
-        const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(myHos.at)) / 60000));
+        const clock = (label: string, min: number | null | undefined) => ({
+          label, value: clockHM(min ?? null), color: clockColor(min ?? null), onClick: () => setRecapOpen(true),
+        });
         // Break: loading and pumping count toward it. While not driving it counts up to 30 min, then a
         // green check. Red if a new trip was begun before it finished.
         const restMin = myHos.nonDrivingSince ? Math.max(0, Math.floor((Date.now() - Date.parse(myHos.nonDrivingSince)) / 60000)) : null;
-        const breakCell = restMin != null && restMin >= BREAK_DONE_MIN ? (
-          <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-            <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, color: "#22c55e", lineHeight: 1.1 }}>✓</div>
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: L.muted, marginTop: 3, whiteSpace: "nowrap" }}>Break done</div>
-          </div>
-        ) : restMin != null ? (
-          <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-            <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, color: breakCountsRed ? "#f87171" : "#fff", lineHeight: 1.1 }}>{restMin}m</div>
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: L.muted, marginTop: 3, whiteSpace: "nowrap" }}>Break · of {BREAK_DONE_MIN}m</div>
-          </div>
-        ) : cell("Break in", myHos.breakLeftMin);
+        const breakCell = restMin != null && restMin >= BREAK_DONE_MIN
+          ? { label: "Break", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) }
+          : restMin != null
+          ? { label: "Break", value: `${restMin}m`, color: breakCountsRed ? "#f87171" : "#fff", onClick: () => setRecapOpen(true) }
+          : clock("Break In", myHos.breakLeftMin);
         return (
-          <div style={{ ...L.secondary, padding: "12px 14px", marginBottom: 14 }}>
-            <div role="button" tabIndex={0} onClick={() => setRecapOpen(true)} onKeyDown={(e) => { if (e.key === "Enter") setRecapOpen(true); }} style={{ cursor: "pointer" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted }}>Hours</span>
-                <span style={{ flex: 1 }} />
-                {myHos.status && <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>{STATUS_NAME[myHos.status] ?? myHos.status}</span>}
-                <span style={{ fontSize: 11, color: L.faint }}>{ageMin < 2 ? "just now" : `${ageMin} min ago`}</span>
-                <span style={{ color: L.faint }}>›</span>
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {breakCell}
-                {cell("Driving left", myHos.driveLeftMin)}
-                {cell("Workday left", myHos.dutyLeftMin)}
-                {cell("Cycle left", myHos.cycleLeftMin)}
-              </div>
-            </div>
+          <div style={{ marginBottom: 14 }}>
+            <GaugePanel top={0} labelBelow cells={[
+              breakCell,
+              clock("DR Left", myHos.driveLeftMin),
+              clock("WD Left", myHos.dutyLeftMin),
+              clock("Cycle Left", myHos.cycleLeftMin),
+            ]} />
             <HosRecapModal open={recapOpen} hos={myHos} onClose={() => setRecapOpen(false)} />
             {hosVsTrip && (
               <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, color: hosVsTrip.level === "bad" ? "#f87171" : "#fb923c" }}>
@@ -1615,7 +1614,7 @@ export default function HomePage() {
       <div>
       <SectionLabel desktopOnly first>Trip</SectionLabel>
 
-      <DispatchedCard items={dispatchedItems} />
+      {!openTrip && <DispatchedCard items={dispatchedItems.slice(0, 1)} />}
 
       {/* Handoff */}
       {handoff && (
@@ -1941,7 +1940,7 @@ export default function HomePage() {
       {(() => {
         // Gross already shows on the trip card; only the truck-change prompt stays here.
         const showGross = tripLoaded && truckChanged;
-        const showExp = expired > 0 || warning > 0 || soonCount > 0;
+        const showExp = false;
         const showSync = pendingCount > 0 || failed.length > 0;
         const showFuel = !!fuel.active;
         if (!showGross && !showExp && !showSync && !showFuel) return null;
@@ -1963,19 +1962,6 @@ export default function HomePage() {
                 valueColor="#fbbf24"
                 onClick={() => tripEquip.reopenTruckChange()}
                 last={!showExp && !showSync}
-              />
-            )}
-            {showExp && (
-              <InfoRow
-                label="Expirations"
-                value={[
-                  expired > 0 ? `${expired} expired` : null,
-                  warning > 0 ? `${warning} within 7 days` : null,
-                  soonCount > 0 ? `${soonCount} within 30 days` : null,
-                ].filter(Boolean).join(" · ")}
-                valueColor={expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : EXPIRY_COLOR.soon}
-                onClick={() => shell.setExpModalOpen(true)}
-                last={!showSync}
               />
             )}
             {showSync && (
@@ -2061,6 +2047,9 @@ export default function HomePage() {
         onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
       />
 
+      <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} onManage={() => { setExpSheetOpen(false); shell.setExpModalOpen(true); }} />
+      <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onClose={() => setLoadsSheetOpen(false)}
+        onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); beginDispatchedLoad(id); }} />
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
           const s = unitAlertsOpen === "trailer" ? trailerAlerts : truckAlerts;
