@@ -1,15 +1,14 @@
 "use client";
 
 import { openAccessSteps } from "../components/access/useAccessSteps";
-import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import React, { useMemo, useState } from "react";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import type { Role } from "@/lib/ui/driver/role";
 import RackProductStatusModal from "./RackProductStatusModal";
 import EditTerminalModal from "./EditTerminalModal";
-import type { TerminalRack, RackProductStatusRow } from "./rackProductTypes";
-
+import { useExpandedRacks } from "./myTerminals/useExpandedRacks";
+import { RackProductList } from "./myTerminals/RackProductList";
 // ── Terminal avatar helpers ───────────────────────────────────────────────────
 // No fill, thin white stroke -- placeholder until real per-operator logos
 // (tracked as a someday idea, not this pass). Was a per-terminal color-hash
@@ -98,66 +97,13 @@ export default function MyTerminalsModal(props: {
 
   const isoToday = () => new Date().toISOString().slice(0, 10);
 
-  // ── Relocated rack status/edit state, scoped to whichever card is expanded ──
-  const [expandedRacks, setExpandedRacks] = useState<TerminalRack[]>([]);
-  const [expandedRackId, setExpandedRackId] = useState("");
-  const [expandedRackProducts, setExpandedRackProducts] = useState<RackProductStatusRow[]>([]);
-  const [racksLoading, setRacksLoading] = useState(false);
-  const [racksError, setRacksError] = useState<string | null>(null);
+  // Rack status/edit state, scoped to whichever card is expanded.
+  const {
+    expandedRacks, expandedRackId, setExpandedRackId, expandedRackProducts,
+    racksLoading, racksError, loadExpandedRacks, loadExpandedRackProducts,
+  } = useExpandedRacks(expandedTerminalId);
   const [studOpen, setStudOpen] = useState(false);
   const [editTerminalOpen, setEditTerminalOpen] = useState(false);
-
-  const loadExpandedRacks = React.useCallback(async (terminalId: string, opts?: { keepRackId?: string }) => {
-    if (!terminalId) {
-      setExpandedRacks([]);
-      setExpandedRackId("");
-      setRacksError(null);
-      return;
-    }
-    setRacksLoading(true);
-    setRacksError(null);
-    const { data, error: err } = await supabase
-      .from("terminal_racks")
-      .select("*")
-      .eq("terminal_id", terminalId)
-      .order("rack_name", { ascending: true });
-    if (err) {
-      setRacksError(err.message);
-      setExpandedRacks([]);
-    } else {
-      const rows = (data ?? []) as TerminalRack[];
-      setExpandedRacks(rows);
-      // Keep the previously-picked rack selected across a refetch (e.g. after
-      // an Edit Terminal rename) if it still exists; otherwise fall back to
-      // the first row, same as the initial pick.
-      const keep = opts?.keepRackId;
-      setExpandedRackId(keep && rows.some((r) => r.rack_id === keep) ? keep : (rows[0]?.rack_id ?? ""));
-    }
-    setRacksLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (!expandedTerminalId) {
-      setExpandedRacks([]);
-      setExpandedRackId("");
-      setExpandedRackProducts([]);
-      setRacksError(null);
-      return;
-    }
-    loadExpandedRacks(expandedTerminalId);
-  }, [expandedTerminalId, loadExpandedRacks]);
-
-  const loadExpandedRackProducts = React.useCallback(async (rackId: string) => {
-    if (!rackId) { setExpandedRackProducts([]); return; }
-    const { data, error: err } = await supabase
-      .from("rack_product_status").select("*").eq("rack_id", rackId).eq("active", true);
-    if (err) { setRacksError(err.message); return; }
-    setExpandedRackProducts((data ?? []) as RackProductStatusRow[]);
-  }, []);
-
-  useEffect(() => {
-    loadExpandedRackProducts(expandedRackId);
-  }, [expandedRackId, loadExpandedRackProducts]);
 
   const { data: productsCatalog = [] } = useProductsCatalog();
   const productsById = useMemo(
@@ -334,35 +280,7 @@ export default function MyTerminalsModal(props: {
                               expandedRackProducts/productsById data already
                               being fetched for the STUD modal, just never
                               rendered anywhere itself. */}
-                          {expandedRackId && (
-                            <div className="space-y-1.5">
-                              {expandedRackProducts.length === 0 ? (
-                                <div className="text-xs text-white/35">No products configured for this rack yet.</div>
-                              ) : (
-                                expandedRackProducts.map((rp) => {
-                                  const p = productsById[rp.product_id];
-                                  const name = p ? (p.product_name ?? p.display_name ?? "Product") : rp.product_id;
-                                  const code = (p?.button_code ?? "").trim();
-                                  const color = (p?.hex_code ?? "").trim() || "rgba(255,255,255,0.7)";
-                                  return (
-                                    <div key={rp.product_id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, opacity: rp.is_out ? 0.5 : 1, minWidth: 0 }}>
-                                      <span style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1, minWidth: 0, overflow: "hidden" }}>
-                                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                                        <span style={{ color, fontWeight: 800, flexShrink: 0 }}>{code}</span>
-                                        <span style={{ color: "#fff", fontWeight: 400, textDecoration: rp.is_out ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, minWidth: 0 }}>
-                                          {name}
-                                        </span>
-                                      </span>
-                                      <span style={{ display: "flex", gap: 12, flexShrink: 0, color: "rgba(255,255,255,0.4)" }}>
-                                        <span style={{ minWidth: 44, textAlign: "right" as const }}>{rp.last_api != null ? `API ${rp.last_api}` : "API —"}</span>
-                                        <span style={{ minWidth: 44, textAlign: "right" as const }}>{rp.last_temp_f != null ? `${rp.last_temp_f}°F` : "—°F"}</span>
-                                      </span>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          )}
+                          <RackProductList expandedRackId={expandedRackId} expandedRackProducts={expandedRackProducts} productsById={productsById} />
 
                           <div className="flex gap-2">
                             <button

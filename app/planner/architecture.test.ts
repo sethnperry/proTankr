@@ -48,10 +48,6 @@ test("the context type comes from the model", () => {
 // its entry here.
 const MAX = 450;
 const GRANDFATHERED: Record<string, number> = {
-  "modals/ScaleHistoryModal.tsx": 465,
-  "modals/MyTerminalsModal.tsx": 457,
-  "hooks/useLocation.ts": 494,
-  "components/StartLoadSheet.tsx": 461,
 };
 
 test("planner files stay under the size limit (or shrink toward it)", () => {

@@ -9,7 +9,7 @@
 // Deliveries are picked from the saved location list (the same picker as the
 // dashboard, with "+ New location"), never typed as free text.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -20,58 +20,10 @@ import { currentCity, type StartPlace } from "@/lib/trips/startPlace";
 import { SupplierPicker } from "./trip/SupplierPicker";
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
 import type { SupplierRow } from "@/lib/trips/types";
-import type { TripSupplier } from "@/lib/trips/tripSupplier";
 
-export type StartLoadValues = {
-  orderNumber: string;
-  extraOrderNumbers: string[];
-  shipper: string;
-  customer: string;
-  deliveries: StartLoadDelivery[];
-  beginMiles: string;
-  startCity: string;
-  startState: string;
-  // Preset (1-5) the Planner loads when it opens for this trip. null = leave the Planner as is.
-  planSlot: number | null;
-  // Supplier dispatch named. Preset at every rack on the trip; changeable there.
-  supplier: TripSupplier | null;
-  // Dispatch's plan only: save it as a plan slot (optionally opening the Planner to change it first). null = run it as a temporary plan.
-  savePlan: { modify: boolean } | null;
-};
-
-const addBtn: React.CSSProperties = {
-  flex: 1, padding: "10px 0", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.25)",
-  background: "transparent", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-
-const hair = "1px solid rgba(255,255,255,0.08)";
-const lineLabel: React.CSSProperties = {
-  fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase",
-  color: "rgba(255,255,255,0.45)", flexShrink: 0, width: 92,
-};
-const removeBtn: React.CSSProperties = {
-  border: "none", background: "transparent", color: "rgba(255,255,255,0.45)",
-  fontSize: 13, cursor: "pointer", padding: 0, fontWeight: 700,
-};
-
-// One line of the report: label on the left, the value (tap to change) on the right.
-function Line({ label, value, onTap, missing, sub, last }: {
-  label: string; value: string | null; onTap: () => void; missing?: boolean; sub?: string | null; last?: boolean;
-}) {
-  return (
-    <button type="button" onClick={onTap}
-      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 0", border: "none", borderBottom: last ? "none" : hair, background: "transparent", cursor: "pointer", textAlign: "left", color: "#fff" }}>
-      <span style={lineLabel}>{label}</span>
-      <span style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-        <span style={{ display: "block", fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: value ? "#fff" : missing ? "#fbbf24" : "rgba(255,255,255,0.4)" }}>
-          {value || (missing ? "Add" : "None")}
-        </span>
-        {sub && <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
-      </span>
-      <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
-    </button>
-  );
-}
+import type { StartLoadValues } from "./startLoad/types";
+import { addBtn, hair, removeBtn, Line } from "./startLoad/ui";
+export type { StartLoadValues } from "./startLoad/types";
 
 type EditKey = "miles" | "order" | "shipper" | "customer" | "start" | `order:${number}`;
 const AUTO_KEYS: EditKey[] = ["miles", "order"];
