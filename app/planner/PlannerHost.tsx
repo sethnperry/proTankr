@@ -1,8 +1,8 @@
 "use client";
 import { useTruckReading } from "@/lib/telematics/useTruckReading";
 import { usePathname, useRouter } from "next/navigation";
-import SetupGate from "./components/SetupGate";
-import SoloOnboarding from "./components/SoloOnboarding";
+import { PartialEquipmentPanel } from "./components/PartialEquipmentPanel";
+import { PlannerGates } from "./components/PlannerGates";
 import { isOnboardingComplete } from "./utils/onboardingProgress";
 import { useCalculatorShell } from "./CalculatorShellContext";
 
@@ -276,7 +276,6 @@ export default function PlannerHost() {
   // MyTerminalsModal instances (now mounted once in ShellChrome), so this
   // page and that one can't each carry an independent copy without risking
   // the two drifting out of sync.
-  const { setEquipOpen, setTermOpen, setLocOpen } = shell;
   const [compModalOpen, setCompModalOpen] = useState(false);
   const [compModalComp, setCompModalComp] = useState<number | null>(null);
   const [tempDialOpen, setTempDialOpen] = useState(false);
@@ -793,27 +792,6 @@ const lastProductInfoById = useMemo(() => {
   // missing unit. A partial state literally cannot load, by construction:
   // there is no full combo for beginLoadToSupabase to snapshot.
   const isPartialEquipment = equipment.isBobtail || equipment.isTrailerOnly;
-  const heldUnitLabel = equipment.isBobtail
-    ? (equipment.currentTruckName ? `Truck ${equipment.currentTruckName}` : "Truck")
-    : (equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Trailer");
-  const missingUnitWord = equipment.isBobtail ? "trailer" : "truck";
-  const partialPanelEl = (
-    <div style={{ marginTop: 24, textAlign: "center" as const }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.4 }}>
-        Currently holding
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginTop: 4 }}>{heldUnitLabel}</div>
-      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 8, lineHeight: 1.5, maxWidth: 300, marginLeft: "auto", marginRight: "auto" }}>
-        {equipment.isBobtail
-          ? "No trailer coupled — add one to plan a load."
-          : "No truck coupled — add one to plan a load."}
-      </div>
-      <button type="button" onClick={openEquipment}
-        style={{ marginTop: 18, background: "#ffffff", color: "#000000", border: "none", borderRadius: 2, padding: "12px 22px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-        Select a {missingUnitWord}
-      </button>
-    </div>
-  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
   // Landscape: trim the page's own side padding (16px -> 6px each side) so
@@ -939,7 +917,14 @@ const lastProductInfoById = useMemo(() => {
           are written. */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
       <TripEquipmentSheets {...tripEquip.sheets} />
-      {isPartialEquipment ? partialPanelEl : (
+      {isPartialEquipment ? (
+        <PartialEquipmentPanel
+          isBobtail={equipment.isBobtail}
+          truckName={equipment.currentTruckName}
+          trailerName={equipment.currentTrailerName}
+          onSelect={openEquipment}
+        />
+      ) : (
       <>
       {stabilityBannerEl}
       <PlanCompartmentsSection
@@ -997,33 +982,12 @@ const lastProductInfoById = useMemo(() => {
         />
       )}
 
-      {onboardingActive ? (
-        <SoloOnboarding
-          userId={effectiveUserId}
-          companyId={shell.companyId!}
-          selectedState={location.selectedState}
-          selectedCity={location.selectedCity}
-          selectedTerminalId={location.selectedTerminalId}
-          onOpenLocation={() => setLocOpen(true)}
-          onOpenTerminal={() => setTermOpen(true)}
-          fetchCombos={equipment.fetchCombos}
-          setSelectedComboId={equipment.setSelectedComboId}
-          setCurrentEquipment={equipment.setCurrentEquipment}
-          onComplete={() => setOnboardingDone(true)}
-        />
-      ) : (
-        <SetupGate
-          comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}
-          locationSelected={!!(location.selectedState && location.selectedCity) || active}
-          terminalSelected={!!location.selectedTerminalId || active}
-          equipmentLabel={equipment.equipmentLabel}
-          locationLabel={location.locationLabel}
-          terminalLabel={terminalLabel}
-          onOpenEquipment={() => setEquipOpen(true)}
-          onOpenLocation={() => setLocOpen(true)}
-          onOpenTerminal={() => setTermOpen(true)}
-        />
-      )}
+      <PlannerGates
+        onboardingActive={onboardingActive}
+        active={active}
+        terminalLabel={terminalLabel ?? ""}
+        onOnboardingComplete={() => setOnboardingDone(true)}
+      />
 
     </div>
       {/* ── Modals ── (outside the page div, so they still show while the Planner itself is hidden) */}
