@@ -25,7 +25,6 @@ import { useCalculatorShell } from "./CalculatorShellContext";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { supabase } from "@/lib/supabase/client";
 import { defaultLandingPath } from "@/lib/ui/driver/navDestinations";
 
 // Module-level (not component state) so it survives this page component
@@ -42,6 +41,7 @@ import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
 import { usePlanMath } from "./hooks/usePlanMath";
+import { usePlannerIntents } from "./hooks/usePlannerIntents";
 import PlanCompartmentsSection from "./components/PlanCompartmentsSection";
 import PlanActionsSection from "./components/PlanActionsSection";
 import { useLoadBegin } from "./hooks/useLoadBegin";
@@ -80,12 +80,6 @@ import { type StaleProduct } from "./components/StaleApiOverlay";
 import { styles } from "./ui/styles";
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
-import { getTripStore } from "@/lib/trips/useTripStore";
-import { newId as newTripId } from "@/lib/trips/tripStore";
-import type { TripPickupRow, TripRow } from "@/lib/trips/types";
-import { openTripForDriver, unlinkCancelledLoad } from "@/lib/trips/tripLogic";
-import { cancelPlannedLoad } from "@/lib/supabase/load";
-import { clearActivePlannedLoad } from "./utils/activePlannedLoad";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { TripEquipmentSheets, useTripEquipment } from "./hooks/useTripEquipment";
 import { SupplierPanel } from "./components/supplier/SupplierPanel";
@@ -825,95 +819,7 @@ const lastProductInfoById = useMemo(() => {
   const tripEquip = useTripEquipment(tripStoreHook, effectiveUserId || null);
   const openEquipment = tripEquip.openEquipment;
 
-  // Begin Loading / Continue Trip from the dashboard: when a plan is already in
-  // place, open Plan Review right over the dashboard (what BEGIN LOADING would
-  // do). With no plan, or if it can't start, go to the Planner so the driver
-  // can see why. Waits for presets/equipment and gives up after 8 s.
-  const beginReadyRef = useRef({ go: false, plan: false, empty: false });
-  beginReadyRef.current = {
-    go: !loadDisabled && !tripNeedsArrive && !loadWorkflow.activeLoadId && unavailableComps.length === 0 && planSlots.presetsReady,
-    plan: plannedProductIds.size > 0,
-    // presets are in, nothing is planned, and nothing else is pending: no
-    // plan to review, so don't wait for "go" (which can never become true)
-    empty: planSlots.presetsReady && plannedProductIds.size === 0 && !tripNeedsArrive && !loadWorkflow.activeLoadId,
-  };
-  const beginTickRef = useRef<number | null>(null);
-  const startBeginWatch = useCallback(() => {
-    if (beginTickRef.current != null) window.clearInterval(beginTickRef.current);
-    const started = Date.now();
-    const finish = (open: boolean) => {
-      if (beginTickRef.current != null) window.clearInterval(beginTickRef.current);
-      beginTickRef.current = null;
-      if (open) requestBegin({});
-      else if (window.location.pathname !== "/planner") router.push("/planner?plan=1");
-    };
-    beginTickRef.current = window.setInterval(() => {
-      const r = beginReadyRef.current;
-      if (r.go) {
-        // give a just-applied trip plan a moment to land before deciding
-        if (!r.plan && Date.now() - started < 1500) return;
-        finish(r.plan);
-      } else if (r.empty && Date.now() - started > 1500) {
-        finish(false);
-      } else if (Date.now() - started > 8000) {
-        finish(false);
-      }
-    }, 250);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, shell.setLoadOverlayOpen]);
-  useEffect(() => () => { if (beginTickRef.current != null) window.clearInterval(beginTickRef.current); }, []);
-
-  // Requests from other screens (shell.postPlannerIntent) and, for a hard
-  // load, the old ?begin=1 / ?report= links.
-  const intent = shell.plannerIntent;
-  useEffect(() => {
-    if (!intent) return;
-    shell.consumePlannerIntent(intent.id);
-    if (intent.kind === "begin") {
-      void (async () => {
-        // Plan Review is already running (the host stays mounted): just show it.
-        if (loadWorkflow.activeLoadId) { loadWorkflow.setLoadingOpen(true); return; }
-        // After a full reload the started load is gone from memory but the
-        // pickup still points at it: finished -> its report, else release it
-        // so Plan Review can start again on the same pickup.
-        const rows = tripStoreHook.state.rows;
-        const trip = effectiveUserId ? openTripForDriver(Object.values(rows.trips ?? {}) as TripRow[], effectiveUserId) : null;
-        const comps = Object.values(rows.trip_compartment_loads ?? {}) as { pickup_id: string; disposition: string }[];
-        const stale = trip
-          ? (Object.values(rows.trip_pickups ?? {}) as TripPickupRow[]).find((p) =>
-              p.trip_id === trip.trip_id && p.load_id && !p.left_at && !comps.some((c) => c.pickup_id === p.pickup_id && c.disposition !== "cancelled"))
-          : null;
-        if (stale?.load_id && effectiveUserId) {
-          let status: string | null = null;
-          try {
-            const { data } = await supabase.from("load_log").select("status").eq("load_id", stale.load_id).maybeSingle();
-            status = (data as { status?: string } | null)?.status ?? null;
-          } catch { /* offline: treat as still planned */ }
-          if (status === "loaded" || status === "completed") { void openLoadReportAtTerminal(stale.load_id); return; }
-          try { await cancelPlannedLoad(stale.load_id); } catch (e) { console.warn("[trips] release planned load failed (non-fatal):", e); }
-          clearActivePlannedLoad(effectiveUserId);
-          unlinkCancelledLoad(getTripStore(effectiveUserId), { userId: effectiveUserId, loadId: stale.load_id, now: new Date(), newId: newTripId });
-        }
-        startBeginWatch();
-      })();
-    } else if (intent.kind === "report" && intent.loadId) {
-      void openLoadReportAtTerminal(intent.loadId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent?.id]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (!params.get("begin")) return;
-    params.delete("begin");
-    const qs = params.toString();
-    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
-    startBeginWatch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // Tells the screen underneath that Plan Review / a report is up.
-  const overlayUp = !!(loadWorkflow.loadingOpen || loadWorkflow.reportLines);
-  useEffect(() => { shell.setLoadOverlayOpen(overlayUp); }, [overlayUp]); // eslint-disable-line react-hooks/exhaustive-deps
+  usePlannerIntents({ effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps });
 
   const {
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
