@@ -861,6 +861,13 @@ export default function DispatchPage() {
         ? [{ icon: "terminal" as const, label: "Company", busy: nav.is("company"), onClick: () => nav.go("company", "/admin") }]
         : []),
     ];
+    const driverListEl = (
+      <div id="dispatch-drivers"><DriverList result={ranked} showNotCarded={showNotCarded && !!planTerminalId}
+          location={planLocation} terminal={planTerminal} historyLoading={history.loading} historyError={history.error}
+          selectedDriverId={tlDriverId}
+          onSelectDriver={(id) => { setTlDriverId((cur) => (cur === id ? null : id)); setTlStart(null); if (planLocationId && planTerminalId) window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onOpenDriver={(id) => setSelectedDriverId(id)} equipFor={equipFor} hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)} /></div>
+    );
     return (
       <>
       <DispatchDashboardView
@@ -875,7 +882,19 @@ export default function DispatchPage() {
         allocation={allContracts.some((c) => c.per_day != null || c.per_week != null) ? { ...allocChip, onOpen: () => setAllocOpen(true) } : null}
         focusCount={planning ? ranked.focusIds.size : null}
         notCarded={planTerminalId && planLocationId ? { count: ranked.notCarded.length, shown: showNotCarded, onToggle: () => setShowNotCarded((v) => !v) } : null}
-        planner={
+        planner={!tlDriverId ? (
+          <div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", margin: "0 0 8px" }}>Step 1 · Pick the driver for this load.</div>
+            {driverListEl}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"}
+              </div>
+              <button type="button" onClick={() => { setTlDriverId(null); setTlStart(null); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>Change driver</button>
+            </div>
           <PlanLoadCard location={planLocation} terminal={planTerminal} terminals={terminalOptions} result={ranked}
             historyLoading={history.loading} historyError={history.error} showNotCarded={showNotCarded && !!planTerminalId}
             onPickLocation={() => setLocPickerOpen(true)}
@@ -915,7 +934,8 @@ export default function DispatchPage() {
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
-        }
+          </div>
+        )}
         onOpenDriver={(id) => setSelectedDriverId(id)}
         hosAlerts={lowHours}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
@@ -937,11 +957,7 @@ export default function DispatchPage() {
           onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
         dispatchedCount={dispatchedShown.length}
         regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
-        drivers={<div id="dispatch-drivers"><DriverList result={ranked} showNotCarded={showNotCarded && !!planTerminalId}
-          location={planLocation} terminal={planTerminal} historyLoading={history.loading} historyError={history.error}
-          selectedDriverId={tlDriverId}
-          onSelectDriver={(id) => { setTlDriverId((cur) => (cur === id ? null : id)); setTlStart(null); if (planLocationId && planTerminalId) window.scrollTo({ top: 0, behavior: "smooth" }); }}
-          onOpenDriver={(id) => setSelectedDriverId(id)} equipFor={equipFor} hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)} /></div>}
+        drivers={mode === "plan" ? undefined : driverListEl}
         tools={dashTools}
       />
       <LocationPicker browse open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}

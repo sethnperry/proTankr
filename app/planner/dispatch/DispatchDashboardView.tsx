@@ -309,7 +309,7 @@ export function DispatchDashboardView(props: {
   dispatchedCount: number;
   regions: RegionFilter;
   dispatchedBoard?: React.ReactNode; // loads sent to drivers, not begun yet
-  drivers: React.ReactNode;   // driver picker
+  drivers?: React.ReactNode;  // driver picker (side column); omitted when the planner holds it
   tools: ToolItem[];
 }) {
   const L = useDashLook();
@@ -432,8 +432,7 @@ export function DispatchDashboardView(props: {
         </div>
         <div className="dash-side">
           {live && (<><SectionLabel first>Loads</SectionLabel>{p.liveBoard}</>)}
-          <SectionLabel first={!live}>Drivers</SectionLabel>
-          {p.drivers}
+          {p.drivers && (<><SectionLabel first={!live}>Drivers</SectionLabel>{p.drivers}</>)}
         </div>
       </div>
       <SectionLabel>Tools</SectionLabel>

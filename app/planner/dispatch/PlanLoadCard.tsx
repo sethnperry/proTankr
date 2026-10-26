@@ -219,9 +219,9 @@ export function PlanLoadCard(props: {
       )}
 
       {p.timeline}
-      {!p.timeline && p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the terminal, then tap a driver in the Drivers list.</div>}
-      {!p.timeline && !p.location && p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the drop location, then tap a driver in the Drivers list.</div>}
-      {!p.timeline && !p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>To plan a load, pick a drop location and a terminal, then tap a driver in the Drivers list.</div>}
+      {!p.timeline && p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the terminal to see the timeline.</div>}
+      {!p.timeline && !p.location && p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the drop location to see the timeline.</div>}
+      {!p.timeline && !p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick a drop location and a terminal.</div>}
 
       <FullscreenModal open={termOpen} title="Pick the terminal" onClose={() => { setTermOpen(false); setChoosing(false); }}
         headerRight={!choosing ? <button type="button" onClick={() => { setChoosing(true); setQ(""); }}
