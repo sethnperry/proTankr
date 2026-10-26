@@ -45,8 +45,37 @@ A layer may read earlier layers, never later ones.
 - New page layout: a component that reads `usePlanner()`.
 - A new layer only when an existing one would pass 300 lines.
 
+## Big modals
+
+A modal that grows past the size limit becomes a **shell plus a folder of the same name**:
+
+```
+modals/LoadingModal.tsx          25 lines. useLoadingModel(props) -> PlanView | ReportView + overlays.
+modals/loading/                  useLoadingModel (basics + sequence hooks), views, one file per section.
+modals/SoloEquipmentModal.tsx    35 lines. useSoloEquipment(props) -> seven dialog components.
+modals/solo/                     five model layers (state, data, coupling, actions, derived) + dialogs.
+modals/BinderModal.tsx           the Binder shell; modals/binder/ holds one file per component.
+```
+
+Rules for a split modal:
+
+1. The shell composes. It calls one model hook and renders parts; no state of its own.
+2. The model is layered hooks (same rule as `model/`: dependency order, no JSX).
+3. Each part is a component taking `{ m }` (the model's type), reading only what it renders.
+4. Parts and layers stay under 400 lines (formatted with `prettier --print-width 140`).
+5. Public exports of the old file stay re-exported from the shell, so importers do not change.
+
+## The size ratchet
+
+`architecture.test.ts` fails if a file in `modals/`, `components/` or `hooks/` passes 450 lines,
+except the files listed there with their current size as a ceiling. They may shrink, never grow.
+When you touch one of them for real work, split it and delete its entry.
+
+Still to split: `usePlanSlots`, `useLoadWorkflow`, `DecoupleModal`, `RecordHistoryModal`,
+`MyLoadsModal`, `SoloOnboarding`, `ServiceTypeManager`, `ScaleHistoryModal`, `EditTerminalModal`,
+`MyTerminalsModal`, `useLocation`, `StartLoadSheet`.
+
 ## Known leftovers
 
 Several older hooks still import from `components/` (`useLoadBegin`, `usePlannerSuppliers`,
-`useTripEquipment`). Rule 4 applies to `model/` only for now. Large modals
-(`SoloEquipmentModal`, `LoadingModal`, `BinderModal`) are not yet split.
+`useTripEquipment`). Rule 4 applies to `model/` only for now.
