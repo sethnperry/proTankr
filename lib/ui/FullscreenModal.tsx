@@ -55,8 +55,6 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
       </button>
     );
 
-  const contentClass =
-    footerNode === null ? "h-[calc(100%-56px)]" : "h-[calc(100%-56px-72px)]";
 
   return (
     <div className="fixed inset-0 z-50">
@@ -70,7 +68,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
       {/* Floating panel */}
       <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-6">
         <div
-          className="w-full max-w-2xl rounded-[2px] border border-white/15 bg-[#0b0b0b] text-white shadow-2xl"
+          className="flex w-full max-w-2xl flex-col rounded-[2px] border border-white/15 bg-[#0b0b0b] text-white shadow-2xl"
           style={{ height: "min(92vh, 900px)" }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
@@ -78,7 +76,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
           aria-label={title}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
             {hideCloseButton ? (
               <div className="min-w-[64px]" />
             ) : (
@@ -97,11 +95,11 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
           </div>
 
           {/* Content */}
-          <div className={`${contentClass} overflow-auto px-4 py-4`}>{children}</div>
+          <div className="min-h-0 flex-1 overflow-auto px-4 py-4">{children}</div>
 
           {/* Footer */}
           {footerNode !== null ? (
-            <div className="border-t border-white/10 px-4 py-3">{footerNode}</div>
+            <div className="shrink-0 border-t border-white/10 px-4 py-3">{footerNode}</div>
           ) : null}
         </div>
       </div>
