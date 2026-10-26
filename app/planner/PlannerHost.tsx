@@ -42,6 +42,8 @@ import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
 import { usePlanMath } from "./hooks/usePlanMath";
+import PlanCompartmentsSection from "./components/PlanCompartmentsSection";
+import PlanActionsSection from "./components/PlanActionsSection";
 import { useLoadBegin } from "./hooks/useLoadBegin";
 import { useLoadPrep } from "./hooks/useLoadPrep";
 import { usePlanTemperature } from "./hooks/usePlanTemperature";
@@ -58,9 +60,7 @@ import RecallEquipmentFlow from "./flows/RecallEquipmentFlow";
 import TempConfirmFlow from "./flows/TempConfirmFlow";
 import { usePlanInputs } from "./hooks/usePlanInputs";
 import { usePlanDirty } from "./hooks/usePlanDirty";
-import CgSlider from "./components/CgSlider";
 import SetupSessionBanner from "./components/SetupSessionBanner";
-import PlanSummaryCard from "./components/PlanSummaryCard";
 import { usePlannerSuppliers } from "./hooks/usePlannerSuppliers";
 import { usePlannerEquipment } from "./hooks/usePlannerEquipment";
 import { useTerminalProducts } from "./hooks/useTerminalProducts";
@@ -68,7 +68,6 @@ import { useLoadReportLauncher } from "./hooks/useLoadReportLauncher";
 import { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDuringLoad";
 
 // ── Sections ───────────────────────────────────────────────────────────────────
-import PlannerControls from "./sections/PlannerControls";
 import { useIsLandscape } from "./hooks/useOrientation";
 import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tripPlan";
 
@@ -76,13 +75,11 @@ import { getTripPlan, markTripPlanApplied, takeTripQuick } from "@/lib/trips/tri
 // LocationModal/MyTerminalsModal now mount once in ShellChrome
 // (CalculatorLayoutClient.tsx) -- see the render-site comment further down.
 import { type StaleProduct } from "./components/StaleApiOverlay";
-import CompartmentDetailModal from "./components/CompartmentDetailModal";
 
 // ── UI ─────────────────────────────────────────────────────────────────────────
 import { styles } from "./ui/styles";
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
-import { productColorFor } from "./utils/productColor";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import type { TripPickupRow, TripRow } from "@/lib/trips/types";
@@ -957,9 +954,6 @@ const lastProductInfoById = useMemo(() => {
     setCaptureBaselineNext(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveUserId, quickTripId, planSlots.presetsReady, equipment.selectedComboId, compartments.length]);
-  const planLetterIconRef = useRef<HTMLButtonElement | null>(null);
-  const savePlanButtonRef = useRef<HTMLButtonElement | null>(null);
-  const compartmentsAreaRef = useRef<HTMLDivElement | null>(null);
 
   const stabilityBannerEl = unstableLoad ? (
     <div style={{ ...styles.error, marginTop: 0, marginBottom: 12, textAlign: "center" as const }}>
@@ -970,7 +964,6 @@ const lastProductInfoById = useMemo(() => {
   const currentOverrides = overridesSnapshot(compPlan, cgSlider);
   const isDirty = currentOverrides !== baselineOverrides;
 
-  const [detailComp, setDetailComp] = useState<number | null>(null);
   // ── Partial equipment (Phase 2: persistent bobtail / trailer-only) ────────
   // A driver can hold just a truck (bobtail) or just a trailer (via a
   // per-unit take-over) with no full combo. The setup gate is satisfied by
@@ -1129,13 +1122,11 @@ const lastProductInfoById = useMemo(() => {
       {isPartialEquipment ? partialPanelEl : (
       <>
       {stabilityBannerEl}
-      <div ref={compartmentsAreaRef} style={{ marginTop: 16 }}>
-      <PlannerControls
-        styles={styles}
+      <PlanCompartmentsSection
         selectedTrailerId={selectedTrailerId}
         compLoading={compLoading}
-        compartments={compartments}
         compError={compError}
+        compartments={compartments}
         persistedCapForComp={persistedCapForComp}
         effectiveMaxGallonsForComp={effectiveMaxGallonsForComp}
         plannedGallonsByComp={plannedGallonsByComp}
@@ -1143,186 +1134,48 @@ const lastProductInfoById = useMemo(() => {
         setCompPlan={setCompPlan}
         terminalProducts={terminalProducts}
         selectedComp={selectedComp}
-        onSelectComp={(n: number) => setDetailComp(n)}
         selectedTerminalId={location.selectedTerminalId ?? ""}
         isLandscape={isLandscape}
+        cgSlider={cgSlider}
+        setCgSlider={setCgSlider}
+        hasCombo={!!equipment.selectedCombo}
+        onChangeProduct={(n) => { setCompModalComp(n); setCompModalOpen(true); }}
       />
-      </div>
-
-
-      {(() => {
-        const n = detailComp;
-        const c = n == null ? null : compartments.find((x) => Number(x.comp_number) === n);
-        if (n == null || !c) return null;
-        const trueMax = Number(c.max_gallons ?? 0);
-        const persisted = persistedCapForComp(n);
-        const sel = compPlan[n];
-        const isEmpty = !!sel?.empty || !sel?.productId;
-        const prod: any = !isEmpty ? terminalProducts.find((p) => p.product_id === sel?.productId) : null;
-        const name = prod ? String(prod.display_name || prod.product_name || "Product") : "Empty";
-        return (
-          <CompartmentDetailModal
-            open
-            compNumber={n}
-            trueMax={trueMax}
-            persistedCap={persisted}
-            capGallons={effectiveMaxGallonsForComp(n, persisted)}
-            plannedGallons={Number(plannedGallonsByComp?.[n] ?? 0)}
-            hasOverride={sel?.capOverride != null}
-            productLabel={name}
-            code={isEmpty ? "MT" : String(prod?.button_code ?? prod?.product_code ?? name.split(" ")[0]).trim().toUpperCase()}
-            color={(prod?.hex_code && String(prod.hex_code).trim()) || productColorFor(prod?.product_name ?? "")}
-            isEmpty={isEmpty}
-            onCapChange={(g) => setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: g } }))}
-            onResetCap={() => setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: null } }))}
-            onChangeProduct={() => { setDetailComp(null); setCompModalComp(n); setCompModalOpen(true); }}
-            onClose={() => setDetailComp(null)}
-          />
-        );
-      })()}
-
-      <CgSlider value={cgSlider} onChange={setCgSlider} disabled={!equipment.selectedCombo} />
       </>
       )}
       </div>
-      {/* ── Info cards, Load button, Load summary ── */}
-      {(() => {
-        // Real bug found live: this card used to show the LAST COMPLETED
-        // load's own numbers (via loadReport), gated on a "recapValid"
-        // freshness check -- but that check compared the live plan against
-        // a baseline captured whenever loadReport happened to change, which
-        // on a fresh mount/refresh is seeded from history (usePlanSlots'
-        // own comboClaim effect always sets lastLoadReport to the last
-        // completed load, independent of whatever draft actually restored)
-        // -- not from anything that verified the two ever matched. The
-        // baseline just trivially matched whatever was already live at that
-        // moment, so the card confidently displayed a past load's (e.g.
-        // "Plan B") numbers under whatever plan the driver actually had
-        // open, and its label -- a full-width tappable button wired to
-        // Recall Last Load -- silently overwrote the live plan with that
-        // past load's content on a single tap that looked like inert status
-        // text. Per explicit direction, this card is now a plain LIVE
-        // summary of whatever's actually in the compartments right now --
-        // no history, no validity check, nothing to accidentally recall.
-        // Recall Last Load still exists as its own explicit action, moved
-        // into PresetQuickPick (see onRecallLastLoad below) where it can't
-        // be tapped by accident.
-        const plannedGal = effectivePlanRows.length ? effectivePlannedGallonsTotal : null;
-        const plannedGalText = plannedGal == null ? "—" : `${Math.round(plannedGal).toLocaleString()} gal`;
-        const grossLbs = plannedGal != null ? livePreviewGrossLbs : null;
-        const grossText = grossLbs == null ? "—" : `${Math.round(grossLbs).toLocaleString()} lbs`;
-
-        // Live planned gross weight, colored against this combo's own
-        // target and the fixed 80,000 lb federal legal limit (same
-        // threshold LoadReportModal already uses for its "drain to 80k"
-        // line).
-        const LEGAL_GROSS_LBS = 80000;
-        const grossColor =
-          grossLbs == null || !(targetWeight > 0) ? "#fff"
-          : grossLbs >= LEGAL_GROSS_LBS ? "#ef4444"
-          : grossLbs >= targetWeight ? "#4ade80"
-          : "#fff";
-
-        // Plan-letter / Equipment / Location cluster -- portaled into the
-        // shared header's slot div (see headerIconsSlot above and
-        // CalculatorLayoutClient.tsx's own comment) instead of rendering as
-        // its own row in the page body. Styling matches the mockup: plan
-        // letter is bold text with a small active dot underneath (not a
-        // boxed icon button), Equipment is a plain "EQ" label (a flat muted
-        // tone regardless of hasEquipment -- the mockup shows this gray
-        // even with real equipment selected), Location is a solid/filled
-        // pin (not the stroke outline used elsewhere). Temperature used to
-        // be a fourth icon here (a live °F reading, color carrying
-        // confidence) -- removed per explicit direction to reduce the
-        // header's icon count. Temp is confirmed/adjusted on the LOAD tap
-        // (ProductTempModal, step 1) and again per product at Log the Load,
-        // so there's no standalone always-on temp control in the header.
-        const headerIconsEl = (
-          <>
-            {/* Trailer number, gray. Equipment, terminal and the bell are not
-                needed on the Plan page. */}
-            {equipmentDetails.trailerName ? (
-              <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.3, color: "rgba(255,255,255,0.5)" }}>
-                {equipmentDetails.trailerName}
-              </span>
-            ) : null}
-          </>
-        );
-
-        // Recap + incentive-points cards. Per explicit follow-up against a
-        // real device screenshot of the previous "merged into one inline
-        // stats band" landscape treatment ("that looks bad... keep the
-        // cards the way they look in portrait mode, just shift the card
-        // over so they're side by side") -- recapCard/pointsCard below are
-        // now EXACTLY portrait's own card content/layout (label, gal/lbs
-        // baseline row, right-aligned target/diff, This-Load/Period-Avg
-        // space-between row) with zero mode-dependent field styling left
-        // in them at all. The only thing that changes across portrait/
-        // landscape/ultra-wide is how the two whole cards are ARRANGED
-        // (stacked, side by side, or grid cell) -- never their own
-        // internal look. `flex:1, minWidth:0` on each card is what makes
-        // them share width evenly when placed in a row; harmless (and
-        // simply unused) when they're stacked in a column instead.
-        const recapCard = (
-          <PlanSummaryCard gallonsText={plannedGalText} grossText={grossText} grossColor={grossColor}
-            showRefApiWarning={!active && planUsesReferenceApi && planRows.length > 0} />
-        );
-
-        // The Plan page's button: "New Plan" starts the Plan Builder; once the
-        // driver changes anything it becomes "Save Plan" and goes back to
-        // "New Plan" after saving.
-        const planPickerEl = (
-          <button ref={planLetterIconRef} type="button" disabled={!planSlots.presetsReady}
-            onClick={() => setPresetQuickPickOpen(true)}
-            style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.04)", padding: "12px 14px", width: "100%", cursor: planSlots.presetsReady ? "pointer" : "not-allowed", opacity: planSlots.presetsReady ? 1 : 0.4, color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: 0.3 }}
-          >
-            Plan {String.fromCharCode(64 + activeSlotLetter)} ▾
-          </button>
-        );
-        const planButtonEl = (
-          <button ref={savePlanButtonRef} type="button"
-            onClick={() => {
-              if (isDirty) {
-                const dup = planSlotWithLayout(compPlan, activeSlotLetter);
-                const to = dup ?? activeSlotLetter;
-                planSlots.saveToSlot(to); setActiveSlotLetter(to); setBaselineOverrides(currentOverrides);
-              }
-              else setWizardNew(true);
-            }}
-            style={{ borderRadius: 2, border: "none", background: "#ffffff", padding: "12px 14px", width: "100%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: "#000000", letterSpacing: 0.3 }}>{isDirty ? "Save Plan" : "New Plan"}</span>
-          </button>
-        );
-        const closeButtonEl = (
-          <button type="button" aria-busy={!!leaving}
-            onClick={() => leaveTo("/planner/home", "Opening dashboard…")}
-            style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.04)", padding: "12px 14px", width: "100%", cursor: "pointer", color: "rgba(255,255,255,0.85)", fontSize: 15, fontWeight: 700, letterSpacing: 0.3 }}
-          >
-            Close
-          </button>
-        );
-
-        // Partial (bobtail / trailer-only): no full combo -> no recap, no
-        // utilization, no LOAD. Only the header icon cluster (EQ / pin /
-        // plan-letter) still portals in, so the driver can pick the missing
-        // unit. The partial prompt itself renders up in the compartments
-        // block (partialPanelEl), not here.
-        if (isPartialEquipment) {
-          return <>{active && headerIconsSlot && createPortal(headerIconsEl, headerIconsSlot)}</>;
-        }
-        return (
-          <>
-            <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto", marginTop: 14, display: "flex", flexDirection: "column", gap: 12 } : { marginTop: 18, display: "flex", flexDirection: "column", gap: 16 }}>
-              {recapCard}
-              {planPickerEl}
-              {planButtonEl}
-              {closeButtonEl}
-            </div>
-            {active && headerIconsSlot && createPortal(headerIconsEl, headerIconsSlot)}
-          </>
-        );
-      })()}
+      {active && headerIconsSlot && createPortal(
+        equipmentDetails.trailerName ? (
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.3, color: "rgba(255,255,255,0.5)" }}>
+            {equipmentDetails.trailerName}
+          </span>
+        ) : null,
+        headerIconsSlot,
+      )}
+      {!isPartialEquipment && (
+        <PlanActionsSection
+          isLandscape={isLandscape}
+          maxWidth={LANDSCAPE_MAX_W}
+          plannedGallons={effectivePlanRows.length ? effectivePlannedGallonsTotal : null}
+          grossLbs={effectivePlanRows.length ? livePreviewGrossLbs : null}
+          targetWeight={targetWeight}
+          showRefApiWarning={!active && planUsesReferenceApi && planRows.length > 0}
+          planLetter={String.fromCharCode(64 + activeSlotLetter)}
+          planPickerDisabled={!planSlots.presetsReady}
+          onOpenPlans={() => setPresetQuickPickOpen(true)}
+          isDirty={isDirty}
+          onNewOrSave={() => {
+            if (isDirty) {
+              const to = planSlotWithLayout(compPlan, activeSlotLetter) ?? activeSlotLetter;
+              planSlots.saveToSlot(to);
+              setActiveSlotLetter(to);
+              setBaselineOverrides(currentOverrides);
+            } else setWizardNew(true);
+          }}
+          closing={!!leaving}
+          onClose={() => leaveTo("/planner/home", "Opening dashboard…")}
+        />
+      )}
 
       {onboardingActive ? (
         <SoloOnboarding
