@@ -69,7 +69,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
       <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-6">
         <div
           className="flex w-full max-w-2xl flex-col rounded-[2px] border border-white/15 bg-[#0b0b0b] text-white shadow-2xl"
-          style={{ height: "min(92vh, 900px)" }}
+          style={{ height: "min(92dvh, 900px)" }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
