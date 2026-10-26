@@ -43,6 +43,8 @@ import { usePlanSlots } from "./hooks/usePlanSlots";
 import { useLoadWorkflow } from "./hooks/useLoadWorkflow";
 import { useTripLoading } from "./hooks/useTripLoading";
 import { usePlanMath } from "./hooks/usePlanMath";
+import { useLoadPrep } from "./hooks/useLoadPrep";
+import { usePlanTemperature } from "./hooks/usePlanTemperature";
 import { usePlanSlotsView } from "./hooks/usePlanSlotsView";
 import { PlannerProvider, type PlannerCtx } from "./PlannerContext";
 import PlanReviewFlow from "./flows/PlanReviewFlow";
@@ -64,7 +66,6 @@ import { usePlannerEquipment } from "./hooks/usePlannerEquipment";
 import { useTerminalProducts } from "./hooks/useTerminalProducts";
 import { useLoadReportLauncher } from "./hooks/useLoadReportLauncher";
 import { useTerminalSwitchDuringLoad } from "./hooks/useTerminalSwitchDuringLoad";
-import { useFuelTempPrediction } from "./hooks/useFuelTempPrediction";
 
 // ── Sections ───────────────────────────────────────────────────────────────────
 import PlannerControls from "./sections/PlannerControls";
@@ -82,12 +83,7 @@ import CompartmentDetailModal from "./components/CompartmentDetailModal";
 import { styles } from "./ui/styles";
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
-import { backCorrectApiTo60 } from "./utils/planMath";
-import { buildTuneRows } from "./utils/tuneRows";
-import { isStaleReading, pickSafest, pickSafe, pickIgnore } from "./utils/staleApi";
 import { productColorFor } from "./utils/productColor";
-import { recordLocationForSwitchTracking } from "./utils/locationSwitchProgress";
-import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import type { TripPickupRow, TripRow } from "@/lib/trips/types";
@@ -497,87 +493,9 @@ export default function PlannerHost() {
     setProductInputs((prev) => ({ ...prev, [productId]: { ...(prev[productId] ?? {}), tempF: tempFVal } }));
   }, []);
 
-  // Fuel temp prediction — drives temp button border color and pre-fills ProductTempModal.
-  //
-  // City/state only -- the server resolves its own fresh ambient + city-level
-  // coordinates (see /api/fuel-temp), never trusting a client-supplied value.
-  // terminalId is passed through only for the per-terminal bias lookup. The
-  // modal below shows this hook's own resolved ambientNowF, not a separately
-  // polled value, so the displayed label and the predicted temp can never
-  // drift apart (see fuelTempPredictor.ts / route.ts for the fuller history
-  // of why this matters -- an earlier version of this app tracked ambient
-  // per-terminal and once had 3 terminals silently resolving to (0,0)).
   const {
-    predictedFuelTempF, confidence: fuelTempConfidence, loading: fuelTempLoading,
-    ambientNowF: fuelTempAmbientF,
-    unbiasedPredictionF: fuelTempUnbiasedF,
-    refresh: refreshFuelTemp,
-  } = useFuelTempPrediction({
-    city: location.selectedCity || null,
-    state: location.selectedState || null,
-    terminalId: location.selectedTerminalId || null,
-  });
-
-  // Auto-apply prediction to the slider when it first arrives.
-  // userAdjustedTempRef = true means the driver has manually moved the slider.
-  // Resets whenever city/state changes so a new terminal gets a fresh auto-apply.
-  const predAppliedForRef = useRef<string>("");
-  const userAdjustedTempRef = useRef<boolean>(false);
-
-  // Mark as user-adjusted whenever tempF changes AFTER a prediction has been
-  // applied. Real bug fixed here: this used to check only whether
-  // predAppliedForRef was non-empty -- but the auto-apply effect below sets
-  // that ref in the SAME tick it calls setTempF, so this effect's own next
-  // run (triggered by that very auto-apply) always saw a non-empty ref and
-  // incorrectly marked the auto-apply's own change as a manual edit. That
-  // permanently blocked ANY future re-application of a fresh prediction for
-  // that city/state -- confirmed live, this is why the modal could show a
-  // newer number than the button/load payload ever received. Now compares
-  // the new value against the prediction itself: only a change that doesn't
-  // match the last-known prediction counts as a genuine manual edit.
-  const prevTempFRef = useRef<number>(tempF);
-  useEffect(() => {
-    if (Math.abs(tempF - prevTempFRef.current) > 0.1) {
-      const matchesPrediction = predictedFuelTempF != null && Math.abs(tempF - predictedFuelTempF) < 0.1;
-      if (predAppliedForRef.current !== "" && !matchesPrediction) {
-        userAdjustedTempRef.current = true;
-      }
-    }
-    prevTempFRef.current = tempF;
-  }, [tempF, predictedFuelTempF]);
-
-  // Reset on city/state change
-  useEffect(() => {
-    predAppliedForRef.current = "";
-    userAdjustedTempRef.current = false;
-    prevTempFRef.current = tempF;
-  }, [location.selectedCity, location.selectedState]);
-
-  // Setup Guide checklist's "switch to a terminal in a different city"
-  // sub-task -- see utils/locationSwitchProgress.ts's own header comment
-  // for why this is a write-once flag, not derived fresh from live state
-  // the way the rest of the checklist is.
-  useEffect(() => {
-    recordLocationForSwitchTracking(effectiveUserId, location.selectedState, location.selectedCity);
-  }, [effectiveUserId, location.selectedState, location.selectedCity]);
-
-  // Apply prediction to slider when it arrives -- skip if the driver has
-  // genuinely adjusted it since. Previously this stopped re-applying the
-  // instant predAppliedForRef matched the current city/state key, even if
-  // a LATER fetch (e.g. the periodic refresh in useFuelTempPrediction.ts)
-  // returned a materially different number -- meaning a driver who left
-  // the app open all day could keep seeing a temp from hours earlier even
-  // though the modal's own banner (which reads predictedFuelTempF
-  // directly, bypassing this effect) had already moved on. Now re-checks
-  // the actual value each time, so any later fetch with a real delta still
-  // lands on the button/load payload, not just the modal.
-  useEffect(() => {
-    if (predictedFuelTempF == null) return;
-    if (userAdjustedTempRef.current) return;
-    if (Math.abs(tempF - predictedFuelTempF) < 0.1) return;
-    setTempF(predictedFuelTempF);
-    predAppliedForRef.current = `${location.selectedCity}|${location.selectedState}`;
-  }, [predictedFuelTempF, location.selectedCity, location.selectedState, tempF]);
+    predictedFuelTempF, fuelTempConfidence, fuelTempLoading, fuelTempAmbientF, fuelTempUnbiasedF, refreshFuelTemp, userAdjustedTempRef,
+  } = usePlanTemperature({ location, effectiveUserId, tempF, setTempF });
 
   // Initialize compPlan entries when compartments change (adds a blank
   // entry for a real compartment that doesn't have one yet, drops any
@@ -1085,165 +1003,7 @@ const lastProductInfoById = useMemo(() => {
     supplierPicks, resolvedSupplierPicksRef, plannedProductIds, productCodeById, productNameById, productHexCodeById,
   });
 
-  // Confidence -> temp color (same palette as the temp prediction, so the Tune
-  // panel's temp keeps the confidence color the driver already knows).
-  const tuneTempColor = useMemo(() => {
-    const c = fuelTempConfidence;
-    if (c === "high") return "#4ade80";
-    if (c === "medium") return "#fbbf24";
-    if (c === "low") return "#f87171";
-    return "#ffffff";
-  }, [fuelTempConfidence]);
-
-  // Per-product rows for Plan Review's Tune panel: code · temp · API · lbs/gal
-  // · date. Minimal by design. The density (lbsPerGal) already reflects any
-  // tune (lbsPerGalForProductId reads tunedApiTempByProduct), so the panel and
-  // the planned gallons can never disagree.
-  const tuneRows = useMemo(() => buildTuneRows({
-    productIds: plannedProductIds,
-    tuned: tunedApiTempByProduct,
-    productTempF,
-    tempF,
-    lastApiByProduct: Object.fromEntries(terminalProducts.map((p) => [p.product_id, p.last_api])),
-    lastInfoById: lastProductInfoById,
-    lbsPerGal: lbsPerGalForProductId,
-    basis: apiBasisForProduct,
-    codeById: productCodeById,
-    nameById: productNameById,
-    hexById: productHexCodeById,
-  }), [plannedProductIds, tunedApiTempByProduct, terminalProducts, lastProductInfoById, productTempF, tempF, lbsPerGalForProductId, apiBasisForProduct, productCodeById, productNameById, productHexCodeById]);
-
-  // Apply a Tune-panel edit: drives the planning density (tunedApiTempByProduct
-  // + productTempF) AND the submission inputs (productInputs) so the logged
-  // weight matches what the driver tuned. Gallons recompute live off the
-  // density change.
-  const onTuneProduct = useCallback((productId: string, api: number, tempFVal: number) => {
-    setTunedApiTempByProduct((prev) => ({ ...prev, [productId]: { api, tempF: tempFVal } }));
-    setSingleProductTempF(productId, tempFVal);
-    setProductApi(productId, String(api));
-    setProductTemp(productId, tempFVal);
-  }, [setSingleProductTempF, setProductApi, setProductTemp]);
-
-  // ── Stale-API decision helpers ────────────────────────────────────────────
-  // (Placed here, after lastProductInfoById + productHexCodeById, which they
-  // read; requestBegin + the begin/clear effects live up near the other load
-  // handlers since they don't depend on these.)
-  // Sourced from lib/config/plannerSafety.ts so it can move to a super-admin
-  // dashboard control later without hunting for a hardcoded 7 (see #2).
-  const STALE_API_DAYS = DEFAULT_STALE_API_DAYS;
-  const computeStalePlannedProducts = useCallback((): StaleProduct[] => {
-    const now = Date.now();
-    return Array.from(plannedProductIds)
-      .filter((pid) => isStaleReading(lastProductInfoById[pid], STALE_API_DAYS, now))
-      .map((pid) => ({
-        productId: pid,
-        name: productNameById.get(pid) ?? pid,
-        dotColor: (productHexCodeById[pid] && productHexCodeById[pid].trim()) || "rgba(255,255,255,0.5)",
-      }));
-  }, [plannedProductIds, lastProductInfoById, productNameById, productHexCodeById]);
-
-  // What Log the Load starts each product's API box at: whatever the driver
-  // entered/tuned, else the same number the plan stands on. Blank on a first
-  // load at a terminal (no history) so the first reading saved is a real BOL
-  // number -- prefilling product min there let a tap-through record product
-  // min as if the terminal had measured it (2026-09-28/29).
-  const productInputsForModal = useMemo(() => {
-    const out: Record<string, { api?: string; tempF?: number }> = { ...productInputs };
-    for (const pid of plannedProductIds) {
-      const cur = out[pid];
-      if (cur?.api) continue;
-      const b = apiBasisForProduct(pid);
-      const api = b && b.hasHistory ? String(Math.round(b.displayApi * 100) / 100) : "";
-      out[pid] = { ...(cur ?? {}), api };
-    }
-    return out;
-  }, [productInputs, plannedProductIds, apiBasisForProduct]);
-
-  // Build the per-product API_60 override for a stale-API choice. `pick`
-  // returns the chosen API for one product, or null to leave it on its
-  // normal density (fresh products are never in the stale list anyway).
-  const buildStaleOverride = useCallback((pick: (p: ProductRow) => number | null): Record<string, number> => {
-    const map: Record<string, number> = {};
-    for (const sp of staleApiPrompt?.products ?? []) {
-      const prod = terminalProducts.find((p) => p.product_id === sp.productId);
-      if (!prod) continue;
-      const v = pick(prod);
-      if (v != null && Number.isFinite(v)) map[sp.productId] = Number(v);
-    }
-    return map;
-  }, [staleApiPrompt, terminalProducts]);
-
-  const handleStaleSafest = useCallback(() => {
-    const map = buildStaleOverride(pickSafest);
-    setStaleApiPrompt(null);
-    requestBegin(map);
-  }, [buildStaleOverride, requestBegin]);
-
-  const handleStaleSafe = useCallback(() => {
-    const map = buildStaleOverride(pickSafe);
-    setStaleApiPrompt(null);
-    requestBegin(map);
-  }, [buildStaleOverride, requestBegin]);
-
-  const handleStaleIgnore = useCallback(() => {
-    const map = buildStaleOverride((p) => pickIgnore(p, backCorrectApiTo60));
-    setStaleApiPrompt(null);
-    requestBegin(map);
-  }, [buildStaleOverride, requestBegin]);
-
-  // ProductTempModal's "Confirm & Continue" for the LOAD flow (step 2, after
-  // the driver confirms/adjusts temp). Closes the temp modal, then runs the
-  // stale-API check: if anything's stale, open the Good/Better/Best overlay;
-  // otherwise begin directly. requestBegin's effect captures
-  // preLoadCardedOnRef and starts begin_load. (The temp modal's own header
-  // Close is the bail-out -- nothing has begun yet, nothing to undo.)
-  const handleConfirmTempAndBeginLoad = useCallback(() => {
-    setTempDialOpen(false);
-    const stale = computeStalePlannedProducts();
-    if (stale.length > 0) {
-      setStaleApiPrompt({ products: stale });
-    } else {
-      requestBegin({});
-    }
-  }, [computeStalePlannedProducts, requestBegin]);
-
-  // Per-product rows for the Temp modal's product list (dot + name + own
-  // temp, tap to adjust just that one) -- same shape as LoadingModal's own
-  // planned-compartments/product-groups rows, for visual continuity.
-  const tempModalProductGroups = useMemo(() => {
-    return Array.from(plannedProductIds)
-      .map((pid) => ({
-        productId: pid,
-        name: productNameById.get(pid) ?? pid,
-        hex: (productHexCodeById[pid] && productHexCodeById[pid].trim()) || "rgba(255,255,255,0.5)",
-        tempF: productTempF[pid] ?? tempF,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [plannedProductIds, productNameById, productHexCodeById, productTempF, tempF]);
-
-
-  // ── Derived load state ─────────────────────────────────────────────────────
-  // unavailableComps is deliberately NOT folded into loadDisabled -- per
-  // spec, tapping LOAD while it's non-empty should produce an explicit
-  // "Cannot Load" message (see loadBlockedMsg below), not just a silently
-  // inert button, so a driver who ignores the compartment-bar warning still
-  // gets told exactly why.
-  const loadDisabled =
-    loadWorkflow.beginLoadBusy ||
-    !equipment.selectedComboId ||
-    !location.selectedTerminalId ||
-    !location.selectedState ||
-    !location.selectedCity ||
-    !location.selectedCityId ||
-    planRows.length === 0;
-
-  // "RELOAD" used to mean "the plan I'm about to submit is the same one
-  // already on file as the last load," tracked via recapValid -- removed
-  // along with that mechanism (see the recap card's own comment for why:
-  // recapValid didn't actually verify the live plan matched the last real
-  // load, it just trivially matched itself). Always "LOAD" now.
-  // On a trip, the tap is the moment loading begins (it becomes the
-  // pickup's begin time), so the button says so.
+  const { handleConfirmTempAndBeginLoad, handleStaleIgnore, handleStaleSafe, handleStaleSafest, loadDisabled, onTuneProduct, productInputsForModal, tempModalProductGroups, tuneRows, tuneTempColor } = useLoadPrep({ apiBasisForProduct, equipment, fuelTempConfidence, lastProductInfoById, lbsPerGalForProductId, loadWorkflow, location, planRows, plannedProductIds, productCodeById, productHexCodeById, productInputs, productNameById, productTempF, requestBegin, setProductApi, setProductTemp, setSingleProductTempF, setStaleApiPrompt, setTempDialOpen, setTunedApiTempByProduct, staleApiPrompt, tempF, terminalProducts, tunedApiTempByProduct });
 
   // Mid-trip equipment change, shared with the Driver Dashboard: warning
   // before the picker, and the truck-change record when a loaded trailer is
