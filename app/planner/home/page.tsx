@@ -24,6 +24,8 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { DutyStopCard } from "./DutyStopCard";
+import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stopPrompt";
 import {
   DELAY_EVENT, delayEventPayload, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
   dropDelayMinutes, type RunningDelay,
@@ -1176,6 +1178,35 @@ export default function HomePage() {
     try { onBigButton(); } finally { arriveAtRef.current = null; }
   };
 
+  // Duty-log stops: the ELD's own time for "stopped driving", asked about once we can see it.
+  const [handledStops, setHandledStops] = useState<Set<string>>(new Set());
+  useEffect(() => { if (userId) setHandledStops(readHandledStops(userId)); }, [userId]);
+  const dutyStop = useMemo(() => {
+    if (!openTrip || !snap || !arrivalTarget || (step.kind !== "arrive_pickup" && step.kind !== "arrive_delivery")) return null;
+    const stamps = [openTrip.started_at, ...snap.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...snap.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
+      .filter(Boolean).map((t) => Date.parse(t as string));
+    return pendingStop(myHos?.stops, { afterMs: Math.max(0, ...stamps), handled: handledStops });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops]);
+  const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
+  const logDutyDelay = (code: string, note: string | null) => {
+    if (!store || !userId || !openTrip || !dutyStop || !delayLeg) return;
+    const d: RunningDelay = {
+      tripId: openTrip.trip_id, leg: delayLeg, code, note, startedAt: dutyStop.at,
+      pickupId: "pickup" in step ? step.pickup.pickup_id : null, deliveryId: "delivery" in step ? step.delivery.delivery_id : null,
+    };
+    const end = dutyStop.resumedAt ?? new Date().toISOString();
+    store.put("trip_events", { event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: end, actor_id: userId, pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, end) });
+    answerStop(dutyStop.at);
+    void syncNow();
+  };
+  const confirmDutyArrival = () => {
+    if (!dutyStop) return;
+    arriveAtRef.current = new Date(dutyStop.at);
+    answerStop(dutyStop.at);
+    try { onBigButton(); } finally { arriveAtRef.current = null; }
+  };
+
   const onBigButton = () => {
     setNotice(null);
     if (!store || !userId) return;
@@ -1853,6 +1884,11 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+      )}
+
+      {dutyStop && !arrival.suggest && arrivalTarget && delayLeg && (
+        <DutyStopCard stop={dutyStop} targetName={arrivalTarget.name} leg={delayLeg}
+          onArrived={confirmDutyArrival} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>

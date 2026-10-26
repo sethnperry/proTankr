@@ -4,6 +4,7 @@
 // call the server Authenticate hands back. Sessions are cached briefly.
 // `fetchImpl` is injectable so this is tested without a network.
 
+import { drivingStops } from "./dutyStops.ts";
 import { breakLeftMin, cycleRecap, nonDrivingSinceMs, workdayLeftMin } from "./cycleRecap.ts";
 import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs, isDutyChange } from "./dutyLogs.ts";
@@ -504,6 +505,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         status: duty.status, statusSince: duty.since, offSince: duty.offSince,
         breakLeftMin: breakLeftMin(logs ?? [], Date.now()) ?? durationMinutes(a.rest),
         nonDrivingSince: (() => { const t = nonDrivingSinceMs(logs ?? [], Date.now()); return t == null ? null : new Date(t).toISOString(); })(),
+        stops: drivingStops(logs ?? [], Date.now()).slice(-8),
         recap: tz ? cycleRecap(logs ?? [], Date.now(), tz) : null,
         debug: (() => {
           const d: Record<string, string> = {};

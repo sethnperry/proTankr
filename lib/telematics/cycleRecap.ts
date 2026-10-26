@@ -16,7 +16,7 @@ export type CycleRecap = { days: RecapDay[]; usedMin: number; availableTomorrowM
 
 type Seg = { code: DutyCode; from: number; to: number };
 
-function segments(logs: any[], nowMs: number): Seg[] {
+export function segments(logs: any[], nowMs: number): Seg[] {
   const rows = (logs ?? [])
     .filter(isDutyChange)
     .map((l) => ({ code: dutyCodeOf(l.status)!, t: Date.parse(l.dateTime) }))
