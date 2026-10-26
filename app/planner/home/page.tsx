@@ -875,6 +875,13 @@ export default function HomePage() {
     if (hop) {
       if (hop.pickup.load_id) { void cancelPlannedLoad(hop.pickup.load_id).catch(() => {}); clearActivePlannedLoad(userId); }
       closePickupNoLoad(store, { userId, pickup: hop.pickup, reason: hop.reason, note: null, arrivedAt: null, leftAt: hop.stop.droveFrom ?? hop.stop.at, ...clock() });
+      // Warn other drivers headed to the rack just left. Best effort.
+      if (isTerminalIssueCode(hop.reason) && hop.pickup.terminal_id && companyId) {
+        void submitOutageReport({
+          terminalId: hop.pickup.terminal_id, selectedRackId: hop.pickup.rack_id, productIds: hop.productIds,
+          reportType: hop.reason as OutageReportType, companyId, userId, truckLabel: equipment.currentTruckName ?? "",
+        }).then(({ error: e }) => { if (e) console.warn("[trips] hop report failed (non-fatal):", e); });
+      }
     }
     const newPickupId = addPickup(store, {
       userId, tripId: openTrip.trip_id,
@@ -1197,7 +1204,7 @@ export default function HomePage() {
     return pendingStop(myHos?.stops, { afterMs: Math.max(0, ...stamps), handled: handledStops });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id]);
-  const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string } | null>(null);
+  const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[] } | null>(null);
   const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
   const logDutyDelay = (code: string, note: string | null) => {
     if (!store || !userId || !openTrip || !dutyStop || !delayLeg) return;
@@ -1211,10 +1218,10 @@ export default function HomePage() {
     void syncNow();
   };
   // Rack hopping: the rack is closed with the reason, the next one is picked, and it starts at the stop's time.
-  const hopToAnotherRack = (reason: string) => {
+  const hopToAnotherRack = (reason: string, productIds: string[]) => {
     if (!dutyStop || !hopPickup) return;
     const st = (myHos?.stops ?? []).find((x) => x.at === dutyStop.at);
-    hopRef.current = { stop: { at: dutyStop.at, droveFrom: st?.droveFrom }, pickup: hopPickup, reason };
+    hopRef.current = { stop: { at: dutyStop.at, droveFrom: st?.droveFrom }, pickup: hopPickup, reason, productIds };
     answerStop(dutyStop.at);
     setNextRackPending(true);
     if (location.selectedCity) shell.setTermOpen(true); else shell.setLocOpen(true);
@@ -1908,7 +1915,7 @@ export default function HomePage() {
       {dutyStop && !arrival.suggest && (arrivalTarget || hopPickup) && delayLeg && (
         <DutyStopCard stop={dutyStop} targetName={arrivalTarget?.name ?? "the stop"} leg={delayLeg}
           hop={hopPickup ? { rackName: hopPickup.name ?? "the rack" } : null}
-          onArrived={confirmDutyArrival} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
+          onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>
