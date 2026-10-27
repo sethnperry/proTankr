@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ connected: true, hos });
     } catch (e) {
       console.warn("[telematics] self hos failed:", (e as Error).message);
-      return NextResponse.json({ connected: false });
+      // Not "no telematics": Geotab is busy or hiccupped. The card keeps its last reading and asks again.
+      return NextResponse.json({ connected: true, hos: null, failed: true });
     }
   }
   if (!r.superAdmin && !(r.role && STAFF.has(r.role))) return NextResponse.json({ error: "Staff only." }, { status: 403 });

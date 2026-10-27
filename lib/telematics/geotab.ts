@@ -88,10 +88,20 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     }
   };
 
+  // Geotab answers only ~10 calls a minute. An odometer that isn't there costs up to four calls, so a
+  // result (found or not) is remembered for a while instead of being searched for on every reading.
+  const odoCache = new Map<string, { at: number; v: number | null }>();
   const odometer = async (id: string): Promise<number | null> => {
+    const hit = odoCache.get(id);
+    if (hit && Date.now() - hit.at < (hit.v == null ? 20 : 5) * 60_000) return hit.v;
+    const v = await odometerLookup(id);
+    odoCache.set(id, { at: Date.now(), v });
+    return v;
+  };
+  const odometerLookup = async (id: string): Promise<number | null> => {
     // The adjusted odometer is what MyGeotab shows; fall back to the engine's raw value. The odometer is only
-    // logged now and then, so look back further when the last day has nothing.
-    for (const days of [1, 7, 30]) {
+    // logged now and then, so look back a week when the last day has nothing.
+    for (const days of [1, 7]) {
       const from = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
       for (const diag of ["DiagnosticOdometerAdjustmentId", "DiagnosticOdometerId"]) {
         const rows: any[] = await call("Get", {
