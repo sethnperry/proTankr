@@ -3,6 +3,7 @@
 //
 // The main Equipment dialog: report section, action row, Select Equipment button.
 
+import { useEffect, useRef } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { StatusBlock } from "./StatusBlock";
 import { COLOR_TARE, COLOR_SERVICE, COLOR_WASH, saveBtnStyle, S } from "./styles";
@@ -12,11 +13,13 @@ export function MainDialog({ m }: { m: SoloModel }) {
   const {
     error,
     handleClose,
+    loading,
     open,
     openEdit,
     openStatus,
     selectedCombo,
     selectedTrailerId,
+    selectedTruckId,
     serviceLines,
     setPickerOpen,
     setScaleHistoryOpen,
@@ -28,6 +31,15 @@ export function MainDialog({ m }: { m: SoloModel }) {
     trailerServiceLine,
     washLines,
   } = m;
+  // With nothing selected there is nothing to look at here: go straight to the picker, once per opening.
+  const autoPicked = useRef(false);
+  const hasUnit = !!selectedCombo || !!selectedTrailerId || !!selectedTruckId;
+  useEffect(() => {
+    if (!open) { autoPicked.current = false; return; }
+    if (loading) return;
+    if (!hasUnit && !autoPicked.current) { autoPicked.current = true; setPickerOpen(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, loading]);
   return (
     <>
       <FullscreenModal open={open} onClose={handleClose} title="Equipment" footer={null}>
@@ -55,12 +67,17 @@ export function MainDialog({ m }: { m: SoloModel }) {
 
           {/* ── Status report -- replaces the old grid + per-card away
               badge/caption. See the statusBlockEl computation above. ── */}
-          <StatusBlock m={m} />
+          {!hasUnit && (
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, textAlign: "center", margin: "8px 8px 18px" }}>
+              Pick the truck and trailer you're running today.
+            </div>
+          )}
+          {hasUnit && <StatusBlock m={m} />}
 
-          <div style={S.divider} />
+          {hasUnit && <div style={S.divider} />}
 
           {/* ── Report section (non-scrolling) ── */}
-          <div style={{ flexShrink: 0 }}>
+          {hasUnit ? (<div style={{ flexShrink: 0 }}>
             {/* Tare + Target merged onto one row per explicit follow-up
                 ("no need to say weight or gross weight just tare and
                 target. the 'lbs' speaks for itself") -- tap anywhere on
@@ -145,7 +162,11 @@ export function MainDialog({ m }: { m: SoloModel }) {
             <button type="button" onClick={handleClose} style={{ ...saveBtnStyle, marginTop: 10 }}>
               Done
             </button>
-          </div>
+          </div>) : (
+            <button type="button" onClick={handleClose} style={{ ...saveBtnStyle, marginTop: 10 }}>
+              Not now
+            </button>
+          )}
         </div>
       </FullscreenModal>
     </>

@@ -125,6 +125,11 @@ export function PickerDialog({ m }: { m: SoloModel }) {
               equipment.
             </div>
           )}
+          {!selectedTruckId && !selectedTrailerId && !coupleFrom && !awaitingTruck && !loading && (
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 12 }}>
+              Tap your truck, then Couple, then tap your trailer.
+            </div>
+          )}
           <EquipmentBoard
             rows={boardRows}
             claimedByCombo={claimedByCombo}

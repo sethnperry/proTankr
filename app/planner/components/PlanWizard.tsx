@@ -56,7 +56,10 @@ export default function PlanWizard({
   );
   const [step, setStep] = useState(0);
   const [plan, setPlan] = useState<Record<number, CompPlanInput>>({});
+  // The everyday fuels first, so a new driver isn't scrolling past additives and aviation gas.
   const [pinned, setPinned] = useState<string[]>([]);
+  const commonIds = useMemo(() => ["D2", "87", "89", "93", "DYED"]
+    .map((code) => products.find((p) => String(p.button_code ?? "").toUpperCase() === code)?.product_id).filter(Boolean) as string[], [products]);
   const [capText, setCapText] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [fromSummary, setFromSummary] = useState(false);
@@ -119,7 +122,7 @@ export default function PlanWizard({
         hideCloseButton
         searchable
         autoFocusSearch
-        pinnedProductIds={pinned}
+        pinnedProductIds={[...pinned, ...commonIds.filter((x) => !pinned.includes(x))]}
         title={`Plan Builder · ${step + 1} of ${total}`}
         footer={backBtn}
         onPicked={(id) => {
@@ -130,6 +133,11 @@ export default function PlanWizard({
         }}
         extra={(
           <>
+            {step === 0 && mode === "first" && (
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+                A plan is what goes in each compartment. Build the one you load most; it becomes your default, and you can make up to five.
+              </div>
+            )}
             <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.35 }}>
               Pick a product to load in Comp {c.n} for this plan.
             </div>

@@ -6,6 +6,8 @@
 // time; the checklist is suppressed while onboarding is active.
 
 import SetupGate from "./SetupGate";
+import { FleetWelcome } from "./onboarding/FleetWelcome";
+import { useFleetNameCheck } from "../hooks/useFleetNameCheck";
 import SoloOnboarding from "./SoloOnboarding";
 import { useCalculatorShell } from "../CalculatorShellContext";
 
@@ -20,6 +22,11 @@ type Props = {
 export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboardingComplete }: Props) {
   const { effectiveUserId, companyId, equipment, location, setEquipOpen, setLocOpen, setTermOpen } = useCalculatorShell();
 
+  const needName = useFleetNameCheck();
+  if (needName.pending) return null;
+  if (needName.required && effectiveUserId && companyId) {
+    return <FleetWelcome userId={effectiveUserId} companyId={companyId} companyName={needName.companyName} onDone={needName.done} />;
+  }
   if (onboardingActive) {
     return (
       <SoloOnboarding
@@ -40,8 +47,9 @@ export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboar
   return (
     <SetupGate
       comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}
-      locationSelected={!!(location.selectedState && location.selectedCity) || active}
-      terminalSelected={!!location.selectedTerminalId || active}
+      // Location and terminal are picked where they're needed (Begin Trip's pickup, the terminal sheet), not up front.
+      locationSelected
+      terminalSelected
       equipmentLabel={equipment.equipmentLabel}
       locationLabel={location.locationLabel}
       terminalLabel={terminalLabel}

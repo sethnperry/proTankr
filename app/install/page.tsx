@@ -11,7 +11,7 @@ import InstallGuide from "../components/InstallGuide";
 export default function InstallPage() {
   return (
     <div className="page">
-      <SiteHeader active="get-the-app" />
+      <SiteHeader minimal />
 
       <section className="hero">
         <h1 className="hero-h1">Add ProTankr to your phone</h1>

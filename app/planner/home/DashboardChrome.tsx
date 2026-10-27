@@ -222,6 +222,7 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12, small }: { cell
   // (text sized from the panel via container units) up to the screen height,
   // and labels truncating once they no longer fit.
   const labelSize = equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
+  const labelSpacing = equal ? "0.14em" : "0.06em"; // four labels have to fit a phone-width row
   const valueSize = equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
   return (
     <div style={{
@@ -236,7 +237,7 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12, small }: { cell
           {(() => {
             const label = (
               <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-                <span style={{ fontSize: labelSize, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.label}</span>
+                <span style={{ fontSize: labelSize, fontWeight: 800, letterSpacing: labelSpacing, textTransform: "uppercase", color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.label}</span>
               </div>
             );
             const value = (

@@ -41,7 +41,7 @@ export type ActiveNav =
   | "get-the-app"
   | undefined;
 
-export default function SiteHeader({ active }: { active?: ActiveNav }) {
+export default function SiteHeader({ active, minimal }: { active?: ActiveNav; minimal?: boolean }) {
   // Small screens collapse About/Pricing/Login behind this menu; the
   // primary CTA stays visible beside it rather than being buried. There is
   // only ever ONE "Get the App" element in the DOM -- it used to be two
@@ -57,7 +57,7 @@ export default function SiteHeader({ active }: { active?: ActiveNav }) {
   return (
     <header className="site-header">
       <div className="nav-row">
-        <button
+        {!minimal && <button
           type="button"
           className="nav-menu-btn"
           aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -65,7 +65,7 @@ export default function SiteHeader({ active }: { active?: ActiveNav }) {
           onClick={() => setMenuOpen((v) => !v)}
         >
           <MenuIcon />
-        </button>
+        </button>}
 
         <Link href="/" className="brand">
           <svg className="mark" width="58" height="54" viewBox="-53.56 -35.05 24.29 22.70" aria-hidden="true">
@@ -74,17 +74,18 @@ export default function SiteHeader({ active }: { active?: ActiveNav }) {
           <span className="wordmark">PROTANKR</span>
         </Link>
 
-        <nav className="nav-links">
+        {!minimal && <nav className="nav-links">
           <Link href="/for-drivers" className={active === "for-drivers" ? "is-active" : undefined}>For Drivers</Link>
           <Link href="/for-fleets" className={active === "for-fleets" ? "is-active" : undefined}>For Fleets</Link>
           <Link href="/about" className={active === "about" ? "is-active" : undefined}>Why ProTankr</Link>
           <Link href="/pricing" className={active === "pricing" ? "is-active" : undefined}>Pricing</Link>
           <Link href="/login" className="nav-login">Login</Link>
-        </nav>
+        </nav>}
 
-        <Link href="/get-the-app" className="nav-cta">
+        {!minimal && <Link href="/get-the-app" className="nav-cta">
           Get Early Access <PhoneIcon />
-        </Link>
+        </Link>}
+        {minimal && <Link href="/login" className="nav-cta">Sign in</Link>}
       </div>
 
       {menuOpen && (

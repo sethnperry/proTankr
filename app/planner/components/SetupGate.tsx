@@ -116,20 +116,6 @@ export default function SetupGate(props: SetupGateProps) {
         </button>
       )}
 
-      {/* Step progress dots -- quiet, just enough to signal "3 steps, here's where you are" */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
-        {(["equipment", "location", "terminal"] as SetupGateStep[]).map((s) => (
-          <div
-            key={s}
-            style={{
-              width: s === step ? 18 : 6, height: 6, borderRadius: 2,
-              background: s === step ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.15)",
-              transition: "all 0.25s ease",
-            }}
-          />
-        ))}
-      </div>
-
       <AnimatePresence mode="wait">
         <motion.button
           key={step}

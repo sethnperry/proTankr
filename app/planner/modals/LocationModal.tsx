@@ -77,11 +77,11 @@ export default function LocationModal(props: {
     onCityPicked,
   } = props;
 
-  // Non-favorited cities start collapsed -- unless the currently selected
+  // With no favorites yet there's nothing to show but the full list, so it starts open. Otherwise it starts collapsed -- unless the currently selected
   // city isn't itself a favorite, in which case it'd otherwise be hidden
   // from view with no indication of where it went.
   const [citiesExpanded, setCitiesExpanded] = useState(
-    () => !!selectedCity && !topCities.includes(selectedCity)
+    () => topCities.length === 0 || (!!selectedCity && !topCities.includes(selectedCity))
   );
 
   const cityRow = (c: string, starred: boolean) => {

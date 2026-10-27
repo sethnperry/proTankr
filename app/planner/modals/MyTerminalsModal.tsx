@@ -119,7 +119,8 @@ export default function MyTerminalsModal(props: {
 
   const handleSelect = (tid: string) => {
     if (!myTerminalIds.has(tid)) setMyTerminalIds(prev => new Set([...prev, tid]));
-    if (!accessDateByTerminalId[tid]) setAccessDateForTerminal_(tid, isoToday());
+    // Picking a terminal doesn't mean the driver has access there: access dates come from a real
+    // load, a typed card, or finishing the access steps.
     setSelectedTerminalId(tid);
     setTermOpen(false);
   };
