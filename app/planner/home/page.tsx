@@ -694,7 +694,7 @@ export default function HomePage() {
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
   const [truckSheetWatch, setTruckSheetWatch] = useState(false);
-  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || truckSheetWatch);
+  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || truckSheetWatch, finishOpen ? 60_000 : undefined);
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);

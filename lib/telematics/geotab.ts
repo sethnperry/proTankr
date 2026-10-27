@@ -89,15 +89,19 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
   };
 
   const odometer = async (id: string): Promise<number | null> => {
-    const from = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    // The adjusted odometer is what MyGeotab shows; fall back to the engine's raw value.
-    for (const diag of ["DiagnosticOdometerAdjustmentId", "DiagnosticOdometerId"]) {
-      const rows: any[] = await call("Get", {
-        typeName: "StatusData",
-        search: { deviceSearch: { id }, diagnosticSearch: { id: diag }, fromDate: from },
-      });
-      const last = (rows ?? []).filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
-      if (last) return Math.round(Number(last.data) / METERS_PER_MILE);
+    // The adjusted odometer is what MyGeotab shows; fall back to the engine's raw value. The odometer is only
+    // logged now and then, so look back further when the last day has nothing.
+    for (const days of [1, 7, 30]) {
+      const from = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+      for (const diag of ["DiagnosticOdometerAdjustmentId", "DiagnosticOdometerId"]) {
+        const rows: any[] = await call("Get", {
+          typeName: "StatusData",
+          search: { deviceSearch: { id }, diagnosticSearch: { id: diag }, fromDate: from },
+          resultsLimit: days === 1 ? undefined : 500,
+        });
+        const last = (rows ?? []).filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+        if (last) return Math.round(Number(last.data) / METERS_PER_MILE);
+      }
     }
     return null;
   };
@@ -318,6 +322,16 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         if (!s) out.push("Status record: none. Geotab has no live status for this vehicle id.");
         else out.push(`Status record: found. Latitude ${s.latitude ?? "none"}, longitude ${s.longitude ?? "none"}, reported ${s.dateTime ? String(s.dateTime).slice(0, 16) : "never"}, communicating: ${s.isDeviceCommunicating === undefined ? "unknown" : s.isDeviceCommunicating ? "yes" : "no"}.`);
       } catch (e) { out.push(`Status record: error ${String((e as Error).message).slice(0, 80)}`); }
+      for (const diag of ["DiagnosticOdometerAdjustmentId", "DiagnosticOdometerId"]) {
+        for (const d of [1, 7, 30]) {
+          try {
+            const rows: any[] = (await call("Get", { typeName: "StatusData", search: { deviceSearch: { id: vehicleId }, diagnosticSearch: { id: diag }, fromDate: new Date(now - d * DAY).toISOString() }, resultsLimit: 500 })) ?? [];
+            const last = rows.filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
+            out.push(`Odometer ${diag.replace("Diagnostic", "").replace("Id", "")}, last ${d} d: ${rows.length} rows${last ? `, newest ${String(last.dateTime).slice(0, 16)} = ${Math.round(Number(last.data) / METERS_PER_MILE)} mi` : ""}.`);
+            if (last) break;
+          } catch (e) { out.push(`Odometer ${diag}, ${d} d: error ${String((e as Error).message).slice(0, 80)}`); break; }
+        }
+      }
       for (const [fromD, toD] of [[3, 0], [30, 3], [180, 30]]) {
         try {
           const logs: any[] = (await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id: vehicleId }, fromDate: new Date(now - fromD * DAY).toISOString(), toDate: new Date(now - toD * DAY).toISOString() }, resultsLimit: 5000 })) ?? [];
