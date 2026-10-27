@@ -7,7 +7,7 @@
 // logic. Lifted out of PlannerHost unchanged.
 
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 import { productColorFor } from "../utils/productColor";
@@ -188,6 +188,24 @@ export function usePlanSlotsView(i: Inputs) {
     return false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compPlan, planSlots.slotHas, planSlots.presetsReady, equipment.selectedComboId]);
+  // A saved plan but an empty live plan (no terminal yet, so nothing was autosaved, or a fresh
+  // device): load the first saved plan once, so Begin Loading finds it instead of sending the
+  // driver to the plan page. Never replaces a live plan, never runs mid-load.
+  const seededLiveFor = useRef<string | null>(null);
+  useEffect(() => {
+    const combo = equipment.selectedComboId;
+    if (!combo || seededLiveFor.current === combo) return;
+    if (!planSlots.presetsReady || !planRestoreAttempted || compLoading || compartments.length === 0) return;
+    if (loadWorkflow.loadingOpen || loadWorkflow.activeLoadId || setupSession || onboardingActive) return;
+    seededLiveFor.current = combo;
+    const holds = (plan: any) => Object.values(plan ?? {}).some((v: any) => v && !v.empty && v.productId);
+    if (holds(compPlan)) return;
+    for (let n = 1; n <= 5; n++) {
+      const snap = planSlots.peekSlot(n);
+      if (snap && holds(snap.compPlan)) { handlePresetLoad(n); return; }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipment.selectedComboId, planSlots.presetsReady, planRestoreAttempted, compLoading, compartments.length]);
   const wizardAuto = !!equipment.selectedComboId && !equipment.isBobtail && !equipment.isTrailerOnly
     && !!selectedTrailerId && !compLoading && compartments.length > 0
     && planSlots.presetsReady && planRestoreAttempted
