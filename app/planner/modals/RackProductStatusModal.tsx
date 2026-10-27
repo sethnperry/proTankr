@@ -22,6 +22,8 @@
 // terminal card"). Behavior is otherwise unchanged from the original.
 
 import React, { useEffect, useState } from "react";
+import { isPlausibleApi } from "../utils/apiBasis";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { TerminalRack, RackProductStatusRow, ProductLite } from "./rackProductTypes";
@@ -79,6 +81,7 @@ export default function RackProductStatusModal({
     setTempF(row?.last_temp_f != null ? String(row.last_temp_f) : "");
   }, [productId, open, rackProducts]);
 
+  const { data: catalog } = useProductsCatalog();
   async function save() {
     if (!productId) return;
     setSaving(true);
@@ -86,6 +89,12 @@ export default function RackProductStatusModal({
 
     const apiNum = api.trim() ? Number(api) : null;
     const tempNum = tempF.trim() ? Number(tempF) : null;
+    const refApi = catalog.find((p) => p.product_id === productId)?.api_60;
+    if (apiNum != null && !isPlausibleApi(apiNum, refApi)) {
+      setError(`${apiNum} API doesn't look right for this product${refApi != null ? ` (about ${Math.round(Number(refApi))})` : ""}. Check the reading.`);
+      setSaving(false);
+      return;
+    }
 
     const { error: upsertErr } = await supabase.from("rack_product_status").upsert(
       {

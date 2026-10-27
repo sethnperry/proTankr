@@ -46,7 +46,7 @@ test("product min falls back to api_60 when api_min isn't seeded", () => {
 
 test("the Marathon case: a day-old reading is used as-is, not the terminal min", () => {
   // 60.55 last night, terminal min 59.5 -> plan on 60.55 (orange/red color only).
-  const b = resolveApiBasis({ ...BASE, apiMin: 55, lastApi: 60.55, lastTempF: 60, minApiObserved: 59.5, lastApiUpdatedAt: hoursAgo(20) });
+  const b = resolveApiBasis({ ...BASE, api60Ref: 60, apiMin: 55, lastApi: 60.55, lastTempF: 60, minApiObserved: 59.5, lastApiUpdatedAt: hoursAgo(20) });
   assert.equal(b.displayApi, 60.55);
   assert.equal(b.api60, 60.55);
   assert.equal(b.tier, "medium");
@@ -72,7 +72,7 @@ test("older than 7 days drops to the terminal min, not the stale reading", () =>
 });
 
 test("older than 7 days never goes back to product min when the terminal ran lighter", () => {
-  const b = resolveApiBasis({ ...BASE, apiMin: 55, lastApi: 59.5, lastTempF: 60, minApiObserved: 59.5, lastApiUpdatedAt: hoursAgo(10 * 24) });
+  const b = resolveApiBasis({ ...BASE, api60Ref: 60, apiMin: 55, lastApi: 59.5, lastTempF: 60, minApiObserved: 59.5, lastApiUpdatedAt: hoursAgo(10 * 24) });
   assert.equal(b.displayApi, 59.5);
 });
 
@@ -112,4 +112,15 @@ test("color tiers by age: <=6h green, <=12h white, <=24h orange, older red", () 
   assert.equal(apiTierColor("medium"), "#fb923c");
   assert.equal(apiTierColor("low"), "#f87171");
   assert.equal(apiTierColor("tuned"), "#ffffff");
+});
+
+import { isPlausibleApi } from "./apiBasis.ts";
+test("an API that can't be real for the product is ignored (diesel at 51)", () => {
+  assert.equal(isPlausibleApi(51.2, 35), false);
+  assert.equal(isPlausibleApi(38.9, 35), true);
+  assert.equal(isPlausibleApi(null, 35), false);
+  assert.equal(isPlausibleApi(62, null), true);
+  const b = resolveApiBasis({ alphaPerF: 0.04, api60Ref: 35, apiMin: 33, minApiObserved: 51.2, lastApi: 51.2, lastTempF: 78, lastApiUpdatedAt: "2026-09-07T00:00:00Z", tuned: null, nowMs: Date.parse("2026-10-27T00:00:00Z") });
+  assert.equal(b.displayApi, 33); // falls back to product min, not 51.2
+  assert.equal(b.hasHistory, false);
 });

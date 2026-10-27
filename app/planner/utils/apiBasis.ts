@@ -42,6 +42,15 @@ export type ApiBasis = {
   hasHistory: boolean;
 };
 
+/** A reading that can't be real for this product: diesel at 51 API, gasoline at 20. Test entries and typos land here.
+ *  With the product's reference API known it must be within 15 of it; otherwise just a sane crude-product range. */
+export function isPlausibleApi(api: number | null | undefined, ref?: number | null): boolean {
+  if (api == null || !Number.isFinite(api)) return false;
+  if (api < 5 || api > 90) return false;
+  const r = ref == null ? NaN : Number(ref);
+  return Number.isFinite(r) ? Math.abs(api - r) <= 15 : true;
+}
+
 const HOUR_MS = 3600 * 1000;
 const LAST_READING_MAX_AGE_MS = 7 * 24 * HOUR_MS;
 
@@ -56,9 +65,11 @@ export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
   const alpha = Number(inp.alphaPerF);
 
   const productMin = inp.apiMin != null && Number.isFinite(inp.apiMin) ? Number(inp.apiMin) : Number(inp.api60Ref);
-  const observed = [inp.minApiObserved, inp.lastApi]
-    .filter((v): v is number => v != null && Number.isFinite(v))
-    .map(Number);
+  // A stored reading that can't be real (a test value, a typo) is ignored, as if it were never recorded.
+  const okApi = (v: number | null) => (isPlausibleApi(v, inp.api60Ref) ? Number(v) : null);
+  const minApiObserved = okApi(inp.minApiObserved);
+  const lastApi = okApi(inp.lastApi);
+  const observed = [minApiObserved, lastApi].filter((v): v is number => v != null);
   const hasHistory = observed.length > 0;
   const terminalFloor = hasHistory ? Math.min(...observed) : productMin;
 
@@ -73,7 +84,7 @@ export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
 
   // No usable last reading (never loaded here, or a reading with no time):
   // the terminal floor, which is product min when there's no history at all.
-  if (inp.lastApi == null || !Number.isFinite(inp.lastApi) || !inp.lastApiUpdatedAt) {
+  if (lastApi == null || !inp.lastApiUpdatedAt) {
     return { api60: terminalFloor, displayApi: terminalFloor, tier: "low", hasHistory };
   }
 
@@ -87,8 +98,8 @@ export function resolveApiBasis(inp: ApiBasisInput): ApiBasis {
   if (ageMs <= LAST_READING_MAX_AGE_MS) {
     const observedTemp = inp.lastTempF != null && Number.isFinite(inp.lastTempF) ? Number(inp.lastTempF) : 60;
     return {
-      api60: backCorrectApiTo60(Number(inp.lastApi), observedTemp, alpha),
-      displayApi: Number(inp.lastApi),
+      api60: backCorrectApiTo60(lastApi, observedTemp, alpha),
+      displayApi: lastApi,
       tier,
       hasHistory,
     };

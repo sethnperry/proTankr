@@ -5,6 +5,7 @@
 // payload-utilization measurement, and the rack's last-observed readings. Each is
 // non-fatal: a failure is logged and the load still completes.
 
+import { isPlausibleApi } from "./apiBasis";
 import { supabase } from "@/lib/supabase/client";
 import { resolveEffectiveRackId } from "./rack";
 import type { ProductRow } from "../types";
@@ -178,6 +179,10 @@ export async function writeRackReadings(args: {
       };
 
       for (const u of product_updates) {
+        // Never record a reading that can't be real for this product (typo, test entry): it would become the
+        // terminal's "last" and "heaviest" and skew every plan there afterwards.
+        const refApi = (terminalProducts.find((p) => p.product_id === u.product_id) as any)?.api_60;
+        if (!isPlausibleApi(u.api, refApi)) { console.warn("[readings] skipped an implausible API:", u.api, "for", u.product_id); continue; }
         const newMin = minObservedFor(u.product_id, u.api);
         // Update-then-insert-if-missing instead of a blind upsert: the
         // Terminal tab's rack Product List filters rack_product_status on
