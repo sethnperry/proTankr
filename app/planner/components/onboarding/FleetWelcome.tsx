@@ -30,7 +30,7 @@ export function FleetWelcome({ userId, companyId, companyName, onDone }: {
   };
   if (!mounted) return null;
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "#111111", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div data-onboarding-layer style={{ position: "fixed", inset: 0, zIndex: 40, background: "#111111", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>Welcome</div>
         <div style={{ fontSize: 26, fontWeight: 900, marginTop: 6, lineHeight: 1.2 }}>{companyName ? `You've been added to ${companyName}` : "You've been added to your fleet"}</div>

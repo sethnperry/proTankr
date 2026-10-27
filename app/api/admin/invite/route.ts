@@ -76,8 +76,8 @@ async function sendInviteEmail(to: string, confirmUrl: string, companyName: stri
 // ─── POST /api/admin/invite ───────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { email, companyId, role = "driver", region } = await req.json() as {
-      email: string; companyId: string; role?: string; region?: string;
+    const { email, companyId, role = "driver", region, name } = await req.json() as {
+      email: string; companyId: string; role?: string; region?: string; name?: string;
     };
     if (!email || !companyId) {
       return NextResponse.json({ error: "email and companyId are required." }, { status: 400 });
@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Invalid role "${role}".` }, { status: 400 });
     }
     const regionClean = typeof region === "string" ? region.trim() : "";
+    const nameClean = typeof name === "string" ? name.trim().replace(/\s+/g, " ").slice(0, 80) : "";
 
     const admin = getAdmin();
     if (!await verifyAdmin(req, admin, companyId)) {
@@ -190,6 +191,19 @@ export async function POST(req: NextRequest) {
           { user_id: linkData.user.id, active_company_id: companyId },
           { onConflict: "user_id" }
         );
+      }
+    }
+
+    // ── The driver's name, as the admin typed it (it has to match Geotab for hours and tracking to
+    // link). An existing account that already has a name keeps it. Best-effort.
+    if (nameClean && invitedUserId) {
+      try {
+        const { data: prof } = await admin.from("profiles").select("display_name").eq("user_id", invitedUserId).maybeSingle();
+        if (!(prof as { display_name?: string | null } | null)?.display_name?.trim()) {
+          await admin.from("profiles").upsert({ user_id: invitedUserId, display_name: nameClean }, { onConflict: "user_id" });
+        }
+      } catch (e: any) {
+        console.warn("[invite] name write failed:", e?.message ?? e);
       }
     }
 

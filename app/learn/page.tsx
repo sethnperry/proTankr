@@ -144,6 +144,9 @@ export default function LearnPage() {
             are many of these stacked in one page. */}
         <Accordion title="▶ Guided tours">
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 14, padding: "4px 0 8px" }}>
+            <a href="/planner/home?tour=1" style={{ display: "block", padding: "14px 16px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", color: "#fff", textDecoration: "none", fontWeight: 800, fontSize: 14 }}>
+              Driver Dashboard tour <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>· what each chip and card does ›</span>
+            </a>
             {TUTORIAL_VIDEOS.length === 0 ? (
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, textAlign: "center" as const, padding: "8px 4px" }}>
                 New walkthroughs are on the way — check back soon.

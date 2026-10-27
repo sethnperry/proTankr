@@ -180,9 +180,11 @@ function TerminalCard({
 // ── Add Terminal Card sheet ──────────────────────────────────────────────────
 
 function AddCardSheet({
-  open, onClose, terminalCatalog, myTerminalIdSet, onAdd,
+  open, onClose, terminalCatalog, myTerminalIdSet, onAdd, homeState, homeCity,
 }: {
   open: boolean; onClose: () => void; terminalCatalog: any[]; myTerminalIdSet: Set<string>;
+  /** Where the driver works, so those terminals are listed first. */
+  homeState?: string | null; homeCity?: string | null;
   onAdd: (terminalId: string, fields: { lastVisit: string; cardNumber: string; pin: string; privateNote: string }) => void;
 }) {
   const [step, setStep] = useState<"search" | "details">("search");
@@ -204,8 +206,13 @@ function AddCardSheet({
         const hay = `${c.terminal_name ?? ""} ${c.city ?? ""} ${c.state ?? ""}`.toLowerCase();
         return hay.includes(q);
       })
+      // Their own city, then their own state, then everything else.
+      .sort((a: any, b: any) => {
+        const rank = (c: any) => (homeState && c.state === homeState ? (homeCity && c.city === homeCity ? 0 : 1) : 2);
+        return rank(a) - rank(b);
+      })
       .slice(0, 60);
-  }, [terminalCatalog, myTerminalIdSet, query]);
+  }, [terminalCatalog, myTerminalIdSet, query, homeState, homeCity]);
 
   return (
     <FullscreenModal
@@ -248,7 +255,7 @@ function AddCardSheet({
             {picked?.city}{picked?.state ? `, ${picked.state}` : ""}
           </div>
           <div>
-            <div className="text-xs text-white/40 mb-1 font-medium">Last Visit (optional)</div>
+            <div className="text-xs text-white/40 mb-1 font-medium">Last load here (optional) · your access runs from this date</div>
             <div className="flex gap-2">
               <input type="date" value={lastVisit} onChange={(e) => setLastVisit(e.target.value)} className="flex-1 min-w-0 rounded-[2px] border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white" />
               <button type="button" onClick={() => setLastVisit(new Date().toISOString().slice(0, 10))} className="rounded-[2px] border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/70 hover:bg-white/10 whitespace-nowrap">Today</button>
@@ -481,7 +488,7 @@ export default function CardsPage() {
         <div style={{ textAlign: "center" as const, color: "rgba(255,255,255,0.3)", fontSize: 14, padding: "60px 20px", lineHeight: 1.5 }}>
           {isDispatchContext
             ? <>No terminal cards yet for {driverName || "this driver"}.</>
-            : <>No starred terminals yet.<br />Star a terminal from the Planner to see its card here.</>}
+            : <>No terminal cards yet.<br />Add the cards you already have below. A terminal also shows up here once you load at it or pick it on the dashboard.</>}
         </div>
       ) : (
         <>
@@ -573,6 +580,8 @@ export default function CardsPage() {
         onClose={() => setAddOpen(false)}
         terminalCatalog={terminals.terminalCatalog}
         myTerminalIdSet={activeMyTerminalIdSet}
+        homeState={shell.location.selectedState}
+        homeCity={shell.location.selectedCity}
         onAdd={handleAddCard}
       />
 

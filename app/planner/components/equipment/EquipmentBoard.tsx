@@ -108,7 +108,10 @@ export function EquipmentBoard(p: Props) {
                   <div style={tile}>
                     <Name>{c.truck.name}</Name>
                     {tl.tone !== "none" && (
-                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : "rgba(255,255,255,0.6)" }}>{tl.text}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : mine && tl.tone === "use" ? "#fff" : "rgba(255,255,255,0.6)" }}>
+                        {/* The driver's own equipment reads "Mine"; everyone else's keeps In Use plus initials. */}
+                        {mine && tl.tone === "use" ? "Mine" : tl.text}
+                      </div>
                     )}
                     {p.renderExtra?.(c.truck)}
                   </div>

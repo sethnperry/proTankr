@@ -93,6 +93,7 @@ export default function SetupGate(props: SetupGateProps) {
 
   return createPortal(
     <div
+      data-onboarding-layer
       style={{
         position: "fixed", inset: 0, zIndex: 40,
         background: "#111111",

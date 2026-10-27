@@ -15,8 +15,8 @@ export function StatusBlock({ m }: { m: SoloModel }) {
       <div style={S.statusHeader}>{statusHeaderText}</div>
       {claimantLabel && (
         <div style={S.statusLine}>
-          <span style={S.statusLabel}>In Use by</span>
-          <span style={S.statusValue}>{claimantLabel}</span>
+          <span style={S.statusLabel}>{claimantLabel === "You" ? "Status" : "In Use by"}</span>
+          <span style={S.statusValue}>{claimantLabel === "You" ? "Mine" : claimantLabel}</span>
         </div>
       )}
       {(currentRegion || currentLocalArea) && (

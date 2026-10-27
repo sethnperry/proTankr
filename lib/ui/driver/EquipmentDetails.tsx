@@ -2,6 +2,7 @@
 
 import TruckFuelTankField from "./TruckFuelTankField";
 import React, { useEffect, useMemo, useState } from "react";
+import { InviteNameField } from "./InviteNameField";
 import { supabase } from "@/lib/supabase/client";
 import { T, css, fmtDate, expiryColor, daysUntil } from "@/lib/ui/driver/tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "@/lib/ui/driver/primitives";
@@ -672,19 +673,21 @@ function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
 // ─────────────────────────────────────────────────────────────
 
 function InviteModal({ companyId, onClose, onDone }: { companyId: string; onClose: () => void; onDone: () => void }) {
-  const [email, setEmail] = useState(""); const [role, setRole] = useState("driver");
+  const [email, setEmail] = useState(""); const [role, setRole] = useState("driver"); const [name, setName] = useState("");
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   async function send() {
-    if (!email.trim()) return; setLoading(true); setStatus(null);
+    if (!email.trim()) return;
+    if ((role === "driver" || role === "lead") && name.trim().length < 2) { setStatus({ type: "error", msg: "Enter the driver's first and last name, spelled the way it is in Geotab." }); return; }
+    setLoading(true); setStatus(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/admin/invite", { method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token ?? ""}` },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role }) });
+        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role, name: name.trim() || undefined }) });
       let json: any = {}; try { json = await res.json(); } catch {}
       if (!res.ok) throw new Error(json?.error ?? `Invite failed (${res.status}).`);
-      setStatus({ type: "success", msg: `Invite sent to ${email.trim()}.` }); setEmail("");
+      setStatus({ type: "success", msg: `Invite sent to ${email.trim()}.` }); setEmail(""); setName("");
       setTimeout(() => onDone(), 2000);
     } catch (e: any) { setStatus({ type: "error", msg: e?.message ?? "Failed." }); }
     finally { setLoading(false); }
@@ -693,6 +696,7 @@ function InviteModal({ companyId, onClose, onDone }: { companyId: string; onClos
     <Modal title="Invite User" onClose={onClose}>
       {status && <Banner msg={status.msg} type={status.type} />}
       <Field label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} style={css.input} onKeyDown={e => e.key === "Enter" && send()} autoFocus /></Field>
+      <Field label="Name"><InviteNameField companyId={companyId} value={name} onChange={setName} inputStyle={css.input} /></Field>
       <Field label="Role"><select value={role} onChange={e => setRole(e.target.value)} style={{ ...css.select, width: "100%" }}><option value="driver">Driver</option><option value="lead">Lead</option><option value="dispatch">Dispatch</option><option value="admin">Admin</option></select></Field>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, lineHeight: 1.5 }}>If the user already has an account they'll be added immediately. New users receive a magic link.</div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>

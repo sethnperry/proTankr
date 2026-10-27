@@ -5,6 +5,7 @@
 // and the equipment / location / terminal setup checklist. Only one shows at a
 // time; the checklist is suppressed while onboarding is active.
 
+import { usePathname } from "next/navigation";
 import SetupGate from "./SetupGate";
 import { FleetWelcome } from "./onboarding/FleetWelcome";
 import { useFleetNameCheck } from "../hooks/useFleetNameCheck";
@@ -22,6 +23,7 @@ type Props = {
 export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboardingComplete }: Props) {
   const { effectiveUserId, companyId, equipment, location, setEquipOpen, setLocOpen, setTermOpen } = useCalculatorShell();
 
+  const pathname = usePathname();
   const needName = useFleetNameCheck();
   if (needName.pending) return null;
   if (needName.required && effectiveUserId && companyId) {
@@ -44,6 +46,8 @@ export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboar
       />
     );
   }
+  // Equipment is asked for on the dashboard and the Plan page. Cards, Reports, Trips and the rest don't need it.
+  if (pathname !== "/planner" && pathname !== "/planner/home") return null;
   return (
     <SetupGate
       comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}

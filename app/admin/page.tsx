@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { InviteNameField } from "@/lib/ui/driver/InviteNameField";
 import { supabase } from "@/lib/supabase/client";
 import { linkMeToTelematics } from "@/lib/telematics/linkMe";
 import { fetchProductsCatalogCached } from "@/lib/queries/useProductsCatalog";
@@ -428,7 +429,7 @@ function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
 // ─────────────────────────────────────────────────────────────
 
 function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string; seats: SeatCapacity; onClose: () => void; onDone: () => void }) {
-  const [email, setEmail] = useState(""); const [role, setRole] = useState("driver");
+  const [email, setEmail] = useState(""); const [role, setRole] = useState("driver"); const [name, setName] = useState("");
   const [region, setRegion] = useState("");
   const [regionOptions, setRegionOptions] = useState<string[]>([]);
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
@@ -451,15 +452,17 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
   // would need to warn about (see lib/billing/useCompanySubscription.ts).
   const overCapacity = wouldExceedCapacity(seats, role);
   async function send() {
-    if (!email.trim()) return; setLoading(true); setStatus(null);
+    if (!email.trim()) return;
+    if ((role === "driver" || role === "lead") && name.trim().length < 2) { setStatus({ type: "error", msg: "Enter the driver's first and last name, spelled the way it is in Geotab." }); return; }
+    setLoading(true); setStatus(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/admin/invite", { method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token ?? ""}` },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role, region: region.trim() || undefined }) });
+        body: JSON.stringify({ email: email.trim().toLowerCase(), companyId, role, name: name.trim() || undefined, region: region.trim() || undefined }) });
       let json: any = {}; try { json = await res.json(); } catch {}
       if (!res.ok) throw new Error(json?.error ?? `Invite failed (${res.status}).`);
-      setStatus({ type: "success", msg: `Invite sent to ${email.trim()}.` }); setEmail("");
+      setStatus({ type: "success", msg: `Invite sent to ${email.trim()}.` }); setEmail(""); setName("");
       setTimeout(() => onDone(), 2000);
     } catch (e: any) { setStatus({ type: "error", msg: e?.message ?? "Failed." }); }
     finally { setLoading(false); }
@@ -468,6 +471,7 @@ function InviteModal({ companyId, seats, onClose, onDone }: { companyId: string;
     <Modal title="Invite User" onClose={onClose}>
       {status && <Banner msg={status.msg} type={status.type} />}
       <Field label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} style={css.input} onKeyDown={e => e.key === "Enter" && send()} autoFocus /></Field>
+      <Field label="Name"><InviteNameField companyId={companyId} value={name} onChange={setName} inputStyle={css.input} /></Field>
       <Field label="Role"><select value={role} onChange={e => setRole(e.target.value)} style={{ ...css.select, width: "100%" }}><option value="driver">Driver</option><option value="lead">Lead</option><option value="dispatch">Dispatch</option><option value="admin">Admin</option></select></Field>
       <Field label="Region">
         <select value={region} onChange={e => setRegion(e.target.value)} style={css.input}>

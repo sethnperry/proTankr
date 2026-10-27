@@ -24,6 +24,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
 import { dropFuelStops, STOP_GRACE_MS } from "@/lib/push/stopAlertCore";
@@ -1201,6 +1202,26 @@ export default function HomePage() {
   // Name for the card: a store picked by name only (no saved location) has no geofence target but still gets asked.
   const stopName = arrivalTarget?.name ?? (step.kind === "arrive_delivery" ? deliveryName(step.delivery) : null);
   const [consigneeSignOpen, setConsigneeSignOpen] = useState(false);
+  // First-use dashboard tour: once, when nothing else is on screen (setup screens, the plan builder).
+  // /planner/home?tour=1 replays it.
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    if (!userId) return;
+    if (new URLSearchParams(window.location.search).get("tour")) {
+      setTourOpen(true);
+      window.history.replaceState(null, "", "/planner/home");
+      return;
+    }
+    if (dashTourSeen(userId) || !equipment.selectedComboId) return;
+    let calm = 0;
+    const t = window.setInterval(() => {
+      const busy = document.querySelector('[role="dialog"]:not([aria-label="Dashboard tour"]), [data-onboarding-layer]');
+      calm = busy ? 0 : calm + 1;
+      if (calm >= 2) { window.clearInterval(t); setTourOpen(true); }
+    }, 1500);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, equipment.selectedComboId]);
   const sigDelivery = step.kind === "finish_delivery" && step.delivery.arrived_at ? step.delivery : null;
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
@@ -1964,6 +1985,8 @@ export default function HomePage() {
           onSave={(name, sig) => { store?.put("trip_deliveries", { delivery_id: sigDelivery.delivery_id, consignee_name: name, consignee_signature: sig }); void syncNow(); setConsigneeSignOpen(false); }}
           onClear={() => { store?.put("trip_deliveries", { delivery_id: sigDelivery.delivery_id, consignee_name: null, consignee_signature: null }); void syncNow(); setConsigneeSignOpen(false); }} />
       )}
+
+      <DashboardTour open={tourOpen} onClose={() => { setTourOpen(false); markDashTourSeen(userId || null); }} />
 
       <AddPickupSheet
         open={addOpen}
