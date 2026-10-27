@@ -12,6 +12,7 @@ import { code39Bars } from "@/lib/trips/code39";
 import { fmtMinutes } from "@/lib/trips/billingTime";
 import type { Ptd } from "@/lib/trips/ptd";
 import { SignatureView } from "../components/trip/tripUi";
+import { buildTimeline } from "@/lib/trips/ptdTimeline";
 
 const ink = "#111";
 const faint = "#666";
@@ -21,6 +22,8 @@ const page: React.CSSProperties = {
   background: "#fff", color: ink, fontFamily: "Arial, Helvetica, sans-serif", fontSize: 11,
   padding: 18, borderRadius: 2, maxWidth: 820, margin: "0 auto", lineHeight: 1.35,
 };
+// US Letter, 0.5 in margins: 7.5 in of width.
+const pagePrint: React.CSSProperties = { width: "7.5in", maxWidth: "7.5in", padding: 0, fontSize: 10, margin: 0 };
 const h2: React.CSSProperties = { fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, margin: "14px 0 4px" };
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const th: React.CSSProperties = { border: line, padding: "3px 5px", textAlign: "left", fontSize: 10, background: "#eee", fontWeight: 700 };
@@ -66,8 +69,6 @@ function Field({ label, value, wide }: { label: string; value?: React.ReactNode;
   );
 }
 
-type StopLike = { arrivedAt: string | null; beginAt: string | null; leftAt: string | null; delayMinutes: number | null; delayReason: string | null; delayNote: string | null };
-
 // One label/value row: label left, value right. Used for times so each one
 // gets its own line instead of a run-on sentence.
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
@@ -75,23 +76,6 @@ function Row({ label, value }: { label: string; value?: React.ReactNode }) {
     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, borderBottom: "1px dotted #bbb", padding: "2px 0" }}>
       <span style={{ color: faint }}>{label}</span>
       <span style={{ fontWeight: 700, textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}>{value || "—"}</span>
-    </div>
-  );
-}
-
-function StopTimes({ stop, beginLabel, endLabel = "Departed" }: { stop: StopLike; beginLabel: string; endLabel?: string }) {
-  const delay = stop.delayReason || stop.delayNote;
-  return (
-    <div style={{ marginTop: 4 }}>
-      <Row label="Arrived" value={fmtDateTime(stop.arrivedAt)} />
-      <Row label={beginLabel} value={fmtDateTime(stop.beginAt)} />
-      <Row label={endLabel} value={fmtDateTime(stop.leftAt)} />
-      {delay ? (
-        <Row
-          label={`Delay${stop.delayMinutes != null ? ` ${stop.delayMinutes} min` : ""}`}
-          value={[stop.delayReason, stop.delayNote].filter(Boolean).join(" — ")}
-        />
-      ) : null}
     </div>
   );
 }
@@ -110,179 +94,154 @@ function Item({ label, value }: { label: string; value: React.ReactNode }) {
 const box: React.CSSProperties = { border: line, padding: 8, marginBottom: 8, breakInside: "avoid" };
 const sigLabel: React.CSSProperties = { fontSize: 9, color: faint, textTransform: "uppercase", marginTop: 6 };
 
-export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSignature }: {
+export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSignature, print = false }: {
   ptd: Ptd;
   truckName: string | null;
   trailerName: string | null;
   viewerId: string | null;
   viewerSignature: string | null;
+  /** The paper version: a fixed US Letter layout with tables, whatever the phone's width. */
+  print?: boolean;
 }) {
   // Signatures are private per driver (RLS); only the viewer's own drawing can
   // be shown. Anyone else's acceptance prints as an electronic signature line.
   const sig = (driverId: string | null) =>
     driverId && driverId === viewerId && viewerSignature
-      ? <div style={{ width: 160, maxWidth: "100%", color: ink }}><SignatureView path={viewerSignature} height={40} /></div>
+      ? <div style={{ width: 150, maxWidth: "100%", color: ink }}><SignatureView path={viewerSignature} height={36} /></div>
       : null;
 
-  const loadingSig = (s: Ptd["loadingSigs"][number], i: number) => (
-    <div key={i} style={{ marginTop: 2 }}>
-      {sig(s.driverId)}
-      <div style={{ fontWeight: 700 }}>{s.name}</div>
-      <div style={{ fontSize: 10, color: faint }}>Signed electronically {fmtDateTime(s.at)}</div>
+  const truckText = ptd.truckChanges.length
+    ? [ptd.truckChanges[0].fromName, ...ptd.truckChanges.map((c, i) => (i === ptd.truckChanges.length - 1 ? (truckName ?? c.toName) : c.toName))].map((n) => n ?? "?").join(" → ")
+    : truckName;
+  const timeline = buildTimeline(ptd);
+  const loader = ptd.loadingSigs[0] ?? null;
+  const multiDelivery = ptd.deliveries.length > 1;
+
+  // One row: loading driver, consignee, delivering driver.
+  const sigRow = (d: Ptd["deliveries"][number] | null, key: string) => (
+    <div key={key} style={{ ...box, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: print ? 10 : 6 }}>
+      {multiDelivery && d && <div style={{ gridColumn: "1 / -1", fontWeight: 800 }}>{d.name}</div>}
+      <div>
+        <div style={sigLabel}>Loading driver</div>
+        <div style={{ minHeight: 38 }}>{sig(loader?.driverId ?? null)}</div>
+        <div style={{ borderTop: line, fontWeight: 700 }}>{loader?.name ?? ""}</div>
+        {loader && <div style={{ fontSize: 9, color: faint }}>Signed electronically</div>}
+      </div>
+      <div>
+        <div style={sigLabel}>Consignee</div>
+        <div style={{ minHeight: 38 }}>{d?.consigneeSignature ? <div style={{ width: 150, maxWidth: "100%", color: ink }}><SignatureView path={d.consigneeSignature} height={36} /></div> : null}</div>
+        <div style={{ borderTop: line, fontWeight: 700 }}>{d?.consigneeName ?? ""}</div>
+      </div>
+      <div>
+        <div style={sigLabel}>Delivering driver</div>
+        <div style={{ minHeight: 38 }}>{d ? sig(d.driverId) : null}</div>
+        <div style={{ borderTop: line, fontWeight: 700 }}>{d?.driver ?? ""}</div>
+        {d?.driverSignedAt && <div style={{ fontSize: 9, color: faint }}>Signed electronically</div>}
+      </div>
     </div>
   );
-  // Loading signatures that name a pickup go under it; any without one (older
-  // events) go under the first pickup.
-  const matched = new Set<number>();
-  const sigsFor = (pickupId: string, first: boolean) =>
-    ptd.loadingSigs
-      .map((s, i) => ({ s, i }))
-      .filter(({ s, i }) => {
-        const hit = s.pickupId ? s.pickupId === pickupId : first;
-        if (hit) matched.add(i);
-        return hit;
-      });
 
   return (
-    <div style={page} className="ptd-page">
+    <div style={print ? { ...page, ...pagePrint } : page} className="ptd-page">
       <Barcode text={ptd.code} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "2px 12px", marginTop: 8 }}>
         <div style={{ fontSize: 17, fontWeight: 900 }}>Product Transfer Document</div>
         <div style={{ color: faint }}>
-          {ptd.status === "complete" ? `Completed ${fmtDateTime(ptd.completedAt)}` : ptd.status === "cancelled" ? "Cancelled" : "In progress"}
+          {ptd.status === "complete" ? "Complete" : ptd.status === "cancelled" ? "Cancelled" : "In progress"}
           {ptd.enteredLate ? " · Entered after the fact" : ""}
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-        <Field label="Order #" value={ptd.orderNumbers.join(", ")} wide />
-        <Field label="Date" value={fmtDate(ptd.date)} />
-        <Field label="Shipper" value={ptd.shipper} wide />
-        <Field label="Customer" value={ptd.customer} wide />
-        <Field label="Truck" value={ptd.truckChanges.length
-          ? [ptd.truckChanges[0].fromName, ...ptd.truckChanges.map((c, i) => (i === ptd.truckChanges.length - 1 ? (truckName ?? c.toName) : c.toName))].map((n) => n ?? "?").join(" → ")
-          : truckName} />
-        <Field label="Trailer" value={trailerName} />
-        <Field label="Begin miles" value={ptd.beginMiles?.toLocaleString("en-US")} />
-        <Field label="End miles" value={ptd.endMiles?.toLocaleString("en-US")} />
-        <Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} />
+      <div style={{ display: "grid", gridTemplateColumns: print ? "repeat(6, 1fr)" : "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginTop: 10 }}>
+        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Order #" value={ptd.orderNumbers.join(", ")} /></div>
+        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Date" value={fmtDate(ptd.date)} /></div>
+        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Truck" value={truckText} /></div>
+        <div style={{ gridColumn: print ? "span 3" : undefined }}><Field label="Shipper" value={ptd.shipper} /></div>
+        <div style={{ gridColumn: print ? "span 3" : undefined }}><Field label="Customer" value={ptd.customer} /></div>
+        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Trailer" value={trailerName} /></div>
+        <div style={{ gridColumn: print ? "span 1" : undefined }}><Field label="Begin miles" value={ptd.beginMiles?.toLocaleString("en-US")} /></div>
+        <div style={{ gridColumn: print ? "span 1" : undefined }}><Field label="End miles" value={ptd.endMiles?.toLocaleString("en-US")} /></div>
+        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} /></div>
       </div>
 
       {ptd.cancellation && (
         <div style={{ border: "1px solid #b91c1c", borderRadius: 2, padding: "6px 8px", marginTop: 10 }}>
-          <div style={{ fontWeight: 800 }}>Load cancelled{ptd.cancellation.at ? ` ${fmtDateTime(ptd.cancellation.at)}` : ""}{ptd.cancellation.by ? ` by ${ptd.cancellation.by}` : ""}</div>
+          <div style={{ fontWeight: 800 }}>Load cancelled{ptd.cancellation.by ? ` by ${ptd.cancellation.by}` : ""}</div>
           <div>{ptd.cancellation.reasons.length ? ptd.cancellation.reasons.join(" → ") : "No reason given"}</div>
           {ptd.cancellation.note && <div>&ldquo;{ptd.cancellation.note}&rdquo;</div>}
           {ptd.cancellation.returnedTo && <div style={{ color: faint }}>Headed to {ptd.cancellation.returnedTo}</div>}
         </div>
       )}
-      {ptd.parks.length > 0 && (
-        <div style={{ ...box, marginTop: 10 }}>
-          {ptd.parks.map((p, i) => (
-            <div key={i}>
-              <Row label="Parked preloaded" value={`${fmtDateTime(p.parkedAt)} → ${p.resumedAt ? fmtDateTime(p.resumedAt) : "still parked"}`} />
-              {(p.where || p.note) && (
-                <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>
-                  {[p.where ? `At ${p.where}` : null, p.note].filter(Boolean).join(" · ")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {ptd.trailerEvents.length > 0 && (
-        <div style={{ ...box, marginTop: 10 }}>
-          {ptd.trailerEvents.map((e, i) => (
-            <Row key={i} label={e.type === "hook" ? "Trailer hooked" : "Trailer dropped"}
-              value={`${e.trailerName ? `${e.trailerName} · ` : ""}${fmtDateTime(e.at)}${e.place ? ` · ${e.place}` : ""}`} />
-          ))}
-          <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>From the truck's telematics.</div>
-        </div>
-      )}
-
-      {ptd.truckChanges.length > 0 && (
-        <div style={{ ...box, marginTop: 10 }}>
-          {ptd.truckChanges.map((c, i) => (
-            <div key={i}>
-              <Row label="Truck changed" value={`${c.fromName ?? "?"} → ${c.toName ?? "?"} · ${fmtDateTime(c.at)}`} />
-              {(c.fromOdometer != null || c.toOdometer != null) && (
-                <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>
-                  Miles {c.fromOdometer?.toLocaleString("en-US") ?? "?"} → {c.toOdometer?.toLocaleString("en-US") ?? "?"}
-                  {c.grossAfter != null ? ` · Gross after ${c.grossAfter.toLocaleString("en-US")} lbs` : ""}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
 
       <div style={h2}>Pickups</div>
       {ptd.pickups.length === 0 && <div style={{ color: faint }}>None yet.</div>}
-      {ptd.pickups.map((p, i) => {
-        const sigs = sigsFor(p.pickupId, i === 0);
-        return (
-          <div key={p.pickupId} style={box}>
-            <div style={{ fontWeight: 800 }}>{p.name}</div>
-            {p.odometer != null && <div style={{ color: faint }}>Odometer {p.odometer.toLocaleString("en-US")}</div>}
-            {p.supplierSwitches.map((w, k) => (
-              <div key={k} style={{ marginTop: 2 }}>
-                <Row label="Supplier switched" value={`${w.from} → ${w.to} · ${w.reason}${w.note ? ` (${w.note})` : ""} · ${fmtDateTime(w.at)}`} />
-              </div>
-            ))}
-            {p.noLoad ? (
-              <>
-                <div style={{ marginTop: 4, fontWeight: 700 }}>Couldn&apos;t load: {p.noLoadReason}</div>
-                <div style={{ marginTop: 4 }}>
-                  <Row label="Arrived" value={fmtDateTime(p.arrivedAt)} />
-                  {p.beginAt && <Row label="Began loading" value={fmtDateTime(p.beginAt)} />}
-                  <Row label="Departed" value={fmtDateTime(p.leftAt)} />
-                </div>
-              </>
-            ) : (
-              <>
-                <StopTimes stop={p} beginLabel="Began loading" />
-                <div style={sigLabel}>Loading driver</div>
-                {sigs.length === 0 ? <div style={{ color: faint }}>Not signed yet.</div> : sigs.map(({ s, i: k }) => loadingSig(s, k))}
-              </>
-            )}
+      {ptd.pickups.map((p) => (
+        <div key={p.pickupId} style={{ ...box, padding: "5px 8px", marginBottom: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <b style={{ overflowWrap: "anywhere" }}>{p.name}</b>
+            {p.odometer != null && <span style={{ color: faint, whiteSpace: "nowrap" }}>Odometer {p.odometer.toLocaleString("en-US")}</span>}
           </div>
-        );
-      })}
-      {ptd.loadingSigs.some((_, i) => !matched.has(i)) && (
-        <div style={box}>
-          <div style={sigLabel}>Loading driver</div>
-          {ptd.loadingSigs.map((s, i) => (matched.has(i) ? null : loadingSig(s, i)))}
+          {p.noLoad && <div style={{ fontWeight: 700, color: "#b45309" }}>Couldn&apos;t load: {p.noLoadReason}</div>}
+          {p.supplierSwitches.map((w, k) => (
+            <div key={k} style={{ fontSize: 10, color: faint }}>Supplier switched {w.from} → {w.to} · {w.reason}{w.note ? ` (${w.note})` : ""}</div>
+          ))}
         </div>
-      )}
+      ))}
 
       <div style={h2}>Compartments</div>
       {ptd.compartments.length === 0 && <div style={{ color: faint }}>None yet.</div>}
-      {ptd.compartments.map((c) => (
-        <div key={c.comp} style={{ ...box, padding: "6px 8px", marginBottom: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <b>C{c.comp} · {c.product}</b>
-            <span style={{ color: faint, textAlign: "right" }}>
-              {c.disposition === "retained" ? "Retained on trailer" : [c.delivery, c.tank ? `Tank ${c.tank}` : null].filter(Boolean).join(" · ")}
-            </span>
+      {ptd.compartments.length > 0 && print && (
+        <table style={table}>
+          <thead>
+            <tr>{["C", "Product", "Order", "BOL", "Supplier", "Gross", "Net", "°F", "API", "To"].map((h) => <th key={h} style={th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {ptd.compartments.map((c) => (
+              <tr key={c.comp}>
+                <td style={td}><b>{c.comp}</b></td><td style={td}>{c.product}</td><td style={td}>{c.order ?? ""}</td><td style={td}>{c.bol ?? ""}</td>
+                <td style={td}>{c.supplier ?? ""}</td><td style={tdR}>{gal(c.gross)}</td><td style={tdR}>{gal(c.net)}</td>
+                <td style={tdR}>{dec(c.temp)}</td><td style={tdR}>{dec(c.api)}</td>
+                <td style={td}>{c.disposition === "retained" ? "Retained" : [c.delivery, c.tank ? `T${c.tank}` : null].filter(Boolean).join(" · ")}</td>
+              </tr>
+            ))}
+            <tr>
+              <td style={{ ...td, fontWeight: 800 }} colSpan={5}>Total</td>
+              <td style={{ ...tdR, fontWeight: 800 }}>{gal(ptd.totals.gross)}</td><td style={{ ...tdR, fontWeight: 800 }}>{gal(ptd.totals.net)}</td>
+              <td style={td} colSpan={3} />
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {ptd.compartments.length > 0 && !print && (
+        <>
+          {ptd.compartments.map((c) => (
+            <div key={c.comp} style={{ ...box, padding: "6px 8px", marginBottom: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <b>C{c.comp} · {c.product}</b>
+                <span style={{ color: faint, textAlign: "right" }}>
+                  {c.disposition === "retained" ? "Retained on trailer" : [c.delivery, c.tank ? `Tank ${c.tank}` : null].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 14px", marginTop: 3 }}>
+                <Item label="Order" value={c.order} />
+                <Item label="BOL" value={c.bol} />
+                <Item label="Supplier" value={c.supplier} />
+                <Item label="Gross" value={gal(c.gross)} />
+                <Item label="Net" value={gal(c.net)} />
+                <Item label="°F" value={dec(c.temp)} />
+                <Item label="API" value={dec(c.api)} />
+              </div>
+              {c.flag ? <div style={{ color: "#b45309", fontSize: 9, marginTop: 2 }}>{c.flag}</div> : null}
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, fontWeight: 800 }}>
+            <span>Total gross {gal(ptd.totals.gross)}</span>
+            <span>Total net {gal(ptd.totals.net)}</span>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 14px", marginTop: 3 }}>
-            <Item label="Order" value={c.order} />
-            <Item label="BOL" value={c.bol} />
-            <Item label="Supplier" value={c.supplier} />
-            <Item label="Gross" value={gal(c.gross)} />
-            <Item label="Net" value={gal(c.net)} />
-            <Item label="°F" value={dec(c.temp)} />
-            <Item label="API" value={dec(c.api)} />
-          </div>
-          {c.flag ? <div style={{ color: "#b45309", fontSize: 9, marginTop: 2 }}>{c.flag}</div> : null}
-        </div>
-      ))}
-      {ptd.compartments.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, fontWeight: 800 }}>
-          <span>Total gross {gal(ptd.totals.gross)}</span>
-          <span>Total net {gal(ptd.totals.net)}</span>
-        </div>
+        </>
+      )}
+      {print && ptd.compartments.some((c) => c.flag) && (
+        <div style={{ color: "#b45309", fontSize: 9, marginTop: 2 }}>{ptd.compartments.filter((c) => c.flag).map((c) => `C${c.comp}: ${c.flag}`).join(" · ")}</div>
       )}
 
       {ptd.billing.length > 0 && (
@@ -310,7 +269,29 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
               <div style={{ color: faint, whiteSpace: "nowrap" }}>{pump ? "Pump off" : "Drop"}{d.status === "planned" ? " · Not delivered yet" : ""}</div>
             </div>
 
-            {(d.drops.length > 0 || d.otherTanks.length > 0) && (
+            {(d.drops.length > 0 || d.otherTanks.length > 0) && print && (
+              <table style={{ ...table, marginTop: 4 }}>
+                <thead><tr>{["Comp", "Product", "Tank", "Gallons", "Before", "After", "Water"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {d.drops.map((x) => (
+                    <tr key={`${x.comp}-${x.tank ?? ""}`}>
+                      <td style={td}>C{x.comp}</td><td style={td}>{x.product}</td><td style={td}>{x.tank ?? "—"}</td>
+                      <td style={tdR}>{x.gallons != null ? gal(x.gallons) : gal(x.net)}</td>
+                      <td style={tdR}>{reading(x.before, x.unit)}</td><td style={tdR}>{reading(x.after, x.unit)}</td>
+                      <td style={tdR}>{x.water == null ? "" : `${dec(x.water)} in`}</td>
+                    </tr>
+                  ))}
+                  {d.otherTanks.map((t) => (
+                    <tr key={`t${t.tank}`}>
+                      <td style={td} /><td style={td}>{t.product ?? ""}</td><td style={td}>{t.tank}</td><td style={tdR} />
+                      <td style={tdR}>{reading(t.before, t.unit)}</td><td style={tdR}>{reading(t.after, t.unit)}</td>
+                      <td style={tdR}>{t.water == null ? "" : `${dec(t.water)} in`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {(d.drops.length > 0 || d.otherTanks.length > 0) && !print && (
               <div style={{ marginTop: 4 }}>
                 {d.drops.map((x) => (
                   <div key={`${x.comp}-${x.tank ?? ""}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
@@ -334,55 +315,64 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
             )}
 
             {(d.odometer != null || d.bioBlends.length > 0 || d.additives.length > 0 || d.issues.length > 0) && (
-              <div style={{ marginTop: 4 }}>
-                {d.odometer != null && <div><Item label="Odometer" value={d.odometer.toLocaleString("en-US")} /></div>}
-                {d.bioBlends.length > 0 && <div><Item label="Bio blended" value={d.bioBlends.join(", ")} /></div>}
-                {d.additives.length > 0 && <div><Item label="Additives" value={d.additives.join(" · ")} /></div>}
-                {d.issues.length > 0 && <div><Item label="Issues" value={d.issues.join(" · ")} /></div>}
+              <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: "2px 16px" }}>
+                {d.odometer != null && <Item label="Odometer" value={d.odometer.toLocaleString("en-US")} />}
+                {d.bioBlends.length > 0 && <Item label="Bio blended" value={d.bioBlends.join(", ")} />}
+                {d.additives.length > 0 && <Item label="Additives" value={d.additives.join(" · ")} />}
+                {d.issues.length > 0 && <Item label="Issues" value={d.issues.join(" · ")} />}
               </div>
             )}
-
-            <StopTimes stop={d} beginLabel={pump ? "Began pumping" : "Began delivering"} />
-
-            <div style={sigLabel}>Delivering driver</div>
-            {sig(d.driverId)}
-            <div style={{ fontWeight: 700 }}>{d.driver ?? ""}</div>
-            {d.driverSignedAt && <div style={{ fontSize: 10, color: faint }}>Signed electronically {fmtDateTime(d.driverSignedAt)}</div>}
-
-            <div style={sigLabel}>Consignee</div>
-            {d.consigneeSignature && <div style={{ width: 160, maxWidth: "100%", color: ink }}><SignatureView path={d.consigneeSignature} height={40} /></div>}
-            <div style={{ fontWeight: 700 }}>{d.consigneeName ?? ""}</div>
           </div>
         );
       })}
 
-      <div style={h2}>Time</div>
-      <div style={box}>
-        {ptd.time.rows.map((r, i) =>
-          r.type === "travel" ? (
-            <Row key={i} label={`Travel to ${r.to}`} value={fmtMinutes(r.minutes)} />
-          ) : (
-            <div key={i}>
-              <Row
-                label={r.name}
-                value={`${fmtMinutes(r.onSite)}${r.noLoad ? " · no load" : r.waited != null && r.working != null
-                  ? ` (waited ${fmtMinutes(r.waited)}, ${r.kind === "rack" ? "loading" : "delivering"} ${fmtMinutes(r.working)})` : ""}`}
-              />
-              {r.reason && <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>{r.reason}</div>}
-            </div>
-          ),
-        )}
-        <div style={{ borderTop: line, marginTop: 6, paddingTop: 6 }}>
-          <Row label="Travel to first rack" value={fmtMinutes(ptd.time.travelToRack)} />
-          <Row label={`Trying to load${ptd.time.racksTried > 1 ? ` (${ptd.time.racksTried} racks)` : ""}`} value={fmtMinutes(ptd.time.loadingSpan)} />
-          <Row label="Travel to delivery" value={fmtMinutes(ptd.time.travelToDelivery)} />
-          <Row label="At deliveries" value={fmtMinutes(ptd.time.atDeliveries)} />
-          <Row label="Total travel" value={fmtMinutes(ptd.time.totalTravel)} />
-          <Row label="Total trip" value={fmtMinutes(ptd.time.total)} />
-        </div>
-      </div>
+      <div style={h2}>Signatures</div>
+      {ptd.deliveries.length === 0 ? sigRow(null, "none") : ptd.deliveries.map((d, i) => sigRow(d, `s${i}`))}
 
-      <div style={{ marginTop: 14, fontSize: 9, color: faint }}>Generated by ProTankr · {ptd.code}</div>
+      {/* Every time on the trip, as a story. Always its own (last) page on paper. */}
+      <div className="ptd-break" style={{ breakBefore: "page", pageBreakBefore: "always" }}>
+        <div style={{ ...h2, marginTop: print ? 0 : 20 }}>Trip timeline · {ptd.code}</div>
+        {timeline.length === 0 && <div style={{ color: faint }}>No times recorded yet.</div>}
+        <div style={{ borderLeft: "2px solid #999", marginLeft: 6, paddingLeft: 12 }}>
+          {timeline.map((e, i) => (
+            <div key={i} style={{ position: "relative", padding: "3px 0", breakInside: "avoid" }}>
+              <span style={{ position: "absolute", left: -18, top: 8, width: 8, height: 8, borderRadius: "50%", background: e.kind === "delay" ? "#b45309" : e.kind === "delivery" ? "#047857" : e.kind === "pickup" ? "#1d4ed8" : ink }} />
+              <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                <span style={{ fontFamily: "monospace", fontSize: 10, color: faint, whiteSpace: "nowrap", minWidth: print ? 96 : 84 }}>{fmtDateTime(e.at)}</span>
+                <span style={{ fontWeight: 700 }}>{e.text}</span>
+              </div>
+              {e.detail && <div style={{ fontSize: 10, color: faint, marginLeft: print ? 106 : 94 }}>{e.detail}</div>}
+            </div>
+          ))}
+        </div>
+
+        <div style={h2}>Time</div>
+        <div style={box}>
+          {ptd.time.rows.map((r, i) =>
+            r.type === "travel" ? (
+              <Row key={i} label={`Travel to ${r.to}`} value={fmtMinutes(r.minutes)} />
+            ) : (
+              <div key={i}>
+                <Row
+                  label={r.name}
+                  value={`${fmtMinutes(r.onSite)}${r.noLoad ? " · no load" : r.waited != null && r.working != null
+                    ? ` (waited ${fmtMinutes(r.waited)}, ${r.kind === "rack" ? "loading" : "delivering"} ${fmtMinutes(r.working)})` : ""}`}
+                />
+                {r.reason && <div style={{ fontSize: 10, color: faint, marginLeft: 8 }}>{r.reason}</div>}
+              </div>
+            ),
+          )}
+          <div style={{ borderTop: line, marginTop: 6, paddingTop: 6 }}>
+            <Row label="Travel to first rack" value={fmtMinutes(ptd.time.travelToRack)} />
+            <Row label={`Trying to load${ptd.time.racksTried > 1 ? ` (${ptd.time.racksTried} racks)` : ""}`} value={fmtMinutes(ptd.time.loadingSpan)} />
+            <Row label="Travel to delivery" value={fmtMinutes(ptd.time.travelToDelivery)} />
+            <Row label="At deliveries" value={fmtMinutes(ptd.time.atDeliveries)} />
+            <Row label="Total travel" value={fmtMinutes(ptd.time.totalTravel)} />
+            <Row label="Total trip" value={fmtMinutes(ptd.time.total)} />
+          </div>
+        </div>
+        <div style={{ marginTop: 14, fontSize: 9, color: faint }}>Generated by ProTankr · {ptd.code}</div>
+      </div>
     </div>
   );
 }
@@ -454,11 +444,13 @@ export function PrintPortal({ children }: { children: React.ReactNode }) {
       <style>{`
         @media screen { .ptd-print-root { display: none; } }
         @media print {
-          @page { margin: 10mm; }
-          html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+          @page { size: 8.5in 11in; margin: 0.5in; }
+          html, body { background: #fff !important; height: auto !important; overflow: visible !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body > *:not(.ptd-print-root) { display: none !important; }
           .ptd-print-root { display: block; }
-          .ptd-print-root .ptd-page { max-width: none; padding: 0; border-radius: 0; }
+          .ptd-print-root .ptd-page { max-width: none; border-radius: 0; margin: 0; }
+          .ptd-print-root table { page-break-inside: auto; }
+          .ptd-print-root tr { page-break-inside: avoid; }
         }
       `}</style>
       {children}

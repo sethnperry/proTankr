@@ -204,7 +204,7 @@ export default function TripPtdPage() {
             <PtdDocument ptd={ptd} truckName={equip.truck} trailerName={equip.trailer} viewerId={userId} viewerSignature={signature.svg} />
           </div>
           <PrintPortal>
-            <PtdDocument ptd={ptd} truckName={equip.truck} trailerName={equip.trailer} viewerId={userId} viewerSignature={signature.svg} />
+            <PtdDocument print ptd={ptd} truckName={equip.truck} trailerName={equip.trailer} viewerId={userId} viewerSignature={signature.svg} />
           </PrintPortal>
         </>
       )}

@@ -5,6 +5,7 @@
 
 import { ptdCode } from "./code39.ts";
 import { delayMinutes, parkRecords } from "./tripFlow.ts";
+import { loggedDelays } from "./delays.ts";
 import { editedNetFlag } from "./netGallons.ts";
 import { billingTime } from "./billingTime.ts";
 import { noLoadReasonLabel, terminalIssueLabel } from "./terminalIssues.ts";
@@ -227,6 +228,8 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     shipper: trip.shipper,
     customer: trip.customer,
     date: trip.started_at ?? input.pickups[0]?.arrived_at ?? null,
+    startedAt: trip.started_at,
+    delays: loggedDelays(input.events),
     completedAt: trip.completed_at,
     status: trip.status,
     enteredLate: trip.entered_late,
