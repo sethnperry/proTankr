@@ -20,7 +20,7 @@ const line = "1px solid #999";
 
 const page: React.CSSProperties = {
   background: "#fff", color: ink, fontFamily: "Arial, Helvetica, sans-serif", fontSize: 11,
-  padding: 18, borderRadius: 2, maxWidth: 820, margin: "0 auto", lineHeight: 1.35,
+  padding: 26, borderRadius: 2, maxWidth: 820, margin: "0 auto", lineHeight: 1.35,
 };
 // US Letter, 0.5 in margins: 7.5 in of width.
 const pagePrint: React.CSSProperties = { width: "7.5in", maxWidth: "7.5in", padding: 0, fontSize: 10, margin: 0 };
@@ -152,16 +152,16 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: print ? "repeat(6, 1fr)" : "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginTop: 10 }}>
-        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Order #" value={ptd.orderNumbers.join(", ")} /></div>
-        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Date" value={fmtDate(ptd.date)} /></div>
-        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Truck" value={truckText} /></div>
-        <div style={{ gridColumn: print ? "span 3" : undefined }}><Field label="Shipper" value={ptd.shipper} /></div>
-        <div style={{ gridColumn: print ? "span 3" : undefined }}><Field label="Customer" value={ptd.customer} /></div>
-        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Trailer" value={trailerName} /></div>
-        <div style={{ gridColumn: print ? "span 1" : undefined }}><Field label="Begin miles" value={ptd.beginMiles?.toLocaleString("en-US")} /></div>
-        <div style={{ gridColumn: print ? "span 1" : undefined }}><Field label="End miles" value={ptd.endMiles?.toLocaleString("en-US")} /></div>
-        <div style={{ gridColumn: print ? "span 2" : undefined }}><Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 8, marginTop: 10 }}>
+        <div style={{ gridColumn: "span 3" }}><Field label="Date" value={fmtDate(ptd.date)} /></div>
+        <div style={{ gridColumn: "span 3" }}><Field label="Order #" value={ptd.orderNumbers.join(", ")} /></div>
+        <div style={{ gridColumn: "span 3" }}><Field label="Shipper" value={ptd.shipper} /></div>
+        <div style={{ gridColumn: "span 3" }}><Field label="Customer" value={ptd.customer} /></div>
+        <div style={{ gridColumn: "span 3" }}><Field label="Truck" value={truckText} /></div>
+        <div style={{ gridColumn: "span 3" }}><Field label="Trailer" value={trailerName} /></div>
+        <div style={{ gridColumn: "span 2" }}><Field label="Begin miles" value={ptd.beginMiles?.toLocaleString("en-US")} /></div>
+        <div style={{ gridColumn: "span 2" }}><Field label="End miles" value={ptd.endMiles?.toLocaleString("en-US")} /></div>
+        <div style={{ gridColumn: "span 2" }}><Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} /></div>
       </div>
 
       {ptd.cancellation && (
