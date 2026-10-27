@@ -24,6 +24,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
 import { dropFuelStops, STOP_GRACE_MS } from "@/lib/push/stopAlertCore";
 import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stopPrompt";
@@ -1203,6 +1204,8 @@ export default function HomePage() {
   const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[] } | null>(null);
   // Name for the card: a store picked by name only (no saved location) has no geofence target but still gets asked.
   const stopName = arrivalTarget?.name ?? (step.kind === "arrive_delivery" ? deliveryName(step.delivery) : null);
+  const [consigneeSignOpen, setConsigneeSignOpen] = useState(false);
+  const sigDelivery = step.kind === "finish_delivery" && step.delivery.arrived_at ? step.delivery : null;
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
   const logDutyDelay = (code: string, note: string | null) => {
@@ -1936,6 +1939,12 @@ export default function HomePage() {
       {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
       )}
+      {sigDelivery && !openingPlanner && (
+        <button type="button" className="dash-press" onClick={() => setConsigneeSignOpen(true)}
+          style={{ width: "100%", marginTop: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", background: "transparent", color: sigDelivery.consignee_signature ? "#4ade80" : "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
+          {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
+        </button>
+      )}
       {delayLeg && !openingPlanner && (
         <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />
       )}
@@ -1955,6 +1964,14 @@ export default function HomePage() {
         </div>
       )}
       </div>
+
+      {sigDelivery && (
+        <ConsigneeSignSheet key={`${sigDelivery.delivery_id}:${consigneeSignOpen}`} open={consigneeSignOpen}
+          initialName={sigDelivery.consignee_name ?? ""} initialSig={sigDelivery.consignee_signature ?? null}
+          onClose={() => setConsigneeSignOpen(false)}
+          onSave={(name, sig) => { store?.put("trip_deliveries", { delivery_id: sigDelivery.delivery_id, consignee_name: name, consignee_signature: sig }); void syncNow(); setConsigneeSignOpen(false); }}
+          onClear={() => { store?.put("trip_deliveries", { delivery_id: sigDelivery.delivery_id, consignee_name: null, consignee_signature: null }); void syncNow(); setConsigneeSignOpen(false); }} />
+      )}
 
       <AddPickupSheet
         open={addOpen}

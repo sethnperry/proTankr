@@ -367,8 +367,8 @@ export function DeliveryDashboard({
       if (!extra.some((x) => x.tank_number === t.tank_number)) extra.push({ tank_number: t.tank_number, product_id: t.product_id });
     }
     setExtraTanks(extra);
-    setConsigneeName(d?.consigneeName ?? delivery.consignee_name ?? "");
-    setConsigneeSig(d?.consigneeSig ?? delivery.consignee_signature ?? null);
+    setConsigneeName(d?.consigneeName || delivery.consignee_name || "");
+    setConsigneeSig(d?.consigneeSig || delivery.consignee_signature || null);
     setOdometer(d?.odometer ?? "");
     const b: Record<string, string> = { ...(d?.bio ?? {}) };
     for (const c of compartments) if (b[c.compartment_load_id] == null && c.bio_blend) b[c.compartment_load_id] = c.bio_blend;
@@ -1138,7 +1138,7 @@ export function DeliveryDashboard({
                 Consignee signature{consigneeSig && consigneeName ? ` · ${consigneeName}` : ""}
               </span>
               <span style={{ color: settings.require_consignee_signature && !consigneeSig ? "#fbbf24" : muted, fontSize: 13 }}>
-                {consigneeSig ? "Redo ›" : settings.require_consignee_signature ? "Required ›" : "Optional ›"}
+                {consigneeSig ? "Signed · Redo ›" : settings.require_consignee_signature ? "Required ›" : "Optional ›"}
               </span>
             </button>
           </div>
@@ -1203,11 +1203,6 @@ export function DeliveryDashboard({
                 <button type="button" style={{ ...pill(lateAnswer === "no"), flex: 1, padding: "12px 0", fontSize: 15 }} onClick={() => setLateAnswer("no")}>No</button>
               </div>
               {lateAnswer === "yes" && !preDropLate && reasonPicker}
-              {lateAnswer === "no" && (
-                <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
-                  OK. This time goes to your manager as unaccounted.
-                </div>
-              )}
             </div>
           )}
 
