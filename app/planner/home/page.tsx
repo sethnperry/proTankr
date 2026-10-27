@@ -1125,7 +1125,7 @@ export default function HomePage() {
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step.kind, (step as any).pickup?.pickup_id, (step as any).delivery?.delivery_id, terminalCatalog, locations]);
-  const arrival = useArrivalSuggestion({ companyId: companyId || null, truckId, target: arrivalTarget, enabled: !!arrivalTarget && !!openTrip });
+  const arrival = useArrivalSuggestion({ companyId: companyId || null, truckId, target: arrivalTarget, enabled: !!arrivalTarget && !!openTrip && !fuel.active });
   const learnArrival = () => {
     if (arrivalTarget && companyId && userId) void recordArrivalPoint({ companyId, userId, truckId, target: arrivalTarget });
   };
@@ -1166,26 +1166,8 @@ export default function HomePage() {
   };
   useDepartureWatch({ companyId: companyId || null, truckId, stopKey: atStop?.key ?? null, target: atStop?.target ?? null, enabled: !!atStop && autoStampOn });
 
-  // Arrival auto-stamp: only where the fence is learned (tight). A wide catalog-point fence still
-  // just offers the Arrive card. Back-dated to when the truck came to rest; the driver can edit.
-  useEffect(() => {
-    if (!autoStampOn || autoBlocked || !arrival.suggest || !arrival.learned || !arrivalTarget || !store || !userId) return;
-    const at = new Date(arrival.suggest.sinceMs);
-    const when = at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    if (step.kind === "arrive_pickup") {
-      arrivePickup(store, { userId, pickup: step.pickup, now: at, newId });
-      const loc = shell.location;
-      if (step.pickup.rack_id == null && loc.selectedRackId && String(loc.selectedTerminalId || "") === String(step.pickup.terminal_id || "")) {
-        store.put("trip_pickups", { pickup_id: step.pickup.pickup_id, rack_id: loc.selectedRackId });
-      }
-    } else if (step.kind === "arrive_delivery") {
-      arriveDelivery(store, { userId, delivery: step.delivery, now: at, newId });
-    } else return;
-    endDelay(at.toISOString());
-    void syncNow();
-    setNotice({ text: `Arrived at ${arrivalTarget.name} at ${when}, from your truck's position.`, tripId: null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arrival.suggest?.sinceMs, arrival.learned, autoStampOn, step.kind]);
+  // Arrival is never stamped automatically: a truck inside a stop's fence may be fueling or waiting on a delay.
+  // The driver is asked (the card below, or the duty-log stop card) and answers.
 
   const confirmDetectedArrival = () => {
     if (!arrival.suggest) return;

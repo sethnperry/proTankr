@@ -186,7 +186,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       </div>
       <div style={card}>
         <div style={title}>Truck position</div>
-        <CheckRow label="Stamp arrival and departure from the truck" help="Needs the Geotab link. Arrival is stamped for the driver once the truck has stopped at a stop whose location the app has learned; departure defaults to when the truck really left. Drivers can always correct a time."
+        <CheckRow label="Stamp departure from the truck" help="Needs the Geotab link. Departure defaults to when the truck really left. Arrival is never stamped automatically: the driver is asked, so a fuel stop or a delay can be logged first. Drivers can always correct a time."
           value={settings.auto_stamp_arrival !== false} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, auto_stamp_arrival: v }))} />
       </div>
       <div style={card}>
