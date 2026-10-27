@@ -16,11 +16,25 @@ export type StopNotice = { at: string; title: string; body: string; kind: "arriv
 const ms = (v: string | null | undefined) => (v ? Date.parse(v) : NaN);
 const hm = (iso: string, tz: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
-export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs: number, tz = "America/New_York"): StopNotice | null {
+/** Wait this long after a stop before asking, so a fuel stop (or another clock) can be started first. */
+export const STOP_GRACE_MS = 5 * 60_000;
+const FUEL_LEAD_MS = 10 * 60_000;
+
+export type FuelWindow = { started_at: string; completed_at: string | null };
+
+/** Stops that were really a fuel stop: they fall inside a fuel stop (a little before it began, until it was finished). */
+export function dropFuelStops<T extends { at: string }>(stops: T[], fuel: FuelWindow[]): T[] {
+  return stops.filter((s) => {
+    const t = Date.parse(s.at);
+    return !fuel.some((f) => t >= Date.parse(f.started_at) - FUEL_LEAD_MS && (f.completed_at == null || t <= Date.parse(f.completed_at) + FUEL_LEAD_MS));
+  });
+}
+
+export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs: number, tz = "America/New_York", nowMs: number = Date.now()): StopNotice | null {
   const stamps = [trip.started_at, ...trip.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...trip.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
     .map(ms).filter((n) => Number.isFinite(n));
   const after = Math.max(lastAnnouncedMs, 0, ...stamps);
-  const stop = [...stops].reverse().find((s) => Date.parse(s.at) > after);
+  const stop = [...stops].reverse().find((s) => Date.parse(s.at) > after && nowMs - Date.parse(s.at) >= STOP_GRACE_MS);
   if (!stop) return null;
   const when = hm(stop.at, tz);
   const live = trip.pickups.filter((p) => p.outcome !== "no_load").sort((a, b) => a.seq - b.seq);

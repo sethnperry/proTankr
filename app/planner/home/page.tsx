@@ -25,6 +25,7 @@ import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
 import { DutyStopCard } from "./DutyStopCard";
+import { dropFuelStops, STOP_GRACE_MS } from "@/lib/push/stopAlertCore";
 import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stopPrompt";
 import {
   DELAY_EVENT, delayEventPayload, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
@@ -1195,15 +1196,28 @@ export default function HomePage() {
   // Duty-log stops: the ELD's own time for "stopped driving", asked about once we can see it.
   const [handledStops, setHandledStops] = useState<Set<string>>(new Set());
   useEffect(() => { if (userId) setHandledStops(readHandledStops(userId)); }, [userId]);
+  const [stopClock, setStopClock] = useState(() => Date.now());
+  useEffect(() => { const t = window.setInterval(() => setStopClock(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
   const hopPickup = snap && step.kind === "planner" ? snap.pickups.find((p) => p.arrived_at && !p.left_at && p.outcome !== "no_load") ?? null : null;
   const dutyStop = useMemo(() => {
     const waiting = step.kind === "arrive_pickup" || step.kind === "arrive_delivery";
     if (!openTrip || !snap || (!waiting && !hopPickup)) return null;
     const stamps = [openTrip.started_at, ...snap.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...snap.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
       .filter(Boolean).map((t) => Date.parse(t as string));
-    return pendingStop(myHos?.stops, { afterMs: Math.max(0, ...stamps), handled: handledStops });
+    // Not while another clock is running (fueling, a delay), and only once the stop is a few minutes old.
+    if (fuel.active || runningDelay) return null;
+    const aged = (myHos?.stops ?? []).filter((x) => stopClock - Date.parse(x.at) >= STOP_GRACE_MS);
+    return pendingStop(aged, { afterMs: Math.max(0, ...stamps), handled: handledStops });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id]);
+  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuel.active, runningDelay, stopClock]);
+  // A stop made while fueling was the fuel stop, not an arrival: it is never asked about afterwards.
+  useEffect(() => {
+    if (!fuel.active || !userId) return;
+    for (const x of dropFuelStops(myHos?.stops ?? [], [{ started_at: fuel.active.started_at, completed_at: null }])) {
+      if (!handledStops.has(x.at)) { markStopHandled(userId, x.at); setHandledStops((c) => new Set(c).add(x.at)); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fuel.active?.id, myHos?.stops]);
   const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[] } | null>(null);
   // Name for the card: a store picked by name only (no saved location) has no geofence target but still gets asked.
   const stopName = arrivalTarget?.name ?? (step.kind === "arrive_delivery" ? deliveryName(step.delivery) : null);

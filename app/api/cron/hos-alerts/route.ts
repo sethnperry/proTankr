@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { autoLinkAllDrivers, providerFor } from "@/lib/telematics/server";
-import { planStopNotice } from "@/lib/push/stopAlertCore";
+import { dropFuelStops, planStopNotice } from "@/lib/push/stopAlertCore";
 import { planHosAlerts, type DriverCase } from "@/lib/push/hosAlertCore";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import type { Level } from "@/lib/telematics/hosTripNotify";
@@ -115,11 +115,15 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
   const stopState: { company_id: string; user_id: string; last_stop_at: string; updated_at: string }[] = [];
   const termTz = new Map(((terms.data ?? []) as any[]).map((r) => [String(r.terminal_id), (r.timezone as string | null) ?? null]));
   const locName = new Map(((locs.data ?? []) as any[]).map((r) => [String(r.location_id), (r.name as string | null) ?? null]));
+  // A fuel stop is not an arrival: skip stops inside one.
+  const fuelRows = driverIds.length
+    ? ((await admin.from("fuel_purchases").select("driver_id, started_at, completed_at").in("driver_id", driverIds).gte("started_at", new Date(Date.now() - 36 * 3600_000).toISOString())).data ?? []) as { driver_id: string; started_at: string; completed_at: string | null }[]
+    : [];
   const stopNotices: { userId: string; title: string; body: string; at: string }[] = [];
   for (const u of driverIds) {
     const trip = trips.find((t) => t.driver_id === u);
-    const stops = stopsOf.get(u);
-    if (!trip || !stops?.length) continue;
+    const stops = dropFuelStops(stopsOf.get(u) ?? [], fuelRows.filter((f) => f.driver_id === u));
+    if (!trip || !stops.length) continue;
     const pr = prevBy.get(u);
     const firstTerm = ((trip.trip_pickups ?? []) as any[]).find((k) => k.terminal_id)?.terminal_id;
     const n = planStopNotice({
