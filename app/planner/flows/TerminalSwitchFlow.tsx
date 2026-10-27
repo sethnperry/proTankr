@@ -6,12 +6,15 @@
 
 import TerminalSwitchDuringLoadSheet from "../components/TerminalSwitchDuringLoadSheet";
 import { usePlanner } from "../PlannerContext";
+import { reportRows } from "../utils/reportRows";
 
 export default function TerminalSwitchFlow() {
   const {
     shell,
     loadWorkflow,
     effectivePlanRows,
+    compPlan,
+    terminalProducts,
     productNameById,
     terminalSwitchConfirm,
     handleUpdateCardAtPrevious,
@@ -32,7 +35,7 @@ export default function TerminalSwitchFlow() {
       onSwitchWithoutUpdating={handleSwitchWithoutUpdating}
       darkMode={shell.theme.darkMode}
       accentColor={shell.theme.accentColor}
-      planRows={effectivePlanRows as any[]}
+      planRows={reportRows(effectivePlanRows as any[], compPlan as any, (terminalProducts ?? []) as any[]) as any[]}
       productNameById={productNameById}
       onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
       requireReason={!!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}

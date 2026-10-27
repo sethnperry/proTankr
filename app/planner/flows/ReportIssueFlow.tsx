@@ -6,12 +6,15 @@
 
 import CancelLoadSheet from "../components/CancelLoadSheet";
 import { usePlanner } from "../PlannerContext";
+import { reportRows } from "../utils/reportRows";
 
 export default function ReportIssueFlow() {
   const {
     shell,
     loadWorkflow,
     effectivePlanRows,
+    compPlan,
+    terminalProducts,
     productNameById,
     cancelLoadConfirmOpen,
     setCancelLoadConfirmOpen,
@@ -38,7 +41,7 @@ export default function ReportIssueFlow() {
       }}
       darkMode={shell.theme.darkMode}
       accentColor={shell.theme.accentColor}
-      planRows={effectivePlanRows as any[]}
+      planRows={reportRows(effectivePlanRows as any[], compPlan as any, (terminalProducts ?? []) as any[]) as any[]}
       productNameById={productNameById}
       onSubmitOutageReport={handleSubmitOutageReport}
     />
