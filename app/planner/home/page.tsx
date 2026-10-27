@@ -937,22 +937,18 @@ export default function HomePage() {
     };
   });
   const hasResidue = stripSlots.some((x) => x.residue);
-  const trailerStrip = stripSlots.length > 0 ? (
-    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-      <span style={{ width: 66, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}><CompartmentStrip slots={stripSlots} /></div>
-      {aboardRows.length > 0 && currentGross != null ? (
-        <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
-          {currentGross.toLocaleString("en-US")}
-          <span style={{ fontSize: 10, fontWeight: 700, color: LOOK.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>
-        </span>
-      ) : (
-        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", color: LOOK.muted, whiteSpace: "nowrap" }}>
-          {aboardRows.length > 0 ? "" : hasResidue ? "RESIDUE" : "EMPTY"}
-        </span>
-      )}
-    </div>
-  ) : null;
+  // The trailer, full width like a header to its card; the gross (or Residue / Empty) goes under it.
+  const trailerBar = stripSlots.length > 0 ? <CompartmentStrip slots={stripSlots} /> : null;
+  const trailerLabel = stripSlots.length === 0 ? null : aboardRows.length > 0 && currentGross != null ? (
+    <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
+      {currentGross.toLocaleString("en-US")}
+      <span style={{ fontSize: 10, fontWeight: 700, color: LOOK.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>
+    </span>
+  ) : (
+    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", color: LOOK.muted, whiteSpace: "nowrap" }}>
+      {aboardRows.length > 0 ? "" : hasResidue ? "RESIDUE" : "EMPTY"}
+    </span>
+  );
   const addCheck = useMemo(() => checkAddPickup({
     compNumbers: Object.keys(compSizes).map(Number),
     onBoard: aboardRows,
@@ -1603,16 +1599,6 @@ export default function HomePage() {
           <div className="dash-num" style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 700, color: LOOK.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {equipmentLabel}
           </div>
-          {/* The trip's order number; the whole thing opens the PTD. */}
-          {openTrip && (
-            <button type="button" onClick={() => nav.go("ptd", `/planner/trips/${openTrip.trip_id}`)} {...busyProps(nav.is("ptd"))} aria-label="Open the PTD"
-              className="dash-num"
-              style={{ flexShrink: 0, background: "none", border: "none", padding: "4px 0 4px 12px", margin: "-4px 0", cursor: "pointer",
-                fontSize: 18, fontWeight: 700, color: LOOK.muted, display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
-              <span style={{ fontSize: 12, letterSpacing: 0.5, display: "inline-flex", alignItems: "center", gap: 6 }}>PTD {nav.is("ptd") ? <Spinner size={10} /> : "›"}</span>
-              <span>{children?.primaryOrder?.order_number ?? "No order #"}{children && children.extraOrders.length > 0 ? ` +${children.extraOrders.length}` : ""}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -1671,6 +1657,18 @@ export default function HomePage() {
         );
       })()}
 
+      {/* One order per load, just above the trip card, on the right. Opens the PTD. */}
+      {openTrip && (
+        <div style={{ display: "flex", justifyContent: "flex-end", margin: "6px 0 12px" }}>
+          <button type="button" onClick={() => nav.go("ptd", `/planner/trips/${openTrip.trip_id}`)} {...busyProps(nav.is("ptd"))} aria-label="Open the PTD"
+            className="dash-num"
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 18, fontWeight: 700, color: LOOK.muted, display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 12, letterSpacing: 0.5, display: "inline-flex", alignItems: "center", gap: 6 }}>PTD {nav.is("ptd") ? <Spinner size={10} /> : "›"}</span>
+            <span>{children?.primaryOrder?.order_number ?? "No order #"}</span>
+          </button>
+        </div>
+      )}
+
       <div className="dash-cols">
       <div>
       <SectionLabel desktopOnly first>Trip</SectionLabel>
@@ -1718,10 +1716,12 @@ export default function HomePage() {
       {/* Trip */}
       {openTrip ? (
         <div style={{ ...card, marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+          {trailerBar && <div style={{ marginBottom: 8 }}>{trailerBar}</div>}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Current trip · {STATUS_LABEL[openTrip.status]}
             </div>
+            {trailerLabel && <span style={{ marginLeft: "auto" }}>{trailerLabel}</span>}
             {/* The trip record is locked once the driver has arrived anywhere:
                 from then on it's a record of what happened. */}
             {!pickups.some((p) => p.arrived_at || p.load_id || p.left_at) && (
@@ -1738,11 +1738,7 @@ export default function HomePage() {
             // A rack the driver left without loading is a rack hop, not a
             // second pickup: show it as "Tried", and number only real pickups.
             const real = pickups.filter((p) => p.outcome !== "no_load");
-            const orderRows = children?.orders ?? [];
-            const multiOrder = orderRows.filter((o) => !!o.order_number).length > 1;
             const current = snap ? activePickup(snap.pickups) : null;
-            const orderNumberFor = (p: TripPickupRow) =>
-              (p.order_id ? orderRows.find((o) => o.order_id === p.order_id) : children?.primaryOrder)?.order_number ?? null;
             return pickups.map((p, i) => {
               const noLoad = p.outcome === "no_load";
               const n = real.indexOf(p);
@@ -1777,12 +1773,6 @@ export default function HomePage() {
                     <span style={{ flex: 1, minWidth: 0, color: placeColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{place || "—"}</span>
                     <span style={{ color: nameColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "55%" }}>{p.name ?? "Not set"}</span>
                   </div>
-                  {(pickups.length > 1 || multiOrder || p.order_id) && (
-                    <button type="button" onClick={() => { setOrderErr(null); setOrderPickup(p); }}
-                      style={{ display: "block", background: "none", border: "none", padding: 0, marginTop: 1, marginLeft: 72, color: muted, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
-                      Order {orderNumberFor(p) ?? "—"} ›
-                    </button>
-                  )}
                 </div>
               );
             });
@@ -1790,7 +1780,6 @@ export default function HomePage() {
           {/* The trailer on one line, between pickup and delivery: product
               colors when loaded (C1 on the right, like the Planner), residue
               dots for what it last carried when empty. */}
-          {trailerStrip && <div style={{ marginTop: 8, marginBottom: 4 }}>{trailerStrip}</div>}
           {liveDeliveries.length === 0 && (
             <div style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
               <span style={{ color: muted, width: 66, flexShrink: 0 }}>Delivery</span>
@@ -1858,9 +1847,12 @@ export default function HomePage() {
         </div>
       ) : (
         <div style={{ ...card, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>No trip in progress</div>
+          {trailerBar && <div style={{ marginBottom: 8 }}>{trailerBar}</div>}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>No trip in progress</div>
+            {trailerLabel}
+          </div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", marginTop: 6 }}>Start a load when you have an order.</div>
-          {trailerStrip && <div style={{ marginTop: 12, marginLeft: -72 }}>{trailerStrip}</div>}
         </div>
       )}
 

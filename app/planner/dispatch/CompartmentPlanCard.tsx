@@ -168,16 +168,14 @@ export function CompartmentPlanCard(p: {
 
               {p.groups.length > 0 && (
                 <div style={{ marginTop: 4 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Order and supplier · the first sets them for the rest</div>
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, marginBottom: 4 }}>Supplier · the first sets it for the rest</div>
                   {p.groups.map((g) => {
                     const prod = byId.get(g.productId);
                     return (
                       <div key={g.productId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${L.hairline}` }}>
                         <span style={{ width: 9, height: 9, borderRadius: "50%", background: colorOf(g.productId) ?? "#888", flexShrink: 0 }} />
                         <span style={{ width: 52, fontSize: 12, fontWeight: 700 }}>{prod?.code ?? "?"} <span style={{ color: L.faint, fontWeight: 500 }}>C{g.comps.join(",")}</span></span>
-                        <input value={g.orderNumber}
-                          onChange={(e) => p.onGroupOrder(g.productId, e.target.value)} placeholder="Order #"
-                          style={{ ...fieldInput, flex: 1, minWidth: 0, padding: "7px 8px", fontSize: 13 }} />
+                        <span style={{ flex: 1 }} />
                         <button type="button" onClick={() => p.onPickSupplier(g.productId)}
                           style={{ ...chip(false), maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {p.supplierName(g.supplierId) ?? "Supplier"}

@@ -928,7 +928,7 @@ export default function DispatchPage() {
                     }}
                     onPickSupplier={(pid) => { setSupPickFor(pid); setSuppliersOpen("pick"); }} />
                 )}
-                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={planGroups.length > 0} needProduct={planGroups.length === 0} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
+                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={false} needProduct={planGroups.length === 0} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
             ) : null}
             hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)}
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}

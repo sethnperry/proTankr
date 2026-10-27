@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabase/client";
 import { grossColor, type AddPickupCheck } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { CompartmentStrip } from "./CompartmentStrip";
-import { OrderChooser, type OrderChoice } from "./OrderChooser";
+import type { OrderChoice } from "./OrderChooser";
 import type { TripOrderRow } from "@/lib/trips/types";
 import { muted, primaryBtn, sectionCard, sectionTitle } from "./tripUi";
 
@@ -168,8 +168,6 @@ export function AddPickupSheet({
               </button>
             </div>
           </div>
-          <OrderChooser orders={orders} value={draft.order} error={orderError}
-            onChange={(order) => setDraft({ ...draft, order })} />
           {draft.comps.map((n) => (
             <div key={n} style={sectionCard}>
               <div style={sectionTitle}>C{n} · product</div>

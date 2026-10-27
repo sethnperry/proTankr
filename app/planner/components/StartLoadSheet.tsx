@@ -324,8 +324,6 @@ export function StartLoadSheet({
 
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
           <button type="button" style={addBtn}
-            onClick={() => { setV((s) => ({ ...s, extraOrderNumbers: [...s.extraOrderNumbers, ""] })); openEdit(`order:${v.extraOrderNumbers.length}`, { ...v, extraOrderNumbers: [...v.extraOrderNumbers, ""] }); }}>+ Order number</button>
-          <button type="button" style={addBtn}
             onClick={() => setV((s) => ({ ...s, deliveries: [...s.deliveries, { locationId: null, oneOffName: "", deliveryType: "drop" }] }))}>+ Delivery</button>
         </div>
       </div>
