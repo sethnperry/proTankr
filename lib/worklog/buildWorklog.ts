@@ -9,6 +9,7 @@
 //  - Loads and gallons are counted once, on the day the load was picked up. The continuation row
 //    shows time and miles only.
 
+import { computeOvertime, type OtRule } from "./overtime.ts";
 import { addDays, clock, localDateOf, localMidnightMs, shortDate, weekday } from "./time.ts";
 
 export type WlStop = { kind: "pickup" | "delivery"; name: string; number?: string | null; city?: string | null; state?: string | null; arrivedAt?: string | null; leftAt?: string | null; noLoad?: boolean };
@@ -23,6 +24,9 @@ export type WlPurchase = { at: string; store: string; place: string; gallons: nu
 export type WlInput = {
   driverName: string; range: { start: string; end: string }; tz: string; title: string;
   trips: WlTrip[]; purchases: WlPurchase[];
+  /** Hours on duty per local date from the electronic log; null/absent = not known. */
+  dutyHours?: Record<string, number> | null;
+  overtimeRule?: OtRule;
 };
 
 export type WlRow = {
@@ -33,12 +37,17 @@ export type WlRow = {
 export type WlDay = {
   date: string; label: string; from: string; to: string; hours: number; miles: number; loads: number; gross: number; net: number;
   rows: WlRow[]; midnightAfter: boolean;
+  /** On duty before, between and after trips (needs the electronic log); null = not known. */
+  nonRev: number | null; worked: number;
 };
 export type WlSummary = {
   daysWorked: number; hours: number; loads: number; gross: number; net: number;
   byProduct: { code: string; name: string; gross: number; net: number }[];
   miles: { total: number; loaded: number | null; empty: number | null; partial: boolean };
   spend: number;
+  /** Trip hours + non-revenue hours. */
+  worked: number; nonRev: number | null;
+  regular: number; overtime: number; double: number; otRule: OtRule;
 };
 export type WlMonth = { month: string; days: number; hours: number; loads: number; gross: number; net: number; miles: number };
 export type Worklog = {
@@ -90,7 +99,7 @@ export function buildWorklog(i: WlInput): Worklog {
   const dayMap = new Map<string, WlDay>();
   const dayOf = (date: string): WlDay => {
     let d = dayMap.get(date);
-    if (!d) { d = { date, label: `${weekday(date)} ${shortDate(date)}`, from: "", to: "", hours: 0, miles: 0, loads: 0, gross: 0, net: 0, rows: [], midnightAfter: false }; dayMap.set(date, d); }
+    if (!d) { d = { date, label: `${weekday(date)} ${shortDate(date)}`, from: "", to: "", hours: 0, miles: 0, loads: 0, gross: 0, net: 0, rows: [], midnightAfter: false, nonRev: null, worked: 0 }; dayMap.set(date, d); }
     return d;
   };
   const windows = new Map<string, { from: number; to: number }>();
@@ -147,11 +156,16 @@ export function buildWorklog(i: WlInput): Worklog {
     }
   }
 
+  // On-duty time with no trip around it still counts as worked: add those days.
+  const duty = i.dutyHours ?? null;
+  if (duty) for (const [date, h] of Object.entries(duty)) if (inRange(date) && h >= 0.25 && !dayMap.has(date)) dayOf(date);
   const days = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
   for (const d of days) {
-    const w = windows.get(d.date)!;
-    d.from = clock(w.from, tz); d.to = w.to >= localMidnightMs(addDays(d.date, 1), tz) ? "12:00a" : clock(w.to, tz);
+    const w = windows.get(d.date);
+    if (w) { d.from = clock(w.from, tz); d.to = w.to >= localMidnightMs(addDays(d.date, 1), tz) ? "12:00a" : clock(w.to, tz); }
     d.hours = r1(d.hours); d.miles = Math.round(d.miles);
+    d.nonRev = duty ? r1(Math.max(0, (duty[d.date] ?? 0) - d.hours)) : null;
+    d.worked = r1(d.hours + (d.nonRev ?? 0));
     d.midnightAfter = d.rows.some((r) => r.continues);
     for (const r of d.rows) { r.hours = r1(r.hours); r.miles = Math.round(r.miles); }
   }
@@ -164,6 +178,8 @@ export function buildWorklog(i: WlInput): Worklog {
     m.days += 1; m.hours += d.hours; m.loads += d.loads; m.gross += d.gross; m.net += d.net; m.miles += d.miles;
     monthMap.set(key, m);
   }
+  const rule = i.overtimeRule ?? "federal";
+  const ot = computeOvertime(days.map((d) => ({ date: d.date, hours: d.worked })), rule, i.range.start);
   const hasLoaded = loadedKnown + emptyKnown > 0;
   return {
     driverName: i.driverName, range: i.range, tz, title: i.title, days, purchases,
@@ -174,6 +190,9 @@ export function buildWorklog(i: WlInput): Worklog {
       byProduct: [...product.values()].sort((a, b) => b.gross - a.gross).map((p) => ({ ...p, gross: Math.round(p.gross), net: Math.round(p.net) })),
       miles: { total: Math.round(totalMiles), loaded: hasLoaded ? Math.round(loadedKnown) : null, empty: hasLoaded ? Math.round(emptyKnown) : null, partial: hasLoaded && anyUnknown },
       spend: Math.round(purchases.reduce((a, p) => a + (p.amount ?? 0), 0) * 100) / 100,
+      worked: r1(days.reduce((a, d) => a + d.worked, 0)),
+      nonRev: duty ? r1(days.reduce((a, d) => a + (d.nonRev ?? 0), 0)) : null,
+      regular: r1(ot.regular), overtime: r1(ot.overtime), double: r1(ot.double), otRule: rule,
     },
   };
 }

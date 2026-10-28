@@ -6,26 +6,13 @@
 
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { generatePayPeriods, type PayPeriodType } from "@/app/admin/payPeriods";
-import { lastFinishedPeriod, isLongRange, PERIOD_TITLE } from "@/lib/reports/periodOptions";
-import { buildWorklog } from "./buildWorklog";
-import { renderWorklogEmail, worklogSubject } from "./renderWorklog";
-import { loadWorklogInputs } from "./loadWorklogInputs";
+import { lastFinishedPeriod, PERIOD_TITLE } from "@/lib/reports/periodOptions";
+import { buildDriverWorklog } from "./serverWorklog";
+import { sendWorklogEmail } from "./emailWorklog";
 import { addDays, localDateOf } from "./time";
 
 const BATCH = 2;
 const SEND_HOUR = 6;
-
-async function sendEmail(to: string, subject: string, html: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY not set.");
-  const from = process.env.INVITE_FROM_EMAIL ?? "noreply@protankr.com";
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ from: `ProTankr <${from}>`, to: [to], subject, html }),
-  });
-  if (!res.ok) throw new Error(`Resend error ${res.status}: ${await res.text()}`);
-}
 
 export async function runWorklogs(nowMs = Date.now()): Promise<number> {
   const admin = getServiceSupabase();
@@ -68,10 +55,9 @@ export async function runWorklogs(nowMs = Date.now()): Promise<number> {
       const [{ data: u }, { data: prof }] = await Promise.all([admin.auth.admin.getUserById(uid), admin.from("profiles").select("display_name").eq("user_id", uid).maybeSingle()]);
       const email = u?.user?.email;
       if (!email) { await mark({ last_period_end: d.period.end }); continue; }
-      const { trips, purchases } = await loadWorklogInputs(admin, { userId: uid, range: d.period, tz: d.c.tz });
-      const w = buildWorklog({ driverName: ((prof as any)?.display_name ?? "").trim() || email, range: d.period, tz: d.c.tz, title: PERIOD_TITLE[d.type], trips, purchases });
-      if (!w.summary.loads && !w.summary.hours) { await mark({ last_period_end: d.period.end }); continue; }
-      await sendEmail(email, worklogSubject(w), renderWorklogEmail(w, { mode: isLongRange(d.period.start, d.period.end) ? "condensed" : "full" }));
+      const w = await buildDriverWorklog({ companyId: d.m.company_id, userId: uid, range: d.period, tz: d.c.tz, title: PERIOD_TITLE[d.type], driverName: ((prof as any)?.display_name ?? "").trim() || email });
+      if (!w.summary.loads && !w.summary.worked) { await mark({ last_period_end: d.period.end }); continue; }
+      await sendWorklogEmail(email, w);
       await mark({ last_period_end: d.period.end });
       sent++;
     } catch (e) { console.warn("[cron] worklog failed:", (e as Error).message); await mark({}); }

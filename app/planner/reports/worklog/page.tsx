@@ -9,15 +9,14 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../../CalculatorShellContext";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
-import { PrintPortal } from "../../trips/PtdDocument";
 import { periodOptions, PERIOD_TITLE, isLongRange, type PeriodSettings } from "@/lib/reports/periodOptions";
-import { loadWorklogInputs } from "@/lib/worklog/loadWorklogInputs";
-import { buildWorklog, type Worklog } from "@/lib/worklog/buildWorklog";
+import type { Worklog } from "@/lib/worklog/buildWorklog";
 import { renderWorklogBody } from "@/lib/worklog/renderWorklog";
 import { localDateOf } from "@/lib/worklog/time";
+import { OT_RULES, type OtRule } from "@/lib/worklog/overtime";
 import type { PayPeriodType } from "@/app/admin/payPeriods";
 
-type Company = { period_type: PayPeriodType; anchor_date: string; send_after_days: number; tz: string };
+type Company = { period_type: PayPeriodType; anchor_date: string; send_after_days: number; tz: string; overtime_rule: OtRule };
 const TYPES: [PayPeriodType, string][] = [["weekly", "Weekly"], ["biweekly", "Every 2 weeks"], ["semi_monthly", "Twice a month"], ["monthly", "Monthly"]];
 const box: React.CSSProperties = { background: "#121213", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 2, padding: 12 };
 const inp: React.CSSProperties = { colorScheme: "dark", width: "100%", background: "rgba(0,0,0,0.28)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, padding: "9px 10px", fontSize: 14 };
@@ -51,7 +50,7 @@ export default function WorklogPage() {
   const reload = async () => {
     if (!effectiveUserId) return;
     const [c, p] = await Promise.all([
-      companyId ? supabase.from("company_report_period").select("period_type, anchor_date, send_after_days, tz").eq("company_id", companyId).maybeSingle() : Promise.resolve({ data: null }),
+      companyId ? supabase.from("company_report_period").select("period_type, anchor_date, send_after_days, tz, overtime_rule").eq("company_id", companyId).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("driver_pay_settings").select("pay_period_type, pay_period_anchor_date, worklog_email").eq("user_id", effectiveUserId).maybeSingle(),
     ]);
     setCompany((c.data as Company | null) ?? null);
@@ -74,12 +73,11 @@ export default function WorklogPage() {
     setBusy(true); setErr("");
     (async () => {
       try {
-        const [{ trips, purchases }, { data: prof }] = await Promise.all([
-          loadWorklogInputs(supabase as any, { userId: effectiveUserId, range, tz }),
-          supabase.from("profiles").select("display_name").eq("user_id", effectiveUserId).maybeSingle(),
-        ]);
         const title = periodId.startsWith("p:") && effective ? PERIOD_TITLE[effective.type] : periodId === "custom" ? "Custom" : options.find((o) => o.id === periodId)?.label.split(" (")[0] ?? "Work Log";
-        const w = buildWorklog({ driverName: (prof as any)?.display_name ?? "", range, tz, title, trips, purchases });
+        const { data: sess } = await supabase.auth.getSession();
+        const r = await fetch("/api/worklog", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess.session?.access_token ?? ""}` }, body: JSON.stringify({ ...range, tz, title, format: "json" }) });
+        const w = (await r.json()) as Worklog & { error?: string };
+        if (!r.ok) throw new Error(w.error ?? "Couldn't load the report.");
         if (!dead) { setLog(w); setCondensed(isLongRange(range.start, range.end)); }
       } catch (e) { if (!dead) setErr((e as Error).message); }
       finally { if (!dead) setBusy(false); }
@@ -87,6 +85,22 @@ export default function WorklogPage() {
     return () => { dead = true; };
     /* eslint-disable-next-line */
   }, [range?.start, range?.end, effectiveUserId, tz]);
+
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const downloadPdf = async () => {
+    if (!range || !log) return;
+    setPdfBusy(true); setErr("");
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const r = await fetch("/api/worklog", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess.session?.access_token ?? ""}` }, body: JSON.stringify({ ...range, tz, title: log.title, format: "pdf" }) });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't make the PDF.");
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url; a.download = `ProTankr-Worklog-${range.start}-to-${range.end}.pdf`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setPdfBusy(false); }
+  };
 
   const html = useMemo(() => (log ? renderWorklogBody(log, { mode: condensed ? "condensed" : "full" }) : ""), [log, condensed]);
 
@@ -102,7 +116,7 @@ export default function WorklogPage() {
   };
 
   // settings state
-  const [cs, setCs] = useState<Company>({ period_type: "weekly", anchor_date: "", send_after_days: 2, tz: deviceTz });
+  const [cs, setCs] = useState<Company>({ period_type: "weekly", anchor_date: "", send_after_days: 2, tz: deviceTz, overtime_rule: "federal" });
   const [ms, setMs] = useState<{ type: PayPeriodType | ""; anchor: string; email: boolean }>({ type: "", anchor: "", email: true });
   const [note, setNote] = useState("");
   useEffect(() => {
@@ -149,7 +163,7 @@ export default function WorklogPage() {
           </label>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button style={btn} disabled={!log} onClick={() => window.print()}>Print / Save PDF</button>
+          <button style={btn} aria-busy={pdfBusy} disabled={!log || pdfBusy} onClick={downloadPdf}>Download PDF</button>
           {shell.isSuperAdmin && <button style={ghost} disabled={!range} onClick={sendSample}>Email me a sample</button>}
           <button style={ghost} onClick={() => setSettingsOpen((v) => !v)}>{settingsOpen ? "Hide settings" : "Period settings"}</button>
         </div>
@@ -167,6 +181,9 @@ export default function WorklogPage() {
             <input type="date" value={cs.anchor_date} onChange={(e) => setCs({ ...cs, anchor_date: e.target.value })} style={inp} />
             <div style={lbl}>Email goes out this many days after a period ends</div>
             <input type="number" min={0} max={14} value={cs.send_after_days} onChange={(e) => setCs({ ...cs, send_after_days: Math.max(0, Math.min(14, Number(e.target.value) || 0)) })} style={inp} />
+            <div style={lbl}>Overtime rule (for the regular / overtime split)</div>
+            <CustomSelect value={cs.overtime_rule} onChange={(v) => setCs({ ...cs, overtime_rule: v as OtRule })} options={OT_RULES.map((r) => ({ value: r.id, label: r.label }))} />
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>An estimate for drivers' records. It doesn't say what anyone is owed: your company may be exempt or use its own policy.</div>
             <div style={lbl}>Time zone</div>
             <input value={cs.tz} onChange={(e) => setCs({ ...cs, tz: e.target.value })} style={inp} />
             <div style={{ marginTop: 10 }}><button style={btn} onClick={saveCompany}>Save company period</button></div>
@@ -188,7 +205,6 @@ export default function WorklogPage() {
       {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{err}</div>}
       {busy && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Loading…</div>}
       {log && !busy && <div style={{ background: "#fff", borderRadius: 2, overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: html }} />}
-      {log && <PrintPortal><div dangerouslySetInnerHTML={{ __html: html }} /></PrintPortal>}
     </div>
   );
 }

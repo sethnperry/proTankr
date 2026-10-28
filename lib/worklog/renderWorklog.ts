@@ -59,10 +59,14 @@ export function renderWorklogBody(w: Worklog, o: { mode?: "full" | "condensed" }
   const s = w.summary;
   const mode = o.mode ?? "full";
   const m = s.miles;
+  const hasDuty = s.nonRev != null;
   const cells = [
     cell("Period", worklogRange(w), `${s.daysWorked} day${s.daysWorked === 1 ? "" : "s"} worked`),
-    cell("Hours worked", hr(s.hours)),
+    cell("Hours worked", hr(s.worked), hasDuty ? `trip ${hr(s.worked - (s.nonRev ?? 0))} + non-rev ${hr(s.nonRev ?? 0)}` : undefined),
     cell("Loads", String(s.loads)),
+    cell("Regular hours", hr(s.regular)),
+    cell("Overtime hours", hr(s.overtime + s.double), s.double > 0 ? `incl. ${hr(s.double)} double time` : undefined),
+    cell("Non-rev hours", s.nonRev == null ? "–" : hr(s.nonRev), s.nonRev == null ? "needs electronic log" : "on duty, not on a trip"),
     cell("Gross gallons", num(s.gross)),
     cell("Net gallons", num(s.net)),
     cell("Paid by you", money(s.spend), "card or cash"),
@@ -83,7 +87,7 @@ export function renderWorklogBody(w: Worklog, o: { mode?: "full" | "condensed" }
     const blocks = w.days.map((d, idx) => {
       const prev = w.days[idx - 1];
       const dash = prev && prev.midnightAfter && prev.date < d.date ? `<div class="mid"><span>MIDNIGHT</span></div>` : "";
-      const head = `<div class="dh"><b>${esc(weekday(d.date))} ${esc(shortDate(d.date))}</b> &nbsp;${esc(d.from)} to ${esc(d.to)} &nbsp;<span class="m">${hr(d.hours)} Hr · ${num(d.miles)} Mi${d.loads ? ` · ${d.loads} load${d.loads === 1 ? "" : "s"} · ${num(d.gross)} Ggal · ${num(d.net)} Ngal` : ""}</span></div>`;
+      const head = `<div class="dh"><b>${esc(weekday(d.date))} ${esc(shortDate(d.date))}</b> &nbsp;${d.from ? `${esc(d.from)} to ${esc(d.to)} ` : ""}&nbsp;<span class="m">${d.nonRev != null ? `${hr(d.worked)} Hr (trip ${hr(d.hours)} + non-rev ${hr(d.nonRev)})` : `${hr(d.hours)} Hr`} · ${num(d.miles)} Mi${d.loads ? ` · ${d.loads} load${d.loads === 1 ? "" : "s"} · ${num(d.gross)} Ggal · ${num(d.net)} Ngal` : ""}</span></div>`;
       const rows = d.rows.map((r) => {
         const ord = r.orders.length ? esc(r.orders.join(", ")) : "Trip";
         const time = r.continued || r.continues ? ` <span style="font-weight:400">(${esc(r.timeFrom)} to ${esc(r.timeTo)}${r.continues ? ", continues" : ""})</span>` : "";
@@ -108,68 +112,3 @@ ${log}${buys}
 </div>`;
 }
 
-// The email: tables and inline styles only. Mail apps (Gmail especially) drop <style> blocks and
-// ignore flexbox, so the in-app/print document above renders as an unstyled stack there.
-const F = "font-family:Arial,Helvetica,sans-serif;";
-const INK = "color:#111111;";
-const eTd = (inner: string, st = "") => `<td style="${F}${INK}${st}">${inner}</td>`;
-
-function eCells(items: [string, string, string?][]): string {
-  const w = `${Math.floor(100 / items.length)}%`;
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:0 0 6px"><tr>${items.map(([k, v, sub]) =>
-    `<td width="${w}" valign="top" bgcolor="#f6f6f6" style="${F}${INK}background:#f6f6f6;padding:8px 8px;border:2px solid #ffffff"><div style="font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#555555">${esc(k)}</div><div style="font-size:17px;font-weight:bold;color:#111111;margin-top:2px">${esc(v)}</div>${sub ? `<div style="font-size:10px;color:#555555;margin-top:1px">${esc(sub)}</div>` : ""}</td>`).join("")}</tr></table>`;
-}
-const eH2 = (t: string) => `<div style="${F}${INK}font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;border-bottom:2px solid #111111;padding:0 0 4px;margin:22px 0 8px">${esc(t)}</div>`;
-const eTable = (head: string[], rows: string[][], rightFrom = 1) =>
-  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr>${head.map((h, i) => `<td style="${F}font-size:10px;font-weight:bold;letter-spacing:.5px;text-transform:uppercase;color:#111111;padding:4px 4px;border-bottom:2px solid #111111;text-align:${i >= rightFrom ? "right" : "left"}">${esc(h)}</td>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((c, i) => `<td style="${F}font-size:13px;color:#111111;padding:5px 4px;border-bottom:1px solid #dddddd;text-align:${i >= rightFrom ? "right" : "left"}">${c}</td>`).join("")}</tr>`).join("")}</table>`;
-
-export function renderWorklogEmail(w: Worklog, o: { mode?: "full" | "condensed" } = {}): string {
-  const s = w.summary, m = s.miles;
-  const mode = o.mode ?? "full";
-  const byProduct = s.byProduct.length
-    ? eTable(["Product", "Gross gal", "Net gal"], s.byProduct.map((p) => [`${esc(p.name)} <span style="color:#666666">(${esc(p.code)})</span>`, num(p.gross), num(p.net)]))
-    : `<div style="${F}font-size:13px;color:#555555">No loads in this period.</div>`;
-
-  let log: string;
-  if (mode === "condensed") {
-    log = eH2("By month") + eTable(["Month", "Days", "Hours", "Loads", "Gross", "Net", "Miles"], w.months.map((x) => [esc(monthName(x.month)), String(x.days), hr(x.hours), String(x.loads), num(x.gross), num(x.net), num(x.miles)]));
-  } else {
-    const blocks = w.days.map((d, idx) => {
-      const prev = w.days[idx - 1];
-      const dash = prev && prev.midnightAfter && prev.date < d.date
-        ? `<div style="${F}border-top:2px dashed #777777;margin:10px 0 8px;padding-top:2px;text-align:center;font-size:10px;letter-spacing:.8px;color:#555555">MIDNIGHT</div>` : "";
-      const loads = d.loads ? ` &middot; ${d.loads} load${d.loads === 1 ? "" : "s"} &middot; ${num(d.gross)} Ggal &middot; ${num(d.net)} Ngal` : "";
-      const head = `<div style="${F}${INK}background:#eeeeee;padding:7px 8px;font-size:13px;line-height:1.4"><b style="font-size:14px">${esc(weekday(d.date))} ${esc(shortDate(d.date))}</b><br>${esc(d.from)} to ${esc(d.to)} &middot; ${hr(d.hours)} Hr &middot; ${num(d.miles)} Mi${loads}</div>`;
-      const rows = d.rows.map((r) => {
-        const ord = r.orders.length ? esc(r.orders.join(", ")) : "Trip";
-        const time = r.continued || r.continues ? ` <span style="font-weight:normal">(${esc(r.timeFrom)} to ${esc(r.timeTo)}${r.continues ? ", continues" : ""})</span>` : "";
-        return `<div style="${F}${INK}padding:6px 8px;border-bottom:1px solid #dddddd;font-size:13px;line-height:1.4"><b${r.continued ? ' style="font-style:italic"' : ""}>${ord}</b>${time}<br>${esc(r.route)}<br><span style="color:#444444">${esc(r.products)} &middot; ${hr(r.hours)} Hr &middot; ${num(r.miles)} Mi${r.gross != null ? ` &middot; ${num(r.gross)} Ggal &middot; ${num(r.net ?? 0)} Ngal` : ""}</span></div>`;
-      }).join("");
-      return `${dash}${head}${rows}<div style="height:10px;line-height:10px">&nbsp;</div>`;
-    }).join("");
-    log = eH2("Work log") + (blocks || `<div style="${F}font-size:13px;color:#555555">No work recorded in this period.</div>`);
-  }
-
-  const buys = w.purchases.length
-    ? eH2("Purchases you paid for") + eTable(["When", "Where", "Paid with", "Gal", "Amount"], [
-        ...w.purchases.map((p) => [esc(new Date(p.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: w.tz })), `${esc(p.store)}${p.place ? ` &middot; ${esc(p.place)}` : ""}`, p.kind === "cash" ? "Cash" : "My card", p.gallons != null ? num(p.gallons) : "&ndash;", p.amount != null ? money(p.amount) : "&ndash;"]),
-        ["", "", "", "<b>Total</b>", `<b>${money(s.spend)}</b>`],
-      ], 3)
-    : "";
-
-  const body = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;margin:0 auto" align="center"><tr><td bgcolor="#ffffff" style="${F}${INK}background:#ffffff;padding:18px 16px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:3px solid #111111"><tr>
-${eTd(`<div style="font-size:20px;font-weight:bold;letter-spacing:.5px;text-transform:uppercase;padding-bottom:8px">${esc(w.title)} Work Log</div>`)}
-<td align="right" width="34" style="padding-bottom:8px"><img src="https://protankr.com/icons/icon-email-black.png" width="28" height="28" alt="ProTankr" style="display:block"></td></tr></table>
-<div style="${F}${INK}font-size:14px;margin:8px 0 0">${esc(w.driverName)}</div>
-${eH2("Summary")}
-${eCells([["Period", worklogRange(w), `${s.daysWorked} day${s.daysWorked === 1 ? "" : "s"} worked`], ["Hours worked", hr(s.hours)]])}
-${eCells([["Loads", String(s.loads)], ["Gross gal", num(s.gross)], ["Net gal", num(s.net)]])}
-${eCells([["Loaded miles", m.loaded == null ? "–" : num(m.loaded), m.partial ? "tracked trips only" : undefined], ["Empty miles", m.empty == null ? "–" : num(m.empty)], ["Total miles", num(m.total)]])}
-${s.spend > 0 ? eCells([["Paid by you", money(s.spend), "card or cash"]]) : ""}
-${eH2("By product")}${byProduct}
-${log}${buys}
-<div style="${F}font-size:11px;line-height:1.45;color:#555555;margin-top:20px;border-top:1px solid #d5d5d5;padding-top:8px">Hours are the time from Begin Trip to the last stop, split at midnight in your time zone. Loads and gallons count on the day the load was picked up; a trip that crosses midnight shows on both days with its time and miles split. Gross and net gallons are as recorded in ProTankr. Compare this to your pay stub or settlement; it is a record of your work, not a pay statement.</div>
-</td></tr></table>`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head><body bgcolor="#f2f2f2" style="margin:0;padding:0;background:#f2f2f2">${body}</body></html>`;
-}
