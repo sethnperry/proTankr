@@ -62,7 +62,7 @@ export function renderWorklogBody(w: Worklog, o: { mode?: "full" | "condensed" }
   const hasDuty = s.nonRev != null;
   const cells = [
     cell("Period", worklogRange(w), `${s.daysWorked} day${s.daysWorked === 1 ? "" : "s"} worked`),
-    cell("Hours worked", hr(s.worked), hasDuty ? `trip ${hr(s.worked - (s.nonRev ?? 0))} + non-rev ${hr(s.nonRev ?? 0)}` : undefined),
+    cell("Hours worked", hr(s.worked), hasDuty ? `on duty; trip ${hr(s.tripHours)}, non-rev ${hr(s.nonRev ?? 0)}` : undefined),
     cell("Loads", String(s.loads)),
     cell("Regular hours", hr(s.regular)),
     cell("Overtime hours", hr(s.overtime + s.double), s.double > 0 ? `incl. ${hr(s.double)} double time` : undefined),
@@ -87,7 +87,7 @@ export function renderWorklogBody(w: Worklog, o: { mode?: "full" | "condensed" }
     const blocks = w.days.map((d, idx) => {
       const prev = w.days[idx - 1];
       const dash = prev && prev.midnightAfter && prev.date < d.date ? `<div class="mid"><span>MIDNIGHT</span></div>` : "";
-      const head = `<div class="dh"><b>${esc(weekday(d.date))} ${esc(shortDate(d.date))}</b> &nbsp;${d.from ? `${esc(d.from)} to ${esc(d.to)} ` : ""}&nbsp;<span class="m">${d.nonRev != null ? `${hr(d.worked)} Hr (trip ${hr(d.hours)} + non-rev ${hr(d.nonRev)})` : `${hr(d.hours)} Hr`} · ${num(d.miles)} Mi${d.loads ? ` · ${d.loads} load${d.loads === 1 ? "" : "s"} · ${num(d.gross)} Ggal · ${num(d.net)} Ngal` : ""}</span></div>`;
+      const head = `<div class="dh"><b>${esc(weekday(d.date))} ${esc(shortDate(d.date))}</b> &nbsp;${d.from ? `${esc(d.from)} to ${esc(d.to)} ` : ""}&nbsp;<span class="m">${d.nonRev != null ? `${hr(d.worked)} Hr on duty (trip ${hr(d.hours)}, non-rev ${hr(d.nonRev)})` : `${hr(d.hours)} Hr`} · ${num(d.miles)} Mi${d.loads ? ` · ${d.loads} load${d.loads === 1 ? "" : "s"} · ${num(d.gross)} Ggal · ${num(d.net)} Ngal` : ""}</span></div>`;
       const rows = d.rows.map((r) => {
         const ord = r.orders.length ? esc(r.orders.join(", ")) : "Trip";
         const time = r.continued || r.continues ? ` <span style="font-weight:400">(${esc(r.timeFrom)} to ${esc(r.timeTo)}${r.continues ? ", continues" : ""})</span>` : "";

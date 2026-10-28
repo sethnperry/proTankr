@@ -80,7 +80,7 @@ export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condens
   y -= 8;
   const hasDuty = s.nonRev != null;
   cells([
-    ["Hours worked", hr(s.worked), hasDuty ? `trip ${hr(s.worked - (s.nonRev ?? 0))} + non-rev ${hr(s.nonRev ?? 0)}` : `${s.daysWorked} day${s.daysWorked === 1 ? "" : "s"} worked`],
+    ["Hours worked", hr(s.worked), hasDuty ? `on duty; trip ${hr(s.tripHours)}, non-rev ${hr(s.nonRev ?? 0)}` : `${s.daysWorked} day${s.daysWorked === 1 ? "" : "s"} worked`],
     ["Regular hours", hr(s.regular)],
     ["Overtime hours", hr(s.overtime + s.double), s.double > 0 ? `incl. ${hr(s.double)} double time` : undefined],
   ]);
@@ -129,7 +129,7 @@ export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condens
       }
       const tail: string[] = [];
       if (d.from) tail.push(`${d.from} to ${d.to}`);
-      tail.push(d.nonRev != null ? `${hr(d.worked)} Hr (trip ${hr(d.hours)} + non-rev ${hr(d.nonRev)})` : `${hr(d.hours)} Hr`);
+      tail.push(d.nonRev != null ? `${hr(d.worked)} Hr on duty (trip ${hr(d.hours)}, non-rev ${hr(d.nonRev)})` : `${hr(d.hours)} Hr`);
       tail.push(`${num(d.miles)} Mi`);
       if (d.loads) tail.push(`${d.loads} load${d.loads === 1 ? "" : "s"}`, `${num(d.gross)} Ggal`, `${num(d.net)} Ngal`);
       const headLines = wrap(`${weekday(d.date)} ${shortDate(d.date)}   ${tail.join("  ·  ")}`, bold, 9, W - 2 * M - 12);

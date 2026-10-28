@@ -46,7 +46,7 @@ export type WlSummary = {
   miles: { total: number; loaded: number | null; empty: number | null; partial: boolean };
   spend: number;
   /** Trip hours + non-revenue hours. */
-  worked: number; nonRev: number | null;
+  worked: number; nonRev: number | null; tripHours: number;
   regular: number; overtime: number; double: number; otRule: OtRule;
 };
 export type WlMonth = { month: string; days: number; hours: number; loads: number; gross: number; net: number; miles: number };
@@ -165,7 +165,11 @@ export function buildWorklog(i: WlInput): Worklog {
     if (w) { d.from = clock(w.from, tz); d.to = w.to >= localMidnightMs(addDays(d.date, 1), tz) ? "12:00a" : clock(w.to, tz); }
     d.hours = r1(d.hours); d.miles = Math.round(d.miles);
     d.nonRev = duty ? r1(Math.max(0, (duty[d.date] ?? 0) - d.hours)) : null;
-    d.worked = r1(d.hours + (d.nonRev ?? 0));
+    // With the electronic log, the day's on-duty total is the hours worked (all on-duty time is paid);
+    // trips only split it into trip time and non-rev. No log for that day: trip time stands.
+    const onDuty = duty?.[d.date] ?? 0;
+    d.worked = onDuty > 0 ? r1(onDuty) : r1(d.hours);
+    if (duty && onDuty <= 0) d.nonRev = 0;
     d.midnightAfter = d.rows.some((r) => r.continues);
     for (const r of d.rows) { r.hours = r1(r.hours); r.miles = Math.round(r.miles); }
   }
@@ -190,7 +194,7 @@ export function buildWorklog(i: WlInput): Worklog {
       byProduct: [...product.values()].sort((a, b) => b.gross - a.gross).map((p) => ({ ...p, gross: Math.round(p.gross), net: Math.round(p.net) })),
       miles: { total: Math.round(totalMiles), loaded: hasLoaded ? Math.round(loadedKnown) : null, empty: hasLoaded ? Math.round(emptyKnown) : null, partial: hasLoaded && anyUnknown },
       spend: Math.round(purchases.reduce((a, p) => a + (p.amount ?? 0), 0) * 100) / 100,
-      worked: r1(days.reduce((a, d) => a + d.worked, 0)),
+      worked: r1(days.reduce((a, d) => a + d.worked, 0)), tripHours: r1(days.reduce((a, d) => a + d.hours, 0)),
       nonRev: duty ? r1(days.reduce((a, d) => a + (d.nonRev ?? 0), 0)) : null,
       regular: r1(ot.regular), overtime: r1(ot.overtime), double: r1(ot.double), otRule: rule,
     },
