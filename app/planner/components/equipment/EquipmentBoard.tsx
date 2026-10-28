@@ -40,6 +40,10 @@ type Props = {
   /** user_id holding each combo, for the truck's "In Use · SP" line. */
   claimedByCombo: Record<string, string | null>;
   initials: Record<string, string>;
+  /** What each holder is doing right now (En route, Loading, …), by user id. */
+  activity?: Record<string, string>;
+  /** Where a loaded trailer is headed, by trailer id. */
+  destByTrailer?: Record<string, string>;
   /** Compartment strip per trailer id (see useEquipmentBoardStatus). */
   strips?: Record<string, StripSeg[]>;
   /** The viewer's own pair (highlighted). */
@@ -112,7 +116,7 @@ export function EquipmentBoard(p: Props) {
                     {tl.tone !== "none" && (
                       <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : mine && tl.tone === "use" ? "#fff" : "rgba(255,255,255,0.6)" }}>
                         {/* The driver's own equipment reads "Mine"; everyone else's keeps In Use plus initials. */}
-                        {mine && tl.tone === "use" ? "Mine" : tl.text}
+                        {mine && tl.tone === "use" ? "Mine" : tl.tone === "use" && holder && p.activity?.[holder] ? `${p.initials[holder] ?? ""}${p.initials[holder] ? " · " : ""}${p.activity[holder]}` : tl.text}
                       </div>
                     )}
                   </Tile>
@@ -120,7 +124,7 @@ export function EquipmentBoard(p: Props) {
                   <Tile style={tile as React.CSSProperties} strip={segs}>
                     <Name>{c.trailer.name}</Name>
                     {loadedText(segs) ? (
-                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded</div>
+                      p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : null
                     ) : <StatusLine u={c.trailer} />}
                   </Tile>
                 </div>

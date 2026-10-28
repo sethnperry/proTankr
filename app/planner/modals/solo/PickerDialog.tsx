@@ -134,6 +134,7 @@ export function PickerDialog({ m }: { m: SoloModel }) {
             rows={boardRows}
             claimedByCombo={claimedByCombo}
             initials={boardStatus.initials}
+            activity={boardStatus.activity} destByTrailer={boardStatus.destByTrailer}
             strips={boardStatus.strips}
             mine={{ truckId: selectedTruckId, trailerId: selectedTrailerId }}
             loading={loading}

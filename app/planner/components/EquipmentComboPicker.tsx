@@ -58,6 +58,7 @@ export default function EquipmentComboPicker({
           rows={rows}
           claimedByCombo={claimedByCombo}
           initials={status.initials}
+          activity={status.activity} destByTrailer={status.destByTrailer}
           strips={status.strips}
           combosOnly
           onCombo={(c) => onPick(c.comboId)}

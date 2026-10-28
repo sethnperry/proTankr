@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { productColorFor } from "../utils/productColor";
-import { dotsFor, initialsOf, type LoadedDot } from "@/lib/equipment/boardStatus";
+import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, type LoadedDot } from "@/lib/equipment/boardStatus";
 import { stripSegments, residueStands, type StripSeg } from "@/lib/equipment/trailerStrip";
 
 const CARRYING = ["loading", "in_transit", "delivering", "parked"];
@@ -22,6 +22,9 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
 
   const [compSizes, setCompSizes] = useState<Record<string, { comp: number; size: number | null }[]>>({});
   const [residueBy, setResidueBy] = useState<Record<string, Record<number, string>>>({});
+
+  const [activity, setActivity] = useState<Record<string, string>>({});
+  const [destByTrailer, setDestByTrailer] = useState<Record<string, string>>({});
 
   const claimKey = [...new Set(claimerIds)].sort().join(",");
   const trailerKey = [...new Set(trailerIds)].sort().join(",");
@@ -65,6 +68,51 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     })();
     return () => { alive = false; };
   }, [enabled, trailerKey, refreshKey]);
+
+  // What each holder is doing (from their open trip or an open fuel stop) and where each loaded trailer is headed.
+  useEffect(() => {
+    if (!enabled || (!claimKey && !trailerKey)) { setActivity({}); setDestByTrailer({}); return; }
+    let alive = true;
+    void (async () => {
+      try {
+        const drivers = claimKey ? claimKey.split(",") : [];
+        const trailers = trailerKey ? trailerKey.split(",") : [];
+        const sel = "trip_id, driver_id, trailer_id, status";
+        const [a, b, fu] = await Promise.all([
+          drivers.length ? supabase.from("trips").select(sel).in("driver_id", drivers).in("status", CARRYING.concat("draft")) : Promise.resolve({ data: [] as any[] }),
+          trailers.length ? supabase.from("trips").select(sel).in("trailer_id", trailers).in("status", CARRYING) : Promise.resolve({ data: [] as any[] }),
+          drivers.length ? supabase.from("fuel_purchases").select("driver_id").in("driver_id", drivers).is("finished_at", null).neq("status", "complete") : Promise.resolve({ data: [] as any[] }),
+        ]);
+        const trips = new Map<string, { trip_id: string; driver_id: string; trailer_id: string | null; status: string }>();
+        for (const t of [...((a.data ?? []) as any[]), ...((b.data ?? []) as any[])]) trips.set(t.trip_id, t);
+        const ids = [...trips.keys()];
+        const [pk, dl] = ids.length
+          ? await Promise.all([
+              supabase.from("trip_pickups").select("trip_id, arrived_at, left_at, outcome").in("trip_id", ids),
+              supabase.from("trip_deliveries").select("trip_id, arrived_at, left_at, status, seq, location_id, one_off_name").in("trip_id", ids),
+            ])
+          : [{ data: [] as any[] }, { data: [] as any[] }];
+        const locIds = [...new Set(((dl.data ?? []) as any[]).map((d) => d.location_id).filter(Boolean))];
+        const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name").in("location_id", locIds) : { data: [] as any[] };
+        const locName = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, String(l.name ?? "")]));
+        const fuelers = new Set(((fu.data ?? []) as any[]).map((f) => f.driver_id));
+        const act: Record<string, string> = {};
+        const dest: Record<string, string> = {};
+        for (const t of trips.values()) {
+          const ps = ((pk.data ?? []) as any[]).filter((x) => x.trip_id === t.trip_id);
+          const ds = ((dl.data ?? []) as any[]).filter((x) => x.trip_id === t.trip_id);
+          if (drivers.includes(t.driver_id)) { const v = driverActivity({ status: t.status, pickups: ps, deliveries: ds }, fuelers.has(t.driver_id)); if (v) act[t.driver_id] = v; }
+          if (t.trailer_id && CARRYING.includes(t.status)) {
+            const i = nextDeliveryIndex(ds);
+            if (i >= 0) { const n = ds[i].location_id ? locName.get(ds[i].location_id) : ds[i].one_off_name; if (n) dest[t.trailer_id] = n; }
+          }
+        }
+        for (const id of fuelers) if (!act[id as string]) act[id as string] = "Fueling";
+        if (alive) { setActivity(act); setDestByTrailer(dest); }
+      } catch { /* fail open */ }
+    })();
+    return () => { alive = false; };
+  }, [enabled, claimKey, trailerKey, refreshKey]);
 
   // Compartment sizes, and what each trailer last held (cleared by a wash after that load).
   useEffect(() => {
@@ -143,5 +191,5 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return out;
   }, [compSizes, aboard, residueBy, colorOf]);
 
-  return { initials, loadedByTrailer, strips };
+  return { initials, loadedByTrailer, strips, activity, destByTrailer };
 }

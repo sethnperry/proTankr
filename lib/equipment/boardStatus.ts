@@ -32,3 +32,29 @@ export function truckLine(opts: { statusLabel: string | null; statusCode: string
   if (opts.claimedBy) return { text: opts.initials ? `In Use · ${opts.initials}` : "In Use", tone: "use" };
   return { text: "", tone: "none" };
 }
+
+type TripBits = {
+  status: string;
+  pickups: { arrived_at: string | null; left_at: string | null; outcome: string | null }[];
+  deliveries: { arrived_at: string | null; left_at: string | null; status: string | null; seq: number }[];
+};
+
+/** What a driver is doing right now, from their open trip. */
+export function driverActivity(t: TripBits | null, fueling: boolean): string | null {
+  if (fueling) return "Fueling";
+  if (!t) return null;
+  if (t.status === "parked") return "Parked";
+  if (t.pickups.some((p) => p.arrived_at && !p.left_at && p.outcome !== "no_load")) return "Loading";
+  if (t.deliveries.some((d) => d.arrived_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled")) return "Delivering";
+  return "En route";
+}
+
+/** The next stop still to deliver to (lowest seq not finished). */
+export function nextDeliveryIndex(ds: { status: string | null; seq: number }[]): number {
+  let best = -1;
+  ds.forEach((d, i) => {
+    if (d.status === "complete" || d.status === "cancelled") return;
+    if (best < 0 || d.seq < ds[best].seq) best = i;
+  });
+  return best;
+}

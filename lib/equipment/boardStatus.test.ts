@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialsOf, dotsFor, truckLine } from "./boardStatus.ts";
+import { initialsOf, dotsFor, truckLine, driverActivity, nextDeliveryIndex } from "./boardStatus.ts";
 
 test("initials use first and last name", () => {
   assert.equal(initialsOf("Seth Perry"), "SP");
@@ -18,4 +18,18 @@ test("truck line: status wins, then in-use initials, else nothing", () => {
   assert.deepEqual(truckLine({ statusLabel: "Readyline", statusCode: "readyline", claimedBy: "u", initials: "SP" }), { text: "Readyline", tone: "status" });
   assert.deepEqual(truckLine({ statusLabel: "In Use", statusCode: "in_use", claimedBy: "u", initials: "SP" }), { text: "In Use · SP", tone: "use" });
   assert.deepEqual(truckLine({ statusLabel: null, statusCode: null, claimedBy: null, initials: "" }), { text: "", tone: "none" });
+});
+
+test("driverActivity reads the trip", () => {
+  const base = { status: "in_transit", pickups: [], deliveries: [] as any[] };
+  assert.equal(driverActivity(null, false), null);
+  assert.equal(driverActivity(null, true), "Fueling");
+  assert.equal(driverActivity(base, false), "En route");
+  assert.equal(driverActivity({ ...base, pickups: [{ arrived_at: "x", left_at: null, outcome: null }] }, false), "Loading");
+  assert.equal(driverActivity({ ...base, deliveries: [{ arrived_at: "x", left_at: null, status: "arrived", seq: 1 }] }, false), "Delivering");
+  assert.equal(driverActivity({ ...base, status: "parked" }, false), "Parked");
+});
+test("nextDeliveryIndex skips finished stops", () => {
+  assert.equal(nextDeliveryIndex([{ status: "complete", seq: 1 }, { status: "planned", seq: 2 }]), 1);
+  assert.equal(nextDeliveryIndex([{ status: "complete", seq: 1 }]), -1);
 });
