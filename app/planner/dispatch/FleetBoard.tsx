@@ -10,6 +10,7 @@
 // deliveries, last delivery under the start. A dot shows where the truck is.
 
 import React, { useState } from "react";
+import { SideView, segsFor, useTrailerSizes } from "@/app/planner/components/TrailerViews";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
@@ -132,23 +133,27 @@ function RouteLine({ route, parked, live }: { route: TripRoute; parked: boolean;
   );
 }
 
-function ProductChips({ ft, product }: { ft: FleetTrip; product: (id: string | null) => BoardProduct }) {
+function ProductChips({ ft, product, sizes }: { ft: FleetTrip; product: (id: string | null) => BoardProduct; sizes: Record<string, { comp: number; size: number | null }[]> }) {
   const aboard = ft.compLoads
     .filter((c) => c.disposition === "loaded" || c.disposition === "retained")
     .sort((a, b) => b.comp_number - a.comp_number);
   if (aboard.length === 0) return null;
+  const loaded: Record<number, string | null> = {};
+  for (const c of aboard) { const p = product(c.product_id); loaded[c.comp_number] = p.hex ?? productColorFor(p.name); }
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 6 }}>
-      {aboard.map((c) => {
-        const p = product(c.product_id);
-        const g = c.gross_gallons != null ? Math.round(Number(c.gross_gallons)).toLocaleString("en-US") : null;
-        return (
-          <span key={c.compartment_load_id} style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.hex ?? productColorFor(p.name) }} />
-            C{c.comp_number} {p.code}{g ? ` · ${g}` : ""}
-          </span>
-        );
-      })}
+    <div style={{ marginTop: 6 }}>
+      <SideView segs={segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded)} height={12} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 5 }}>
+        {aboard.map((c) => {
+          const p = product(c.product_id);
+          const g = c.gross_gallons != null ? Math.round(Number(c.gross_gallons)).toLocaleString("en-US") : null;
+          return (
+            <span key={c.compartment_load_id} style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
+              C{c.comp_number} {p.code}{g ? ` · ${g}` : ""}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -305,6 +310,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
   now: Date;
   onOpenTrip: (tripId: string) => void; // opens the PTD in progress
 }) {
+  const sizes = useTrailerSizes(trips.map((t) => t.trip.trailer_id));
   const live = trips.filter((t) => t.trip.status !== "parked");
   const parked = trips.filter((t) => t.trip.status === "parked");
   const show = (x: BoardSection) => !sections || sections.includes(x);
@@ -363,7 +369,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
               );
             })()}
             <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
-            <ProductChips ft={ft} product={product} />
+            <ProductChips ft={ft} product={product} sizes={sizes} />
           </button>
         );
       })}
@@ -394,7 +400,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
               {ft.orderNumbers.length > 0 ? ` · Order ${ft.orderNumbers.join(", ")}` : ""}
             </div>
             {t.parked_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{t.parked_note}&rdquo;</div>}
-            <ProductChips ft={ft} product={product} />
+            <ProductChips ft={ft} product={product} sizes={sizes} />
           </button>
         );
       })}

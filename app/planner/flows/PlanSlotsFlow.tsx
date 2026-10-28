@@ -17,7 +17,7 @@ export default function PlanSlotsFlow() {
     setPresetQuickPickOpen,
     summaryForSlot,
     nameForSlot,
-    colorsForSlot,
+    stripForSlot,
     handlePresetLoad,
     handlePresetSaveEmpty,
     setPresetSheetSlot,
@@ -48,7 +48,7 @@ export default function PlanSlotsFlow() {
         disabledReason={!shell.location.selectedTerminalId ? "Select a terminal first" : "Syncing presets…"}
         getSummary={summaryForSlot}
         getName={nameForSlot}
-        getColors={colorsForSlot}
+        getStrip={stripForSlot}
         onLoad={handlePresetLoad}
         onSaveEmpty={handlePresetSaveEmpty}
         onOpenActions={(n) => setPresetSheetSlot(n)}

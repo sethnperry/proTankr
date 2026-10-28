@@ -20,7 +20,7 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
   const { loadWorkflow, tripWaitingPickup } = l;
   const {
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
-    summaryForSlot, presetSheetSummary, nameForSlot, colorsForSlot,
+    summaryForSlot, presetSheetSummary, nameForSlot, stripForSlot,
     handlePresetLoad, handlePresetSaveEmpty, handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
     planSlotWithLayout, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleWizardFinish,
   } = usePlanSlotsView({
@@ -46,7 +46,7 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     summaryForSlot,
     presetSheetSummary,
     nameForSlot,
-    colorsForSlot,
+    stripForSlot,
     handlePresetLoad,
     handlePresetSaveEmpty,
     handlePresetSheetLoad,

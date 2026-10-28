@@ -2310,6 +2310,7 @@ export default function HomePage() {
         suppliers={suppliers}
         onAddSupplier={addSupplier}
         presets={sheetPresets}
+        compSizes={compSizes}
         dispatchPlan={dispatchedPickup ? (() => {
           const meta = readPlannedMeta(dispatchedPickup.planned_comps);
           if (!meta.size) return null;

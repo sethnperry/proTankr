@@ -16,7 +16,10 @@ import { dispatchedForDriver } from "@/lib/trips/tripLogic";
 import { swapRunOrder } from "@/lib/dispatch/dispatchTrip";
 import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
-import type { TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
+import { BirdTab, segsFor, useTrailerSizes } from "../components/TrailerViews";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { productColorFor } from "../utils/productColor";
+import type { TripCompartmentLoadRow, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import { fmtDateTime } from "./PtdDocument";
 
 import { usePending } from "@/lib/ui/pending";
@@ -45,6 +48,7 @@ export default function TripsPage() {
   const [showHidden, setShowHidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locs, setLocs] = useState<Record<string, string>>({});
+  const catalog = useProductsCatalog();
 
   useEffect(() => {
     if (!store || !userId) return;
@@ -68,6 +72,8 @@ export default function TripsPage() {
           ]);
           if (cancelled) return;
           store.hydrate("trip_pickups", (pk.data ?? []) as TripPickupRow[]);
+          const cl = await supabase.from("trip_compartment_loads").select("*").in("trip_id", ids.slice(i, i + 200));
+          if (!cancelled) store.hydrate("trip_compartment_loads", (cl.data ?? []) as TripCompartmentLoadRow[]);
           const dels = (dl.data ?? []) as TripDeliveryRow[];
           store.hydrate("trip_deliveries", dels);
           const locIds = [...new Set(dels.map((d) => d.location_id).filter(Boolean))] as string[];
@@ -106,10 +112,18 @@ export default function TripsPage() {
         const from = picks.map((k) => [k.name, [k.city, k.state].filter(Boolean).join(", ")].filter(Boolean).join(" ")).filter(Boolean).join(" + ");
         const to = drops.map((d) => (d.location_id && locs[d.location_id]) || d.one_off_name || "").filter(Boolean).join(" + ");
         const route = [from, to].filter(Boolean).join(" to ");
-        return { trip: t, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
+        // What the trailer carried, comp by comp, for the tab down the card's right edge.
+        const loadedBy: Record<number, string | null> = {};
+        for (const c of store.list("trip_compartment_loads", (x) => x.trip_id === t.trip_id)) {
+          if (c.disposition === "cancelled" || !c.product_id) continue;
+          const p = catalog.data.find((x) => x.product_id === c.product_id);
+          loadedBy[c.comp_number] = p?.hex_code || productColorFor(p ? p.display_name || p.product_name : "");
+        }
+        return { trip: t, loadedBy, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, userId, state, locs]);
+  }, [store, userId, state, locs, catalog.data]);
+  const sizes = useTrailerSizes(rows.map((r) => r.trip.trailer_id));
 
   const hiddenCount = rows.filter((r) => r.trip.driver_hidden).length;
   const visible = showHidden ? rows : rows.filter((r) => !r.trip.driver_hidden);
@@ -144,7 +158,8 @@ export default function TripsPage() {
           {loading ? "Loading…" : rows.length ? "Nothing to show." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {visible.map(({ trip, order, more, route }) => {
+      {visible.map(({ trip, order, more, route, loadedBy }) => {
+        const segs = segsFor(trip.trailer_id ? sizes[trip.trailer_id] : undefined, loadedBy);
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
@@ -152,7 +167,8 @@ export default function TripsPage() {
           <div key={trip.trip_id} role="button" tabIndex={0} aria-busy={nav.is(trip.trip_id)}
             onClick={() => nav.go(trip.trip_id, `/planner/trips/${trip.trip_id}`)}
             onKeyDown={(e) => { if (e.key === "Enter") nav.go(trip.trip_id, `/planner/trips/${trip.trip_id}`); }}
-            style={{ ...card, opacity: trip.driver_hidden ? 0.55 : 1 }}>
+            style={{ ...card, display: "flex", padding: 0, overflow: "hidden", opacity: trip.driver_hidden ? 0.55 : 1 }}>
+            <div style={{ flex: 1, minWidth: 0, padding: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
               <div style={{ display: "flex", gap: 6, minWidth: 0, fontSize: 16, fontWeight: 800 }}>
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -193,6 +209,8 @@ export default function TripsPage() {
                 </button>
               )}
             </div>
+            </div>
+            <BirdTab segs={segs} />
           </div>
         );
       })}

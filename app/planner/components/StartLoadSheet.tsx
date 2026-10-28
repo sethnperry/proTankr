@@ -10,6 +10,7 @@
 // dashboard, with "+ New location"), never typed as free text.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SideView, segsFor } from "./TrailerViews";
 import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -38,6 +39,7 @@ export function StartLoadSheet({
   suppliers,
   onAddSupplier,
   presets,
+  compSizes,
   dispatchPlan,
   dispatchMatch,
   saveSlot,
@@ -71,6 +73,8 @@ export function StartLoadSheet({
   suppliers: SupplierRow[];
   onAddSupplier: (name: string) => SupplierRow | null;
   presets: PresetSummary[];
+  /** Volume per compartment number, so the plan views are drawn in proportion. */
+  compSizes?: Record<number, number>;
   // The plan dispatch sent (product per compartment, highest comp first). Replaces the plan list.
   dispatchPlan?: (string | null)[] | null;
   // The driver's own saved plan with the same layout as the one dispatch sent, if any.
@@ -210,13 +214,15 @@ export function StartLoadSheet({
     k === "miles" ? "Beginning miles" : k === "order" ? "Order number" : k === "shipper" ? "Shipper" : k === "customer" ? "Customer" : k === "start" ? "Starting from" : `Order number ${Number(k.slice(6)) + 2}`;
 
   const chosenPreset = presets.find((p) => p.slot === v.planSlot) ?? null;
-  const dots = (comps: (string | null)[]) => (
-    <span style={{ display: "inline-flex", gap: 5, verticalAlign: "middle" }}>
-      {comps.map((c, i) => (
-        <span key={i} style={{ width: 11, height: 11, borderRadius: "50%", background: c ? productColor(c) : "#000", border: "1px solid rgba(255,255,255,0.25)" }} />
-      ))}
-    </span>
-  );
+  // Comps arrive highest number first (the Planner's right-to-left order).
+  const dots = (comps: (string | null)[]) => {
+    const n = comps.length;
+    const sizes = Array.from({ length: n }, (_, i) => ({ comp: i + 1, size: compSizes?.[i + 1] ?? null }));
+    const loaded: Record<number, string | null> = {};
+    comps.forEach((c, i) => { loaded[n - i] = c ? productColor(c) : null; });
+    return <span style={{ display: "inline-block", width: 112, verticalAlign: "middle" }}><SideView segs={segsFor(sizes, loaded)} height={14} /></span>;
+  };
+
 
   return (
     <>

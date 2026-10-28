@@ -8,6 +8,7 @@
 // Each card is collapsed to a line or two; tap the header to expand.
 
 import React, { useState } from "react";
+import { SideView, segsFor, useTrailerSizes } from "../TrailerViews";
 import { CardBusy, Spinner, busyProps } from "@/lib/ui/pending";
 import { apiTierColor, type ApiTier } from "../../utils/apiBasis";
 import type { TerminalProductStatus, StoreDelivery } from "../../hooks/useDashboardCards";
@@ -426,6 +427,12 @@ export function StoreActivityCard({ storeName, items, productInfo, onPickStore }
   );
 }
 
+function loadedColors(loads: FleetTripLike["compLoads"], productInfo: ProductInfoFn): Record<number, string | null> {
+  const m: Record<number, string | null> = {};
+  for (const c of onBoard(loads)) m[c.comp_number] = colorOf(productInfo(c.product_id));
+  return m;
+}
+
 export function ParkedPreloadsCard({ items, productInfo, onOpenTrip, openingId }: {
   openingId?: string | null;
   items: FleetTripLike[];
@@ -433,6 +440,7 @@ export function ParkedPreloadsCard({ items, productInfo, onOpenTrip, openingId }
   onOpenTrip: (tripId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const sizes = useTrailerSizes(items.map((f) => f.trip.trailer_id));
   if (items.length === 0) return null;
   return (
     <div style={cardStyle}>
@@ -461,11 +469,14 @@ export function ParkedPreloadsCard({ items, productInfo, onOpenTrip, openingId }
               </span>
               <span style={{ color: muted, fontSize: 12, flexShrink: 0 }}>{ago(f.trip.parked_at ?? null)}</span>
             </div>
+            <div style={{ marginTop: 6 }}>
+              <SideView segs={segsFor(f.trip.trailer_id ? sizes[f.trip.trailer_id] : undefined, loadedColors(f.compLoads, productInfo))} height={12} />
+            </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
               {forLabel && <span style={{ color: muted }}>{forLabel}</span>}
               {[...byProduct].map(([pid, g]) => {
                 const info = productInfo(pid);
-                return <span key={String(pid)} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Dot color={colorOf(info)} />{info.code} {gal(g)}</span>;
+                return <span key={String(pid)}>{info.code} {gal(g)}</span>;
               })}
             </div>
           </button>

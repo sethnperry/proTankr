@@ -36,6 +36,7 @@
 // visual representation of the product selection."
 
 import React, { useEffect, useRef, useState } from "react";
+import { SideView, type StripSeg } from "./TrailerViews";
 
 type Props = {
   open: boolean;
@@ -47,7 +48,7 @@ type Props = {
   disabledReason?: string;
   getSummary: (slot: number) => string;
   getName: (slot: number) => string | undefined;
-  getColors: (slot: number) => string[];
+  getStrip: (slot: number) => StripSeg[];
   onLoad: (slot: number) => void;
   onSaveEmpty: (slot: number) => void;
   onOpenActions: (slot: number) => void;
@@ -73,7 +74,7 @@ const ROW_BORDER_ACTIVE = "1px solid rgba(255,255,255,0.25)";
 
 export default function PresetQuickPick({
   open, onClose, slots, slotHas, activeSlot, disabled, disabledReason,
-  getSummary, getName, getColors, onLoad, onSaveEmpty, onOpenActions, onRename,
+  getSummary, getName, getStrip, onLoad, onSaveEmpty, onOpenActions, onRename,
   onRecallLastLoad,
 }: Props) {
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
@@ -137,7 +138,7 @@ export default function PresetQuickPick({
             const has = !!slotHas[slot];
             const isActive = slot === activeSlot;
                         const name = getName(slot);
-            const colors = has ? getColors(slot) : [];
+            const strip = has ? getStrip(slot) : [];
 
             const onPressStart = () => {
               if (disabled || !has) return;
@@ -192,11 +193,7 @@ export default function PresetQuickPick({
                           {name || `Preset ${letter}`}
                         </div>
                         {has ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }} title={getSummary(slot)}>
-                            {colors.map((c, i) => (
-                              <span key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: c, flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.25)" }} />
-                            ))}
-                          </div>
+                          <div style={{ flex: "0 0 112px" }} title={getSummary(slot)}><SideView segs={strip} height={14} /></div>
                         ) : (
                           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>
                             Tap to save current plan

@@ -7,6 +7,7 @@
 // logic. Lifted out of PlannerHost unchanged.
 
 import { useRouter } from "next/navigation";
+import { segsFor, type StripSeg } from "../components/TrailerViews";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
@@ -118,15 +119,15 @@ export function usePlanSlotsView(i: Inputs) {
   // file's `ordered = [...compartments].sort(asc).reverse()`, "right-to-
   // left display" comment) -- per explicit correction ("comp 1 is on the
   // right, looking at the passenger side... the dots are backwards").
-  const colorsForSlot = useCallback((slot: number): string[] => {
+  const stripForSlot = useCallback((slot: number): StripSeg[] => {
     const plan = planSlots.peekSlot(slot)?.compPlan;
-    return [...compartments]
-      .map((c: any) => Number(c.comp_number))
-      .sort((a, b) => b - a)
-      .map((n) => {
-        const v = plan?.[n];
-        return (!v || v.empty || !v.productId) ? "#000000" : productColorFor(productNameById.get(v.productId) ?? "");
-      });
+    const sizes = compartments.map((c: any) => ({ comp: Number(c.comp_number), size: c.max_gallons != null ? Number(c.max_gallons) : null }));
+    const loaded: Record<number, string | null> = {};
+    for (const c of sizes) {
+      const v = plan?.[c.comp];
+      loaded[c.comp] = !v || v.empty || !v.productId ? null : productColorFor(productNameById.get(v.productId) ?? "");
+    }
+    return segsFor(sizes, loaded);
   }, [planSlots, productNameById, compartments]);
 
   // Same tap-to-load/tap-empty-to-save sequence the old PresetDial's own
@@ -243,7 +244,7 @@ export function usePlanSlotsView(i: Inputs) {
 
   return {
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
-    summaryForSlot, presetSheetSummary, nameForSlot, colorsForSlot,
+    summaryForSlot, presetSheetSummary, nameForSlot, stripForSlot,
     handlePresetLoad, handlePresetSaveEmpty, handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
     planSlotWithLayout, hasAnyPlan, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleWizardFinish,
   };

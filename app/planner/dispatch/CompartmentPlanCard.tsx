@@ -8,6 +8,7 @@
 // Planner of anyone who drives that trailer.
 
 import React, { useMemo, useState } from "react";
+import { SideView, segsFor } from "../components/TrailerViews";
 import { useDashLook } from "../home/dashLook";
 import { SECONDARY_BTN } from "@/lib/ui/look";
 import { CompartmentStrip } from "../components/trip/CompartmentStrip";
@@ -89,9 +90,11 @@ export function CompartmentPlanCard(p: {
     if (pid) next[n] = pid; else delete next[n];
     p.onPlan(next);
   };
-  const dots = (payload: any) => {
+  const slotSegs = (payload: any) => {
     const pl = planFromSlotPayload(payload);
-    return [...p.comps].sort((a, b) => b.n - a.n).map((c) => colorOf(pl[c.n]));
+    const loaded: Record<number, string | null> = {};
+    for (const c of p.comps) loaded[c.n] = colorOf(pl[c.n]) ?? null;
+    return segsFor(p.comps.map((c) => ({ comp: c.n, size: c.size ?? null })), loaded);
   };
   const loadSlot = (s: number) => {
     const t = p.slots[s];
@@ -138,7 +141,7 @@ export function CompartmentPlanCard(p: {
                   return (
                     <button key={s} type="button" onClick={() => loadSlot(s)} style={{ ...slotChip(p.activeSlot === s), display: "flex", alignItems: "center", gap: 6 }}>
                       {ltr}
-                      {t && <span style={{ display: "flex", gap: 2 }}>{dots(t.payload).map((c, j) => <span key={j} title={c ? undefined : "Empty"} style={{ width: 8, height: 8, borderRadius: "50%", background: c ?? "linear-gradient(to top right, transparent calc(50% - 1px), rgba(255,255,255,0.5) calc(50% - 1px), rgba(255,255,255,0.5) calc(50% + 1px), transparent calc(50% + 1px)), linear-gradient(to bottom right, transparent calc(50% - 1px), rgba(255,255,255,0.5) calc(50% - 1px), rgba(255,255,255,0.5) calc(50% + 1px), transparent calc(50% + 1px)), #000", border: "1px solid rgba(255,255,255,0.3)" }} />)}</span>}
+                      {t && <span style={{ display: "inline-block", width: 60 }}><SideView segs={slotSegs(t.payload)} height={9} gap={2} /></span>}
                     </button>
                   );
                 })}
