@@ -60,7 +60,7 @@ type Props = {
 
 function Strip({ segs }: { segs: StripSeg[] }) {
   return (
-    <div aria-hidden style={{ alignSelf: "stretch", width: 14, flexShrink: 0, margin: "6px 0", display: "flex", flexDirection: "column", gap: 2 }}>
+    <div aria-hidden style={{ alignSelf: "stretch", width: 20, flexShrink: 0, margin: 0, display: "flex", flexDirection: "column", gap: 2, borderLeft: "1px solid rgba(255,255,255,0.12)" }}>
       {segs.map((g) => (
         <div key={g.comp} style={{
           flex: `${g.size} 1 0`, minHeight: 3, boxSizing: "border-box",
@@ -75,8 +75,8 @@ function Strip({ segs }: { segs: StripSeg[] }) {
 
 function Tile({ children, strip, style, ...rest }: { children: React.ReactNode; strip?: StripSeg[]; style?: React.CSSProperties } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div {...rest} style={{ ...tileBase, ...style }}>
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    <div {...rest} style={{ ...tileBase, ...(strip && strip.length > 0 ? { paddingRight: 0, gap: 0 } : {}), ...style }}>
+      <div style={{ flex: 1, minWidth: 0, ...(strip && strip.length > 0 ? { paddingLeft: 10 } : {}) }}>{children}</div>
       {strip && strip.length > 0 && <Strip segs={strip} />}
     </div>
   );
