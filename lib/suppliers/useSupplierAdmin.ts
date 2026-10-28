@@ -5,6 +5,7 @@
 // contract terms per supplier and terminal, and the writes behind them.
 // Writes return an error string instead of throwing. Contracts are warn-only.
 
+import { sharedTerminals } from "./useTerminalSuppliers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -115,27 +116,30 @@ export async function saveSupplierAdmin(ids: Ids, v: {
   };
   // Only a manager sends lock changes (the database refuses them from anyone else).
   if (canLock) { patch.account_locked = v.accountLocked; patch.step_locks = a.locks; }
-  const { error } = await supabase.from("supplier_terminal_steps").upsert(patch, { onConflict: "supplier_id,terminal_id" });
+  const terminals = await sharedTerminals(ids.companyId, ids.terminalId);
+  const { error } = await supabase.from("supplier_terminal_steps").upsert(terminals.map((t) => ({ ...patch, terminal_id: t })), { onConflict: "supplier_id,terminal_id" });
   return error ? error.message : null;
 }
 
 export async function saveContract(ids: Ids, c: Omit<SupplierContract, "supplier_id" | "terminal_id">, userId: string, wasPaused: boolean): Promise<string | null> {
   const now = new Date().toISOString();
-  const { error } = await supabase.from("supplier_contracts").upsert({
-    company_id: ids.companyId, supplier_id: ids.supplierId, terminal_id: ids.terminalId,
+  const shared = await sharedTerminals(ids.companyId, ids.terminalId);
+  const { error } = await supabase.from("supplier_contracts").upsert(shared.map((terminal_id) => ({
+    company_id: ids.companyId, supplier_id: ids.supplierId, terminal_id,
     limit_basis: c.limit_basis, per_day: c.per_day, per_week: c.per_week, reset_dow: c.reset_dow, reset_time: c.reset_time,
     paused: c.paused, paused_note: c.paused ? (c.paused_note?.trim() || null) : null,
     ...(c.paused && !wasPaused ? { paused_at: now, paused_by: userId } : {}),
     ...(!c.paused ? { paused_at: null, paused_by: null } : {}),
     updated_by: userId, updated_at: now,
-  }, { onConflict: "supplier_id,terminal_id" });
+  })), { onConflict: "supplier_id,terminal_id" });
   return error ? error.message : null;
 }
 
 /** Takes a supplier off one terminal (its steps and contract go; the supplier stays). */
 export async function unlinkSupplier(ids: Ids): Promise<string | null> {
-  const a = await supabase.from("supplier_terminal_steps").delete().eq("supplier_id", ids.supplierId).eq("terminal_id", ids.terminalId);
+  const shared = await sharedTerminals(ids.companyId, ids.terminalId);
+  const a = await supabase.from("supplier_terminal_steps").delete().eq("supplier_id", ids.supplierId).in("terminal_id", shared);
   if (a.error) return a.error.message;
-  await supabase.from("supplier_contracts").delete().eq("supplier_id", ids.supplierId).eq("terminal_id", ids.terminalId);
+  await supabase.from("supplier_contracts").delete().eq("supplier_id", ids.supplierId).in("terminal_id", shared);
   return null;
 }

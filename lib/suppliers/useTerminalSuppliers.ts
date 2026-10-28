@@ -114,9 +114,26 @@ export function useTerminalSuppliers(companyId: string | null, terminalId: strin
 
 type Ids = { companyId: string; supplierId: string; terminalId: string };
 
+// Terminals that share sourcing with this one (terminal_sourcing_groups), this terminal included.
+const groupCache = new Map<string, { at: number; rows: { terminal_id: string; group_key: string }[] }>();
+export async function sharedTerminals(companyId: string, terminalId: string): Promise<string[]> {
+  let hit = groupCache.get(companyId);
+  if (!hit || Date.now() - hit.at > 5 * 60_000) {
+    const { data, error } = await supabase.from("terminal_sourcing_groups").select("terminal_id,group_key").eq("company_id", companyId);
+    hit = { at: Date.now(), rows: error ? [] : ((data ?? []) as { terminal_id: string; group_key: string }[]) };
+    groupCache.set(companyId, hit);
+  }
+  const mine = hit.rows.find((r) => String(r.terminal_id) === terminalId);
+  if (!mine) return [terminalId];
+  return hit.rows.filter((r) => r.group_key === mine.group_key).map((r) => String(r.terminal_id));
+}
+
 async function upsert(ids: Ids, patch: Record<string, unknown>): Promise<string | null> {
+  // Writes go to every terminal that shares sourcing here, so they stay the same.
+  const terminals = await sharedTerminals(ids.companyId, ids.terminalId);
+  const now = new Date().toISOString();
   const { error } = await supabase.from("supplier_terminal_steps").upsert(
-    { company_id: ids.companyId, supplier_id: ids.supplierId, terminal_id: ids.terminalId, updated_at: new Date().toISOString(), ...patch },
+    terminals.map((t) => ({ company_id: ids.companyId, supplier_id: ids.supplierId, terminal_id: t, updated_at: now, ...patch })),
     { onConflict: "supplier_id,terminal_id" },
   );
   return error ? error.message : null;
