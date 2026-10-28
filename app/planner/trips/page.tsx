@@ -111,7 +111,7 @@ export default function TripsPage() {
         const drops = store.list("trip_deliveries", (d) => d.trip_id === t.trip_id).filter((d) => d.status !== "cancelled").sort((a, b) => a.seq - b.seq);
         const from = picks.map((k) => [k.name, [k.city, k.state].filter(Boolean).join(", ")].filter(Boolean).join(" ")).filter(Boolean).join(" + ");
         const to = drops.map((d) => (d.location_id && locs[d.location_id]) || d.one_off_name || "").filter(Boolean).join(" + ");
-        const route = [from, to].filter(Boolean).join(" to ");
+        const route = [from, to].filter(Boolean).join(" → ");
         // What the trailer carried, comp by comp, for the tab down the card's right edge.
         const loadedBy: Record<number, string | null> = {};
         for (const c of store.list("trip_compartment_loads", (x) => x.trip_id === t.trip_id)) {
