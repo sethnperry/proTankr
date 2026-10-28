@@ -97,16 +97,16 @@ export function hosText(h: { driveLeftMin: number | null; dutyLeftMin: number | 
 }
 
 /** Rough driving time left to run the remaining stops in order, from the truck's
- * position: straight-line miles x 1.25 at 45 mph. Stops without coordinates are
+ * position: straight-line miles x 1.2 for the road at 55 mph (Tampa to Fort Myers: about 2 h). Stops without coordinates are
  * skipped, so it can only under-count. */
 export function remainingDriveMin(from: LatLon, stops: (LatLon | null)[]): number {
   let at = from, miles = 0;
   for (const s of stops) {
     if (!s) continue;
-    miles += airMiles(at, s) * 1.25;
+    miles += airMiles(at, s) * 1.2;
     at = s;
   }
-  return (miles / 45) * 60;
+  return (miles / 55) * 60;
 }
 
 export const STATUS_NAME: Record<string, string> = STATUS_LABEL;
@@ -132,20 +132,17 @@ export const DROP_STOP_MIN = 45; // time at a delivery
  * stops. `stopMin` is the on-duty time at the stops ahead. Both estimates
  * only count stops with known coordinates, so they can under-count; the text
  * says "about". Null when it is fine. */
+// Only said when the trip clearly won't fit: the estimates are rough, so a close call stays quiet.
+const MARGIN_MIN = 20;
+
 export function tripHosCheck(o: { driveLeftMin: number | null; dutyLeftMin: number | null; remainingDriveMin: number; stopMin: number }): { level: "warn" | "bad"; text: string } | null {
   const h = (m: number) => `${(Math.max(0, m) / 60).toFixed(1)} h`;
   const needWindow = o.remainingDriveMin + o.stopMin;
-  if (o.driveLeftMin != null && o.remainingDriveMin > o.driveLeftMin) {
+  if (o.driveLeftMin != null && o.remainingDriveMin > o.driveLeftMin + MARGIN_MIN) {
     return { level: "bad", text: `The rest of this trip needs about ${h(o.remainingDriveMin)} of driving and you have ${h(o.driveLeftMin)} left. Plan a break or a place to park.` };
   }
-  if (o.dutyLeftMin != null && needWindow > o.dutyLeftMin) {
+  if (o.dutyLeftMin != null && needWindow > o.dutyLeftMin + MARGIN_MIN) {
     return { level: "bad", text: `Finishing this trip takes about ${h(needWindow)} including stops and your window has ${h(o.dutyLeftMin)} left.` };
-  }
-  if (o.driveLeftMin != null && o.driveLeftMin - o.remainingDriveMin < 30) {
-    return { level: "warn", text: `Tight: about ${h(o.driveLeftMin - o.remainingDriveMin)} of driving to spare. Trip needs about ${h(o.remainingDriveMin)}, you have ${h(o.driveLeftMin)}.` };
-  }
-  if (o.dutyLeftMin != null && o.dutyLeftMin - needWindow < 30) {
-    return { level: "warn", text: `Tight: about ${h(o.dutyLeftMin - needWindow)} to spare in your window. Trip needs about ${h(o.remainingDriveMin)} driving + ${h(o.stopMin)} at stops, window has ${h(o.dutyLeftMin)}.` };
   }
   return null;
 }
