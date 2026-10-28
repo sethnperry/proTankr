@@ -78,7 +78,7 @@ const draftFrom = (r: AccessRequirements | null): Draft => ({
 const QUESTIONS = 5;
 
 export function TerminalAccessSheet({
-  open, terminalId, terminalName, userId, companyId, fromLoad, setupOnly, onClose, onCardIssued,
+  open, terminalId, terminalName, userId, companyId, fromLoad, setupOnly, editSetup, onClose, onCardIssued,
 }: {
   open: boolean;
   terminalId: string | null;
@@ -87,6 +87,7 @@ export function TerminalAccessSheet({
   companyId: string | null;
   fromLoad?: boolean;
   setupOnly?: boolean; // has access already: just collect the terminal's answers, then close
+  editSetup?: boolean; // open straight to the setup answers (admin edit)
   onClose: () => void;
   onCardIssued: (terminalId: string) => void | Promise<void>;
 }) {
@@ -110,7 +111,7 @@ export function TerminalAccessSheet({
     setInitFor(terminalId);
     setErr(null);
     setDraft(draftFrom(data.req));
-    if (!requirementsComplete(data.req)) { setQ(0); setMode("setup"); }
+    if (editSetup || !requirementsComplete(data.req)) { setQ(0); setMode("setup"); }
     else setMode("steps");
   }, [open, data, terminalId, initFor]);
 

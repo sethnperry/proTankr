@@ -26,6 +26,7 @@ import FleetUtilizationModal from "./FleetUtilizationModal";
 import TripSettingsModal from "./TripSettingsModal";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
+import TerminalSetupModal from "./TerminalSetupModal";
 import TelematicsModal from "./TelematicsModal";
 import IftaModal from "./IftaModal";
 import TargetWeightPolicyModal from "./TargetWeightPolicyModal";
@@ -1256,6 +1257,7 @@ export default function AdminPage() {
   const [tripSettingsOpen, setTripSettingsOpen] = useState(false);
   const [delaysOpen, setDelaysOpen] = useState(false);
   const [fuelSettingsOpen, setFuelSettingsOpen] = useState(false);
+  const [terminalSetupOpen, setTerminalSetupOpen] = useState(false);
   const [telematicsOpen, setTelematicsOpen] = useState(false);
   const [iftaOpen, setIftaOpen] = useState(false);
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
@@ -2076,6 +2078,11 @@ export default function AdminPage() {
             Trip Settings
           </button>
         )}
+        {(myRole === "admin" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setTerminalSetupOpen(true)}>
+            Terminal Setup
+          </button>
+        )}
         {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setFuelSettingsOpen(true)}>
             Fuel
@@ -2523,6 +2530,7 @@ export default function AdminPage() {
       <FleetUtilizationModal open={fleetUtilOpen} onClose={() => setFleetUtilOpen(false)} companyId={companyId!} />
       <IftaModal open={iftaOpen} onClose={() => setIftaOpen(false)} companyId={companyId!} />
       <TelematicsModal open={telematicsOpen} onClose={() => setTelematicsOpen(false)} companyId={companyId!} />
+      <TerminalSetupModal open={terminalSetupOpen} onClose={() => setTerminalSetupOpen(false)} userId={currentUserId || null} companyId={companyId || null} />
       <FuelSettingsModal open={fuelSettingsOpen} onClose={() => setFuelSettingsOpen(false)} companyId={companyId!} />
       <DelaysModal open={delaysOpen} onClose={() => setDelaysOpen(false)} companyId={companyId!} />
       <TripSettingsModal open={tripSettingsOpen} onClose={() => setTripSettingsOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
