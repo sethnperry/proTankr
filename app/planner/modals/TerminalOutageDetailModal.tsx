@@ -23,7 +23,7 @@
 import React, { useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { clearOutageReport, type ComposedOutageReport } from "../hooks/useTerminalOutageReports";
-import { hhmmInTimeZone } from "../utils/dates";
+import { hhmmInTimeZone, outageAge } from "../utils/dates";
 import { productColorFor } from "../utils/productColor";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../cards/cardTheme";
 
@@ -48,7 +48,6 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
       : report.productName;
   const productColor = productColorFor(report.productName);
   const markedHhmm = hhmmInTimeZone(report.createdAtMs, timeZone);
-  const clearsHhmm = hhmmInTimeZone(report.expiresAtMs, timeZone);
 
   return (
     <div
@@ -62,7 +61,8 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
       <div style={{ fontSize: 13, fontWeight: 700, color: productColor }}>{productLine}</div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-          Marked out at {markedHhmm} hrs, clears at {clearsHhmm} hrs
+          <span style={{ color: "#fff", fontWeight: 800 }}>{outageAge(report.createdAtMs, Date.now())}</span> since {markedHhmm} hrs
+          {report.reportType === "out_of_allocation" ? ` · resets at midnight` : " · stays until cleared"}
         </div>
         {report.canClear && (
           <button aria-busy={!!(clearing)}

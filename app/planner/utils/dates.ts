@@ -144,3 +144,31 @@ export function hhmmInTimeZone(dateMs: number, timeZone: string): string {
 export function nextClearingCheckpoint(atMs: number, timeZone: string): number {
   return mostRecentClearingCheckpoint(atMs, timeZone) + 6 * 60 * 60 * 1000;
 }
+
+// ─── Report lifetimes ────────────────────────────────────────────────────────
+// Out of Allocation resets at local midnight. Everything else (out of product, long line,
+// terminal issue) stays until someone clears it (a load at that rack clears out-of-product on its
+// own), with a 72 h cap so a forgotten flag can't mislead forever.
+export const MANUAL_REPORT_CAP_MS = 72 * 60 * 60 * 1000;
+
+export function outageExpiresAtMs(reportType: string, createdAtMs: number, timeZone: string): number {
+  if (reportType === "out_of_allocation") {
+    const { year, month, day } = tzPartsAt(createdAtMs, timeZone);
+    return zonedWallTimeToUtcMs(year, month, day + 1, 0, timeZone);
+  }
+  return createdAtMs + MANUAL_REPORT_CAP_MS;
+}
+
+export function outageIsActive(reportType: string, createdAtMs: number, nowMs: number, timeZone: string): boolean {
+  return nowMs < outageExpiresAtMs(reportType, createdAtMs, timeZone);
+}
+
+/** How long a flag has been up: "45m" under an hour, "5h" under a day, then "1d 6h". */
+export function outageAge(createdAtMs: number, nowMs: number): string {
+  const min = Math.max(0, Math.floor((nowMs - createdAtMs) / 60000));
+  if (min < 60) return `${Math.max(1, min)}m`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const d = Math.floor(hrs / 24);
+  return `${d}d ${hrs % 24}h`;
+}

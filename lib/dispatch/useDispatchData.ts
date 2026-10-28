@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { activePickup } from "@/lib/trips/tripFlow";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
-import { mostRecentClearingCheckpoint } from "@/app/planner/utils/dates";
+import { MANUAL_REPORT_CAP_MS, outageIsActive } from "@/app/planner/utils/dates";
 import { useCompanyRoster } from "@/app/planner/hooks/useCompanyRoster";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import type { ActiveReport, ReportType } from "./conflicts";
@@ -74,13 +74,8 @@ export function useFleetReports(trips: FleetTrip[], watchTerminalIds: string[] =
     if (readIds.length === 0) { setReports([]); setPlannedByLoad(new Map()); setLoaded(true); return; }
     try {
       const now = Date.now();
-      // Reports clear at the terminal's 6-hour checkpoints; fetch the widest
-      // window, then keep each terminal's own.
-      const cutoffs = new Map(readIds.map((id) => {
-        const tz = tzOf.get(id) || "America/New_York";
-        return [id, mostRecentClearingCheckpoint(now, tz)];
-      }));
-      const minCut = Math.min(...cutoffs.values());
+      // Allocation resets at local midnight; the rest stay until cleared (capped at 72 h).
+      const minCut = now - MANUAL_REPORT_CAP_MS;
       const [r, ll] = await Promise.all([
         supabase.from("terminal_outage_reports")
           .select("report_id, terminal_id, report_type, product_id, supplier_name, created_at")
@@ -91,7 +86,7 @@ export function useFleetReports(trips: FleetTrip[], watchTerminalIds: string[] =
       ]);
       if (r.error) throw r.error;
       setReports(((r.data ?? []) as any[])
-        .filter((x) => Date.parse(x.created_at) >= (cutoffs.get(String(x.terminal_id)) ?? 0))
+        .filter((x) => outageIsActive(x.report_type, Date.parse(x.created_at), now, tzOf.get(String(x.terminal_id)) || "America/New_York"))
         .map((x) => ({
           reportId: x.report_id, terminalId: String(x.terminal_id), type: x.report_type as ReportType,
           productId: x.product_id ?? null, supplierName: x.supplier_name ?? null, createdAt: x.created_at,

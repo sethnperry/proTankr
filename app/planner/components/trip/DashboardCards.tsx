@@ -153,7 +153,7 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
           onClick={onOpenReports}
           style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: red, fontWeight: 700, textAlign: "left", cursor: "pointer" }}
         >
-          {reports.map((r) => r.tickerText).join(" · ")} ›
+          {reports.map((r, i) => (<React.Fragment key={r.reportId}>{i ? " · " : ""}{r.tickerText.split(/(⟦[^⟧]*⟧)/).filter(Boolean).map((t, j) => (t.startsWith("⟦") ? <span key={j} style={{ color: "#fff" }}>{t.slice(1, -1)}</span> : t))}</React.Fragment>))} ›
         </button>
       )}
       {open && (

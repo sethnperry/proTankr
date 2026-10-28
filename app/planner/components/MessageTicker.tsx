@@ -26,6 +26,20 @@ const SPEED_PX_PER_SEC = 55;
 const PAUSE_MS = 1400;
 const HOME_INSET_PX = 14;
 
+// Text inside ⟦ ⟧ is drawn white (the age of a flag); the rest keeps the ticker's color.
+function setRich(el: HTMLElement, text: string) {
+  el.textContent = "";
+  for (const part of text.split(/(⟦[^⟧]*⟧)/)) {
+    if (!part) continue;
+    if (part.startsWith("⟦")) {
+      const span = document.createElement("span");
+      span.textContent = part.slice(1, -1);
+      span.style.color = "#fff";
+      el.appendChild(span);
+    } else el.appendChild(document.createTextNode(part));
+  }
+}
+
 export default function MessageTicker({ messages, color }: { messages: string[]; color: string }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -50,7 +64,7 @@ export default function MessageTicker({ messages, color }: { messages: string[];
 
     function startMessage(i: number) {
       msgIndex = i;
-      el!.textContent = messages[msgIndex];
+      setRich(el!, messages[msgIndex]);
       x = track!.clientWidth;
       phase = "enter";
       lastTs = null;

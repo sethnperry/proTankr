@@ -39,7 +39,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { resolveEffectiveRackId } from "../utils/rack";
-import { mostRecentClearingCheckpoint, nextClearingCheckpoint } from "../utils/dates";
+import { MANUAL_REPORT_CAP_MS, outageAge, outageExpiresAtMs, outageIsActive } from "../utils/dates";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 
 export type OutageReportType = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue";
@@ -265,7 +265,8 @@ export function useActiveOutageBanner(
     const allProducts = plannedProductIds === "all";
     const planned = plannedProductIds instanceof Set ? plannedProductIds : new Set<string>();
     const tz = timeZone || "America/New_York";
-    const cutoffMs = mostRecentClearingCheckpoint(Date.now(), tz);
+    const nowMs = Date.now();
+    const cutoffMs = nowMs - MANUAL_REPORT_CAP_MS;
 
     const { data, error } = await supabase
       .from("terminal_outage_reports")
@@ -283,6 +284,7 @@ export function useActiveOutageBanner(
     const seen = new Set<string>();
     const rows: OutageRow[] = [];
     for (const r of data as OutageRow[]) {
+      if (!outageIsActive(r.report_type, new Date(r.created_at).getTime(), nowMs, tz)) continue;
       if (!allProducts && !isTerminalWide(r.report_type) && !(r.product_id && planned.has(r.product_id))) continue;
       const key = `${r.report_type}:${r.product_id ?? ""}:${r.supplier_id ?? r.supplier_name ?? ""}`;
       if (seen.has(key)) continue;
@@ -326,10 +328,12 @@ export function useActiveOutageBanner(
       const truck = r.truck_label || "?";
       const isProduct = r.report_type === "out_of_product";
       const supplierName = r.report_type === "out_of_allocation" ? (r.supplier_name ?? null) : null;
-      const tickerText = wide ? shortName
-        : isProduct ? `Out of ${shortName}`
-        : supplierName ? `No Allocation - ${supplierName} (${shortName})`
-        : `OOA ${shortName}`;
+      // The flag's age sits in ⟦ ⟧ so the ticker can draw it white against the red text.
+      const age = `⟦${outageAge(createdAtMs, nowMs)}⟧`;
+      const tickerText = wide ? `${shortName} ${age}`
+        : isProduct ? `Out of ${shortName} ${age}`
+        : supplierName ? `No Allocation - ${supplierName} (${shortName}) ${age}`
+        : `OOA ${shortName} ${age}`;
       const personLabel = r.report_type !== "out_of_allocation"
         ? (companyNameById.get(r.company_id) || "Company")
         : (displayNameByUserId.get(r.reporter_user_id) || "Driver");
@@ -342,7 +346,7 @@ export function useActiveOutageBanner(
         personLabel,
         truckLabel: truck,
         createdAtMs,
-        expiresAtMs: nextClearingCheckpoint(createdAtMs, tz),
+        expiresAtMs: outageExpiresAtMs(r.report_type, createdAtMs, tz),
         canClear: !!effectiveUserId && (r.reporter_user_id === effectiveUserId || r.report_type !== "out_of_allocation"),
         supplierName,
       };
