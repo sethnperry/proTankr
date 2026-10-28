@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/fuelTempPredictor.test.ts lib/supabase/cookieScope.test.ts lib/capacity/*.test.ts lib/pwa/*.test.ts lib/ui/driver/*.test.ts app/planner/utils/*.test.ts app/planner/architecture.test.ts lib/trips/*.test.ts lib/terminals/*.test.ts lib/expiry.test.ts lib/equipment/*.test.ts lib/fuel/*.test.ts lib/vault/*.test.ts lib/suppliers/*.test.ts lib/dispatch/*.test.ts lib/telematics/*.test.ts lib/push/*.test.ts lib/ifta/*.test.ts lib/recap/*.test.ts",
+    "test": "node --test lib/fuelTempPredictor.test.ts lib/supabase/cookieScope.test.ts lib/capacity/*.test.ts lib/pwa/*.test.ts lib/ui/driver/*.test.ts app/planner/utils/*.test.ts app/planner/architecture.test.ts lib/trips/*.test.ts lib/terminals/*.test.ts lib/expiry.test.ts lib/equipment/*.test.ts lib/fuel/*.test.ts lib/vault/*.test.ts lib/suppliers/*.test.ts lib/dispatch/*.test.ts lib/telematics/*.test.ts lib/push/*.test.ts lib/ifta/*.test.ts lib/worklog/*.test.ts lib/reports/*.test.ts",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",

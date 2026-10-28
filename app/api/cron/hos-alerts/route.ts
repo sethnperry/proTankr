@@ -14,7 +14,7 @@ import { dropFuelStops, planStopNotice } from "@/lib/push/stopAlertCore";
 import { planHosAlerts, type DriverCase } from "@/lib/push/hosAlertCore";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import { pushTerminalReports } from "@/lib/push/terminalReportPush";
-import { maybeSendRecap, resetReached } from "@/lib/recap/sendDriverRecap";
+import { runWorklogs } from "@/lib/worklog/sendWorklogs";
 import type { Level } from "@/lib/telematics/hosTripNotify";
 
 export const runtime = "nodejs";
@@ -33,7 +33,6 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
     .eq("company_id", companyId).in("status", OPEN);
   const trips = ((tripRows ?? []) as any[]).filter((t) => t.driver_id);
   if (!trips.length) {
-    try { await runRecaps(companyId, p); } catch (e) { console.warn("[cron] recaps failed:", (e as Error).message); }
     return { sent: 0, drivers: 0 };
   }
 
@@ -155,28 +154,7 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
     }
     await admin.from("hos_alert_state").upsert(stopState, { onConflict: "company_id,user_id" });
   }
-  try { await runRecaps(companyId, p); } catch (e) { console.warn("[cron] recaps failed:", (e as Error).message); }
   return { sent, drivers: cases.length };
-}
-
-// Pay period recaps: after a driver's 34-hour reset. Drivers on a reset are usually not on an open
-// trip, so a few linked drivers are looked at per run, least recently checked first.
-const RECAP_BATCH = 3;
-async function runRecaps(companyId: string, p: NonNullable<Awaited<ReturnType<typeof providerFor>>>) {
-  const admin = getServiceSupabase();
-  const { data: dm } = await admin.from("telematics_driver_map").select("user_id, provider_user_id").eq("company_id", companyId);
-  const links = ((dm ?? []) as { user_id: string; provider_user_id: string }[]).filter((r) => r.user_id && r.provider_user_id);
-  if (!links.length) return;
-  const { data: st } = await admin.from("driver_recap_state").select("user_id, checked_at").in("user_id", links.map((l) => l.user_id));
-  const checked = new Map(((st ?? []) as { user_id: string; checked_at: string | null }[]).map((r) => [r.user_id, r.checked_at ? Date.parse(r.checked_at) : 0]));
-  const batch = [...links].sort((a, b) => (checked.get(a.user_id) ?? 0) - (checked.get(b.user_id) ?? 0)).slice(0, RECAP_BATCH);
-  for (const l of batch) {
-    await admin.from("driver_recap_state").upsert({ user_id: l.user_id, company_id: companyId, checked_at: new Date().toISOString() }, { onConflict: "user_id" });
-    try {
-      const h = await p.hos(l.provider_user_id);
-      if (h && resetReached(h.offSince, Date.now())) await maybeSendRecap({ companyId, userId: l.user_id, providerDriverId: l.provider_user_id, provider: p, offSince: h.offSince! });
-    } catch (e) { console.warn("[cron] recap check failed:", (e as Error).message); }
-  }
 }
 
 export async function GET(req: NextRequest) { return handle(req); }
@@ -188,10 +166,12 @@ async function handle(req: NextRequest) {
   if (!secret || given !== secret) return NextResponse.json({ error: "Not allowed." }, { status: 401 });
   let reportPushes = 0;
   try { reportPushes = await pushTerminalReports(); } catch (e) { console.warn("[cron] terminal report pushes failed:", (e as Error).message); }
+  let worklogs = 0;
+  try { worklogs = await runWorklogs(); } catch (e) { console.warn("[cron] worklogs failed:", (e as Error).message); }
   const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active");
   const out: Record<string, { sent: number; drivers: number } | string> = {};
   for (const c of (data ?? []) as { company_id: string }[]) {
     try { out[c.company_id] = await runCompany(c.company_id); } catch (e) { out[c.company_id] = (e as Error).message; }
   }
-  return NextResponse.json({ ok: true, reportPushes, companies: out });
+  return NextResponse.json({ ok: true, reportPushes, worklogs, companies: out });
 }

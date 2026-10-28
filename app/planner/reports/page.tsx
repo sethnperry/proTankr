@@ -23,6 +23,7 @@
 // their own Planner-selected equipment throughout.
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useLoadHistory } from "../hooks/useLoadHistory";
@@ -114,6 +115,7 @@ function ReportTile({ title, sub, stat, statColor, onClick, disabled }: {
 // ── Reports hub ───────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
+  const router = useRouter();
   const shell = useCalculatorShell();
   const { effectiveUserId, equipment, terminals, expirations, role } = shell;
 
@@ -374,6 +376,11 @@ export default function ReportsPage() {
               sub="Completed and planned loads across all equipment"
               stat={loadHistory.loading ? undefined : `${loadHistory.rows.length}`}
               onClick={() => setMyLoadsOpen(true)}
+            />
+            <ReportTile
+              title="Work Log"
+              sub="Trips, hours, miles and gallons by day for a period"
+              onClick={() => router.push("/planner/reports/worklog")}
             />
             <ReportTile
               title={UTILIZATION_METRIC_LABEL}

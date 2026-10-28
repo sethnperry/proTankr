@@ -48,7 +48,6 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
   // Only loaded/shown/saved when showPersonalFields is true.
   const [payPeriodType,     setPayPeriodType]     = useState("");
   const [paydayDayOfWeek,   setPaydayDayOfWeek]   = useState("");
-  const [payAnchor,         setPayAnchor]         = useState("");
   const [payNotes,          setPayNotes]          = useState("");
   const [leaseDetails,      setLeaseDetails]      = useState("");
 
@@ -116,12 +115,11 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
         if (showPersonalFields) {
           const { data: payRow } = await supabase
             .from("driver_pay_settings")
-            .select("pay_period_type, payday_day_of_week, notes, lease_details, pay_period_anchor_date")
+            .select("pay_period_type, payday_day_of_week, notes, lease_details")
             .eq("user_id", member.user_id)
             .maybeSingle();
           setPayPeriodType(payRow?.pay_period_type ?? "");
           setPaydayDayOfWeek(payRow?.payday_day_of_week ?? "");
-          setPayAnchor((payRow as any)?.pay_period_anchor_date ?? "");
           setPayNotes(payRow?.notes ?? "");
           setLeaseDetails((payRow as any)?.lease_details ?? "");
         }
@@ -227,7 +225,6 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
           user_id:            member.user_id,
           pay_period_type:    payPeriodType || null,
           payday_day_of_week: paydayDayOfWeek || null,
-          pay_period_anchor_date: payAnchor || null,
           notes:              payNotes || null,
           lease_details:      leaseDetails || null,
           updated_at:         new Date().toISOString(),
@@ -345,12 +342,6 @@ export function DriverProfileModal({ member, companyId, onClose, onDone, onRemov
                     <option value="friday">Friday</option>
                     <option value="saturday">Saturday</option>
                   </select>
-                </Field>
-                <Field label="A date a pay period started">
-                  <input type="date" value={payAnchor} onChange={e => setPayAnchor(e.target.value)} style={{ ...css.input, width: "100%" }} />
-                  <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
-                    Any start date of a period you were paid for. With the period above, this sets the recap emailed to you after each 34-hour reset.
-                  </div>
                 </Field>
                 <Field label="Notes">
                   <textarea
