@@ -830,6 +830,18 @@ export default function HomePage() {
     if (!store || !finishDeliveryRow) return;
     saveDeliveryProgress(store, { delivery: finishDeliveryRow, ...p, newId });
     void syncNow();
+    // A tank the driver adds at the drop is saved to the store right away, not only at Finish.
+    const loc = finishDeliveryRow.location_id;
+    if (loc) {
+      const seen = [
+        ...(p.compTanks ?? []).flatMap((c) => {
+          const cl = snap?.compLoads.find((x) => x.compartment_load_id === c.compartment_load_id);
+          return c.tank_number ? [{ tank_number: c.tank_number, product_id: cl?.product_id ?? null }] : [];
+        }),
+        ...(p.tanks ?? []).map((t) => ({ tank_number: t.tank_number, product_id: t.product_id ?? null })),
+      ];
+      if (seen.length) void rememberTanks(loc, seen, locList.tanks).then(() => locList.reload());
+    }
   };
   const productInfo = (id: string | null): ProductInfo => {
     const p = id ? products.find((x) => x.product_id === id) : null;
