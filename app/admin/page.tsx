@@ -2523,6 +2523,7 @@ export default function AdminPage() {
           onClose={() => setLoadsModal(null)}
           targetUserId={loadsModal.userId}
           targetDisplayName={loadsModal.displayName}
+          companyId={companyId}
         />
       )}
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />

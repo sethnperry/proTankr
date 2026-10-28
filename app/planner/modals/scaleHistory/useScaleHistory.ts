@@ -8,10 +8,11 @@ import { supabase } from "@/lib/supabase/client";
 import { generateWeightTicketPng, shareOrDownloadTicket } from "@/lib/ui/generateWeightTicket";
 import type { WeightRecordRaw, Props } from "./types";
 import { fmtDate, buildShareText, shareViaClipboard, shareViaSMS, shareViaEmail } from "./helpers";
+import { lastDays, inRange, type DateRange } from "@/lib/reports/dateRange";
 
 export function useScaleHistory({ open, onClose, companyId, comboId, onChanged, truckName, trailerName }: Props) {
   const [search, setSearch] = useState("");
-  const [activeDays, setActiveDays] = useState<number | null>(90);
+  const [range, setRange] = useState<DateRange>(() => lastDays(30));
   const [copied, setCopied] = useState(false);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,7 +35,7 @@ export function useScaleHistory({ open, onClose, companyId, comboId, onChanged, 
 
   const equipmentLabel = [truckName, trailerName].filter(Boolean).join(" / ");
 
-  const allEquipment = activeDays === null;
+  const allEquipment = range === null;
 
   function closeExpanded() {
     setExpandedId(null);
@@ -102,14 +103,11 @@ export function useScaleHistory({ open, onClose, companyId, comboId, onChanged, 
 
   const filtered = useMemo(() => {
     let list = rows;
-    if (activeDays != null) {
-      const cutoff = Date.now() - activeDays * 86400000;
-      list = list.filter((r) => new Date(r.recorded_at).getTime() >= cutoff);
-    }
+    if (range) list = list.filter((r) => inRange(r.recorded_at, range));
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) => (r.notes ?? "").toLowerCase().includes(q));
-  }, [rows, activeDays, search]);
+  }, [rows, range, search]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, WeightRecordRaw[]>();
@@ -210,7 +208,7 @@ export function useScaleHistory({ open, onClose, companyId, comboId, onChanged, 
   const expandedRow = filtered.find((r) => r.weight_record_id === expandedId) ?? null;
 
   return {
-    activeDays, allEquipment, busy, byDate, closeExpanded, comboId, companyId, confirmingDelete, copied, deleteRecord, editHeavy, editLight, editNotes, editing, equipmentLabel, error, expandedId, filtered, handleCopy, handleEmail, handleSMS, hasAny, load, loading, namesByUserId, noteOverlay, onChanged, onClose, open, openRow, printBusy, printRecord, reportMenuOpen, reportRef, resolveCreatedByNames, rows, saveEdit, search, searchRef, setActiveDays, setBusy, setConfirmingDelete, setCopied, setEditHeavy, setEditLight, setEditNotes, setEditing, setError, setExpandedId, setLoading, setNamesByUserId, setNoteOverlay, setPrintBusy, setReportMenuOpen, setRows, setSearch, startEdit, totalCount, trailerName, truckName,
+    range, allEquipment, busy, byDate, closeExpanded, comboId, companyId, confirmingDelete, copied, deleteRecord, editHeavy, editLight, editNotes, editing, equipmentLabel, error, expandedId, filtered, handleCopy, handleEmail, handleSMS, hasAny, load, loading, namesByUserId, noteOverlay, onChanged, onClose, open, openRow, printBusy, printRecord, reportMenuOpen, reportRef, resolveCreatedByNames, rows, saveEdit, search, searchRef, setRange, setBusy, setConfirmingDelete, setCopied, setEditHeavy, setEditLight, setEditNotes, setEditing, setError, setExpandedId, setLoading, setNamesByUserId, setNoteOverlay, setPrintBusy, setReportMenuOpen, setRows, setSearch, startEdit, totalCount, trailerName, truckName,
     expandedRow,
   };
 }

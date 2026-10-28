@@ -14,9 +14,10 @@ type Props = {
   onClose: () => void;
   targetUserId: string;
   targetDisplayName: string;
+  companyId?: string | null;
 };
 
-export default function AdminLoadsModal({ open, onClose, targetUserId, targetDisplayName }: Props) {
+export default function AdminLoadsModal({ open, onClose, targetUserId, targetDisplayName, companyId }: Props) {
   const loadHistory = useLoadHistory(targetUserId);
   // Sourced from the shared cached catalog (lib/queries/useTerminalsCatalog.ts)
   // instead of this modal's own supabase.from("terminals") fetch on every
@@ -40,6 +41,7 @@ export default function AdminLoadsModal({ open, onClose, targetUserId, targetDis
       open={open}
       onClose={onClose}
       authUserId={targetUserId}
+      companyId={companyId}
       rows={loadHistory.rows}
       loading={loadHistory.loading}
       error={loadHistory.error}

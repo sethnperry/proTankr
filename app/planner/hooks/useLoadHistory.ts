@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { deleteLoad as deleteLoadRpc } from "@/lib/supabase/load";
+import { lastDays, rangeBounds, type DateRange } from "@/lib/reports/dateRange";
 
 export type LoadHistoryRow = {
   load_id: string;
@@ -54,8 +55,8 @@ export function useLoadHistory(authUserId: string) {
   const [linesCache, setLinesCache] = useState<Record<string, LoadHistoryLine[]>>({});
   const [linesLoading, setLinesLoading] = useState<Record<string, boolean>>({});
 
-  // dateRange: number of days back, or null = all time
-  const fetch = useCallback(async (dateRange: number | null = 7) => {
+  // range: local dates (both ends included), null = all time, left out = the last 30 days
+  const fetch = useCallback(async (range: DateRange | undefined = lastDays(30)) => {
     if (!authUserId) return;
     setLoading(true);
     setError(null);
@@ -83,9 +84,9 @@ export function useLoadHistory(authUserId: string) {
         .order("started_at", { ascending: false })
         .limit(200);
 
-      if (dateRange != null) {
-        const cutoff = new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000).toISOString();
-        q = q.gte("started_at", cutoff);
+      if (range) {
+        const { fromIso, toIso } = rangeBounds(range);
+        q = q.gte("started_at", fromIso).lt("started_at", toIso);
       }
 
       const { data, error: err } = await q;
@@ -100,7 +101,7 @@ export function useLoadHistory(authUserId: string) {
     }
   }, [authUserId]);
 
-  useEffect(() => { fetch(7); }, [fetch]);
+  useEffect(() => { fetch(); }, [fetch]);
 
   // Resolve terminal names and combo labels for all rows
   const resolveLabels = useCallback(async (

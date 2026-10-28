@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { lastDays, inRange, type DateRange } from "@/lib/reports/dateRange";
 
 import type { ServiceRecordRaw, WashRecordRaw, ServiceTypeRaw, UnitRef, ServiceRow, WashRow, Props } from "./types";
 import { buildShareText, shareViaClipboard, shareViaSMS, shareViaEmail } from "./helpers";
@@ -13,7 +14,7 @@ export function useRecordHistory(props: Props) {
   const { open, onClose, kind, title, companyId, truckId, trailerId, trucks, trailers, onChanged } = props;
 
   const [search, setSearch] = useState("");
-  const [activeDays, setActiveDays] = useState<number | null>(90);
+  const [range, setRange] = useState<DateRange>(() => lastDays(30));
   const [copied, setCopied] = useState(false);
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,7 +64,7 @@ export function useRecordHistory(props: Props) {
 
   // Selecting "All" (date range) also broadens scope to every truck/trailer
   // in the company, not just the currently selected pair.
-  const allEquipment = activeDays === null;
+  const allEquipment = range === null;
 
   function closeExpanded() {
     setExpandedId(null);
@@ -190,10 +191,7 @@ export function useRecordHistory(props: Props) {
 
   const filteredService = useMemo(() => {
     let list = serviceRows;
-    if (activeDays != null) {
-      const cutoff = Date.now() - activeDays * 86400000;
-      list = list.filter((r) => new Date(r.date).getTime() >= cutoff);
-    }
+    if (range) list = list.filter((r) => inRange(r.date, range));
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) =>
@@ -202,18 +200,15 @@ export function useRecordHistory(props: Props) {
       (r.shopName ?? "").toLowerCase().includes(q) ||
       (r.location ?? "").toLowerCase().includes(q)
     );
-  }, [serviceRows, activeDays, search]);
+  }, [serviceRows, range, search]);
 
   const filteredWash = useMemo(() => {
     let list = washRows;
-    if (activeDays != null) {
-      const cutoff = Date.now() - activeDays * 86400000;
-      list = list.filter((r) => new Date(r.date).getTime() >= cutoff);
-    }
+    if (range) list = list.filter((r) => inRange(r.date, range));
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) => r.unit.name.toLowerCase().includes(q) || (r.location ?? "").toLowerCase().includes(q));
-  }, [washRows, activeDays, search]);
+  }, [washRows, range, search]);
 
   const serviceByDate = useMemo(() => {
     const map = new Map<string, ServiceRow[]>();
@@ -341,8 +336,9 @@ export function useRecordHistory(props: Props) {
     title,
     search,
     setSearch,
-    activeDays,
-    setActiveDays,
+    range,
+    companyId,
+    setRange,
     copied,
     reportMenuOpen,
     setReportMenuOpen,

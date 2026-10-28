@@ -36,6 +36,7 @@
 // replaces -- enforced by load_utilization_staff_read (is_company_staff),
 // not by this component.
 
+import { lastDays, rangeBounds, type DateRange } from "@/lib/reports/dateRange";
 import React, { useMemo, useState } from "react";
 
 import DriverGroupPicker from "./DriverGroupPicker";
@@ -54,21 +55,18 @@ type Props = {
 };
 
 export default function FleetUtilizationModal({ open, onClose, companyId }: Props) {
-  const [rangeDays, setRangeDays] = useState(30);
+  const [range, setRange] = useState<DateRange>(() => lastDays(30));
   const [driverFilter, setDriverFilter] = useState<Set<string> | null>(null);
   const [driverPickerOpen, setDriverPickerOpen] = useState(false);
 
-  // Rounded down to the hour so the window isn't a fresh cache key on every
-  // render, while still tracking "now" rather than freezing at mount.
-  const since = useMemo(() => {
-    const d = new Date();
-    d.setMinutes(0, 0, 0);
-    d.setDate(d.getDate() - rangeDays);
-    return d.toISOString();
-  }, [rangeDays]);
+  const { since, until } = useMemo(() => {
+    if (!range) return { since: "1970-01-01T00:00:00.000Z", until: undefined };
+    const b = rangeBounds(range);
+    return { since: b.fromIso, until: b.toIso };
+  }, [range]);
 
-  const fleet = useFleetPeriodUtilization(open ? companyId : null, since);
-  const headroom = useCompanyHeadroom(open ? companyId : null, since);
+  const fleet = useFleetPeriodUtilization(open ? companyId : null, since, until);
+  const headroom = useCompanyHeadroom(open ? companyId : null, since, until);
 
   // load_utilization is never cleaned up when a driver leaves the company, so
   // without the roster filter a departed driver's loads would keep landing in
@@ -122,8 +120,8 @@ export default function FleetUtilizationModal({ open, onClose, companyId }: Prop
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10200, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <FleetUtilizationView
         onClose={onClose}
-        rangeDays={rangeDays}
-        onRangeChange={setRangeDays}
+        companyId={companyId}
+        onRangeChange={setRange}
         driverFilterCount={driverFilter === null ? null : driverFilter.size}
         rosterSize={currentMemberIds.size}
         onOpenDriverPicker={() => setDriverPickerOpen(true)}

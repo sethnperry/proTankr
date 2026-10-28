@@ -6,6 +6,8 @@
 // minutes past the drop estimate that the driver said had no reason. The
 // unaccounted list is the task list: those are the drops to ask about.
 
+import { PeriodPicker } from "@/lib/ui/PeriodPicker";
+import { lastDays, rangeBounds, type DateRange } from "@/lib/reports/dateRange";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -19,13 +21,12 @@ const chip = (on: boolean): React.CSSProperties => ({
   padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
   border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)", background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.7)",
 });
-const RANGES = [{ d: 7, label: "7d" }, { d: 30, label: "30d" }, { d: 90, label: "90d" }] as const;
 
 const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`);
 const chunk = <T,>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
 export default function DelaysModal({ open, onClose, companyId }: { open: boolean; onClose: () => void; companyId: string }) {
-  const [days, setDays] = useState<number>(30);
+  const [range, setRange] = useState<DateRange>(() => lastDays(30));
   const [data, setData] = useState<DelayReportInput | null>(null);
   const [places, setPlaces] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -39,9 +40,9 @@ export default function DelaysModal({ open, onClose, companyId }: { open: boolea
     setErr(null);
     void (async () => {
       try {
-        const since = new Date(Date.now() - days * 86_400_000).toISOString();
-        const { data: trips, error } = await supabase.from("trips").select("trip_id, driver_id, started_at")
-          .eq("company_id", companyId).gte("started_at", since).limit(2000);
+        let tq = supabase.from("trips").select("trip_id, driver_id, started_at").eq("company_id", companyId).order("started_at", { ascending: false }).limit(2000);
+        if (range) { const b = rangeBounds(range); tq = tq.gte("started_at", b.fromIso).lt("started_at", b.toIso); }
+        const { data: trips, error } = await tq;
         if (error) throw error;
         const ids = (trips ?? []).map((t: any) => t.trip_id as string);
         const deliveries: any[] = [];
@@ -69,7 +70,7 @@ export default function DelaysModal({ open, onClose, companyId }: { open: boolea
       }
     })();
     return () => { alive = false; };
-  }, [open, companyId, days]);
+  }, [open, companyId, range?.start, range?.end]);
 
   const report = useMemo(() => (data ? buildDelayReport(data) : null), [data]);
   const who = (id: string) => nameById[id] ?? "Driver";
@@ -78,7 +79,7 @@ export default function DelaysModal({ open, onClose, companyId }: { open: boolea
   return (
     <FullscreenModal open={open} title="Delays" onClose={onClose}>
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {RANGES.map((r) => <button key={r.d} type="button" style={chip(days === r.d)} onClick={() => setDays(r.d)}>{r.label}</button>)}
+        <PeriodPicker companyId={companyId} userId={undefined} allowAll onChange={setRange} />
       </div>
       {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
       {!report && !err && <div style={{ color: muted }}>Loading…</div>}

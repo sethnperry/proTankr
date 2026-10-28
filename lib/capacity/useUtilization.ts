@@ -125,18 +125,20 @@ export function useCompanyUtilization(companyId: string | null, since: string | 
  * eligible loads also keeps this figure comparable with the utilization
  * percentage shown beside it, which covers the same loads.
  */
-export function useCompanyHeadroom(companyId: string | null, since: string | null) {
+export function useCompanyHeadroom(companyId: string | null, since: string | null, until?: string) {
   return useQuery({
-    queryKey: ["utilization", "headroom", companyId, since],
+    queryKey: ["utilization", "headroom", companyId, since, until ?? null],
     enabled: Boolean(companyId && since),
     staleTime: 60_000,
     queryFn: async (): Promise<HeadroomSummary> => {
-      const { data: idRows, error: idErr } = await supabase
+      let idq = supabase
         .from("load_utilization")
         .select("load_id")
         .eq("company_id", companyId!)
         .eq("eligibility", "eligible")
         .gte("loaded_at", since!);
+      if (until) idq = idq.lt("loaded_at", until);
+      const { data: idRows, error: idErr } = await idq;
       if (idErr) throw idErr;
 
       const ids = ((idRows ?? []) as { load_id: string }[]).map((r) => r.load_id);
@@ -186,8 +188,8 @@ export function useDriverPeriodUtilization(driverId: string | null, since: strin
  * same shape, so the fleet headline and a driver's own card can never be
  * computed two different ways.
  */
-export function useFleetPeriodUtilization(companyId: string | null, since: string | null) {
-  const query = useCompanyUtilization(companyId, since);
+export function useFleetPeriodUtilization(companyId: string | null, since: string | null, until?: string) {
+  const query = useCompanyUtilization(companyId, since, until);
   const rows = query.data ?? EMPTY_ROWS;
   const summary = useMemo(() => aggregateUtilization(rows), [rows]);
   return { rows, summary, isLoading: query.isLoading, error: query.error };

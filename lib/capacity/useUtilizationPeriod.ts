@@ -13,10 +13,9 @@
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-
 import { generatePayPeriods, type PayPeriodType } from "@/app/admin/payPeriods";
-import { supabase } from "@/lib/supabase/client";
+import { useReportPeriods } from "@/lib/reports/useReportPeriods";
+import { localDateOf, localMidnightMs } from "@/lib/worklog/time";
 
 const FALLBACK_DAYS = 30;
 
@@ -38,6 +37,7 @@ export type UtilizationPeriod = {
 
 function rollingWindow(): UtilizationPeriod {
   const d = new Date();
+  d.setMinutes(0, 0, 0); // steady within the hour, so it is not a new query key on every render
   d.setDate(d.getDate() - FALLBACK_DAYS);
   return {
     since: d.toISOString(),
@@ -46,34 +46,15 @@ function rollingWindow(): UtilizationPeriod {
   };
 }
 
-export function useUtilizationPeriod(companyId: string | null): UtilizationPeriod {
-  const { data } = useQuery({
-    queryKey: ["utilizationPeriod", companyId],
-    enabled: Boolean(companyId),
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("incentive_settings")
-        .select("pay_period_type, pay_period_anchor_date")
-        .eq("company_id", companyId!)
-        .maybeSingle();
-      // A company with no settings row at all is the normal, expected case
-      // here -- not an error worth surfacing. The caller falls back.
-      if (error) return null;
-      return data;
-    },
-  });
-
-  const anchor = data?.pay_period_anchor_date as string | null | undefined;
-  if (!anchor) return rollingWindow();
-
-  const type = ((data?.pay_period_type as PayPeriodType | null) ?? "biweekly");
-  const start = generatePayPeriods(type, anchor, 1)[0]?.start;
+export function useUtilizationPeriod(companyId: string | null, userId?: string | null): UtilizationPeriod {
+  // The same period everything else uses: the driver's own if set, else the company's.
+  const { settings, tz, ready } = useReportPeriods(companyId, userId);
+  if (!ready || !settings) return rollingWindow();
+  const start = generatePayPeriods(settings.type, settings.anchor, 1, localDateOf(Date.now(), tz))[0]?.start;
   if (!start) return rollingWindow();
-
   return {
-    since: `${start}T00:00:00Z`,
-    shortLabel: `${PERIOD_LABELS[type]} Avg`,
-    longLabel: `This ${PERIOD_LABELS[type].toLowerCase()} period`,
+    since: new Date(localMidnightMs(start, tz)).toISOString(),
+    shortLabel: `${PERIOD_LABELS[settings.type]} Avg`,
+    longLabel: `This ${PERIOD_LABELS[settings.type].toLowerCase()} period`,
   };
 }

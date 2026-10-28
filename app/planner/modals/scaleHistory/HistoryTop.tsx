@@ -4,10 +4,10 @@
 // Part of ScaleHistoryModal.tsx: grab handle, title, search, date ranges and the report menu.
 
 import type { ScaleHistoryModel } from "./useScaleHistory";
-import { DATE_RANGES } from "./helpers";
+import { PeriodPicker } from "@/lib/ui/PeriodPicker";
 
 export function HistoryTop({ m }: { m: ScaleHistoryModel }) {
-  const { activeDays, copied, handleCopy, handleEmail, handleSMS, hasAny, loading, onClose, reportMenuOpen, reportRef, search, searchRef, setActiveDays, setReportMenuOpen, setSearch, totalCount } = m;
+  const { range, copied, handleCopy, handleEmail, handleSMS, hasAny, loading, onClose, reportMenuOpen, reportRef, search, searchRef, setRange, setReportMenuOpen, setSearch, totalCount } = m;
   return (
     <>
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
@@ -40,25 +40,7 @@ export function HistoryTop({ m }: { m: ScaleHistoryModel }) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 18px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, flex: 1, overflowX: "auto" }}>
-            {DATE_RANGES.map(({ label, days }) => {
-              const active = activeDays === days;
-              return (
-                <button
-                  key={label}
-                  onClick={() => setActiveDays(days)}
-                  title={days === null ? "All dates, all equipment" : undefined}
-                  style={{
-                    padding: "5px 10px", borderRadius: 2, border: "1px solid", fontSize: 11, fontWeight: 800,
-                    cursor: "pointer", letterSpacing: 0.3, transition: "all 120ms ease", flexShrink: 0,
-                    background: active ? "rgba(255,255,255,0.10)" : "transparent",
-                    borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
-                    color: active ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            <PeriodPicker companyId={m.companyId} userId={undefined} allowAll onChange={setRange} />
           </div>
 
           <div ref={reportRef} style={{ position: "relative", flexShrink: 0 }}>

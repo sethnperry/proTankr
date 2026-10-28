@@ -12,12 +12,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Props } from "./myLoads/types";
-import { shareViaClipboard, shareViaSMS, shareViaEmail, DATE_RANGES } from "./myLoads/helpers";
+import { shareViaClipboard, shareViaSMS, shareViaEmail } from "./myLoads/helpers";
+import { PeriodPicker } from "@/lib/ui/PeriodPicker";
+import { lastDays, type DateRange } from "@/lib/reports/dateRange";
 import { LoadRow } from "./myLoads/LoadRow";
 
 
 export default function MyLoadsModal({
-  open, onClose,
+  open, onClose, authUserId, companyId,
   rows, loading, error,
   linesCache, linesLoading,
   onFetchLines, onFetchRange,
@@ -29,7 +31,9 @@ export default function MyLoadsModal({
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeDays, setActiveDays] = useState<number | null>(7);
+  const [range, setRange] = useState<DateRange>(() => lastDays(30));
+  // Bumped to remount the picker (back to its own default) when a deep link forces All time.
+  const [pickerKey, setPickerKey] = useState(0);
   const [copied, setCopied] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"delete" | "restore" | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -53,13 +57,14 @@ export default function MyLoadsModal({
         // set once its row actually resolves, see the effect below.
         autoExpandedRef.current = null;
         setFocusedLoadId(initialExpandLoadId);
-        setActiveDays(null);
+        setRange(null);
+        setPickerKey((k) => k + 1);
         onFetchRange(null);
       } else {
         setExpandedId(null);
         setSelectedId(null);
         setFocusedLoadId(null);
-        onFetchRange(activeDays);
+        onFetchRange(range);
       }
       setTimeout(() => searchRef.current?.focus(), 180);
     }
@@ -81,9 +86,9 @@ export default function MyLoadsModal({
     onFetchLines(initialExpandLoadId, row.planned_snapshot, row.product_temp_f);
   }, [open, initialExpandLoadId, rows, onFetchLines]);
 
-  function handleRangeChange(days: number | null) {
-    setActiveDays(days);
-    onFetchRange(days);
+  function handleRangeChange(r: DateRange) {
+    setRange(r);
+    onFetchRange(r);
   }
 
   function handleToggle(loadId: string, plannedSnapshot?: any, productTempF?: number | null) {
@@ -202,24 +207,7 @@ export default function MyLoadsModal({
 
         {/* Date filter chips + share controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 18px 12px", flexWrap: "nowrap", overflowX: "auto" }}>
-          {DATE_RANGES.map(({ label, days }) => {
-            const active = activeDays === days;
-            return (
-              <button
-                key={label}
-                onClick={() => handleRangeChange(days)}
-                style={{
-                  padding: "5px 10px", borderRadius: 2, border: "1px solid", fontSize: 11, fontWeight: 800,
-                  cursor: "pointer", letterSpacing: 0.3, transition: "all 120ms ease", flexShrink: 0,
-                  background: active ? "rgba(255,255,255,0.10)" : "transparent",
-                  borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
-                  color: active ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
+          <PeriodPicker key={pickerKey} companyId={companyId} userId={authUserId} allowAll defaultAll={pickerKey > 0} onChange={handleRangeChange} style={{ flexShrink: 0 }} />
 
           {/* Share + row-management controls — enabled only when a load is selected */}
           <div style={{ marginLeft: "auto", display: "flex", gap: 5, alignItems: "center" }}>
@@ -299,7 +287,7 @@ export default function MyLoadsModal({
           )}
           {!loading && !error && filtered.length === 0 && (
             <div style={{ padding: "40px 18px", textAlign: "center", color: "rgba(255,255,255,0.25)", fontSize: 14 }}>
-              {search ? "No loads match your search" : activeDays ? `No loads in the last ${activeDays} days` : "No loads yet"}
+              {search ? "No loads match your search" : range ? "No loads in this period" : "No loads yet"}
             </div>
           )}
           {!loading && !error && filtered.map((row) => (

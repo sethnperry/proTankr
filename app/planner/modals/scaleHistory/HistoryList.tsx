@@ -7,7 +7,7 @@ import type { ScaleHistoryModel } from "./useScaleHistory";
 import { fmtDateHeader, fmt, editInputStyle, editLabelStyle } from "./helpers";
 
 export function HistoryList({ m }: { m: ScaleHistoryModel }) {
-  const { activeDays, byDate, editHeavy, editLight, editNotes, editing, error, expandedId, hasAny, loading, namesByUserId, openRow, search, setEditHeavy, setEditLight, setEditNotes, setNoteOverlay, expandedRow } = m;
+  const { range, byDate, editHeavy, editLight, editNotes, editing, error, expandedId, hasAny, loading, namesByUserId, openRow, search, setEditHeavy, setEditLight, setEditNotes, setNoteOverlay, expandedRow } = m;
   return (
     <>
         <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain" }}>
@@ -15,7 +15,7 @@ export function HistoryList({ m }: { m: ScaleHistoryModel }) {
           {!loading && error && <div style={{ padding: "24px 18px", textAlign: "center", color: "#ef4444", fontSize: 14 }}>{error}</div>}
           {!loading && !hasAny && (
             <div style={{ padding: "40px 18px", textAlign: "center", color: "rgba(255,255,255,0.25)", fontSize: 14 }}>
-              {search ? "No records match your search" : activeDays ? `No records in the last ${activeDays} days` : "No records yet"}
+              {search ? "No records match your search" : range ? "No records in this period" : "No records yet"}
             </div>
           )}
 

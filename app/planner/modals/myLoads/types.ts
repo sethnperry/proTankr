@@ -17,7 +17,9 @@ export type Props = {
   linesCache: Record<string, LoadHistoryLine[]>;
   linesLoading: Record<string, boolean>;
   onFetchLines: (loadId: string, plannedSnapshot?: any, productTempF?: number | null) => void;
-  onFetchRange: (days: number | null) => void;
+  onFetchRange: (range: import("@/lib/reports/dateRange").DateRange) => void;
+  /** For the period picker: whose period the reports follow. */
+  companyId?: string | null;
   terminalCatalog: any[];
   headerOverride?: string;
   combos: any[];

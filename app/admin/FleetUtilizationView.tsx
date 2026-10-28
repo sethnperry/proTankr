@@ -12,6 +12,8 @@
 // that matter most: no `enabled` gate, no leaderboard ordering, and excluded
 // loads shown rather than folded in.
 
+import { PeriodPicker } from "@/lib/ui/PeriodPicker";
+import type { DateRange } from "@/lib/reports/dateRange";
 import React from "react";
 
 import {
@@ -23,13 +25,6 @@ import {
 
 const LABEL = "rgba(255,255,255,0.4)";
 const MUTED = "rgba(255,255,255,0.45)";
-
-export const RANGES = [
-  { label: "7d", days: 7 },
-  { label: "30d", days: 30 },
-  { label: "90d", days: 90 },
-  { label: "1y", days: 365 },
-];
 
 function chipStyle(active: boolean): React.CSSProperties {
   return {
@@ -78,8 +73,8 @@ export type FleetTotals = {
 
 export type FleetUtilizationViewProps = {
   onClose: () => void;
-  rangeDays: number;
-  onRangeChange: (days: number) => void;
+  companyId: string;
+  onRangeChange: (r: DateRange) => void;
   driverFilterCount: number | null;
   rosterSize: number;
   onOpenDriverPicker: () => void;
@@ -91,7 +86,7 @@ export type FleetUtilizationViewProps = {
 };
 
 export function FleetUtilizationView({
-  onClose, rangeDays, onRangeChange, driverFilterCount, rosterSize,
+  onClose, companyId, onRangeChange, driverFilterCount, rosterSize,
   onOpenDriverPicker, loading, totals, drivers, headroom, errorMessage,
 }: FleetUtilizationViewProps) {
   const excludedTotal = totals.safety + totals.constraint + totals.incomplete;
@@ -105,11 +100,7 @@ export function FleetUtilizationView({
       </div>
 
       <div style={{ padding: "12px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {RANGES.map((r) => (
-          <button key={r.label} type="button" onClick={() => onRangeChange(r.days)} style={chipStyle(rangeDays === r.days)}>
-            {r.label}
-          </button>
-        ))}
+        <PeriodPicker companyId={companyId} userId={undefined} allowAll onChange={onRangeChange} />
         {/* Meaningless with one driver on the roster -- hidden rather than
             shown disabled, same as the equivalent chip in PayrollReportModal.tsx. */}
         {rosterSize > 1 && (

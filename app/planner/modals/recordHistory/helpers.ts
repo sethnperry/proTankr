@@ -7,12 +7,6 @@ import React from "react";
 
 import type { RecordHistoryKind, ServiceTypeRaw, ServiceRow, WashRow } from "./types";
 
-export const DATE_RANGES: { label: string; days: number | null }[] = [
-  { label: "30d", days: 30 },
-  { label: "90d", days: 90 },
-  { label: "1y", days: 365 },
-  { label: "All", days: null },
-];
 
 export function fmtDate(iso: string): string {
   const d = new Date(iso);

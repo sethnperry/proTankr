@@ -476,6 +476,7 @@ export default function ReportsPage() {
       <MyLoadsModal
         open={myLoadsOpen} onClose={() => setMyLoadsOpen(false)}
         authUserId={viewedUserId}
+        companyId={companyId}
         rows={loadHistory.rows}
         loading={loadHistory.loading}
         error={loadHistory.error}

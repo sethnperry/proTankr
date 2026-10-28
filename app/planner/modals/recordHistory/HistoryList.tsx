@@ -9,7 +9,7 @@ import { fmtDateHeader, dueDetailLine, editInputStyle, editLabelStyle } from "./
 import type { RecordHistoryModel } from "./useRecordHistory";
 
 export function HistoryList({ m }: { m: RecordHistoryModel }) {
-  const { kind, search, activeDays, loading, error, types, namesByUserId, expandedId, editing, setNoteOverlay, editTypeId, setEditTypeId, editDate, setEditDate, editReading, setEditReading, editShop, setEditShop, editLocation, setEditLocation, editNotes, setEditNotes, editWashedAt, setEditWashedAt, editWashLocation, setEditWashLocation, editWashNotes, setEditWashNotes, serviceByDate, washByDate, hasAny, openRow, hasExpanded } = m;
+  const { kind, search, range, loading, error, types, namesByUserId, expandedId, editing, setNoteOverlay, editTypeId, setEditTypeId, editDate, setEditDate, editReading, setEditReading, editShop, setEditShop, editLocation, setEditLocation, editNotes, setEditNotes, editWashedAt, setEditWashedAt, editWashLocation, setEditWashLocation, editWashNotes, setEditWashNotes, serviceByDate, washByDate, hasAny, openRow, hasExpanded } = m;
   return (
     <>
         <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain" }}>
@@ -17,7 +17,7 @@ export function HistoryList({ m }: { m: RecordHistoryModel }) {
           {!loading && error && <div style={{ padding: "24px 18px", textAlign: "center", color: "#ef4444", fontSize: 14 }}>{error}</div>}
           {!loading && !hasAny && (
             <div style={{ padding: "40px 18px", textAlign: "center", color: "rgba(255,255,255,0.25)", fontSize: 14 }}>
-              {search ? "No records match your search" : activeDays ? `No records in the last ${activeDays} days` : "No records yet"}
+              {search ? "No records match your search" : range ? "No records in this period" : "No records yet"}
             </div>
           )}
 

@@ -42,7 +42,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import DriverGroupPicker from "./DriverGroupPicker";
-import { generatePayPeriods, type PayPeriod, type PayPeriodType } from "./payPeriods";
+import { PeriodPicker } from "@/lib/ui/PeriodPicker";
+import { lastDays, rangeBounds, type DateRange } from "@/lib/reports/dateRange";
 import { useCompanyRoster } from "@/app/planner/hooks/useCompanyRoster";
 import { UTILIZATION_ACTUAL_WORD } from "@/lib/capacity/computeUtilization";
 import {
@@ -99,19 +100,8 @@ function exclusionNote(row: UtilizationRow): string | null {
 export default function PayrollReportModal({ open, onClose, companyId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
-  const [periods, setPeriods] = useState<PayPeriod[]>([]);
-  const [selectedPeriod, setSelectedPeriod] = useState<PayPeriod | null>(null);
-
-  // Period SHAPE settings, folded in here from the deleted
-  // IncentiveSettingsModal. They live with their primary consumer rather
-  // than behind a second admin tile named confusingly close to this one
-  // ("Report Period" next to "Period Report"). useUtilizationPeriod reads
-  // the same two columns for the driver's own card, so changing them here
-  // moves both surfaces together -- which is the point.
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [periodType, setPeriodType] = useState<PayPeriodType>("biweekly");
-  const [anchorDate, setAnchorDate] = useState("");
-  const [savingSettings, setSavingSettings] = useState(false);
+  const [range, setRange] = useState<DateRange>(() => lastDays(30));
+  const selectedPeriod = useMemo(() => (range ? { ...range, label: `${range.start} to ${range.end}` } : null), [range]);
 
   const [employeeNumberById, setEmployeeNumberById] = useState<Record<string, string | null>>({});
   const [expandedDriverId, setExpandedDriverId] = useState<string | null>(null);
@@ -130,39 +120,11 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
   const [driverFilter, setDriverFilter] = useState<Set<string> | null>(null);
   const [driverPickerOpen, setDriverPickerOpen] = useState(false);
 
-  // ── Pay-period settings + generated periods ───────────────────────────────
-  // Reads only the period SHAPE from incentive_settings, never `enabled` --
-  // measurement must work for a company that has configured nothing
-  // (docs/incentive-redesign-plan.md, TEST K).
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("incentive_settings")
-        .select("pay_period_type, pay_period_anchor_date")
-        .eq("company_id", companyId)
-        .maybeSingle();
-      if (cancelled) return;
-      const pt = (data?.pay_period_type ?? "biweekly") as PayPeriodType;
-      const anchor = data?.pay_period_anchor_date ?? new Date().toISOString().slice(0, 10);
-      setPeriodType(pt);
-      setAnchorDate(anchor);
-      const gen = generatePayPeriods(pt, anchor, 12);
-      setPeriods(gen);
-      setSelectedPeriod(gen[0] ?? null);
-    })();
-    return () => { cancelled = true; };
-  }, [open, companyId]);
+  useEffect(() => { if (open) setError(null); }, [open]);
 
-  // Same no-zone timestamp format the previous load_points version used, on
-  // purpose: it resolves server-side as UTC, which is what useUtilizationPeriod
-  // does too, so the Period Report and the driver's own card cover the same
-  // window. The known UTC-vs-local-midnight edge is documented in CLAUDE.md
-  // and belongs to both surfaces at once, not to this file alone.
-  const since = selectedPeriod ? `${selectedPeriod.start}T00:00:00` : null;
-  const until = selectedPeriod ? `${selectedPeriod.end}T23:59:59` : undefined;
+  const bounds = useMemo(() => (range ? rangeBounds(range) : null), [range]);
+  const since = bounds?.fromIso ?? null;
+  const until = bounds?.toIso;
 
   const query = useCompanyUtilization(open && selectedPeriod ? companyId : null, since, until);
   const rows = useMemo(() => query.data ?? [], [query.data]);
@@ -202,26 +164,6 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
       .filter((r) => r.driver_id === expandedDriverId)
       .sort((a, b) => ((a.loaded_at ?? "") < (b.loaded_at ?? "") ? 1 : -1));
   }, [visibleRows, expandedDriverId]);
-
-  async function savePeriodSettings() {
-    setSavingSettings(true);
-    setError(null);
-    try {
-      const { error: err } = await supabase.from("incentive_settings").upsert(
-        { company_id: companyId, pay_period_type: periodType, pay_period_anchor_date: anchorDate || null },
-        { onConflict: "company_id" }
-      );
-      if (err) throw err;
-      const gen = generatePayPeriods(periodType, anchorDate || new Date().toISOString().slice(0, 10), 12);
-      setPeriods(gen);
-      setSelectedPeriod(gen[0] ?? null);
-      setSettingsOpen(false);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
-    } finally {
-      setSavingSettings(false);
-    }
-  }
 
   async function handleExportCsv() {
     if (!selectedPeriod) return;
@@ -267,26 +209,11 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#111518", borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", width: "100%", maxWidth: 640, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", padding: "16px 18px 12px", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>Period Report</div>
-          <button type="button" onClick={() => setSettingsOpen((v) => !v)} aria-label="Period settings"
-            style={{ background: "none", border: "none", color: settingsOpen ? "#fff" : "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "0 8px", flexShrink: 0 }}>
-            Settings
-          </button>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.85)", fontSize: 20, fontWeight: 900, cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
         </div>
 
         <div style={{ padding: "12px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" as const }}>
-          <select
-            value={selectedPeriod ? `${selectedPeriod.start}|${selectedPeriod.end}` : ""}
-            onChange={(e) => {
-              const [start, end] = e.target.value.split("|");
-              setSelectedPeriod(periods.find((p) => p.start === start && p.end === end) ?? null);
-            }}
-            style={{ ...INPUT, flex: 1, minWidth: 140 }}
-          >
-            {periods.map((p) => (
-              <option key={`${p.start}|${p.end}`} value={`${p.start}|${p.end}`}>{p.label}</option>
-            ))}
-          </select>
+          <PeriodPicker companyId={companyId} userId={undefined} onChange={setRange} />
           {/* Meaningless with one driver on the roster (the company is
               always effectively "just me") -- hidden rather than shown
               disabled, same treatment as the Users/Fleet Cards admin tiles
@@ -304,31 +231,6 @@ export default function PayrollReportModal({ open, onClose, companyId }: Props) 
             Export CSV
           </button>
         </div>
-
-        {settingsOpen && (
-          <div style={{ padding: "12px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: LABEL, textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 8 }}>
-              Report period
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
-              <select value={periodType} onChange={(e) => setPeriodType(e.target.value as PayPeriodType)} style={{ ...INPUT, flex: 1, minWidth: 130 }}>
-                <option value="weekly">Weekly</option>
-                <option value="biweekly">Biweekly</option>
-                <option value="semi_monthly">Semi-Monthly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-              <input type="date" value={anchorDate} onChange={(e) => setAnchorDate(e.target.value)} style={{ ...INPUT, flex: 1, minWidth: 130 }} />
-              <button aria-busy={!!(savingSettings)} type="button" onClick={savePeriodSettings} disabled={savingSettings}
-                style={{ padding: "8px 14px", borderRadius: 2, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.1)", color: "#4ade80", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}>
-                {savingSettings ? "Saving…" : "Save"}
-              </button>
-            </div>
-            <div style={{ fontSize: 11, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
-              Sets the periods listed above, and the window the driver&apos;s own utilization average
-              covers on the Planner. A company that sets nothing gets a rolling 30 days.
-            </div>
-          </div>
-        )}
 
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px 18px" }}>
           {loading ? (

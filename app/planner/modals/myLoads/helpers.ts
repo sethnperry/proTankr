@@ -199,12 +199,6 @@ export function shareViaEmail(row: LoadHistoryRow, lines: LoadHistoryLine[] | un
   window.location.href = mailto;
 }
 
-export const DATE_RANGES: { label: string; days: number | null }[] = [
-  { label: "7d",  days: 7    },
-  { label: "30d", days: 30   },
-  { label: "90d", days: 90   },
-  { label: "All", days: null },
-];
 
 // ─── Expanded line rows ───────────────────────────────────────────────────────
 
