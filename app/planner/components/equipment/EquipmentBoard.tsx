@@ -44,6 +44,8 @@ type Props = {
   activity?: Record<string, string>;
   /** Where a loaded trailer is headed, by trailer id. */
   destByTrailer?: Record<string, string>;
+  /** Where an empty trailer last was ("BN · Tampa"), by trailer id. */
+  lastPlaceByTrailer?: Record<string, string>;
   /** Compartment strip per trailer id (see useEquipmentBoardStatus). */
   strips?: Record<string, StripSeg[]>;
   /** The viewer's own pair (highlighted). */
@@ -125,7 +127,7 @@ export function EquipmentBoard(p: Props) {
                     <Name>{c.trailer.name}</Name>
                     {loadedText(segs) ? (
                       p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : null
-                    ) : <StatusLine u={c.trailer} />}
+                    ) : p.lastPlaceByTrailer?.[c.trailer.id] && !c.trailer.statusCode ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : <StatusLine u={c.trailer} />}
                   </Tile>
                 </div>
               );
@@ -167,7 +169,8 @@ export function EquipmentBoard(p: Props) {
                   <Tile key={u.id} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
-                    {loadedText(segs) ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded</div> : <StatusLine u={u} />}
+                    {loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
+                      : p.lastPlaceByTrailer?.[u.id] && !u.statusCode ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[u.id]}</div> : <StatusLine u={u} />}
                   </Tile>
                 );
               })}

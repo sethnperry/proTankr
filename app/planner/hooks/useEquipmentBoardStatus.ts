@@ -9,14 +9,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { productColorFor } from "../utils/productColor";
-import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, type LoadedDot } from "@/lib/equipment/boardStatus";
+import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, placeLine, lastPlace, type LoadedDot } from "@/lib/equipment/boardStatus";
 import { stripSegments, residueStands, type StripSeg } from "@/lib/equipment/trailerStrip";
 
 const CARRYING = ["loading", "in_transit", "delivering", "parked"];
 
 export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], trailerIds: string[], refreshKey?: unknown) {
   const catalog = useProductsCatalog();
+  const terminals = useTerminalsCatalog();
+  const [lastStops, setLastStops] = useState<Record<string, { at: string | null; line: string }[]>>({});
   const [initials, setInitials] = useState<Record<string, string>>({});
   const [aboard, setAboard] = useState<Record<string, { comp: number; productId: string | null }[]>>({});
 
@@ -114,6 +117,50 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return () => { alive = false; };
   }, [enabled, claimKey, trailerKey, refreshKey]);
 
+  // Where each trailer last was: its newest finished pickup (terminal) or delivery (store).
+  useEffect(() => {
+    if (!enabled || !trailerKey) { setLastStops({}); return; }
+    let alive = true;
+    void (async () => {
+      try {
+        const ids = trailerKey.split(",");
+        const tr = await supabase.from("trips").select("trip_id, trailer_id").in("trailer_id", ids).order("started_at", { ascending: false }).limit(400);
+        const trips = (tr.data ?? []) as { trip_id: string; trailer_id: string }[];
+        if (trips.length === 0) { if (alive) setLastStops({}); return; }
+        const tids = trips.map((t) => t.trip_id);
+        const [pk, dl] = await Promise.all([
+          supabase.from("trip_pickups").select("trip_id, terminal_id, left_at, outcome").in("trip_id", tids).not("left_at", "is", null),
+          supabase.from("trip_deliveries").select("trip_id, location_id, one_off_name, left_at").in("trip_id", tids).not("left_at", "is", null),
+        ]);
+        const locIds = [...new Set(((dl.data ?? []) as any[]).map((d) => d.location_id).filter(Boolean))];
+        const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name, city").in("location_id", locIds) : { data: [] as any[] };
+        const loc = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, l]));
+        const trailerOf = new Map(trips.map((t) => [t.trip_id, t.trailer_id]));
+        const term = new Map(terminals.data.map((t) => [String(t.terminal_id), t]));
+        const out: Record<string, { at: string | null; line: string }[]> = {};
+        for (const r of (pk.data ?? []) as any[]) {
+          const tid = trailerOf.get(r.trip_id); const t = r.terminal_id ? term.get(String(r.terminal_id)) : null;
+          if (!tid || !t || r.outcome === "no_load") continue;
+          (out[tid] ??= []).push({ at: r.left_at, line: placeLine("terminal", String(t.terminal_name ?? ""), t.city) });
+        }
+        for (const r of (dl.data ?? []) as any[]) {
+          const tid = trailerOf.get(r.trip_id); const l = r.location_id ? loc.get(r.location_id) : null;
+          const name = l?.name ?? r.one_off_name;
+          if (!tid || !name) continue;
+          (out[tid] ??= []).push({ at: r.left_at, line: placeLine("store", String(name), l?.city) });
+        }
+        if (alive) setLastStops(out);
+      } catch { /* fail open */ }
+    })();
+    return () => { alive = false; };
+  }, [enabled, trailerKey, refreshKey, terminals.data]);
+
+  const lastPlaceByTrailer = useMemo(() => {
+    const o: Record<string, string> = {};
+    for (const [id, st] of Object.entries(lastStops)) { const v = lastPlace(st); if (v) o[id] = v; }
+    return o;
+  }, [lastStops]);
+
   // Compartment sizes, and what each trailer last held (cleared by a wash after that load).
   useEffect(() => {
     if (!enabled || !trailerKey) { setCompSizes({}); setResidueBy({}); return; }
@@ -191,5 +238,5 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return out;
   }, [compSizes, aboard, residueBy, colorOf]);
 
-  return { initials, loadedByTrailer, strips, activity, destByTrailer };
+  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer };
 }

@@ -58,3 +58,24 @@ export function nextDeliveryIndex(ds: { status: string | null; seq: number }[]):
   });
   return best;
 }
+
+/** Two-letter terminal code, the same one My Terminals shows ("Buckey North" -> "BN"). */
+export function terminalCode(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+/** "BN · Tampa" for a terminal, "Love's 495 · Tampa" for a store; the city is dropped when there isn't one. */
+export function placeLine(kind: "terminal" | "store", name: string, city: string | null | undefined): string {
+  const head = kind === "terminal" ? terminalCode(name) : name.trim();
+  const c = (city ?? "").trim();
+  return c ? `${head} · ${c}` : head;
+}
+
+/** Where an empty trailer last was: whichever finished stop is newest. */
+export function lastPlace(stops: { at: string | null; line: string }[]): string | null {
+  let best: { at: string; line: string } | null = null;
+  for (const s of stops) if (s.at && (!best || s.at > best.at)) best = { at: s.at, line: s.line };
+  return best?.line ?? null;
+}

@@ -14,12 +14,9 @@ import { RackProductList } from "./myTerminals/RackProductList";
 // (tracked as a someday idea, not this pass). Was a per-terminal color-hash
 // fill; that didn't fit the monochrome theme.
 
-function avatarInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-}
+const avatarInitials = terminalCode;
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { terminalCode } from "@/lib/equipment/boardStatus";
 
 type TerminalRow = any;
 type CardData = { cardNumber: string; privateNote: string; pin: string; };

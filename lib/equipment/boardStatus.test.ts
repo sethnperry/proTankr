@@ -33,3 +33,13 @@ test("nextDeliveryIndex skips finished stops", () => {
   assert.equal(nextDeliveryIndex([{ status: "complete", seq: 1 }, { status: "planned", seq: 2 }]), 1);
   assert.equal(nextDeliveryIndex([{ status: "complete", seq: 1 }]), -1);
 });
+
+import { terminalCode, placeLine, lastPlace } from "./boardStatus.ts";
+test("terminal code and place line", () => {
+  assert.equal(terminalCode("Buckey North"), "BN");
+  assert.equal(terminalCode("Citgo"), "CI");
+  assert.equal(placeLine("terminal", "Kinder Morgan", "Tampa"), "KM · Tampa");
+  assert.equal(placeLine("store", "Love's 495", null), "Love's 495");
+  assert.equal(lastPlace([{ at: "2026-10-01", line: "a" }, { at: "2026-10-05", line: "b" }, { at: null, line: "c" }]), "b");
+  assert.equal(lastPlace([]), null);
+});

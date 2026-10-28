@@ -275,7 +275,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         rows={rows}
         claimedByCombo={claimedByCombo}
         initials={boardStatus.initials}
-        activity={boardStatus.activity} destByTrailer={boardStatus.destByTrailer}
+        activity={boardStatus.activity} destByTrailer={boardStatus.destByTrailer} lastPlaceByTrailer={boardStatus.lastPlaceByTrailer}
         strips={boardStatus.strips}
         mine={{ truckId: myTruckId, trailerId: myTrailerId }}
         loading={loading}
