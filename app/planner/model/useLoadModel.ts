@@ -100,7 +100,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
 
   const {
     terminalSwitchConfirm,
-    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad, startSupplierPick,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,
@@ -162,7 +162,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
   const tripEquip = useTripEquipment(tripStoreHook, effectiveUserId || null);
   const openEquipment = tripEquip.openEquipment;
 
-  usePlannerIntents({ effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps });
+  usePlannerIntents({ startSupplierPick, effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps });
 
   return {
     supplierPicks,
@@ -183,7 +183,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
     handleViewAltLoadInReports,
     terminalLabel,
     terminalSwitchConfirm,
-    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad, startSupplierPick,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,

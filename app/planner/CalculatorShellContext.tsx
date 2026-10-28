@@ -37,7 +37,7 @@ import type { TerminalRow, TerminalCatalogRow } from "./types";
 import { isRole, type Role } from "@/lib/ui/driver/role";
 
 export type CardData = { cardNumber: string; privateNote: string; pin: string };
-export type PlannerIntent = { id: number; kind: "begin" | "report"; loadId?: string };
+export type PlannerIntent = { id: number; kind: "begin" | "report" | "supplier"; loadId?: string };
 
 type ShellValue = {
   authEmail: string;

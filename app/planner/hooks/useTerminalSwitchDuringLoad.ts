@@ -304,6 +304,8 @@ export function useTerminalSwitchDuringLoad(a: Args) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [couldntLoad]);
   const finishCouldntLoad = useCallback(() => setCouldntLoad(null), []);
+  // From the dashboard, after the next rack of a hop was picked there: just the sourcing sheet.
+  const startSupplierPick = useCallback(() => setCouldntLoad({ stage: "supplier", hopped: false }), []);
 
   // Trip workflow, no load in progress: the driver changed terminals from the
   // Planner's own picker. Leaving a rack they already arrived at is a rack
@@ -403,7 +405,7 @@ export function useTerminalSwitchDuringLoad(a: Args) {
 
   return {
     terminalSwitchConfirm,
-    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad, startSupplierPick,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,

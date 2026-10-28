@@ -23,6 +23,7 @@ import type { usePlanSlots } from "./usePlanSlots";
 import type { useTripStore } from "@/lib/trips/useTripStore";
 
 type Inputs = {
+  startSupplierPick: () => void;
   effectiveUserId: string | null | undefined;
   loadDisabled: boolean;
   loadWorkflow: ReturnType<typeof useLoadWorkflow>;
@@ -37,7 +38,7 @@ type Inputs = {
 };
 
 export function usePlannerIntents(i: Inputs) {
-  const { effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps } = i;
+  const { startSupplierPick, effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps } = i;
   const router = useRouter();
   // Begin Loading / Continue Trip from the dashboard: when a plan is already in
   // place, open Plan Review right over the dashboard (what BEGIN LOADING would
@@ -110,6 +111,8 @@ export function usePlannerIntents(i: Inputs) {
         }
         startBeginWatch();
       })();
+    } else if (intent.kind === "supplier") {
+      startSupplierPick();
     } else if (intent.kind === "report" && intent.loadId) {
       void openLoadReportAtTerminal(intent.loadId);
     }

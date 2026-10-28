@@ -914,6 +914,8 @@ export default function HomePage() {
     });
     if (hop) arrivePickup(store, { userId, pickup: { pickup_id: newPickupId, trip_id: openTrip.trip_id } as TripPickupRow, ...clock(), now: new Date(hop.stop.at) });
     void syncNow();
+    // After a rack hop, the new rack's sourcing is asked right away (each terminal has its own).
+    if (hop) shell.postPlannerIntent("supplier");
   };
 
   // ── Add another pickup (partly loaded trailer) ───────────────────────────
