@@ -89,6 +89,17 @@ export default function WorklogPage() {
 
   const html = useMemo(() => (log ? renderWorklogBody(log, { mode: condensed ? "condensed" : "full" }) : ""), [log, condensed]);
 
+  const [sampleMsg, setSampleMsg] = useState("");
+  const sendSample = async () => {
+    if (!range) return;
+    setSampleMsg("Sending…");
+    const { data: sess } = await supabase.auth.getSession();
+    const title = periodId.startsWith("p:") && effective ? PERIOD_TITLE[effective.type] : "Weekly";
+    const r = await fetch("/api/worklog/sample", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess.session?.access_token ?? ""}` }, body: JSON.stringify({ ...range, tz, title }) });
+    const j = await r.json().catch(() => ({}));
+    setSampleMsg(r.ok ? `Sent to ${j.to}.` : j.error ?? "Failed.");
+  };
+
   // settings state
   const [cs, setCs] = useState<Company>({ period_type: "weekly", anchor_date: "", send_after_days: 2, tz: deviceTz });
   const [ms, setMs] = useState<{ type: PayPeriodType | ""; anchor: string; email: boolean }>({ type: "", anchor: "", email: true });
@@ -137,8 +148,10 @@ export default function WorklogPage() {
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button style={btn} disabled={!log} onClick={() => window.print()}>Print / Save PDF</button>
+          {shell.isSuperAdmin && <button style={ghost} disabled={!range} onClick={sendSample}>Email me a sample</button>}
           <button style={ghost} onClick={() => setSettingsOpen((v) => !v)}>{settingsOpen ? "Hide settings" : "Period settings"}</button>
         </div>
+        {sampleMsg && <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>{sampleMsg}</div>}
       </div>
 
       {settingsOpen && (
