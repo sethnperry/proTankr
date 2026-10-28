@@ -1,5 +1,5 @@
 -- A long line is not cleared because someone loaded (unlike an out-of-product flag). It clears on
--- its own an hour after the last load or rack-hop departure at that terminal, whichever is later.
+-- its own an hour after the last load or rack-hop departure (made because of the long line) at that terminal, whichever is later.
 -- The app reads last_activity_at; these triggers keep it current.
 alter table public.terminal_outage_reports add column if not exists last_activity_at timestamptz;
 
@@ -20,8 +20,9 @@ create trigger trg_touch_long_line_on_load after update on public.load_log
 create or replace function public.touch_long_line_on_hop()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.outcome is distinct from 'no_load' or new.left_at is null or new.terminal_id is null then return new; end if;
-  if tg_op = 'UPDATE' and old.left_at is not distinct from new.left_at and old.outcome is not distinct from new.outcome then return new; end if;
+  -- Only a hop made because of the long line shows the line was still there.
+  if new.outcome is distinct from 'no_load' or new.no_load_reason is distinct from 'long_line' or new.left_at is null or new.terminal_id is null then return new; end if;
+  if tg_op = 'UPDATE' and old.left_at is not distinct from new.left_at and old.outcome is not distinct from new.outcome and old.no_load_reason is not distinct from new.no_load_reason then return new; end if;
   update terminal_outage_reports o
      set last_activity_at = greatest(coalesce(o.last_activity_at, 'epoch'::timestamptz), new.left_at)
    where o.terminal_id = new.terminal_id and o.report_type = 'long_line';
