@@ -5,13 +5,14 @@
 // on top (a truck and its trailer on one row, one wide tap target), a gap, then the loose
 // trucks on the left and loose trailers on the right, all in natural numeric order.
 //
-// Under a combo's numbers: the truck reads "In Use · SP" (the driver's initials) unless it has
-// a fleet status; the trailer reads "Loaded" with one colored dot per loaded compartment.
-// A loose unit shows its fleet status (Readyline, Deadline) like it always has.
+// Every card is the same size and shows only the unit number and its status. The truck reads
+// "In Use · SP" (the driver's initials) unless it has a fleet status. A trailer carries its compartments
+// down its right edge: comp 1 on top, each as tall as it is big; filled in the product's color when
+// loaded, outlined in the last product's color when empty (residue), a gray outline when new or washed.
 
 import React from "react";
 import type { TrackRows, TrackUnit } from "@/lib/equipment/trackList";
-import type { LoadedDot } from "@/lib/equipment/boardStatus";
+import type { StripSeg } from "@/lib/equipment/trailerStrip";
 import { truckLine } from "@/lib/equipment/boardStatus";
 import { fleetStatusColor, fleetStatusLabel } from "../../modals/EquipmentStatusModal";
 
@@ -20,13 +21,14 @@ const MUTED = "rgba(255,255,255,0.35)";
 const header: React.CSSProperties = {
   fontSize: 12, fontWeight: 800, color: MUTED, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8, textAlign: "center",
 };
+const TILE_H = 64;
 const tileBase: React.CSSProperties = {
   borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
-  padding: "12px 10px", textAlign: "center", userSelect: "none", color: "rgba(255,255,255,0.85)", minWidth: 0, boxSizing: "border-box",
+  height: TILE_H, padding: "0 10px", display: "flex", alignItems: "center", gap: 8, overflow: "hidden", textAlign: "center", userSelect: "none", color: "rgba(255,255,255,0.85)", minWidth: 0, boxSizing: "border-box",
 };
 const tileMine: React.CSSProperties = { background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.45)", color: "#fff" };
 const plus: React.CSSProperties = {
-  borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", padding: "14px 10px",
+  borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", height: TILE_H, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px",
   textAlign: "center", cursor: "pointer", fontWeight: 900, fontSize: 20, color: "rgba(255,255,255,0.35)",
 };
 
@@ -37,7 +39,8 @@ type Props = {
   /** user_id holding each combo, for the truck's "In Use · SP" line. */
   claimedByCombo: Record<string, string | null>;
   initials: Record<string, string>;
-  loadedByTrailer: Record<string, LoadedDot[]>;
+  /** Compartment strip per trailer id (see useEquipmentBoardStatus). */
+  strips?: Record<string, StripSeg[]>;
   /** The viewer's own pair (highlighted). */
   mine?: { truckId: string | null; trailerId: string | null };
   /** A loose unit waiting to be coupled (outlined). */
@@ -51,22 +54,35 @@ type Props = {
   onAddTruck?: () => void;
   onAddTrailer?: () => void;
   longPress?: LongPress;
-  renderExtra?: (u: TrackUnit) => React.ReactNode;
-  /** Draws a status line for a loose unit's away caption etc. */
-  looseCaption?: (u: TrackUnit) => React.ReactNode;
   loading?: boolean;
   emptyNote?: string;
 };
 
-function Dots({ dots }: { dots: LoadedDot[] }) {
+function Strip({ segs }: { segs: StripSeg[] }) {
   return (
-    <span style={{ display: "inline-flex", gap: 3, marginLeft: 6, verticalAlign: "middle" }}>
-      {dots.map((d) => (
-        <span key={d.comp} aria-hidden style={{ width: 9, height: 9, borderRadius: "50%", background: d.color, border: "1px solid rgba(255,255,255,0.35)" }} />
+    <div aria-hidden style={{ alignSelf: "stretch", width: 14, flexShrink: 0, margin: "6px 0", display: "flex", flexDirection: "column", gap: 2 }}>
+      {segs.map((g) => (
+        <div key={g.comp} style={{
+          flex: `${g.size} 1 0`, minHeight: 3, boxSizing: "border-box",
+          ...(g.kind === "loaded" ? { background: g.color ?? "#fff", border: `1px solid ${g.color ?? "#fff"}` }
+            : g.kind === "residue" ? { border: `1.5px solid ${g.color ?? "#fff"}` }
+            : { border: "1px solid rgba(255,255,255,0.35)" }),
+        }} />
       ))}
-    </span>
+    </div>
   );
 }
+
+function Tile({ children, strip, style, ...rest }: { children: React.ReactNode; strip?: StripSeg[]; style?: React.CSSProperties } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div {...rest} style={{ ...tileBase, ...style }}>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+      {strip && strip.length > 0 && <Strip segs={strip} />}
+    </div>
+  );
+}
+
+const loadedText = (segs?: StripSeg[]) => !!segs?.some((g) => g.kind === "loaded");
 
 function Name({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 17, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</div>;
@@ -97,7 +113,7 @@ export function EquipmentBoard(p: Props) {
                 statusLabel: c.truck.statusCode ? fleetStatusLabel(c.truck.statusCode) || c.truck.statusCode : null,
                 statusCode: c.truck.statusCode, claimedBy: holder, initials: holder ? p.initials[holder] ?? "" : "",
               });
-              const dots = p.loadedByTrailer[c.trailer.id];
+              const segs = p.strips?.[c.trailer.id];
               const mine = isMine(c.truck.id, c.trailer.id);
               const tile = { ...tileBase, ...(mine ? tileMine : {}) };
               return (
@@ -105,7 +121,7 @@ export function EquipmentBoard(p: Props) {
                   onClick={() => p.onCombo?.(c)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); p.onCombo?.(c); } }}
                   style={{ display: "grid", gridTemplateColumns: "1fr 26px 1fr", alignItems: "stretch", cursor: "pointer" }}>
-                  <div style={tile}>
+                  <Tile style={tile as React.CSSProperties}>
                     <Name>{c.truck.name}</Name>
                     {tl.tone !== "none" && (
                       <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : mine && tl.tone === "use" ? "#fff" : "rgba(255,255,255,0.6)" }}>
@@ -113,16 +129,14 @@ export function EquipmentBoard(p: Props) {
                         {mine && tl.tone === "use" ? "Mine" : tl.text}
                       </div>
                     )}
-                    {p.renderExtra?.(c.truck)}
-                  </div>
+                  </Tile>
                   <div aria-hidden style={{ alignSelf: "center", height: 2, background: "rgba(255,255,255,0.45)" }} />
-                  <div style={tile}>
+                  <Tile style={tile as React.CSSProperties} strip={segs}>
                     <Name>{c.trailer.name}</Name>
-                    {dots ? (
-                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded<Dots dots={dots} /></div>
+                    {loadedText(segs) ? (
+                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded</div>
                     ) : <StatusLine u={c.trailer} />}
-                    {p.renderExtra?.(c.trailer)}
-                  </div>
+                  </Tile>
                 </div>
               );
             })}
@@ -141,13 +155,11 @@ export function EquipmentBoard(p: Props) {
                 const mine = p.mine?.truckId === u.id;
                 const pending = p.pendingId === u.id;
                 return (
-                  <div key={u.id} style={{ ...tileBase, ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     <StatusLine u={u} />
-                    {p.looseCaption?.(u)}
-                    {p.renderExtra?.(u)}
-                  </div>
+                  </Tile>
                 );
               })}
               {p.canAdd && <div style={plus} onClick={p.onAddTruck}>+</div>}
@@ -160,15 +172,13 @@ export function EquipmentBoard(p: Props) {
                 const lp = p.longPress?.(u);
                 const mine = p.mine?.trailerId === u.id;
                 const pending = p.pendingId === u.id;
-                const dots = p.loadedByTrailer[u.id];
+                const segs = p.strips?.[u.id];
                 return (
-                  <div key={u.id} style={{ ...tileBase, ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
-                    {dots ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded<Dots dots={dots} /></div> : <StatusLine u={u} />}
-                    {p.looseCaption?.(u)}
-                    {p.renderExtra?.(u)}
-                  </div>
+                    {loadedText(segs) ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)" }}>Loaded</div> : <StatusLine u={u} />}
+                  </Tile>
                 );
               })}
               {p.canAdd && <div style={plus} onClick={p.onAddTrailer}>+</div>}

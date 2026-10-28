@@ -134,7 +134,7 @@ export function PickerDialog({ m }: { m: SoloModel }) {
             rows={boardRows}
             claimedByCombo={claimedByCombo}
             initials={boardStatus.initials}
-            loadedByTrailer={boardStatus.loadedByTrailer}
+            strips={boardStatus.strips}
             mine={{ truckId: selectedTruckId, trailerId: selectedTrailerId }}
             loading={loading}
             onCombo={(c) => setDetailComboId(c.comboId)}
@@ -153,13 +153,6 @@ export function PickerDialog({ m }: { m: SoloModel }) {
                     return { handlers: handlers as Record<string, unknown>, didFire };
                   }
                 : undefined
-            }
-            looseCaption={(u) =>
-              filter.awayOnly ? (
-                <div style={S.cardCurrentCaption}>
-                  Currently in {u.currentRegion ?? u.region ?? "—"} · {u.currentLocalArea ?? u.localArea ?? "—"}
-                </div>
-              ) : null
             }
           />
           <button

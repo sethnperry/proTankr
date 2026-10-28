@@ -58,7 +58,7 @@ export default function EquipmentComboPicker({
           rows={rows}
           claimedByCombo={claimedByCombo}
           initials={status.initials}
-          loadedByTrailer={status.loadedByTrailer}
+          strips={status.strips}
           combosOnly
           onCombo={(c) => onPick(c.comboId)}
           emptyNote="No equipment found."

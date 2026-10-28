@@ -275,15 +275,12 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         rows={rows}
         claimedByCombo={claimedByCombo}
         initials={boardStatus.initials}
-        loadedByTrailer={boardStatus.loadedByTrailer}
+        strips={boardStatus.strips}
         mine={{ truckId: myTruckId, trailerId: myTrailerId }}
         loading={loading}
         onCombo={(c) => setPick({ truckId: c.truck.id, trailerId: c.trailer.id })}
         onTruck={(u) => setPick({ truckId: u.id, trailerId: null })}
         onTrailer={(u) => setPick({ truckId: null, trailerId: u.id })}
-        renderExtra={(u) => u.statusLocation ? (
-          <div style={{ fontSize: 11, marginTop: 2, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.statusLocation}</div>
-        ) : null}
         emptyNote={`Nothing matches${filtered ? " this filter" : ""}.`}
       />
 
