@@ -63,7 +63,7 @@ export function HistoryTop({ m }: { m: ScaleHistoryModel }) {
                 background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 2,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.55)", padding: 4,
               }}>
-                {[{ label: "Copy", fn: handleCopy }, { label: "Text", fn: handleSMS }, { label: "Email", fn: handleEmail }].map((o) => (
+                {[{ label: "Copy", fn: handleCopy }, { label: "Text", fn: handleSMS }, { label: "Email PDF", fn: handleEmail }].map((o) => (
                   <div
                     key={o.label}
                     onClick={o.fn}

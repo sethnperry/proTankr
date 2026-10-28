@@ -12,7 +12,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Props } from "./myLoads/types";
-import { shareViaClipboard, shareViaSMS, shareViaEmail } from "./myLoads/helpers";
+import { shareViaClipboard, shareViaSMS } from "./myLoads/helpers";
+import { emailReportPdf } from "@/lib/reports/emailReport";
+import { loadReportDoc } from "@/lib/reports/docs";
 import { PeriodPicker } from "@/lib/ui/PeriodPicker";
 import { lastDays, type DateRange } from "@/lib/reports/dateRange";
 import { LoadRow } from "./myLoads/LoadRow";
@@ -114,7 +116,7 @@ export default function MyLoadsModal({
   }
   function handleEmail() {
     if (!selectedRow) return;
-    shareViaEmail(selectedRow, selectedLines);
+    void emailReportPdf(loadReportDoc(selectedRow, selectedLines));
   }
 
   async function confirmDelete() {
@@ -213,7 +215,7 @@ export default function MyLoadsModal({
           <div style={{ marginLeft: "auto", display: "flex", gap: 5, alignItems: "center" }}>
             {(["copy", "text", "email"] as const).map((type) => {
               const enabled = !!selectedId;
-              const label = type === "copy" ? (copied ? "✓" : "COPY") : type === "text" ? "TEXT" : "EMAIL";
+              const label = type === "copy" ? (copied ? "✓" : "COPY") : type === "text" ? "TEXT" : "EMAIL PDF";
               return (
                 <button
                   key={type}

@@ -7,7 +7,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { generateWeightTicketPng, shareOrDownloadTicket } from "@/lib/ui/generateWeightTicket";
 import type { WeightRecordRaw, Props } from "./types";
-import { fmtDate, buildShareText, shareViaClipboard, shareViaSMS, shareViaEmail } from "./helpers";
+import { fmtDate, buildShareText, shareViaClipboard, shareViaSMS } from "./helpers";
+import { emailReportPdf } from "@/lib/reports/emailReport";
+import { scaleHistoryDoc } from "@/lib/reports/docs";
 import { lastDays, inRange, type DateRange } from "@/lib/reports/dateRange";
 
 export function useScaleHistory({ open, onClose, companyId, comboId, onChanged, truckName, trailerName }: Props) {
@@ -127,7 +129,7 @@ export function useScaleHistory({ open, onClose, companyId, comboId, onChanged, 
     setReportMenuOpen(false);
   }
   function handleSMS() { shareViaSMS(buildShareText(filtered, "Scale History")); setReportMenuOpen(false); }
-  function handleEmail() { shareViaEmail("Scale History", buildShareText(filtered, "Scale History")); setReportMenuOpen(false); }
+  function handleEmail() { void emailReportPdf(scaleHistoryDoc(filtered, { equipment: equipmentLabel, range })); setReportMenuOpen(false); }
 
   function openRow(id: string) {
     if (expandedId === id) { closeExpanded(); return; }

@@ -8,7 +8,9 @@ import { supabase } from "@/lib/supabase/client";
 import { lastDays, inRange, type DateRange } from "@/lib/reports/dateRange";
 
 import type { ServiceRecordRaw, WashRecordRaw, ServiceTypeRaw, UnitRef, ServiceRow, WashRow, Props } from "./types";
-import { buildShareText, shareViaClipboard, shareViaSMS, shareViaEmail } from "./helpers";
+import { buildShareText, shareViaClipboard, shareViaSMS } from "./helpers";
+import { emailReportPdf } from "@/lib/reports/emailReport";
+import { recordHistoryDoc } from "@/lib/reports/docs";
 
 export function useRecordHistory(props: Props) {
   const { open, onClose, kind, title, companyId, truckId, trailerId, trucks, trailers, onChanged } = props;
@@ -237,7 +239,7 @@ export function useRecordHistory(props: Props) {
     setReportMenuOpen(false);
   }
   function handleSMS() { shareViaSMS(buildShareText(kind, filteredService, filteredWash, title)); setReportMenuOpen(false); }
-  function handleEmail() { shareViaEmail(title, buildShareText(kind, filteredService, filteredWash, title)); setReportMenuOpen(false); }
+  function handleEmail() { void emailReportPdf(recordHistoryDoc(kind, filteredService, filteredWash, { title, range })); setReportMenuOpen(false); }
 
   function openRow(id: string) {
     if (expandedId === id) { closeExpanded(); return; }

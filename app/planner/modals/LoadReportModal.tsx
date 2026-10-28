@@ -3,6 +3,8 @@
 
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
+import { emailReportPdf } from "@/lib/reports/emailReport";
+import { loadReportDoc } from "@/lib/reports/docs";
 import type { LoadHistoryRow, LoadHistoryLine } from "../hooks/useLoadHistory";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -138,8 +140,7 @@ export default function LoadReportModal({ open, onClose, row, lines }: Props) {
   }
   function handleSMS() { window.location.href = `sms:?&body=${encodeURIComponent(body)}`; }
   function handleEmail() {
-    const subject = [fmtDateTime(row!.started_at), cityState, row!.terminal_name].filter(Boolean).join("  ·  ");
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    void emailReportPdf(loadReportDoc(row!, lines));
   }
 
   return createPortal(
@@ -265,7 +266,7 @@ export default function LoadReportModal({ open, onClose, row, lines }: Props) {
         <div style={{ padding: "12px 18px 28px", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", gap: 8 }}>
           <button type="button" onClick={handleCopy} style={BTN}>{copied ? "✓ Copied" : "Copy"}</button>
           <button type="button" onClick={handleSMS}  style={BTN}>Text</button>
-          <button type="button" onClick={handleEmail} style={BTN}>Email</button>
+          <button type="button" onClick={handleEmail} style={BTN}>Email PDF</button>
         </div>
       </div>
     </div>,
