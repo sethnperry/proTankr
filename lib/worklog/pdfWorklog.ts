@@ -129,7 +129,7 @@ export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condens
       }
       const tail: string[] = [];
       if (d.from) tail.push(`${d.from} to ${d.to}`);
-      tail.push(d.nonRev != null ? `${hr(d.worked)} Hr on duty (trip ${hr(d.hours)}, non-rev ${hr(d.nonRev)})` : `${hr(d.hours)} Hr`);
+      tail.push(d.nonRev != null ? `${hr(d.worked)} Hr on duty (trip ${hr(d.hours)}, non-rev ${hr(d.nonRev)}${d.tripOverDuty >= 0.1 ? `; trip ${hr(d.tripOverDuty)} more than the log shows on duty` : ""})` : `${hr(d.hours)} Hr`);
       tail.push(`${num(d.miles)} Mi`);
       if (d.loads) tail.push(`${d.loads} load${d.loads === 1 ? "" : "s"}`, `${num(d.gross)} Ggal`, `${num(d.net)} Ngal`);
       const headLines = wrap(`${weekday(d.date)} ${shortDate(d.date)}   ${tail.join("  ·  ")}`, bold, 9, W - 2 * M - 12);

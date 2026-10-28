@@ -39,6 +39,8 @@ export type WlDay = {
   rows: WlRow[]; midnightAfter: boolean;
   /** On duty before, between and after trips (needs the electronic log); null = not known. */
   nonRev: number | null; worked: number;
+  /** Trip hours beyond the electronic log's on-duty time that day (off duty or no log during a trip). */
+  tripOverDuty: number;
 };
 export type WlSummary = {
   daysWorked: number; hours: number; loads: number; gross: number; net: number;
@@ -99,7 +101,7 @@ export function buildWorklog(i: WlInput): Worklog {
   const dayMap = new Map<string, WlDay>();
   const dayOf = (date: string): WlDay => {
     let d = dayMap.get(date);
-    if (!d) { d = { date, label: `${weekday(date)} ${shortDate(date)}`, from: "", to: "", hours: 0, miles: 0, loads: 0, gross: 0, net: 0, rows: [], midnightAfter: false, nonRev: null, worked: 0 }; dayMap.set(date, d); }
+    if (!d) { d = { date, label: `${weekday(date)} ${shortDate(date)}`, from: "", to: "", hours: 0, miles: 0, loads: 0, gross: 0, net: 0, rows: [], midnightAfter: false, nonRev: null, worked: 0, tripOverDuty: 0 }; dayMap.set(date, d); }
     return d;
   };
   const windows = new Map<string, { from: number; to: number }>();
@@ -168,8 +170,8 @@ export function buildWorklog(i: WlInput): Worklog {
     // With the electronic log, the day's on-duty total is the hours worked (all on-duty time is paid);
     // trips only split it into trip time and non-rev. No log for that day: trip time stands.
     const onDuty = duty?.[d.date] ?? 0;
-    d.worked = onDuty > 0 ? r1(onDuty) : r1(d.hours);
-    if (duty && onDuty <= 0) d.nonRev = 0;
+    d.worked = duty ? r1(onDuty) : r1(d.hours);
+    d.tripOverDuty = duty ? r1(Math.max(0, d.hours - onDuty)) : 0;
     d.midnightAfter = d.rows.some((r) => r.continues);
     for (const r of d.rows) { r.hours = r1(r.hours); r.miles = Math.round(r.miles); }
   }
