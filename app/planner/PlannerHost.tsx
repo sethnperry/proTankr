@@ -12,6 +12,7 @@ import PlanSlotsFlow from "./flows/PlanSlotsFlow";
 import CompartmentFlow from "./flows/CompartmentFlow";
 import PlanBuilderFlow from "./flows/PlanBuilderFlow";
 import TerminalSwitchFlow from "./flows/TerminalSwitchFlow";
+import HopSupplierFlow from "./flows/HopSupplierFlow";
 import ReportIssueFlow from "./flows/ReportIssueFlow";
 import StaleApiFlow from "./flows/StaleApiFlow";
 import RecallEquipmentFlow from "./flows/RecallEquipmentFlow";
@@ -27,6 +28,7 @@ export default function PlannerHost() {
       <CompartmentFlow />
       <PlanBuilderFlow />
       <TerminalSwitchFlow />
+      <HopSupplierFlow />
       <ReportIssueFlow />
       <StaleApiFlow />
       <RecallEquipmentFlow />

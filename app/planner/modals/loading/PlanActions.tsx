@@ -51,7 +51,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
           opacity: busy ? 0.55 : 1,
         }}
       >
-        Update Card, No Load
+        Couldn't load
       </button>
 
       <button

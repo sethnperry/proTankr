@@ -24,12 +24,19 @@ export default function TerminalSwitchFlow() {
     switchReasonNoteRef,
     tripPickup,
     tripWaitingPickup,
+    couldntLoad,
+    onCouldntLoadReasonDone,
+    finishCouldntLoad,
   } = usePlanner();
+  const reasonStage = couldntLoad?.stage === "reason";
 
   return (
     <TerminalSwitchDuringLoadSheet
-      open={!!terminalSwitchConfirm}
-      prevTerminalName={terminalSwitchConfirm?.prev.terminalName ?? ""}
+      open={!!terminalSwitchConfirm || reasonStage}
+      reasonOnly={reasonStage}
+      onReasonDone={onCouldntLoadReasonDone}
+      onReasonCancel={finishCouldntLoad}
+      prevTerminalName={reasonStage && couldntLoad ? couldntLoad.prev.terminalName : terminalSwitchConfirm?.prev.terminalName ?? ""}
       newTerminalName={terminalSwitchConfirm?.next.terminalName ?? ""}
       onUpdateCardAtPrevious={handleUpdateCardAtPrevious}
       onSwitchWithoutUpdating={handleSwitchWithoutUpdating}
@@ -38,7 +45,7 @@ export default function TerminalSwitchFlow() {
       planRows={reportRows(effectivePlanRows as any[], compPlan as any, (terminalProducts ?? []) as any[]) as any[]}
       productNameById={productNameById}
       onSubmitOutageReport={handleSubmitOutageReportForPreviousTerminal}
-      requireReason={!!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}
+      requireReason={reasonStage || !!((loadWorkflow.activeLoadId && tripPickup) || tripWaitingPickup?.arrived_at)}
       onReasonPicked={(code, note) => {
         if (!switchReportedIssueRef.current) switchReportedIssueRef.current = code;
         switchReasonNoteRef.current = note;

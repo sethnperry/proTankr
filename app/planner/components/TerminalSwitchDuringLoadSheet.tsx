@@ -80,6 +80,10 @@ type Props = {
   // onSubmitOutageReport; the rest come back here.
   requireReason?: boolean;
   onReasonPicked?: (code: string, note: string | null) => void;
+  // "Couldn't load": only ask why, then hand back (the terminal picker opens next).
+  reasonOnly?: boolean;
+  onReasonDone?: () => void;
+  onReasonCancel?: () => void;
 };
 
 const secondaryRowStyle: React.CSSProperties = {
@@ -96,8 +100,9 @@ const cancelStyle: React.CSSProperties = {
 export default function TerminalSwitchDuringLoadSheet({
   open, prevTerminalName, newTerminalName, onUpdateCardAtPrevious, onSwitchWithoutUpdating,
   darkMode, accentColor, planRows, productNameById, onSubmitOutageReport,
-  requireReason = false, onReasonPicked,
+  requireReason = false, onReasonPicked, reasonOnly = false, onReasonDone, onReasonCancel,
 }: Props) {
+  const afterReason = () => { if (reasonOnly) onReasonDone?.(); else setMode("menu"); };
   const [mode, setMode] = useState<"reason" | "otherNote" | "menu" | "reportType" | "reportProducts">(requireReason ? "reason" : "menu");
   const [otherNote, setOtherNote] = useState("");
   const [reasonGiven, setReasonGiven] = useState(false);
@@ -163,7 +168,7 @@ export default function TerminalSwitchDuringLoadSheet({
     // question -- just go back to the real decision (update the previous
     // terminal's card or not / report another issue).
     setReasonGiven(true);
-    setMode("menu");
+    afterReason();
   }
 
   function submitReport() {
@@ -215,7 +220,9 @@ export default function TerminalSwitchDuringLoadSheet({
               Why are you leaving {prevTerminalName}?
             </div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
-              {prevTerminalName} goes on your PTD as couldn&apos;t load, and {newTerminalName} becomes your pickup.
+              {reasonOnly
+                ? `${prevTerminalName} goes on your PTD as couldn't load. You'll pick the next terminal after this.`
+                : `${prevTerminalName} goes on your PTD as couldn't load, and ${newTerminalName} becomes your pickup.`}
             </div>
             {TERMINAL_ISSUES.map((t) => (
               <button aria-busy={!!(submitBusy && reportType === t.code)}
@@ -235,12 +242,13 @@ export default function TerminalSwitchDuringLoadSheet({
                   if (r.code === "other") { setMode("otherNote"); return; }
                   onReasonPicked?.(r.code, null);
                   setReasonGiven(true);
-                  setMode("menu");
+                  afterReason();
                 }}
               >
                 {r.label}
               </button>
             ))}
+            {reasonOnly && <button type="button" style={cancelStyle} onClick={onReasonCancel}>Cancel</button>}
           </>
         )}
 
@@ -260,7 +268,7 @@ export default function TerminalSwitchDuringLoadSheet({
             <button
               type="button" style={{ ...primaryRowStyle, opacity: otherNote.trim() ? 1 : 0.55 }}
               disabled={!otherNote.trim()}
-              onClick={() => { onReasonPicked?.("other", otherNote.trim()); setReasonGiven(true); setMode("menu"); }}
+              onClick={() => { onReasonPicked?.("other", otherNote.trim()); setReasonGiven(true); afterReason(); }}
             >
               Continue
             </button>

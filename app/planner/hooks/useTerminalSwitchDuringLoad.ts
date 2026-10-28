@@ -72,6 +72,15 @@ export function useTerminalSwitchDuringLoad(a: Args) {
   const [terminalSwitchWatch, setTerminalSwitchWatch] = useState<TerminalSnapshot | null>(null);
   const [terminalSwitchConfirm, setTerminalSwitchConfirm] = useState<{ prev: TerminalSnapshot; next: TerminalSnapshot } | null>(null);
 
+  // "Couldn't load" from Plan Review: why, then the terminal picker, then the hop is applied with no
+  // card update, then the new terminal's sourcing, then the dashboard. stage "apply" runs the hop.
+  const [couldntLoad, setCouldntLoad] = useState<
+    | { stage: "reason" | "pick"; prev: TerminalSnapshot }
+    | { stage: "apply"; prev: TerminalSnapshot; next: TerminalSnapshot }
+    | { stage: "supplier"; hopped: boolean }
+    | null
+  >(null);
+
   const handleTapTerminalInLoadingModal = useCallback(() => {
     setTerminalSwitchWatch({
       terminalId: String(location.selectedTerminalId || ""),
@@ -99,7 +108,14 @@ export function useTerminalSwitchDuringLoad(a: Args) {
     const prev = terminalSwitchWatch;
     setTerminalSwitchWatch(null);
     const newTerminalId = String(location.selectedTerminalId || "");
-    if (!newTerminalId || newTerminalId === prev.terminalId) return;
+    if (!newTerminalId || newTerminalId === prev.terminalId) { setCouldntLoad(null); return; }
+    if (couldntLoad?.stage === "pick") {
+      setCouldntLoad({
+        stage: "apply", prev,
+        next: { terminalId: newTerminalId, terminalName: terminalLabel || "Terminal", rackId: String(location.selectedRackId || ""), city: location.selectedCity, state: location.selectedState },
+      });
+      return;
+    }
     setTerminalSwitchConfirm({
       prev,
       next: {
@@ -109,7 +125,7 @@ export function useTerminalSwitchDuringLoad(a: Args) {
         city: location.selectedCity, state: location.selectedState,
       },
     });
-  }, [terminalSwitchWatch, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel]);
+  }, [terminalSwitchWatch, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel, couldntLoad]);
 
   // Every planned product's id -- used both to re-seed API/Temp after a
   // confirmed switch (below) and to scope the "Report Terminal Issue"
@@ -261,6 +277,31 @@ export function useTerminalSwitchDuringLoad(a: Args) {
     applyTerminalSwitch(prev, next);
   }, [terminalSwitchConfirm, applyTerminalSwitch]);
 
+  const handleCouldntLoad = useCallback(() => {
+    setCouldntLoad({
+      stage: "reason",
+      prev: {
+        terminalId: String(location.selectedTerminalId || ""), terminalName: terminalLabel || "Terminal",
+        rackId: String(location.selectedRackId || ""), city: location.selectedCity, state: location.selectedState,
+      },
+    });
+  }, [location.selectedTerminalId, location.selectedRackId, location.selectedCity, location.selectedState, terminalLabel]);
+  // The why is answered (a reported issue or a picked reason): open the terminal picker.
+  const onCouldntLoadReasonDone = useCallback(() => {
+    if (couldntLoad?.stage !== "reason") return;
+    setTerminalSwitchWatch(couldntLoad.prev);
+    setCouldntLoad({ stage: "pick", prev: couldntLoad.prev });
+    shell.setTermOpen(true);
+  }, [couldntLoad, shell]);
+  useEffect(() => {
+    if (couldntLoad?.stage !== "apply") return;
+    const hopped = !!(loadWorkflow.activeLoadId ? tripPickup : (tripWaitingPickup?.arrived_at ? tripWaitingPickup : null));
+    applyTerminalSwitch(couldntLoad.prev, couldntLoad.next);
+    setCouldntLoad({ stage: "supplier", hopped });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [couldntLoad]);
+  const finishCouldntLoad = useCallback(() => setCouldntLoad(null), []);
+
   // Trip workflow, no load in progress: the driver changed terminals from the
   // Planner's own picker. Leaving a rack they already arrived at is a rack
   // hop (same sheet as Plan Review: why, card, then the new terminal becomes
@@ -348,17 +389,18 @@ export function useTerminalSwitchDuringLoad(a: Args) {
   // params.
   const handleSubmitOutageReportForPreviousTerminal = useCallback(
     (reportType: OutageReportType, productIds: string[]) => {
-      const prev = terminalSwitchConfirm?.prev;
+      const prev = (couldntLoad && "prev" in couldntLoad ? couldntLoad.prev : null) ?? terminalSwitchConfirm?.prev;
       return handleSubmitOutageReport(reportType, productIds, prev?.terminalId, prev?.rackId || null).then((r) => {
         if (!r.error && !switchReportedIssueRef.current) switchReportedIssueRef.current = reportType;
         return r;
       });
     },
-    [terminalSwitchConfirm, handleSubmitOutageReport]
+    [terminalSwitchConfirm, couldntLoad, handleSubmitOutageReport]
   );
 
   return {
     terminalSwitchConfirm,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,

@@ -43,6 +43,7 @@ export default function PlanReviewFlow() {
     handleTapTerminalInLoadingModal,
     handleBackToPlannerNoUpdate,
     openCancelLoadSheet,
+    handleCouldntLoad,
   } = usePlanner();
 
   return (
@@ -102,7 +103,7 @@ export default function PlanReviewFlow() {
       }
       trip={tripModeForLoading}
       onFinishLoadingStart={loadGeoShips}
-      onUpdateCardOnly={() => loadWorkflow.cancelActiveLoad()}
+      onUpdateCardOnly={handleCouldntLoad}
       onReportTerminalIssue={() => openCancelLoadSheet()}
       onBackToPlanner={handleBackToPlannerNoUpdate}
       onAdjustPlan={handleBackToPlannerNoUpdate}
