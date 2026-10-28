@@ -545,6 +545,10 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       };
     },
 
+    async dutyLogs(id: string, fromIso: string, toIso: string): Promise<any[]> {
+      return ((await call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: fromIso, toDate: toIso } })) ?? []) as any[];
+    },
+
     async positions(): Promise<Map<string, VehicleReading>> {
       const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       const out = new Map<string, VehicleReading>();

@@ -83,6 +83,8 @@ export interface TelematicsProvider {
   /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */
   lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null>;
   hos(driverId: string, tz?: string): Promise<HosAvailability | null>;
+  /** Raw duty-status log rows for one driver inside a window (used for pay period recaps). */
+  dutyLogs(driverId: string, fromIso: string, toIso: string): Promise<any[]>;
   listVehicles(): Promise<ProviderVehicle[]>;
   reading(vehicleId: string): Promise<VehicleReading>;
   /** GPS trail for one vehicle inside a window, oldest first (paged). */
