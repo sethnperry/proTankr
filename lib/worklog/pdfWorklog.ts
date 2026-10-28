@@ -17,8 +17,12 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 const monthName = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 const safe = (s: string) => s.replace(/[^\x20-\x7E -ÿ–—…•‘’“”]/g, "?");
 
+const KIND: Record<string, string> = { Weekly: "W", Biweekly: "BW", "Semi-monthly": "SM", Monthly: "M" };
+const mmddyy = (iso: string) => { const [y, m, d] = iso.split("-"); return `${m}${d}${y.slice(2)}`; };
+
+/** e.g. ProTankr-WWL-102126-to-102726.pdf (W = weekly, WL = work log). */
 export function worklogFileName(w: Pick<Worklog, "range" | "title">): string {
-  return `ProTankr-${w.title.replace(/[^A-Za-z0-9]+/g, "")}-Worklog-${w.range.start}-to-${w.range.end}.pdf`;
+  return `ProTankr-${KIND[w.title] ?? "C"}WL-${mmddyy(w.range.start)}-to-${mmddyy(w.range.end)}.pdf`;
 }
 
 export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condensed"; logo?: Uint8Array | null } = {}): Promise<Uint8Array> {

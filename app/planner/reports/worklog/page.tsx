@@ -96,7 +96,7 @@ export default function WorklogPage() {
       if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't make the PDF.");
       const url = URL.createObjectURL(await r.blob());
       const a = document.createElement("a");
-      a.href = url; a.download = `ProTankr-Worklog-${range.start}-to-${range.end}.pdf`; a.click();
+      a.href = url; a.download = `ProTankr-${({ Weekly: "W", Biweekly: "BW", "Semi-monthly": "SM", Monthly: "M" } as Record<string, string>)[log.title] ?? "C"}WL-${range.start.slice(5, 7)}${range.start.slice(8)}${range.start.slice(2, 4)}-to-${range.end.slice(5, 7)}${range.end.slice(8)}${range.end.slice(2, 4)}.pdf`; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (e) { setErr((e as Error).message); }
     finally { setPdfBusy(false); }
