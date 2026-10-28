@@ -63,7 +63,8 @@ export interface TelematicsProvider {
   /** The shipping documents (BOL numbers) currently on a vehicle, newest first. */
   activeShipments(vehicleId: string): Promise<ProviderShipment[]>;
   /** The driver who most recently signed in to a vehicle (last 7 days), if the provider says. */
-  lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null>;
+  /** The last driver signed in to the vehicle, when they signed in (`at`) and, if known, when they signed out (`outAt`). */
+  lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string; outAt?: string | null } | null>;
   /** The driver signed in to each vehicle right now: provider vehicle id -> provider driver id. */
   currentDrivers(): Promise<Map<string, string>>;
   /** The last driver recorded for each vehicle that has nobody signed in now. */

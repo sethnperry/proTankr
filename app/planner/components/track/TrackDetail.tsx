@@ -45,6 +45,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
   const [reading, setReading] = useState<TruckReading | null>(null);
   const [trip, setTrip] = useState<TruckTripSummary | null>(null);
   const [adding, setAdding] = useState(false);
+  const [allBols, setAllBols] = useState(false);
   const [posDebug, setPosDebug] = useState<string[] | "loading" | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -245,7 +246,8 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
                   {reading.driverName
                     ? <><b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in to the truck)</span></>
                     : reading.lastDriver
-                      ? <><span style={{ color: muted }}>Nobody signed in now. Last signed in: </span><b>{reading.lastDriver.name}</b> <span style={{ color: muted }}>· {ageText(reading.lastDriver.at)}</span></>
+                      ? <><span style={{ color: muted }}>Nobody signed in now. Last driver: </span><b>{reading.lastDriver.name}</b>{" "}
+                          <span style={{ color: muted }}>· {reading.lastDriver.outAt ? `signed out ${ageText(reading.lastDriver.outAt)}` : `signed in ${ageText(reading.lastDriver.at)}`}</span></>
                       : reading.heldByName
                         ? <><b>{reading.heldByName}</b> <span style={{ color: muted }}>(has it selected in ProTankr)</span></>
                         : <span style={{ color: muted }}>No driver found for this truck.</span>}
@@ -260,13 +262,19 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
                 <div style={label}>Shipments (BOL numbers)</div>
                 {reading.shipments && reading.shipments.length > 0 ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                    {reading.shipments.map((s) => (
+                    {[...reading.shipments].sort((a, b) => String(b.activeFrom ?? "").localeCompare(String(a.activeFrom ?? ""))).slice(0, allBols ? 200 : 4).map((s) => (
                       <span key={s.documentNumber} title={[s.shipperName, s.commodity].filter(Boolean).join(" · ") || undefined}
                         style={{ border: "1px solid rgba(255,255,255,0.3)", padding: "5px 10px", fontSize: 15, fontWeight: 800 }}>
                         {s.documentNumber}
                         {(s.shipperName || s.commodity) && <span style={{ fontSize: 11, fontWeight: 600, color: muted }}> {[s.shipperName, s.commodity].filter(Boolean).join(" · ")}</span>}
                       </span>
                     ))}
+                    {reading.shipments.length > 4 && (
+                      <button type="button" onClick={() => setAllBols((v) => !v)}
+                        style={{ background: "none", border: "none", color: "#93c5fd", fontWeight: 800, fontSize: 13, cursor: "pointer", padding: "5px 2px" }}>
+                        {allBols ? "Show fewer" : `Show all ${reading.shipments.length}`}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div style={{ fontSize: 14, marginTop: 4, color: muted }}>None on the truck's Drive app (Assets → Shipments).</div>

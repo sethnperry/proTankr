@@ -273,11 +273,16 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
-    async lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string } | null> {
+    async lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string; outAt?: string | null } | null> {
       const from = new Date(Date.now() - 7 * 86400000).toISOString();
       const rows: any[] = await call("Get", { typeName: "DriverChange", search: { deviceSearch: { id: vehicleId }, fromDate: from } });
-      const last = (rows ?? []).filter((r) => r?.driver?.id && !/^unknown/i.test(String(r.driver.id)) && r.dateTime && (!r.device?.id || String(r.device.id) === vehicleId)).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
-      return last ? { driverId: String(last.driver.id), at: String(last.dateTime) } : null;
+      const here = (rows ?? []).filter((r) => r?.driver?.id && r.dateTime && (!r.device?.id || String(r.device.id) === vehicleId)).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime)));
+      const known = here.filter((r) => !/^unknown|^nodriver/i.test(String(r.driver.id)));
+      const last = known[known.length - 1];
+      if (!last) return null;
+      // The sign-out is the next change on this vehicle after that sign-in: nobody (or someone else).
+      const next = here.find((r) => String(r.dateTime) > String(last.dateTime) && String(r.driver.id) !== String(last.driver.id));
+      return { driverId: String(last.driver.id), at: String(last.dateTime), outAt: next ? String(next.dateTime) : null };
     },
 
     async currentDrivers(): Promise<Map<string, string>> {

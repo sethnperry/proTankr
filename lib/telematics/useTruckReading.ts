@@ -12,7 +12,7 @@ export type TruckReading = { odometerMi: number | null; fuelLevelPct?: number | 
   bearingDeg?: number | null; isDriving?: boolean | null; communicating?: boolean | null;
   shipments?: { documentNumber: string; shipperName: string | null; commodity: string | null; activeFrom: string | null }[];
   geotabTrailers?: { name: string; comment: string | null; ours: boolean }[];
-  lastDriver?: { name: string; at: string } | null;
+  lastDriver?: { name: string; at: string; outAt?: string | null } | null;
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; cycleLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null };
 
 /** The truck's reading, and whether asking failed (provider down, server hiccup) as opposed to "no connection". */

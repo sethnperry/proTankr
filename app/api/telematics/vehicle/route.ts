@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     // Who is in the truck: the driver signed in to Geotab (or the last one who was), matched to a ProTankr
     // member when possible, plus who holds the truck in ProTankr, and the driver's hours.
     let driverName: string | null = null, heldByName: string | null = null;
-    let lastDriver: { name: string; at: string } | null = null;
+    let lastDriver: { name: string; at: string; outAt?: string | null } | null = null;
     let hos: Awaited<ReturnType<typeof p.hos>> = null;
     try {
       const nameOf = async (userId: string) => {
@@ -91,12 +91,14 @@ export async function GET(req: NextRequest) {
       let hosDriverId: string | null = reading.driverId ?? null;
       if (reading.driverId) driverName = await providerDriverName(reading.driverId);
       else {
+        // The sign-out time comes from the vehicle's driver changes; the live reading only knows who.
+        const seen = await p.lastDriverOf(vid).catch(() => null);
         const last = reading.lastDriverId
-          ? { driverId: reading.lastDriverId, at: reading.at ?? new Date().toISOString() }
-          : await p.lastDriverOf(vid).catch(() => null);
+          ? { driverId: reading.lastDriverId, at: seen?.driverId === reading.lastDriverId ? seen.at : reading.at ?? new Date().toISOString(), outAt: seen?.driverId === reading.lastDriverId ? seen.outAt ?? null : null }
+          : seen;
         if (last) {
           const n = await providerDriverName(last.driverId);
-          if (n) { lastDriver = { name: n, at: last.at }; hosDriverId = last.driverId; }
+          if (n) { lastDriver = { name: n, at: last.at, outAt: last.outAt ?? null }; hosDriverId = last.driverId; }
         }
       }
       if (hosDriverId) hos = await p.hos(hosDriverId).catch(() => null);
