@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase/client";
 export type StopAnswer = {
   id: string; stop_at: string; kind: "arrive" | "hop"; place_name: string | null;
   answer: "arrived" | "delay" | "yes" | "no";
+  reason: string | null; report_posted_at: string | null;
 };
 
 export function useStopAnswers(userId: string | null | undefined) {
@@ -18,7 +19,7 @@ export function useStopAnswers(userId: string | null | undefined) {
   const load = useCallback(async () => {
     if (!userId) return;
     const { data, error } = await supabase.from("stop_answers")
-      .select("id, stop_at, kind, place_name, answer")
+      .select("id, stop_at, kind, place_name, answer, reason, report_posted_at")
       .eq("user_id", userId).not("answer", "is", null).is("applied_at", null)
       .gte("stop_at", new Date(Date.now() - 48 * 3600_000).toISOString())
       .order("stop_at", { ascending: true }).limit(20);

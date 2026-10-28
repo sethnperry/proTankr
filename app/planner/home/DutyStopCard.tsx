@@ -13,7 +13,7 @@ import { LOOK } from "./dashLook";
 
 const hm = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export function DutyStopCard({ stop, targetName, leg, hop, products = [], onArrived, onHop, onDelay, onDismiss, preset }: {
+export function DutyStopCard({ stop, targetName, leg, hop, products = [], onArrived, onHop, onDelay, onDismiss, preset, presetReason, reportPosted }: {
   stop: { at: string; code: string; resumedAt: string | null }; targetName: string; leg: DelayLeg;
   /** Set when the driver was at a rack and has driven elsewhere: the rack they left. */
   hop?: { rackName: string } | null;
@@ -21,7 +21,9 @@ export function DutyStopCard({ stop, targetName, leg, hop, products = [], onArri
   products?: { productId: string; name: string }[];
   /** Answer already tapped on the notification: applied here, and only the reason is asked. */
   preset?: "arrived" | "delay" | "yes" | "no";
-  onArrived: () => void; onHop?: (reason: string, productIds: string[]) => void; onDelay: (code: string, note: string | null) => void; onDismiss: () => void;
+  /** A "No" whose reason was already picked on the notification (and the report posted there). */
+  presetReason?: string | null; reportPosted?: boolean;
+  onArrived: () => void; onHop?: (reason: string, productIds: string[], reported?: boolean) => void; onDelay: (code: string, note: string | null) => void; onDismiss: () => void;
 }) {
   const [picking, setPicking] = useState(preset === "delay");
   const [why, setWhy] = useState(preset === "no" && !!hop);
@@ -30,6 +32,13 @@ export function DutyStopCard({ stop, targetName, leg, hop, products = [], onArri
     if (applied.current) return;
     if (preset === "arrived") { applied.current = true; onArrived(); }
     else if (preset === "yes") { applied.current = true; onDismiss(); }
+    else if (preset === "no" && hop && presetReason && presetReason !== "other") {
+      applied.current = true;
+      const issue = TERMINAL_ISSUES.find((t) => t.code === presetReason);
+      if (reportPosted || !issue?.productScoped) onHop?.(presetReason, [], !!reportPosted);
+      else if (products.length > 1) { setScoped(presetReason); setSel(new Set()); }
+      else onHop?.(presetReason, products.map((x) => x.productId));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
   const [scoped, setScoped] = useState<string | null>(null); // a product-specific reason waiting on which products

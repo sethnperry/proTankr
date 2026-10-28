@@ -896,7 +896,7 @@ export default function HomePage() {
       if (hop.pickup.load_id) { void cancelPlannedLoad(hop.pickup.load_id).catch(() => {}); clearActivePlannedLoad(userId); }
       closePickupNoLoad(store, { userId, pickup: hop.pickup, reason: hop.reason, note: null, arrivedAt: null, leftAt: hop.stop.droveFrom ?? hop.stop.at, ...clock() });
       // Warn other drivers headed to the rack just left. Best effort.
-      if (isTerminalIssueCode(hop.reason) && hop.pickup.terminal_id && companyId) {
+      if (isTerminalIssueCode(hop.reason) && hop.pickup.terminal_id && companyId && !hop.skipReport) {
         void submitOutageReport({
           terminalId: hop.pickup.terminal_id, selectedRackId: hop.pickup.rack_id, productIds: hop.productIds,
           reportType: hop.reason as OutageReportType, companyId, userId, truckLabel: equipment.currentTruckName ?? "",
@@ -1209,11 +1209,11 @@ export default function HomePage() {
     const queued = stopAnswers.find((a) => Date.parse(a.stop_at) > afterMs && (a.kind === "hop") === !!hopPickup);
     if (queued) {
       const real = (myHos?.stops ?? []).find((x) => Math.abs(Date.parse(x.at) - Date.parse(queued.stop_at)) < 60_000);
-      return { at: real?.at ?? new Date(queued.stop_at).toISOString(), code: real?.code ?? "ON", resumedAt: real?.resumedAt ?? null, answerId: queued.id, answer: queued.answer };
+      return { at: real?.at ?? new Date(queued.stop_at).toISOString(), code: real?.code ?? "ON", resumedAt: real?.resumedAt ?? null, answerId: queued.id, answer: queued.answer, reason: queued.reason, reported: !!queued.report_posted_at };
     }
     const aged = (myHos?.stops ?? []).filter((x) => stopClock - Date.parse(x.at) >= STOP_GRACE_MS);
     const p = pendingStop(aged, { afterMs, handled: handledStops });
-    return p ? { ...p, answerId: undefined as string | undefined, answer: undefined as "arrived" | "delay" | "yes" | "no" | undefined } : null;
+    return p ? { ...p, answerId: undefined as string | undefined, answer: undefined as "arrived" | "delay" | "yes" | "no" | undefined, reason: undefined as string | null | undefined, reported: false } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuel.active, runningDelay, stopClock, stopAnswers]);
   // A stop made while fueling was the fuel stop, not an arrival: it is never asked about afterwards.
@@ -1224,7 +1224,7 @@ export default function HomePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fuel.active?.id, myHos?.stops]);
-  const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[] } | null>(null);
+  const hopRef = useRef<{ stop: { at: string; droveFrom?: string }; pickup: TripPickupRow; reason: string; productIds: string[]; skipReport?: boolean } | null>(null);
   // Name for the card: a store picked by name only (no saved location) has no geofence target but still gets asked.
   const stopName = arrivalTarget?.name ?? (step.kind === "arrive_delivery" ? deliveryName(step.delivery) : null);
   const [consigneeSignOpen, setConsigneeSignOpen] = useState(false);
@@ -1268,10 +1268,10 @@ export default function HomePage() {
     void syncNow();
   };
   // Rack hopping: the rack is closed with the reason, the next one is picked, and it starts at the stop's time.
-  const hopToAnotherRack = (reason: string, productIds: string[]) => {
+  const hopToAnotherRack = (reason: string, productIds: string[], reported?: boolean) => {
     if (!dutyStop || !hopPickup) return;
     const st = (myHos?.stops ?? []).find((x) => x.at === dutyStop.at);
-    hopRef.current = { stop: { at: dutyStop.at, droveFrom: st?.droveFrom }, pickup: hopPickup, reason, productIds };
+    hopRef.current = { stop: { at: dutyStop.at, droveFrom: st?.droveFrom }, pickup: hopPickup, reason, productIds, skipReport: reported };
     answerStop(dutyStop.at);
     setNextRackPending(true);
     if (location.selectedCity) shell.setTermOpen(true); else shell.setLocOpen(true);
@@ -1961,7 +1961,7 @@ export default function HomePage() {
       {dutyStop && !arrival.suggest && (stopName || hopPickup) && delayLeg && (
         <DutyStopCard stop={dutyStop} targetName={stopName ?? "the stop"} leg={delayLeg}
           hop={hopPickup ? { rackName: hopPickup.name ?? "the rack" } : null}
-          preset={dutyStop.answer} onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
+          preset={dutyStop.answer} presetReason={dutyStop.reason} reportPosted={dutyStop.reported} onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>

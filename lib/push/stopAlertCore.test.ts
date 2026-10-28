@@ -8,8 +8,8 @@ const base: StopTrip = { started_at: "2026-10-26T12:00:00Z", pickups: [{ seq: 1,
 test("waiting on an arrival: asks about it", () => {
   const n = planStopNotice(base, [stop], 0, undefined, Date.parse(stop.at) + 6 * 60_000);
   assert.equal(n?.kind, "arrive");
-  assert.equal(n!.title, "Marathon");
-  assert.equal(n!.body, "Did you arrive?");
+  assert.equal(n!.title, "Did you arrive at Marathon?");
+  assert.equal(n!.body, "");
 });
 test("at a rack and drove elsewhere: rack hop", () => {
   const t: StopTrip = { ...base, pickups: [{ seq: 1, arrived_at: "2026-10-26T12:30:00Z", left_at: null, outcome: null, name: "Marathon" }] };

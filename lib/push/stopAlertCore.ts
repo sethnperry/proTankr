@@ -40,15 +40,15 @@ export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs:
   const atRack = live.find((p) => p.arrived_at && !p.left_at);
   if (atRack) {
     // The place is the title (it stands out); the body is the one question. Yes / No buttons answer it.
-    return { at: stop.at, kind: "hop", place: atRack.name ?? "the rack", title: atRack.name ?? "the rack", body: "Did you load here?" };
+    return { at: stop.at, kind: "hop", place: atRack.name ?? "the rack", title: `Did you load at ${atRack.name ?? "the rack"}?`, body: "" };
   }
   const nextPickup = live.find((p) => !p.arrived_at);
   if (nextPickup) {
-    return { at: stop.at, kind: "arrive", place: nextPickup.name ?? "the terminal", title: nextPickup.name ?? "the terminal", body: "Did you arrive?" };
+    return { at: stop.at, kind: "arrive", place: nextPickup.name ?? "the terminal", title: `Did you arrive at ${nextPickup.name ?? "the terminal"}?`, body: "" };
   }
   const nextDrop = trip.deliveries.filter((d) => d.status !== "complete" && d.status !== "cancelled").sort((a, b) => a.seq - b.seq).find((d) => !d.arrived_at);
   if (nextDrop) {
-    return { at: stop.at, kind: "arrive", place: nextDrop.name ?? "the store", title: nextDrop.name ?? "the store", body: "Did you arrive?" };
+    return { at: stop.at, kind: "arrive", place: nextDrop.name ?? "the store", title: `Did you arrive at ${nextDrop.name ?? "the store"}?`, body: "" };
   }
   return null;
 }
