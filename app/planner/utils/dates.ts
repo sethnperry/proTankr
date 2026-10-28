@@ -151,7 +151,14 @@ export function nextClearingCheckpoint(atMs: number, timeZone: string): number {
 // own), with a 72 h cap so a forgotten flag can't mislead forever.
 export const MANUAL_REPORT_CAP_MS = 72 * 60 * 60 * 1000;
 
-export function outageExpiresAtMs(reportType: string, createdAtMs: number, timeZone: string): number {
+/** A long line clears an hour after the last load or rack-hop departure there (or the report, if later). */
+export const LONG_LINE_CLEAR_AFTER_MS = 60 * 60 * 1000;
+
+export function outageExpiresAtMs(reportType: string, createdAtMs: number, timeZone: string, lastActivityMs?: number | null): number {
+  if (reportType === "long_line") {
+    const last = Math.max(createdAtMs, lastActivityMs != null && Number.isFinite(lastActivityMs) ? lastActivityMs : 0);
+    return Math.min(last + LONG_LINE_CLEAR_AFTER_MS, createdAtMs + MANUAL_REPORT_CAP_MS);
+  }
   if (reportType === "out_of_allocation") {
     const { year, month, day } = tzPartsAt(createdAtMs, timeZone);
     return zonedWallTimeToUtcMs(year, month, day + 1, 0, timeZone);
@@ -159,8 +166,8 @@ export function outageExpiresAtMs(reportType: string, createdAtMs: number, timeZ
   return createdAtMs + MANUAL_REPORT_CAP_MS;
 }
 
-export function outageIsActive(reportType: string, createdAtMs: number, nowMs: number, timeZone: string): boolean {
-  return nowMs < outageExpiresAtMs(reportType, createdAtMs, timeZone);
+export function outageIsActive(reportType: string, createdAtMs: number, nowMs: number, timeZone: string, lastActivityMs?: number | null): boolean {
+  return nowMs < outageExpiresAtMs(reportType, createdAtMs, timeZone, lastActivityMs);
 }
 
 /** How long a flag has been up: "45m" under an hour, "5h" under a day, then "1d 6h". */

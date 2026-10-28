@@ -4,7 +4,7 @@
 // next load, cache-first for content-hashed build assets, network-first for
 // API/Supabase/auth.
 
-const CACHE_NAME = "protankr-v5"; // bump this to force-invalidate stale caches on the next deploy
+const CACHE_NAME = "protankr-v6"; // bump this to force-invalidate stale caches on the next deploy
 
 const STATIC_ASSETS = [
   "/manifest.json",
@@ -123,8 +123,52 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// ── Notification answers, kept until they reach the server ───────────────────
+// A button tapped with no signal is stored in IndexedDB and retried on background sync, when the
+// app opens or regains signal (it posts "flush-answers"), and on the next push.
+function answersDb() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open("protankr-sw", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("answers", { keyPath: "id" });
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function dbOp(mode, fn) {
+  const db = await answersDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("answers", mode);
+    const out = fn(tx.objectStore("answers"));
+    tx.oncomplete = () => resolve(out && out.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function postAnswer(id, answer) {
+  const res = await fetch("/api/push/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, answer }) });
+  // 4xx means it will never be accepted (bad id): drop it. Only a network error or 5xx is retried.
+  return res.ok || (res.status >= 400 && res.status < 500);
+}
+async function sendAnswer(id, answer) {
+  try { if (await postAnswer(id, answer)) return; } catch (e) { /* offline */ }
+  try {
+    await dbOp("readwrite", (st) => st.put({ id, answer, at: Date.now() }));
+    if (self.registration.sync) await self.registration.sync.register("stop-answers");
+  } catch (e) { /* storage blocked: the answer is lost */ }
+}
+async function flushAnswers() {
+  let rows = [];
+  try { rows = await dbOp("readonly", (st) => st.getAll()); } catch (e) { return; }
+  for (const r of rows) {
+    if (Date.now() - r.at > 48 * 3600 * 1000) { await dbOp("readwrite", (st) => st.delete(r.id)).catch(() => {}); continue; }
+    try { if (await postAnswer(r.id, r.answer)) await dbOp("readwrite", (st) => st.delete(r.id)); } catch (e) { return; }
+  }
+}
+self.addEventListener("sync", (event) => { if (event.tag === "stop-answers") event.waitUntil(flushAnswers()); });
+self.addEventListener("message", (event) => { if (event.data === "flush-answers") event.waitUntil(flushAnswers()); });
+
 // Push: show the notification the server sent, and open the app on tap.
 self.addEventListener("push", (event) => {
+  event.waitUntil(flushAnswers());
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch { d = { title: "ProTankr", body: event.data ? event.data.text() : "" }; }
   event.waitUntil(
@@ -145,10 +189,8 @@ self.addEventListener("notificationclick", (event) => {
   const answerId = event.notification.data && event.notification.data.answerId;
   if (event.action && answerId) {
     // A button: record the answer and stay out of the app. The dashboard applies it later.
-    event.waitUntil(
-      fetch("/api/push/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: answerId, answer: event.action }) })
-        .catch(() => {})
-    );
+    // With no signal the answer is kept and sent when the phone is back online.
+    event.waitUntil(sendAnswer(answerId, event.action));
     return;
   }
   const url = (event.notification.data && event.notification.data.url) || "/planner/home";

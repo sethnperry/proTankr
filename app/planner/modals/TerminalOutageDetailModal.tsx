@@ -62,7 +62,10 @@ function ReportRow({ report, timeZone, onClear, clearing }: {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
           <span style={{ color: "#fff", fontWeight: 800 }}>{outageAge(report.createdAtMs, Date.now())}</span> since {markedHhmm} hrs
-          {report.reportType === "out_of_allocation" ? ` · resets at midnight` : " · stays until cleared"}
+          {report.reportType === "out_of_allocation" ? ` · resets at midnight`
+            : report.reportType === "long_line" ? ` · clears an hour after the last load or rack hop`
+            : " · stays until cleared"}
+          {report.reportType === "long_line" && report.avgWaitMin != null && <> · <span style={{ color: "#fff", fontWeight: 800 }}>avg wait {report.avgWaitMin} min</span></>}
         </div>
         {report.canClear && (
           <button aria-busy={!!(clearing)}

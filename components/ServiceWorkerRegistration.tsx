@@ -38,6 +38,11 @@ export default function ServiceWorkerRegistration() {
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") reg.update();
         });
+        // Answers tapped on a notification while offline are re-sent when the app is open and online.
+        const flush = () => navigator.serviceWorker.controller?.postMessage("flush-answers");
+        window.addEventListener("online", flush);
+        document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") flush(); });
+        flush();
       })
       .catch((err) => console.error("[SW] registration failed:", err));
   }, []);

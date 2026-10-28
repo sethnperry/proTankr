@@ -78,7 +78,7 @@ export function useFleetReports(trips: FleetTrip[], watchTerminalIds: string[] =
       const minCut = now - MANUAL_REPORT_CAP_MS;
       const [r, ll] = await Promise.all([
         supabase.from("terminal_outage_reports")
-          .select("report_id, terminal_id, report_type, product_id, supplier_name, created_at")
+          .select("report_id, terminal_id, report_type, product_id, supplier_name, created_at, last_activity_at")
           .in("terminal_id", readIds).gte("created_at", new Date(minCut).toISOString()),
         loadIds.length
           ? supabase.from("load_lines").select("load_id, product_id").in("load_id", loadIds)
@@ -86,7 +86,7 @@ export function useFleetReports(trips: FleetTrip[], watchTerminalIds: string[] =
       ]);
       if (r.error) throw r.error;
       setReports(((r.data ?? []) as any[])
-        .filter((x) => outageIsActive(x.report_type, Date.parse(x.created_at), now, tzOf.get(String(x.terminal_id)) || "America/New_York"))
+        .filter((x) => outageIsActive(x.report_type, Date.parse(x.created_at), now, tzOf.get(String(x.terminal_id)) || "America/New_York", x.last_activity_at ? Date.parse(x.last_activity_at) : null))
         .map((x) => ({
           reportId: x.report_id, terminalId: String(x.terminal_id), type: x.report_type as ReportType,
           productId: x.product_id ?? null, supplierName: x.supplier_name ?? null, createdAt: x.created_at,

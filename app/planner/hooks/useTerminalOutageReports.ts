@@ -129,6 +129,7 @@ type OutageRow = {
   created_at: string;
   supplier_id?: string | null;
   supplier_name?: string | null;
+  last_activity_at?: string | null;
 };
 
 export type ComposedOutageReport = {
@@ -149,6 +150,8 @@ export type ComposedOutageReport = {
   canClear: boolean;
   /** The supplier an allocation report names, if any. */
   supplierName: string | null;
+  /** Long line only: average wait (minutes) drivers logged through the delay button. */
+  avgWaitMin?: number | null;
 };
 
 /** Deletes one report early, instead of waiting for its natural checkpoint
@@ -270,7 +273,7 @@ export function useActiveOutageBanner(
 
     const { data, error } = await supabase
       .from("terminal_outage_reports")
-      .select("report_id, product_id, report_type, company_id, reporter_user_id, truck_label, created_at, supplier_id, supplier_name")
+      .select("report_id, product_id, report_type, company_id, reporter_user_id, truck_label, created_at, supplier_id, supplier_name, last_activity_at")
       .eq("terminal_id", terminalId)
       .gte("created_at", new Date(cutoffMs).toISOString())
       .order("created_at", { ascending: false });
@@ -284,7 +287,7 @@ export function useActiveOutageBanner(
     const seen = new Set<string>();
     const rows: OutageRow[] = [];
     for (const r of data as OutageRow[]) {
-      if (!outageIsActive(r.report_type, new Date(r.created_at).getTime(), nowMs, tz)) continue;
+      if (!outageIsActive(r.report_type, new Date(r.created_at).getTime(), nowMs, tz, r.last_activity_at ? new Date(r.last_activity_at).getTime() : null)) continue;
       if (!allProducts && !isTerminalWide(r.report_type) && !(r.product_id && planned.has(r.product_id))) continue;
       const key = `${r.report_type}:${r.product_id ?? ""}:${r.supplier_id ?? r.supplier_name ?? ""}`;
       if (seen.has(key)) continue;
@@ -303,6 +306,14 @@ export function useActiveOutageBanner(
     }
     rows.length = 0; rows.push(...shown);
     if (rows.length === 0) { setTickerMessage(null); setReports([]); return; }
+
+    // Long line: the average wait drivers logged through the delay button, when there is one.
+    let waitMin: number | null = null;
+    if (rows.some((r) => r.report_type === "long_line")) {
+      const { data: w } = await supabase.rpc("long_line_wait", { p_terminal_id: terminalId });
+      const row = Array.isArray(w) ? w[0] : w;
+      if (row && Number(row.samples) > 0 && row.avg_min != null) waitMin = Math.round(Number(row.avg_min));
+    }
 
     const companyIds = Array.from(new Set(rows.filter((r) => r.report_type !== "out_of_allocation").map((r) => r.company_id)));
     const reporterIds = Array.from(new Set(rows.filter((r) => r.report_type === "out_of_allocation").map((r) => r.reporter_user_id)));
@@ -330,7 +341,7 @@ export function useActiveOutageBanner(
       const supplierName = r.report_type === "out_of_allocation" ? (r.supplier_name ?? null) : null;
       // The flag's age sits in ⟦ ⟧ so the ticker can draw it white against the red text.
       const age = `⟦${outageAge(createdAtMs, nowMs)}⟧`;
-      const tickerText = wide ? `${shortName} ${age}`
+      const tickerText = wide ? `${shortName}${r.report_type === "long_line" && waitMin != null ? ` · avg wait ${waitMin}m` : ""} ${age}`
         : isProduct ? `Out of ${shortName} ${age}`
         : supplierName ? `No Allocation - ${supplierName} (${shortName}) ${age}`
         : `OOA ${shortName} ${age}`;
@@ -346,7 +357,8 @@ export function useActiveOutageBanner(
         personLabel,
         truckLabel: truck,
         createdAtMs,
-        expiresAtMs: outageExpiresAtMs(r.report_type, createdAtMs, tz),
+        expiresAtMs: outageExpiresAtMs(r.report_type, createdAtMs, tz, r.last_activity_at ? new Date(r.last_activity_at).getTime() : null),
+        avgWaitMin: r.report_type === "long_line" ? waitMin : null,
         canClear: !!effectiveUserId && (r.reporter_user_id === effectiveUserId || r.report_type !== "out_of_allocation"),
         supplierName,
       };

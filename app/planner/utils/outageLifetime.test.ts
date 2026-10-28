@@ -21,3 +21,14 @@ test("age reads minutes, hours, then days", () => {
   assert.equal(outageAge(t, t + 3 * 3600000 + 1000), "3h");
   assert.equal(outageAge(t, t + 30 * 3600000), "1d 6h");
 });
+
+test("long line clears an hour after the last load or rack hop, not when someone loads", () => {
+  const created = Date.parse("2026-10-27T12:00:00Z");
+  assert.equal(outageExpiresAtMs("long_line", created, TZ), created + 3600_000);
+  const lastLoad = created + 90 * 60_000;
+  assert.equal(outageExpiresAtMs("long_line", created, TZ, lastLoad), lastLoad + 3600_000);
+  assert.equal(outageIsActive("long_line", created, lastLoad + 30 * 60_000, TZ, lastLoad), true);
+  assert.equal(outageIsActive("long_line", created, lastLoad + 61 * 60_000, TZ, lastLoad), false);
+  // activity before the report never shortens it
+  assert.equal(outageExpiresAtMs("long_line", created, TZ, created - 5 * 3600_000), created + 3600_000);
+});
