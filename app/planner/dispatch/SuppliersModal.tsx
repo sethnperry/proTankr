@@ -173,22 +173,20 @@ function Editor({ name, row, contract, canManage, onSave, onRename, onUnlink, on
       {saved && <div style={{ fontSize: 13, color: "#4ade80", marginTop: 10 }}>Saved.</div>}
       <button type="button" className="dash-press" onClick={save} {...busyProps(busy)} style={{ ...PRIMARY_BTN, marginTop: 12 }}>Save</button>
 
-      {canManage && (
-        <div style={{ marginTop: 12, display: "flex", gap: 14, justifyContent: "center" }}>
-          {confirm ? (
-            <>
-              <span style={{ fontSize: 12, color: L.muted }}>{confirm === "unlink" ? "Remove from this terminal?" : "Retire this supplier everywhere?"}</span>
-              <button type="button" onClick={() => run(confirm === "unlink" ? onUnlink : onRetire)} style={{ border: "none", background: "transparent", color: "#f87171", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Yes</button>
-              <button type="button" onClick={() => setConfirm(null)} style={{ border: "none", background: "transparent", color: L.muted, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>No</button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={() => setConfirm("unlink")} style={{ border: "none", background: "transparent", color: L.muted, fontSize: 12, cursor: "pointer" }}>Remove from this terminal</button>
-              <button type="button" onClick={() => setConfirm("retire")} style={{ border: "none", background: "transparent", color: "#f87171", fontSize: 12, cursor: "pointer" }}>Retire supplier</button>
-            </>
-          )}
-        </div>
-      )}
+      <div style={{ marginTop: 12, display: "flex", gap: 14, justifyContent: "center" }}>
+        {confirm ? (
+          <>
+            <span style={{ fontSize: 12, color: L.muted }}>{confirm === "unlink" ? "Remove from this terminal?" : "Deactivate this supplier everywhere?"}</span>
+            <button type="button" onClick={() => run(confirm === "unlink" ? onUnlink : onRetire)} style={{ border: "none", background: "transparent", color: "#f87171", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Yes</button>
+            <button type="button" onClick={() => setConfirm(null)} style={{ border: "none", background: "transparent", color: L.muted, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>No</button>
+          </>
+        ) : (
+          <>
+            {canManage && <button type="button" onClick={() => setConfirm("unlink")} style={{ border: "none", background: "transparent", color: L.muted, fontSize: 12, cursor: "pointer" }}>Remove from this terminal</button>}
+            <button type="button" onClick={() => setConfirm("retire")} style={{ border: "none", background: "transparent", color: "#f87171", fontSize: 12, cursor: "pointer" }}>Deactivate supplier</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -225,6 +223,7 @@ export function SuppliersModal(props: {
   const refreshAll = () => { ts.refresh(); company.refresh(); cons.refresh(); };
 
   const linked = useMemo(() => company.suppliers.filter((s) => ts.bySupplier.has(s.supplier_id)), [company.suppliers, ts.bySupplier]);
+  const inactiveLinked = useMemo(() => company.all.filter((s) => !s.is_active && ts.bySupplier.has(s.supplier_id)), [company.all, ts.bySupplier]);
   const others = useMemo(() => company.suppliers.filter((s) => !ts.bySupplier.has(s.supplier_id)), [company.suppliers, ts.bySupplier]);
   const termOptions = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -319,6 +318,20 @@ export function SuppliersModal(props: {
           </div>
         );
       })}
+
+      {inactiveLinked.length > 0 && (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, margin: "14px 0 6px" }}>Deactivated</div>
+          {inactiveLinked.map((s) => (
+            <div key={s.supplier_id} style={{ ...L.secondary, display: "flex", alignItems: "center", marginBottom: 6, padding: "10px 12px", opacity: 0.8 }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: L.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+              <button type="button" className="dash-press" {...busyProps(busy)}
+                onClick={async () => { setBusy(true); const r = await addCompanySupplier(p.companyId, p.userId, s.name, company.all); setBusy(false); if (r.error) setErr(r.error); else refreshAll(); }}
+                style={{ ...SECONDARY_BTN, width: 96, padding: "7px 0", fontSize: 12 }}>Reactivate</button>
+            </div>
+          ))}
+        </>
+      )}
 
       {others.length > 0 && (
         <>
