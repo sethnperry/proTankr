@@ -97,7 +97,7 @@ export function hosText(h: { driveLeftMin: number | null; dutyLeftMin: number | 
 }
 
 /** Rough driving time left to run the remaining stops in order, from the truck's
- * position: straight-line miles x 1.2 for the road at 55 mph (Tampa to Fort Myers: about 2 h). Stops without coordinates are
+ * position: straight-line miles x 1.2 for the road at 60 mph (trucks are governed at 65 and not all of the road is interstate). Stops without coordinates are
  * skipped, so it can only under-count. */
 export function remainingDriveMin(from: LatLon, stops: (LatLon | null)[]): number {
   let at = from, miles = 0;
@@ -106,7 +106,7 @@ export function remainingDriveMin(from: LatLon, stops: (LatLon | null)[]): numbe
     miles += airMiles(at, s) * 1.2;
     at = s;
   }
-  return (miles / 55) * 60;
+  return (miles / 60) * 60;
 }
 
 export const STATUS_NAME: Record<string, string> = STATUS_LABEL;
