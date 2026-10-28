@@ -16,7 +16,7 @@ import { dispatchedForDriver } from "@/lib/trips/tripLogic";
 import { swapRunOrder } from "@/lib/dispatch/dispatchTrip";
 import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
-import type { TripOrderRow, TripRow } from "@/lib/trips/types";
+import type { TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import { fmtDateTime } from "./PtdDocument";
 
 import { usePending } from "@/lib/ui/pending";
@@ -44,6 +44,7 @@ export default function TripsPage() {
   const { state, store, syncNow } = useTripStore(userId);
   const [showHidden, setShowHidden] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [locs, setLocs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!store || !userId) return;
@@ -60,6 +61,20 @@ export default function TripsPage() {
         for (let i = 0; i < ids.length; i += 200) {
           const o = await supabase.from("trip_orders").select("*").in("trip_id", ids.slice(i, i + 200));
           if (!cancelled) store.hydrate("trip_orders", (o.data ?? []) as TripOrderRow[]);
+          // Where each trip started and ended, for the subtitle.
+          const [pk, dl] = await Promise.all([
+            supabase.from("trip_pickups").select("*").in("trip_id", ids.slice(i, i + 200)),
+            supabase.from("trip_deliveries").select("*").in("trip_id", ids.slice(i, i + 200)),
+          ]);
+          if (cancelled) return;
+          store.hydrate("trip_pickups", (pk.data ?? []) as TripPickupRow[]);
+          const dels = (dl.data ?? []) as TripDeliveryRow[];
+          store.hydrate("trip_deliveries", dels);
+          const locIds = [...new Set(dels.map((d) => d.location_id).filter(Boolean))] as string[];
+          if (locIds.length) {
+            const lr = await supabase.from("delivery_locations").select("location_id, name, location_number").in("location_id", locIds);
+            if (!cancelled) setLocs((m) => ({ ...m, ...Object.fromEntries(((lr.data ?? []) as { location_id: string; name: string; location_number: string | null }[]).map((l) => [l.location_id, [l.name, l.location_number].filter(Boolean).join(" ")])) }));
+          }
         }
       } catch (e) {
         console.warn("[trips] list failed:", e);
@@ -84,10 +99,17 @@ export default function TripsPage() {
         const orders = store.list("trip_orders", (o) => o.trip_id === t.trip_id);
         const primary = orders.find((o) => o.is_primary);
         const numbered = orders.filter((o) => o.order_number);
-        return { trip: t, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1) };
+        // Origin to destination: where it loaded and where it went. Racks it couldn't load at and
+        // cancelled stops are left out.
+        const picks = store.list("trip_pickups", (k) => k.trip_id === t.trip_id).filter((k) => k.outcome !== "no_load").sort((a, b) => a.seq - b.seq);
+        const drops = store.list("trip_deliveries", (d) => d.trip_id === t.trip_id).filter((d) => d.status !== "cancelled").sort((a, b) => a.seq - b.seq);
+        const from = picks.map((k) => [k.name, [k.city, k.state].filter(Boolean).join(", ")].filter(Boolean).join(" ")).filter(Boolean).join(" + ");
+        const to = drops.map((d) => (d.location_id && locs[d.location_id]) || d.one_off_name || "").filter(Boolean).join(" + ");
+        const route = [from, to].filter(Boolean).join(" to ");
+        return { trip: t, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, userId, state]);
+  }, [store, userId, state, locs]);
 
   const hiddenCount = rows.filter((r) => r.trip.driver_hidden).length;
   const visible = showHidden ? rows : rows.filter((r) => !r.trip.driver_hidden);
@@ -122,7 +144,7 @@ export default function TripsPage() {
           {loading ? "Loading…" : rows.length ? "Nothing to show." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {visible.map(({ trip, order, more }) => {
+      {visible.map(({ trip, order, more, route }) => {
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
@@ -141,7 +163,7 @@ export default function TripsPage() {
               <div style={{ fontSize: 13, fontWeight: 700, color: s.color, flexShrink: 0 }}>{s.label}</div>
             </div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
-              {[trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
+              {route || [trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
             </div>
             {reasons && <div style={{ fontSize: 13, color: "#f87171", marginTop: 2 }}>{reasons}</div>}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 2 }}>
