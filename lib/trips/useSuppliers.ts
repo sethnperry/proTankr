@@ -4,7 +4,9 @@
 // The company's supplier list. Rows live in the phone's trip store (so a
 // supplier added with no signal is usable at once and syncs later) and are
 // refreshed from the server on mount. Adding a name that's already on the
-// list (ignoring case and spaces) returns the existing supplier.
+// list (ignoring case and spaces) returns the existing supplier, unless the caller says the name is
+// only checked at one terminal (`atTerminal`): suppliers are per terminal, so "Contract" at Marathon
+// and "Contract" at Citgo are two different suppliers that happen to share a name.
 
 import { useCallback, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -37,11 +39,11 @@ export function useSuppliers(store: TripStore | null, state: TripStoreState | nu
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [state, companyId]);
 
-  const addSupplier = useCallback((name: string): SupplierRow | null => {
+  const addSupplier = useCallback((name: string, atTerminal?: SupplierRow[]): SupplierRow | null => {
     if (!store || !companyId) return null;
     const clean = cleanName(name);
     if (!clean) return null;
-    const existing = findSupplier(suppliers, clean);
+    const existing = findSupplier(atTerminal ?? suppliers, clean);
     if (existing) {
       if (!existing.is_active) store.put("suppliers", { supplier_id: existing.supplier_id, is_active: true });
       return { ...existing, is_active: true };

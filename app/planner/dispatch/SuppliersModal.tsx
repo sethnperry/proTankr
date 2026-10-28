@@ -235,7 +235,7 @@ export function SuppliersModal(props: {
   const add = async () => {
     if (!terminalId) return;
     setBusy(true); setErr(null);
-    const r = await addCompanySupplier(p.companyId, p.userId, newName, company.all.map((s) => ({ ...s, company_id: p.companyId })) as any);
+    const r = await addCompanySupplier(p.companyId, p.userId, newName, linked.map((s) => ({ ...s, company_id: p.companyId })) as any);
     if (r.error || !r.supplier) { setBusy(false); setErr(r.error); return; }
     const e = await linkSupplierToTerminal(ids(r.supplier.supplier_id));
     setBusy(false);

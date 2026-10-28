@@ -6,8 +6,8 @@
 // already on the list (ignoring case and spaces) just picks the existing one.
 //
 // At a terminal (terminalSupplierIds given), only the suppliers loaded at that terminal are
-// listed. A supplier new to the terminal is added with "+ New supplier" (an existing company
-// supplier with the same name is reused). Names are typed exactly as they appear on dispatch.
+// listed. A supplier new to the terminal is added with "+ New supplier". Suppliers are per terminal:
+// the same name at another terminal is a different supplier. Names are typed exactly as on dispatch.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cleanName, findSupplier, searchSuppliers } from "@/lib/trips/refs";
@@ -25,7 +25,8 @@ export function SupplierPicker({
   open: boolean;
   suppliers: SupplierRow[];
   current: string | null;
-  onAdd: (name: string) => SupplierRow | null;
+  /** Adds a supplier. `atTerminal` is the list a name is matched against (this terminal's suppliers). */
+  onAdd: (name: string, atTerminal?: SupplierRow[]) => SupplierRow | null;
   onPick: (s: PickedSupplier) => void;
   onClose: () => void;
   title?: string;
@@ -57,7 +58,7 @@ export function SupplierPicker({
   const pool = useMemo(() => (hereIds ? active.filter((s) => hereIds.has(s.supplier_id)) : active), [active, hereIds]);
   const list = useMemo(() => searchSuppliers(pool, q), [pool, q]);
   const typed = cleanName(q);
-  const exact = typed ? findSupplier(suppliers, typed) : null;
+  const exact = typed ? findSupplier(hereIds ? pool : suppliers, typed) : null;
 
   if (!open) return null;
   const row = (s: SupplierRow) => {
@@ -70,7 +71,8 @@ export function SupplierPicker({
     );
   };
   const finishAdd = async (name: string, acct: string) => {
-    const row = onAdd(name);
+    // Names are per terminal: only a supplier already loaded here is reused.
+    const row = onAdd(name, hereIds ? pool : undefined);
     if (row && asksAccount && acct.trim()) {
       setSaving(true);
       await saveSupplierAccount({ companyId: companyId!, supplierId: row.supplier_id, terminalId: terminalId! }, acct);
@@ -123,12 +125,6 @@ export function SupplierPicker({
           </div>
         ) : (
         <div style={{ overflowY: "auto", flex: 1 }}>
-          {typed && exact && !pool.some((x) => x.supplier_id === exact.supplier_id) && (
-            <button type="button" onClick={add}
-              style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 2, border: "1px dashed rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-              + Add “{exact.name}” at this terminal
-            </button>
-          )}
           {typed && !exact ? (
             <button type="button" onClick={add}
               style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 2, border: "1px dashed rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
