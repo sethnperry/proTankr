@@ -4,12 +4,13 @@
 // next load, cache-first for content-hashed build assets, network-first for
 // API/Supabase/auth.
 
-const CACHE_NAME = "protankr-v3"; // bump this to force-invalidate stale caches on the next deploy
+const CACHE_NAME = "protankr-v4"; // bump this to force-invalidate stale caches on the next deploy
 
 const STATIC_ASSETS = [
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
+  "/icons/badge-96.png",
 ];
 
 // Install — cache static assets that rarely change
@@ -131,7 +132,7 @@ self.addEventListener("push", (event) => {
       body: d.body || "",
       tag: d.tag || "protankr",
       icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
       data: { url: d.url || "/planner/home" },
     })
   );

@@ -20,7 +20,7 @@ export async function showNotification(title: string, body: string, tag: string)
   if (notifyPermission() !== "granted") return;
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) { await reg.showNotification(title, { body, tag, icon: "/icons/icon-192.png" } as NotificationOptions); return; }
+    if (reg) { await reg.showNotification(title, { body, tag, icon: "/icons/icon-192.png", badge: "/icons/badge-96.png" } as NotificationOptions); return; }
   } catch { /* fall through to the page constructor */ }
   try { new Notification(title, { body, tag }); } catch { /* some browsers allow neither */ }
 }
