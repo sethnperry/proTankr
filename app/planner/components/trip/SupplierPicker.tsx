@@ -5,11 +5,11 @@
 // supplier is always spelled the same way. "+ Add" saves a new one; a name
 // already on the list (ignoring case and spaces) just picks the existing one.
 //
-// At a terminal (terminalSupplierIds given), that terminal's suppliers come
-// first and the rest sit under "Other suppliers". Names are typed exactly as
-// they appear on dispatch.
+// At a terminal (terminalSupplierIds given), only the suppliers loaded at that terminal are
+// listed. A supplier new to the terminal is added with "+ New supplier" (an existing company
+// supplier with the same name is reused). Names are typed exactly as they appear on dispatch.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cleanName, findSupplier, searchSuppliers } from "@/lib/trips/refs";
 import type { SupplierRow } from "@/lib/trips/types";
 
@@ -36,16 +36,15 @@ export function SupplierPicker({
   excludeName?: string | null;
 }) {
   const [q, setQ] = useState("");
-  const [showOthers, setShowOthers] = useState(false);
-  useEffect(() => { if (open) { setQ(""); setShowOthers(false); } }, [open]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (open) setQ(""); }, [open]);
   const active = useMemo(
     () => suppliers.filter((s) => s.is_active && (!excludeName || s.name !== excludeName)),
     [suppliers, excludeName],
   );
-  const list = useMemo(() => searchSuppliers(active, q), [active, q]);
-  const split = !!terminalSupplierIds && !q.trim();
-  const here = split ? list.filter((s) => terminalSupplierIds!.has(s.supplier_id)) : list;
-  const others = split ? list.filter((s) => !terminalSupplierIds!.has(s.supplier_id)) : [];
+  // At a terminal: only what is loaded there.
+  const pool = useMemo(() => (terminalSupplierIds ? active.filter((s) => terminalSupplierIds.has(s.supplier_id)) : active), [active, terminalSupplierIds]);
+  const list = useMemo(() => searchSuppliers(pool, q), [pool, q]);
   const typed = cleanName(q);
   const exact = typed ? findSupplier(suppliers, typed) : null;
 
@@ -79,6 +78,7 @@ export function SupplierPicker({
         </div>
         {subtitle && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: -4, marginBottom: 10 }}>{subtitle}</div>}
         <input
+          ref={inputRef}
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -86,25 +86,21 @@ export function SupplierPicker({
           style={{ width: "100%", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)", padding: "12px", fontSize: 16, color: "#fff", boxSizing: "border-box", marginBottom: 10 }}
         />
         <div style={{ overflowY: "auto", flex: 1 }}>
-          {typed && !exact && (
+          {typed && !exact ? (
             <button type="button" onClick={add}
               style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 2, border: "1px dashed rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-              + Add “{typed}”
+              + New supplier “{typed}”
+            </button>
+          ) : (
+            <button type="button" onClick={() => inputRef.current?.focus()}
+              style={{ width: "100%", textAlign: "left", padding: "12px", marginBottom: 6, borderRadius: 2, border: "1px dashed rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              + New supplier
             </button>
           )}
-          {split && here.length > 0 && <div style={sectionLabel}>At {terminalName || "this terminal"}</div>}
-          {here.map((s) => row(s))}
-          {split && others.length > 0 && (
-            here.length === 0 ? null : (
-              <button type="button" onClick={() => setShowOthers((v) => !v)}
-                style={{ ...sectionLabel, border: "none", background: "transparent", cursor: "pointer", padding: "10px 2px 6px", width: "100%", textAlign: "left" }}>
-                {showOthers ? "▾" : "▸"} Other suppliers ({others.length})
-              </button>
-            )
-          )}
-          {split && (showOthers || here.length === 0) && others.map((s) => row(s))}
+          {list.length > 0 && terminalSupplierIds && <div style={sectionLabel}>At {terminalName || "this terminal"}</div>}
+          {list.map((s) => row(s))}
           {!list.length && !typed && (
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", padding: 8 }}>No suppliers yet. Type the name exactly as on dispatch to add it.</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", padding: 8 }}>{terminalSupplierIds ? "No suppliers loaded here yet. " : "No suppliers yet. "}Type the name exactly as on dispatch to add it.</div>
           )}
         </div>
         {onSkip && (
