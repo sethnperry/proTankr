@@ -289,6 +289,17 @@ export function useActiveOutageBanner(
       seen.add(key);
       rows.push(r);
     }
+    // Reports older than the last time this driver left the terminal are old news to them.
+    let shown = rows;
+    if (effectiveUserId) {
+      const { data: left } = await supabase.from("trip_pickups")
+        .select("left_at, trips!inner(driver_id)")
+        .eq("terminal_id", terminalId).eq("trips.driver_id", effectiveUserId)
+        .not("left_at", "is", null).order("left_at", { ascending: false }).limit(1);
+      const leftMs = left?.[0]?.left_at ? new Date(left[0].left_at as string).getTime() : 0;
+      if (leftMs) shown = rows.filter((r) => new Date(r.created_at).getTime() > leftMs);
+    }
+    rows.length = 0; rows.push(...shown);
     if (rows.length === 0) { setTickerMessage(null); setReports([]); return; }
 
     const companyIds = Array.from(new Set(rows.filter((r) => r.report_type !== "out_of_allocation").map((r) => r.company_id)));

@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { expiryStateFor } from "@/lib/expiry";
 import { addDaysISO_ } from "../../utils/dates";
+import { requirementsComplete, type AccessRequirements } from "@/lib/terminals/accessSteps";
 import { TerminalAccessSheet } from "./TerminalAccessSheet";
 import { OPEN_ACCESS_STEPS_EVENT, invalidateAccess, type OpenAccessStepsDetail } from "./useAccessSteps";
 
@@ -31,7 +32,7 @@ export function AccessStepsHost({ userId, companyId, onCardIssued }: {
 }) {
   const qc = useQueryClient();
   const { data: catalog } = useTerminalsCatalog();
-  const [open, setOpen] = useState<{ terminalId: string; fromLoad: boolean } | null>(null);
+  const [open, setOpen] = useState<{ terminalId: string; fromLoad: boolean; setupOnly?: boolean } | null>(null);
 
   useEffect(() => {
     const onOpen = async (ev: Event) => {
@@ -63,6 +64,11 @@ export function AccessStepsHost({ userId, companyId, onCardIssued }: {
           setOpen({ terminalId: d.terminalId, fromLoad: true });
         } else if (existing && !existing.completed_at) {
           setOpen({ terminalId: d.terminalId, fromLoad: true });
+        } else {
+          // Already has access here. If nobody has answered this terminal's questions yet, the
+          // first driver to load there does; everyone after them is spared.
+          const { data: req } = await supabase.from("terminal_access_requirements").select("*").eq("terminal_id", d.terminalId).maybeSingle();
+          if (!requirementsComplete(req as AccessRequirements | null)) setOpen({ terminalId: d.terminalId, fromLoad: false, setupOnly: true });
         }
       } catch (e) {
         console.warn("access steps:", e instanceof Error ? e.message : e);
@@ -84,6 +90,7 @@ export function AccessStepsHost({ userId, companyId, onCardIssued }: {
       userId={userId}
       companyId={companyId}
       fromLoad={open?.fromLoad}
+      setupOnly={open?.setupOnly}
       onClose={() => setOpen(null)}
       onCardIssued={onCardIssued}
     />

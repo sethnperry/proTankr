@@ -78,7 +78,7 @@ const draftFrom = (r: AccessRequirements | null): Draft => ({
 const QUESTIONS = 5;
 
 export function TerminalAccessSheet({
-  open, terminalId, terminalName, userId, companyId, fromLoad, onClose, onCardIssued,
+  open, terminalId, terminalName, userId, companyId, fromLoad, setupOnly, onClose, onCardIssued,
 }: {
   open: boolean;
   terminalId: string | null;
@@ -86,6 +86,7 @@ export function TerminalAccessSheet({
   userId: string | null;
   companyId: string | null;
   fromLoad?: boolean;
+  setupOnly?: boolean; // has access already: just collect the terminal's answers, then close
   onClose: () => void;
   onCardIssued: (terminalId: string) => void | Promise<void>;
 }) {
@@ -166,6 +167,7 @@ export function TerminalAccessSheet({
       if (fromLoad) await ensureProgress();
     });
     if (!ok) return;
+    if (setupOnly) { onClose(); return; }
     const needsLetter = draft.letter !== false && !prog?.letter_attached_at;
     setMode(needsLetter && (fromLoad || prog) ? "letter" : "steps");
   }

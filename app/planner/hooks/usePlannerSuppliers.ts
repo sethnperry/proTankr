@@ -7,7 +7,7 @@
 // Lifted out of PlannerHost unchanged.
 
 import { useCalculatorShell } from "../CalculatorShellContext";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { useLoadWorkflow } from "./useLoadWorkflow";
 import { productColorFor } from "../utils/productColor";
@@ -71,9 +71,29 @@ export function usePlannerSuppliers(a: Args) {
     setSupplierPromptToken((n) => n + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadWorkflow.loadingOpen]);
+  // Sourcing differs by terminal, so the trip's supplier belongs to the trip's first rack only.
+  // Any other rack asks again.
+  const tripFirstTerminal = useMemo(() => {
+    if (!openTripIdForSupplier) return null;
+    const pk = (Object.values(tripStoreHook.state.rows.trip_pickups ?? {}) as any[])
+      .filter((p) => p.trip_id === openTripIdForSupplier)
+      .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))[0];
+    return pk?.terminal_id ? String(pk.terminal_id) : null;
+  }, [openTripIdForSupplier, tripStoreHook.state]);
+  // Changing terminals during Plan Review (a rack hop): ask for that terminal's sourcing.
+  const lastTerminalRef = useRef<string | null>(null);
+  useEffect(() => {
+    const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    const prev = lastTerminalRef.current;
+    lastTerminalRef.current = tid;
+    if (!prev || !tid || prev === tid) return;
+    if (loadWorkflow.loadingOpen && !loadWorkflow.reportLines) setSupplierPromptToken((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.selectedTerminalId]);
   useEffect(() => {
     const tid = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
     if (!openTripIdForSupplier || !tid || !effectiveUserId) return;
+    if (tripFirstTerminal && tid !== tripFirstTerminal) return;
     if (readPicks(effectiveUserId, tid)) return;
     const ts = getTripSupplier(effectiveUserId, openTripIdForSupplier);
     if (ts) supplierPicks.setPicks(tripSupplierPicks(ts));
@@ -82,10 +102,11 @@ export function usePlannerSuppliers(a: Args) {
   const onSupplierPicks = useCallback((next: SupplierPick[]) => {
     supplierPicks.setPicks(next);
     const groups = groupPicks(next);
-    if (openTripIdForSupplier && effectiveUserId && groups.length === 1) {
+    const here = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    if (openTripIdForSupplier && effectiveUserId && groups.length === 1 && (!tripFirstTerminal || here === tripFirstTerminal)) {
       setTripSupplier(effectiveUserId, openTripIdForSupplier, { supplier_id: groups[0].supplier_id, name: groups[0].name });
     }
-  }, [supplierPicks.setPicks, openTripIdForSupplier, effectiveUserId]);
+  }, [supplierPicks.setPicks, openTripIdForSupplier, effectiveUserId, tripFirstTerminal, location.selectedTerminalId]);
   const onSupplierSwitched = useCallback((e: SupplierSwitchEvent) => {
     const pk = tripPickup ?? tripWaitingPickup;
     if (!pk || !tripStoreObj || !effectiveUserId) return;
