@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fmtSignedGallons, tankDiscrepancy, tanksForProduct } from "./tankReadings.ts";
+import { fmtSignedGallons, tankDiscrepancy, tanksForProduct, sortTankNames } from "./tankReadings.ts";
 
 test("sums the rise across every tank of the product", () => {
   // Dropped 6,800 into tanks 1 and 2; tank 3 leveled with them.
@@ -48,4 +48,11 @@ test("after reading prefill", async () => {
   assert.equal(prefillAfter(1200, 0, "gallons"), 1200);
   assert.equal(prefillAfter(null, 3800, "gallons"), null);
   assert.equal(prefillAfter(40, 3800, "inches"), null);
+});
+
+test("tank names follow the driver's order, then by name", () => {
+  const order = new Map([["EAST", 0], ["CENTER", 1], ["WEST", 2]]);
+  assert.deepEqual(sortTankNames(["WEST", "CENTER", "EAST"], order), ["EAST", "CENTER", "WEST"]);
+  assert.deepEqual(sortTankNames(["WEST", "NEW", "EAST"], order), ["EAST", "WEST", "NEW"]);
+  assert.deepEqual(sortTankNames(["10", "2", "1"], null), ["1", "2", "10"]);
 });

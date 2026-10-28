@@ -177,7 +177,8 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
         const tq = (c: string) => supabase.from("delivery_location_tanks")
           .select(c).in("location_id", ids.slice(i, i + 200)).eq("is_active", true);
         const base = "tank_id,location_id,tank_number,product_id,capacity_gallons,is_active";
-        let t = await tq(`${base},hose_length_ft`);
+        let t = await tq(`${base},hose_length_ft,sort_order`);
+        if (t.error) t = await tq(`${base},hose_length_ft`);
         if (t.error) t = await tq(base);
         tankRows = tankRows.concat(((t.data ?? []) as unknown as LocationTank[]).map((x) => ({
           ...x,
@@ -250,4 +251,16 @@ export async function rememberTanks(
     const { error } = await supabase.from("delivery_location_tanks").upsert(rows, { onConflict: "location_id,tank_number" });
     if (error) console.warn("[trips] remember tanks failed:", error.message);
   }
+}
+
+// Saves the driver's tank order for a store: sort_order 0..n over the names given (saved tanks only).
+export async function saveTankOrder(locationId: string, ordered: string[], existing: LocationTank[]) {
+  const have = new Map(existing.filter((t) => t.location_id === locationId).map((t) => [t.tank_number.trim(), t]));
+  const rows = ordered.flatMap((n, i) => {
+    const t = have.get(n.trim());
+    return t ? [{ tank_id: t.tank_id, location_id: locationId, tank_number: t.tank_number, sort_order: i, client_updated_at: new Date().toISOString() }] : [];
+  });
+  if (!rows.length) return;
+  const { error } = await supabase.from("delivery_location_tanks").upsert(rows, { onConflict: "location_id,tank_number" });
+  if (error) console.warn("[trips] save tank order failed:", error.message);
 }

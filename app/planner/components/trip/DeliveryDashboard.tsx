@@ -55,12 +55,14 @@ import {
   prefillAfter,
   tankDiscrepancy,
   tanksForProduct,
+  sortTankNames,
   type Discrepancy,
   type ReadingUnit,
 } from "@/lib/trips/tankReadings";
 import type { DeliveryLocation, LocationTank } from "@/lib/trips/deliveryLocations";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripDeliveryTankRow } from "@/lib/trips/types";
-import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
+import { saveTankOrder, type DelayReason, type TripSettings } from "@/lib/trips/useTripData";
+import { TankPickList } from "./TankPickList";
 import {
   SignatureAccept,
   SignaturePad,
@@ -271,6 +273,11 @@ export function DeliveryDashboard({
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [readings, setReadings] = useState<Record<string, Reading>>({});
   const [unit, setUnit] = useState<ReadingUnit>("gallons");
+  // The driver's tank order for this store (sort_order), kept locally once changed.
+  const [tankOrderLocal, setTankOrder] = useState<Map<string, number> | null>(null);
+  const tankOrder = useMemo(() => tankOrderLocal ?? new Map(
+    locationTanks.filter((t) => t.location_id === delivery.location_id && t.sort_order != null).map((t) => [t.tank_number.trim(), Number(t.sort_order)] as [string, number]),
+  ), [tankOrderLocal, locationTanks, delivery.location_id]);
   const [extraTanks, setExtraTanks] = useState<{ tank_number: string; product_id: string | null }[]>([]);
   const [water, setWater] = useState<Record<string, string>>({});
   const [waterTanks, setWaterTanks] = useState<string[]>([]);
@@ -451,7 +458,7 @@ export function DeliveryDashboard({
     for (const c of delivered) if (!ids.includes(c.product_id)) ids.push(c.product_id);
     return ids.map((pid) => {
       const comps = delivered.filter((c) => c.product_id === pid);
-      const tanks = tanksForProduct(pid, locationTanks, extraTanks);
+      const tanks = tanksForProduct(pid, locationTanks, extraTanks, tankOrder);
       for (const c of comps) {
         for (const x of targetsFor(c)) if (!tanks.includes(x.tank)) tanks.push(x.tank);
       }
@@ -515,11 +522,19 @@ export function DeliveryDashboard({
   };
 
   // ── Drop-into picker ───────────────────────────────────────────────────────
+  const reorderTanks = (visible: string[]) => {
+    const all = sortTankNames(Array.from(new Set([...locationTanks.filter((t) => t.location_id === delivery.location_id).map((t) => t.tank_number.trim()), ...extraTanks.map((t) => t.tank_number.trim()), ...visible])), tankOrder);
+    const slots = all.map((n, i) => (visible.includes(n) ? i : -1)).filter((i) => i >= 0);
+    const merged = [...all];
+    slots.forEach((slot, k) => { merged[slot] = visible[k]; });
+    setTankOrder(new Map(merged.map((n, i) => [n, i])));
+    if (delivery.location_id) void saveTankOrder(delivery.location_id, merged, locationTanks);
+  };
   const pickRow = pickFor ? rows.find((c) => c.compartment_load_id === pickFor) ?? null : null;
   const pickInfo = pickRow ? productInfo(pickRow.product_id) : null;
   const pickTanks = pickRow
     ? (() => {
-        const ts = tanksForProduct(pickRow.product_id, locationTanks, extraTanks);
+        const ts = tanksForProduct(pickRow.product_id, locationTanks, extraTanks, tankOrder);
         const cur = choice[pickRow.compartment_load_id];
         if (cur && cur !== RETAIN && !ts.includes(cur)) ts.push(cur);
         return ts;
@@ -849,7 +864,8 @@ export function DeliveryDashboard({
     for (const t of locationTanks) if (t.is_active !== false && (!t.product_id || hauledIds.has(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
     for (const t of extraTanks) add(t.tank_number, t.product_id, null);
     for (const c of rows) for (const x of targetsFor(c)) add(x.tank, c.product_id, null);
-    return [...seen.values()].sort((a, b) => a.tank.localeCompare(b.tank, undefined, { numeric: true }));
+    const byName = new Map([...seen.values()].map((m) => [m.tank, m]));
+    return sortTankNames([...byName.keys()], tankOrder).map((n) => byName.get(n)!);
   })();
 
   // ── Before getting out ─────────────────────────────────────────────────────
@@ -1214,12 +1230,8 @@ export function DeliveryDashboard({
       {pickRow && pickInfo && (
         <OptionCard title={`C${pickRow.comp_number} · ${pickInfo.code} · drop into`} dotColor={pickInfo.hex ?? productColorFor(pickInfo.name)} onClose={() => setPickFor(null)}>
           {pickTanks.length === 0 && <div style={{ fontSize: 13, color: muted }}>No saved {pickInfo.name} tank here yet.</div>}
-          {pickTanks.map((n) => (
-            <button key={n} type="button" onClick={() => choose(pickRow.compartment_load_id, n)}
-              style={{ ...optionBtn, borderColor: choice[pickRow.compartment_load_id] === n ? "#fff" : optionBtn.border as string }}>
-              Tank {n}
-            </button>
-          ))}
+          <TankPickList names={pickTanks} selected={choice[pickRow.compartment_load_id]} style={optionBtn} selectedBorder={optionBtn.border as string}
+            label={(n) => (/^\d+$/.test(n) ? `Tank ${n}` : n)} onChoose={(n) => choose(pickRow.compartment_load_id, n)} onReorder={reorderTanks} />
           <button type="button" onClick={() => { setNewTankFor(pickRow.compartment_load_id); setNewTankText(""); setPickFor(null); }}
             style={{ ...optionBtn, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
             + Other tank #

@@ -33,6 +33,10 @@ const TRAILER_W = 52;
 const TANK_CX = 282;
 const R = 27;
 
+// A numbered tank reads "T3"; a named one (EAST) reads as is. Long names shrink to fit the lid.
+const tankTag = (tank: string) => (/^\d+$/.test(tank.trim()) ? `T${tank}` : tank);
+const lidFont = (tag: string) => Math.max(7, Math.min(13, (R * 1.76) / Math.max(1, tag.length * 0.68)));
+
 const g0 = (n: number) => Math.round(n).toLocaleString("en-US");
 
 export function TankMap({
@@ -204,11 +208,11 @@ export function TankMap({
                   <circle cx={TANK_CX} cy={cy} r={R * 0.3} fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={3} strokeDasharray="2.2 2.2" />
                 </>
               )}
-              <text x={TANK_CX} y={cy + 4} textAnchor="middle" fontSize={13} fontWeight={800} fill="#fff" style={{ pointerEvents: "none" }}>
-                {kind === "dome" ? `T${t.tank}` : ""}
+              <text x={TANK_CX} y={cy + 4} textAnchor="middle" fontSize={lidFont(tankTag(t.tank))} fontWeight={800} fill="#fff" style={{ pointerEvents: "none" }}>
+                {kind === "dome" ? tankTag(t.tank) : ""}
               </text>
               {kind === "cap" && (
-                <text x={TANK_CX + R * 0.8 + 7} y={cy + 4} textAnchor="start" fontSize={12} fontWeight={800} fill="#fff" style={{ pointerEvents: "none" }}>T{t.tank}</text>
+                <text x={TANK_CX + R * 0.8 + 7} y={cy + 4} textAnchor="start" fontSize={12} fontWeight={800} fill="#fff" style={{ pointerEvents: "none" }}>{tankTag(t.tank)}</text>
               )}
               <text x={TANK_CX} y={cy + R + 13} textAnchor="middle" fontSize={10} fontWeight={800} fill={c} style={{ pointerEvents: "none" }}>
                 {(t.name ?? t.code ?? "").slice(0, 12)}{into > 0 ? `  +${g0(into)}` : ""}
@@ -239,14 +243,14 @@ export function TankMap({
                 <span style={{ flex: 1 }} />
                 <button type="button" onClick={() => onPick(c.id)}
                   style={{ background: "none", border: "none", color: c.retained ? "#93c5fd" : c.targets.length ? "#fff" : "#fbbf24", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: "4px 0" }}>
-                  {c.retained ? "Retain ›" : c.targets.length ? (c.targets.length > 1 ? "Split ›" : `Tank ${c.targets[0].tank} ›`) : "Pick ›"}
+                  {c.retained ? "Retain ›" : c.targets.length ? (c.targets.length > 1 ? "Split ›" : `${/^\d+$/.test(c.targets[0].tank.trim()) ? "Tank " : ""}${c.targets[0].tank} ›`) : "Pick ›"}
                 </button>
               </div>
               {c.targets.length > 0 && splitting && (
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
                   {c.targets.map((t) => (
                     <div key={t.tank} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, width: 70 }}>C{c.n} → T{t.tank}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, width: 70 }}>C{c.n} → {tankTag(t.tank)}</span>
                       <input value={String(Math.round(t.gallons))} inputMode="numeric"
                         onChange={(e) => onSplitGallons(c.id, t.tank, Number(e.target.value.replace(/[^0-9]/g, "")) || 0)}
                         onFocus={(e) => e.currentTarget.select()}

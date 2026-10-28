@@ -37,6 +37,7 @@ export type LocationTank = {
   product_id: string | null;
   capacity_gallons: number | null;
   hose_length_ft?: number | null;
+  sort_order?: number | null;
   is_active: boolean;
 };
 

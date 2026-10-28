@@ -48,16 +48,29 @@ export function fmtSignedGallons(n: number): string {
 
 // The tanks a product's readings cover: the location's saved tanks for that
 // product, then any tank already read or typed for it, numeric order.
+// Tank names in the driver's chosen order (sort_order), then the rest by name.
+export function sortTankNames(names: string[], order?: Map<string, number> | null): string[] {
+  const idx = (n: string) => order?.get(n.trim());
+  return [...names].sort((a, b) => {
+    const x = idx(a), y = idx(b);
+    if (x != null && y != null && x !== y) return x - y;
+    if (x != null && y == null) return -1;
+    if (x == null && y != null) return 1;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+}
+
 export function tanksForProduct(
   productId: string | null,
   locationTanks: { tank_number: string; product_id: string | null; is_active?: boolean }[],
   extra: { tank_number: string; product_id: string | null }[],
+  order?: Map<string, number> | null,
 ): string[] {
   const out: string[] = [];
   const add = (n: string) => { const t = n.trim(); if (t && !out.includes(t)) out.push(t); };
   for (const t of locationTanks) if (t.is_active !== false && productId && t.product_id === productId) add(t.tank_number);
   for (const t of extra) if (t.product_id === productId) add(t.tank_number);
-  return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return sortTankNames(out, order);
 }
 
 // The after reading the delivery screen prefills (gallons only): the before
