@@ -55,6 +55,7 @@ export function LocationPicker({
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
+  const [myStores, setMyStores] = useState(false);
   const { data: products } = useProductsCatalog();
   const [bRegion, setBRegion] = useState("");
   const [bArea, setBArea] = useState("");
@@ -68,6 +69,7 @@ export function LocationPicker({
     setChoosingCity(false);
     setShowAll(false);
     setQuery("");
+    setMyStores(false);
     setBRegion(""); setBArea(""); setBCity(""); setBLimit(60);
     setCityKey(defaultLocationCity(locations, { selectedId: selectedLocationId, origin }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,6 +227,21 @@ export function LocationPicker({
     );
   }
 
+  // My Stores: every starred location, by city then store number.
+  const starredAll = myStores
+    ? locations.filter((l) => l.starred).sort((a, b) =>
+        `${a.state ?? ""} ${a.city ?? ""}`.localeCompare(`${b.state ?? ""} ${b.city ?? ""}`)
+        || String(a.location_number ?? "").localeCompare(String(b.location_number ?? ""), undefined, { numeric: true })
+        || (a.name ?? "").localeCompare(b.name ?? ""))
+    : [];
+  const myBtn = (
+    <button type="button" onClick={() => setMyStores((v) => !v)}
+      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 700,
+        border: `1px solid ${myStores ? "#fbbf24" : "rgba(255,255,255,0.2)"}`, background: myStores ? "rgba(251,191,36,0.12)" : "transparent",
+        color: myStores ? "#fbbf24" : "rgba(255,255,255,0.75)" }}>
+      ★ My Stores
+    </button>
+  );
   const hidden = groups.others.length;
   const shown = groups.starred.length === 0 || showAll ? [...groups.starred, ...groups.others] : groups.starred;
 
@@ -235,16 +252,24 @@ export function LocationPicker({
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
-            <span>Showing locations in <span style={{ color: "#fff" }}>{cityLabel(city)}</span></span>
-            <button type="button" onClick={() => { setChoosingCity(true); setQuery(""); }}
-              style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
-              Change
-            </button>
+            {myStores
+              ? <span>Your starred stores</span>
+              : <span>Showing locations in <span style={{ color: "#fff" }}>{cityLabel(city)}</span></span>}
+            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {!myStores && (
+                <button type="button" onClick={() => { setChoosingCity(true); setQuery(""); }}
+                  style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                  Change
+                </button>
+              )}
+              {myBtn}
+            </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {shown.map((l) => card(l))}
+            {myStores && starredAll.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "12px 0" }}>No starred stores yet. Tap a star on a location to add it.</div>}
+            {(myStores ? starredAll : shown).map((l) => card(l))}
           </div>
-          {groups.starred.length > 0 && hidden > 0 && (
+          {!myStores && groups.starred.length > 0 && hidden > 0 && (
             <button type="button" onClick={() => setShowAll((v) => !v)}
               style={{ width: "100%", marginTop: 10, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)",
                 background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
