@@ -32,3 +32,11 @@ test("out of order and adjustments", () => {
   assert.equal(requirementsComplete(req()), true);
   assert.equal(requirementsComplete(req({ has_orientation: null })), false);
 });
+
+test("extra steps appear before the loads and track per driver", () => {
+  const r = req({ letter_required: false, extra_steps: [{ id: "a1", label: "Safety test" }] });
+  const s = accessSteps(r, prog({ extras_done: { a1: "x" } }), 0);
+  assert.equal(s.find((x) => x.key === "extra:a1")!.state, "done");
+  assert.equal(s.findIndex((x) => x.key === "extra:a1") < s.findIndex((x) => x.key === "load:1"), true);
+  assert.equal(accessSteps(r, prog(), 0).find((x) => x.key === "extra:a1")!.label, "Safety test");
+});

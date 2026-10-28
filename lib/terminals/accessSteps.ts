@@ -29,6 +29,7 @@ export type AccessRequirements = {
   has_orientation: boolean | null;
   orientation_schedule: string | null;
   notes: string | null;
+  extra_steps?: { id: string; label: string }[] | null;
   updated_at?: string | null;
 };
 
@@ -42,11 +43,12 @@ export type AccessProgress = {
   registered_at: string | null;
   orientation_done_at: string | null;
   loads_adjust: number;
+  extras_done?: Record<string, string> | null;
   card_issued_at: string | null;
   completed_at: string | null;
 };
 
-export type AccessStepKey = "letter" | "media" | "register" | "orientation" | `load:${number}` | "card";
+export type AccessStepKey = "letter" | "media" | "register" | "orientation" | `extra:${string}` | `load:${number}` | "card";
 
 export type AccessStep = QualStep & { key: AccessStepKey };
 
@@ -75,6 +77,9 @@ export function accessSteps(
   if (req?.has_training_media) raw.push({ key: "media", kind: "video", label: "Training video or PowerPoint", done: !!prog?.media_done_at });
   if (req?.new_user_url) raw.push({ key: "register", kind: "register", label: "Register as a new user", done: !!prog?.registered_at });
   if (req?.has_orientation) raw.push({ key: "orientation", kind: "orientation", label: "Onsite orientation", done: !!prog?.orientation_done_at });
+  for (const x of req?.extra_steps ?? []) {
+    if (x?.id && x.label) raw.push({ key: `extra:${x.id}`, kind: "other", label: x.label, done: !!prog?.extras_done?.[x.id] });
+  }
   for (let i = 1; i < loadsRequired; i++) {
     raw.push({ key: `load:${i}`, kind: "training_load", label: `Training load ${i}`, done: loadsDone >= i });
   }

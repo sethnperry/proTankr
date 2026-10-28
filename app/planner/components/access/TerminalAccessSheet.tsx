@@ -65,6 +65,7 @@ type Draft = {
   newUserUrl: string;
   letter: boolean | null; letterDue: LetterDue;
   orientation: boolean | null; schedule: string;
+  extras: { id: string; label: string }[];
 };
 
 const draftFrom = (r: AccessRequirements | null): Draft => ({
@@ -73,9 +74,10 @@ const draftFrom = (r: AccessRequirements | null): Draft => ({
   newUserUrl: r?.new_user_url ?? "",
   letter: r?.letter_required ?? null, letterDue: r?.letter_due ?? "unknown",
   orientation: r?.has_orientation ?? null, schedule: r?.orientation_schedule ?? "",
+  extras: (r?.extra_steps ?? []).map((x) => ({ id: x.id, label: x.label })),
 });
 
-const QUESTIONS = 5;
+const QUESTIONS = 6;
 
 export function TerminalAccessSheet({
   open, terminalId, terminalName, userId, companyId, fromLoad, setupOnly, editSetup, onClose, onCardIssued,
@@ -162,6 +164,7 @@ export function TerminalAccessSheet({
         letter_due: draft.letter === false ? null : draft.letterDue,
         has_orientation: !!draft.orientation,
         orientation_schedule: draft.orientation && draft.schedule.trim() ? draft.schedule.trim() : null,
+        extra_steps: draft.extras.map((x) => ({ id: x.id, label: x.label.trim() })).filter((x) => x.label),
       };
       const { error: e } = await supabase.from("terminal_access_requirements").upsert(row, { onConflict: "terminal_id" });
       if (e) throw e;
@@ -301,6 +304,21 @@ export function TerminalAccessSheet({
           )}
           {nextBtn(draft.orientation != null)}
         </>)}
+        {q === 5 && (<>
+          <div style={qText}>Any other steps drivers must finish here?</div>
+          <div style={{ fontSize: 13, color: MUTED, marginBottom: 12 }}>For example a safety test or fingerprints. Leave empty if there are none.</div>
+          {draft.extras.map((x, i) => (
+            <div key={x.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input value={x.label} style={input} placeholder="Step name"
+                onChange={(e) => setDraft({ ...draft, extras: draft.extras.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)) })} />
+              <button type="button" aria-label="Remove step" onClick={() => setDraft({ ...draft, extras: draft.extras.filter((_, j) => j !== i) })}
+                style={{ ...btn, width: 52, textAlign: "center", padding: "0" }}>×</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setDraft({ ...draft, extras: [...draft.extras, { id: Math.random().toString(36).slice(2, 10), label: "" }] })}
+            style={{ ...btn, textAlign: "center", marginBottom: 4 }}>+ Add a step</button>
+          {nextBtn(true)}
+        </>)}
       </div>
     );
   };
@@ -355,6 +373,13 @@ export function TerminalAccessSheet({
       sub: isDone ? `Done ${fmtDate(prog?.orientation_done_at)}` : req?.orientation_schedule || "Tap when done",
       onTap: () => void toggle("orientation_done_at", isDone),
     };
+    if (s.key.startsWith("extra:")) {
+      const id = s.key.slice(6);
+      return {
+        sub: isDone ? `Done ${fmtDate(prog?.extras_done?.[id])}` : "Tap when done",
+        onTap: () => void run(() => patchProgress({ extras_done: { ...(prog?.extras_done ?? {}), [id]: isDone ? undefined : new Date().toISOString() } })),
+      };
+    }
     if (s.key === "card") return {
       sub: isDone ? `Issued ${fmtDate(prog?.card_issued_at)}` : s.state === "blocked" ? "Letter needed first" : "Tap when your card is issued",
       onTap: isDone ? undefined : () => setMode("card"),
