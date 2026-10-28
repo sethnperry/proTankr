@@ -151,6 +151,12 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
           if (tid && t && !planned[tid]) planned[tid] = placeLine("terminal", String(t.terminal_name ?? ""), t.city);
         }
         const out: Record<string, { at: string | null; line: string }[]> = {};
+        // A manual status update (STUD) with a location is the newest word on where the trailer is.
+        const st = await supabase.from("trailers").select("trailer_id, status_code, status_updated_at, current_local_area, current_region").in("trailer_id", ids);
+        for (const r of (st.data ?? []) as any[]) {
+          const line = String(r.current_local_area || r.current_region || "").trim();
+          if (r.status_code && r.status_updated_at && line) (out[r.trailer_id] ??= []).push({ at: r.status_updated_at, line });
+        }
         for (const r of (dl.data ?? []) as any[]) {
           const tid = trailerOf.get(r.trip_id); const l = r.location_id ? loc.get(r.location_id) : null;
           const name = l?.name ?? r.one_off_name;

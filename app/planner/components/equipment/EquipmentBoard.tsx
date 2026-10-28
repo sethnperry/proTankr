@@ -65,15 +65,17 @@ type Props = {
   emptyNote?: string;
 };
 
-function Tile({ children, strip, style, ...rest }: { children: React.ReactNode; strip?: StripSeg[]; style?: React.CSSProperties } & React.HTMLAttributes<HTMLDivElement>) {
+function Tile({ children, strip, style, dot, ...rest }: { children: React.ReactNode; strip?: StripSeg[]; style?: React.CSSProperties; dot?: string | null } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div {...rest} style={{ ...tileBase, ...(strip && strip.length > 0 ? { paddingRight: 0, gap: 0 } : {}), ...style }}>
+    <div {...rest} style={{ position: "relative", ...tileBase, ...(strip && strip.length > 0 ? { paddingRight: 0, gap: 0 } : {}), ...style }}>
+      {dot && <span aria-hidden style={{ position: "absolute", top: 7, left: 7, width: 9, height: 9, borderRadius: "50%", background: dot }} />}
       <div style={{ flex: 1, minWidth: 0, ...(strip && strip.length > 0 ? { paddingLeft: 10 } : {}) }}>{children}</div>
       {strip && strip.length > 0 && <BirdTab segs={strip} />}
     </div>
   );
 }
 
+const dotFor = (u: TrackUnit) => (u.statusCode ? fleetStatusColor(u.statusCode) : null);
 const loadedText = (segs?: StripSeg[]) => !!segs?.some((g) => g.kind === "loaded");
 
 function Name({ children }: { children: React.ReactNode }) {
@@ -113,7 +115,7 @@ export function EquipmentBoard(p: Props) {
                   onClick={() => p.onCombo?.(c)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); p.onCombo?.(c); } }}
                   style={{ display: "grid", gridTemplateColumns: "1fr 26px 1fr", alignItems: "stretch", cursor: "pointer" }}>
-                  <Tile style={tile as React.CSSProperties}>
+                  <Tile dot={dotFor(c.truck)} style={tile as React.CSSProperties}>
                     <Name>{c.truck.name}</Name>
                     {tl.tone !== "none" && (
                       <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : mine && tl.tone === "use" ? "#fff" : "rgba(255,255,255,0.6)" }}>
@@ -123,7 +125,7 @@ export function EquipmentBoard(p: Props) {
                     )}
                   </Tile>
                   <div aria-hidden style={{ alignSelf: "center", height: 2, background: "rgba(255,255,255,0.45)" }} />
-                  <Tile style={tile as React.CSSProperties} strip={segs}>
+                  <Tile dot={dotFor(c.trailer)} style={tile as React.CSSProperties} strip={segs}>
                     <Name>{c.trailer.name}</Name>
                     {loadedText(segs) ? (
                       p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : null
@@ -147,7 +149,7 @@ export function EquipmentBoard(p: Props) {
                 const mine = p.mine?.truckId === u.id;
                 const pending = p.pendingId === u.id;
                 return (
-                  <Tile key={u.id} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     <StatusLine u={u} />
@@ -166,7 +168,7 @@ export function EquipmentBoard(p: Props) {
                 const pending = p.pendingId === u.id;
                 const segs = p.strips?.[u.id];
                 return (
-                  <Tile key={u.id} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
