@@ -135,6 +135,7 @@ import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChoo
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
 import { useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
+import { SuppliersModal } from "../dispatch/SuppliersModal";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
@@ -1415,6 +1416,7 @@ export default function HomePage() {
   const [parkOpen, setParkOpen] = useState(false);
   // Right-now sheets opened from the gauges and the Terminal tool.
   const [terminalNowOpen, setTerminalNowOpen] = useState(false);
+  const [suppliersOpen, setSuppliersOpen] = useState(false);
   const [dropNowOpen, setDropNowOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   // Re-render every 30 s so the Break chip counts up between hours reads.
@@ -2160,6 +2162,12 @@ export default function HomePage() {
           style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>
           Switch Terminal
         </button>
+        {companyId && alertTerminalId && (
+          <button type="button" onClick={() => setSuppliersOpen(true)} className="dash-press"
+            style={{ width: "100%", marginTop: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.secondary }}>
+            Suppliers
+          </button>
+        )}
         {accessCollapsed && (
           <>
             <div style={{ marginTop: 18 }}><SectionLabel>Terminal access</SectionLabel></div>
@@ -2167,6 +2175,12 @@ export default function HomePage() {
           </>
         )}
       </FullscreenModal>
+      {companyId && userId && alertTerminalId && (
+        <SuppliersModal open={suppliersOpen} onClose={() => setSuppliersOpen(false)} companyId={companyId} userId={userId}
+          canManage={shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin}
+          terminals={terminalCatalog.map((t) => ({ id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", used: false, place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null, city: t.city ?? null, state: t.state ?? null }))}
+          initialTerminalId={alertTerminalId} />
+      )}
       {/* After the Terminal sheet so Update status opens on top of it. */}
       <TerminalStatusSheet
         open={statusOpen}

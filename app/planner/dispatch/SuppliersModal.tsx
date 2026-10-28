@@ -335,7 +335,7 @@ export function SuppliersModal(props: {
         </>
       )}
 
-      {p.canManage && (
+      {(
         <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New supplier, exactly as on dispatch (e.g. Atlas - MO)" style={fieldInput} />
           <button type="button" className="dash-press" disabled={busy || !newName.trim()} onClick={add}
