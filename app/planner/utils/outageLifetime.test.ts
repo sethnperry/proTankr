@@ -13,7 +13,7 @@ test("allocation resets at local midnight", () => {
 test("out of product stays until cleared, capped at 72 h", () => {
   const created = Date.parse("2026-10-27T12:00:00Z");
   assert.equal(outageIsActive("out_of_product", created, created + 70 * 3600_000, TZ), true);
-  assert.equal(outageExpiresAtMs("long_line", created, TZ), created + MANUAL_REPORT_CAP_MS);
+  assert.equal(outageExpiresAtMs("terminal_issue", created, TZ), created + MANUAL_REPORT_CAP_MS);
 });
 test("age reads minutes, hours, then days", () => {
   const t = 1_000_000_000_000;
