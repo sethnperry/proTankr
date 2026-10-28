@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../../CalculatorShellContext";
+import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { PrintPortal } from "../../trips/PtdDocument";
 import { periodOptions, PERIOD_TITLE, isLongRange, type PeriodSettings } from "@/lib/reports/periodOptions";
 import { loadWorklogInputs } from "@/lib/worklog/loadWorklogInputs";
@@ -19,7 +20,7 @@ import type { PayPeriodType } from "@/app/admin/payPeriods";
 type Company = { period_type: PayPeriodType; anchor_date: string; send_after_days: number; tz: string };
 const TYPES: [PayPeriodType, string][] = [["weekly", "Weekly"], ["biweekly", "Every 2 weeks"], ["semi_monthly", "Twice a month"], ["monthly", "Monthly"]];
 const box: React.CSSProperties = { background: "#121213", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 2, padding: 12 };
-const inp: React.CSSProperties = { width: "100%", background: "#0b0b0b", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, padding: "9px 10px", fontSize: 14 };
+const inp: React.CSSProperties = { colorScheme: "dark", width: "100%", background: "rgba(0,0,0,0.28)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, padding: "9px 10px", fontSize: 14 };
 const lbl: React.CSSProperties = { fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", color: "rgba(255,255,255,0.45)", margin: "10px 0 4px" };
 const btn: React.CSSProperties = { background: "#fff", color: "#000", border: 0, borderRadius: 2, padding: "10px 14px", fontWeight: 800, fontSize: 13, letterSpacing: 0.5, textTransform: "uppercase" };
 const ghost: React.CSSProperties = { ...btn, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" };
@@ -131,10 +132,11 @@ export default function WorklogPage() {
 
       <div style={{ ...box, marginBottom: 12 }}>
         <div style={{ ...lbl, marginTop: 0 }}>Period</div>
-        <select value={periodId} onChange={(e) => setPeriodId(e.target.value)} style={inp}>
-          {options.some((o) => o.group === "period") && <optgroup label="Your periods">{options.filter((o) => o.group === "period").map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>}
-          <optgroup label="Calendar">{options.filter((o) => o.group === "calendar").map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}<option value="custom">Custom dates…</option></optgroup>
-        </select>
+        <CustomSelect value={periodId} onChange={setPeriodId} options={[
+          ...options.filter((o) => o.group === "period").map((o) => ({ value: o.id, label: o.label })),
+          ...options.filter((o) => o.group === "calendar").map((o) => ({ value: o.id, label: o.label })),
+          { value: "custom", label: "Custom dates…" },
+        ]} />
         {periodId === "custom" && (
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <input type="date" value={custom.start} onChange={(e) => setCustom((c) => ({ ...c, start: e.target.value }))} style={inp} />
@@ -160,7 +162,7 @@ export default function WorklogPage() {
             <div style={{ fontWeight: 800, color: "#fff", fontSize: 14 }}>Company period</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>Used for everyone who hasn't set their own. Drivers are emailed their log after each period ends.</div>
             <div style={lbl}>How often</div>
-            <select value={cs.period_type} onChange={(e) => setCs({ ...cs, period_type: e.target.value as PayPeriodType })} style={inp}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            <CustomSelect value={cs.period_type} onChange={(v) => setCs({ ...cs, period_type: v as PayPeriodType })} options={TYPES.map(([v, l]) => ({ value: v, label: l }))} />
             <div style={lbl}>A date a period began (e.g. a Wednesday)</div>
             <input type="date" value={cs.anchor_date} onChange={(e) => setCs({ ...cs, anchor_date: e.target.value })} style={inp} />
             <div style={lbl}>Email goes out this many days after a period ends</div>
@@ -173,7 +175,7 @@ export default function WorklogPage() {
           <div style={{ fontWeight: 800, color: "#fff", fontSize: 14 }}>My period</div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>{company ? "Leave blank to use the company's period." : "Set the period your reports use."}</div>
           <div style={lbl}>How often</div>
-          <select value={ms.type} onChange={(e) => setMs({ ...ms, type: e.target.value as PayPeriodType | "" })} style={inp}><option value="">Company period</option>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <CustomSelect value={ms.type} onChange={(v) => setMs({ ...ms, type: v as PayPeriodType | "" })} options={[{ value: "", label: company ? "Company period" : "Not set" }, ...TYPES.map(([v, l]) => ({ value: v, label: l }))]} />
           {ms.type && (<><div style={lbl}>A date a period began</div><input type="date" value={ms.anchor} onChange={(e) => setMs({ ...ms, anchor: e.target.value })} style={inp} /></>)}
           <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, fontSize: 13, color: "rgba(255,255,255,0.8)" }}>
             <input type="checkbox" checked={ms.email} onChange={(e) => setMs({ ...ms, email: e.target.checked })} /> Email me my Work Log after each period

@@ -6,12 +6,13 @@
 // moves to "This period" once the period settings load, unless the person already chose.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { periodOptions } from "@/lib/reports/periodOptions";
 import { useReportPeriods } from "@/lib/reports/useReportPeriods";
 import { lastDays, type DateRange } from "@/lib/reports/dateRange";
 import { localDateOf } from "@/lib/worklog/time";
 
-const sel: React.CSSProperties = { background: "#0b0b0b", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, padding: "7px 8px", fontSize: 13, minWidth: 0 };
+const sel: React.CSSProperties = { colorScheme: "dark", background: "rgba(0,0,0,0.28)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, padding: "7px 8px", fontSize: 13, minWidth: 0 };
 
 export function PeriodPicker({ companyId, userId, onChange, allowAll = false, defaultAll = false, style }: {
   companyId: string | null | undefined; userId: string | null | undefined;
@@ -48,18 +49,19 @@ export function PeriodPicker({ companyId, userId, onChange, allowAll = false, de
   };
   useEffect(() => { if (id === "custom") { const r = rangeFor("custom"); if (r) cb.current(r); } }, [custom.start, custom.end]); // eslint-disable-line
 
+  const choices = [
+    ...opts.filter((o) => o.group === "period").map((o) => ({ value: o.id, label: o.label })),
+    { value: "d:7", label: "Last 7 days" }, { value: "d:30", label: "Last 30 days" },
+    ...opts.filter((o) => o.group === "calendar").map((o) => ({ value: o.id, label: o.label })),
+    ...(allowAll ? [{ value: "all", label: "All time" }] : []),
+    { value: "custom", label: "Custom dates…" },
+  ];
+
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", ...style }}>
-      <select value={id} onChange={(e) => pick(e.target.value)} style={sel} aria-label="Report period">
-        {opts.some((o) => o.group === "period") && <optgroup label="Your periods">{opts.filter((o) => o.group === "period").map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>}
-        <optgroup label="Other">
-          <option value="d:7">Last 7 days</option>
-          <option value="d:30">Last 30 days</option>
-          {opts.filter((o) => o.group === "calendar").map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          {allowAll && <option value="all">All time</option>}
-          <option value="custom">Custom dates…</option>
-        </optgroup>
-      </select>
+      <div style={{ minWidth: 190, flex: "1 1 190px" }}>
+        <CustomSelect value={id} onChange={pick} buttonStyle={{ padding: "8px 34px 8px 10px", fontSize: 13 }} options={choices} />
+      </div>
       {id === "custom" && (<>
         <input type="date" value={custom.start} onChange={(e) => setCustom((c) => ({ ...c, start: e.target.value }))} style={sel} />
         <input type="date" value={custom.end} onChange={(e) => setCustom((c) => ({ ...c, end: e.target.value }))} style={sel} />

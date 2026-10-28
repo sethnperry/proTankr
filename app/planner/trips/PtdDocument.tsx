@@ -445,6 +445,7 @@ export function PrintPortal({ children }: { children: React.ReactNode }) {
         @media screen { .ptd-print-root { display: none; } }
         @media print {
           @page { size: 8.5in 11in; margin: 0.5in; }
+          html { color-scheme: light !important; }
           html, body { background: #fff !important; height: auto !important; overflow: visible !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body > *:not(.ptd-print-root) { display: none !important; }
           .ptd-print-root { display: block; }

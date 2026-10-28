@@ -24,7 +24,7 @@ const CSS = `
 .wl *{box-sizing:border-box}
 .wl h1{font-size:20px;letter-spacing:.5px;margin:0;text-transform:uppercase}
 .wl .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:3px solid #111;padding-bottom:8px}
-.wl .brand{font-size:12px;color:#555}
+.wl .brand{font-size:12px;color:#555;flex-shrink:0}
 .wl .who{font-size:14px;margin:8px 0 0}
 .wl h2{font-size:12px;letter-spacing:1px;text-transform:uppercase;margin:22px 0 8px;padding-bottom:4px;border-bottom:2px solid #111}
 .wl .cells{display:flex;flex-wrap:wrap;border:1px solid #cfcfcf;margin-bottom:-1px}
@@ -99,7 +99,7 @@ export function renderWorklogBody(w: Worklog, o: { mode?: "full" | "condensed" }
     : "";
 
   return `<style>${CSS}</style><div class="wl">
-<div class="top"><h1>${esc(w.title)} Work Log</h1><div class="brand">ProTankr</div></div>
+<div class="top"><h1>${esc(w.title)} Work Log</h1><div class="brand"><img src="https://protankr.com/icons/icon-email-black.png" width="26" height="26" alt="ProTankr" style="display:block;margin-left:auto"></div></div>
 <div class="who">${esc(w.driverName)}</div>
 <h2>Summary</h2><div class="cells">${cells}</div><div class="cells">${miles}</div>
 <h2>By product</h2>${byProduct}
