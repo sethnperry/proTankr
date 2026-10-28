@@ -16,6 +16,8 @@ type Session = { path: string; credentials: { database: string; sessionId: strin
 const SESSION_MS = 10 * 60 * 1000;
 const METERS_PER_MILE = 1609.344;
 const sessions = new Map<string, Session>();
+// Last good duty logs per driver (module-level: a provider is built per request).
+const hosLogCache = new Map<string, { at: number; rows: any[] }>();
 
 async function rpc(f: Fetch, host: string, method: string, params: unknown): Promise<any> {
   const res = await f(`https://${host}/apiv1`, {
@@ -523,7 +525,18 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     async hos(id: string, tz?: string): Promise<HosAvailability | null> {
       const [avail, logs] = await Promise.all([
         call("Get", { typeName: "DutyStatusAvailability", search: { userSearch: { id } } }) as Promise<any[]>,
-        call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString() } }).catch(() => []) as Promise<any[]>,
+        // Geotab answers only ~10 calls a minute, so this one can fail for no reason. Fall back to the last
+        // good copy of the logs (up to 20 minutes old) rather than losing the working clock.
+        (async () => {
+          try {
+            const rows = (await call("Get", { typeName: "DutyStatusLog", search: { userSearch: { id }, fromDate: new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString() } })) as any[];
+            hosLogCache.set(id, { at: Date.now(), rows: rows ?? [] });
+            return rows ?? [];
+          } catch {
+            const hit = hosLogCache.get(id);
+            return hit && Date.now() - hit.at < 20 * 60_000 ? hit.rows : [];
+          }
+        })(),
       ]);
       const a = (avail ?? [])[0];
       if (!a) return null;
