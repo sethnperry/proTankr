@@ -820,7 +820,11 @@ export default function HomePage() {
         : { text: "Delivery finished.", tripId: null });
     void syncNow();
     if (finishDeliveryRow.location_id) {
-      const seen = v.tanks.map((t) => ({ tank_number: t.tank_number, product_id: t.product_id }));
+      // Every tank used, with or without a reading (the first tank of a split is saved here).
+      const seen = [
+        ...v.delivered.flatMap((c) => (c.tank_number ? [{ tank_number: c.tank_number, product_id: c.product_id }] : [])),
+        ...v.tanks.map((t) => ({ tank_number: t.tank_number, product_id: t.product_id })),
+      ];
       await rememberTanks(finishDeliveryRow.location_id, seen, locList.tanks);
       void locList.reload();
     }
