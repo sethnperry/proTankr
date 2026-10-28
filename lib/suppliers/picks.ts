@@ -9,6 +9,8 @@ export type SupplierPick = { product_id: string; supplier_id: string | null; nam
 
 export type StoredPicks = { at: number; picks: SupplierPick[]; skipped?: boolean };
 
+export const PICKS_CHANGED_EVENT = "proTankr:supplierPicksChanged";
+
 export const PICK_TTL_MS = 14 * 60 * 60 * 1000;
 
 export function picksKey(userId: string, terminalId: string): string {
@@ -33,6 +35,8 @@ export function writePicks(userId: string | null, terminalId: string | null, val
   try {
     if (!value) localStorage.removeItem(picksKey(userId, terminalId));
     else localStorage.setItem(picksKey(userId, terminalId), JSON.stringify(value));
+    // The Planner stays mounted while other screens (Begin Trip) write picks: tell it to re-read.
+    window.dispatchEvent(new CustomEvent(PICKS_CHANGED_EVENT, { detail: { key: picksKey(userId, terminalId) } }));
   } catch {
     // storage blocked: picks just won't survive a reload
   }

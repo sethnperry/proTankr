@@ -15,6 +15,7 @@ import { newId as newTripId } from "@/lib/trips/tripStore";
 import type { TripPickupRow } from "@/lib/trips/types";
 import { retagLoadPickup, retargetWaitingPickup } from "@/lib/trips/tripLogic";
 import { addPickup, closePickupNoLoad } from "@/lib/trips/tripFlow";
+import { writePicks } from "@/lib/suppliers/picks";
 import { writeActivePlannedLoad } from "../utils/activePlannedLoad";
 import type { OutageReportType } from "./useTerminalOutageReports";
 import type { useCalculatorShell } from "../CalculatorShellContext";
@@ -177,6 +178,8 @@ export function useTerminalSwitchDuringLoad(a: Args) {
       const reasonNote = switchReasonNoteRef.current;
       switchReportedIssueRef.current = null;
       switchReasonNoteRef.current = null;
+      // The supplier picked at the rack being left is for that rack only.
+      writePicks(effectiveUserId, prev.terminalId, null);
       void (async () => {
         if (hadLoad) await loadWorkflow.cancelActiveLoad();
         try {

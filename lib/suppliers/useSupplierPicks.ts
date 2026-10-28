@@ -5,7 +5,7 @@
 // (see picks.ts). Reloads when the terminal changes.
 
 import { useCallback, useEffect, useState } from "react";
-import { readPicks, writePicks, type SupplierPick } from "./picks";
+import { PICKS_CHANGED_EVENT, picksKey, readPicks, writePicks, type SupplierPick } from "./picks";
 
 export function useSupplierPicks(userId: string | null, terminalId: string | null) {
   const [picks, setPicksState] = useState<SupplierPick[]>([]);
@@ -19,6 +19,20 @@ export function useSupplierPicks(userId: string | null, terminalId: string | nul
     setPicksState(v?.picks ?? []);
     setSkippedState(!!v?.skipped);
     setLoadedFor(`${userId}|${terminalId}`);
+  }, [userId, terminalId]);
+  // Another screen (Begin Trip, a rack hop) rewrote this terminal's picks: take them.
+  useEffect(() => {
+    if (!userId || !terminalId) return;
+    const mine = picksKey(userId, terminalId);
+    const onChange = (e: Event) => {
+      if ((e as CustomEvent<{ key: string }>).detail?.key !== mine) return;
+      const v = readPicks(userId, terminalId);
+      const next = v?.picks ?? [];
+      setPicksState((cur) => (JSON.stringify(cur) === JSON.stringify(next) ? cur : next));
+      setSkippedState(!!v?.skipped);
+    };
+    window.addEventListener(PICKS_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(PICKS_CHANGED_EVENT, onChange);
   }, [userId, terminalId]);
   const loaded = loadedFor === `${userId}|${terminalId}`;
 
