@@ -524,8 +524,14 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       if (!a) return null;
       // Only real duty status changes (not ELD log-in/out); see dutyLogs.ts.
       const duty = dutyFromLogs(logs ?? []);
+      // Ten hours off duty resets the driving and working clocks. A driver who is off duty or logged
+      // out gets zeros from the availability call, which would read as "no time left", so show the
+      // full clocks instead. (The cycle isn't touched: it only resets after 34 hours.)
+      const rested = !!duty.offSince && Date.now() - Date.parse(duty.offSince) >= 10 * 3600_000;
       return {
-        driveLeftMin: durationMinutes(a.driving), dutyLeftMin: durationMinutes(a.duty) ?? workdayLeftMin(logs ?? [], Date.now()), cycleLeftMin: durationMinutes(a.cycle),
+        driveLeftMin: rested ? 11 * 60 : durationMinutes(a.driving),
+        dutyLeftMin: rested ? 14 * 60 : durationMinutes(a.duty) ?? workdayLeftMin(logs ?? [], Date.now()),
+        cycleLeftMin: durationMinutes(a.cycle),
         status: duty.status, statusSince: duty.since, offSince: duty.offSince,
         breakLeftMin: breakLeftMin(logs ?? [], Date.now()) ?? durationMinutes(a.rest),
         nonDrivingSince: (() => { const t = nonDrivingSinceMs(logs ?? [], Date.now()); return t == null ? null : new Date(t).toISOString(); })(),
