@@ -128,6 +128,27 @@ export function nonDrivingSinceMs(logs: any[], nowMs: number): number | null {
 export const WORKDAY_MIN = 14 * 60;
 export const RESET_OFF_MIN = 10 * 60;
 
+/** Driving minutes left of the 11-hour limit, counted from the duty log: driving since the last 10 straight
+ * hours off. Null when there is nothing to go on. A driver fresh off a reset has all 11 hours. */
+export function driveLeftMin(logs: any[], nowMs: number): number | null {
+  const segs = segments(logs, nowMs);
+  if (!segs.length) return null;
+  let used = 0;
+  let off = 0;
+  for (const s of segs) {
+    const len = (s.to - s.from) / 60000;
+    if (ONDUTY.has(s.code)) {
+      if (off >= RESET_OFF_MIN) used = 0;
+      off = 0;
+      if (s.code === "D") used += len;
+    } else {
+      off += len;
+    }
+  }
+  if (off >= RESET_OFF_MIN) used = 0;
+  return Math.max(0, Math.round(11 * 60 - used));
+}
+
 /** The 14-hour window: it opens when on-duty time starts after 10 straight hours off, and runs on the wall clock.
  * Null when there is nothing to go on or the driver is fresh off a reset (a full window). */
 export function workdayLeftMin(logs: any[], nowMs: number): number | null {

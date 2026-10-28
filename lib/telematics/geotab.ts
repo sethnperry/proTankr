@@ -5,7 +5,7 @@
 // `fetchImpl` is injectable so this is tested without a network.
 
 import { drivingStops } from "./dutyStops.ts";
-import { breakLeftMin, cycleRecap, nonDrivingSinceMs, workdayLeftMin } from "./cycleRecap.ts";
+import { breakLeftMin, cycleRecap, driveLeftMin, nonDrivingSinceMs, workdayLeftMin } from "./cycleRecap.ts";
 import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs, isDutyChange } from "./dutyLogs.ts";
 
@@ -534,8 +534,11 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       // full clocks instead. (The cycle isn't touched: it only resets after 34 hours.)
       const rested = !!duty.offSince && Date.now() - Date.parse(duty.offSince) >= 10 * 3600_000;
       return {
-        driveLeftMin: rested ? 11 * 60 : durationMinutes(a.driving),
-        dutyLeftMin: rested ? 14 * 60 : durationMinutes(a.duty) ?? workdayLeftMin(logs ?? [], Date.now()),
+        // Counted from the duty log (driving since the last 10 hours off; the 14-hour window on the wall
+        // clock), because the availability call goes wrong when a driver is logged out or has just
+        // changed status. It is only the fallback when there are no logs.
+        driveLeftMin: rested ? 11 * 60 : driveLeftMin(logs ?? [], Date.now()) ?? durationMinutes(a.driving),
+        dutyLeftMin: rested ? 14 * 60 : workdayLeftMin(logs ?? [], Date.now()) ?? durationMinutes(a.duty),
         cycleLeftMin: durationMinutes(a.cycle),
         status: duty.status, statusSince: duty.since, offSince: duty.offSince,
         breakLeftMin: breakLeftMin(logs ?? [], Date.now()) ?? durationMinutes(a.rest),

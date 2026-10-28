@@ -69,3 +69,21 @@ test("non-driving stretch: starts when driving ends, counts on-duty, null while 
   const driving = [log("2026-10-23T08:00:00Z", "D")];
   assert.equal(nonDrivingSinceMs(driving, T), null);
 });
+
+import { driveLeftMin, workdayLeftMin as wl } from "./cycleRecap.ts";
+const row = (t: string, status: string) => ({ dateTime: t, status, eventType: 1 });
+test("driving time stops counting once the driver is on duty not driving", () => {
+  const now = Date.parse("2026-10-27T20:00:00Z");
+  const logs = [row("2026-10-27T10:00:00Z", "OFF"), row("2026-10-27T12:00:00Z", "D"), row("2026-10-27T15:00:00Z", "ON")];
+  assert.equal(driveLeftMin(logs, now), 11 * 60 - 180);
+});
+test("ten hours off resets the driving count", () => {
+  const now = Date.parse("2026-10-28T12:00:00Z");
+  const logs = [row("2026-10-27T12:00:00Z", "D"), row("2026-10-27T20:00:00Z", "OFF")];
+  assert.equal(driveLeftMin(logs, now), 11 * 60);
+});
+test("the 14-hour window keeps running while off duty (under 10 hours off)", () => {
+  const now = Date.parse("2026-10-27T20:00:00Z");
+  const logs = [row("2026-10-27T10:00:00Z", "ON"), row("2026-10-27T14:00:00Z", "OFF")];
+  assert.equal(wl(logs, now), 14 * 60 - 600);
+});

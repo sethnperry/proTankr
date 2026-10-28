@@ -1678,7 +1678,14 @@ export default function HomePage() {
         // Break: loading and pumping count toward it. While not driving it counts up to 30 min, then a
         // green check. Red if a new trip was begun before it finished.
         const restMin = myHos.nonDrivingSince ? Math.max(0, Math.floor((Date.now() - Date.parse(myHos.nonDrivingSince)) / 60000)) : null;
-        const breakCell = restMin != null && restMin >= BREAK_DONE_MIN
+        // Off duty: after about an hour the check mark becomes a count-up toward the 10 hours off that
+        // reset the driving and working clocks, and turns into a check again at 10:00.
+        const offMin = myHos.offSince ? Math.max(0, Math.floor((Date.now() - Date.parse(myHos.offSince)) / 60000)) : null;
+        const breakCell = offMin != null && offMin >= 600
+          ? { label: "Reset", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) }
+          : offMin != null && offMin >= 60
+          ? { label: "Off / 10:00", value: `${Math.floor(offMin / 60)}:${String(offMin % 60).padStart(2, "0")}`, color: "#fff", onClick: () => setRecapOpen(true) }
+          : restMin != null && restMin >= BREAK_DONE_MIN
           ? { label: "Break", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) }
           : restMin != null
           ? { label: "Break", value: `${restMin}m`, color: breakCountsRed ? "#f87171" : "#fff", onClick: () => setRecapOpen(true) }
