@@ -390,6 +390,8 @@ export function StartLoadSheet({
       suppliers={suppliers}
       current={v.supplier?.name ?? null}
       onAdd={onAddSupplier}
+      companyId={companyId}
+      terminalId={pickupTerminalId}
       terminalSupplierIds={pickupTerminalId ? terminalSupplierIds : undefined}
       terminalName={pickupLabel}
       onPick={(sp) => { setV((st) => ({ ...st, supplier: sp })); setSupplierOpen(false); }}

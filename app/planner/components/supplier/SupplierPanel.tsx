@@ -220,6 +220,8 @@ export function SupplierPanel({
         suppliers={suppliers}
         current={pickerCurrent}
         onAdd={onAddSupplier}
+        companyId={companyId}
+        terminalId={terminalId}
         terminalSupplierIds={terminalSupplierIds}
         terminalName={terminalName}
         excludeName={picker?.switchFrom?.from.name ?? null}

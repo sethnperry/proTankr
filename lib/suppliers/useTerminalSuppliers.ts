@@ -139,6 +139,12 @@ async function upsert(ids: Ids, patch: Record<string, unknown>): Promise<string 
   return error ? error.message : null;
 }
 
+/** Saves the account number(s) for a supplier here (company only). More than one: separate with commas. */
+export function saveSupplierAccount(ids: Ids, account: string): Promise<string | null> {
+  const a = account.trim();
+  return upsert(ids, { account_number: a || null, last_used_at: new Date().toISOString() });
+}
+
 /** Links a supplier to a terminal (it now shows first there). Keeps steps. */
 export function linkSupplierToTerminal(ids: Ids): Promise<string | null> {
   return upsert(ids, { last_used_at: new Date().toISOString() });

@@ -45,6 +45,9 @@ export type LoadingTripMode = {
   existingOdometer: number | null;
   suppliers: SupplierRow[];
   onAddSupplier: (name: string) => SupplierRow | null;
+  /** The pickup terminal, so the supplier list and a new supplier's account numbers are per terminal. */
+  supplierCompanyId?: string | null;
+  supplierTerminalId?: string | null;
   // Shipment numbers the telematics app logged for this stop (oldest first); prefill the BOL.
   geotabBols?: string[];
   // BOL numbers among `values` already on another load.

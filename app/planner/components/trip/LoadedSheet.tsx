@@ -65,8 +65,10 @@ const str = (n: number | null | undefined) => (n == null ? "" : String(n));
 
 export function LoadedSheet({
   open, pickup, compLoads, orders, settings, reasons, needsOdometer, productName,
-  signature, onSaveSignature, suppliers, onAddSupplier, checkBols, onSubmit, onClose, geotabBols,
+  signature, onSaveSignature, suppliers, onAddSupplier, checkBols, onSubmit, onClose, geotabBols, companyId, terminalId,
 }: {
+  companyId?: string | null;
+  terminalId?: string | null;
   // Shipment numbers the telematics app logged for this stop; fill an empty BOL.
   geotabBols?: string[];
   open: boolean;
@@ -300,6 +302,8 @@ export function LoadedSheet({
         suppliers={suppliers}
         current={supplier || null}
         onAdd={onAddSupplier}
+        companyId={companyId}
+        terminalId={terminalId}
         onPick={(p) => { setSupplier(p.name); setSupplierId(p.supplier_id); setPickingSupplier(false); }}
         onClose={() => setPickingSupplier(false)}
       />

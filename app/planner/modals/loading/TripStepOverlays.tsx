@@ -45,6 +45,8 @@ export function TripStepOverlays({ m }: { m: LoadingModel }) {
           suppliers={trip.suppliers}
           current={seqSupplier || null}
           onAdd={trip.onAddSupplier}
+          companyId={trip.supplierCompanyId}
+          terminalId={trip.supplierTerminalId}
           onPick={(p) => {
             setSeqSupplier(p.name);
             setSeqSupplierId(p.supplier_id);

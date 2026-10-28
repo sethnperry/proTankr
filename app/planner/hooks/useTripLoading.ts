@@ -136,6 +136,8 @@ export function useTripLoading(a: Args) {
       existingOdometer: tripPickup.odometer,
       suppliers: tripSuppliers,
       onAddSupplier: addTripSupplier,
+      supplierCompanyId: shell.companyId ?? null,
+      supplierTerminalId: tripPickup.terminal_id ? String(tripPickup.terminal_id) : null,
       checkBols: (values) => bolConflicts(trips, allComps, shell.companyId!, values, mine),
       signature: tripSignature.svg,
       onSaveSignature: tripSignature.save,

@@ -2373,6 +2373,8 @@ export default function HomePage() {
           onSaveSignature={signature.save}
           suppliers={suppliers}
           onAddSupplier={addSupplier}
+          companyId={companyId}
+          terminalId={loadedPickup.terminal_id ? String(loadedPickup.terminal_id) : null}
           checkBols={(values, exclude) => bolConflicts(
             trips,
             Object.values(state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[],
