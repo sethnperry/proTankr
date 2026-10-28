@@ -12,21 +12,10 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { CompartmentStrip } from "./trip/CompartmentStrip";
-import { stripSegments, type StripSeg } from "@/lib/equipment/trailerStrip";
+import { segsFor, type StripSeg } from "@/lib/equipment/trailerStrip";
 
+export { segsFor };
 export type { StripSeg };
-
-/** Compartment segments from a trailer's sizes plus what is in each compartment right now. */
-export function segsFor(
-  sizes: { comp: number; size: number | null }[] | undefined,
-  loaded: Record<number, string | null | undefined>,
-  residue: Record<number, string> = {},
-): StripSeg[] {
-  const comps = sizes && sizes.length ? sizes : Object.keys(loaded).map((n) => ({ comp: Number(n), size: null }));
-  const now: Record<number, string> = {};
-  for (const [n, c] of Object.entries(loaded)) if (c) now[Number(n)] = c;
-  return stripSegments(comps, now, residue);
-}
 
 export function SideView({ segs, height = 10, gap = 3 }: { segs: StripSeg[]; height?: number; gap?: number }) {
   if (!segs.length) return null;

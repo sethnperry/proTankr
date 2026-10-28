@@ -29,3 +29,15 @@ export function residueStands(lastLoadAt: string | null, lastWashAt: string | nu
   if (!lastWashAt) return true;
   return Date.parse(lastWashAt) <= Date.parse(lastLoadAt);
 }
+
+/** Compartment segments from a trailer's sizes plus what is in each compartment right now. */
+export function segsFor(
+  sizes: { comp: number; size: number | null }[] | undefined,
+  loaded: Record<number, string | null | undefined>,
+  residue: Record<number, string> = {},
+): StripSeg[] {
+  const comps = sizes && sizes.length ? sizes : Object.keys(loaded).map((n) => ({ comp: Number(n), size: null }));
+  const now: Record<number, string> = {};
+  for (const [n, c] of Object.entries(loaded)) if (c) now[Number(n)] = c;
+  return stripSegments(comps, now, residue);
+}

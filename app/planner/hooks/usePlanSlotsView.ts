@@ -7,7 +7,7 @@
 // logic. Lifted out of PlannerHost unchanged.
 
 import { useRouter } from "next/navigation";
-import { segsFor, type StripSeg } from "../components/TrailerViews";
+import { segsFor, type StripSeg } from "@/lib/equipment/trailerStrip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
