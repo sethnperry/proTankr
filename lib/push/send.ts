@@ -8,7 +8,12 @@ import webpush from "web-push";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 
 export type StoredSub = { endpoint: string; p256dh: string; auth: string };
-export type PushPayload = { title: string; body: string; url: string; tag: string };
+export type PushPayload = {
+  title: string; body: string; url: string; tag: string;
+  /** Buttons on the notification. With answerId, tapping one records the answer without opening the app. */
+  actions?: { action: string; title: string }[];
+  answerId?: string;
+};
 
 let configured = false;
 function configure(): boolean {

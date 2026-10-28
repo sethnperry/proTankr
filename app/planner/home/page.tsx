@@ -27,6 +27,7 @@ import { DelayButton } from "../components/trip/DelayButton";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
+import { useStopAnswers } from "@/lib/trips/useStopAnswers";
 import { dropFuelStops, STOP_GRACE_MS } from "@/lib/push/stopAlertCore";
 import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stopPrompt";
 import {
@@ -1191,6 +1192,7 @@ export default function HomePage() {
 
   // Duty-log stops: the ELD's own time for "stopped driving", asked about once we can see it.
   const [handledStops, setHandledStops] = useState<Set<string>>(new Set());
+  const { answers: stopAnswers, markApplied: markAnswerApplied } = useStopAnswers(userId);
   useEffect(() => { if (userId) setHandledStops(readHandledStops(userId)); }, [userId]);
   const [stopClock, setStopClock] = useState(() => Date.now());
   useEffect(() => { const t = window.setInterval(() => setStopClock(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
@@ -1202,10 +1204,18 @@ export default function HomePage() {
       .filter(Boolean).map((t) => Date.parse(t as string));
     // Not while another clock is running (fueling, a delay), and only once the stop is a few minutes old.
     if (fuel.active || runningDelay) return null;
+    const afterMs = Math.max(0, ...stamps);
+    // An answer tapped on the notification comes first, oldest first, on the stop's own time.
+    const queued = stopAnswers.find((a) => Date.parse(a.stop_at) > afterMs && (a.kind === "hop") === !!hopPickup);
+    if (queued) {
+      const real = (myHos?.stops ?? []).find((x) => Math.abs(Date.parse(x.at) - Date.parse(queued.stop_at)) < 60_000);
+      return { at: real?.at ?? new Date(queued.stop_at).toISOString(), code: real?.code ?? "ON", resumedAt: real?.resumedAt ?? null, answerId: queued.id, answer: queued.answer };
+    }
     const aged = (myHos?.stops ?? []).filter((x) => stopClock - Date.parse(x.at) >= STOP_GRACE_MS);
-    return pendingStop(aged, { afterMs: Math.max(0, ...stamps), handled: handledStops });
+    const p = pendingStop(aged, { afterMs, handled: handledStops });
+    return p ? { ...p, answerId: undefined as string | undefined, answer: undefined as "arrived" | "delay" | "yes" | "no" | undefined } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuel.active, runningDelay, stopClock]);
+  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuel.active, runningDelay, stopClock, stopAnswers]);
   // A stop made while fueling was the fuel stop, not an arrival: it is never asked about afterwards.
   useEffect(() => {
     if (!fuel.active || !userId) return;
@@ -1240,7 +1250,12 @@ export default function HomePage() {
   }, [userId, equipment.selectedComboId]);
   const sigDelivery = step.kind === "finish_delivery" && step.delivery.arrived_at ? step.delivery : null;
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
-  const answerStop = (at: string) => { if (userId) markStopHandled(userId, at); setHandledStops((s) => new Set(s).add(at)); };
+  const answerStop = (at: string) => {
+    if (userId) markStopHandled(userId, at);
+    setHandledStops((s) => new Set(s).add(at));
+    const row = stopAnswers.find((a) => Math.abs(Date.parse(a.stop_at) - Date.parse(at)) < 60_000);
+    if (row) void markAnswerApplied(row.id);
+  };
   const logDutyDelay = (code: string, note: string | null) => {
     if (!store || !userId || !openTrip || !dutyStop || !delayLeg) return;
     const d: RunningDelay = {
@@ -1946,7 +1961,7 @@ export default function HomePage() {
       {dutyStop && !arrival.suggest && (stopName || hopPickup) && delayLeg && (
         <DutyStopCard stop={dutyStop} targetName={stopName ?? "the stop"} leg={delayLeg}
           hop={hopPickup ? { rackName: hopPickup.name ?? "the rack" } : null}
-          onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
+          preset={dutyStop.answer} onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
       <div style={{ marginTop: 4, marginBottom: 14 }}>

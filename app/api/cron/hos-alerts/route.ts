@@ -119,7 +119,7 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
   const fuelRows = driverIds.length
     ? ((await admin.from("fuel_purchases").select("driver_id, started_at, completed_at").in("driver_id", driverIds).gte("started_at", new Date(Date.now() - 36 * 3600_000).toISOString())).data ?? []) as { driver_id: string; started_at: string; completed_at: string | null }[]
     : [];
-  const stopNotices: { userId: string; title: string; body: string; at: string }[] = [];
+  const stopNotices: { userId: string; title: string; body: string; at: string; kind: "arrive" | "hop"; place: string; tripId: string | null }[] = [];
   for (const u of driverIds) {
     const trip = trips.find((t) => t.driver_id === u);
     const stops = dropFuelStops(stopsOf.get(u) ?? [], fuelRows.filter((f) => f.driver_id === u));
@@ -131,13 +131,21 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
       pickups: ((trip.trip_pickups ?? []) as any[]).map((k) => ({ seq: k.seq, arrived_at: k.arrived_at, left_at: k.left_at, outcome: k.outcome, name: k.name })),
       deliveries: ((trip.trip_deliveries ?? []) as any[]).map((d) => ({ seq: d.seq, arrived_at: d.arrived_at, left_at: d.left_at, status: d.status, name: d.location_id ? locName.get(String(d.location_id)) ?? null : null })),
     }, stops, pr?.last_stop_at ? Date.parse(pr.last_stop_at) : 0, (firstTerm && termTz.get(String(firstTerm))) || undefined);
-    if (n) stopNotices.push({ userId: u, title: n.title, body: n.body, at: n.at });
+    if (n) stopNotices.push({ userId: u, title: n.title, body: n.body, at: n.at, kind: n.kind, place: n.place, tripId: (trip.trip_id as string | undefined) ?? null });
   }
   if (stopNotices.length) {
     const { data: ss } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth, user_id").eq("company_id", companyId).in("user_id", stopNotices.map((x) => x.userId));
     for (const r of (ss ?? []) as (StoredSub & { user_id: string })[]) stopSubs.set(r.user_id, [...(stopSubs.get(r.user_id) ?? []), r]);
     for (const n of stopNotices) {
-      sent += await sendPush(stopSubs.get(n.userId) ?? [], { title: n.title, body: n.body, url: "/planner/home", tag: `stop-${n.userId}` });
+      // One answer row per stop; the notification's Yes / No (Arrived / Delay) buttons fill it in.
+      const { data: ans } = await admin.from("stop_answers")
+        .upsert({ company_id: companyId, user_id: n.userId, trip_id: n.tripId, stop_at: n.at, kind: n.kind, place_name: n.place }, { onConflict: "user_id,stop_at", ignoreDuplicates: true })
+        .select("id").maybeSingle();
+      const answerId = (ans as { id?: string } | null)?.id;
+      sent += await sendPush(stopSubs.get(n.userId) ?? [], {
+        title: n.title, body: n.body, url: "/planner/home", tag: `stop-${answerId ?? n.userId}`,
+        ...(answerId ? { answerId, actions: n.kind === "arrive" ? [{ action: "arrived", title: "Arrived" }, { action: "delay", title: "Delay" }] : [{ action: "yes", title: "Yes" }, { action: "no", title: "No" }] } : {}),
+      });
       stopState.push({ company_id: companyId, user_id: n.userId, last_stop_at: n.at, updated_at: new Date().toISOString() });
     }
     await admin.from("hos_alert_state").upsert(stopState, { onConflict: "company_id,user_id" });

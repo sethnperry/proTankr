@@ -4,7 +4,7 @@
 // next load, cache-first for content-hashed build assets, network-first for
 // API/Supabase/auth.
 
-const CACHE_NAME = "protankr-v4"; // bump this to force-invalidate stale caches on the next deploy
+const CACHE_NAME = "protankr-v5"; // bump this to force-invalidate stale caches on the next deploy
 
 const STATIC_ASSETS = [
   "/manifest.json",
@@ -133,13 +133,24 @@ self.addEventListener("push", (event) => {
       tag: d.tag || "protankr",
       icon: "/icons/icon-192.png",
       badge: "/icons/badge-96.png",
-      data: { url: d.url || "/planner/home" },
+      // Buttons on the notification (Arrived / Delay, Yes / No) answer without opening the app.
+      actions: Array.isArray(d.actions) ? d.actions.slice(0, 2) : [],
+      data: { url: d.url || "/planner/home", answerId: d.answerId || null },
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const answerId = event.notification.data && event.notification.data.answerId;
+  if (event.action && answerId) {
+    // A button: record the answer and stay out of the app. The dashboard applies it later.
+    event.waitUntil(
+      fetch("/api/push/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: answerId, answer: event.action }) })
+        .catch(() => {})
+    );
+    return;
+  }
   const url = (event.notification.data && event.notification.data.url) || "/planner/home";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {

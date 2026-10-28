@@ -5,7 +5,7 @@
 // timestamp, so nothing is typed and a stop in a dead zone still gets its real
 // time once the truck's logs reach us.
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { DELAY_REASONS, LEG_LABEL, OTHER_CODE, type DelayLeg } from "@/lib/trips/delays";
 import { DUTY_NAME } from "@/lib/trips/stopPrompt";
 import { OTHER_NO_LOAD_REASONS, TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
@@ -13,21 +13,31 @@ import { LOOK } from "./dashLook";
 
 const hm = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export function DutyStopCard({ stop, targetName, leg, hop, products = [], onArrived, onHop, onDelay, onDismiss }: {
+export function DutyStopCard({ stop, targetName, leg, hop, products = [], onArrived, onHop, onDelay, onDismiss, preset }: {
   stop: { at: string; code: string; resumedAt: string | null }; targetName: string; leg: DelayLeg;
   /** Set when the driver was at a rack and has driven elsewhere: the rack they left. */
   hop?: { rackName: string } | null;
   /** Products on the plan, for a product-specific report (out of product / allocation). */
   products?: { productId: string; name: string }[];
+  /** Answer already tapped on the notification: applied here, and only the reason is asked. */
+  preset?: "arrived" | "delay" | "yes" | "no";
   onArrived: () => void; onHop?: (reason: string, productIds: string[]) => void; onDelay: (code: string, note: string | null) => void; onDismiss: () => void;
 }) {
-  const [picking, setPicking] = useState(false);
-  const [why, setWhy] = useState(false);
+  const [picking, setPicking] = useState(preset === "delay");
+  const [why, setWhy] = useState(preset === "no" && !!hop);
+  const applied = useRef(false);
+  useEffect(() => {
+    if (applied.current) return;
+    if (preset === "arrived") { applied.current = true; onArrived(); }
+    else if (preset === "yes") { applied.current = true; onDismiss(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset]);
   const [scoped, setScoped] = useState<string | null>(null); // a product-specific reason waiting on which products
   const [sel, setSel] = useState<Set<string>>(new Set());
   const btn: React.CSSProperties = { padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 };
   return (
     <div style={{ ...LOOK.primary, padding: 14, marginBottom: 10, borderColor: "rgba(147,197,253,0.5)" }}>
+      {preset && <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "rgba(147,197,253,0.9)", marginBottom: 4 }}>You answered from the notification</div>}
       <div style={{ fontSize: 14, fontWeight: 800 }}>{hop ? `You stopped driving at ${hm(stop.at)}` : `Did you arrive at ${targetName}?`}</div>
       <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
         Your log changed to {DUTY_NAME[stop.code] ?? stop.code}{stop.resumedAt ? ` and you were driving again at ${hm(stop.resumedAt)}` : ""}. {hop ? `You left ${hop.rackName}. Another rack, or a delay?` : `Your truck stopped at ${hm(stop.at)}.`}
