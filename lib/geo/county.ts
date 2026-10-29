@@ -4,7 +4,7 @@
 // adding a location may not be at the site, so the address (or the city) decides.
 //
 //   street address on file -> Census address geocoder, then OpenStreetMap's Nominatim
-//   otherwise (or if both fail) -> the city's center point -> the FCC's Census area lookup
+//   otherwise (or if both fail) -> the zip code's area (zip + city + state) -> the city's center point (FCC area lookup)
 //
 // Returns the name as given ("Hillsborough County", "Kings County"), or null.
 
@@ -52,12 +52,33 @@ async function nominatim(q: string): Promise<string | null> {
   }
 }
 
+/** Structured lookup by zip (+ city, state): the zip's own area, closer than the whole city's center. */
+async function nominatimZip(city: string, state: string, zip: string): Promise<string | null> {
+  try {
+    const q = new URLSearchParams({ postalcode: zip.slice(0, 5), country: "us", format: "json", addressdetails: "1", limit: "1" });
+    if (city) q.set("city", city);
+    if (state) q.set("state", state);
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?${q}`, { cache: "no-store", headers: { "User-Agent": UA }, signal: AbortSignal.timeout(7000) });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { address?: { county?: unknown } }[];
+    const n = j[0]?.address?.county;
+    return typeof n === "string" && n.trim() ? n.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export type PlaceInput = { address?: string | null; city?: string | null; state?: string | null; zip?: string | null };
 
 export async function countyForPlace(p: PlaceInput, cityCenter?: { lat: number; lon: number } | null): Promise<string | null> {
   const street = t(p.address), city = t(p.city), state = t(p.state), zip = t(p.zip);
   if (street && city && state) {
     const c = (await censusAddress(street, city, state, zip)) ?? (await nominatim(`${street}, ${city}, ${state}${zip ? ` ${zip}` : ""}`));
+    if (c) return c;
+  }
+  // No street address (or it wasn't found): the zip breaks the tie for a city that spans counties.
+  if (zip && /^\d{5}/.test(zip)) {
+    const c = await nominatimZip(city, state, zip);
     if (c) return c;
   }
   if (cityCenter) {
