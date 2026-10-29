@@ -815,6 +815,13 @@ export default function HomePage() {
   }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
   const tapFuel = async () => {
+    // Starting a fuel stop answers "did you arrive?": that stop was the fuel stop, so it is never asked about again.
+    if (!fuel.active && userId) {
+      const ats = [...(myHos?.stops ?? []).map((x) => x.at), ...(dutyStop ? [dutyStop.at] : [])];
+      for (const at of ats) markStopHandled(userId, at);
+      setHandledStops((c) => new Set([...c, ...ats]));
+      if (dutyStop?.answerId) markAnswerApplied(dutyStop.answerId);
+    }
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
     setFuelOpen(true);
   };
