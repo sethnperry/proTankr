@@ -7,7 +7,6 @@ import React from "react";
 import type { ReportLine } from "../../hooks/useLoadWorkflow";
 import { type StepTimes } from "@/lib/trips/tripFlow";
 import type { SupplierRow } from "@/lib/trips/types";
-import type { RunningDelay } from "@/lib/trips/delays";
 import type { DelayReason, TripSettings } from "@/lib/trips/useTripData";
 
 // ── Trip mode (2026-10-11) ─────────────────────────────────────────────────
@@ -60,13 +59,6 @@ export type LoadingTripMode = {
     number,
     { bol: string | null; supplier: string | null; supplierId: string | null; net: number | null; netTouched: boolean }
   >;
-  // Waiting at the rack: a Delay (timer, may warn other drivers) and Begin Loading (stamps the begin time).
-  rackWait?: {
-    beganAt: string | null;
-    delay: RunningDelay | null;
-    onStartDelay: (code: string, note: string | null) => void;
-    onBegin: () => void;
-  };
   onArrivedAtDelivery: () => void;
   onBackToDashboard?: () => void;
 };

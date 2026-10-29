@@ -24,7 +24,6 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
-import { LoadingClock } from "../components/trip/LoadingClock";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
@@ -32,7 +31,7 @@ import { useStopAnswers } from "@/lib/trips/useStopAnswers";
 import { dropFuelStops, STOP_GRACE_MS } from "@/lib/push/stopAlertCore";
 import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stopPrompt";
 import {
-  DELAY_EVENT, delayEventPayload, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
+  DELAY_EVENT, delayEventPayload, delayIssueCode, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
   dropDelayMinutes, type RunningDelay,
 } from "@/lib/trips/delays";
 import { newId } from "@/lib/trips/tripStore";
@@ -266,6 +265,15 @@ export default function HomePage() {
     };
     writeRunningDelay(userId, d);
     setRunningDelay(d);
+    // Long line / rack down / terminal issue at the rack also warn other drivers heading there.
+    const issue = delayIssueCode(code);
+    const pk = "pickup" in step ? step.pickup : null;
+    if (issue && delayLeg === "at_rack" && pk?.terminal_id && companyId) {
+      void submitOutageReport({
+        terminalId: String(pk.terminal_id), selectedRackId: pk.rack_id ?? null, productIds: [], reportType: issue,
+        companyId, userId, truckLabel: equipment.currentTruckName ?? "",
+      }).then((r) => { if (r.error) console.warn("[trips] rack delay report failed (non-fatal):", r.error); });
+    }
   };
   const tripDelays = useMemo(
     () => (store && openTrip ? loggedDelays(store.list("trip_events", (e) => e.trip_id === openTrip.trip_id)) : []),
@@ -1331,6 +1339,7 @@ export default function HomePage() {
         });
         break;
       case "planner":
+        endDelay();
         setOpeningPlanner(true);
         // Plan Review opens right over this screen (the Planner host stays
         // mounted in the layout). If there is no plan, or it can't start, the
@@ -2028,10 +2037,6 @@ export default function HomePage() {
           {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
         </button>
       )}
-      {openTrip && snap && (() => {
-        const lp = snap.pickups.find((p) => p.begin_at && !p.left_at && !p.outcome);
-        return lp ? <LoadingClock since={lp.begin_at as string} /> : null;
-      })()}
       {delayLeg && !openingPlanner && (
         <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />
       )}
