@@ -280,7 +280,7 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
               loadingOffset(trip.settings),
               trip.arrivedAt,
               trip.beganAt,
-              trip.departedAt ?? null,
+              null, // not the truck-position departure: the truck can move within the rack before loading is done
             ),
         );
         setTripReasonId(trip.existingDelayReasonId);
