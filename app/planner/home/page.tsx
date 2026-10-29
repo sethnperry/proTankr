@@ -24,6 +24,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { LoadingClock } from "../components/trip/LoadingClock";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
@@ -2027,6 +2028,10 @@ export default function HomePage() {
           {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
         </button>
       )}
+      {openTrip && snap && (() => {
+        const lp = snap.pickups.find((p) => p.begin_at && !p.left_at && !p.outcome);
+        return lp ? <LoadingClock since={lp.begin_at as string} /> : null;
+      })()}
       {delayLeg && !openingPlanner && (
         <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />
       )}
