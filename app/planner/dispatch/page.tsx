@@ -960,9 +960,9 @@ export default function DispatchPage() {
         drivers={mode === "plan" ? undefined : driverListEl}
         tools={dashTools}
       />
-      <LocationPicker browse open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
+      <LocationPicker open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
-        onToggleStar={locList.toggleStar} onLocationAdded={locList.reload}
+        onLocationAdded={locList.reload}
         onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />
       <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} rows={allocRows} />
       {companyId && authUserId && (

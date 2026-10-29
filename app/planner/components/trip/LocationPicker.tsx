@@ -1,117 +1,88 @@
 "use client";
 // app/planner/components/trip/LocationPicker.tsx
 //
-// Delivery location picker. Laid out like the terminal picker
-// (MyTerminalsModal): the city at the top with Change, then one card per
-// location. Starred locations in that city come first (store number, then
-// name); "Show N more" reveals the rest of the city. Change opens a city list
-// with a search that also finds locations directly. A place that isn't saved
-// yet is added as a real location ("+ New location"), never a one-off.
+// The one delivery-location list. Used to pick a delivery (the left three quarters of a card selects it)
+// and, with no onPick (the Delivery Locations page), to manage them (the whole card opens it). The right
+// quarter of every card opens the editor. "Showing Tampa, FL · Change" narrows State > County > City,
+// the search box finds a store by number, name or city anywhere, and "+ New location" adds one.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AreaChooser } from "./AreaChooser";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { CustomSelect } from "@/lib/ui/CustomSelect";
 import {
-  browseLocations,
-  browseOptions,
+  byNumberThenName,
   defaultLocationCity,
   filterLocations,
-  locationCities,
-  locationsInCity,
   locationTitle,
   type DeliveryLocation,
   type LatLon,
   type LocationTank,
 } from "@/lib/trips/deliveryLocations";
+import { areaLabel, inArea, type AreaPick } from "@/lib/trips/areaTree";
 import type { DeliveryDestination } from "@/lib/trips/tripFlow";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { dashedBtn, fieldInput, linkBtn, muted } from "./tripUi";
 import { LocationEditor } from "./LocationEditor";
 
-export function LocationPicker({
-  open, title, origin, locations, tanks = [], companyId, userId, onToggleStar, onPick, onClose, onManage, onLocationAdded,
-  selectedLocationId = null, browse = false,
+const PAGE = 60;
+
+export function LocationBrowser({
+  origin = null, locations, tanks = [], companyId, userId, onPick, onChanged, selectedLocationId = null,
 }: {
-  open: boolean;
-  title: string;
-  origin: LatLon | null;
+  origin?: LatLon | null;
   locations: DeliveryLocation[];
-  onToggleStar: (locationId: string, star: boolean) => void;
-  onPick: (to: DeliveryDestination) => void;
-  onClose: () => void;
-  onManage?: () => void;
   tanks?: LocationTank[];
   companyId: string | null;
   userId: string | null;
-  // Called after "+ New location" saves, so the caller can reload its list.
-  onLocationAdded?: () => void;
-  // Highlighted, and its city is where the picker opens.
+  /** Select a delivery. Without it (the manage page) the whole card opens the editor. */
+  onPick?: (to: DeliveryDestination) => void;
+  /** After a location is added, edited or retired, so the caller can reload its list. */
+  onChanged?: () => void;
   selectedLocationId?: string | null;
-  // Dispatch: browse the whole list by region / local area / city, favorites on top, search at the top.
-  browse?: boolean;
 }) {
-  const [cityKey, setCityKey] = useState<string | null>(null);
-  const [choosingCity, setChoosingCity] = useState(false);
+  const [area, setArea] = useState<AreaPick | null>(null);
   const [areaOpen, setAreaOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [myStores, setMyStores] = useState(false);
+  const [limit, setLimit] = useState(PAGE);
+  // undefined = the list; null = a new location; a row = editing it.
+  const [editing, setEditing] = useState<DeliveryLocation | null | undefined>(undefined);
   const { data: products } = useProductsCatalog();
-  const [bRegion, setBRegion] = useState("");
-  const [bArea, setBArea] = useState("");
-  const [bCity, setBCity] = useState("");
-  const [bLimit, setBLimit] = useState(60);
 
-  // Each open starts on the list, in the selected location's city.
+  // Open on the selected delivery's city, else the one nearest the pickup, else the first.
   useEffect(() => {
-    if (!open) return;
-    setAdding(false);
-    setChoosingCity(false);
-    setShowAll(false);
-    setQuery("");
-    setMyStores(false);
-    setBRegion(""); setBArea(""); setBCity(""); setBLimit(60);
-    setCityKey(defaultLocationCity(locations, { selectedId: selectedLocationId, origin }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    if (area || locations.length === 0) return;
+    const key = defaultLocationCity(locations, { selectedId: selectedLocationId, origin });
+    const l = key ? locations.find((x) => `${(x.city ?? "").trim().toLowerCase()}|${(x.state ?? "").trim().toUpperCase()}` === key) : null;
+    setArea(l ? { state: (l.state ?? "").trim().toUpperCase(), county: "", city: (l.city ?? "").trim() } : { state: "", county: "", city: "" });
+  }, [area, locations, selectedLocationId, origin]);
 
-  // A brand-new list (first load) with no city picked yet.
-  useEffect(() => {
-    if (open && !cityKey && locations.length) setCityKey(defaultLocationCity(locations, { selectedId: selectedLocationId, origin }));
-  }, [open, cityKey, locations, selectedLocationId, origin]);
+  const searching = !!query.trim();
+  const list = useMemo(() => {
+    const base = searching ? filterLocations(locations, { origin: null, nearMe: false, query }) : inArea(locations, area ?? { state: "", county: "", city: "" });
+    return [...base].sort(byNumberThenName);
+  }, [locations, area, query, searching]);
 
-  const pick = (l: DeliveryLocation) => onPick({ locationId: l.location_id, oneOffName: null, deliveryType: l.delivery_type });
+  const pick = (l: DeliveryLocation) => onPick?.({ locationId: l.location_id, oneOffName: null, deliveryType: l.delivery_type });
+  const done = () => { onChanged?.(); setEditing(undefined); };
 
-  const cities = useMemo(() => locationCities(locations), [locations]);
-  const city = cities.find((c) => c.key === cityKey) ?? null;
-  const groups = useMemo(() => (cityKey ? locationsInCity(locations, cityKey) : { starred: [], others: [] }), [locations, cityKey]);
-  const matches = useMemo(
-    () => (query.trim() ? filterLocations(locations, { origin: null, nearMe: false, query }) : []),
-    [locations, query],
-  );
-  const bOpts = useMemo(() => browseOptions(locations, { region: bRegion, area: bArea }), [locations, bRegion, bArea]);
-  const bList = useMemo(() => browseLocations(locations, { region: bRegion, area: bArea, cityKey: bCity, query }), [locations, bRegion, bArea, bCity, query]);
-  const cityLabel = (c: { city: string; state: string } | null) =>
-    c ? (c.city ? [c.city, c.state].filter(Boolean).join(", ") : "No city") : "";
-
-  if (adding && companyId && userId) {
+  if (editing !== undefined && companyId && userId) {
     return (
-      <FullscreenModal open={open} title="New location" onClose={() => setAdding(false)} footer={null}>
-        <button type="button" onClick={() => setAdding(false)} style={{ ...linkBtn, marginBottom: 12 }}>‹ Back to list</button>
+      <>
+        <button type="button" onClick={() => setEditing(undefined)} style={{ ...linkBtn, marginBottom: 12 }}>‹ Back to list</button>
         <LocationEditor
+          key={editing?.location_id ?? "new"}
           companyId={companyId}
           userId={userId}
-          location={null}
+          location={editing}
           tanks={tanks}
           existing={locations}
           products={products}
-          seedName={query.trim()}
-          onSaved={(l) => { onLocationAdded?.(); pick(l); }}
-          onUseExisting={pick}
+          seedName={editing ? "" : query.trim()}
+          onSaved={(l) => { onChanged?.(); if (!editing && onPick) pick(l); else setEditing(undefined); }}
+          onUseExisting={(l) => (onPick && !editing ? pick(l) : setEditing(l))}
+          onRetired={done}
         />
-      </FullscreenModal>
+      </>
     );
   }
 
@@ -119,175 +90,85 @@ export function LocationPicker({
     const active = l.location_id === selectedLocationId;
     return (
       <div key={l.location_id} style={{
-        display: "flex", alignItems: "center", borderRadius: 2, overflow: "hidden",
+        display: "flex", alignItems: "stretch", borderRadius: 2, overflow: "hidden",
         border: `1px solid ${active ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.10)"}`,
         background: active ? "rgba(255,255,255,0.05)" : "transparent",
       }}>
-        <button type="button" aria-label={l.starred ? "Unstar" : "Star"}
-          onClick={() => onToggleStar(l.location_id, !l.starred)}
-          style={{ flexShrink: 0, width: 26, height: 26, marginLeft: 12, padding: 0, border: "none", background: "transparent",
-            color: l.starred ? "#fbbf24" : "rgba(255,255,255,0.3)", fontSize: 20, lineHeight: "26px", cursor: "pointer" }}>
-          {l.starred ? "★" : "☆"}
-        </button>
-        <button type="button" onClick={() => pick(l)}
-          style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", color: "#fff", padding: "8px 12px", cursor: "pointer" }}>
+        <button type="button" onClick={() => (onPick ? pick(l) : setEditing(l))}
+          style={{ flex: 3, minWidth: 0, textAlign: "left", border: "none", background: "transparent", color: "#fff", padding: "10px 12px", cursor: "pointer" }}>
           <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locationTitle(l)}</div>
           <div style={{ marginTop: 4, fontSize: 12, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {[l.address, l.delivery_type === "pump_off" ? "Pump off" : "Drop"].filter(Boolean).join(" · ")}
+            {[searching ? [l.city, l.state].filter(Boolean).join(", ") : null, l.address, l.delivery_type === "pump_off" ? "Pump off" : "Drop"].filter(Boolean).join(" · ")}
           </div>
+        </button>
+        <button type="button" aria-label={`Edit ${locationTitle(l)}`} onClick={() => setEditing(l)}
+          style={{ flex: 1, minWidth: 0, border: "none", borderLeft: "1px solid rgba(255,255,255,0.10)", background: "transparent", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          Edit ›
         </button>
       </div>
     );
   };
 
-  const footer = (
-    <>
-      {companyId && userId && (
-        <button type="button" onClick={() => setAdding(true)} style={{ ...dashedBtn, marginTop: 14 }}>
-          + New location{query.trim() ? ` “${query.trim()}”` : ""}
-        </button>
-      )}
-      {onManage && (
-        <div style={{ textAlign: "center", marginTop: 14 }}>
-          <button type="button" onClick={onManage} style={linkBtn}>Manage saved locations ›</button>
-        </div>
-      )}
-    </>
-  );
-
-  if (browse) {
-    const sel = (value: string, onChange: (v: string) => void, all: string, opts: { value: string; label: string }[]) => (
-      <div style={{ flex: "1 1 130px", minWidth: 0 }}><CustomSelect value={value} onChange={onChange} options={[{ value: "", label: all }, ...opts]} /></div>
-    );
-    const shownOthers = bList.others.slice(0, bLimit);
-    const searching = !!query.trim();
-    return (
-      <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search store number, name or city" autoFocus
-          style={{ ...fieldInput, marginBottom: 10 }} />
-        {!searching && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            {bOpts.regions.length > 0 && sel(bRegion, (v) => { setBRegion(v); setBArea(""); setBCity(""); setBLimit(60); }, "All regions", bOpts.regions.map((r) => ({ value: r, label: r })))}
-            {bOpts.areas.length > 0 && sel(bArea, (v) => { setBArea(v); setBCity(""); setBLimit(60); }, "All local areas", bOpts.areas.map((r) => ({ value: r, label: r })))}
-            {sel(bCity, (v) => { setBCity(v); setBLimit(60); }, "All cities", bOpts.cities.map((c) => ({ value: c.key, label: `${cityLabel(c)} (${c.count})` })))}
-          </div>
-        )}
-        {bList.starred.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>Favorites</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>{bList.starred.map((l) => card(l))}</div>
-          </>
-        )}
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: muted, margin: "4px 0 6px" }}>
-          {searching ? "Matches" : "Locations"} · {bList.others.length.toLocaleString()}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {bList.others.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "8px 0" }}>{searching ? "No matches." : "No locations here."}</div>}
-          {shownOthers.map((l) => card(l))}
-        </div>
-        {bList.others.length > bLimit && (
-          <button type="button" onClick={() => setBLimit((n) => n + 60)}
-            style={{ width: "100%", marginTop: 10, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            Show {Math.min(60, bList.others.length - bLimit)} more ▼
-          </button>
-        )}
-        {footer}
-      </FullscreenModal>
-    );
-  }
-
-  // City list (Change), with a search that finds locations in any city.
-  if (choosingCity || (!city && locations.length > 0)) {
-    return (
-      <FullscreenModal open={open} title="Choose a city" onClose={onClose} footer={null}>
-        {city && (
-          <button type="button" onClick={() => { setChoosingCity(false); setQuery(""); }} style={{ ...linkBtn, marginBottom: 12 }}>‹ Back to {cityLabel(city)}</button>
-        )}
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search number, name or city"
-          style={{ ...fieldInput, marginBottom: 10 }} />
-        {query.trim() ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {matches.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "12px 0" }}>No matches.</div>}
-            {matches.map((l) => card(l))}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {cities.map((c) => (
-              <button key={c.key} type="button"
-                onClick={() => { setCityKey(c.key); setChoosingCity(false); setShowAll(false); }}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px", borderRadius: 2, cursor: "pointer", textAlign: "left",
-                  border: `1px solid ${c.key === cityKey ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.10)"}`,
-                  background: c.key === cityKey ? "rgba(255,255,255,0.05)" : "transparent", color: "#fff" }}>
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{cityLabel(c)}</span>
-                <span style={{ fontSize: 12, color: muted }}>{c.count} location{c.count === 1 ? "" : "s"}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {footer}
-      </FullscreenModal>
-    );
-  }
-
-  // My Stores: every starred location, by city then store number.
-  const starredAll = myStores
-    ? locations.filter((l) => l.starred).sort((a, b) =>
-        `${a.state ?? ""} ${a.city ?? ""}`.localeCompare(`${b.state ?? ""} ${b.city ?? ""}`)
-        || String(a.location_number ?? "").localeCompare(String(b.location_number ?? ""), undefined, { numeric: true })
-        || (a.name ?? "").localeCompare(b.name ?? ""))
-    : [];
-  const myBtn = (
-    <button type="button" onClick={() => setMyStores((v) => !v)}
-      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 700,
-        border: `1px solid ${myStores ? "#fbbf24" : "rgba(255,255,255,0.2)"}`, background: myStores ? "rgba(251,191,36,0.12)" : "transparent",
-        color: myStores ? "#fbbf24" : "rgba(255,255,255,0.75)" }}>
-      ★ My Stores
-    </button>
-  );
-  const hidden = groups.others.length;
-  const shown = groups.starred.length === 0 || showAll ? [...groups.starred, ...groups.others] : groups.starred;
-
   return (
     <>
-    <AreaChooser open={open && areaOpen} locations={locations} requireCity
-      value={{ state: city?.state ?? "", county: "", city: city?.city ?? "" }}
-      onPick={(p) => { setCityKey(`${p.city.trim().toLowerCase()}|${p.state}`); setShowAll(false); setMyStores(false); }}
-      onSearch={() => { setAreaOpen(false); setChoosingCity(true); setQuery(""); }}
-      onClose={() => setAreaOpen(false)} />
-    <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
+      <AreaChooser open={areaOpen} locations={locations} value={area ?? { state: "", county: "", city: "" }}
+        onPick={(p) => { setArea(p); setLimit(PAGE); setQuery(""); }} onClose={() => setAreaOpen(false)} />
       {locations.length === 0 ? (
         <div style={{ fontSize: 14, color: muted, padding: "12px 0" }}>No saved locations yet.</div>
       ) : (
         <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
-            {myStores
-              ? <span>Your starred stores</span>
-              : <span>Showing locations in <span style={{ color: "#fff" }}>{cityLabel(city)}</span></span>}
-            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {!myStores && (
-                <button type="button" onClick={() => { setAreaOpen(true); setQuery(""); }}
-                  style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
-                  Change
-                </button>
-              )}
-              {myBtn}
-            </span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>
+            <span>{searching ? "Search results" : <>Showing <span style={{ color: "#fff" }}>{areaLabel(area ?? { state: "", county: "", city: "" })}</span></>}</span>
+            <button type="button" onClick={() => setAreaOpen(true)}
+              style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+              Change
+            </button>
           </div>
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Search number, name or city"
+            style={{ ...fieldInput, marginBottom: 10 }} />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {myStores && starredAll.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "12px 0" }}>No starred stores yet. Tap a star on a location to add it.</div>}
-            {(myStores ? starredAll : shown).map((l) => card(l))}
+            {list.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "8px 0" }}>{searching ? "No matches." : "No locations here."}</div>}
+            {list.slice(0, limit).map(card)}
           </div>
-          {!myStores && groups.starred.length > 0 && hidden > 0 && (
-            <button type="button" onClick={() => setShowAll((v) => !v)}
-              style={{ width: "100%", marginTop: 10, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)",
-                background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              {showAll ? "Hide unstarred ▲" : `Show ${hidden} more in ${city?.city || "this city"} ▼`}
+          {list.length > limit && (
+            <button type="button" onClick={() => setLimit((n) => n + PAGE)}
+              style={{ width: "100%", marginTop: 10, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Show {Math.min(PAGE, list.length - limit)} more ▼
             </button>
           )}
         </>
       )}
-      {footer}
-    </FullscreenModal>
+      {companyId && userId && (
+        <button type="button" onClick={() => setEditing(null)} style={{ ...dashedBtn, marginTop: 14 }}>
+          + New location{query.trim() ? ` “${query.trim()}”` : ""}
+        </button>
+      )}
     </>
+  );
+}
+
+export function LocationPicker({
+  open, title, origin = null, locations, tanks = [], companyId, userId, onPick, onClose, onLocationAdded, selectedLocationId = null,
+}: {
+  open: boolean;
+  title: string;
+  origin?: LatLon | null;
+  locations: DeliveryLocation[];
+  onPick: (to: DeliveryDestination) => void;
+  onClose: () => void;
+  tanks?: LocationTank[];
+  companyId: string | null;
+  userId: string | null;
+  // Called after a location is added, edited or retired, so the caller can reload its list.
+  onLocationAdded?: () => void;
+  selectedLocationId?: string | null;
+}) {
+  return (
+    <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
+      {open && (
+        <LocationBrowser origin={origin} locations={locations} tanks={tanks} companyId={companyId} userId={userId}
+          onPick={onPick} onChanged={onLocationAdded} selectedLocationId={selectedLocationId} />
+      )}
+    </FullscreenModal>
   );
 }

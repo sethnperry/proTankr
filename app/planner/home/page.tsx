@@ -2433,7 +2433,6 @@ export default function HomePage() {
         origin={origin}
         companyId={companyId}
         userId={userId}
-        onToggleStar={(id, star) => void locList.toggleStar(id, star).catch(() => {})}
         onLocationAdded={() => void locList.reload()}
         busy={busy}
         error={error}
@@ -2531,10 +2530,8 @@ export default function HomePage() {
         companyId={companyId}
         userId={userId}
         onLocationAdded={() => void locList.reload()}
-        onToggleStar={(id, star) => void locList.toggleStar(id, star).catch(() => {})}
         onPick={onPick}
         onClose={() => { setPicker(null); setAutoArrive(false); }}
-        onManage={() => { setPicker(null); nav.go("locations", "/planner/locations"); }}
       />
     </div>
     </DashLookProvider>

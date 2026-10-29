@@ -50,7 +50,6 @@ export function StartLoadSheet({
   origin,
   companyId,
   userId,
-  onToggleStar,
   onLocationAdded,
   busy,
   error,
@@ -94,7 +93,6 @@ export function StartLoadSheet({
   origin: LatLon | null;
   companyId: string | null;
   userId: string | null;
-  onToggleStar: (locationId: string, star: boolean) => void;
   onLocationAdded: () => void;
   busy?: boolean;
   error?: string | null;
@@ -429,7 +427,6 @@ export function StartLoadSheet({
       tanks={tanks}
       companyId={companyId}
       userId={userId}
-      onToggleStar={onToggleStar}
       onLocationAdded={onLocationAdded}
       onPick={(to) => {
         if (picking != null) setDelivery(picking, { locationId: to.locationId, oneOffName: null, deliveryType: to.deliveryType });
