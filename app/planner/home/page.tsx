@@ -455,6 +455,13 @@ export default function HomePage() {
     });
   }, [dispatchedList, store, suppliers, truckId, trailerId, state, plannedNames]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A fuel stop still open when a trip is about to begin: ask, so the fueling time ends before the trip's start
+  // instead of straddling it.
+  const [fuelAsk, setFuelAsk] = useState<null | (() => void)>(null);
+  const askFuelFirst = (go: () => void) => {
+    if (fuel.active && fuel.active.status !== "complete" && !fuel.active.finished_at) setFuelAsk(() => go);
+    else go();
+  };
   const beginDispatchedLoad = (tripId?: string) => {
     const trip = tripId ? dispatchedList.find((t) => t.trip_id === tripId) : dispatchedList[0];
     if (!store || !userId || !trip || openTrip) return;
@@ -1295,12 +1302,11 @@ export default function HomePage() {
           doResume();
           break;
         }
-        if (dispatchedList.length) {
-          beginDispatchedLoad();
-          break;
-        }
-        setError(null);
-        setSheetOpen(true);
+        askFuelFirst(() => {
+          if (dispatchedList.length) { beginDispatchedLoad(); return; }
+          setError(null);
+          setSheetOpen(true);
+        });
         break;
       case "planner":
         setOpeningPlanner(true);
@@ -2265,6 +2271,22 @@ export default function HomePage() {
         onCleared={terminalAlerts.refresh}
       />
 
+      <FullscreenModal open={!!fuelAsk} title="Done fueling?" onClose={() => setFuelAsk(null)} footer={null}>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.45 }}>
+          You have a fuel stop open{fuel.active?.started_at ? `, started ${new Date(fuel.active.started_at).toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}. The fueling time needs to end before the trip begins.
+        </div>
+        <button type="button" className="dash-press" style={{ width: "100%", marginTop: 16, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}
+          onClick={() => {
+            const go = fuelAsk; const a = fuel.active;
+            setFuelAsk(null);
+            if (a) void fuel.save({ ...a, finished_at: new Date().toISOString(), status: a.status === "fueling" || a.status === "pumping" ? "details" : a.status });
+            go?.();
+          }}>Yes, I'm done fueling</button>
+        <button type="button" className="dash-press" style={{ width: "100%", marginTop: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.secondary }}
+          onClick={() => { setFuelAsk(null); setFuelOpen(true); }}>Still fueling</button>
+        <button type="button" className="dash-press" style={{ width: "100%", marginTop: 10, padding: "12px 0", fontSize: 13, fontWeight: 700, background: "transparent", border: "none", color: "#f87171", cursor: "pointer" }}
+          onClick={() => { const go = fuelAsk; setFuelAsk(null); void fuel.discard(); go?.(); }}>Cancel the fuel stop</button>
+      </FullscreenModal>
       <FuelSheet
         open={fuelOpen}
         onClose={() => setFuelOpen(false)}
