@@ -27,7 +27,6 @@ const tileBase: React.CSSProperties = {
   borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
   height: TILE_H, padding: "0 10px", display: "flex", alignItems: "center", gap: 8, overflow: "hidden", textAlign: "center", userSelect: "none", color: "rgba(255,255,255,0.85)", minWidth: 0, boxSizing: "border-box",
 };
-const tileMine: React.CSSProperties = { background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.45)", color: "#fff" };
 const plus: React.CSSProperties = {
   borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", height: TILE_H, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px",
   textAlign: "center", cursor: "pointer", fontWeight: 900, fontSize: 20, color: "rgba(255,255,255,0.35)",
@@ -106,7 +105,7 @@ export function EquipmentBoard(p: Props) {
               });
               const segs = p.strips?.[c.trailer.id];
               const mine = isMine(c.truck.id, c.trailer.id);
-              const tile = { ...tileBase, ...(mine ? tileMine : {}) };
+              const tile = { ...tileBase };
               return (
                 <div key={c.comboId} role="button" tabIndex={0}
                   onClick={() => p.onCombo?.(c)}
@@ -114,10 +113,10 @@ export function EquipmentBoard(p: Props) {
                   style={{ display: "grid", gridTemplateColumns: "1fr 26px 1fr", alignItems: "stretch", cursor: "pointer" }}>
                   <Tile dot={dotFor(c.truck)} style={tile as React.CSSProperties}>
                     <Name>{c.truck.name}</Name>
-                    {tl.tone !== "none" && (
-                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : mine && tl.tone === "use" ? "#fff" : "rgba(255,255,255,0.6)" }}>
+                    {(tl.tone !== "none" || mine) && (
+                      <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : "rgba(255,255,255,0.6)" }}>
                         {/* The driver's own equipment reads "Mine"; everyone else's keeps In Use plus initials. */}
-                        {mine && tl.tone === "use" ? "Mine" : tl.tone === "use" && holder && p.activity?.[holder] ? `${p.initials[holder] ?? ""}${p.initials[holder] ? " · " : ""}${p.activity[holder]}` : tl.text}
+                        {tl.tone === "use" || (tl.tone === "none" && mine) ? (() => { const ini = mine ? "Me" : holder ? p.initials[holder] ?? "" : ""; const act = holder ? p.activity?.[holder] : null; return act ? `${ini}${ini ? " · " : ""}${act}` : ini ? `In Use · ${ini}` : "In Use"; })() : tl.text}
                       </div>
                     )}
                   </Tile>
@@ -146,7 +145,7 @@ export function EquipmentBoard(p: Props) {
                 const mine = p.mine?.truckId === u.id;
                 const pending = p.pendingId === u.id;
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} style={{ ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     <StatusLine u={u} />
@@ -165,7 +164,7 @@ export function EquipmentBoard(p: Props) {
                 const pending = p.pendingId === u.id;
                 const segs = p.strips?.[u.id];
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} strip={segs} style={{ ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
