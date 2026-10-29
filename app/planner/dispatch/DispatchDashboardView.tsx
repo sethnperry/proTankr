@@ -29,7 +29,7 @@ import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { LiveSheet } from "./LiveSheet";
 import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
-import { adviceFor } from "@/lib/dispatch/frictionAdvice";
+import { outageAge } from "@/app/planner/utils/dates";
 
 export type DispatchMode = "plan" | "live";
 
@@ -130,104 +130,69 @@ function RegionButton({ r }: { r: RegionFilter }) {
   );
 }
 
-function ConflictCard({ c, terminal, product, onOpenTrip, openingId, isNew, onSeen, onAck }: {
-  c: ConflictWithAck;
+const nameInitials = (n?: string | null) => (n ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+const unitTag = (unit: string | null | undefined, ini: string) => [String(unit ?? "").replace(/^truck\s*/i, "").trim(), ini].filter(Boolean).join("-");
+
+function FrictionList({ conflicts, terminal, product, initialsOf, isNew, onSeen, onAck, onOpenTrip }: {
+  conflicts: ConflictWithAck[];
   terminal: (id: string) => { name: string; place: string | null };
   product: (id: string | null) => BoardProduct;
-  onOpenTrip: (tripId: string) => void;
-  openingId?: string | null;
-  isNew: boolean;
+  initialsOf: (userId: string) => string;
+  isNew: (terminalId: string) => boolean;
   onSeen: (terminalId: string) => void;
   onAck: (terminalId: string, reportIds: string[], note: string) => Promise<boolean>;
+  onOpenTrip: (tripId: string) => void;
 }) {
   const L = useDashLook();
-  const [handling, setHandling] = useState(false);
-  const [note, setNote] = useState("");
+  const [sel, setSel] = useState<{ c: ConflictWithAck; r: ActiveReport } | null>(null);
   const [saving, setSaving] = useState(false);
-  const t = terminal(c.terminalId);
-  const handled = c.handled;
-  const color = handled ? GREY : c.severity === "hit" ? RED : ORANGE;
-  const save = async () => {
-    setSaving(true);
-    const ok = await onAck(c.terminalId, c.reports.map((r) => r.reportId), note);
-    setSaving(false);
-    if (ok) { setHandling(false); setNote(""); onSeen(c.terminalId); }
-  };
+  const rows = conflicts.flatMap((c) => c.reports.map((r) => ({ c, r }))).sort((a, b) => b.r.createdAt.localeCompare(a.r.createdAt));
+  const tm = (id: string) => { const t = terminal(id); return t.place ? `${t.name}, ${t.place.split(",")[0]}` : t.name; };
+  const hhmm = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const close = () => setSel(null);
   return (
-    <div style={{ ...L.primary, borderColor: `${color}66`, marginBottom: 10, opacity: handled ? 0.65 : 1 }}>
-      <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${L.hairline}` }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span aria-hidden style={{ width: 8, height: 8, background: color, flexShrink: 0, alignSelf: "center" }} />
-          <span style={{ fontSize: 15, fontWeight: 800, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
-          {isNew && (
-            <button type="button" onClick={() => onSeen(c.terminalId)} className="dash-press" aria-label="Mark as seen"
-              style={{ border: "none", background: RED, color: "#000", fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", padding: "2px 6px", cursor: "pointer" }}>
-              NEW
-            </button>
-          )}
-          {t.place && <span style={{ fontSize: 12, color: L.muted, whiteSpace: "nowrap" }}>{t.place}</span>}
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-          {c.reports.map((r) => (
-            <span key={r.reportId} style={{ fontSize: 12, fontWeight: 700, padding: "3px 7px", border: `1px solid ${RED}55`, color: "#fca5a5", background: "rgba(239,68,68,0.08)" }}>
-              {reportText(r, product)} <span style={{ color: L.faint, fontWeight: 600 }}>· {clock(r.createdAt)}</span>
-            </span>
-          ))}
-        </div>
-        {handled ? (
-          <div style={{ marginTop: 8, fontSize: 12, color: L.muted }}>
-            <span style={{ color: "#4ade80", fontWeight: 800 }}>✓ Handled</span>
-            {handled.by ? ` by ${handled.by}` : ""} · {clock(handled.at)}
-            {handled.note ? <span style={{ color: "rgba(255,255,255,0.8)" }}> — {handled.note}</span> : null}
-          </div>
-        ) : handling ? (
-          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional): rerouted, called terminal…" maxLength={200}
-              onKeyDown={(e) => { if (e.key === "Enter") void save(); }} autoFocus
-              style={{ flex: "1 1 180px", minWidth: 0, background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 14, padding: "7px 9px", borderRadius: 2 }} />
-            <button type="button" onClick={() => void save()} className="dash-press" {...busyProps(saving)}
-              style={{ border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "7px 12px", cursor: "pointer" }}>
-              Mark handled
-            </button>
-            <button type="button" onClick={() => setHandling(false)} className="dash-press"
-              style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "7px 10px", cursor: "pointer" }}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={() => { setHandling(true); onSeen(c.terminalId); }} className="dash-press"
-            style={{ marginTop: 8, border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "5px 10px", cursor: "pointer" }}>
-            Handle…
-          </button>
-        )}
-      </div>
-      {!handled && (() => {
-        const a = adviceFor(c, (id) => product(id).code ?? "product");
-        const h = { fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: L.muted, margin: "8px 0 3px" };
+    <>
+      {rows.map(({ c, r }) => {
+        const color = c.handled ? GREY : c.severity === "hit" ? RED : ORANGE;
+        const who = unitTag(r.truckLabel, r.reporterId ? initialsOf(r.reporterId) : "");
         return (
-          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${L.hairline}`, fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.85)" }}>
-            <div style={{ ...h, marginTop: 0 }}>What this means</div>
-            <div>{a.meaning}</div>
-            {a.now.length > 0 && <><div style={h}>What to do now</div>{a.now.map((x) => <div key={x}>• {x}</div>)}</>}
-            {a.prevent.length > 0 && <><div style={h}>To avoid it next time</div>{a.prevent.map((x) => <div key={x}>• {x}</div>)}</>}
-          </div>
+          <button key={r.reportId} type="button" className="dash-press" onClick={() => { setSel({ c, r }); onSeen(c.terminalId); }}
+            style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "11px 12px", marginBottom: 6, cursor: "pointer", borderColor: `${color}77`, opacity: c.handled ? 0.6 : 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.35 }}>
+              {who && <span>{who} </span>}
+              <span style={{ color }}>{reportText(r, product).toUpperCase()}</span>
+              <span style={{ fontWeight: 600 }}> at {tm(c.terminalId)}</span>
+              <span style={{ fontWeight: 600, color: L.muted }}> · {outageAge(Date.parse(r.createdAt), Date.now())} ago</span>
+              {isNew(c.terminalId) && <span style={{ marginLeft: 8, background: RED, color: "#000", fontSize: 10, fontWeight: 900, padding: "1px 5px" }}>NEW</span>}
+              {c.handled && <span style={{ marginLeft: 8, color: "#4ade80", fontSize: 11 }}>✓ handled</span>}
+            </div>
+          </button>
         );
-      })()}
-      {c.trucks.map((tr) => (
-        <button key={tr.tripId} type="button" onClick={() => onOpenTrip(tr.tripId)} className="dash-press" {...busyProps(openingId === tr.tripId)}
-          style={{ position: "relative", display: "flex", width: "100%", alignItems: "baseline", gap: 8, padding: "9px 14px", background: "none", border: "none",
-            borderTop: `1px solid ${L.hairline}`, color: "#fff", cursor: "pointer", textAlign: "left" }}>
-          <CardBusy on={openingId === tr.tripId} />
-          <span style={{ flex: 1, minWidth: 0, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            <span style={{ fontWeight: 700, color: tr.severity === "hit" ? "#fff" : L.muted }}>{tr.driverName ?? "Driver"}</span>
-            {tr.truckName && <span style={{ color: L.muted }}> · Truck {tr.truckName}</span>}
-          </span>
-          <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: tr.arrived ? "#fff" : L.muted }}>
-            {tr.arrived ? "At rack" : "En route"}{tr.severity === "maybe" ? " · plan unknown" : ""} ›
-          </span>
-        </button>
-      ))}
-    </div>
+      })}
+      <FullscreenModal open={!!sel} title={sel ? reportText(sel.r, product) : ""} onClose={close}>
+        {sel && (
+          <>
+            <div style={{ fontSize: 13, color: L.muted, marginBottom: 10 }}>
+              {sel.r.truckLabel ? `${unitTag(sel.r.truckLabel, sel.r.reporterId ? initialsOf(sel.r.reporterId) : "")} reported at ${tm(sel.c.terminalId)} · ` : ""}{outageAge(Date.parse(sel.r.createdAt), Date.now())} ago
+            </div>
+            {sel.c.trucks.filter((t) => t.reportIds.includes(sel.r.reportId)).map((t) => (
+              <button key={t.tripId} type="button" className="dash-press" onClick={() => { close(); onOpenTrip(t.tripId); }}
+                style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "11px 12px", marginBottom: 6, cursor: "pointer" }}>
+                <span style={{ fontWeight: 800 }}>{unitTag(t.truckName, nameInitials(t.driverName))}</span>{" "}
+                {t.arrived ? `At ${tm(sel.c.terminalId)}` : `En route to ${tm(sel.c.terminalId)}${t.etaMs ? ` - ETA ${hhmm(t.etaMs)}` : ""}`}
+              </button>
+            ))}
+            {!sel.c.handled && (
+              <button type="button" className="dash-press" {...busyProps(saving)}
+                onClick={async () => { setSaving(true); const ok = await onAck(sel.c.terminalId, [sel.r.reportId], ""); setSaving(false); if (ok) close(); }}
+                style={{ marginTop: 10, border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 14px", cursor: "pointer" }}>
+                Mark handled
+              </button>
+            )}
+          </>
+        )}
+      </FullscreenModal>
+    </>
   );
 }
 
@@ -291,6 +256,7 @@ export function DispatchDashboardView(props: {
   error?: string | null;
   // LIVE
   conflicts: ConflictWithAck[];
+  initialsOf: (userId: string) => string;
   watch: WatchTerminal[];
   unseen: Set<string>;
   onSeen: (terminalId: string) => void;
@@ -462,10 +428,10 @@ export function DispatchDashboardView(props: {
                 <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
                   No friction. Nothing reported at a rack your trucks are headed to.
                 </div>
-              ) : p.conflicts.map((c) => (
-                <ConflictCard key={c.terminalId} c={c} terminal={p.terminal} product={p.product} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId}
-                  isNew={p.unseen.has(c.terminalId)} onSeen={p.onSeen} onAck={p.onAck} />
-              ))}
+              ) : (
+                <FrictionList conflicts={p.conflicts} terminal={p.terminal} product={p.product} initialsOf={p.initialsOf}
+                  isNew={(id) => p.unseen.has(id)} onSeen={p.onSeen} onAck={p.onAck} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} />
+              )}
               {p.watch.length > 0 && (
                 <>
                   <SectionLabel right={<span style={{ color: L.faint, letterSpacing: 0 }}>no truck headed there</span>}>Watch</SectionLabel>

@@ -53,3 +53,14 @@ test("live counts", () => {
   ];
   assert.deepEqual(liveCounts(trips), { atRack: 1, enRouteToRack: 1, loadedRolling: 1, parked: 1 });
 });
+
+test("a truck that gets there after the report expires is not held up by it", () => {
+  const midnight = Date.parse("2026-10-30T04:00:00Z");
+  const trips = [f("a", { pickups: [pk()] }), f("b", { pickups: [pk()] }), f("c", { pickups: [pk({ arrived_at: "x" })] })];
+  const eta = (id: string) => (id === "a" ? midnight - 3600_000 : id === "b" ? midnight + 3600_000 : null);
+  const c = findConflicts(trips, [rep({ type: "out_of_allocation", productId: null, expiresAtMs: midnight })], new Map(), eta);
+  assert.deepEqual(c[0].trucks.map((t) => t.tripId).sort(), ["a", "c"]); // b arrives after midnight; c is already there
+  assert.equal(c[0].trucks.find((t) => t.tripId === "a")?.etaMs, midnight - 3600_000);
+  // Everyone arrives after it expires: no friction at all.
+  assert.equal(findConflicts([trips[1]], [rep({ type: "out_of_allocation", productId: null, expiresAtMs: midnight })], new Map(), eta).length, 0);
+});

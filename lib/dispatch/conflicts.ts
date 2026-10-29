@@ -18,6 +18,9 @@ export type ActiveReport = {
   productId: string | null;
   supplierName: string | null;
   createdAt: string;
+  reporterId?: string | null;
+  truckLabel?: string | null; // the reporter's truck, as saved with the report
+  expiresAtMs?: number | null; // after this the report no longer counts
 };
 
 export type FleetTripLite = {
@@ -37,6 +40,7 @@ export type AffectedTruck = {
   driverName: string | null;
   truckName: string | null;
   arrived: boolean;
+  etaMs?: number | null; // when it gets to the rack, if on the way and its position is known
   severity: Severity;
   // The reports that touch this truck.
   reportIds: string[];
@@ -78,6 +82,7 @@ export function findConflicts(
   trips: FleetTripLite[],
   reports: ActiveReport[],
   plannedByLoad: Map<string, string[]> = new Map(),
+  etaFor?: (tripId: string) => number | null,
 ): Conflict[] {
   const byTerminal = new Map<string, ActiveReport[]>();
   for (const r of reports) {
@@ -95,20 +100,23 @@ export function findConflicts(
       const products = productsForPickup(p, plannedByLoad);
       let sev: Severity | null = null;
       const ids: string[] = [];
+      const eta = p.arrived_at ? null : etaFor?.(f.trip.trip_id) ?? null;
       for (const r of reps) {
+        // A truck that gets there after the report runs out is not held up by it.
+        if (eta != null && r.expiresAtMs != null && eta >= r.expiresAtMs) continue;
         const s = touches(r, products);
         if (!s) continue;
         ids.push(r.reportId);
         if (s === "hit" || !sev) sev = s;
       }
       if (!sev) continue;
-      trucks.push({ tripId: f.trip.trip_id, driverName: f.driverName, truckName: f.truckName, arrived: !!p.arrived_at, severity: sev, reportIds: ids });
+      trucks.push({ tripId: f.trip.trip_id, driverName: f.driverName, truckName: f.truckName, arrived: !!p.arrived_at, etaMs: eta, severity: sev, reportIds: ids });
     }
     if (trucks.length === 0) continue;
     trucks.sort((a, b) => Number(a.severity !== "hit") - Number(b.severity !== "hit") || Number(b.arrived) - Number(a.arrived));
     out.push({
       terminalId,
-      reports: [...reps].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      reports: reps.filter((r) => trucks.some((t) => t.reportIds.includes(r.reportId))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
       trucks,
       severity: trucks.some((t) => t.severity === "hit") ? "hit" : "maybe",
       newestAt: reps.reduce((m, r) => (r.createdAt > m ? r.createdAt : m), ""),

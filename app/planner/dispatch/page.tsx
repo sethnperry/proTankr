@@ -96,7 +96,7 @@ import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, typ
 import { useTrailerPlan } from "@/lib/dispatch/useTrailerPlan";
 import { CompartmentPlanCard } from "./CompartmentPlanCard";
 import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, swapDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
-import { onBoard } from "@/lib/trips/tripFlow";
+import { onBoard, activePickup } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
 // Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
@@ -282,6 +282,7 @@ export default function DispatchPage() {
   const regionDriverIds = useMemo(
     () => new Set(plan.roster.filter((m) => regionSel.has(m.region?.trim() || NO_REGION)).map((m) => m.user_id)),
     [plan.roster, regionSel]);
+  const initialsOf = (n?: string | null) => (n ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const driverInRegion = (id: string | null | undefined) => !regionOn || (!!id && regionDriverIds.has(id));
   // A parked load belongs to the region it's parked in, whoever's driver or
   // equipment it is. Older ones without a region fall back to the driver's.
@@ -347,9 +348,20 @@ export default function DispatchPage() {
 
   const { settings: tripSettings } = useTripSettings(companyId || null);
   const fleetReports = useFleetReports(fleetTrips, plan.usedTerminalIds);
+  const terminalLLOf = (id: string) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; };
+  const locationLLOf = (id: string) => { const l = locList.locations.find((x) => x.location_id === id); return l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null; };
+  // When a truck on its way to a rack gets there (live position + straight-line drive time).
+  const arrivalEta = (tripId: string): number | null => {
+    const ft = fleetTrips.find((f) => f.trip.trip_id === tripId);
+    const pk = ft ? activePickup(ft.pickups.filter((x) => x.outcome !== "no_load")) : null;
+    const dest = pk?.terminal_id ? terminalLLOf(String(pk.terminal_id)) : null;
+    const pos = ft?.trip.truck_id ? livePositions.get(ft.trip.truck_id) : undefined;
+    if (!dest || !pos || Date.now() - Date.parse(pos.at ?? "") > 30 * 60000) return null;
+    return Date.now() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, dest) * 60000;
+  };
   const rawConflicts = useMemo(
-    () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad),
-    [fleetTrips, fleetReports.reports, fleetReports.plannedByLoad],
+    () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad, arrivalEta),
+    [fleetTrips, fleetReports.reports, fleetReports.plannedByLoad, livePositions, terminalsCatalog], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const reportIds = useMemo(() => [...new Set(rawConflicts.flatMap((c) => c.reports.map((r) => r.reportId)))], [rawConflicts]);
   const acks = useConflictAcks(companyId || null, reportIds, authUserId || null);
@@ -369,8 +381,6 @@ export default function DispatchPage() {
   const [showNotCarded, setShowNotCarded] = useState(false);
   const [locPickerOpen, setLocPickerOpen] = useState(false);
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
-  const terminalLLOf = (id: string) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id); return t?.lat != null && t?.lon != null ? { lat: Number(t.lat), lon: Number(t.lon) } : null; };
-  const locationLLOf = (id: string) => { const l = locList.locations.find((x) => x.location_id === id); return l?.lat != null && l?.lon != null ? { lat: l.lat, lon: l.lon } : null; };
   const lowHours = useMemo(
     () => buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now()),
     [fleetTrips, fleetHos]);
@@ -930,7 +940,7 @@ export default function DispatchPage() {
         watch={watch} unseen={notifier.unseen} onSeen={notifier.markSeen} onSeenAll={notifier.markAllSeen}
         notify={notifier.permission} onEnableNotify={() => { void enablePush(companyId || "").finally(() => void notifier.enable()); }}
         onAck={acks.ack} ackError={acks.error}
-        terminal={terminalInfo} product={boardProduct} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
+        terminal={terminalInfo} product={boardProduct} initialsOf={(id) => initialsOf(plan.roster.find((m) => m.user_id === id)?.display_name)} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
         alerts={alerts} planCounts={pCounts} planLoading={plan.loading}
         allocation={allContracts.some((c) => c.per_day != null || c.per_week != null) ? { ...allocChip, onOpen: () => setAllocOpen(true) } : null}
         focusCount={planning ? ranked.focusIds.size : null}
