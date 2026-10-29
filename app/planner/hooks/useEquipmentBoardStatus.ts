@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { productColorFor } from "../utils/productColor";
-import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, placeLine, lastPlace, type LoadedDot } from "@/lib/equipment/boardStatus";
+import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, placeLine, lastPlace, storeLabel, type LoadedDot } from "@/lib/equipment/boardStatus";
 import { stripSegments, residueStands, type StripSeg } from "@/lib/equipment/trailerStrip";
 
 const CARRYING = ["loading", "in_transit", "delivering", "parked"];
@@ -97,8 +97,8 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
             ])
           : [{ data: [] as any[] }, { data: [] as any[] }];
         const locIds = [...new Set(((dl.data ?? []) as any[]).map((d) => d.location_id).filter(Boolean))];
-        const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name").in("location_id", locIds) : { data: [] as any[] };
-        const locName = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, String(l.name ?? "")]));
+        const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name, location_number").in("location_id", locIds) : { data: [] as any[] };
+        const locName = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, storeLabel(l.name, l.location_number)]));
         const fuelers = new Set(((fu.data ?? []) as any[]).map((f) => f.driver_id));
         const act: Record<string, string> = {};
         const dest: Record<string, string> = {};
@@ -139,7 +139,7 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
           supabase.from("trip_deliveries").select("trip_id, location_id, one_off_name, left_at").in("trip_id", trips.map((t) => t.trip_id)).not("left_at", "is", null),
         ]);
         const locIds = [...new Set(((dl.data ?? []) as any[]).map((d) => d.location_id).filter(Boolean))];
-        const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name").in("location_id", locIds) : { data: [] as any[] };
+        const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name, location_number").in("location_id", locIds) : { data: [] as any[] };
         const loc = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, l]));
         const trailerOf = new Map<string, string>([...trips.map((t) => [t.trip_id, t.trailer_id] as [string, string]), ...dispatched.map((t) => [t.trip_id, t.planned_trailer_id] as [string, string])]);
         const planning = new Set<string>([...trips.filter((t) => t.status === "draft" || t.status === "loading").map((t) => t.trip_id), ...dispatched.map((t) => t.trip_id)]);
@@ -159,7 +159,7 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
         }
         for (const r of (dl.data ?? []) as any[]) {
           const tid = trailerOf.get(r.trip_id); const l = r.location_id ? loc.get(r.location_id) : null;
-          const name = l?.name ?? r.one_off_name;
+          const name = l ? storeLabel(l.name, l.location_number) : r.one_off_name;
           if (tid && name) (out[tid] ??= []).push({ at: r.left_at, line: placeLine("store", String(name), null) });
         }
         if (alive) { setLastStops(out); setPlannedPickup(planned); }

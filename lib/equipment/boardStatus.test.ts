@@ -43,3 +43,10 @@ test("terminal code and place line", () => {
   assert.equal(lastPlace([{ at: "2026-10-01", line: "a" }, { at: "2026-10-05", line: "b" }, { at: null, line: "c" }]), "b");
   assert.equal(lastPlace([]), null);
 });
+
+import { storeLabel } from "./boardStatus.ts";
+test("store label adds the store number once", () => {
+  assert.equal(storeLabel("Love's", "495"), "Love's 495");
+  assert.equal(storeLabel("Love's 495", "495"), "Love's 495");
+  assert.equal(storeLabel("Love's", null), "Love's");
+});

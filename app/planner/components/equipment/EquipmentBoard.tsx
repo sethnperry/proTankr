@@ -68,7 +68,7 @@ type Props = {
 function Tile({ children, strip, style, dot, ...rest }: { children: React.ReactNode; strip?: StripSeg[]; style?: React.CSSProperties; dot?: string | null } & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div {...rest} style={{ position: "relative", ...tileBase, ...(strip && strip.length > 0 ? { paddingRight: 0, gap: 0 } : {}), ...style }}>
-      {dot && <span aria-hidden style={{ position: "absolute", top: 7, left: 7, width: 9, height: 9, borderRadius: "50%", background: dot }} />}
+      {dot && <span aria-hidden style={{ position: "absolute", top: 6, left: 6, width: 6, height: 6, borderRadius: "50%", background: dot }} />}
       <div style={{ flex: 1, minWidth: 0, ...(strip && strip.length > 0 ? { paddingLeft: 10 } : {}) }}>{children}</div>
       {strip && strip.length > 0 && <BirdTab segs={strip} />}
     </div>
@@ -125,10 +125,10 @@ export function EquipmentBoard(p: Props) {
                     )}
                   </Tile>
                   <div aria-hidden style={{ alignSelf: "center", height: 2, background: "rgba(255,255,255,0.45)" }} />
-                  <Tile dot={dotFor(c.trailer)} style={tile as React.CSSProperties} strip={segs}>
+                  <Tile style={tile as React.CSSProperties} strip={segs}>
                     <Name>{c.trailer.name}</Name>
                     {loadedText(segs) ? (
-                      p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : null
+                      p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : p.lastPlaceByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : null
                     ) : p.lastPlaceByTrailer?.[c.trailer.id] && !c.trailer.statusCode ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : <StatusLine u={c.trailer} />}
                   </Tile>
                 </div>

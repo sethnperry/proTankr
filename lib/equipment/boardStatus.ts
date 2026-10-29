@@ -79,3 +79,11 @@ export function lastPlace(stops: { at: string | null; line: string }[]): string 
   for (const s of stops) if (s.at && (!best || s.at > best.at)) best = { at: s.at, line: s.line };
   return best?.line ?? null;
 }
+
+/** "Love's" + "495" -> "Love's 495"; nothing added when the name already carries the number. */
+export function storeLabel(name: string | null | undefined, number: string | null | undefined): string {
+  const n = String(name ?? "").trim();
+  const num = String(number ?? "").trim();
+  if (!num || n.toLowerCase().includes(num.toLowerCase())) return n;
+  return n ? `${n} ${num}` : num;
+}
