@@ -1,7 +1,7 @@
 -- One store, one location: the same name + store number in the same state can't be saved twice.
 -- First merge the duplicates already there (keep the one with tanks, else the oldest), moving the
 -- trips and stars onto it; then add the unique index.
--- NOT YET APPLIED: it merges real locations (today: the two #708 Loves in Bushnell), so it waits for a go-ahead.
+-- Applied 2026-10-29 (it merged the two #708 Loves in Bushnell).
 
 create or replace function public._loc_norm_name(n text) returns text language sql immutable as
 $$ select regexp_replace(lower(coalesce(n,'')), '[^a-z0-9]', '', 'g') $$;

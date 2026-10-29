@@ -747,6 +747,10 @@ export default function HomePage() {
 
   // Fuel stop: tapping Fuel stamps the start time right away.
   const fuel = useFuelStop(userId || null, companyId || null);
+  // Fueling in progress (pump not finished yet). A stop left open only for its details doesn't count.
+  const fuelOn = !!fuel.active && !fuel.active.finished_at;
+  // A notice that stops an action (themed, not an alert).
+  const [blockNotice, setBlockNotice] = useState<{ title: string; text: string } | null>(null);
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
   const [truckSheetWatch, setTruckSheetWatch] = useState(false);
@@ -815,6 +819,12 @@ export default function HomePage() {
   }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
   const tapFuel = async () => {
+    // Fuel, scale or any other stop waits until the delivery you're at is finished.
+    const openDrop = snap?.deliveries.find((d) => d.arrived_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled");
+    if (openDrop && !fuel.active) {
+      setBlockNotice({ title: "Finish the delivery first", text: `You're at ${deliveryName(openDrop) ?? "the delivery"}. Finish the delivery (or undo the arrival if you haven't dropped yet) before you fuel.` });
+      return;
+    }
     // Starting a fuel stop answers "did you arrive?": that stop was the fuel stop, so it is never asked about again.
     if (!fuel.active && userId) {
       const ats = [...(myHos?.stops ?? []).map((x) => x.at), ...(dutyStop ? [dutyStop.at] : [])];
@@ -1202,7 +1212,7 @@ export default function HomePage() {
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step.kind, (step as any).pickup?.pickup_id, (step as any).delivery?.delivery_id, terminalCatalog, locations]);
-  const arrival = useArrivalSuggestion({ companyId: companyId || null, truckId, target: arrivalTarget, enabled: !!arrivalTarget && !!openTrip && !fuel.active });
+  const arrival = useArrivalSuggestion({ companyId: companyId || null, truckId, target: arrivalTarget, enabled: !!arrivalTarget && !!openTrip && !fuelOn });
   const learnArrival = () => {
     if (arrivalTarget && companyId && userId) void recordArrivalPoint({ companyId, userId, truckId, target: arrivalTarget });
   };
@@ -1265,7 +1275,7 @@ export default function HomePage() {
     const stamps = [openTrip.started_at, ...snap.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...snap.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
       .filter(Boolean).map((t) => Date.parse(t as string));
     // Not while another clock is running (fueling, a delay), and only once the stop is a few minutes old.
-    if (fuel.active || runningDelay) return null;
+    if (fuelOn || runningDelay) return null;
     const afterMs = Math.max(0, ...stamps);
     // An answer tapped on the notification comes first, oldest first, on the stop's own time.
     const queued = stopAnswers.find((a) => Date.parse(a.stop_at) > afterMs && (a.kind === "hop") === !!hopPickup);
@@ -1277,7 +1287,7 @@ export default function HomePage() {
     const p = pendingStop(aged, { afterMs, handled: handledStops });
     return p ? { ...p, answerId: undefined as string | undefined, answer: undefined as "arrived" | "delay" | "yes" | "no" | undefined, reason: undefined as string | null | undefined, reported: false } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuel.active, runningDelay, stopClock, stopAnswers]);
+  }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuelOn, runningDelay, stopClock, stopAnswers]);
   // A stop made while fueling was the fuel stop, not an arrival: it is never asked about afterwards.
   useEffect(() => {
     if (!fuel.active || !userId) return;
@@ -1371,6 +1381,7 @@ export default function HomePage() {
         shell.postPlannerIntent("begin");
         break;
       case "arrive_pickup": {
+        if (fuelOn) { setBlockNotice({ title: "Finish fueling first", text: "You can't arrive while a fuel stop is running. Finish fueling, then tap Arrive." }); break; }
         endDelay();
         learnArrival();
         // Arrived: straight to the Planner to build the load, on this
@@ -1408,6 +1419,7 @@ export default function HomePage() {
         setPicker({ mode: "add" });
         break;
       case "arrive_delivery":
+        if (fuelOn) { setBlockNotice({ title: "Finish fueling first", text: "You can't arrive while a fuel stop is running. Finish fueling, then tap Arrive." }); break; }
         endDelay();
         learnArrival();
         // Arrived: only the time is stamped. Nothing opens; the button becomes
@@ -2319,6 +2331,11 @@ export default function HomePage() {
         onCleared={terminalAlerts.refresh}
       />
 
+      <FullscreenModal open={!!blockNotice} title={blockNotice?.title ?? ""} onClose={() => setBlockNotice(null)} footer={null}>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.45 }}>{blockNotice?.text}</div>
+        <button type="button" className="dash-press" style={{ width: "100%", marginTop: 16, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}
+          onClick={() => setBlockNotice(null)}>OK</button>
+      </FullscreenModal>
       <FullscreenModal open={!!fuelAsk} title="Done fueling?" onClose={() => setFuelAsk(null)} footer={null}>
         <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.45 }}>
           You have a fuel stop open{fuel.active?.started_at ? `, started ${new Date(fuel.active.started_at).toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}. The fueling time needs to end before the trip begins.
