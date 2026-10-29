@@ -341,7 +341,7 @@ export function useActiveOutageBanner(
       const supplierName = r.report_type === "out_of_allocation" ? (r.supplier_name ?? null) : null;
       // The flag's age sits in ⟦ ⟧ so the ticker can draw it white against the red text.
       const age = `⟦${outageAge(createdAtMs, nowMs)}⟧`;
-      const tickerText = wide ? `${shortName}${r.report_type === "long_line" && waitMin != null ? ` · avg wait ${waitMin}m` : ""} ${age}`
+      const tickerText = wide ? `${shortName}${r.report_type === "long_line" && waitMin != null ? ` · avg wait ${waitMin}m` : ""} · reported ${age} ago`
         : isProduct ? `Out of ${shortName} ${age}`
         : supplierName ? `No Allocation - ${supplierName} (${shortName}) ${age}`
         : `OOA ${shortName} ${age}`;
