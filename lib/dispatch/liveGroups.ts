@@ -28,6 +28,7 @@ export type LiveRow = {
   delayMin?: number | null; // how long that earlier stop took
   etaMs?: number | null;    // new arrival estimate for this leg
   reason?: string | null;   // what the driver said held them up, if they said
+  parking?: boolean;        // dispatch told this load to park; it has not parked yet
   destId?: string | null;   // en route: the terminal or store it is headed to
   heldAt?: string | null;   // for a recovered row: the stop that held it
   orders: string[];
@@ -58,6 +59,7 @@ export function classifyLive(
     if (ft.trip.status === "parked" || ft.trip.status === "dispatched" || ft.trip.status === "complete" || ft.trip.status === "cancelled") continue;
     const base = {
       tripId: ft.trip.trip_id, driverName: ft.driverName ?? "Driver", truckName: ft.truckName, trailerName: ft.trailerName, orders: ft.orderNumbers,
+      parking: !!ft.trip.park_requested_at,
     };
     const pickups = [...ft.pickups].filter((p) => p.outcome !== "no_load").sort((a, b) => a.seq - b.seq);
     const drops = [...ft.deliveries].filter((d) => !done(d.status)).sort((a, b) => a.seq - b.seq);

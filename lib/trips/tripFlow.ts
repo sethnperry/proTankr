@@ -852,6 +852,8 @@ export function parkTrip(
     parked_where: where,
     parked_region: args.region?.trim() || null,
     parked_note: note,
+    park_requested_at: null,
+    park_requested_by: null,
   });
   logEvent(store, args.newId, {
     trip_id: args.trip.trip_id, event_type: PARK_EVENT, occurred_at: args.parkedAt, actor_id: args.userId,

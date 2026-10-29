@@ -335,6 +335,9 @@ export function DispatchDashboardView(props: {
   const [hosOpen, setHosOpen] = useState(false);
   const [sheet, setSheet] = useState<null | "enroute" | "onsite" | "delayed" | "cancelled" | "dispatched" | "friction">(null);
   const lc = liveChipCounts(p.liveRows);
+  // Loads dispatch told to park that have not parked yet count with the parked ones.
+  const parkingRows = p.liveRows.filter((r) => r.parking);
+  const parkedCount = p.counts.parked + parkingRows.length;
   // One expirations tile, worst tier first: expired (red), then 7 days
   // (orange), then 30 days (yellow). Counts only that tier, so resolving the
   // reds moves the tile down to the oranges.
@@ -361,7 +364,7 @@ export function DispatchDashboardView(props: {
       ]
     : [
         { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true) },
-        { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
+        { label: "Parked", value: String(parkedCount), color: parkedCount ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
         p.allocation
           ? { label: "Allocation", value: String(p.allocation.count), color: p.allocation.color, onClick: p.allocation.onOpen }
           : { label: "Allocation", value: "0", color: GREY },
@@ -375,7 +378,7 @@ export function DispatchDashboardView(props: {
   // Second row (Live): the rest of the load states and the hours watch.
   const cells2: GaugeCell[] = [
     { label: "Cancelled", value: String(p.cancelledCount), color: p.cancelledCount ? "#fff" : GREY, onClick: () => setSheet("cancelled") },
-    { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
+    { label: "Parked", value: String(parkedCount), color: parkedCount ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
     { label: "Dispatched", value: String(p.dispatchedCount), color: p.dispatchedCount ? "#93c5fd" : GREY, onClick: () => setSheet("dispatched") },
     { label: "Hours", value: String(p.hosAlerts.length), color: p.hosAlerts.some((a) => a.level === "red") ? RED : p.hosAlerts.length ? ORANGE : GREY, onClick: () => setHosOpen(true) },
   ];
@@ -481,7 +484,20 @@ export function DispatchDashboardView(props: {
       <FullscreenModal open={sheet === "dispatched"} title={`Dispatched · not begun (${p.dispatchedCount})`} onClose={() => setSheet(null)}>
         {p.dispatchedBoard ?? <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>No loads sent and waiting.</div>}
       </FullscreenModal>
-      <FullscreenModal open={parkedOpen} title={`Parked loads (${p.counts.parked})`} onClose={() => setParkedOpen(false)}>
+      <FullscreenModal open={parkedOpen} title={`Parked loads (${parkedCount})`} onClose={() => setParkedOpen(false)}>
+        {parkingRows.length > 0 && (
+          <>
+            <SectionLabel first>Parking it</SectionLabel>
+            {parkingRows.map((r) => (
+              <button key={r.tripId} type="button" className="dash-press" onClick={() => { setParkedOpen(false); p.onOpenTrip(r.tripId); }}
+                style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "9px 12px", marginBottom: 6, cursor: "pointer", borderColor: "#93c5fd66" }}>
+                <div style={{ fontSize: 14, fontWeight: 800 }}><span style={{ color: "#93c5fd" }}>PARKING IT</span> <span style={{ fontWeight: 600 }}>· {r.driverName}</span></div>
+                <div style={{ fontSize: 12, color: L.muted, marginTop: 2 }}>{[r.truckName ? `Truck ${r.truckName}` : null, r.trailerName ? `Trailer ${r.trailerName}` : null].filter(Boolean).join(" · ")}{r.orders[0] ? ` · Order ${r.orders[0]}` : ""}</div>
+              </button>
+            ))}
+            {p.counts.parked > 0 && <SectionLabel>Parked</SectionLabel>}
+          </>
+        )}
         {p.parkedBoard}
       </FullscreenModal>
       <FullscreenModal open={expOpen} title={`Expirations · next 30 days${scope}`} onClose={() => setExpOpen(false)}>

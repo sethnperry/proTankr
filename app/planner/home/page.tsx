@@ -1358,6 +1358,7 @@ export default function HomePage() {
   const onBigButton = () => {
     setNotice(null);
     if (!store || !userId) return;
+    if (parkRequested) { setParkOpen(true); return; }
     switch (step.kind) {
       case "start":
         if (parked) {
@@ -1527,6 +1528,8 @@ export default function HomePage() {
   const onBoardLines = (compLoads: TripCompartmentLoadRow[] | undefined) =>
     onBoard(compLoads ?? []).sort((a, b) => a.comp_number - b.comp_number).map(loadLine);
   const showPark = !!snap && canPark(openTrip, step, onBoard(snap.compLoads).length > 0);
+  // Dispatch told the driver to park this load: the big button becomes "Park it".
+  const parkRequested = !!openTrip?.park_requested_at && showPark;
   // Regions for Park Preloaded: the company's list, defaulting to the driver's own.
   const [parkRegions, setParkRegions] = useState<string[]>([]);
   const [myRegion, setMyRegion] = useState<string | null>(null);
@@ -1967,11 +1970,6 @@ export default function HomePage() {
                 Cancel load
               </button>
             )}
-            {showPark && (
-              <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
-                Park preloaded
-              </button>
-            )}
           </div>
         </div>
       ) : (
@@ -2041,6 +2039,12 @@ export default function HomePage() {
           preset={dutyStop.answer} presetReason={dutyStop.reason} reportPosted={dutyStop.reported} onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
+      {parkRequested && !openingPlanner && (
+        <div style={{ ...card, marginTop: 4, marginBottom: 10, borderColor: "rgba(96,165,250,0.6)" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#93c5fd" }}>Dispatch</div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>Park this load. Tap Park it to say where.</div>
+        </div>
+      )}
       <div style={{ marginTop: 4, marginBottom: 14 }}>
       {/* Next step. Hidden while the "Did you arrive?" card is waiting for an answer. */}
       {!arriveCardPending && <button
@@ -2052,13 +2056,18 @@ export default function HomePage() {
           width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
         }}
       >
-        {openingPlanner ? busyText(true, "Opening Planner…") : parked && step.kind === "start"
+        {openingPlanner ? busyText(true, "Opening Planner…") : parkRequested ? "Park it" : parked && step.kind === "start"
           ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
           : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
           : step.label}
       </button>}
       {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
-        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{step.detail}</div>
+        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{parkRequested ? "Dispatch asked you to park this load" : step.detail}</div>
+      )}
+      {showPark && !parkRequested && !openingPlanner && !arriveCardPending && (
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          <button type="button" onClick={() => setParkOpen(true)} style={{ background: "none", border: "none", color: muted, fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>Park preloaded</button>
+        </div>
       )}
       {sigDelivery && !openingPlanner && (
         <button type="button" className="dash-press" onClick={() => setConsigneeSignOpen(true)}

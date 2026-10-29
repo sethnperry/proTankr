@@ -42,6 +42,9 @@ export type TripRow = Synced & {
   parked_where?: string | null;
   parked_region?: string | null; // the region it's parked in, for dispatch's region filter
   parked_note?: string | null;
+  // Dispatch told the driver to park this load (20261030000000). Cleared when it is parked or the request is withdrawn.
+  park_requested_at?: string | null;
+  park_requested_by?: string | null;
   // Cancel a load (20261013000000). Reasons in the order picked.
   cancel_reasons?: string[] | null;
   cancel_note?: string | null;

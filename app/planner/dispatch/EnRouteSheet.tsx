@@ -18,7 +18,8 @@ import { locationPlace, locationTitle, type DeliveryLocation } from "@/lib/trips
 import { deliveryPlace, type Place } from "@/lib/trips/fleetProgress";
 import { activePickup } from "@/lib/trips/tripFlow";
 import { noLoadReasonLabel } from "@/lib/trips/terminalIssues";
-import { cancelLoadInProgress, changeDeliveryLocation, changeOrderNumber, changePickupTerminal } from "@/lib/dispatch/tripEdits";
+import { arriveByDispatch, cancelLoadInProgress, parkByDispatch, requestPark, withdrawPark } from "@/lib/dispatch/tripEdits";
+import { DispatchEditSheet } from "./DispatchEditSheet";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
 import type { LiveRow } from "@/lib/dispatch/liveGroups";
 import { busyProps } from "@/lib/ui/pending";
@@ -47,14 +48,17 @@ export function EnRouteSheet({ open, rows, fleetTrips, locations, terminals, del
 }) {
   const L = useDashLook();
   const [destKey, setDestKey] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null); // trip id
-  const kinds: ("to_rack" | "to_drop")[] = ["to_rack", "to_drop"];
+  const [editing, setEditingId] = useState<string | null>(null); // trip id
+  const [editMode, setEditMode] = useState<"edit" | "cancel">("edit");
+  const setEditing = (id: string | null, mode: "edit" | "cancel" = "edit") => { setEditMode(mode); setEditingId(id); };
+  const kinds: ("to_rack" | "to_drop" | "parking")[] = ["to_rack", "to_drop", "parking"];
   const groups = useMemo(() => {
-    const m = new Map<string, { key: string; kind: "to_rack" | "to_drop"; label: string; rows: LiveRow[] }>();
+    const m = new Map<string, { key: string; kind: "to_rack" | "to_drop" | "parking"; label: string; rows: LiveRow[] }>();
     for (const r of rows) {
       if (r.kind !== "to_rack" && r.kind !== "to_drop") continue;
-      const key = `${r.kind}|${r.destId ?? r.where}`;
-      const g = m.get(key) ?? { key, kind: r.kind, label: destLabel(r), rows: [] };
+      const parking = !!r.parking;
+      const key = parking ? "parking|all" : `${r.kind}|${r.destId ?? r.where}`;
+      const g = m.get(key) ?? { key, kind: (parking ? "parking" : r.kind) as "to_rack" | "to_drop" | "parking", label: parking ? "Parking it" : destLabel(r), rows: [] };
       g.rows.push(r);
       m.set(key, g);
     }
@@ -92,7 +96,7 @@ export function EnRouteSheet({ open, rows, fleetTrips, locations, terminals, del
           if (!list.length) return null;
           return (
             <div key={k} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, margin: "2px 0 8px" }}>{k === "to_rack" ? "To load" : "To deliver"}</div>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, margin: "2px 0 8px" }}>{k === "to_rack" ? "To load" : k === "to_drop" ? "To deliver" : "Parking"}</div>
               {list.map((g) => (
                 <button key={g.key} type="button" className="dash-press" onClick={() => setDestKey(g.key)}
                   style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "11px 12px", marginBottom: 6, cursor: "pointer", fontSize: 14, fontWeight: 800 }}>
@@ -109,19 +113,23 @@ export function EnRouteSheet({ open, rows, fleetTrips, locations, terminals, del
           const ft = ftOf(r.tripId);
           if (!ft) return null;
           return <TripCard key={r.tripId} ft={ft} row={r} locations={locations} deliveryLocs={deliveryLocs} sizes={sizes.get(ft.trip.trailer_id ?? "")} colorOf={colorOf} tm={tm}
-            onEdit={() => setEditing(r.tripId)} onOpen={() => { setDestKey(null); onClose(); onOpenTrip(r.tripId); }} />;
+            actor={userId ?? ""} onChanged={onChanged} onEdit={() => setEditing(r.tripId, "edit")} onCancel={() => setEditing(r.tripId, "cancel")} onOpen={() => { setDestKey(null); onClose(); onOpenTrip(r.tripId); }} />;
         })}
       </FullscreenModal>
 
-      {editFt && (
-        <EditSheet ft={editFt} terminals={terminals} deliveryLocs={deliveryLocs} deliveryTanks={deliveryTanks} companyId={companyId} userId={userId}
-          onLocationAdded={onLocationAdded} onDone={() => { onChanged(); }} onClose={() => setEditing(null)} tm={tm} />
+      {editFt && editMode === "edit" && (
+        <DispatchEditSheet ft={editFt} terminals={terminals} locations={deliveryLocs} tanks={deliveryTanks} companyId={companyId} userId={userId}
+          onLocationAdded={onLocationAdded} onDone={onChanged} onClose={() => setEditing(null)} />
+      )}
+      {editFt && editMode === "cancel" && (
+        <CancelSheet ft={editFt} actor={userId ?? ""} onDone={onChanged} onClose={() => setEditing(null)} />
       )}
     </>
   );
 }
 
-function TripCard({ ft, row, locations, deliveryLocs, sizes, colorOf, tm, onEdit, onOpen }: {
+function TripCard({ ft, row, locations, deliveryLocs, sizes, colorOf, tm, actor, onChanged, onEdit, onCancel, onOpen }: {
+  actor: string; onChanged: () => void; onCancel: () => void;
   ft: FleetTrip; row: LiveRow; locations: Map<string, Place>; deliveryLocs: DeliveryLocation[]; sizes?: Map<number, number>;
   colorOf: (id: string | null) => string | null; tm: (id: string | number | null) => string | null; onEdit: () => void; onOpen: () => void;
 }) {
@@ -171,101 +179,66 @@ function TripCard({ ft, row, locations, deliveryLocs, sizes, colorOf, tm, onEdit
           </div>
         );
       })}
-      <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
-        <button type="button" onClick={onEdit} style={{ background: "none", border: "none", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}>Edit trip</button>
-        <button type="button" onClick={onOpen} style={{ background: "none", border: "none", color: muted, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>Open PTD ›</button>
-      </div>
+      <ActionsMenu ft={ft} actor={actor} onChanged={onChanged} onEdit={onEdit} onCancel={onCancel} onOpen={onOpen} />
     </div>
   );
 }
 
-function EditSheet({ ft, terminals, deliveryLocs, deliveryTanks, companyId, userId, tm, onLocationAdded, onDone, onClose }: {
-  ft: FleetTrip; terminals: TermRow[]; deliveryLocs: DeliveryLocation[]; deliveryTanks: any[]; companyId: string | null; userId: string | null;
-  tm: (id: string | number | null) => string | null; onLocationAdded: () => void; onDone: () => void; onClose: () => void;
-}) {
+function ActionsMenu({ ft, actor, onChanged, onEdit, onCancel, onOpen }: { ft: FleetTrip; actor: string; onChanged: () => void; onEdit: () => void; onCancel: () => void; onOpen: () => void }) {
   const L = useDashLook();
-  const [order, setOrder] = useState(ft.orderNumbers[0] ?? "");
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [termFor, setTermFor] = useState<string | null>(null); // pickup id
-  const [q, setQ] = useState("");
-  const [locFor, setLocFor] = useState<string | null>(null);   // delivery id
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const [note, setNote] = useState("");
-  const actor = userId ?? "";
-  const run = async (fn: () => Promise<string | null>, ok: string, after?: () => void) => {
+  const [msg, setMsg] = useState<string | null>(null);
+  const aboard = ft.compLoads.some((c) => c.disposition === "loaded");
+  const requested = !!ft.trip.park_requested_at;
+  const stop = ft.pickups.filter((p) => p.outcome !== "no_load" && !p.left_at).sort((a, b) => a.seq - b.seq)[0];
+  const drop = ft.deliveries.filter((d) => d.status === "planned").sort((a, b) => a.seq - b.seq)[0];
+  const canArrive = stop ? !stop.arrived_at : !!drop && !drop.arrived_at;
+  const run = async (fn: () => Promise<string | null>) => {
     setBusy(true); setMsg(null);
     const err = await fn();
     setBusy(false);
-    if (err) { setMsg({ ok: false, text: err }); return; }
-    setMsg({ ok: true, text: `${ok} The driver was notified.` });
-    onDone(); after?.();
+    if (err) { setMsg(err); return; }
+    setOpen(false); onChanged();
   };
-  const hits = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return terminals.filter((t) => !s || `${t.terminal_name} ${t.city ?? ""} ${t.state ?? ""}`.toLowerCase().includes(s)).slice(0, 40);
-  }, [terminals, q]);
-  const row = { ...L.secondary, display: "flex", width: "100%", textAlign: "left" as const, color: "#fff", padding: "11px 12px", marginBottom: 6, cursor: "pointer", fontSize: 14, justifyContent: "space-between", gap: 8 };
-  const open = ft.pickups.filter((p) => !p.arrived_at && !p.left_at && p.outcome !== "no_load");
-  const openDrops = ft.deliveries.filter((d) => !d.arrived_at && !d.left_at && d.status === "planned");
-  const head = { fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: L.muted, margin: "14px 0 6px" };
+  const item = { display: "block", width: "100%", textAlign: "left" as const, background: "none", border: "none", borderTop: `1px solid ${L.hairline}`, color: "#fff", fontSize: 14, padding: "11px 12px", cursor: "pointer", opacity: busy ? 0.5 : 1 };
   return (
-    <>
-      <FullscreenModal open={!termFor} title={`Edit trip · ${tagOf(ft.truckName, ft.driverName)}`} onClose={onClose}>
-        {msg && <div style={{ fontSize: 13, color: msg.ok ? "#4ade80" : "#f87171", marginBottom: 10 }}>{msg.text}</div>}
-        <div style={{ ...head, marginTop: 0 }}>Order number</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input value={order} onChange={(e) => setOrder(e.target.value)} style={{ flex: 1, minWidth: 0, background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "10px 12px", borderRadius: 2 }} />
-          <button type="button" disabled={busy || order.trim() === (ft.orderNumbers[0] ?? "")} onClick={() => void run(() => changeOrderNumber(ft, order, actor), "Order changed.")}
-            style={{ border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 14px", cursor: "pointer", opacity: busy ? 0.5 : 1 }}>Save</button>
+    <div style={{ marginTop: 12 }}>
+      <button type="button" onClick={() => { setOpen((v) => !v); setMsg(null); }} aria-expanded={open}
+        style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", padding: "7px 12px", cursor: "pointer" }}>
+        Actions {open ? "▴" : "▾"}
+      </button>
+      {open && (
+        <div style={{ ...L.secondary, marginTop: 6 }}>
+          {msg && <div style={{ fontSize: 12, color: "#f87171", padding: "8px 12px" }}>{msg}</div>}
+          {requested
+            ? <button type="button" disabled={busy} onClick={() => void run(() => parkByDispatch(ft, actor))} style={{ ...item, borderTop: "none" }}>Park (mark parked)</button>
+            : canArrive && <button type="button" disabled={busy} onClick={() => void run(() => arriveByDispatch(ft, actor))} style={{ ...item, borderTop: "none" }}>Arrive</button>}
+          <button type="button" disabled={busy} onClick={() => { setOpen(false); onEdit(); }} style={item}>{aboard ? "Correct trip…" : "Edit trip"}</button>
+          {aboard && (requested
+            ? <button type="button" disabled={busy} onClick={() => void run(() => withdrawPark(ft, actor))} style={item}>Don&apos;t park</button>
+            : <button type="button" disabled={busy} onClick={() => void run(() => requestPark(ft, actor))} style={item}>Park preloaded</button>)}
+          <button type="button" disabled={busy} onClick={() => { setOpen(false); onCancel(); }} style={{ ...item, color: "#f87171" }}>Cancel load…</button>
+          <button type="button" disabled={busy} onClick={onOpen} style={{ ...item, color: L.muted }}>Open PTD ›</button>
         </div>
-        {open.length > 0 && <div style={head}>Pickup</div>}
-        {open.map((p) => (
-          <button key={p.pickup_id} type="button" className="dash-press" onClick={() => { setQ(""); setTermFor(p.pickup_id); }} style={row}>
-            <span>{p.name ?? "Not set"}{p.city ? `, ${p.city}` : ""}</span><span style={{ color: L.muted }}>Change ›</span>
-          </button>
-        ))}
-        {openDrops.length > 0 && <div style={head}>Delivery</div>}
-        {openDrops.map((d) => {
-          const loc = d.location_id ? deliveryLocs.find((l) => l.location_id === d.location_id) : null;
-          return (
-            <button key={d.delivery_id} type="button" className="dash-press" onClick={() => setLocFor(d.delivery_id)} style={row}>
-              <span>{loc ? `${locationTitle(loc)}, ${locationPlace(loc)}` : d.one_off_name ?? "Not set"}</span><span style={{ color: L.muted }}>Change ›</span>
-            </button>
-          );
-        })}
-        <div style={head}>Cancel this load</div>
-        {!confirmCancel ? (
-          <button type="button" className="dash-press" onClick={() => setConfirmCancel(true)} style={{ ...row, borderColor: "rgba(248,113,113,0.5)", color: "#f87171", fontWeight: 800 }}>Cancel load…</button>
-        ) : (
-          <div>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for the driver (optional)" maxLength={150}
-              style={{ width: "100%", boxSizing: "border-box", background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "10px 12px", borderRadius: 2, marginBottom: 8 }} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" {...busyProps(busy)} onClick={() => void run(() => cancelLoadInProgress(ft, actor, note), "Load cancelled.", () => onClose())}
-                style={{ border: "none", background: "#ef4444", color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "10px 14px", cursor: "pointer" }}>Cancel load and notify driver</button>
-              <button type="button" onClick={() => setConfirmCancel(false)} style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "10px 12px", cursor: "pointer" }}>Keep</button>
-            </div>
-          </div>
-        )}
-        <div style={{ fontSize: 12, color: L.faint, marginTop: 14 }}>Every change is sent to the driver as a notification.</div>
-      </FullscreenModal>
+      )}
+    </div>
+  );
+}
 
-      <FullscreenModal open={!!termFor} title="New pickup terminal" onClose={() => setTermFor(null)}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search terminal or city" autoFocus
-          style={{ width: "100%", boxSizing: "border-box", background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "11px 12px", borderRadius: 2, marginBottom: 10 }} />
-        {hits.map((t) => (
-          <button key={String(t.terminal_id)} type="button" className="dash-press"
-            onClick={() => { const id = termFor!; setTermFor(null); void run(() => changePickupTerminal(ft, id, { terminalId: String(t.terminal_id), name: t.terminal_name, city: t.city, state: t.state }, actor), "Pickup changed."); }} style={row}>
-            <span>{t.terminal_name}</span><span style={{ color: L.muted }}>{[t.city, t.state].filter(Boolean).join(", ")}</span>
-          </button>
-        ))}
-      </FullscreenModal>
-
-      <LocationPicker open={!!locFor} title="New delivery location" origin={null} locations={deliveryLocs} tanks={deliveryTanks} companyId={companyId} userId={userId}
-        onLocationAdded={onLocationAdded}
-        onPick={(to) => { const id = locFor!; setLocFor(null); if (!to.locationId) return; const l = deliveryLocs.find((x) => x.location_id === to.locationId); void run(() => changeDeliveryLocation(ft, id, { locationId: to.locationId!, label: l ? `${locationTitle(l)}, ${locationPlace(l)}` : "a new store" }, actor), "Delivery changed."); }}
-        onClose={() => setLocFor(null)} />
-    </>
+function CancelSheet({ ft, actor, onDone, onClose }: { ft: FleetTrip; actor: string; onDone: () => void; onClose: () => void }) {
+  const L = useDashLook();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <FullscreenModal open title={`Cancel load · ${tagOf(ft.truckName, ft.driverName)}`} onClose={onClose}>
+      {err && <div style={{ fontSize: 13, color: "#f87171", marginBottom: 10 }}>{err}</div>}
+      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for the driver (optional)" maxLength={150}
+        style={{ width: "100%", boxSizing: "border-box", background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "10px 12px", borderRadius: 2, marginBottom: 10 }} />
+      <button type="button" {...busyProps(busy)} onClick={async () => { setBusy(true); const e = await cancelLoadInProgress(ft, actor, note); setBusy(false); if (e) { setErr(e); return; } onDone(); onClose(); }}
+        style={{ border: "none", background: "#ef4444", color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "11px 14px", cursor: "pointer" }}>Cancel load and notify driver</button>
+      <div style={{ fontSize: 12, color: L.faint, marginTop: 12 }}>The driver is notified. A load with product on board can&apos;t be cancelled; park or deliver it instead.</div>
+    </FullscreenModal>
   );
 }

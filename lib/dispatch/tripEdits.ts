@@ -72,3 +72,103 @@ export async function cancelLoadInProgress(ft: FleetTrip, actorId: string, note:
   void notifyDriver(ft.trip.trip_id, note.trim() ? `Dispatch cancelled this load: ${note.trim()}` : "Dispatch cancelled this load.");
   return null;
 }
+
+/** Dispatch marks the truck arrived at the stop it is headed to. */
+export async function arriveByDispatch(ft: FleetTrip, actorId: string): Promise<string | null> {
+  const at = nowIso();
+  const pk = ft.pickups.filter((p) => p.outcome !== "no_load" && !p.left_at).sort((a, b) => a.seq - b.seq)[0];
+  if (pk && !pk.arrived_at) {
+    const { error } = await supabase.from("trip_pickups").update({ arrived_at: at, client_updated_at: at }).eq("pickup_id", pk.pickup_id);
+    if (error) return error.message;
+    await logEvent(ft.trip.trip_id, actorId, "pickup_arrived", { by: "dispatch" });
+    void notifyDriver(ft.trip.trip_id, `Dispatch marked you arrived at ${pk.name ?? "the rack"}.`);
+    return null;
+  }
+  const d = ft.deliveries.filter((x) => x.status === "planned").sort((a, b) => a.seq - b.seq)[0];
+  if (!pk && d && !d.arrived_at) {
+    const a = await supabase.from("trip_deliveries").update({ arrived_at: at, client_updated_at: at }).eq("delivery_id", d.delivery_id);
+    if (a.error) return a.error.message;
+    await supabase.from("trips").update({ status: "delivering", client_updated_at: at }).eq("trip_id", ft.trip.trip_id);
+    await logEvent(ft.trip.trip_id, actorId, "delivery_arrived", { by: "dispatch" });
+    void notifyDriver(ft.trip.trip_id, "Dispatch marked you arrived at the delivery.");
+    return null;
+  }
+  return "There is no stop to arrive at.";
+}
+
+/** Tell the driver to park the loaded trailer. */
+export async function requestPark(ft: FleetTrip, actorId: string): Promise<string | null> {
+  if (!ft.compLoads.some((c) => c.disposition === "loaded")) return "Nothing is loaded yet, so there is nothing to park.";
+  const at = nowIso();
+  const { error } = await supabase.from("trips").update({ park_requested_at: at, park_requested_by: actorId, client_updated_at: at }).eq("trip_id", ft.trip.trip_id);
+  if (error) return error.message;
+  await logEvent(ft.trip.trip_id, actorId, "park_requested", {});
+  void notifyDriver(ft.trip.trip_id, "Dispatch asked you to park this load. Open the dashboard and tap Park it.");
+  return null;
+}
+
+export async function withdrawPark(ft: FleetTrip, actorId: string): Promise<string | null> {
+  const at = nowIso();
+  const { error } = await supabase.from("trips").update({ park_requested_at: null, park_requested_by: null, client_updated_at: at }).eq("trip_id", ft.trip.trip_id);
+  if (error) return error.message;
+  await logEvent(ft.trip.trip_id, actorId, "park_withdrawn", {});
+  void notifyDriver(ft.trip.trip_id, "Dispatch said don't park. Carry on with the trip.");
+  return null;
+}
+
+/** Dispatch parks the load on the driver's behalf. */
+export async function parkByDispatch(ft: FleetTrip, actorId: string): Promise<string | null> {
+  const at = nowIso();
+  // A stop arrived at but not begun goes back to not arrived, as when the driver parks.
+  for (const d of ft.deliveries.filter((x) => x.status === "planned" && x.arrived_at && !x.begin_at)) {
+    await supabase.from("trip_deliveries").update({ arrived_at: null, delay_reason_id: null, delay_note: null, client_updated_at: at }).eq("delivery_id", d.delivery_id);
+  }
+  const { data, error } = await supabase.from("trips").update({
+    status: "parked", parked_at: at, parked_by: actorId, parked_for: "layover", park_requested_at: null, park_requested_by: null, client_updated_at: at,
+  }).eq("trip_id", ft.trip.trip_id).not("status", "in", "(complete,cancelled,parked)").select("trip_id");
+  if (error) return error.message;
+  if (!data?.length) return "That load can't be parked now.";
+  await logEvent(ft.trip.trip_id, actorId, "parked", { by: "dispatch" });
+  void notifyDriver(ft.trip.trip_id, "Dispatch parked your load.");
+  return null;
+}
+
+// ── The full edit (the driver's Begin Trip card, used by dispatch) ───────────
+
+type Rows = { trip: Record<string, any>; orders: Record<string, any>[]; pickups: Record<string, any>[]; deliveries: Record<string, any>[]; events: Record<string, any>[] };
+
+async function write(table: string, key: string, rows: Record<string, any>[], known: Set<string>) {
+  const at = nowIso();
+  for (const r of rows) {
+    const row = { ...r, client_updated_at: at };
+    const res = known.has(String(r[key]))
+      ? await supabase.from(table).update(row).eq(key, r[key])
+      : await supabase.from(table).insert(row);
+    if (res.error) return res.error.message;
+  }
+  return null;
+}
+
+/** Writes the rows buildStartLoad produced for an existing trip. */
+export async function saveTripEdit(ft: FleetTrip, orderIds: string[], rows: Rows, supplierId: string | null | undefined, actorId: string): Promise<string | null> {
+  const at = nowIso();
+  const t = await supabase.from("trips").update({ ...rows.trip, client_updated_at: at }).eq("trip_id", ft.trip.trip_id);
+  if (t.error) return t.error.message;
+  const known = (ids: string[]) => new Set(ids);
+  for (const [table, key, list, ids] of [
+    ["trip_orders", "order_id", rows.orders, orderIds],
+    ["trip_pickups", "pickup_id", rows.pickups, ft.pickups.map((p) => p.pickup_id)],
+    ["trip_deliveries", "delivery_id", rows.deliveries, ft.deliveries.map((d) => d.delivery_id)],
+  ] as const) {
+    const err = await write(table, key, list, known(ids));
+    if (err) return err;
+  }
+  if (supplierId !== undefined) {
+    const pk = rows.pickups[0]?.pickup_id;
+    if (pk) await supabase.from("trip_pickups").update({ supplier_id: supplierId, client_updated_at: at }).eq("pickup_id", pk);
+  }
+  if (rows.events.length) await supabase.from("trip_events").insert(rows.events);
+  await logEvent(ft.trip.trip_id, actorId, "dispatch_edit", { change: "trip_edited" });
+  void notifyDriver(ft.trip.trip_id, "Dispatch updated your trip. Open the dashboard to see the changes.");
+  return null;
+}
