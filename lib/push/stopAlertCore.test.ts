@@ -13,7 +13,7 @@ test("waiting on an arrival: asks about it", () => {
 });
 test("at a rack and drove elsewhere: rack hop", () => {
   const t: StopTrip = { ...base, pickups: [{ seq: 1, arrived_at: "2026-10-26T12:30:00Z", left_at: null, outcome: null, name: "Marathon" }] };
-  assert.equal(planStopNotice(t, [stop], 0, undefined, Date.parse(stop.at) + 6 * 60_000)?.kind, "hop");
+  assert.equal(planStopNotice(t, [stop], 0, undefined, Date.parse(stop.at) + 6 * 60_000, 9)?.kind, "hop");
 });
 test("already announced or already recorded stops send nothing", () => {
   assert.equal(planStopNotice(base, [stop], Date.parse(stop.at)), null);
@@ -41,5 +41,5 @@ test("a stop while still at the rack you arrived at asks nothing (moving up in l
   const now = Date.parse("2026-10-26T15:00:00.000Z");
   assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, 0.1), null);
   assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, 8)?.kind, "hop");
-  assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, null)?.kind, "hop");
+  assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, null), null);
 });

@@ -115,6 +115,9 @@ export function useTripLoading(a: Args) {
       const picked = compPicks.find((p) => p.product_id === String(v.productId));
       if (picked) compDefaults[n] = { bol: null, supplier: picked.name, supplierId: picked.supplier_id, net: null, netTouched: false };
     }
+    // Delays logged at the rack for this pickup (the Begin Loading step logs them without a pickup id).
+    const rackDelays = loggedDelays(tripStoreObj.list("trip_events", (e) => e.trip_id === tripPickup.trip_id))
+      .filter((d) => d.leg === "at_rack" && (d.pickupId === tripPickup.pickup_id || (d.pickupId == null && (!tripPickup.arrived_at || d.startedAt >= tripPickup.arrived_at))));
     const snap = tripSnapshot(tripStoreObj, tripPickup.trip_id);
     const allComps = Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[];
     const trips = Object.values(tripStoreHook.state.rows.trips ?? {}) as TripRow[];
@@ -133,11 +136,11 @@ export function useTripLoading(a: Args) {
       existingDelayReasonId: tripPickup.delay_code && isTerminalIssueCode(tripPickup.delay_code)
         ? issueChoiceValue(tripPickup.delay_code)
         : tripPickup.delay_reason_id ?? (() => {
-            const hit = loggedDelays(tripStoreObj.list("trip_events", (e) => e.trip_id === tripPickup.trip_id))
-              .filter((d) => d.leg === "at_rack" && d.pickupId === tripPickup.pickup_id).map((d) => delayIssueCode(d.code)).find(Boolean);
+            const hit = rackDelays.map((d) => delayIssueCode(d.code)).find(Boolean);
             return hit ? issueChoiceValue(hit) : null;
           })(),
-      existingDelayNote: tripPickup.delay_note,
+      // A delay already logged at this rack explains the wait, so Finish Loading doesn't ask again.
+      existingDelayNote: tripPickup.delay_note ?? (rackDelays.length && !rackDelays.some((d) => delayIssueCode(d.code)) ? rackDelays.map((d) => d.label).join(", ") : null),
       needsOdometer: pickupNeedsOdometer(snap.pickups, tripPickup.pickup_id),
       existingOdometer: tripPickup.odometer,
       suppliers: tripSuppliers,

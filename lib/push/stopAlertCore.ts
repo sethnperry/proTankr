@@ -43,7 +43,8 @@ export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs:
   const atRack = live.find((p) => p.arrived_at && !p.left_at);
   if (atRack) {
     // Still parked at that rack: the stop was just moving up in line, so there's nothing to ask.
-    if (milesFromRack != null && milesFromRack <= STILL_AT_RACK_MI) return null;
+    // Only ask once there's proof the truck has gone: with no position, or still at the rack, it's just a wait.
+    if (milesFromRack == null || milesFromRack <= STILL_AT_RACK_MI) return null;
     // The place is the title (it stands out); the body is the one question. Yes / No buttons answer it.
     return { at: stop.at, kind: "hop", place: atRack.name ?? "the rack", title: `Did you load at ${atRack.name ?? "the rack"}?`, body: "" };
   }

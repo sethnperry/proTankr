@@ -260,7 +260,8 @@ export default function HomePage() {
     if (!userId || !openTrip || !delayLeg) return;
     const d: RunningDelay = {
       tripId: openTrip.trip_id, leg: delayLeg, code, note, startedAt: new Date().toISOString(),
-      pickupId: "pickup" in step ? step.pickup.pickup_id : null,
+      // The "planner" step (Begin Loading) carries no pickup of its own: use the rack the driver is waiting at.
+      pickupId: "pickup" in step ? step.pickup.pickup_id : (snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome)?.pickup_id ?? null),
       deliveryId: "delivery" in step ? step.delivery.delivery_id : null,
     };
     writeRunningDelay(userId, d);
