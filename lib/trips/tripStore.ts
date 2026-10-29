@@ -268,6 +268,18 @@ export function createTripStore(opts: TripStoreOptions) {
     return true;
   }
 
+  // Drop one row the server no longer has (e.g. a pickup deleted from the server). Rows still waiting to
+  // send are kept: they may have been made offline.
+  function dropRowIfSynced(table: TripTable, key: string): boolean {
+    if (state.queue.some((q) => q.table === table && q.key === key)) return false;
+    if (state.failed.some((f) => f.table === table && f.key === key)) return false;
+    if (!(key in state.rows[table])) return false;
+    const next = { ...state.rows[table] } as Record<string, unknown>;
+    delete next[key];
+    commit({ ...state, rows: { ...state.rows, [table]: next } as TripStoreState["rows"] });
+    return true;
+  }
+
   function dismissFailed(table: TripTable, key: string) {
     commit({ ...state, failed: state.failed.filter((f) => !(f.table === table && f.key === key)) });
   }
@@ -399,6 +411,7 @@ export function createTripStore(opts: TripStoreOptions) {
     get,
     list,
     forgetTrip,
+    dropRowIfSynced,
     dismissFailed,
     drain,
     pendingCount: () => state.queue.length,

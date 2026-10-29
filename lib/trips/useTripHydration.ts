@@ -67,7 +67,16 @@ export function useTripHydration(
           supabase.from("trip_compartment_loads").select("*").in("trip_id", openIds),
         ]);
         store.hydrate("trip_orders", (o.data ?? []) as TripOrderRow[]);
-        store.hydrate("trip_pickups", (p.data ?? []) as TripPickupRow[]);
+        const serverPickups = (p.data ?? []) as TripPickupRow[];
+        store.hydrate("trip_pickups", serverPickups);
+        // A pickup removed on the server (e.g. a hop that was undone) leaves the phone too.
+        if (!p.error) {
+          const have = new Set(serverPickups.map((x) => x.pickup_id));
+          const open = new Set(openIds);
+          for (const lp of store.list("trip_pickups", (x) => open.has(x.trip_id) && !have.has(x.pickup_id))) {
+            store.dropRowIfSynced("trip_pickups", lp.pickup_id);
+          }
+        }
         const deliveries = (d.data ?? []) as TripDeliveryRow[];
         store.hydrate("trip_deliveries", deliveries);
         store.hydrate("trip_compartment_loads", (c.data ?? []) as TripCompartmentLoadRow[]);
