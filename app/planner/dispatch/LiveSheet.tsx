@@ -35,7 +35,7 @@ export function LiveSheet({ open, title, rows, kinds, showRecovered, onClose, on
       {rows.length === 0 && <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Nothing here right now.</div>}
       {rows.length > 0 && shown.length === 0 && <div style={{ fontSize: 14, color: L.muted }}>No matches.</div>}
       {(showRecovered ? ([...kinds, "recovered"] as const) : kinds).map((k) => {
-        const list = k === "recovered" ? shown.filter((r) => r.recovered) : shown.filter((r) => r.kind === k && !r.recovered);
+        const list = k === "recovered" ? shown.filter((r) => r.recovered) : shown.filter((r) => r.kind === k && !(showRecovered && r.recovered));
         if (!list.length) return null;
         return (
           <div key={k} style={{ marginBottom: 14 }}>

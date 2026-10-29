@@ -29,6 +29,7 @@ import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { LiveSheet } from "./LiveSheet";
 import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
+import { adviceFor } from "@/lib/dispatch/frictionAdvice";
 
 export type DispatchMode = "plan" | "live";
 
@@ -200,6 +201,18 @@ function ConflictCard({ c, terminal, product, onOpenTrip, openingId, isNew, onSe
           </button>
         )}
       </div>
+      {!handled && (() => {
+        const a = adviceFor(c, (id) => product(id).code ?? "product");
+        const h = { fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: L.muted, margin: "8px 0 3px" };
+        return (
+          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${L.hairline}`, fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.85)" }}>
+            <div style={{ ...h, marginTop: 0 }}>What this means</div>
+            <div>{a.meaning}</div>
+            {a.now.length > 0 && <><div style={h}>What to do now</div>{a.now.map((x) => <div key={x}>• {x}</div>)}</>}
+            {a.prevent.length > 0 && <><div style={h}>To avoid it next time</div>{a.prevent.map((x) => <div key={x}>• {x}</div>)}</>}
+          </div>
+        );
+      })()}
       {c.trucks.map((tr) => (
         <button key={tr.tripId} type="button" onClick={() => onOpenTrip(tr.tripId)} className="dash-press" {...busyProps(openingId === tr.tripId)}
           style={{ position: "relative", display: "flex", width: "100%", alignItems: "baseline", gap: 8, padding: "9px 14px", background: "none", border: "none",
@@ -324,7 +337,7 @@ export function DispatchDashboardView(props: {
   const [expOpen, setExpOpen] = useState(false);
   const [parkedOpen, setParkedOpen] = useState(false);
   const [hosOpen, setHosOpen] = useState(false);
-  const [sheet, setSheet] = useState<null | "enroute" | "onsite" | "delayed" | "cancelled" | "dispatched">(null);
+  const [sheet, setSheet] = useState<null | "enroute" | "onsite" | "delayed" | "cancelled" | "dispatched" | "friction">(null);
   const lc = liveChipCounts(p.liveRows);
   // One expirations tile, worst tier first: expired (red), then 7 days
   // (orange), then 30 days (yellow). Counts only that tier, so resolving the
@@ -343,10 +356,9 @@ export function DispatchDashboardView(props: {
     : { ...expTile0, label: `${expTile0.label}${p.focusCount != null ? scope : ""}` };
 
   const open = p.conflicts.filter((c) => !c.handled).length;
-  const goFriction = () => document.getElementById("dispatch-friction")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const cells: GaugeCell[] = live
     ? [
-        { label: "Friction", value: String(open), color: open ? RED : GREY, onClick: goFriction },
+        { label: "Friction", value: String(open), color: open ? RED : GREY, onClick: () => setSheet("friction") },
         { label: "En Route", value: String(lc.enRoute), color: lc.enRoute ? "#fff" : GREY, onClick: () => setSheet("enroute") },
         { label: "On Site", value: String(lc.onSite), color: lc.onSite ? "#fff" : GREY, onClick: () => setSheet("onsite") },
         { label: "Delayed", value: String(lc.delayed), color: lc.delayed ? ORANGE : GREY, onClick: () => setSheet("delayed") },
@@ -392,43 +404,7 @@ export function DispatchDashboardView(props: {
         <div>
           {live ? (
             <>
-              <span id="dispatch-friction" />
-              <SectionLabel first right={
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, letterSpacing: 0 }}>
-                  {p.unseen.size > 0 && (
-                    <button type="button" onClick={p.onSeenAll} className="dash-press"
-                      style={{ border: "none", background: "transparent", color: RED, fontSize: 10, fontWeight: 800, cursor: "pointer", padding: 0, letterSpacing: 0 }}>
-                      {p.unseen.size} new · mark seen
-                    </button>
-                  )}
-                  {p.notify === "default" && (
-                    <button type="button" onClick={p.onEnableNotify} className="dash-press"
-                      style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 10, fontWeight: 800, padding: "2px 7px", cursor: "pointer", letterSpacing: 0 }}>
-                      Enable alerts
-                    </button>
-                  )}
-                  {p.notify === "granted" && <span style={{ color: "#4ade80", fontSize: 10, fontWeight: 800 }}>Alerts on</span>}
-                  {p.notify === "denied" && <span style={{ color: L.faint, fontSize: 10, fontWeight: 800 }}>Alerts blocked</span>}
-                  <span style={{ color: L.faint }}>{p.reportCount} report{p.reportCount === 1 ? "" : "s"}</span>
-                </span>
-              }>
-                Friction
-              </SectionLabel>
-              {p.ackError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>Couldn't save: {p.ackError}</div>}
-              {p.conflicts.length === 0 ? (
-                <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
-                  No friction. Nothing reported at a rack your trucks are headed to.
-                </div>
-              ) : p.conflicts.map((c) => (
-                <ConflictCard key={c.terminalId} c={c} terminal={p.terminal} product={p.product} onOpenTrip={p.onOpenTrip} openingId={p.openingId}
-                  isNew={p.unseen.has(c.terminalId)} onSeen={p.onSeen} onAck={p.onAck} />
-              ))}
-              {p.watch.length > 0 && (
-                <>
-                  <SectionLabel right={<span style={{ color: L.faint, letterSpacing: 0 }}>no truck headed there</span>}>Watch</SectionLabel>
-                  {p.watch.map((w) => <WatchRow key={w.terminalId} w={w} terminal={p.terminal} product={p.product} />)}
-                </>
-              )}
+              <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Tap a chip above for details. Friction, En Route, On Site and Delayed each open their own window.</div>
             </>
           ) : (
             <>
@@ -458,6 +434,44 @@ export function DispatchDashboardView(props: {
           </button>
         ))}
         <div style={{ fontSize: 12, color: L.faint, marginTop: 6 }}>Clocks refresh about every 3 minutes. Tap a driver to open their load.</div>
+      </FullscreenModal>
+      <FullscreenModal open={sheet === "friction"} title={`Friction (${open})`} onClose={() => setSheet(null)}>
+                            <SectionLabel first right={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, letterSpacing: 0 }}>
+                  {p.unseen.size > 0 && (
+                    <button type="button" onClick={p.onSeenAll} className="dash-press"
+                      style={{ border: "none", background: "transparent", color: RED, fontSize: 10, fontWeight: 800, cursor: "pointer", padding: 0, letterSpacing: 0 }}>
+                      {p.unseen.size} new · mark seen
+                    </button>
+                  )}
+                  {p.notify === "default" && (
+                    <button type="button" onClick={p.onEnableNotify} className="dash-press"
+                      style={{ border: `1px solid ${L.hairline}`, background: "transparent", color: L.muted, fontSize: 10, fontWeight: 800, padding: "2px 7px", cursor: "pointer", letterSpacing: 0 }}>
+                      Enable alerts
+                    </button>
+                  )}
+                  {p.notify === "granted" && <span style={{ color: "#4ade80", fontSize: 10, fontWeight: 800 }}>Alerts on</span>}
+                  {p.notify === "denied" && <span style={{ color: L.faint, fontSize: 10, fontWeight: 800 }}>Alerts blocked</span>}
+                  <span style={{ color: L.faint }}>{p.reportCount} report{p.reportCount === 1 ? "" : "s"}</span>
+                </span>
+              }>
+                Friction
+              </SectionLabel>
+              {p.ackError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>Couldn't save: {p.ackError}</div>}
+              {p.conflicts.length === 0 ? (
+                <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
+                  No friction. Nothing reported at a rack your trucks are headed to.
+                </div>
+              ) : p.conflicts.map((c) => (
+                <ConflictCard key={c.terminalId} c={c} terminal={p.terminal} product={p.product} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId}
+                  isNew={p.unseen.has(c.terminalId)} onSeen={p.onSeen} onAck={p.onAck} />
+              ))}
+              {p.watch.length > 0 && (
+                <>
+                  <SectionLabel right={<span style={{ color: L.faint, letterSpacing: 0 }}>no truck headed there</span>}>Watch</SectionLabel>
+                  {p.watch.map((w) => <WatchRow key={w.terminalId} w={w} terminal={p.terminal} product={p.product} />)}
+                </>
+              )}
       </FullscreenModal>
       <LiveSheet open={sheet === "enroute"} title="En route" rows={p.liveRows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop")} kinds={["to_rack", "to_drop"]}
         onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
