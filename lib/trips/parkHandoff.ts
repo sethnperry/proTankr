@@ -6,11 +6,13 @@
 
 import { supabase } from "@/lib/supabase/client";
 
-/** Returns the trip id that was taken over, or null when the trailer holds no parked trip. */
+/** Called whenever a driver ends up coupled to a trailer (a commandeer, or a shared truck handed over).
+ *  Returns the trip id that was taken over, or null when the trailer holds no parked trip. */
 export async function takeOverParkedTrip(trailerId: string, truckId: string | null, userId: string): Promise<string | null> {
   const { data } = await supabase.from("trips").select("trip_id, driver_id, parked_at, parked_by").eq("trailer_id", trailerId).eq("status", "parked").limit(1);
   const t = ((data ?? []) as { trip_id: string; driver_id: string; parked_at: string | null; parked_by: string | null }[])[0];
-  if (!t) return null;
+  // Your own parked load stays parked until you resume it yourself.
+  if (!t || t.driver_id === userId) return null;
   const at = new Date().toISOString();
   const up = await supabase.from("trips").update({
     status: "in_transit", driver_id: userId, ...(truckId ? { truck_id: truckId } : {}),

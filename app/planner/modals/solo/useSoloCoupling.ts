@@ -49,11 +49,11 @@ export function useSoloCoupling(props: Props, s: ReturnType<typeof useSoloState>
     const existing = combos.find((c) => String(c.truck_id) === String(truckId) && String(c.trailer_id) === String(trailerId));
     if (existing && !forceClaim) {
       if (String(existing.combo_id) !== String(selectedComboId)) onSelectComboId(String(existing.combo_id));
+      // A shared truck: picking a pair whose trailer holds another driver's parked load takes that load over.
+      if (!setupSession && authUserId) { try { await takeOverParkedTrip(trailerId, truckId, authUserId); } catch { /* the dashboard's Take Over Trip still works */ } }
       return;
     }
 
-    // Taking a trailer another driver holds: if it carries a parked preloaded trip, the trip comes with it.
-    const takingTrailer = !setupSession && !!claimedByOther("trailer", trailerId);
     setBusy(true);
     setError(null);
     try {
@@ -105,7 +105,7 @@ export function useSoloCoupling(props: Props, s: ReturnType<typeof useSoloState>
         comboId = String((data as any)?.combo_id ?? "");
       }
       if (!comboId) throw new Error("No combo_id returned.");
-      if (takingTrailer && authUserId) { try { await takeOverParkedTrip(trailerId, truckId, authUserId); } catch { /* the dashboard's Take Over Trip still works */ } }
+      if (!setupSession && authUserId) { try { await takeOverParkedTrip(trailerId, truckId, authUserId); } catch { /* the dashboard's Take Over Trip still works */ } }
       onSelectComboId(comboId);
       await Promise.all([loadEquipment(), onRefreshCombos()]);
     } catch (e: any) {
