@@ -30,7 +30,7 @@ import TerminalOutageDetailModal from "../modals/TerminalOutageDetailModal";
 import MessageTicker from "./MessageTicker";
 import type { ComposedOutageReport } from "../hooks/useTerminalOutageReports";
 
-const TICKER_COLOR = "#ff3b30";
+const TICKER_COLOR = "#ffffff";
 
 export default function TerminalOutageBanner({
   tickerMessage, reports, timeZone, refresh,
@@ -51,7 +51,7 @@ export default function TerminalOutageBanner({
         onClick={() => setDetailOpen(true)}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          width: "100%", height: 22, padding: "0 14px",
+          width: "100%", height: 26, padding: "0 14px",
           background: "transparent", border: "none", cursor: "pointer",
         }}
       >

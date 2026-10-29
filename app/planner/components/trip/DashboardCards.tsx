@@ -7,6 +7,7 @@
 //   headed to my delivery, parked preloads.
 // Each card is collapsed to a line or two; tap the header to expand.
 
+import { parseTicker, TICKER_TONE_COLOR } from "../../utils/tickerMarkup";
 import React, { useState } from "react";
 import { SideView, segsFor, useTrailerSizes } from "../TrailerViews";
 import { CardBusy, Spinner, busyProps } from "@/lib/ui/pending";
@@ -152,9 +153,9 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
         <button
           type="button"
           onClick={onOpenReports}
-          style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: red, fontWeight: 700, textAlign: "left", cursor: "pointer" }}
+          style={{ ...rowStyle, width: "100%", display: "block", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, textAlign: "left", cursor: "pointer" }}
         >
-          {reports.map((r, i) => (<React.Fragment key={r.reportId}>{i ? " · " : ""}{r.tickerText.split(/(⟦[^⟧]*⟧)/).filter(Boolean).map((t, j) => (t.startsWith("⟦") ? <span key={j} style={{ color: "#fff" }}>{t.slice(1, -1)}</span> : t))}</React.Fragment>))} ›
+          {reports.map((r, i) => (<React.Fragment key={r.reportId}>{i ? " · " : ""}{parseTicker(r.tickerText).map((t, j) => (t.tone === "base" ? t.text : <span key={j} style={{ color: TICKER_TONE_COLOR[t.tone] }}>{t.text}</span>))}</React.Fragment>))} ›
         </button>
       )}
       {open && (

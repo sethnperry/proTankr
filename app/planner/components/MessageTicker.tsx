@@ -21,22 +21,21 @@
 // single message without needing an external re-trigger.
 
 import React, { useEffect, useRef } from "react";
+import { parseTicker, TICKER_TONE_COLOR } from "../utils/tickerMarkup";
 
 const SPEED_PX_PER_SEC = 55;
 const PAUSE_MS = 1400;
 const HOME_INSET_PX = 14;
 
-// Text inside ⟦ ⟧ is drawn white (the age of a flag); the rest keeps the ticker's color.
+// Colored runs (see utils/tickerMarkup.ts); unmarked text keeps the ticker's color.
 function setRich(el: HTMLElement, text: string) {
   el.textContent = "";
-  for (const part of text.split(/(⟦[^⟧]*⟧)/)) {
-    if (!part) continue;
-    if (part.startsWith("⟦")) {
-      const span = document.createElement("span");
-      span.textContent = part.slice(1, -1);
-      span.style.color = "#fff";
-      el.appendChild(span);
-    } else el.appendChild(document.createTextNode(part));
+  for (const part of parseTicker(text)) {
+    if (part.tone === "base") { el.appendChild(document.createTextNode(part.text)); continue; }
+    const span = document.createElement("span");
+    span.textContent = part.text;
+    span.style.color = TICKER_TONE_COLOR[part.tone];
+    el.appendChild(span);
   }
 }
 
@@ -111,13 +110,13 @@ export default function MessageTicker({ messages, color }: { messages: string[];
   if (messages.length === 0) return null;
 
   return (
-    <div ref={trackRef} style={{ position: "relative", height: 22, overflow: "hidden", flex: 1 }}>
+    <div ref={trackRef} style={{ position: "relative", height: 26, overflow: "hidden", flex: 1 }}>
       <div
         ref={textRef}
         style={{
           position: "absolute", top: 0, bottom: 0, left: 0,
           display: "flex", alignItems: "center", whiteSpace: "nowrap",
-          fontSize: 12, fontWeight: 800, letterSpacing: 0.3, color,
+          fontSize: 14, fontWeight: 800, letterSpacing: 0.3, color,
           willChange: "transform",
         }}
       />

@@ -339,12 +339,13 @@ export function useActiveOutageBanner(
       const truck = r.truck_label || "?";
       const isProduct = r.report_type === "out_of_product";
       const supplierName = r.report_type === "out_of_allocation" ? (r.supplier_name ?? null) : null;
-      // The flag's age sits in ⟦ ⟧ so the ticker can draw it white against the red text.
-      const age = `⟦${outageAge(createdAtMs, nowMs)}⟧`;
-      const tickerText = wide ? `${shortName}${r.report_type === "long_line" && waitMin != null ? ` · avg wait ${waitMin}m` : ""} · reported ${age} ago`
-        : isProduct ? `Out of ${shortName} ${age}`
-        : supplierName ? `No Allocation - ${supplierName} (${shortName}) ${age}`
-        : `OOA ${shortName} ${age}`;
+      // Colors ride in the text (utils/tickerMarkup.ts): red is only for Long Line, the average is white, the age gray.
+      const age = `⟨${outageAge(createdAtMs, nowMs)} ago⟩`;
+      const lineName = r.report_type === "long_line" ? `⟪${shortName}⟫` : shortName;
+      const tickerText = wide ? `${lineName}${r.report_type === "long_line" && waitMin != null ? ` · avg wait ⟦${waitMin}m⟧` : ""} · reported ${age}`
+        : isProduct ? `Out of ${shortName} · reported ${age}`
+        : supplierName ? `No Allocation - ${supplierName} (${shortName}) · reported ${age}`
+        : `OOA ${shortName} · reported ${age}`;
       const personLabel = r.report_type !== "out_of_allocation"
         ? (companyNameById.get(r.company_id) || "Company")
         : (displayNameByUserId.get(r.reporter_user_id) || "Driver");
