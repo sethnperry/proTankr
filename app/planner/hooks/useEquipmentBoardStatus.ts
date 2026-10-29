@@ -14,6 +14,8 @@ import { productColorFor } from "../utils/productColor";
 import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, placeLine, lastPlace, storeLabel, type LoadedDot } from "@/lib/equipment/boardStatus";
 import { stripSegments, residueStands, type StripSeg } from "@/lib/equipment/trailerStrip";
 
+// A fuel stop left open longer than this was abandoned, not in progress.
+const FUEL_STALE_MS = 3 * 3600_000;
 const CARRYING = ["loading", "in_transit", "delivering", "parked"];
 
 export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], trailerIds: string[], refreshKey?: unknown) {
@@ -81,13 +83,13 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
       try {
         const drivers = claimKey ? claimKey.split(",") : [];
         const trailers = trailerKey ? trailerKey.split(",") : [];
-        const sel = "trip_id, driver_id, trailer_id, status";
+        const sel = "trip_id, driver_id, trailer_id, status, started_at";
         const [a, b, fu] = await Promise.all([
           drivers.length ? supabase.from("trips").select(sel).in("driver_id", drivers).in("status", CARRYING.concat("draft")) : Promise.resolve({ data: [] as any[] }),
           trailers.length ? supabase.from("trips").select(sel).in("trailer_id", trailers).in("status", CARRYING) : Promise.resolve({ data: [] as any[] }),
-          drivers.length ? supabase.from("fuel_purchases").select("driver_id").in("driver_id", drivers).is("finished_at", null).neq("status", "complete") : Promise.resolve({ data: [] as any[] }),
+          drivers.length ? supabase.from("fuel_purchases").select("driver_id, started_at").in("driver_id", drivers).is("finished_at", null).neq("status", "complete").gte("started_at", new Date(Date.now() - FUEL_STALE_MS).toISOString()) : Promise.resolve({ data: [] as any[] }),
         ]);
-        const trips = new Map<string, { trip_id: string; driver_id: string; trailer_id: string | null; status: string }>();
+        const trips = new Map<string, { trip_id: string; driver_id: string; trailer_id: string | null; status: string; started_at?: string }>();
         for (const t of [...((a.data ?? []) as any[]), ...((b.data ?? []) as any[])]) trips.set(t.trip_id, t);
         const ids = [...trips.keys()];
         const [pk, dl] = ids.length
@@ -99,7 +101,10 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
         const locIds = [...new Set(((dl.data ?? []) as any[]).map((d) => d.location_id).filter(Boolean))];
         const lr = locIds.length ? await supabase.from("delivery_locations").select("location_id, name, location_number").in("location_id", locIds) : { data: [] as any[] };
         const locName = new Map(((lr.data ?? []) as any[]).map((l) => [l.location_id, storeLabel(l.name, l.location_number)]));
-        const fuelers = new Set(((fu.data ?? []) as any[]).map((f) => f.driver_id));
+        // A fuel stop only counts when it is newer than the driver's newest trip (a new trip means they moved on).
+        const newestTrip = new Map<string, string>();
+        for (const t of trips.values()) { const at = String((t as any).started_at ?? ""); if (at > (newestTrip.get(t.driver_id) ?? "")) newestTrip.set(t.driver_id, at); }
+        const fuelers = new Set(((fu.data ?? []) as any[]).filter((f) => String(f.started_at) > (newestTrip.get(f.driver_id) ?? "")).map((f) => f.driver_id));
         const act: Record<string, string> = {};
         const dest: Record<string, string> = {};
         for (const t of trips.values()) {
