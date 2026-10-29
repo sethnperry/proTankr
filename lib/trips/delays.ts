@@ -40,6 +40,7 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
   to_rack: [...ROAD],
   at_rack: [
     { code: "long_line", label: "Long line" },
+    { code: "rack_down", label: "Rack down" },
     { code: "terminal_issue", label: "Terminal issue" },
     { code: "gauging", label: "Gauging / terminal closed" },
     { code: "order_problem", label: "Order or paperwork problem" },
@@ -163,4 +164,11 @@ export function loggedDelays(events: TripEventRow[]): LoggedDelay[] {
 // Minutes already explained at one delivery's drop.
 export function dropDelayMinutes(delays: LoggedDelay[], deliveryId: string): number {
   return delays.filter((d) => d.deliveryId === deliveryId && d.leg === "at_drop").reduce((t, d) => t + d.minutes, 0);
+}
+
+/** The terminal warning (if any) a rack delay reason should also post for other drivers. */
+export function delayIssueCode(code: string | null | undefined): "long_line" | "terminal_issue" | null {
+  if (code === "long_line") return "long_line";
+  if (code === "terminal_issue" || code === "rack_down") return "terminal_issue";
+  return null;
 }

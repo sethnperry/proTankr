@@ -4,7 +4,8 @@ import { readGeoDeparture } from "@/lib/telematics/geoDepartures";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLoadWorkflow } from "./useLoadWorkflow";
-import { reportDelayIssue } from "./useTerminalOutageReports";
+import { reportDelayIssue, submitOutageReport } from "./useTerminalOutageReports";
+import { DELAY_EVENT, delayEventPayload, delayIssueCode, loggedDelays, readRunningDelay, writeRunningDelay, type RunningDelay } from "@/lib/trips/delays";
 import { isTerminalIssueCode, issueChoiceValue } from "@/lib/trips/terminalIssues";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
@@ -90,6 +91,47 @@ export function useTripLoading(a: Args) {
     void fetchTruckShipments(geoTruckId, new Date(Date.parse(geoArrived) - 3600000).toISOString()).then(setGeoShips);
   }, [geoPickupId, geoArrived, geoTruckId]);
 
+  // ── Waiting at the rack: Delay (timer + terminal warning) and Begin Loading ──
+  const [rackDelay, setRackDelay] = useState<RunningDelay | null>(null);
+  useEffect(() => {
+    if (!effectiveUserId) return;
+    const d = readRunningDelay(effectiveUserId);
+    setRackDelay(d && d.leg === "at_rack" && d.pickupId === (tripPickup?.pickup_id ?? null) ? d : null);
+  }, [effectiveUserId, tripPickup?.pickup_id]);
+  const endRackDelay = useCallback((atIso: string) => {
+    if (!effectiveUserId || !tripStoreObj) return;
+    const d = readRunningDelay(effectiveUserId);
+    if (!d || d.leg !== "at_rack") return;
+    tripStoreObj.put("trip_events", {
+      event_id: newTripId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: atIso, actor_id: effectiveUserId,
+      pickup_id: d.pickupId, delivery_id: null, payload: delayEventPayload(d, atIso),
+    });
+    writeRunningDelay(effectiveUserId, null);
+    setRackDelay(null);
+  }, [effectiveUserId, tripStoreObj]);
+  const startRackDelay = useCallback((code: string, note: string | null) => {
+    if (!effectiveUserId || !tripPickup) return;
+    const d: RunningDelay = { tripId: tripPickup.trip_id, leg: "at_rack", code, note, startedAt: new Date().toISOString(), pickupId: tripPickup.pickup_id, deliveryId: null };
+    writeRunningDelay(effectiveUserId, d);
+    setRackDelay(d);
+    // Long line / rack down / terminal issue also warn the next driver heading here.
+    const issue = delayIssueCode(code);
+    if (issue && tripPickup.terminal_id && shell.companyId) {
+      void submitOutageReport({
+        terminalId: String(tripPickup.terminal_id), selectedRackId: tripPickup.rack_id ?? null, productIds: [], reportType: issue,
+        companyId: shell.companyId, userId: effectiveUserId,
+        truckLabel: equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? "",
+      }).then((r) => { if (r.error) console.warn("[trips] rack delay report failed (non-fatal):", r.error); });
+    }
+  }, [effectiveUserId, tripPickup, shell.companyId, equipment.selectedCombo, equipment.truckNameById]);
+  const beginRackLoading = useCallback(() => {
+    if (!tripStoreObj || !tripPickup) return;
+    const at = new Date().toISOString();
+    endRackDelay(at);
+    tripStoreObj.put("trip_pickups", { pickup_id: tripPickup.pickup_id, begin_at: at });
+    void tripStoreHook.syncNow();
+  }, [tripStoreObj, tripPickup, endRackDelay, tripStoreHook]);
+
   const tripModeForLoading = useMemo<LoadingTripMode | null>(() => {
     if (!tripPickup || !tripStoreObj || !shell.companyId) return null;
     const comps = (Object.values(tripStoreHook.state.rows.trip_compartment_loads ?? {}) as TripCompartmentLoadRow[])
@@ -130,7 +172,12 @@ export function useTripLoading(a: Args) {
       beganAt: tripPickup.begin_at,
       existingTimes: tripPickup.left_at ? { arrivedAt: tripPickup.arrived_at, beginAt: tripPickup.begin_at, leftAt: tripPickup.left_at } as StepTimes : null,
       existingDelayReasonId: tripPickup.delay_code && isTerminalIssueCode(tripPickup.delay_code)
-        ? issueChoiceValue(tripPickup.delay_code) : tripPickup.delay_reason_id,
+        ? issueChoiceValue(tripPickup.delay_code)
+        : tripPickup.delay_reason_id ?? (() => {
+            const hit = loggedDelays(tripStoreObj.list("trip_events", (e) => e.trip_id === tripPickup.trip_id))
+              .filter((d) => d.leg === "at_rack" && d.pickupId === tripPickup.pickup_id).map((d) => delayIssueCode(d.code)).find(Boolean);
+            return hit ? issueChoiceValue(hit) : null;
+          })(),
       existingDelayNote: tripPickup.delay_note,
       needsOdometer: pickupNeedsOdometer(snap.pickups, tripPickup.pickup_id),
       existingOdometer: tripPickup.odometer,
@@ -147,9 +194,10 @@ export function useTripLoading(a: Args) {
         loadWorkflow.closeLoadReport();
       },
       onBackToDashboard: () => leaveTo("/planner/home", "Opening dashboard…"),
+      rackWait: { beganAt: tripPickup.begin_at, delay: rackDelay, onStartDelay: startRackDelay, onBegin: beginRackLoading },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds, compPlan, geoShips]);
+  }, [tripPickup, tripStoreObj, tripStoreHook.state, shell.companyId, tripSettings, tripReasons, tripSuppliers, addTripSupplier, tripSignature.svg, tripSignature.save, supplierPicks.picks, plannedProductIds, compPlan, geoShips, rackDelay, startRackDelay, beginRackLoading]);
 
   // Runs right after recordLoadCompleted wrote gross/temp/API for this load.
   const recordTripLoaded = useCallback((extras: TripLoadExtras | undefined, editOnly: boolean) => {
@@ -211,6 +259,7 @@ export function useTripLoading(a: Args) {
         truckLabel: equipment.truckNameById[equipment.selectedCombo?.truck_id ?? ""] ?? "",
       });
     }
+    if (!editOnly) endRackDelay(new Date().toISOString());
     void tripStoreHook.syncNow();
     // Finished loading on a trip: back to the Driver Dashboard (the report
     // is a link on the trip card there).
@@ -219,7 +268,7 @@ export function useTripLoading(a: Args) {
       loadWorkflow.closeLoadReport();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId]);
+  }, [tripStoreObj, tripPickup, effectiveUserId, shell.companyId, equipment.selectedCombo, equipment.currentTrailerId, endRackDelay]);
 
 
   return {
