@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
   const lat = Number(sp.get("lat"));
   const lon = Number(sp.get("lon"));
   const reverse = sp.has("lat") && sp.has("lon") && Number.isFinite(lat) && Number.isFinite(lon);
-  if (!reverse && (!city || !state)) return NextResponse.json({ error: "city and state, or lat and lon, are required." }, { status: 400 });
+  const search = (sp.get("search") ?? "").trim();
+  const pin = sp.get("pin") === "1" && reverse;
+  if (!reverse && !search && (!city || !state)) return NextResponse.json({ error: "city and state, or lat and lon, are required." }, { status: 400 });
 
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,6 +35,35 @@ export async function GET(req: NextRequest) {
 
   const key = process.env.OPENWEATHER_API_KEY;
   if (!key) return NextResponse.json({ error: "OPENWEATHER_API_KEY not set." }, { status: 500 });
+
+  // Map search: ?search=text -> up to 5 places with coordinates and address parts.
+  if (search) {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: search, format: "json", addressdetails: "1", limit: "5", countrycodes: "us" })}`,
+        { cache: "no-store", headers: { "User-Agent": "ProTankr/1.0 (support@protankr.com)" }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return NextResponse.json({ error: "Search unavailable." }, { status: 502 });
+      const arr = (await r.json()) as { lat: string; lon: string; display_name: string }[];
+      return NextResponse.json({ results: (arr ?? []).map((x) => ({ lat: Number(x.lat), lon: Number(x.lon), label: x.display_name })) });
+    } catch { return NextResponse.json({ error: "Search unavailable." }, { status: 502 }); }
+  }
+
+  // A dropped pin: ?pin=1&lat=&lon= -> the address at that spot and its county (the pin is at the site, so it is trusted).
+  if (pin) {
+    let a: Record<string, string> = {};
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?${new URLSearchParams({ lat: String(lat), lon: String(lon), format: "json", addressdetails: "1", zoom: "18" })}`,
+        { cache: "no-store", headers: { "User-Agent": "ProTankr/1.0 (support@protankr.com)" }, signal: AbortSignal.timeout(8000) });
+      if (r.ok) a = ((await r.json()) as { address?: Record<string, string> }).address ?? {};
+    } catch { /* county still comes from the pin below */ }
+    const street = [a.house_number, a.road].filter(Boolean).join(" ");
+    return NextResponse.json({
+      address: street || null,
+      city: a.city || a.town || a.village || a.hamlet || a.suburb || null,
+      state: stateCode(a.state ?? null),
+      zip: a.postcode ? String(a.postcode).slice(0, 5) : null,
+      county: (await countyFor(lat, lon)) ?? a.county ?? null,
+    });
+  }
 
   // County for a place by its address (never the phone's position): ?county=1&city=&state=[&address=&zip=].
   if (sp.get("county") === "1" && city && state) {
