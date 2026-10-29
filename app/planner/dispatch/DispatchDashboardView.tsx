@@ -133,6 +133,8 @@ function RegionButton({ r }: { r: RegionFilter }) {
 const nameInitials = (n?: string | null) => (n ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 const unitTag = (unit: string | null | undefined, ini: string) => [String(unit ?? "").replace(/^truck\s*/i, "").trim(), ini].filter(Boolean).join("-");
 
+type FrictionGroup = { key: string; c: ConflictWithAck; type: string; reports: ActiveReport[] }; // newest report first
+
 function FrictionList({ conflicts, terminal, product, initialsOf, isNew, onSeen, onAck, onOpenTrip }: {
   conflicts: ConflictWithAck[];
   terminal: (id: string) => { name: string; place: string | null };
@@ -144,53 +146,78 @@ function FrictionList({ conflicts, terminal, product, initialsOf, isNew, onSeen,
   onOpenTrip: (tripId: string) => void;
 }) {
   const L = useDashLook();
-  const [sel, setSel] = useState<{ c: ConflictWithAck; r: ActiveReport } | null>(null);
+  const [selKey, setSelKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const rows = conflicts.flatMap((c) => c.reports.map((r) => ({ c, r }))).sort((a, b) => b.r.createdAt.localeCompare(a.r.createdAt));
+  // One row per kind of problem at a terminal; its reports are the friction events.
+  const groups: FrictionGroup[] = conflicts.flatMap((c) => {
+    const byType = new Map<string, ActiveReport[]>();
+    for (const r of c.reports) byType.set(r.type, [...(byType.get(r.type) ?? []), r]);
+    return [...byType].map(([type, reports]) => ({ key: `${c.terminalId}|${type}`, c, type, reports: [...reports].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }));
+  }).sort((a, b) => b.reports[0].createdAt.localeCompare(a.reports[0].createdAt));
+  const sel = groups.find((g) => g.key === selKey) ?? null;
   const tm = (id: string) => { const t = terminal(id); return t.place ? `${t.name}, ${t.place.split(",")[0]}` : t.name; };
   const hhmm = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const close = () => setSel(null);
+  const label = (g: FrictionGroup) => {
+    if (g.type === "out_of_product") return `Out of ${[...new Set(g.reports.map((r) => (r.productId ? product(r.productId).code : null)).filter(Boolean))].join(", ") || "product"}`;
+    return reportText(g.reports[0], product);
+  };
+  const last = (g: FrictionGroup) => {
+    const r = g.reports[0];
+    const who = unitTag(r.truckLabel, r.reporterId ? initialsOf(r.reporterId) : "");
+    return `${who ? `${who} · ` : ""}${outageAge(Date.parse(r.createdAt), Date.now())} ago`;
+  };
+  const trucksOf = (g: FrictionGroup) => g.c.trucks.filter((t) => t.reportIds.some((id) => g.reports.some((r) => r.reportId === id)));
+  const close = () => setSelKey(null);
+  const tRow = { ...L.secondary, display: "block", width: "100%", textAlign: "left" as const, color: "#fff", padding: "8px 12px", marginBottom: 4, cursor: "pointer" };
   return (
     <>
-      {rows.map(({ c, r }) => {
-        const color = c.handled ? GREY : c.severity === "hit" ? RED : ORANGE;
-        const who = unitTag(r.truckLabel, r.reporterId ? initialsOf(r.reporterId) : "");
+      {groups.map((g) => {
+        const color = g.c.handled ? GREY : g.c.severity === "hit" ? RED : ORANGE;
         return (
-          <button key={r.reportId} type="button" className="dash-press" onClick={() => { setSel({ c, r }); onSeen(c.terminalId); }}
-            style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "11px 12px", marginBottom: 6, cursor: "pointer", borderColor: `${color}77`, opacity: c.handled ? 0.6 : 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.35 }}>
-              {who && <span>{who} </span>}
-              <span style={{ color }}>{reportText(r, product).toUpperCase()}</span>
-              <span style={{ fontWeight: 600 }}> at {tm(c.terminalId)}</span>
-              <span style={{ fontWeight: 600, color: L.muted }}> · {outageAge(Date.parse(r.createdAt), Date.now())} ago</span>
-              {isNew(c.terminalId) && <span style={{ marginLeft: 8, background: RED, color: "#000", fontSize: 10, fontWeight: 900, padding: "1px 5px" }}>NEW</span>}
-              {c.handled && <span style={{ marginLeft: 8, color: "#4ade80", fontSize: 11 }}>✓ handled</span>}
+          <button key={g.key} type="button" className="dash-press" onClick={() => { setSelKey(g.key); onSeen(g.c.terminalId); }}
+            style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "9px 12px", marginBottom: 6, cursor: "pointer", borderColor: `${color}77`, opacity: g.c.handled ? 0.6 : 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ color }}>{label(g).toUpperCase()}</span>
+              <span style={{ fontWeight: 600 }}> at {tm(g.c.terminalId)}</span>
+              {isNew(g.c.terminalId) && <span style={{ marginLeft: 8, background: RED, color: "#000", fontSize: 10, fontWeight: 900, padding: "1px 5px" }}>NEW</span>}
+              {g.c.handled && <span style={{ marginLeft: 8, color: "#4ade80", fontSize: 11 }}>✓ handled</span>}
             </div>
+            <div style={{ fontSize: 12, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{last(g)}</div>
           </button>
         );
       })}
-      <FullscreenModal open={!!sel} title={sel ? reportText(sel.r, product) : ""} onClose={close}>
-        {sel && (
-          <>
-            <div style={{ fontSize: 13, color: L.muted, marginBottom: 10 }}>
-              {sel.r.truckLabel ? `${unitTag(sel.r.truckLabel, sel.r.reporterId ? initialsOf(sel.r.reporterId) : "")} reported at ${tm(sel.c.terminalId)} · ` : ""}{outageAge(Date.parse(sel.r.createdAt), Date.now())} ago
+      <FullscreenModal open={!!sel} title={sel ? `${label(sel)} · ${tm(sel.c.terminalId)}` : ""} onClose={close}>
+        {sel && (() => {
+          const ts = trucksOf(sel);
+          const en = ts.filter((t) => !t.arrived), there = ts.filter((t) => t.arrived);
+          const section = (list: typeof ts, text: string) => list.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, margin: "0 0 6px" }}>{list.length} trk {text} {tm(sel.c.terminalId)}</div>
+              {list.map((t) => (
+                <button key={t.tripId} type="button" className="dash-press" onClick={() => { close(); onOpenTrip(t.tripId); }} style={tRow}>
+                  <span style={{ fontWeight: 800 }}>{unitTag(t.truckName, nameInitials(t.driverName))}</span>
+                  {!t.arrived && <span style={{ color: L.muted }}>{t.etaMs ? ` · ETA ${hhmm(t.etaMs)}` : " · ETA unknown"}</span>}
+                </button>
+              ))}
             </div>
-            {sel.c.trucks.filter((t) => t.reportIds.includes(sel.r.reportId)).map((t) => (
-              <button key={t.tripId} type="button" className="dash-press" onClick={() => { close(); onOpenTrip(t.tripId); }}
-                style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "11px 12px", marginBottom: 6, cursor: "pointer" }}>
-                <span style={{ fontWeight: 800 }}>{unitTag(t.truckName, nameInitials(t.driverName))}</span>{" "}
-                {t.arrived ? `At ${tm(sel.c.terminalId)}` : `En route to ${tm(sel.c.terminalId)}${t.etaMs ? ` - ETA ${hhmm(t.etaMs)}` : ""}`}
-              </button>
-            ))}
-            {!sel.c.handled && (
-              <button type="button" className="dash-press" {...busyProps(saving)}
-                onClick={async () => { setSaving(true); const ok = await onAck(sel.c.terminalId, [sel.r.reportId], ""); setSaving(false); if (ok) close(); }}
-                style={{ marginTop: 10, border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 14px", cursor: "pointer" }}>
-                Mark handled
-              </button>
-            )}
-          </>
-        )}
+          );
+          return (
+            <>
+              <div style={{ fontSize: 13, color: L.muted, marginBottom: 12 }}>
+                {sel.reports.length} friction event{sel.reports.length === 1 ? "" : "s"} · last {last(sel)}
+              </div>
+              {section(en, "En route to")}
+              {section(there, "At")}
+              {!sel.c.handled && (
+                <button type="button" className="dash-press" {...busyProps(saving)}
+                  onClick={async () => { setSaving(true); const ok = await onAck(sel.c.terminalId, sel.reports.map((r) => r.reportId), ""); setSaving(false); if (ok) close(); }}
+                  style={{ marginTop: 4, border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 14px", cursor: "pointer" }}>
+                  Mark handled
+                </button>
+              )}
+            </>
+          );
+        })()}
       </FullscreenModal>
     </>
   );
