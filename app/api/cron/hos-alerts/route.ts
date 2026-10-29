@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { autoLinkAllDrivers, providerFor } from "@/lib/telematics/server";
+import { airMiles } from "@/lib/trips/deliveryLocations";
 import { dropFuelStops, planStopNotice } from "@/lib/push/stopAlertCore";
 import { planHosAlerts, type DriverCase } from "@/lib/push/hosAlertCore";
 import { sendPush, type StoredSub } from "@/lib/push/send";
@@ -130,11 +131,17 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
     if (!trip || !stops.length) continue;
     const pr = prevBy.get(u);
     const firstTerm = ((trip.trip_pickups ?? []) as any[]).find((k) => k.terminal_id)?.terminal_id;
+    // How far the truck is from the rack it arrived at (null when either position is unknown).
+    const rackPk = ((trip.trip_pickups ?? []) as any[]).find((k) => k.arrived_at && !k.left_at && k.outcome !== "no_load" && k.terminal_id);
+    const rackLL = rackPk ? termLL.get(String(rackPk.terminal_id)) ?? null : null;
+    const vehNow = trip.truck_id ? vehOfTruck.get(trip.truck_id) : undefined;
+    const posNow = vehNow ? positions.get(vehNow) : null;
+    const milesFromRack = rackLL && posNow && posNow.lat != null && posNow.lon != null ? airMiles(rackLL, { lat: posNow.lat, lon: posNow.lon }) : null;
     const n = planStopNotice({
       started_at: trip.started_at ?? null,
       pickups: ((trip.trip_pickups ?? []) as any[]).map((k) => ({ seq: k.seq, arrived_at: k.arrived_at, left_at: k.left_at, outcome: k.outcome, name: k.name })),
       deliveries: ((trip.trip_deliveries ?? []) as any[]).map((d) => ({ seq: d.seq, arrived_at: d.arrived_at, left_at: d.left_at, status: d.status, name: d.location_id ? locName.get(String(d.location_id)) ?? null : null })),
-    }, stops, pr?.last_stop_at ? Date.parse(pr.last_stop_at) : 0, (firstTerm && termTz.get(String(firstTerm))) || undefined);
+    }, stops, pr?.last_stop_at ? Date.parse(pr.last_stop_at) : 0, (firstTerm && termTz.get(String(firstTerm))) || undefined, Date.now(), milesFromRack);
     if (n) stopNotices.push({ userId: u, title: n.title, body: n.body, at: n.at, kind: n.kind, place: n.place, tripId: (trip.trip_id as string | undefined) ?? null });
   }
   if (stopNotices.length) {

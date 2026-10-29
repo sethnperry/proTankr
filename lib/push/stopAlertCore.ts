@@ -30,7 +30,10 @@ export function dropFuelStops<T extends { at: string }>(stops: T[], fuel: FuelWi
   });
 }
 
-export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs: number, tz = "America/New_York", nowMs: number = Date.now()): StopNotice | null {
+/** Within this far of the rack the truck is still there (moving up in line), not gone to another rack. */
+export const STILL_AT_RACK_MI = 0.5;
+
+export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs: number, tz = "America/New_York", nowMs: number = Date.now(), milesFromRack: number | null = null): StopNotice | null {
   const stamps = [trip.started_at, ...trip.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...trip.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
     .map(ms).filter((n) => Number.isFinite(n));
   const after = Math.max(lastAnnouncedMs, 0, ...stamps);
@@ -39,6 +42,8 @@ export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs:
   const live = trip.pickups.filter((p) => p.outcome !== "no_load").sort((a, b) => a.seq - b.seq);
   const atRack = live.find((p) => p.arrived_at && !p.left_at);
   if (atRack) {
+    // Still parked at that rack: the stop was just moving up in line, so there's nothing to ask.
+    if (milesFromRack != null && milesFromRack <= STILL_AT_RACK_MI) return null;
     // The place is the title (it stands out); the body is the one question. Yes / No buttons answer it.
     return { at: stop.at, kind: "hop", place: atRack.name ?? "the rack", title: `Did you load at ${atRack.name ?? "the rack"}?`, body: "" };
   }

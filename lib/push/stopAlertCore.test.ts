@@ -34,3 +34,12 @@ test("a stop inside a fuel stop is dropped", () => {
   assert.equal(dropFuelStops([stop], fuel).length, 0);
   assert.equal(dropFuelStops([stop], [{ started_at: "2026-10-26T18:00:00Z", completed_at: null }]).length, 1);
 });
+
+test("a stop while still at the rack you arrived at asks nothing (moving up in line)", () => {
+  const trip = { started_at: "2026-10-26T12:00:00.000Z", pickups: [{ seq: 1, arrived_at: "2026-10-26T13:00:00.000Z", left_at: null, outcome: null, name: "Buckey North" }], deliveries: [] };
+  const s = { at: "2026-10-26T14:42:00.000Z", code: "ON", resumedAt: null, droveFrom: "2026-10-26T14:00:00.000Z" };
+  const now = Date.parse("2026-10-26T15:00:00.000Z");
+  assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, 0.1), null);
+  assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, 8)?.kind, "hop");
+  assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, null)?.kind, "hop");
+});
