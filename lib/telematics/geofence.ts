@@ -29,6 +29,14 @@ export function fenceFor(points: LatLon[], catalog: LatLon | null): Fence | null
 
 export const inside = (p: LatLon, f: Fence) => airMiles(p, f.center) <= f.radiusMi;
 
+/** A truck only counts as having left a stop once it is at least this far from where it sat there. */
+export const DEPART_MIN_MI = 0.25;
+
+/** Still at the stop: inside the fence, or less than DEPART_MIN_MI from where the truck sat when watching began
+ * (moving the truck within a rack or yard is not leaving). */
+export const stillAtStop = (p: LatLon, f: Fence, anchor: LatLon | null) =>
+  inside(p, f) || (anchor != null && airMiles(p, anchor) < DEPART_MIN_MI);
+
 /** A point is worth keeping only if it's near where the catalog says the stop
  * is (or there's no catalog point): a driver who tapped Arrive far too early
  * would otherwise teach us a wrong center. */

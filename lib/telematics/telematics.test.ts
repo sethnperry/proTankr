@@ -357,3 +357,12 @@ test("geotab: a driver on duty through the Drive app is placed by the vehicle on
   const p = geotabProvider({ database: "db-duty", userName: "u", password: "p" }, f);
   assert.deepEqual(await p.lastVehicleOf("d7"), { vehicleId: "vF", at: "2026-10-22T09:00:00Z" });
 });
+
+import { stillAtStop, type Fence } from "./geofence.ts";
+test("moving the truck within a quarter mile is not leaving the stop", () => {
+  const fence: Fence = { center: { lat: 28, lon: -82 }, radiusMi: 0.3, learned: true };
+  const anchor = { lat: 28.01, lon: -82 };             // sat ~0.7 mi from the learned center (offset fence)
+  assert.equal(stillAtStop({ lat: 28.0125, lon: -82 }, fence, anchor), true);  // ~0.17 mi from where it sat
+  assert.equal(stillAtStop({ lat: 28.0145, lon: -82 }, fence, anchor), false); // ~0.31 mi from where it sat
+  assert.equal(stillAtStop({ lat: 28.0001, lon: -82 }, fence, null), true);    // inside the fence
+});

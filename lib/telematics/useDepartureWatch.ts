@@ -8,7 +8,7 @@
 // got to the screen.
 
 import { useEffect, useRef } from "react";
-import { fenceFor, inside, NEW_EXIT, stepExit, type ExitWatch } from "./geofence";
+import { fenceFor, NEW_EXIT, stepExit, stillAtStop, type ExitWatch } from "./geofence";
 import { writeGeoDeparture } from "./geoDepartures";
 import { learnedPoints, type ArrivalTarget } from "./useArrivalSuggestion";
 import { fetchTruckReading } from "./useTruckReading";
@@ -26,6 +26,7 @@ export function useDepartureWatch(o: { companyId: string | null; truckId: string
     let timer: number | undefined;
     let w: ExitWatch = NEW_EXIT;
     let fence: ReturnType<typeof fenceFor> | undefined;
+    let anchor: { lat: number; lon: number } | null = null; // where the truck sat when watching began
     const tick = async () => {
       if (off) return;
       const t = targetRef.current;
@@ -35,7 +36,9 @@ export function useDepartureWatch(o: { companyId: string | null; truckId: string
           const r = await fetchTruckReading(truckId);
           if (off || !r) return; // no telematics: stop checking
           if (fence && r.lat != null && r.lon != null && r.at && Date.now() - Date.parse(r.at) <= FRESH_MS) {
-            w = stepExit(w, { inside: inside({ lat: r.lat, lon: r.lon }, fence), speedMph: r.speedMph ?? null, nowMs: Date.now() });
+            const pos = { lat: r.lat, lon: r.lon };
+            if (!anchor) anchor = pos;
+            w = stepExit(w, { inside: stillAtStop(pos, fence, anchor), speedMph: r.speedMph ?? null, nowMs: Date.now() });
             if (w.confirmedAtMs != null) { writeGeoDeparture(stopKey, new Date(w.confirmedAtMs).toISOString()); return; }
           }
         } catch { /* try again next minute */ }
