@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { stateCode } from "@/lib/geo/usStates";
-import { countyFor } from "@/lib/geo/county";
+import { countyFor, countyForPlace } from "@/lib/geo/county";
 
 export const runtime = "nodejs";
 
@@ -34,7 +34,17 @@ export async function GET(req: NextRequest) {
   const key = process.env.OPENWEATHER_API_KEY;
   if (!key) return NextResponse.json({ error: "OPENWEATHER_API_KEY not set." }, { status: 500 });
 
-  if (reverse && sp.get("county") === "1") return NextResponse.json({ county: await countyFor(lat, lon) });
+  // County for a place by its address (never the phone's position): ?county=1&city=&state=[&address=&zip=].
+  if (sp.get("county") === "1" && city && state) {
+    let center: { lat: number; lon: number } | null = null;
+    try {
+      const g = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(`${city},${state},US`)}&limit=1&appid=${encodeURIComponent(key)}`, { cache: "no-store" });
+      const arr: unknown = await g.json();
+      const it = Array.isArray(arr) ? (arr[0] as { lat?: unknown; lon?: unknown } | undefined) : undefined;
+      if (Number.isFinite(Number(it?.lat)) && Number.isFinite(Number(it?.lon))) center = { lat: Number(it!.lat), lon: Number(it!.lon) };
+    } catch { /* fall through without a city center */ }
+    return NextResponse.json({ county: await countyForPlace({ address: sp.get("address"), city, state, zip: sp.get("zip") }, center) });
+  }
 
   if (reverse) {
     const r = await fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${encodeURIComponent(key)}`, { cache: "no-store" });

@@ -69,12 +69,13 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   };
 }
 
-async function countyAt(lat: number, lon: number): Promise<string | null> {
+async function countyOf(place: { address: string; city: string; state: string; zip: string }): Promise<string | null> {
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return null;
-    const res = await fetch(`/api/geocode?lat=${lat}&lon=${lon}&county=1`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!token || !place.city || !place.state) return null;
+    const q = new URLSearchParams({ county: "1", city: place.city, state: place.state, address: place.address, zip: place.zip });
+    const res = await fetch(`/api/geocode?${q}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const j = (await res.json()) as { county?: string | null };
     return j.county ?? null;
@@ -192,13 +193,15 @@ export function LocationEditor({
     try {
       let { lat, lon } = draft;
       const placeChanged = !location || location.city !== (draft.city.trim() || null) || location.state !== (draft.state.trim().toUpperCase() || null);
-      let county: string | null | undefined;
       if (!geoPinned && (lat == null || placeChanged)) {
         const g = await geocode(draft.city.trim(), draft.state.trim());
-        if (g) { ({ lat, lon } = g); county = g.county ?? null; }
-      } else if (lat != null && lon != null && (placeChanged || !location?.county)) {
-        county = await countyAt(lat, lon);
+        if (g) ({ lat, lon } = g);
       }
+      // County comes from the address (or the city), never from the pin: the person adding this may not be at the site.
+      const addressChanged = !location || (location.address ?? "") !== draft.address.trim();
+      const county = placeChanged || addressChanged || !location?.county
+        ? await countyOf({ address: draft.address.trim(), city: draft.city.trim(), state: draft.state.trim(), zip: draft.zip.trim() })
+        : null;
       const now = new Date().toISOString();
       const row = {
         company_id: companyId,
