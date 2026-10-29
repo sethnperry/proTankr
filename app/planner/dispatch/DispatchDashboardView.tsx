@@ -28,6 +28,7 @@ import type { HosAlert } from "@/lib/dispatch/hosAlerts";
 import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { DelayedSheet } from "./LiveSheet";
+import { EnRouteSheet } from "./EnRouteSheet";
 import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
 import { outageAge } from "@/app/planner/utils/dates";
 
@@ -311,6 +312,8 @@ export function DispatchDashboardView(props: {
   onOpenDriver: (userId: string) => void;
   // LIVE chips: every load in progress, classified (liveGroups.ts)
   liveRows: LiveRow[];
+  // Everything the En Route window needs to show and edit trips (see EnRouteSheet).
+  enRoute?: Omit<React.ComponentProps<typeof EnRouteSheet>, "open" | "rows" | "onClose" | "onOpenTrip">;
   // Slots
   liveBoard: React.ReactNode; // loads in progress
   hosAlerts: HosAlert[]; // LIVE: drivers on loads in progress low on hours
@@ -466,8 +469,8 @@ export function DispatchDashboardView(props: {
                 </>
               )}
       </FullscreenModal>
-      <DelayedSheet open={sheet === "enroute"} mode="enroute" rows={p.liveRows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop")}
-        onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
+      {p.enRoute && <EnRouteSheet open={sheet === "enroute"} rows={p.liveRows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop")} {...p.enRoute}
+        onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} />}
       <DelayedSheet open={sheet === "onsite"} mode="onsite" rows={p.liveRows.filter((r) => r.kind === "loading" || r.kind === "unloading")}
         onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
       <DelayedSheet open={sheet === "delayed"} rows={p.liveRows.filter((r) => r.delayed || r.recovered)}

@@ -28,6 +28,7 @@ export type LiveRow = {
   delayMin?: number | null; // how long that earlier stop took
   etaMs?: number | null;    // new arrival estimate for this leg
   reason?: string | null;   // what the driver said held them up, if they said
+  destId?: string | null;   // en route: the terminal or store it is headed to
   heldAt?: string | null;   // for a recovered row: the stop that held it
   orders: string[];
 };
@@ -83,6 +84,7 @@ export function classifyLive(
     const recovered = !!lastLeft && dwell != null && dwell >= lastLeft.limit && now - Date.parse(lastLeft.left) <= RECOVERED_WINDOW_MIN * 60000;
     const moving = (kind: "to_rack" | "to_drop", terminalId: string | null, locationId: string | null, fromIso: string | null) => ({
       delayed: false,
+      destId: terminalId ?? locationId,
       etaMs: etaFor?.({ kind, tripId: ft.trip.trip_id, truckId: ft.trip.truck_id ?? null, terminalId, locationId, fromIso: lastLeft?.left ?? fromIso }) ?? null,
       ...(recovered ? { recovered: true, delayMin: dwell, heldAt: lastLeft!.name, reason: lastLeft!.reason } : {}),
     });

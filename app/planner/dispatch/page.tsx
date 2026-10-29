@@ -1020,6 +1020,15 @@ export default function DispatchPage() {
           onDismissCancelled={(id) => saveDismissed(new Set([...dismissed, id]))}
           onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
         dispatchedCount={dispatchedShown.length} cancelledCount={visibleCancelled.length} liveRows={liveRows}
+        enRoute={{
+          fleetTrips, locations: fleet.locations, terminals: terminalsCatalog as any, deliveryLocs: locList.locations, deliveryTanks: locList.tanks,
+          companyId: companyId || null, userId: authUserId || null, onLocationAdded: locList.reload, onChanged: () => fleet.reload?.(),
+          destLabel: (r) => {
+            if (r.kind === "to_rack") { const t = terminalsCatalog.find((x) => String(x.terminal_id) === String(r.destId)); return t ? [t.terminal_name, t.city, t.state].filter(Boolean).join(", ") : r.where; }
+            const l = locList.locations.find((x) => x.location_id === r.destId);
+            return l ? [l.location_number ? `Store ${l.location_number}` : l.name, l.city, l.state].filter(Boolean).join(", ") : [r.where, r.place].filter(Boolean).join(", ");
+          },
+        }}
         regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
         drivers={mode === "plan" ? undefined : driverListEl}
         tools={dashTools}
