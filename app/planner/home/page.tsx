@@ -108,6 +108,7 @@ import { fetchPresets, getTripPlan, setTripPlan, setTripQuick, nextSaveSlot, sav
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
+import { saveTripDraft, takeTripDraft, takeDetourSlot } from "@/lib/trips/planDetour";
 import { getTripSupplier, sameSupplier, seedTerminalPicks, setTripSupplier, type TripSupplier } from "@/lib/trips/tripSupplier";
 import { readPicks, groupPicks } from "@/lib/suppliers/picks";
 import { linkSupplierToTerminal } from "@/lib/suppliers/useTerminalSuppliers";
@@ -398,6 +399,25 @@ export default function HomePage() {
 
   // ── Start Load prefills ────────────────────────────────────────────────────
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Values the Begin / Edit Trip card had when the driver left to make or change a plan.
+  const [resumeDraft, setResumeDraft] = useState<StartLoadValues | null>(null);
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("resume") !== "trip") return;
+    params.delete("resume");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    const d = takeTripDraft(userId);
+    const slot = takeDetourSlot();
+    if (d) { setResumeDraft({ ...d, planSlot: slot ?? d.planSlot }); setSheetOpen(true); }
+  }, [userId]);
+  useEffect(() => { if (!sheetOpen && resumeDraft) setResumeDraft(null); }, [sheetOpen, resumeDraft]);
+  const planDetour = (what: "new" | number, v: StartLoadValues) => {
+    if (!userId) return;
+    saveTripDraft(userId, v);
+    router.push(`/planner?plan=1&detour=${what === "new" ? "new" : `edit&slot=${what}`}`);
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editing = !!openTrip;
@@ -503,6 +523,7 @@ export default function HomePage() {
   })();
 
   const initialValues = useMemo<StartLoadValues>(() => {
+    if (resumeDraft) return resumeDraft;
     if (openTrip && children && snap) {
       const planned = plannedDeliveries(snap.deliveries);
       return {
@@ -562,7 +583,7 @@ export default function HomePage() {
       if (star) return { locationId: star.location_id, oneOffName: null, deliveryType: star.delivery_type };
       return { locationId: null, oneOffName: "", deliveryType: "drop" };
     }
-  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId]);
+  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId, resumeDraft]);
 
   const submit = async (v: StartLoadValues) => {
     if (!store || !userId || !companyId) {
@@ -2337,6 +2358,8 @@ export default function HomePage() {
 
       <StartLoadSheet
         breakNote={breakNote}
+        planRequired={!(editing && children?.pickup?.load_id)}
+        onPlanDetour={planDetour}
         open={sheetOpen}
         editing={editing}
         initial={initialValues}

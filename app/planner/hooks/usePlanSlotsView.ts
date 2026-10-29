@@ -11,6 +11,7 @@ import { segsFor, type StripSeg } from "@/lib/equipment/trailerStrip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
+import { detourActive, finishDetour, RESUME_URL, startDetour } from "@/lib/trips/planDetour";
 import { productColorFor } from "../utils/productColor";
 
 import type { Dispatch, SetStateAction } from "react";
@@ -207,6 +208,23 @@ export function usePlanSlotsView(i: Inputs) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equipment.selectedComboId, planSlots.presetsReady, planRestoreAttempted, compLoading, compartments.length]);
+  // Opened from the Begin / Edit Trip card to make or change a plan: "?detour=new" or "?detour=edit&slot=N".
+  const detourDone = useRef(false);
+  useEffect(() => {
+    if (detourDone.current || typeof window === "undefined" || !active || !planSlots.presetsReady || !planRestoreAttempted || compLoading || compartments.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const kind = params.get("detour");
+    if (!kind) return;
+    detourDone.current = true;
+    const slot = Number(params.get("slot"));
+    params.delete("detour"); params.delete("slot");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    startDetour();
+    if (kind === "edit" && slot >= 1 && slot <= 5) handlePresetLoad(slot);
+    else setWizardNew(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, planSlots.presetsReady, planRestoreAttempted, compLoading, compartments.length]);
   const wizardAuto = !!equipment.selectedComboId && !equipment.isBobtail && !equipment.isTrailerOnly
     && !!selectedTrailerId && !compLoading && compartments.length > 0
     && planSlots.presetsReady && planRestoreAttempted
@@ -237,6 +255,7 @@ export function usePlanSlotsView(i: Inputs) {
     setCaptureBaselineNext(true);
     setBaselineOverrides(overridesSnapshot(plan, cgSlider));
     setWizardNew(false);
+    if (detourActive()) { finishDetour(target); router.push(RESUME_URL); return; }
     if (!wizardNew && !active) router.push("/planner?plan=1");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planSlots, activeSlotLetter, hasAnyPlan, cgSlider, wizardNew, active, router]);

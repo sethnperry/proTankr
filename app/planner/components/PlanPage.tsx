@@ -5,6 +5,7 @@
 // compartments, CG slider, summary and plan actions, plus the setup gates. Reads the
 // planner model with usePlanner(); holds layout only.
 
+import { detourActive, finishDetour, RESUME_URL } from "@/lib/trips/planDetour";
 import { createPortal } from "react-dom";
 import { Spinner } from "@/lib/ui/pending";
 import { TripEquipmentSheets } from "./trip/TripEquipmentSheets";
@@ -152,10 +153,17 @@ export default function PlanPage() {
               planSlots.saveToSlot(to);
               setActiveSlotLetter(to);
               setBaselineOverrides(currentOverrides);
+              if (detourActive()) { finishDetour(to); leaveTo(RESUME_URL, "Back to your trip…"); }
             } else setWizardNew(true);
           }}
           closing={!!leaving}
-          onClose={() => leaveTo("/planner/home", "Opening dashboard…")}
+          onClose={() => {
+            if (detourActive()) {
+              const snap = planSlots.peekSlot(activeSlotLetter);
+              const has = !!snap && Object.values(snap.compPlan ?? {}).some((c: any) => c && !c.empty && c.productId);
+              finishDetour(has ? activeSlotLetter : null); leaveTo(RESUME_URL, "Back to your trip…"); return; }
+            leaveTo("/planner/home", "Opening dashboard…");
+          }}
         />
       )}
 

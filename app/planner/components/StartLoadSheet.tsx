@@ -59,7 +59,13 @@ export function StartLoadSheet({
   suggestStart,
   liveMiles,
   breakNote,
+  planRequired = true,
+  onPlanDetour,
 }: {
+  // A plan must be chosen unless the pickup is already loaded or dispatch sent one.
+  planRequired?: boolean;
+  // Make or change a plan in the Planner, then come back here ("new" or an existing slot).
+  onPlanDetour?: (what: "new" | number, v: StartLoadValues) => void;
   // Shown only when the 30-minute break isn't done and driving is already well along since the last one.
   breakNote?: string | null;
   // The truck's odometer from telematics. Fills beginning miles unless one was typed.
@@ -190,6 +196,14 @@ export function StartLoadSheet({
   }, [open, pickupTerminalId]);
 
   const milesOk = v.beginMiles.trim() === "" || Number.isFinite(Number(v.beginMiles));
+  // Everything on the card has to be filled in before the trip is saved.
+  const missing: string[] = [];
+  if (!v.beginMiles.trim() || !Number.isFinite(Number(v.beginMiles))) missing.push("begin miles");
+  if (!v.orderNumber.trim() || v.extraOrderNumbers.some((n) => !n.trim())) missing.push("order number");
+  if (!v.startCity.trim()) missing.push("starting from");
+  if (!pickupLabel) missing.push("pickup");
+  if (v.deliveries.some((d) => !d.locationId && !d.oneOffName?.trim())) missing.push("delivery");
+  if (planRequired && !dispatchPlan && v.planSlot == null) missing.push("plan");
 
   // Pop-out save: write the value, then move to the next missing one.
   const commitEdit = () => {
@@ -233,14 +247,15 @@ export function StartLoadSheet({
       footer={
         <div style={{ padding: "12px 16px" }}>
           {error && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+          {missing.length > 0 && <div style={{ color: "#fbbf24", fontSize: 12, marginBottom: 8, textAlign: "center" }}>Still needed: {missing.join(", ")}</div>}
           <button
             type="button"
-            disabled={busy || !milesOk}
+            disabled={busy || missing.length > 0}
             onClick={() => onSubmit(v)}
             style={{
               width: "100%", padding: "16px 0", borderRadius: 2, border: "none",
               background: "#fff", color: "#000", fontSize: 17, fontWeight: 800,
-              opacity: busy || !milesOk ? 0.5 : 1, cursor: busy ? "default" : "pointer",
+              opacity: busy || missing.length > 0 ? 0.5 : 1, cursor: busy ? "default" : "pointer",
             }}
           >
             {editing ? "Save" : "Begin Trip"}
@@ -290,8 +305,8 @@ export function StartLoadSheet({
           {dispatchPlan ? (
             <Line label="Plan" value="Sent by dispatch" last onTap={() => undefined} sub={null} />
           ) : (
-            <Line label="Plan" value={chosenPreset ? `${slotLetter(chosenPreset.slot)}${chosenPreset.name ? ` · ${chosenPreset.name}` : ""}` : presets.length ? null : "No saved plans"}
-              onTap={() => presets.length && setPlanOpen(true)} last />
+            <Line label="Plan" value={chosenPreset ? `${slotLetter(chosenPreset.slot)}${chosenPreset.name ? ` · ${chosenPreset.name}` : ""}` : null}
+              missing onTap={() => setPlanOpen(true)} last />
           )}
         </div>
 
@@ -363,10 +378,18 @@ export function StartLoadSheet({
 
     <FullscreenModal open={open && planOpen} title="Plan" onClose={() => setPlanOpen(false)}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
-        <button type="button" onClick={() => { setV((s) => ({ ...s, planSlot: null })); setPlanOpen(false); }}
-          style={{ padding: "12px", borderRadius: 2, textAlign: "left", cursor: "pointer", border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 15 }}>
-          Leave the Planner as it is
-        </button>
+        {onPlanDetour && (
+          <button type="button" onClick={() => { setPlanOpen(false); onPlanDetour("new", v); }}
+            style={{ padding: "12px", borderRadius: 2, textAlign: "left", cursor: "pointer", border: "1px solid rgba(255,255,255,0.7)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 800 }}>
+            + New Plan
+          </button>
+        )}
+        {onPlanDetour && chosenPreset && (
+          <button type="button" onClick={() => { setPlanOpen(false); onPlanDetour(chosenPreset.slot, v); }}
+            style={{ padding: "12px", borderRadius: 2, textAlign: "left", cursor: "pointer", border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700 }}>
+            Edit Plan {slotLetter(chosenPreset.slot)}{chosenPreset.name ? ` · ${chosenPreset.name}` : ""}
+          </button>
+        )}
         {presets.map((p) => {
           const on = v.planSlot === p.slot;
           return (
