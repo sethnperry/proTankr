@@ -83,7 +83,8 @@ export function classifyLive(
     const recovered = !!lastLeft && dwell != null && dwell >= lastLeft.limit && now - Date.parse(lastLeft.left) <= RECOVERED_WINDOW_MIN * 60000;
     const moving = (kind: "to_rack" | "to_drop", terminalId: string | null, locationId: string | null, fromIso: string | null) => ({
       delayed: false,
-      ...(recovered ? { recovered: true, delayMin: dwell, heldAt: lastLeft!.name, reason: lastLeft!.reason, etaMs: etaFor?.({ kind, tripId: ft.trip.trip_id, truckId: ft.trip.truck_id ?? null, terminalId, locationId, fromIso: lastLeft!.left }) ?? null } : {}),
+      etaMs: etaFor?.({ kind, tripId: ft.trip.trip_id, truckId: ft.trip.truck_id ?? null, terminalId, locationId, fromIso: lastLeft?.left ?? fromIso }) ?? null,
+      ...(recovered ? { recovered: true, delayMin: dwell, heldAt: lastLeft!.name, reason: lastLeft!.reason } : {}),
     });
     const nextRack = pickups.find((p) => !p.arrived_at && !p.left_at);
     const loadedAboard = ft.compLoads.some((c) => c.disposition === "loaded");

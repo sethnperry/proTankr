@@ -76,8 +76,10 @@ const tagOf = (r: LiveRow) => [String(r.truckName ?? "").replace(/^truck\s*/i, "
 const clockOf = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 /** The Delayed chip's window: one line per held-up load, same style as Friction. Tap a line for the detail. */
-export function DelayedSheet({ open, rows, onClose, onOpenTrip, openingId }: {
+export function DelayedSheet({ open, rows, mode = "delayed", onClose, onOpenTrip, openingId }: {
   open: boolean;
+  /** delayed = held-up loads; enroute / onsite = every load in that state, same layout. */
+  mode?: "delayed" | "enroute" | "onsite";
   rows: LiveRow[];
   onClose: () => void;
   onOpenTrip: (tripId: string) => void;
@@ -89,9 +91,26 @@ export function DelayedSheet({ open, rows, onClose, onOpenTrip, openingId }: {
   const at = (r: LiveRow) => (r.recovered ? r.heldAt ?? "the stop" : [r.where, r.place?.split(",")[0]].filter(Boolean).join(", "));
   return (
     <>
-      <FullscreenModal open={open} title={`Delayed (${rows.length})`} onClose={onClose}>
-        {list.length === 0 && <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Nothing is delayed right now.</div>}
+      <FullscreenModal open={open} title={`${mode === "delayed" ? "Delayed" : mode === "enroute" ? "En route" : "On site"} (${rows.length})`} onClose={onClose}>
+        {list.length === 0 && <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>{mode === "delayed" ? "Nothing is delayed right now." : "Nothing here right now."}</div>}
         {list.map((r) => {
+          if (mode !== "delayed") {
+            const verb = r.kind === "to_rack" ? "To load at" : r.kind === "to_drop" ? "To deliver to" : r.kind === "loading" ? "Loading at" : "Unloading at";
+            return (
+              <button key={r.tripId} type="button" className="dash-press" onClick={() => setSel(r)}
+                style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "9px 12px", marginBottom: 6, cursor: "pointer", borderColor: r.delayed ? `${EXPIRY_COLOR.expiring}77` : undefined }}>
+                <div style={{ fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span>{verb.toUpperCase()}</span>
+                  <span style={{ fontWeight: 600 }}> {[r.where, r.place?.split(",")[0]].filter(Boolean).join(", ")}</span>
+                </div>
+                <div style={{ fontSize: 12, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {tagOf(r)}
+                  {mode === "enroute" ? (r.etaMs ? ` · ETA ${clockOf(r.etaMs)}` : " · ETA unknown") : ` · ${dur(r.minutes)}`}
+                  {r.delayed && <span style={{ color: EXPIRY_COLOR.expiring }}> · delayed</span>}
+                </div>
+              </button>
+            );
+          }
           const cause = (r.reason ?? (r.kind === "unloading" ? "Delayed unloading" : r.kind === "loading" ? "Delayed loading" : "Delayed")).toUpperCase();
           return (
             <button key={r.tripId} type="button" className="dash-press" onClick={() => setSel(r)}
@@ -118,8 +137,9 @@ export function DelayedSheet({ open, rows, onClose, onOpenTrip, openingId }: {
               ["Driver", sel.driverName],
               ["Equipment", [sel.truckName ? `Truck ${sel.truckName}` : null, sel.trailerName ? `Trailer ${sel.trailerName}` : null].filter(Boolean).join(" · ") || null],
               [sel.recovered ? "Was held at" : KIND_LABEL[sel.kind], sel.recovered ? sel.heldAt ?? null : [sel.where, sel.place].filter(Boolean).join(" · ")],
-              [sel.recovered ? "Held for" : "Time there", dur(sel.recovered ? sel.delayMin ?? null : sel.minutes) || null],
-              ["Reason given", sel.reason ?? "None given"],
+              [sel.recovered ? "Held for" : sel.kind === "to_rack" || sel.kind === "to_drop" ? "On the way" : "Time there", dur(sel.recovered ? sel.delayMin ?? null : sel.minutes) || null],
+              ...(sel.delayed || sel.recovered ? [["Reason given", sel.reason ?? "None given"]] : []),
+              ...(!sel.recovered && sel.etaMs ? [["ETA", clockOf(sel.etaMs)]] : []),
               ...(sel.recovered ? [["Now", `En route to ${[sel.where, sel.place].filter(Boolean).join(" · ")}`], ["New ETA", sel.etaMs ? clockOf(sel.etaMs) : "Unknown (no truck position)"]] : []),
               ["Order", sel.orders.join(", ") || null],
             ].filter(([, v]) => v).map(([k, v]) => (

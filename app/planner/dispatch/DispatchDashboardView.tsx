@@ -27,7 +27,7 @@ import { groupBySubject } from "@/lib/dispatch/planAlerts";
 import type { HosAlert } from "@/lib/dispatch/hosAlerts";
 import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
-import { LiveSheet, DelayedSheet } from "./LiveSheet";
+import { DelayedSheet } from "./LiveSheet";
 import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
 import { outageAge } from "@/app/planner/utils/dates";
 
@@ -466,10 +466,10 @@ export function DispatchDashboardView(props: {
                 </>
               )}
       </FullscreenModal>
-      <LiveSheet open={sheet === "enroute"} title="En route" rows={p.liveRows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop")} kinds={["to_rack", "to_drop"]}
-        onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
-      <LiveSheet open={sheet === "onsite"} title="On site" rows={p.liveRows.filter((r) => r.kind === "loading" || r.kind === "unloading")} kinds={["loading", "unloading"]}
-        onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
+      <DelayedSheet open={sheet === "enroute"} mode="enroute" rows={p.liveRows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop")}
+        onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
+      <DelayedSheet open={sheet === "onsite"} mode="onsite" rows={p.liveRows.filter((r) => r.kind === "loading" || r.kind === "unloading")}
+        onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
       <DelayedSheet open={sheet === "delayed"} rows={p.liveRows.filter((r) => r.delayed || r.recovered)}
         onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
       <FullscreenModal open={sheet === "cancelled"} title={`Cancelled loads (${p.cancelledCount})`} onClose={() => setSheet(null)}>
