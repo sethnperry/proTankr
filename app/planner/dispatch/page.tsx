@@ -87,7 +87,8 @@ import { forecastLoad, typicalStartMinutes, clock } from "@/lib/dispatch/forecas
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
 import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
 import { LocationPicker } from "../components/trip/LocationPicker";
-import { useDeliveryLocationList } from "@/lib/trips/useTripData";
+import { useDeliveryLocationList, useTripSettings } from "@/lib/trips/useTripData";
+import { classifyLive } from "@/lib/dispatch/liveGroups";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
 import { settingsForTerminal } from "@/lib/dispatch/forecast";
 import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, type GroupOverride } from "@/lib/dispatch/compPlan";
@@ -290,6 +291,10 @@ export default function DispatchPage() {
   }), [fleet.trips, regionOn, regionDriverIds, regionSel]); // eslint-disable-line react-hooks/exhaustive-deps
   const regionRoster = useMemo(() => plan.roster.filter((m) => driverInRegion(m.user_id)), [plan.roster, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Re-read the clock every minute so on-site times and the Delayed chip keep moving.
+  const [liveTick, setLiveTick] = useState(0);
+  useEffect(() => { const t = window.setInterval(() => setLiveTick((n) => n + 1), 60_000); return () => window.clearInterval(t); }, []);
+
   // Cancelled loads the dispatcher has dismissed (this device).
   const dismissKey = `proTankr:u:${authUserId || "anon"}:dismissedCancelled`;
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -303,6 +308,10 @@ export default function DispatchPage() {
   const visibleCancelled = useMemo(
     () => cancelledTrips.trips.filter((c) => !dismissed.has(c.trip.trip_id) && driverInRegion(c.trip.driver_id)),
     [cancelledTrips.trips, dismissed, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { settings: tripSettings } = useTripSettings(companyId || null);
+  const liveRows = useMemo(
+    () => classifyLive(fleetTrips, fleet.locations, Date.now(), { loading: tripSettings.loading_delay_threshold_minutes, delivery: tripSettings.delivery_delay_threshold_minutes }),
+    [fleetTrips, fleet.locations, tripSettings.loading_delay_threshold_minutes, tripSettings.delivery_delay_threshold_minutes, liveTick]);
   const fleetReports = useFleetReports(fleetTrips, plan.usedTerminalIds);
   const rawConflicts = useMemo(
     () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad),
@@ -955,7 +964,7 @@ export default function DispatchPage() {
           onOpenTrip={openTrip} openingId={nav.openingId("trip")}
           onDismissCancelled={(id) => saveDismissed(new Set([...dismissed, id]))}
           onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
-        dispatchedCount={dispatchedShown.length}
+        dispatchedCount={dispatchedShown.length} cancelledCount={visibleCancelled.length} liveRows={liveRows}
         regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
         drivers={mode === "plan" ? undefined : driverListEl}
         tools={dashTools}

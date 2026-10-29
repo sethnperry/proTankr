@@ -27,6 +27,8 @@ import { groupBySubject } from "@/lib/dispatch/planAlerts";
 import type { HosAlert } from "@/lib/dispatch/hosAlerts";
 import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
+import { LiveSheet } from "./LiveSheet";
+import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
 
 export type DispatchMode = "plan" | "live";
 
@@ -301,12 +303,15 @@ export function DispatchDashboardView(props: {
   // Supplier contracts at or near their limit (count, worst level color) and how to open the list.
   allocation?: { count: number; color: string; onOpen: () => void } | null;
   onOpenDriver: (userId: string) => void;
+  // LIVE chips: every load in progress, classified (liveGroups.ts)
+  liveRows: LiveRow[];
   // Slots
   liveBoard: React.ReactNode; // loads in progress
   hosAlerts: HosAlert[]; // LIVE: drivers on loads in progress low on hours
   parkedBoard: React.ReactNode; // parked preloads, opened from the Parked chip
   cancelledBoard: React.ReactNode; // cancelled loads (renders nothing when there are none)
   dispatchedCount: number;
+  cancelledCount: number;
   regions: RegionFilter;
   dispatchedBoard?: React.ReactNode; // loads sent to drivers, not begun yet
   drivers?: React.ReactNode;  // driver picker (side column); omitted when the planner holds it
@@ -319,6 +324,8 @@ export function DispatchDashboardView(props: {
   const [expOpen, setExpOpen] = useState(false);
   const [parkedOpen, setParkedOpen] = useState(false);
   const [hosOpen, setHosOpen] = useState(false);
+  const [sheet, setSheet] = useState<null | "enroute" | "onsite" | "delayed" | "cancelled" | "dispatched">(null);
+  const lc = liveChipCounts(p.liveRows);
   // One expirations tile, worst tier first: expired (red), then 7 days
   // (orange), then 30 days (yellow). Counts only that tier, so resolving the
   // reds moves the tile down to the oranges.
@@ -336,12 +343,13 @@ export function DispatchDashboardView(props: {
     : { ...expTile0, label: `${expTile0.label}${p.focusCount != null ? scope : ""}` };
 
   const open = p.conflicts.filter((c) => !c.handled).length;
+  const goFriction = () => document.getElementById("dispatch-friction")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const cells: GaugeCell[] = live
     ? [
-        { label: "Conflicts", value: String(open), color: open ? RED : GREY },
-        { label: "At Rack", value: String(p.counts.atRack), color: p.counts.atRack ? "#fff" : GREY },
-        { label: "To Rack", value: String(p.counts.enRouteToRack), color: p.counts.enRouteToRack ? "#fff" : GREY },
-        { label: "Hours", value: String(p.hosAlerts.length), color: p.hosAlerts.some((a) => a.level === "red") ? RED : p.hosAlerts.length ? ORANGE : GREY, onClick: () => setHosOpen(true) },
+        { label: "Friction", value: String(open), color: open ? RED : GREY, onClick: goFriction },
+        { label: "En Route", value: String(lc.enRoute), color: lc.enRoute ? "#fff" : GREY, onClick: () => setSheet("enroute") },
+        { label: "On Site", value: String(lc.onSite), color: lc.onSite ? "#fff" : GREY, onClick: () => setSheet("onsite") },
+        { label: "Delayed", value: String(lc.delayed), color: lc.delayed ? ORANGE : GREY, onClick: () => setSheet("delayed") },
       ]
     : [
         { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true) },
@@ -356,33 +364,35 @@ export function DispatchDashboardView(props: {
       ];
 
   const groups = groupBySubject(p.alerts);
+  // Second row (Live): the rest of the load states and the hours watch.
+  const cells2: GaugeCell[] = [
+    { label: "Cancelled", value: String(p.cancelledCount), color: p.cancelledCount ? "#fff" : GREY, onClick: () => setSheet("cancelled") },
+    { label: "Parked", value: String(p.counts.parked), color: p.counts.parked ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
+    { label: "Dispatched", value: String(p.dispatchedCount), color: p.dispatchedCount ? "#93c5fd" : GREY, onClick: () => setSheet("dispatched") },
+    { label: "Hours", value: String(p.hosAlerts.length), color: p.hosAlerts.some((a) => a.level === "red") ? RED : p.hosAlerts.length ? ORANGE : GREY, onClick: () => setHosOpen(true) },
+  ];
 
   return (
     <div className="dash-wrap" style={{ paddingTop: 4, paddingBottom: 24 }}>
       <DashStyles />
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ ...L.title, fontSize: 11, color: L.muted }}>Dispatch Dashboard</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {p.companyName ?? "Fleet"}
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 1, minWidth: 0 }}>
-          <RegionButton r={p.regions} />
-          <ModeSwitch mode={p.mode} onMode={p.onMode} />
-        </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {p.companyName ?? "Fleet"}
       </div>
-      <div style={{ fontSize: 13, color: L.faint, marginTop: 6 }}>
-        {live ? "What's going wrong right now, where trucks are headed." : "What runs out before the next load does."}
+      <div style={{ ...L.title, fontSize: 11, color: L.muted, marginTop: 2 }}>Dispatch Dashboard</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 12 }}>
+        <RegionButton r={p.regions} />
+        <ModeSwitch mode={p.mode} onMode={p.onMode} />
       </div>
 
       <GaugePanel cells={cells} equal />
+      {live && <GaugePanel cells={cells2} equal top={6} />}
       {p.error && <div style={{ fontSize: 13, color: "#f87171", marginTop: 10 }}>{p.error}</div>}
 
       <div className="dash-cols" style={{ marginTop: 4 }}>
         <div>
           {live ? (
             <>
+              <span id="dispatch-friction" />
               <SectionLabel first right={
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, letterSpacing: 0 }}>
                   {p.unseen.size > 0 && (
@@ -402,12 +412,12 @@ export function DispatchDashboardView(props: {
                   <span style={{ color: L.faint }}>{p.reportCount} report{p.reportCount === 1 ? "" : "s"}</span>
                 </span>
               }>
-                Conflicts
+                Friction
               </SectionLabel>
               {p.ackError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>Couldn't save: {p.ackError}</div>}
               {p.conflicts.length === 0 ? (
                 <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>
-                  No conflicts. Nothing reported at a rack your trucks are headed to.
+                  No friction. Nothing reported at a rack your trucks are headed to.
                 </div>
               ) : p.conflicts.map((c) => (
                 <ConflictCard key={c.terminalId} c={c} terminal={p.terminal} product={p.product} onOpenTrip={p.onOpenTrip} openingId={p.openingId}
@@ -448,6 +458,18 @@ export function DispatchDashboardView(props: {
           </button>
         ))}
         <div style={{ fontSize: 12, color: L.faint, marginTop: 6 }}>Clocks refresh about every 3 minutes. Tap a driver to open their load.</div>
+      </FullscreenModal>
+      <LiveSheet open={sheet === "enroute"} title="En route" rows={p.liveRows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop")} kinds={["to_rack", "to_drop"]}
+        onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
+      <LiveSheet open={sheet === "onsite"} title="On site" rows={p.liveRows.filter((r) => r.kind === "loading" || r.kind === "unloading")} kinds={["loading", "unloading"]}
+        onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
+      <LiveSheet open={sheet === "delayed"} title="Delayed" rows={p.liveRows.filter((r) => r.delayed)} kinds={["loading", "unloading"]}
+        onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
+      <FullscreenModal open={sheet === "cancelled"} title={`Cancelled loads (${p.cancelledCount})`} onClose={() => setSheet(null)}>
+        {p.cancelledBoard}
+      </FullscreenModal>
+      <FullscreenModal open={sheet === "dispatched"} title={`Dispatched · not begun (${p.dispatchedCount})`} onClose={() => setSheet(null)}>
+        {p.dispatchedBoard ?? <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>No loads sent and waiting.</div>}
       </FullscreenModal>
       <FullscreenModal open={parkedOpen} title={`Parked loads (${p.counts.parked})`} onClose={() => setParkedOpen(false)}>
         {p.parkedBoard}
