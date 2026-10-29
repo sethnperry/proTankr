@@ -572,27 +572,25 @@ export default function FuelSheet({
   if (choice && isQuickKind(choice.payKind) && choice.method) {
     const m = choice.method;
     const pin = pins[m.id];
-    // Three numbers side by side: shrink the type for long ones so none spill.
-    const big = (v: string | null | undefined): React.CSSProperties => {
-      const n = (v ?? "").length;
-      return { fontSize: n <= 4 ? 28 : n <= 6 ? 22 : n <= 8 ? 18 : 15, fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
-    };
+    // Three numbers side by side, all the same size (long ones are clipped with an ellipsis, never shrunk).
+    const big = (_v?: string | null): React.CSSProperties => ({ fontSize: 22, fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+    const acct = m.kind === "company_account" && m.account_number ? m.account_number : null;
     const cell: React.CSSProperties = { background: "#0f0f10", padding: "12px 10px", minWidth: 0 };
     return (
       <FullscreenModal open={open} title={m.name} onClose={closeChoice} footer={null}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1, background: hair, border: `1px solid ${hair}`, marginBottom: 12 }}>
           <div style={cell}>
-            <div style={lab}>Truck</div>
-            <div className="dash-num" style={big(truckName)}>{truckName ?? "—"}</div>
+            <div style={lab}>{acct ? "Account" : "Truck"}</div>
+            <div className="dash-num" style={big()}>{acct ?? truckName ?? "—"}</div>
           </div>
           <div style={cell}>
             <div style={lab}>Employee ID</div>
-            <div className="dash-num" style={big(driverNo)}>{driverNo ?? "—"}</div>
+            <div className="dash-num" style={big()}>{driverNo ?? "—"}</div>
           </div>
           <button type="button" style={{ ...cell, border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}
             onClick={() => { setPinDraft(pin ?? ""); setEditPin(true); setErr(null); }}>
             <div style={lab}>PIN{pin ? " ✎" : ""}</div>
-            <div className="dash-num" style={{ ...big(pin), color: pin ? "#fff" : "#fbbf24", ...(pin ? {} : { fontSize: 15 }) }}>{pin ?? "Add"}</div>
+            <div className="dash-num" style={{ ...big(), color: pin ? "#fff" : "#fbbf24" }}>{pin ?? "Add"}</div>
           </button>
         </div>
         {!driverNo && <div style={{ fontSize: 12, color: "#fbbf24", marginBottom: 10 }}>No employee ID on your profile. Add it in Settings → Profile.</div>}
@@ -608,13 +606,11 @@ export default function FuelSheet({
           </div>
         )}
 
-        {m.kind === "company_account" && m.account_number && (
-          <div style={{ ...box, textAlign: "center" }}>
-            <div style={lab}>Account number</div>
-            <div className="dash-num" style={{ fontSize: 30, fontWeight: 900, letterSpacing: "0.04em", marginTop: 4 }}>{m.account_number}</div>
-            <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>Or show this screen to the cashier.</div>
-          </div>
-        )}
+        <div style={{ ...box, textAlign: "center" }}>
+          <div style={lab}>Odometer</div>
+          <input className="dash-num" inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} placeholder="—"
+            style={{ ...input, border: "none", background: "transparent", textAlign: "center", fontSize: 30, fontWeight: 900, letterSpacing: "0.04em", marginTop: 4, padding: 0 }} />
+        </div>
 
         {m.steps.length > 0 && (
           <div style={{ marginBottom: 12 }}>
@@ -630,10 +626,7 @@ export default function FuelSheet({
           <button type="button" style={{ ...link, marginBottom: 14 }} onClick={() => void openGuide(m.guide_path!).catch(() => {})}>📄 {m.guide_name ?? "Detailed steps"}</button>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
-          <Field label="Diesel gallons"><input style={input} inputMode="decimal" value={quickGal} onChange={(e) => setQuickGal(e.target.value)} /></Field>
-        </div>
+        <Field label="Diesel gallons"><input style={input} inputMode="decimal" value={quickGal} onChange={(e) => setQuickGal(e.target.value)} /></Field>
         <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: 14 }}>
           <span style={{ fontSize: 15, fontWeight: 700 }}>Filled to full</span>
           <input type="checkbox" checked={quickFull} onChange={(e) => setQuickFull(e.target.checked)} style={{ width: 22, height: 22 }} />
