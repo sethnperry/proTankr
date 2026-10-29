@@ -491,6 +491,20 @@ export default function HomePage() {
     if (fuel.active && fuel.active.status !== "complete" && !fuel.active.finished_at) setFuelAsk(() => go);
     else go();
   };
+  // Put the Planner's terminal (and rack) on a pickup's, when it isn't there already.
+  const alignPlannerToPickup = (pk: { terminal_id?: string | null; state?: string | null; city?: string | null; rack_id?: string | null }) => {
+    const loc = shell.location;
+    if (pk.terminal_id && pk.terminal_id !== String(loc.selectedTerminalId || "")) {
+      loc.skipResetRef.current = true;
+      if (pk.state) loc.setSelectedState(pk.state);
+      if (pk.city) loc.setSelectedCity(pk.city);
+      loc.setSelectedTerminalId(pk.terminal_id);
+      loc.setSelectedRackId(pk.rack_id ?? "");
+      setTimeout(() => { loc.skipResetRef.current = false; }, 50);
+    } else if (pk.rack_id && loc.selectedRackId !== pk.rack_id) {
+      loc.setSelectedRackId(pk.rack_id);
+    }
+  };
   const beginDispatchedLoad = (tripId?: string) => {
     const trip = tripId ? dispatchedList.find((t) => t.trip_id === tripId) : dispatchedList[0];
     if (!store || !userId || !trip || openTrip) return;
@@ -1341,6 +1355,8 @@ export default function HomePage() {
       case "planner":
         endDelay();
         setOpeningPlanner(true);
+        // The Planner can be on another terminal (or none) after a rack hop or an undo: put it on this pickup's.
+        { const wp = snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome); if (wp) alignPlannerToPickup(wp); }
         // Plan Review opens right over this screen (the Planner host stays
         // mounted in the layout). If there is no plan, or it can't start, the
         // host sends the driver to the Planner instead.
@@ -1356,14 +1372,7 @@ export default function HomePage() {
         arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
         const loc = shell.location;
         const pk = step.pickup;
-        if (pk.terminal_id && pk.terminal_id !== String(loc.selectedTerminalId || "")) {
-          loc.skipResetRef.current = true;
-          if (pk.state) loc.setSelectedState(pk.state);
-          if (pk.city) loc.setSelectedCity(pk.city);
-          loc.setSelectedTerminalId(pk.terminal_id);
-          loc.setSelectedRackId(pk.rack_id ?? "");
-          setTimeout(() => { loc.skipResetRef.current = false; }, 50);
-        }
+        alignPlannerToPickup(pk);
         void (async () => {
           try {
             if (pk.terminal_id && !pk.rack_id) {
