@@ -23,6 +23,7 @@ const header: React.CSSProperties = {
   fontSize: 12, fontWeight: 800, color: MUTED, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8, textAlign: "center",
 };
 const TILE_H = 64;
+const tileMine: React.CSSProperties = { background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.45)", color: "#fff" };
 const tileBase: React.CSSProperties = {
   borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
   height: TILE_H, padding: "0 10px", display: "flex", alignItems: "center", gap: 8, overflow: "hidden", textAlign: "center", userSelect: "none", color: "rgba(255,255,255,0.85)", minWidth: 0, boxSizing: "border-box",
@@ -105,7 +106,7 @@ export function EquipmentBoard(p: Props) {
               });
               const segs = p.strips?.[c.trailer.id];
               const mine = isMine(c.truck.id, c.trailer.id);
-              const tile = { ...tileBase };
+              const tile = { ...tileBase, ...(mine ? tileMine : {}) };
               return (
                 <div key={c.comboId} role="button" tabIndex={0}
                   onClick={() => p.onCombo?.(c)}
@@ -145,7 +146,7 @@ export function EquipmentBoard(p: Props) {
                 const mine = p.mine?.truckId === u.id;
                 const pending = p.pendingId === u.id;
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} style={{ ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     <StatusLine u={u} />
@@ -164,7 +165,7 @@ export function EquipmentBoard(p: Props) {
                 const pending = p.pendingId === u.id;
                 const segs = p.strips?.[u.id];
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} strip={segs} style={{ ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
