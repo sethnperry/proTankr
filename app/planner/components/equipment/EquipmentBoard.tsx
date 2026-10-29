@@ -83,13 +83,9 @@ function Name({ children }: { children: React.ReactNode }) {
 }
 
 function StatusLine({ u }: { u: TrackUnit }) {
-  // The dot carries the status; only the finer detail (Maintenance, Parked…) is spelled out.
-  if (!u.subStatus) return null;
-  return (
-    <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: fleetStatusColor(u.statusCode ?? ""), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-      {u.subStatus}
-    </div>
-  );
+  // The dot carries the status; the detail (Maintenance, Parked…) is in the unit's own screen.
+  void u;
+  return null;
 }
 
 export function EquipmentBoard(p: Props) {
