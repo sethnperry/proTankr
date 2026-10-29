@@ -121,3 +121,15 @@ export function similarLocations<L extends LocationLike>(existing: L[], draft: L
     return false;
   });
 }
+
+// The same store: same name (letters and digits only, so "Love's" = "Loves") and store number in the same state.
+// Saving a second one is blocked outright; anything looser (similarLocations) is only a warning.
+export function sameStore<L extends LocationLike>(existing: L[], draft: LocationDraft, excludeId?: string | null): L[] {
+  const strip = (v: string | null | undefined) => (v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const num = strip(draft.location_number);
+  if (!num) return [];
+  const name = strip(draft.name);
+  const st = (draft.state ?? "").trim().toUpperCase();
+  return existing.filter((l) => l.location_id !== excludeId && l.is_active !== false
+    && strip(l.name) === name && strip(l.location_number) === num && ((l.state ?? "").trim().toUpperCase() === st));
+}

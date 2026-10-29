@@ -60,3 +60,12 @@ test("similarLocations catches the same store typed differently", () => {
   assert.deepEqual(similarLocations(existing, draft({ name: "Loves", location_number: "496" })).map((l) => l.location_id), []);
   assert.deepEqual(similarLocations(existing, draft({ name: "loves", location_number: "495" }), "a"), []);
 });
+
+import { sameStore } from "./refs.ts";
+test("the same store (name + number + state) is caught, however it is typed", () => {
+  const ex = [{ location_id: "a", name: "Loves", location_number: "708", city: "Bushnell", state: "FL", address: null, is_active: true }];
+  assert.equal(sameStore(ex as any, { name: "Love's", location_number: "#708", city: "Bushnell", state: "fl", address: null } as any).length, 1);
+  assert.equal(sameStore(ex as any, { name: "Loves", location_number: "709", city: "Bushnell", state: "FL", address: null } as any).length, 0);
+  assert.equal(sameStore(ex as any, { name: "Loves", location_number: "708", city: "x", state: "GA", address: null } as any).length, 0);
+  assert.equal(sameStore(ex as any, { name: "Loves", location_number: "708", city: "x", state: "FL", address: null } as any, "a").length, 0);
+});

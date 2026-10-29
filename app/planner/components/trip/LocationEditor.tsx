@@ -16,7 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { locationPlace, locationTitle, type DeliveryLocation, type LocationTank } from "@/lib/trips/deliveryLocations";
-import { similarLocations } from "@/lib/trips/refs";
+import { sameStore, similarLocations } from "@/lib/trips/refs";
 import type { DeliveryType } from "@/lib/trips/types";
 import {
   dashedBtn,
@@ -144,6 +144,11 @@ export function LocationEditor({
     [existing, draft.name, draft.location_number, draft.address, draft.city, draft.state, draft.location_id],
   );
 
+  // The very same store is never saved twice.
+  const sameStores = useMemo(
+    () => sameStore(existing, { name: draft.name, location_number: draft.location_number || null, address: draft.address || null, city: draft.city || null, state: draft.state || null }, draft.location_id),
+    [existing, draft.name, draft.location_number, draft.address, draft.city, draft.state, draft.location_id],
+  );
   const patch = (p: Partial<Draft>) => { setDraft((d) => ({ ...d, ...p })); setAckSimilar(false); };
   const patchTank = (i: number, p: Partial<TankDraft>) =>
     setDraft((d) => ({ ...d, tanks: d.tanks.map((t, j) => (j === i ? { ...t, ...p } : t)) }));
@@ -162,6 +167,7 @@ export function LocationEditor({
     if (!draft.city.trim() || !draft.state.trim()) return setErr("Enter the city and state.");
     const nums = draft.tanks.map((t) => t.tank_number.trim()).filter(Boolean);
     if (new Set(nums).size !== nums.length) return setErr("Two tanks have the same number.");
+    if (sameStores.length > 0) return setErr(`${locationTitle(sameStores[0])} in ${locationPlace(sameStores[0])} is already saved. Use that one.`);
     // A likely duplicate needs one more tap, so it's a choice, not an accident.
     if (similar.length > 0 && !ackSimilar) {
       setAckSimilar(true);
@@ -357,7 +363,7 @@ export function LocationEditor({
       )}
 
       {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
-      <button aria-busy={!!(busy)} type="button" onClick={() => void save()} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
+      <button aria-busy={!!(busy)} type="button" onClick={() => void save()} disabled={busy || sameStores.length > 0} style={{ ...primaryBtn, opacity: busy || sameStores.length > 0 ? 0.5 : 1 }}>
         {busy ? "Saving…" : similar.length > 0 && ackSimilar ? "Save as a new location anyway" : "Save"}
       </button>
 
