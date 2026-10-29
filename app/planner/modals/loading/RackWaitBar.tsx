@@ -24,17 +24,20 @@ export function RackWaitBar({ m }: { m: LoadingModel }) {
   const running = rw?.delay ?? null;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!running) return;
+    if (!running && !rw?.beganAt) return;
     setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [running]);
+  }, [running, rw?.beganAt]);
   if (!rw || m.report) return null;
 
   if (rw.beganAt) {
+    const ms = now - Date.parse(rw.beganAt);
+    const long = ms >= 3600_000;
     return (
-      <div style={{ padding: "10px 2px", borderBottom: "1px solid rgba(255,255,255,0.08)", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.65)" }}>
-        Began loading {clock(rw.beganAt)}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 2px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.65)" }}>Began loading {clock(rw.beganAt)}</span>
+        <span style={{ fontSize: 18, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: long ? "#fbbf24" : "#fff" }}>{mmss(ms)}</span>
       </div>
     );
   }
