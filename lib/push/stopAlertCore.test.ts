@@ -43,3 +43,16 @@ test("a stop while still at the rack you arrived at asks nothing (moving up in l
   assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, 8)?.kind, "hop");
   assert.equal(planStopNotice(trip as any, [s], 0, "America/New_York", now, null), null);
 });
+
+test("no 'Did you arrive?' while the truck is nowhere near the next stop", () => {
+  const stop = { at: "2026-10-29T22:30:00Z", code: "ON", resumedAt: null, droveFrom: "x" };
+  const now = Date.parse(stop.at) + 6 * 60_000;
+  const trip: StopTrip = {
+    started_at: "2026-10-29T20:00:00Z",
+    pickups: [{ seq: 1, arrived_at: "2026-10-29T21:00:00Z", left_at: "2026-10-29T22:00:00Z", outcome: "loaded", name: "Rack" }],
+    deliveries: [{ seq: 1, arrived_at: null, left_at: null, status: "planned", name: "Loves" }],
+  };
+  assert.equal(planStopNotice(trip, [stop], 0, undefined, now, null, 12), null);               // 12 mi away
+  assert.equal(planStopNotice(trip, [stop], 0, undefined, now, null, 0.4)?.title, "Did you arrive at Loves?");
+  assert.equal(planStopNotice(trip, [stop], 0, undefined, now, null, null)?.kind, "arrive");   // distance unknown: still asks
+});

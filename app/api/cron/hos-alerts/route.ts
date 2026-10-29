@@ -137,11 +137,16 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
     const vehNow = trip.truck_id ? vehOfTruck.get(trip.truck_id) : undefined;
     const posNow = vehNow ? positions.get(vehNow) : null;
     const milesFromRack = rackLL && posNow && posNow.lat != null && posNow.lon != null ? airMiles(rackLL, { lat: posNow.lat, lon: posNow.lon }) : null;
+    // How far the truck is from the stop it is headed to (the next rack, else the next delivery).
+    const nextPk = ((trip.trip_pickups ?? []) as any[]).filter((k) => !k.arrived_at && k.outcome !== "no_load" && k.terminal_id).sort((a, b) => a.seq - b.seq)[0];
+    const nextDl = ((trip.trip_deliveries ?? []) as any[]).filter((d) => !d.arrived_at && d.status !== "complete" && d.status !== "cancelled" && d.location_id).sort((a, b) => a.seq - b.seq)[0];
+    const nextLL = nextPk ? termLL.get(String(nextPk.terminal_id)) ?? null : nextDl ? locLL.get(String(nextDl.location_id)) ?? null : null;
+    const milesFromNext = nextLL && posNow && posNow.lat != null && posNow.lon != null ? airMiles(nextLL, { lat: posNow.lat, lon: posNow.lon }) : null;
     const n = planStopNotice({
       started_at: trip.started_at ?? null,
       pickups: ((trip.trip_pickups ?? []) as any[]).map((k) => ({ seq: k.seq, arrived_at: k.arrived_at, left_at: k.left_at, outcome: k.outcome, name: k.name })),
       deliveries: ((trip.trip_deliveries ?? []) as any[]).map((d) => ({ seq: d.seq, arrived_at: d.arrived_at, left_at: d.left_at, status: d.status, name: d.location_id ? locName.get(String(d.location_id)) ?? null : null })),
-    }, stops, pr?.last_stop_at ? Date.parse(pr.last_stop_at) : 0, (firstTerm && termTz.get(String(firstTerm))) || undefined, Date.now(), milesFromRack);
+    }, stops, pr?.last_stop_at ? Date.parse(pr.last_stop_at) : 0, (firstTerm && termTz.get(String(firstTerm))) || undefined, Date.now(), milesFromRack, milesFromNext);
     if (n) stopNotices.push({ userId: u, title: n.title, body: n.body, at: n.at, kind: n.kind, place: n.place, tripId: (trip.trip_id as string | undefined) ?? null });
   }
   if (stopNotices.length) {

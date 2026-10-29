@@ -33,7 +33,12 @@ export function dropFuelStops<T extends { at: string }>(stops: T[], fuel: FuelWi
 /** Within this far of the rack the truck is still there (moving up in line), not gone to another rack. */
 export const STILL_AT_RACK_MI = 0.5;
 
-export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs: number, tz = "America/New_York", nowMs: number = Date.now(), milesFromRack: number | null = null): StopNotice | null {
+/** "Did you arrive?" is only asked when the truck is within this far of the stop it is headed to. */
+export const ARRIVE_NEAR_MI = 1;
+
+export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs: number, tz = "America/New_York", nowMs: number = Date.now(), milesFromRack: number | null = null, milesFromNext: number | null = null): StopNotice | null {
+  // Not near the next stop (still at the terminal, stopped for a break): nothing to ask. Unknown distance still asks.
+  const farFromNext = milesFromNext != null && milesFromNext > ARRIVE_NEAR_MI;
   const stamps = [trip.started_at, ...trip.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...trip.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
     .map(ms).filter((n) => Number.isFinite(n));
   const after = Math.max(lastAnnouncedMs, 0, ...stamps);
@@ -50,10 +55,12 @@ export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs:
   }
   const nextPickup = live.find((p) => !p.arrived_at);
   if (nextPickup) {
+    if (farFromNext) return null;
     return { at: stop.at, kind: "arrive", place: nextPickup.name ?? "the terminal", title: `Did you arrive at ${nextPickup.name ?? "the terminal"}?`, body: "" };
   }
   const nextDrop = trip.deliveries.filter((d) => d.status !== "complete" && d.status !== "cancelled").sort((a, b) => a.seq - b.seq).find((d) => !d.arrived_at);
   if (nextDrop) {
+    if (farFromNext) return null;
     return { at: stop.at, kind: "arrive", place: nextDrop.name ?? "the store", title: `Did you arrive at ${nextDrop.name ?? "the store"}?`, body: "" };
   }
   return null;
