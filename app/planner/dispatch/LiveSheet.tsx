@@ -13,7 +13,9 @@ import { CardBusy, busyProps } from "@/lib/ui/pending";
 
 const dur = (m: number | null) => (m == null ? "" : m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`);
 
-export function LiveSheet({ open, title, rows, kinds, onClose, onOpenTrip, openingId }: {
+export function LiveSheet({ open, title, rows, kinds, showRecovered, onClose, onOpenTrip, openingId }: {
+  /** Also list loads whose delay has ended and are moving again, with a new ETA. */
+  showRecovered?: boolean;
   open: boolean;
   title: string;
   rows: LiveRow[];
@@ -32,12 +34,12 @@ export function LiveSheet({ open, title, rows, kinds, onClose, onOpenTrip, openi
         style={{ width: "100%", boxSizing: "border-box", background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "11px 12px", borderRadius: 2, marginBottom: 12 }} />
       {rows.length === 0 && <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Nothing here right now.</div>}
       {rows.length > 0 && shown.length === 0 && <div style={{ fontSize: 14, color: L.muted }}>No matches.</div>}
-      {kinds.map((k) => {
-        const list = shown.filter((r) => r.kind === k);
+      {(showRecovered ? ([...kinds, "recovered"] as const) : kinds).map((k) => {
+        const list = k === "recovered" ? shown.filter((r) => r.recovered) : shown.filter((r) => r.kind === k && !r.recovered);
         if (!list.length) return null;
         return (
           <div key={k} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, margin: "2px 0 8px" }}>{KIND_LABEL[k]} · {list.length}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted, margin: "2px 0 8px" }}>{k === "recovered" ? "Delayed, now moving" : KIND_LABEL[k]} · {list.length}</div>
             {list.map((r) => (
               <button key={r.tripId} type="button" onClick={() => onOpenTrip(r.tripId)} className="dash-press" {...busyProps(openingId === r.tripId)}
                 style={{ ...L.secondary, position: "relative", display: "block", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer", borderColor: r.delayed ? `${EXPIRY_COLOR.expiring}88` : undefined }}>
@@ -53,6 +55,12 @@ export function LiveSheet({ open, title, rows, kinds, onClose, onOpenTrip, openi
                 <div style={{ marginTop: 3, fontSize: 13, color: "rgba(255,255,255,0.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {r.where}{r.place && <span style={{ color: L.muted }}> · {r.place}</span>}
                 </div>
+                {r.recovered && (
+                  <div style={{ marginTop: 2, fontSize: 12, color: L.muted }}>
+                    {KIND_LABEL[r.kind]} · was held {dur(r.delayMin ?? null)}
+                    {r.etaMs ? <> · <span style={{ color: "#fff", fontWeight: 800 }}>new ETA {new Date(r.etaMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span></> : " · ETA unknown (no truck position)"}
+                  </div>
+                )}
                 {r.orders.length > 0 && <div style={{ marginTop: 2, fontSize: 12, color: L.faint }}>Order {r.orders.join(", ")}{r.trailerName ? ` · Trailer ${r.trailerName}` : ""}</div>}
               </button>
             ))}

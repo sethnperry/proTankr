@@ -463,7 +463,7 @@ export function DispatchDashboardView(props: {
         onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
       <LiveSheet open={sheet === "onsite"} title="On site" rows={p.liveRows.filter((r) => r.kind === "loading" || r.kind === "unloading")} kinds={["loading", "unloading"]}
         onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
-      <LiveSheet open={sheet === "delayed"} title="Delayed" rows={p.liveRows.filter((r) => r.delayed)} kinds={["loading", "unloading"]}
+      <LiveSheet open={sheet === "delayed"} title="Delayed" rows={p.liveRows.filter((r) => r.delayed || r.recovered)} kinds={["loading", "unloading"]} showRecovered
         onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
       <FullscreenModal open={sheet === "cancelled"} title={`Cancelled loads (${p.cancelledCount})`} onClose={() => setSheet(null)}>
         {p.cancelledBoard}

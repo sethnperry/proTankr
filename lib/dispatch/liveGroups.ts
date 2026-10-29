@@ -22,8 +22,18 @@ export type LiveRow = {
   sinceIso: string | null;
   minutes: number | null; // time on site, or since the leg began
   delayed: boolean;
+  /** En route again after a stop that ran past its delay threshold. */
+  recovered?: boolean;
+  delayMin?: number | null; // how long that earlier stop took
+  etaMs?: number | null;    // new arrival estimate for this leg
   orders: string[];
 };
+
+/** What the ETA lookup is asked about: the leg an en-route load is on. */
+export type EtaQuery = { kind: "to_rack" | "to_drop"; tripId: string; truckId: string | null; terminalId: string | null; locationId: string | null; fromIso: string | null };
+
+/** A delay that has ended stays on the Delayed list this long after the truck leaves. */
+export const RECOVERED_WINDOW_MIN = 6 * 60;
 
 export const KIND_LABEL: Record<LiveKind, string> = {
   to_rack: "To load", to_drop: "To deliver", loading: "Loading", unloading: "Unloading",
@@ -36,6 +46,7 @@ const placeText = (p: { city?: string | null; state?: string | null } | null | u
 export function classifyLive(
   trips: FleetTrip[], locations: Map<string, Place>, now: number,
   threshold: { loading: number; delivery: number },
+  etaFor?: (q: EtaQuery) => number | null,
 ): LiveRow[] {
   const out: LiveRow[] = [];
   for (const ft of trips) {
@@ -59,19 +70,30 @@ export function classifyLive(
       out.push({ ...base, kind: "unloading", where: pl.name ?? "Delivery", place: placeText(pl), sinceIso: atDrop.arrived_at, minutes, delayed: (minutes ?? 0) >= threshold.delivery });
       continue;
     }
+    // The stop just left: if it ran past its delay threshold, the delay has ended and the load is moving again.
+    const lastLeft = [
+      ...pickups.filter((p) => p.arrived_at && p.left_at).map((p) => ({ arr: p.arrived_at!, left: p.left_at!, limit: threshold.loading })),
+      ...ft.deliveries.filter((d) => d.arrived_at && d.left_at).map((d) => ({ arr: d.arrived_at!, left: d.left_at!, limit: threshold.delivery })),
+    ].sort((a, b) => Date.parse(b.left) - Date.parse(a.left))[0];
+    const dwell = lastLeft ? Math.round((Date.parse(lastLeft.left) - Date.parse(lastLeft.arr)) / 60000) : null;
+    const recovered = !!lastLeft && dwell != null && dwell >= lastLeft.limit && now - Date.parse(lastLeft.left) <= RECOVERED_WINDOW_MIN * 60000;
+    const moving = (kind: "to_rack" | "to_drop", terminalId: string | null, locationId: string | null, fromIso: string | null) => ({
+      delayed: false,
+      ...(recovered ? { recovered: true, delayMin: dwell, etaMs: etaFor?.({ kind, tripId: ft.trip.trip_id, truckId: ft.trip.truck_id ?? null, terminalId, locationId, fromIso: lastLeft!.left }) ?? null } : {}),
+    });
     const nextRack = pickups.find((p) => !p.arrived_at && !p.left_at);
     const loadedAboard = ft.compLoads.some((c) => c.disposition === "loaded");
     if (nextRack && !(loadedAboard && !pickups.some((p) => !p.arrived_at))) {
       // Heading to a rack: the leg began when the trip did, or when the last rack was left.
       const since = [...pickups].reverse().find((p) => p.left_at)?.left_at ?? ft.trip.started_at ?? null;
-      out.push({ ...base, kind: "to_rack", where: nextRack.name ?? "Rack", place: placeText(nextRack), sinceIso: since, minutes: minutesSince(since, now), delayed: false });
+      out.push({ ...base, kind: "to_rack", where: nextRack.name ?? "Rack", place: placeText(nextRack), sinceIso: since, minutes: minutesSince(since, now), ...moving("to_rack", nextRack.terminal_id ? String(nextRack.terminal_id) : null, null, since) });
       continue;
     }
     const nextDrop = drops.find((d) => !d.arrived_at);
     if (nextDrop) {
       const pl = deliveryPlace(nextDrop, locations);
       const since = [...pickups].reverse().find((p) => p.left_at)?.left_at ?? ft.trip.started_at ?? null;
-      out.push({ ...base, kind: "to_drop", where: pl.name ?? "Delivery", place: placeText(pl), sinceIso: since, minutes: minutesSince(since, now), delayed: false });
+      out.push({ ...base, kind: "to_drop", where: pl.name ?? "Delivery", place: placeText(pl), sinceIso: since, minutes: minutesSince(since, now), ...moving("to_drop", null, nextDrop.location_id ?? null, since) });
     }
   }
   return out;
@@ -88,6 +110,6 @@ export function liveChipCounts(rows: LiveRow[]): LiveCounts {
   return {
     enRoute: rows.filter((r) => r.kind === "to_rack" || r.kind === "to_drop").length,
     onSite: rows.filter((r) => r.kind === "loading" || r.kind === "unloading").length,
-    delayed: rows.filter((r) => r.delayed).length,
+    delayed: rows.filter((r) => r.delayed || r.recovered).length,
   };
 }

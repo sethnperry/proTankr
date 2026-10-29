@@ -171,7 +171,8 @@ const fmtSpan = (from: string | null | undefined, to: string | null | undefined)
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 };
 
-function CancelledSection({ cancelled, days, onOpenTrip, openingId, onDismiss, onDismissAll }: {
+function CancelledSection({ cancelled, days, onOpenTrip, openingId, onDismiss, onDismissAll, onReassign }: {
+  onReassign?: (ct: CancelledTrip) => void;
   onDismiss?: (tripId: string) => void;
   onDismissAll?: () => void;
   openingId?: string | null;
@@ -211,7 +212,7 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId, onDismiss, o
         const span = fmtSpan(t.started_at, t.cancelled_at);
         return (
           <div key={t.trip_id}>
-          <button type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)", marginBottom: onDismiss ? 0 : card.marginBottom }} onClick={() => onOpenTrip(t.trip_id)} {...busyProps(openingId === t.trip_id)}>
+          <button type="button" style={{ ...card, borderColor: "rgba(248,113,113,0.3)", marginBottom: (onDismiss || onReassign) ? 0 : card.marginBottom }} onClick={() => onOpenTrip(t.trip_id)} {...busyProps(openingId === t.trip_id)}>
             <CardBusy on={openingId === t.trip_id} />
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -243,12 +244,18 @@ function CancelledSection({ cancelled, days, onOpenTrip, openingId, onDismiss, o
             {t.cancel_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{t.cancel_note}&rdquo;</div>}
             {t.cancel_returned_to && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Headed to {t.cancel_returned_to}</div>}
           </button>
-          {onDismiss && (
-            <div style={{ textAlign: "right", marginBottom: 10 }}>
-              <button type="button" onClick={() => onDismiss(t.trip_id)}
+          {(onDismiss || onReassign) && (
+            <div style={{ textAlign: "right", marginBottom: 10, display: "flex", justifyContent: "flex-end", gap: 14 }}>
+              {onReassign && (
+                <button type="button" onClick={() => onReassign(ct)}
+                  style={{ border: "none", background: "transparent", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", padding: "4px 0" }}>
+                  Reassign
+                </button>
+              )}
+              {onDismiss && <button type="button" onClick={() => onDismiss(t.trip_id)}
                 style={{ border: "none", background: "transparent", color: muted, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "4px 0" }}>
                 Dismiss
-              </button>
+              </button>}
             </div>
           )}
           </div>
@@ -290,13 +297,14 @@ function liveFor(ft: FleetTrip, route: TripRoute, pos: LivePos | undefined, term
   return { ...line, fraction, remainingDriveMin: remainingDriveMin({ lat: pos.lat, lon: pos.lon }, ahead) };
 }
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, positions, hos, geo, terminalLL, locationLL }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, onReassignCancelled, positions, hos, geo, terminalLL, locationLL }: {
   positions?: Map<string, LivePos>;            // truck id -> live position
   hos?: Map<string, HosAvailability>;          // driver user id -> clocks
   geo?: Map<string, GeoState>;                 // trip id -> truck is at its next stop's geofence
   terminalLL?: (terminalId: string) => LatLon | null;
   locationLL?: (locationId: string) => LatLon | null;
   onDismissCancelled?: (tripId: string) => void;
+  onReassignCancelled?: (ct: CancelledTrip) => void;
   onDismissAllCancelled?: () => void;
   // Which lists to show (default all). The Dispatch Dashboard shows loads in
   // progress in LIVE mode and parked + cancelled in PLAN mode.
@@ -407,7 +415,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
 
       </>}
 
-      {cancelled && show("cancelled") && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} onDismiss={onDismissCancelled} onDismissAll={onDismissAllCancelled} />}
+      {cancelled && show("cancelled") && <CancelledSection cancelled={cancelled} days={cancelledDays} onOpenTrip={onOpenTrip} openingId={openingId} onDismiss={onDismissCancelled} onDismissAll={onDismissAllCancelled} onReassign={onReassignCancelled} />}
     </div>
   );
 }

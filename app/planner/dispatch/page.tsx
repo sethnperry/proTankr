@@ -45,6 +45,7 @@ import { expiryStateFor, EXPIRY_COLOR, type ExpiryState } from "@/lib/expiry";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { startSetupSession } from "@/lib/setupSession";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
@@ -62,7 +63,7 @@ import { enablePush } from "@/lib/push/subscribe";
 import { hosText, resetInfo } from "@/lib/telematics/progress";
 import { restWindow } from "@/lib/dispatch/dutyGraph";
 import { TrackSheet } from "../components/track/TrackSheet";
-import { CANCELLED_DAYS, useCancelledTrips } from "@/lib/trips/useCancelledTrips";
+import { CANCELLED_DAYS, useCancelledTrips, type CancelledTrip } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
 import { findConflicts, liveCounts } from "@/lib/dispatch/conflicts";
@@ -90,7 +91,7 @@ import { LocationPicker } from "../components/trip/LocationPicker";
 import { useDeliveryLocationList, useTripSettings } from "@/lib/trips/useTripData";
 import { classifyLive } from "@/lib/dispatch/liveGroups";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
-import { settingsForTerminal } from "@/lib/dispatch/forecast";
+import { settingsForTerminal, driveMinutesByDistance } from "@/lib/dispatch/forecast";
 import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, type GroupOverride } from "@/lib/dispatch/compPlan";
 import { useTrailerPlan } from "@/lib/dispatch/useTrailerPlan";
 import { CompartmentPlanCard } from "./CompartmentPlanCard";
@@ -308,10 +309,43 @@ export default function DispatchPage() {
   const visibleCancelled = useMemo(
     () => cancelledTrips.trips.filter((c) => !dismissed.has(c.trip.trip_id) && driverInRegion(c.trip.driver_id)),
     [cancelledTrips.trips, dismissed, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reassign a cancelled load to another driver: a new dispatched load with the same order number,
+  // rack, supplier and store. The cancelled record stays; it just stops showing as cancelled.
+  const [reassigning, setReassigning] = useState<CancelledTrip | null>(null);
+  const [reassignBusy, setReassignBusy] = useState(false);
+  const [reassignErr, setReassignErr] = useState<string | null>(null);
+  const reassignTo = async (driverId: string) => {
+    const ct = reassigning;
+    if (!ct || !companyId || !authUserId) return;
+    const pk = ct.pickups.find((p) => p.terminal_id) ?? ct.pickups[0];
+    const dl = ct.deliveries.find((d) => d.location_id);
+    if (!pk?.terminal_id || !dl?.location_id) { setReassignErr("This load has no rack or store to copy."); return; }
+    setReassignBusy(true); setReassignErr(null);
+    try {
+      const nums = ct.orderNumbers;
+      const taken = nums.length ? await serverOrderConflicts(companyId, nums, ct.trip.trip_id) : [];
+      if (taken.length) { setReassignErr(`Order ${taken[0]} is already on another trip.`); return; }
+      const nowMs = Date.now();
+      const leg = {
+        terminalId: String(pk.terminal_id), terminalName: pk.name ?? "Rack", city: pk.city ?? null, state: pk.state ?? null,
+        locationId: dl.location_id, deliveryType: dl.delivery_type, supplierId: pk.supplier_id ?? null,
+        orderNumber: nums[0] ?? "", startMs: nowMs, endMs: nowMs, truckId: null, trailerId: null, warnings: [] as string[],
+        shipper: ct.trip.shipper ?? undefined, customer: ct.trip.customer ?? undefined,
+      };
+      const rows = buildDispatchedTrip({ companyId, dispatcherId: authUserId, driverId, leg, seq: 1 }, { now: new Date(), newId: () => crypto.randomUUID() });
+      const err = await writeDispatched(rows as any);
+      if (err) { setReassignErr(err); return; }
+      const ev = await supabase.from("trip_events").insert({
+        event_id: crypto.randomUUID(), trip_id: ct.trip.trip_id, event_type: "reassigned", occurred_at: new Date().toISOString(),
+        actor_id: authUserId, pickup_id: null, delivery_id: null, payload: { to_driver: driverId, new_trip_id: (rows.trip as any).trip_id },
+      });
+      if (ev.error) setReassignErr(`Sent, but couldn't clear it from Cancelled: ${ev.error.message}`);
+      else setReassigning(null);
+      dispatched.reload(); cancelledTrips.reload();
+    } finally { setReassignBusy(false); }
+  };
+
   const { settings: tripSettings } = useTripSettings(companyId || null);
-  const liveRows = useMemo(
-    () => classifyLive(fleetTrips, fleet.locations, Date.now(), { loading: tripSettings.loading_delay_threshold_minutes, delivery: tripSettings.delivery_delay_threshold_minutes }),
-    [fleetTrips, fleet.locations, tripSettings.loading_delay_threshold_minutes, tripSettings.delivery_delay_threshold_minutes, liveTick]);
   const fleetReports = useFleetReports(fleetTrips, plan.usedTerminalIds);
   const rawConflicts = useMemo(
     () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad),
@@ -341,6 +375,16 @@ export default function DispatchPage() {
     () => buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now()),
     [fleetTrips, fleetHos]);
   useHosNotifier({ userId: authUserId || null, alerts: lowHours, ready: fleet.loaded && fleetHos.size > 0 });
+  const liveRows = useMemo(
+    () => classifyLive(fleetTrips, fleet.locations, Date.now(), { loading: tripSettings.loading_delay_threshold_minutes, delivery: tripSettings.delivery_delay_threshold_minutes },
+      (q) => {
+        const dest = q.kind === "to_rack" ? (q.terminalId ? terminalLLOf(q.terminalId) : null) : (q.locationId ? locationLLOf(q.locationId) : null);
+        if (!dest) return null;
+        const pos = q.truckId ? livePositions.get(q.truckId) : undefined;
+        if (pos && Date.now() - Date.parse(pos.at ?? "") < 30 * 60000) return Date.now() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, dest) * 60000;
+        return null;
+      }),
+    [fleetTrips, fleet.locations, tripSettings.loading_delay_threshold_minutes, tripSettings.delivery_delay_threshold_minutes, liveTick, livePositions, terminalsCatalog, locList.locations]); // eslint-disable-line react-hooks/exhaustive-deps
   const geo = useGeofenceWatch({ userId: authUserId || null, companyId: companyId || null, trips: fleetTrips, locations: fleet.locations, positions: livePositions, terminalLL: terminalLLOf, locationLL: locationLLOf });
   const history = useLocationDeliveries(companyId || null, planLocationId);
   const planLocation = locList.locations.find((l) => l.location_id === planLocationId) ?? null;
@@ -962,6 +1006,7 @@ export default function DispatchPage() {
         cancelledBoard={<FleetBoard sections={["cancelled"]} cancelled={visibleCancelled} cancelledDays={CANCELLED_DAYS}
           trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")}
+          onReassignCancelled={(ct) => { setReassignErr(null); setReassigning(ct); }}
           onDismissCancelled={(id) => saveDismissed(new Set([...dismissed, id]))}
           onDismissAllCancelled={() => saveDismissed(new Set([...dismissed, ...visibleCancelled.map((c) => c.trip.trip_id)]))} />}
         dispatchedCount={dispatchedShown.length} cancelledCount={visibleCancelled.length} liveRows={liveRows}
@@ -969,6 +1014,20 @@ export default function DispatchPage() {
         drivers={mode === "plan" ? undefined : driverListEl}
         tools={dashTools}
       />
+      <FullscreenModal open={!!reassigning} title="Reassign to which driver?" onClose={() => setReassigning(null)}>
+        {reassigning && (
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>
+            {reassigning.orderNumbers.length ? `Order ${reassigning.orderNumbers.join(", ")} · ` : ""}same rack, supplier and store. It leaves the Cancelled list once sent.
+          </div>
+        )}
+        {reassignErr && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10 }}>{reassignErr}</div>}
+        {[...regionRoster].filter((m) => m.user_id !== reassigning?.trip.driver_id).sort((a, b) => (a.display_name ?? "").localeCompare(b.display_name ?? "")).map((m) => (
+          <button key={m.user_id} type="button" disabled={reassignBusy} onClick={() => void reassignTo(m.user_id)}
+            style={{ display: "block", width: "100%", textAlign: "left", background: "#121213", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 15, fontWeight: 700, padding: "12px 14px", marginBottom: 6, borderRadius: 2, cursor: "pointer", opacity: reassignBusy ? 0.5 : 1 }}>
+            {m.display_name ?? "Driver"}
+          </button>
+        ))}
+      </FullscreenModal>
       <LocationPicker open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
         onLocationAdded={locList.reload}
