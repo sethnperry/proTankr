@@ -83,10 +83,11 @@ function Name({ children }: { children: React.ReactNode }) {
 }
 
 function StatusLine({ u }: { u: TrackUnit }) {
-  if (!u.statusCode || u.statusCode === "in_use") return null;
+  // The dot carries the status; only the finer detail (Maintenance, Parked…) is spelled out.
+  if (!u.subStatus) return null;
   return (
-    <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: fleetStatusColor(u.statusCode), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-      {fleetStatusLabel(u.statusCode) || u.statusCode}{u.subStatus ? ` · ${u.subStatus}` : ""}
+    <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: fleetStatusColor(u.statusCode ?? ""), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {u.subStatus}
     </div>
   );
 }
@@ -104,8 +105,8 @@ export function EquipmentBoard(p: Props) {
             {rows.combos.map((c) => {
               const holder = p.claimedByCombo[c.comboId] ?? null;
               const tl = truckLine({
-                statusLabel: c.truck.statusCode ? fleetStatusLabel(c.truck.statusCode) || c.truck.statusCode : null,
-                statusCode: c.truck.statusCode, claimedBy: holder, initials: holder ? p.initials[holder] ?? "" : "",
+                statusLabel: null,
+                statusCode: null, claimedBy: holder, initials: holder ? p.initials[holder] ?? "" : "",
               });
               const segs = p.strips?.[c.trailer.id];
               const mine = isMine(c.truck.id, c.trailer.id);
@@ -129,7 +130,7 @@ export function EquipmentBoard(p: Props) {
                     <Name>{c.trailer.name}</Name>
                     {loadedText(segs) ? (
                       p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : p.lastPlaceByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : null
-                    ) : p.lastPlaceByTrailer?.[c.trailer.id] && !c.trailer.statusCode ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : <StatusLine u={c.trailer} />}
+                    ) : p.lastPlaceByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : <StatusLine u={c.trailer} />}
                   </Tile>
                 </div>
               );
@@ -172,7 +173,7 @@ export function EquipmentBoard(p: Props) {
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
-                      : p.lastPlaceByTrailer?.[u.id] && !u.statusCode ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[u.id]}</div> : <StatusLine u={u} />}
+                      : p.lastPlaceByTrailer?.[u.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[u.id]}</div> : <StatusLine u={u} />}
                   </Tile>
                 );
               })}
