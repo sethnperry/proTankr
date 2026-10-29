@@ -237,7 +237,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     endMiles: end,
     totalMiles: tripMiles(begin, end, changes),
     truckChanges: changes,
-    parks: parkRecords(input.events),
+    parks: parkRecords(input.events).map((p) => ({ ...p, parkedByName: p.parkedBy ? names.driver(p.parkedBy) : null, resumedByName: p.resumedBy ? names.driver(p.resumedBy) : null })),
     trailerEvents: trailerRecords(input.events),
     cancellation: trip.status === "cancelled"
       ? {

@@ -1530,6 +1530,11 @@ export default function HomePage() {
   const showPark = !!snap && canPark(openTrip, step, onBoard(snap.compLoads).length > 0);
   // Dispatch told the driver to park this load: the big button becomes "Park it".
   const parkRequested = !!openTrip?.park_requested_at && showPark;
+  // Another driver parked this trailer and you took it over: tell the new driver what is aboard.
+  const handoffKey = openTrip?.handoff_at ? `proTankr:handoffAck:${openTrip.trip_id}:${openTrip.handoff_at}` : null;
+  const [handoffAcked, setHandoffAcked] = useState<string | null>(null);
+  const handoffAlert = !!openTrip?.handoff_at && openTrip.driver_id === userId && handoffKey !== handoffAcked && (() => { try { return !localStorage.getItem(handoffKey!); } catch { return true; } })();
+  const dismissHandoff = () => { try { if (handoffKey) localStorage.setItem(handoffKey, "1"); } catch { /* storage blocked */ } setHandoffAcked(handoffKey); };
   // Regions for Park Preloaded: the company's list, defaulting to the driver's own.
   const [parkRegions, setParkRegions] = useState<string[]>([]);
   const [myRegion, setMyRegion] = useState<string | null>(null);
@@ -1970,6 +1975,11 @@ export default function HomePage() {
                 Cancel load
               </button>
             )}
+            {showPark && (
+              <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
+                Park preloaded
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -2039,6 +2049,14 @@ export default function HomePage() {
           preset={dutyStop.answer} presetReason={dutyStop.reason} reportPosted={dutyStop.reported} onArrived={confirmDutyArrival} products={plannedProducts} onHop={hopToAnotherRack} onDelay={logDutyDelay} onDismiss={() => answerStop(dutyStop.at)} />
       )}
 
+      {handoffAlert && !openingPlanner && (
+        <div style={{ ...card, marginTop: 4, marginBottom: 10, borderColor: "rgba(96,165,250,0.6)" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#93c5fd" }}>Trailer is preloaded</div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>You took over this load. Deliver it and tap Arrive at the stop.</div>
+          <div style={{ marginTop: 6 }}>{onBoardLines(snap?.compLoads).map((l) => <div key={l} style={{ fontSize: 14 }}>{l}</div>)}</div>
+          <button type="button" onClick={dismissHandoff} style={{ ...smallLink, marginTop: 8 }}>Got it</button>
+        </div>
+      )}
       {parkRequested && !openingPlanner && (
         <div style={{ ...card, marginTop: 4, marginBottom: 10, borderColor: "rgba(96,165,250,0.6)" }}>
           <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#93c5fd" }}>Dispatch</div>
@@ -2063,11 +2081,6 @@ export default function HomePage() {
       </button>}
       {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{parkRequested ? "Dispatch asked you to park this load" : step.detail}</div>
-      )}
-      {showPark && !parkRequested && !openingPlanner && !arriveCardPending && (
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <button type="button" onClick={() => setParkOpen(true)} style={{ background: "none", border: "none", color: muted, fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>Park preloaded</button>
-        </div>
       )}
       {sigDelivery && !openingPlanner && (
         <button type="button" className="dash-press" onClick={() => setConsigneeSignOpen(true)}

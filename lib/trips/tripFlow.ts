@@ -904,7 +904,7 @@ export function resumeTrip(
   }
 }
 
-export type ParkRecord = { parkedAt: string; resumedAt: string | null; parkFor: ParkFor | null; where: string | null; note: string | null };
+export type ParkRecord = { parkedAt: string; resumedAt: string | null; resumedBy?: string | null; parkedBy?: string | null; parkFor: ParkFor | null; where: string | null; note: string | null };
 
 // Every park on a trip, paired with the resume that followed it (for the PTD).
 export function parkRecords(events: TripEventRow[]): ParkRecord[] {
@@ -915,6 +915,7 @@ export function parkRecords(events: TripEventRow[]): ParkRecord[] {
       const p = (e.payload ?? {}) as Record<string, unknown>;
       out.push({
         parkedAt: e.occurred_at,
+        parkedBy: e.actor_id ?? null,
         resumedAt: null,
         parkFor: (p.parked_for as ParkFor) ?? null,
         where: (p.where as string) ?? null,
@@ -922,7 +923,7 @@ export function parkRecords(events: TripEventRow[]): ParkRecord[] {
       });
     } else if (e.event_type === RESUME_EVENT) {
       const open = [...out].reverse().find((r) => !r.resumedAt);
-      if (open) open.resumedAt = e.occurred_at;
+      if (open) { open.resumedAt = e.occurred_at; open.resumedBy = e.actor_id ?? null; }
     }
   }
   return out;

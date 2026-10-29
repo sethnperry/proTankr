@@ -164,6 +164,22 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         <div style={{ gridColumn: "span 2" }}><Field label="Total miles" value={ptd.totalMiles?.toLocaleString("en-US")} /></div>
       </div>
 
+      {ptd.parks.length > 0 && (
+        <div style={{ ...box, marginTop: 8 }}>
+          <div style={{ fontWeight: 800 }}>Parked preloaded</div>
+          {ptd.parks.map((p, i) => {
+            const t = (iso: string) => new Date(iso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
+            const took = p.resumedBy && p.parkedBy && p.resumedBy !== p.parkedBy;
+            return (
+              <div key={i}>
+                Parked {t(p.parkedAt)}{p.parkedByName ? ` by ${p.parkedByName}` : ""}{p.where ? ` at ${p.where}` : ""}
+                {p.resumedAt ? ` · ${took ? `taken over by ${p.resumedByName ?? "another driver"}` : "resumed"} ${t(p.resumedAt)}` : ""}
+                {p.note ? ` · “${p.note}”` : ""}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {ptd.cancellation && (
         <div style={{ border: "1px solid #b91c1c", borderRadius: 2, padding: "6px 8px", marginTop: 10 }}>
           <div style={{ fontWeight: 800 }}>Load cancelled{ptd.cancellation.by ? ` by ${ptd.cancellation.by}` : ""}</div>

@@ -4,6 +4,7 @@
 // Coupling: resolving a truck/trailer pair, taps, commandeer/away/deadline checks.
 
 import { supabase } from "@/lib/supabase/client";
+import { takeOverParkedTrip } from "@/lib/trips/parkHandoff";
 import type { Props } from "./types";
 
 import type { useSoloState } from "./useSoloState";
@@ -51,6 +52,8 @@ export function useSoloCoupling(props: Props, s: ReturnType<typeof useSoloState>
       return;
     }
 
+    // Taking a trailer another driver holds: if it carries a parked preloaded trip, the trip comes with it.
+    const takingTrailer = !setupSession && !!claimedByOther("trailer", trailerId);
     setBusy(true);
     setError(null);
     try {
@@ -102,6 +105,7 @@ export function useSoloCoupling(props: Props, s: ReturnType<typeof useSoloState>
         comboId = String((data as any)?.combo_id ?? "");
       }
       if (!comboId) throw new Error("No combo_id returned.");
+      if (takingTrailer && authUserId) { try { await takeOverParkedTrip(trailerId, truckId, authUserId); } catch { /* the dashboard's Take Over Trip still works */ } }
       onSelectComboId(comboId);
       await Promise.all([loadEquipment(), onRefreshCombos()]);
     } catch (e: any) {
