@@ -7,6 +7,7 @@
 // Pure: takes the trips the board already has.
 
 import type { FleetTrip } from "../trips/useFleetTrips.ts";
+import { terminalIssueLabel } from "../trips/terminalIssues.ts";
 import { deliveryPlace, type Place } from "../trips/fleetProgress.ts";
 
 export type LiveKind = "to_rack" | "to_drop" | "loading" | "unloading";
@@ -26,6 +27,8 @@ export type LiveRow = {
   recovered?: boolean;
   delayMin?: number | null; // how long that earlier stop took
   etaMs?: number | null;    // new arrival estimate for this leg
+  reason?: string | null;   // what the driver said held them up, if they said
+  heldAt?: string | null;   // for a recovered row: the stop that held it
   orders: string[];
 };
 
@@ -41,6 +44,7 @@ export const KIND_LABEL: Record<LiveKind, string> = {
 
 const done = (s: string | null | undefined) => s === "complete" || s === "cancelled";
 const minutesSince = (iso: string | null, now: number) => (iso ? Math.max(0, Math.round((now - Date.parse(iso)) / 60000)) : null);
+const reasonOf = (code?: string | null, note?: string | null) => [terminalIssueLabel(code), note?.trim() || null].filter(Boolean).join(" · ") || null;
 const placeText = (p: { city?: string | null; state?: string | null } | null | undefined) => [p?.city, p?.state].filter(Boolean).join(", ") || null;
 
 export function classifyLive(
@@ -60,26 +64,26 @@ export function classifyLive(
     const atRack = pickups.find((p) => p.arrived_at && !p.left_at);
     if (atRack) {
       const minutes = minutesSince(atRack.arrived_at, now);
-      out.push({ ...base, kind: "loading", where: atRack.name ?? "Rack", place: placeText(atRack), sinceIso: atRack.arrived_at, minutes, delayed: (minutes ?? 0) >= threshold.loading });
+      out.push({ ...base, kind: "loading", where: atRack.name ?? "Rack", place: placeText(atRack), sinceIso: atRack.arrived_at, minutes, delayed: (minutes ?? 0) >= threshold.loading, reason: reasonOf(atRack.delay_code, atRack.delay_note) });
       continue;
     }
     const atDrop = drops.find((d) => d.arrived_at && !d.left_at);
     if (atDrop) {
       const minutes = minutesSince(atDrop.arrived_at, now);
       const pl = deliveryPlace(atDrop, locations);
-      out.push({ ...base, kind: "unloading", where: pl.name ?? "Delivery", place: placeText(pl), sinceIso: atDrop.arrived_at, minutes, delayed: (minutes ?? 0) >= threshold.delivery });
+      out.push({ ...base, kind: "unloading", where: pl.name ?? "Delivery", place: placeText(pl), sinceIso: atDrop.arrived_at, minutes, delayed: (minutes ?? 0) >= threshold.delivery, reason: reasonOf(null, atDrop.delay_note) });
       continue;
     }
     // The stop just left: if it ran past its delay threshold, the delay has ended and the load is moving again.
     const lastLeft = [
-      ...pickups.filter((p) => p.arrived_at && p.left_at).map((p) => ({ arr: p.arrived_at!, left: p.left_at!, limit: threshold.loading })),
-      ...ft.deliveries.filter((d) => d.arrived_at && d.left_at).map((d) => ({ arr: d.arrived_at!, left: d.left_at!, limit: threshold.delivery })),
+      ...pickups.filter((p) => p.arrived_at && p.left_at).map((p) => ({ arr: p.arrived_at!, left: p.left_at!, limit: threshold.loading, name: p.name ?? "the rack", reason: reasonOf(p.delay_code, p.delay_note) })),
+      ...ft.deliveries.filter((d) => d.arrived_at && d.left_at).map((d) => ({ arr: d.arrived_at!, left: d.left_at!, limit: threshold.delivery, name: deliveryPlace(d, locations).name ?? "the store", reason: reasonOf(null, d.delay_note) })),
     ].sort((a, b) => Date.parse(b.left) - Date.parse(a.left))[0];
     const dwell = lastLeft ? Math.round((Date.parse(lastLeft.left) - Date.parse(lastLeft.arr)) / 60000) : null;
     const recovered = !!lastLeft && dwell != null && dwell >= lastLeft.limit && now - Date.parse(lastLeft.left) <= RECOVERED_WINDOW_MIN * 60000;
     const moving = (kind: "to_rack" | "to_drop", terminalId: string | null, locationId: string | null, fromIso: string | null) => ({
       delayed: false,
-      ...(recovered ? { recovered: true, delayMin: dwell, etaMs: etaFor?.({ kind, tripId: ft.trip.trip_id, truckId: ft.trip.truck_id ?? null, terminalId, locationId, fromIso: lastLeft!.left }) ?? null } : {}),
+      ...(recovered ? { recovered: true, delayMin: dwell, heldAt: lastLeft!.name, reason: lastLeft!.reason, etaMs: etaFor?.({ kind, tripId: ft.trip.trip_id, truckId: ft.trip.truck_id ?? null, terminalId, locationId, fromIso: lastLeft!.left }) ?? null } : {}),
     });
     const nextRack = pickups.find((p) => !p.arrived_at && !p.left_at);
     const loadedAboard = ft.compLoads.some((c) => c.disposition === "loaded");

@@ -27,7 +27,7 @@ import { groupBySubject } from "@/lib/dispatch/planAlerts";
 import type { HosAlert } from "@/lib/dispatch/hosAlerts";
 import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
-import { LiveSheet } from "./LiveSheet";
+import { LiveSheet, DelayedSheet } from "./LiveSheet";
 import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
 import { outageAge } from "@/app/planner/utils/dates";
 
@@ -443,8 +443,8 @@ export function DispatchDashboardView(props: {
         onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
       <LiveSheet open={sheet === "onsite"} title="On site" rows={p.liveRows.filter((r) => r.kind === "loading" || r.kind === "unloading")} kinds={["loading", "unloading"]}
         onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
-      <LiveSheet open={sheet === "delayed"} title="Delayed" rows={p.liveRows.filter((r) => r.delayed || r.recovered)} kinds={["loading", "unloading"]} showRecovered
-        onClose={() => setSheet(null)} onOpenTrip={(id) => { setSheet(null); p.onOpenTrip(id); }} openingId={p.openingId} />
+      <DelayedSheet open={sheet === "delayed"} rows={p.liveRows.filter((r) => r.delayed || r.recovered)}
+        onClose={() => setSheet(null)} onOpenTrip={p.onOpenTrip} openingId={p.openingId} />
       <FullscreenModal open={sheet === "cancelled"} title={`Cancelled loads (${p.cancelledCount})`} onClose={() => setSheet(null)}>
         {p.cancelledBoard}
       </FullscreenModal>
