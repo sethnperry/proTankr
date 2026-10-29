@@ -17,6 +17,8 @@ export type DeliveryLocation = {
   city: string | null;
   state: string | null;
   zip?: string | null;
+  // The county (or borough), looked up from the coordinates (20261029030000). Optional: missing before that migration.
+  county?: string | null;
   // One of the company's regions (20261022010000). Optional: missing before that migration.
   region?: string | null;
   // One of that region's local areas (20261031000000). Optional: missing before that migration.

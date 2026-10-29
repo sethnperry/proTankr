@@ -9,6 +9,7 @@
 // yet is added as a real location ("+ New location"), never a one-off.
 
 import React, { useEffect, useMemo, useState } from "react";
+import { AreaChooser } from "./AreaChooser";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import {
@@ -52,6 +53,7 @@ export function LocationPicker({
 }) {
   const [cityKey, setCityKey] = useState<string | null>(null);
   const [choosingCity, setChoosingCity] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
@@ -246,6 +248,12 @@ export function LocationPicker({
   const shown = groups.starred.length === 0 || showAll ? [...groups.starred, ...groups.others] : groups.starred;
 
   return (
+    <>
+    <AreaChooser open={open && areaOpen} locations={locations} requireCity
+      value={{ state: city?.state ?? "", county: "", city: city?.city ?? "" }}
+      onPick={(p) => { setCityKey(`${p.city.trim().toLowerCase()}|${p.state}`); setShowAll(false); setMyStores(false); }}
+      onSearch={() => { setAreaOpen(false); setChoosingCity(true); setQuery(""); }}
+      onClose={() => setAreaOpen(false)} />
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
       {locations.length === 0 ? (
         <div style={{ fontSize: 14, color: muted, padding: "12px 0" }}>No saved locations yet.</div>
@@ -257,7 +265,7 @@ export function LocationPicker({
               : <span>Showing locations in <span style={{ color: "#fff" }}>{cityLabel(city)}</span></span>}
             <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
               {!myStores && (
-                <button type="button" onClick={() => { setChoosingCity(true); setQuery(""); }}
+                <button type="button" onClick={() => { setAreaOpen(true); setQuery(""); }}
                   style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
                   Change
                 </button>
@@ -280,5 +288,6 @@ export function LocationPicker({
       )}
       {footer}
     </FullscreenModal>
+    </>
   );
 }

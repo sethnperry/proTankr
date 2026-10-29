@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { stateCode } from "@/lib/geo/usStates";
+import { countyFor } from "@/lib/geo/county";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,8 @@ export async function GET(req: NextRequest) {
   const key = process.env.OPENWEATHER_API_KEY;
   if (!key) return NextResponse.json({ error: "OPENWEATHER_API_KEY not set." }, { status: 500 });
 
+  if (reverse && sp.get("county") === "1") return NextResponse.json({ county: await countyFor(lat, lon) });
+
   if (reverse) {
     const r = await fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${encodeURIComponent(key)}`, { cache: "no-store" });
     if (!r.ok) return NextResponse.json({ error: "Geocoder unavailable." }, { status: 502 });
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest) {
     const it = Array.isArray(arr) ? (arr[0] as { name?: unknown; state?: unknown } | undefined) : undefined;
     const name = typeof it?.name === "string" ? it.name : null;
     if (!name) return NextResponse.json({ error: "No city found here." }, { status: 404 });
-    return NextResponse.json({ city: name, state: stateCode(typeof it?.state === "string" ? it.state : null) });
+    return NextResponse.json({ city: name, state: stateCode(typeof it?.state === "string" ? it.state : null), county: await countyFor(lat, lon) });
   }
 
   const q = encodeURIComponent(`${city},${state},US`);
@@ -51,5 +54,5 @@ export async function GET(req: NextRequest) {
   const la = Number(item?.lat);
   const lo = Number(item?.lon);
   if (!Number.isFinite(la) || !Number.isFinite(lo)) return NextResponse.json({ error: "City not found." }, { status: 404 });
-  return NextResponse.json({ lat: la, lon: lo });
+  return NextResponse.json({ lat: la, lon: lo, county: await countyFor(la, lo) });
 }

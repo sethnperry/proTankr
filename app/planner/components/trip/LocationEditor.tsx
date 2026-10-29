@@ -69,7 +69,21 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   };
 }
 
-async function geocode(city: string, state: string): Promise<{ lat: number; lon: number } | null> {
+async function countyAt(lat: number, lon: number): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return null;
+    const res = await fetch(`/api/geocode?lat=${lat}&lon=${lon}&county=1`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { county?: string | null };
+    return j.county ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function geocode(city: string, state: string): Promise<{ lat: number; lon: number; county?: string | null } | null> {
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -78,7 +92,7 @@ async function geocode(city: string, state: string): Promise<{ lat: number; lon:
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const j = (await res.json()) as { lat: number; lon: number };
+    const j = (await res.json()) as { lat: number; lon: number; county?: string | null };
     return Number.isFinite(j.lat) && Number.isFinite(j.lon) ? j : null;
   } catch {
     return null;
@@ -178,9 +192,12 @@ export function LocationEditor({
     try {
       let { lat, lon } = draft;
       const placeChanged = !location || location.city !== (draft.city.trim() || null) || location.state !== (draft.state.trim().toUpperCase() || null);
+      let county: string | null | undefined;
       if (!geoPinned && (lat == null || placeChanged)) {
         const g = await geocode(draft.city.trim(), draft.state.trim());
-        if (g) ({ lat, lon } = g);
+        if (g) { ({ lat, lon } = g); county = g.county ?? null; }
+      } else if (lat != null && lon != null && (placeChanged || !location?.county)) {
+        county = await countyAt(lat, lon);
       }
       const now = new Date().toISOString();
       const row = {
@@ -194,6 +211,7 @@ export function LocationEditor({
         region: draft.region.trim() || null,
         local_area: draft.local_area.trim() || null,
         lat, lon,
+        ...(county ? { county } : {}),
         delivery_type: draft.delivery_type,
         notes: draft.notes.trim() || null,
         client_updated_at: now,
@@ -203,7 +221,7 @@ export function LocationEditor({
         : supabase.from("delivery_locations").insert({ ...r, created_by: userId }).select("location_id").single();
       let res = await write(row);
       // Before the 2026-10-11 migration there is no zip column; save without it.
-      if (res.error && /zip|region|local_area/i.test(res.error.message)) {
+      if (res.error && /zip|region|local_area|county/i.test(res.error.message)) {
         const { zip: _zip, region: _region, local_area: _la, ...older } = row;
         res = await write(older);
       }
