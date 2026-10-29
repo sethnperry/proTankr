@@ -1,19 +1,16 @@
 // lib/trips/fleetProgress.ts
 //
-// The route line on the Dispatch Dashboard's loads-in-progress board. A trip
-// is drawn as a U: start on the top left, racks along the top to the right,
-// then a turn down and back left along the bottom through the deliveries, so
-// the last delivery sits under the start (tank trucks usually load out and
-// deliver back toward home).
+// The route line on the Dispatch Dashboard's loads-in-progress board: one row,
+// origin on the left, the loading terminal(s) in the middle, the destination
+// (store) on the right.
 //
-//   Start ●────────────● Rack
-//                        │
-//   Store ●──────────────╯
+//   Brandon ●──────── BN - Tampa ●──────── #495 - Lakeland ●
 //
 // Pure: positions are fractions (0 = left, 1 = right), rows are "top" or
 // "bottom". The page turns them into SVG.
 
 import type { TripDeliveryRow, TripPickupRow, TripRow } from "./types.ts";
+import { terminalCode } from "../equipment/boardStatus.ts";
 
 export type NodeState = "done" | "current" | "next" | "upcoming" | "skipped";
 
@@ -40,7 +37,7 @@ export type TripRoute = {
   since: string | null; // ISO time the current status started
 };
 
-export type Place = { name: string | null; city: string | null; state: string | null };
+export type Place = { name: string | null; city: string | null; state: string | null; number?: string | null };
 
 const cityOf = (p: Place | null | undefined) =>
   p?.city ? p.city : null;
@@ -62,33 +59,38 @@ export function buildTripRoute(
   const ps = [...pickups].sort((a, b) => a.seq - b.seq);
   const ds = deliveries.filter((d) => d.status !== "cancelled").sort((a, b) => a.seq - b.seq);
 
+  // Labels: the origin is a city; a terminal is "BN - Tampa" (code, city, no state); a store is
+  // "#495 - Tampa" when it has a number, else its name.
+  const withCity = (head: string, city: string | null | undefined) => (city ? `${head} - ${city}` : head);
   const nodes: RouteNode[] = [];
   nodes.push({
     key: "start", kind: "start", row: "top", x: 0, state: "done",
     label: cityOf(start) ?? "Start", sub: start?.name ?? null,
   });
-  ps.forEach((p, i) => {
+  ps.forEach((p) => {
     const noLoad = p.outcome === "no_load";
     nodes.push({
-      key: p.pickup_id, kind: "pickup", row: "top", x: (i + 1) / ps.length,
-      label: p.city ?? p.name ?? "Rack", sub: p.city ? p.name : null,
+      key: p.pickup_id, kind: "pickup", row: "top", x: 0,
+      label: p.name ? withCity(terminalCode(p.name), p.city) : p.city ?? "Rack", sub: p.city ? p.name : null,
       state: noLoad ? "skipped" : p.left_at ? "done" : "upcoming",
     });
   });
   if (ps.length === 0) {
-    nodes.push({ key: "pickup", kind: "pickup", row: "top", x: 1, label: "Rack", sub: null, state: "upcoming" });
+    nodes.push({ key: "pickup", kind: "pickup", row: "top", x: 0, label: "Rack", sub: null, state: "upcoming" });
   }
-  ds.forEach((d, i) => {
+  ds.forEach((d) => {
     const place = deliveryPlace(d, locations);
+    const head = place.number ? `#${place.number}` : place.name;
     nodes.push({
-      key: d.delivery_id, kind: "delivery", row: "bottom", x: 1 - (i + 1) / ds.length,
-      label: place.city ?? place.name ?? "Delivery", sub: place.city ? place.name : null,
+      key: d.delivery_id, kind: "delivery", row: "top", x: 0,
+      label: head ? withCity(head, place.city) : place.city ?? "Delivery", sub: place.city ? place.name : null,
       state: d.status === "complete" ? "done" : "upcoming",
     });
   });
   if (ds.length === 0) {
-    nodes.push({ key: "delivery", kind: "delivery", row: "bottom", x: 0, label: "Not set", sub: null, state: "upcoming" });
+    nodes.push({ key: "delivery", kind: "delivery", row: "top", x: 0, label: "Not set", sub: null, state: "upcoming" });
   }
+  nodes.forEach((n, i) => { n.x = nodes.length > 1 ? i / (nodes.length - 1) : 0; });
 
   // Current position: the first stop that isn't done (or skipped).
   let at = nodes.findIndex((n, i) => i > 0 && n.state !== "done" && n.state !== "skipped");

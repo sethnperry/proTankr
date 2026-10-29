@@ -79,9 +79,9 @@ export function useFleetTrips(companyId: string | null) {
       const deliveries = (dl.data ?? []) as TripDeliveryRow[];
       const locIds = [...new Set([...deliveries, ...((prevDel.data ?? []) as any[])].map((d) => d.location_id).filter(Boolean))];
       const lr = locIds.length
-        ? await supabase.from("delivery_locations").select("location_id, name, city, state").in("location_id", locIds)
+        ? await supabase.from("delivery_locations").select("location_id, name, city, state, location_number").in("location_id", locIds)
         : { data: [] as any[] };
-      const locs = new Map<string, Place>(((lr.data ?? []) as any[]).map((l) => [l.location_id, { name: l.name, city: l.city, state: l.state }]));
+      const locs = new Map<string, Place>(((lr.data ?? []) as any[]).map((l) => [l.location_id, { name: l.name, city: l.city, state: l.state, number: l.location_number ?? null }]));
 
       const truckName = new Map(((tk.data ?? []) as any[]).map((t) => [t.truck_id, t.truck_name as string]));
       const trailerName = new Map(((tl.data ?? []) as any[]).map((t) => [t.trailer_id, t.trailer_name as string]));

@@ -380,7 +380,6 @@ export function DispatchDashboardView(props: {
     { label: "Cancelled", value: String(p.cancelledCount), color: p.cancelledCount ? "#fff" : GREY, onClick: () => setSheet("cancelled") },
     { label: "Parked", value: String(parkedCount), color: parkedCount ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
     { label: "Dispatched", value: String(p.dispatchedCount), color: p.dispatchedCount ? "#93c5fd" : GREY, onClick: () => setSheet("dispatched") },
-    { label: "Hours", value: String(p.hosAlerts.length), color: p.hosAlerts.some((a) => a.level === "red") ? RED : p.hosAlerts.length ? ORANGE : GREY, onClick: () => setHosOpen(true) },
   ];
 
   return (
@@ -402,9 +401,7 @@ export function DispatchDashboardView(props: {
       <div className="dash-cols" style={{ marginTop: 4 }}>
         <div>
           {live ? (
-            <>
-              <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Tap a chip above for details. Friction, En Route, On Site and Delayed each open their own window.</div>
-            </>
+            <>{p.liveBoard}</>
           ) : (
             <>
               <SectionLabel first>Plan a load</SectionLabel>
@@ -416,8 +413,8 @@ export function DispatchDashboardView(props: {
           )}
         </div>
         <div className="dash-side">
-          {live && (<><SectionLabel first>Loads</SectionLabel>{p.liveBoard}</>)}
-          {p.drivers && (<><SectionLabel first={!live}>Drivers</SectionLabel>{p.drivers}</>)}
+          
+          {p.drivers && (<><SectionLabel first>Drivers</SectionLabel>{p.drivers}</>)}
         </div>
       </div>
       <SectionLabel>Tools</SectionLabel>

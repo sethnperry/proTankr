@@ -5,9 +5,8 @@
 // parked load. Presentational only (data comes from useFleetTrips), so it can
 // be rendered without a browser.
 //
-// The route line is a U (lib/trips/fleetProgress.ts): start city top left,
-// rack(s) along the top to the right, then down and back left through the
-// deliveries, last delivery under the start. A dot shows where the truck is.
+// The route line is one row (lib/trips/fleetProgress.ts): origin on the left, the
+// loading terminal(s) in the middle, the destination on the right. A dot shows where the truck is.
 
 import React, { useState } from "react";
 import { SideView, segsFor, useTrailerSizes } from "@/app/planner/components/TrailerViews";
@@ -43,14 +42,13 @@ const PARKED = "#93c5fd";
 const LEFT = 5;
 const RIGHT = 95;
 const px = (x: number) => LEFT + (RIGHT - LEFT) * x;
-const TOP_Y = 26;
-const BOT_Y = 66;
-const HEIGHT = 92;
+const TOP_Y = 10;
+const HEIGHT = 44;
 
 function RouteLine({ route, parked, live }: { route: TripRoute; parked: boolean; live?: number | null }) {
   const { nodes, position } = route;
   const dotColor = parked ? PARKED : MOVING;
-  const y = (row: "top" | "bottom") => (row === "top" ? TOP_Y : BOT_Y);
+  const y = (row: "top" | "bottom") => TOP_Y;
 
   // Segments between consecutive nodes. The top→bottom hop goes down the
   // right edge first, then left.
@@ -109,17 +107,16 @@ function RouteLine({ route, parked, live }: { route: TripRoute; parked: boolean;
         const left = px(n.x);
         const atLeft = n.x === 0;
         const atRight = n.x === 1;
-        const top = n.row === "top";
         const isHere = i === position.at;
         return (
           <div key={`l-${n.key}`} style={{
             position: "absolute",
-            top: top ? 0 : BOT_Y + 8,
+            top: TOP_Y + 10,
             left: atRight ? undefined : `${left}%`,
             right: atRight ? `${100 - left}%` : undefined,
             transform: atLeft ? "translateX(-6px)" : atRight ? "translateX(6px)" : "translateX(-50%)",
             textAlign: atLeft ? "left" : atRight ? "right" : "center",
-            maxWidth: "42%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            maxWidth: `${Math.min(42, 90 / Math.max(1, nodes.length - 1))}%`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             fontSize: 12, lineHeight: "15px",
             fontWeight: isHere ? 800 : 600,
             color: n.state === "skipped" ? "rgba(248,113,113,0.8)" : isHere ? "#fff" : "rgba(255,255,255,0.65)",
