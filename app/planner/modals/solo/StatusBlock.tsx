@@ -7,7 +7,7 @@ import type { SoloModel } from "./useSoloEquipment";
 import { S } from "./styles";
 
 export function StatusBlock({ m }: { m: SoloModel }) {
-  const { awayNotes, claimantLabel, currentLocalArea, currentRegion, selectedTrailerRow, selectedTruckRow, statusHeaderText } = m;
+  const { awayNotes, claimantLabel, currentLocalArea, currentRegion, selectedTrailerRow, selectedTruckRow, statusHeaderText, myActivity } = m;
   return !selectedTruckRow && !selectedTrailerRow ? (
     <div style={S.statusEmpty}>No equipment selected — tap Select Equipment to choose your truck and trailer.</div>
   ) : (
@@ -16,7 +16,7 @@ export function StatusBlock({ m }: { m: SoloModel }) {
       {claimantLabel && (
         <div style={S.statusLine}>
           <span style={S.statusLabel}>{claimantLabel === "You" ? "Status" : "In Use by"}</span>
-          <span style={S.statusValue}>{claimantLabel === "You" ? "Mine" : claimantLabel}</span>
+          <span style={S.statusValue}>{claimantLabel === "You" ? (myActivity ? `Me · ${myActivity}` : "In Use · Me") : claimantLabel}</span>
         </div>
       )}
       {(currentRegion || currentLocalArea) && (

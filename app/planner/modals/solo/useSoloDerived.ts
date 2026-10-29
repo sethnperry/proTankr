@@ -105,7 +105,7 @@ export function useSoloDerived(
   ); // eslint-disable-line react-hooks/exhaustive-deps
   const claimedByCombo = useMemo(() => Object.fromEntries(combos.map((c) => [c.combo_id, c.claimed_by])), [combos]);
   const boardStatus = useEquipmentBoardStatus(
-    open && pickerOpen,
+    open,
     combos.map((c) => c.claimed_by).filter((x): x is string => !!x),
     trailers.map((t) => t.trailer_id),
     combos.length,
@@ -179,6 +179,7 @@ export function useSoloDerived(
     selectedTruckRow,
     selectedTrailerRow,
     claimantLabel,
+    myActivity: effectiveUserId ? boardStatus.activity?.[effectiveUserId] ?? null : null,
     currentRegion,
     currentLocalArea,
     awayNotes,
