@@ -46,8 +46,10 @@ export type ApiBasis = {
  *  With the product's reference API known it must be within 15 of it; otherwise just a sane crude-product range. */
 export function isPlausibleApi(api: number | null | undefined, ref?: number | null): boolean {
   if (api == null || !Number.isFinite(api)) return false;
-  if (api < 5 || api > 90) return false;
   const r = ref == null ? NaN : Number(ref);
+  // DEF reads about -1.7 API; only a product whose own reference is that low may go below 5.
+  const lowest = Number.isFinite(r) && r < 5 ? -10 : 5;
+  if (api < lowest || api > 90) return false;
   return Number.isFinite(r) ? Math.abs(api - r) <= 15 : true;
 }
 

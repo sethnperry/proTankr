@@ -148,6 +148,7 @@ export function ProductEntryOverlay({ m }: { m: LoadingModel }) {
               setSeqError(null);
             },
             decimal: true,
+            signed: true,
           },
           {
             key: "temp",

@@ -24,6 +24,8 @@ export type ValueEntryField = {
   badge?: React.ReactNode;
   /** Digits + at most one decimal point (API/Temp) vs. digits-only (gallons). Default false. */
   decimal?: boolean;
+  /** Allows a leading minus (DEF reads a slightly negative API). Adds a +/- button, since phone number pads have no minus. */
+  signed?: boolean;
   /** Show the label even when it's the only field. */
   showLabel?: boolean;
   /** Free text (a BOL number): no number filtering, text keyboard. */
@@ -65,12 +67,13 @@ type Props = {
   footer?: React.ReactNode;
 };
 
-function sanitize(raw: string, decimal: boolean): string {
+function sanitize(raw: string, decimal: boolean, signed = false): string {
   if (!decimal) return raw.replace(/[^0-9]/g, "");
+  const neg = signed && raw.trim().startsWith("-");
   let v = raw.replace(/[^0-9.]/g, "");
   const parts = v.split(".");
   if (parts.length > 2) v = parts[0] + "." + parts.slice(1).join("");
-  return v;
+  return neg ? `-${v}` : v;
 }
 
 export default function ValueEntryOverlay({ open, title, fields, hint, onCancel, onSubmit, submitLabel = "Set", dotColor, cancelLabel = "Cancel", error, busyLabel, focusKey, footer }: Props) {
@@ -162,7 +165,7 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                   autoFocus={i === 0 && !focusKey}
                   enterKeyHint={i < fields.length - 1 ? "next" : "done"}
                   value={f.value}
-                  onChange={(e) => f.onChange(f.text || f.plain ? e.target.value : sanitize(e.target.value, !!f.decimal))}
+                  onChange={(e) => f.onChange(f.text || f.plain ? e.target.value : sanitize(e.target.value, !!f.decimal, !!f.signed))}
                   onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onFieldEnter(i); } }}
                   style={{
@@ -179,6 +182,11 @@ export default function ValueEntryOverlay({ open, title, fields, hint, onCancel,
                     inputRef={{ get current() { return inputRefs.current[f.key] ?? null; } }}
                     style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}
                   />
+                )}
+                {f.signed && (
+                  <button type="button" aria-label="Toggle minus sign" onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { f.onChange(f.value.startsWith("-") ? f.value.slice(1) : `-${f.value}`); inputRefs.current[f.key]?.focus(); }}
+                    style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 40, height: 36, borderRadius: 2, border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: "#fff", fontSize: 18, fontWeight: 800, cursor: "pointer" }}>±</button>
                 )}
                 {f.badge && (
                   <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", fontSize: 28, fontWeight: 900, color: "#4ade80", lineHeight: 1 }}>{f.badge}</span>

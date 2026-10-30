@@ -47,7 +47,7 @@ export function TunePanel({
     if (!editing) return;
     const api = Number(apiStr);
     const t = Number(tempStr);
-    if (Number.isFinite(api) && api > 0 && Number.isFinite(t)) {
+    if (Number.isFinite(api) && api > -10 && apiStr.trim() !== "" && apiStr.trim() !== "-" && Number.isFinite(t)) {
       onTune(editing.productId, Math.round(api * 10) / 10, Math.round(t * 10) / 10);
     }
     setEditing(null);
@@ -116,7 +116,7 @@ export function TunePanel({
         dotColor={editing?.dotColor}
         fields={[
           { key: "temp", label: "Temp °F", value: tempStr, onChange: setTempStr, decimal: true, suffix: "°F" },
-          { key: "api", label: "API", value: apiStr, onChange: setApiStr, decimal: true, suffix: "API" },
+          { key: "api", label: "API", value: apiStr, onChange: setApiStr, decimal: true, signed: true, suffix: "API" },
         ]}
         hint={
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center" as const }}>

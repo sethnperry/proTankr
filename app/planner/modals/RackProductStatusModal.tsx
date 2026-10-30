@@ -273,12 +273,17 @@ export default function RackProductStatusModal({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 6, textTransform: "uppercase" as const }}>API</div>
-            <input
-              type="text" inputMode="decimal" value={api} onChange={(e) => setApi(e.target.value)}
-              onFocus={(e) => e.currentTarget.select()}
-              placeholder="50.6"
-              style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 14 }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type="text" inputMode="decimal" value={api} onChange={(e) => setApi(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                onFocus={(e) => e.currentTarget.select()}
+                placeholder="50.6"
+                style={{ width: "100%", boxSizing: "border-box" as const, padding: "10px 40px 10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "white", fontSize: 14 }}
+              />
+              <button type="button" aria-label="Toggle minus sign" onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setApi((v) => (v.startsWith("-") ? v.slice(1) : `-${v}`))}
+                style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 30, height: 28, borderRadius: 2, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>±</button>
+            </div>
           </div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginBottom: 6, textTransform: "uppercase" as const }}>Temp (°F)</div>

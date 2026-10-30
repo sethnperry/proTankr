@@ -124,3 +124,9 @@ test("an API that can't be real for the product is ignored (diesel at 51)", () =
   assert.equal(b.displayApi, 33); // falls back to product min, not 51.2
   assert.equal(b.hasHistory, false);
 });
+
+test("DEF reads a slightly negative API", () => {
+  assert.equal(isPlausibleApi(-1.7, -1.7), true);
+  assert.equal(isPlausibleApi(-1.7, 35), false);
+  assert.equal(isPlausibleApi(-30, -1.7), false);
+});
