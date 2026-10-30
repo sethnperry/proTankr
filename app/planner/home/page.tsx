@@ -150,6 +150,7 @@ import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/a
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
+import { WalletHub, walletTool } from "../components/wallet/WalletHub";
 import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
 import { HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard } from "../components/trip/DashboardCards";
 import { useUnitAlerts } from "../hooks/useDashboardCards";
@@ -1521,6 +1522,7 @@ export default function HomePage() {
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
   const [unitAlertsOpen, setUnitAlertsOpen] = useState<"truck" | "trailer" | null>(null);
   useEffect(() => { setTruckSheetWatch(unitAlertsOpen === "truck"); }, [unitAlertsOpen]);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [expSheetOpen, setExpSheetOpen] = useState(false);
   const [loadsSheetOpen, setLoadsSheetOpen] = useState(false);
   // Everyone in the company with the SELECTED store on their trip: delivering there, loaded and on the way, or
@@ -2297,6 +2299,7 @@ export default function HomePage() {
         onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
       />
 
+      <WalletHub open={walletOpen} onClose={() => setWalletOpen(false)} />
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
       <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onClose={() => setLoadsSheetOpen(false)}
         onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); beginDispatchedLoad(id); }} />
@@ -2422,9 +2425,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
-          ...(canCards ? [{ icon: "card" as const, label: "Cards",
-            sub: "Terminals, badges, credentials",
-            onClick: () => nav.go("cards", "/planner/cards"), busy: nav.is("cards") }] : []),
+          walletTool(() => setWalletOpen(true)),
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
           { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => nav.go("reports", "/planner/reports"), busy: nav.is("reports") },
         ];

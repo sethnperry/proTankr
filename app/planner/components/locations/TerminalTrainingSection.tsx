@@ -26,7 +26,7 @@ const url = (u: string) => (/^https?:\/\//i.test(u.trim()) ? u.trim() : `https:/
 
 type Detail = { req: TrainingReq | null; mine: (TrainingRecord & { id: string }) | null; all: (TrainingRecord & { user_id: string })[]; letters: { id: string; file_path: string; original_name: string | null; created_at: string }[] };
 
-function useDetail(terminalId: string, userId: string | null, staff: boolean) {
+export function useTrainingDetail(terminalId: string, userId: string | null, staff: boolean) {
   return useQuery({
     queryKey: [TRAINING_QUERY_KEY, terminalId, userId, staff],
     enabled: !!userId,
@@ -47,7 +47,7 @@ export function TerminalTrainingSection({ terminalId, terminalName, userId, comp
 }) {
   const L = useDashLook();
   const qc = useQueryClient();
-  const { data } = useDetail(terminalId, userId, staff);
+  const { data } = useTrainingDetail(terminalId, userId, staff);
   const roster = useCompanyRoster(staff ? companyId : null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);

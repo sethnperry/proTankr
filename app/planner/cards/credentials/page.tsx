@@ -12,7 +12,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../../CalculatorShellContext";
 import { formatMDY, formatMDYWithCountdown_ } from "../../utils/dates";
-import CardsSubTabs from "../CardsSubTabs";
+import WalletBack from "../WalletBack";
 import FlippableCard from "../FlippableCard";
 import {
   cardStateFor, DARK_EXP_COLOR,
@@ -375,7 +375,7 @@ export default function CredentialsPage() {
 
   return (
     <div>
-      <CardsSubTabs />
+      <WalletBack />
       {isDispatchContext && (
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 14 }}>
           Viewing <span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 700 }}>{driverName || "…"}</span>'s credentials.
