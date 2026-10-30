@@ -126,7 +126,7 @@ import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
 import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type FinishDeliverySubmit, type ProductInfo } from "../components/trip/DeliveryDashboard";
 import { LocationPicker } from "../components/trip/LocationPicker";
-import { DeliveryLocationsModal, deliveriesTool } from "../components/trip/DeliveryLocationsModal";
+import { LocationsHub, locationsTool } from "../components/locations/LocationsHub";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
@@ -744,7 +744,7 @@ export default function HomePage() {
   const [loadedOpen, setLoadedOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [picker, setPicker] = useState<PickerMode | null>(null);
-  // The Deliveries tool: the same location modal with no pick, so tapping a store opens its setup.
+  // The Locations tool: terminals and delivery locations.
   const [manageLocsOpen, setManageLocsOpen] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tripId: string | null } | null>(null);
 
@@ -2418,7 +2418,7 @@ export default function HomePage() {
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
             onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
-          deliveriesTool(() => setManageLocsOpen(true)),
+          locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
@@ -2553,7 +2553,7 @@ export default function HomePage() {
         );
       })()}
 
-      <DeliveryLocationsModal open={manageLocsOpen} onClose={() => setManageLocsOpen(false)} locations={locations} tanks={locList.tanks} companyId={companyId} userId={userId} origin={origin} onChanged={() => void locList.reload()} />
+      <LocationsHub open={manageLocsOpen} onClose={() => setManageLocsOpen(false)} companyId={companyId} userId={userId} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} origin={origin} />
 
       <LocationPicker
         open={!!picker}

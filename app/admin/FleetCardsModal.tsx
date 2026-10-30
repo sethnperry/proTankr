@@ -25,9 +25,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   companyId: string;
+  /** Open straight on this terminal's drivers (the Locations hub), skipping the search. */
+  initialTerminalId?: string | null;
 };
 
-export default function FleetCardsModal({ open, onClose, companyId }: Props) {
+export default function FleetCardsModal({ open, onClose, companyId, initialTerminalId }: Props) {
   const [search, setSearch] = useState("");
   // Sourced from the shared cached catalog (lib/queries/useTerminalsCatalog.ts)
   // instead of this modal's own supabase.from("terminals") fetch on every
@@ -45,6 +47,13 @@ export default function FleetCardsModal({ open, onClose, companyId }: Props) {
     setPicked(null);
     setDrivers([]);
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !initialTerminalId) return;
+    const t = terminals.find((x) => String(x.terminal_id) === String(initialTerminalId));
+    if (t) void pickTerminal(t as TerminalOption);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialTerminalId, terminals.length]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

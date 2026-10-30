@@ -2,15 +2,13 @@
 // app/planner/components/trip/DeliveryLocationsModal.tsx
 //
 // The Deliveries tool's window: every saved delivery location, tap one to set it up (name, store number,
-// tanks, hose lengths) or add a new one. Shared by the Driver Dashboard and the Dispatch Dashboard
-// tools grids, so a change here is a change in both.
+// tanks, hose lengths) or add a new one. Opened from the Locations tool (LocationsHub) on both dashboards.
 
 import React, { useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { LocationBrowser } from "./LocationPicker";
 import type { DeliveryLocation, LatLon, LocationTank } from "@/lib/trips/deliveryLocations";
-import type { ToolItem } from "@/app/planner/home/DashboardChrome";
 
 /** Counties are looked up from each location's address, a few at a time, until none are left. Runs while the
  *  locations are being shown (the modal, or the Delivery Locations page). */
@@ -55,6 +53,3 @@ export function DeliveryLocationsModal({ open, onClose, locations, tanks, compan
     </FullscreenModal>
   );
 }
-
-/** The grid tile that opens it. Both dashboards put this in their tools grid. */
-export const deliveriesTool = (onClick: () => void): ToolItem => ({ icon: "store", label: "Deliveries", sub: "Set up locations", onClick });
