@@ -25,9 +25,9 @@ test("nothing waiting: no push", () => {
   assert.equal(planStopNotice(t, [stop], 0), null);
 });
 
-test("waits five minutes after the stop", () => {
-  assert.equal(planStopNotice(base, [stop], 0, undefined, Date.parse(stop.at) + 2 * 60_000), null);
-  assert.ok(planStopNotice(base, [stop], 0, undefined, Date.parse(stop.at) + 5 * 60_000));
+test("waits fifteen minutes after the stop", () => {
+  assert.equal(planStopNotice(base, [stop], 0, undefined, Date.parse(stop.at) + 14 * 60_000), null);
+  assert.ok(planStopNotice(base, [stop], 0, undefined, Date.parse(stop.at) + 15 * 60_000));
 });
 test("a stop inside a fuel stop is dropped", () => {
   const fuel = [{ started_at: "2026-10-26T14:45:00Z", completed_at: null }];
