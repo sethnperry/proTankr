@@ -146,7 +146,7 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
       {view === "profile" ? (
         <div>
           <BackRow title={title === "Company Settings" ? "Company Settings" : "Settings"} onBack={() => setView("root")} />
-          <SelfProfileView />
+          <SelfProfileView direct onExit={() => setView("root")} />
         </div>
       ) : view === "fuelPins" ? (
         <div>

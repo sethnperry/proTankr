@@ -15,7 +15,9 @@ import { MemberCard } from "./MemberCard";
 import { DriverProfileModal } from "./DriverProfileModal";
 import type { Member } from "./types";
 
-export function SelfProfileView() {
+/** `direct`: skip the member card and open the editor at once; `onExit` runs when it is closed or saved
+ *  (Settings uses this so Settings > Profile is one tap to the form). */
+export function SelfProfileView({ direct = false, onExit }: { direct?: boolean; onExit?: () => void } = {}) {
   const [member,     setMember]     = useState<Member | null>(null);
   const [companyId,  setCompanyId]  = useState<string | null>(null);
   const [editing,    setEditing]    = useState(false);
@@ -76,7 +78,18 @@ export function SelfProfileView() {
         <div style={{ color: T.danger, fontSize: 13 }}>{err}</div>
       )}
 
-      {member && companyId && !loading && (
+      {direct && member && companyId && !loading && (
+        <DriverProfileModal
+          member={member}
+          companyId={companyId}
+          hideComplianceFields
+          showPersonalFields
+          onClose={() => onExit?.()}
+          onDone={() => { onExit?.(); }}
+        />
+      )}
+
+      {!direct && member && companyId && !loading && (
         <>
           <MemberCard
             member={member}
