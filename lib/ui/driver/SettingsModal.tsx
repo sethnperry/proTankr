@@ -35,6 +35,7 @@ import { SelfProfileView } from "./SelfProfileView";
 import { supabase } from "@/lib/supabase/client";
 import JoinFleetView from "@/app/planner/components/JoinFleetView";
 import FuelPinsView from "@/app/planner/components/FuelPinsView";
+import TelematicsLoginView from "@/app/planner/components/TelematicsLoginView";
 import { disablePush, enablePush, pushEnabledHere, pushSupported } from "@/lib/push/subscribe";
 import { T, css } from "./tokens";
 import { useCompanySubscription, computeSeatCapacity } from "@/lib/billing/useCompanySubscription";
@@ -112,7 +113,7 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
   // analogous state to sync, so it simply omits this.
   onCompanyRenamed?: (name: string) => void;
 }) {
-  const [view, setView] = useState<"root" | "profile" | "joinFleet" | "fuelPins">("root");
+  const [view, setView] = useState<"root" | "profile" | "joinFleet" | "fuelPins" | "hosLogin">("root");
   const [company, setCompany] = useState<{ name: string; isSolo: boolean } | null>(null);
   const [pushOn, setPushOn] = useState<boolean | null>(null);
   const [pushMsg, setPushMsg] = useState<string | null>(null);
@@ -137,7 +138,7 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
 
   const isAdmin = myRole === "admin";
   const isSolo = company?.isSolo ?? false;
-  const title = view === "profile" ? "Profile" : view === "joinFleet" ? "Join a Fleet" : view === "fuelPins" ? "Fuel PINs"
+  const title = view === "profile" ? "Profile" : view === "joinFleet" ? "Join a Fleet" : view === "fuelPins" ? "Fuel PINs" : view === "hosLogin" ? "Hours of Service Login"
     : !isSolo && isAdmin ? "Company Settings" : "Settings";
 
   return (
@@ -151,6 +152,11 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
         <div>
           <BackRow title="Settings" onBack={() => setView("root")} />
           <FuelPinsView companyId={companyId} userId={authUserId} />
+        </div>
+      ) : view === "hosLogin" ? (
+        <div>
+          <BackRow title="Settings" onBack={() => setView("root")} />
+          <TelematicsLoginView companyId={companyId} />
         </div>
       ) : view === "joinFleet" ? (
         <div>
@@ -180,6 +186,13 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
                 sub="Your PIN for the company fuel program"
                 onClick={() => setView("fuelPins")}
               />
+              {!isSolo && (
+                <SettingsRow
+                  label="Hours of service login"
+                  sub="Your own telematics login, so your hours show up"
+                  onClick={() => setView("hosLogin")}
+                />
+              )}
               {isSolo && (
                 <SettingsRow
                   label="Join a Fleet"

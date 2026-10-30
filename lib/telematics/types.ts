@@ -50,6 +50,8 @@ export type ProviderGroup = { id: string; name: string; parentId: string | null 
 export type TrailerEvent = { type: "hook" | "drop"; at: string; trailerProviderId: string; lat: number | null; lon: number | null };
 
 export interface TelematicsProvider {
+  /** The provider user id of the account this provider is signed in as (a driver's own login). Throws TelematicsAuthError on a bad login. */
+  selfUserId?(userName: string): Promise<string | null>;
   listTrailers(): Promise<ProviderTrailer[]>;
   /** The provider's group tree (Geotab Groups), flat with parent ids. */
   listGroups(): Promise<ProviderGroup[]>;

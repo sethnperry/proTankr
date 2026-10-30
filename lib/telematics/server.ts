@@ -39,6 +39,19 @@ export async function providerFor(companyId: string): Promise<TelematicsProvider
   return geotabProvider({ database: c.database_name, userName: c.user_name, password: decryptSecret(c.credentials_enc) });
 }
 
+/** A driver's own connection (their login, the company's database), else the company's. Hours come from this. */
+export async function providerForDriver(companyId: string, userId: string): Promise<TelematicsProvider | null> {
+  const admin = getServiceSupabase();
+  const { data } = await admin.from("telematics_driver_credentials").select("user_name, credentials_enc, status").eq("company_id", companyId).eq("user_id", userId).maybeSingle();
+  const d = data as { user_name: string; credentials_enc: string; status: string } | null;
+  if (d && d.status === "active") {
+    const { data: c } = await admin.from("telematics_connections").select("database_name, status").eq("company_id", companyId).maybeSingle();
+    const conn = c as { database_name: string; status: string } | null;
+    if (conn && conn.status === "active") return geotabProvider({ database: conn.database_name, userName: d.user_name, password: decryptSecret(d.credentials_enc) });
+  }
+  return providerFor(companyId);
+}
+
 /** The company's members with the identity fields used to match provider drivers. */
 export async function rosterMembers(companyId: string): Promise<Member[]> {
   const admin = getServiceSupabase();

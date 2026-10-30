@@ -522,6 +522,13 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return ld ? { vehicleId: String(ld.device.id), at: String(ld.dateTime) } : null;
     },
 
+    async selfUserId(userName: string): Promise<string | null> {
+      // Signing in is the check: a wrong login throws TelematicsAuthError from call().
+      const rows: any[] = await call("Get", { typeName: "User", search: { name: userName } });
+      const me = (rows ?? []).find((u) => String(u?.name ?? "").toLowerCase() === userName.toLowerCase()) ?? (rows ?? [])[0];
+      return me?.id ? String(me.id) : null;
+    },
+
     async hos(id: string, tz?: string): Promise<HosAvailability | null> {
       const [avail, logs] = await Promise.all([
         call("Get", { typeName: "DutyStatusAvailability", search: { userSearch: { id } } }) as Promise<any[]>,
