@@ -43,7 +43,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
 import { LockIcon } from "./PatternLock";
-import { createVault, getKeyRow, openRows, passphraseProblem, recoverVault, unlockVault, eraseVault } from "@/lib/vault/client";
+import { createVault, getKeyRow, openRows, passphraseProblem, recoverVault, unlockVault, eraseVault, vaultKeyFromPassphrase } from "@/lib/vault/client";
+import { bioDeclined, bioEnrolled, bioSupported, declineBio, enrollBio, removeBio, unlockWithBio } from "@/lib/vault/biometric";
 import { getVaultKey, onVaultKeyChange, setVaultKey } from "@/lib/vault/session";
 import { sealEntry } from "@/lib/vault/entries";
 import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, cardExpIso, groupCard, isCardCategory, maskCard, maskCardGroups } from "@/lib/vault/cards";
@@ -143,7 +144,7 @@ function CategoryChip({ active, label, onClick }: { active: boolean; label: stri
 
 type EntryGroup = { key: string; label: string; entries: VaultEntryRow[] };
 
-type Phase = "loading" | "setup" | "show-code" | "locked" | "recover" | "erase" | "unlocked";
+type Phase = "loading" | "setup" | "show-code" | "offer-bio" | "locked" | "recover" | "erase" | "unlocked";
 
 export default function VaultPage() {
   const shell = useCalculatorShell();
@@ -158,6 +159,13 @@ export default function VaultPage() {
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [codeSaved, setCodeSaved] = useState(false);
   const [eraseText, setEraseText] = useState("");
+  // Fingerprint/face unlock (see lib/vault/biometric.ts)
+  const [bioOk, setBioOk] = useState(false);
+  const [bioOn, setBioOn] = useState(false);
+  const [bioPass, setBioPass] = useState("");
+  const bioTried = useRef(false);
+  useEffect(() => { void bioSupported().then(setBioOk); }, []);
+  useEffect(() => { if (userId) setBioOn(bioEnrolled(userId)); }, [userId, phase]);
 
   const [entries, setEntries] = useState<VaultEntryRow[]>([]);
   const [entriesLoading, setEntriesLoading] = useState(false);
@@ -231,6 +239,13 @@ export default function VaultPage() {
     return () => window.clearInterval(id);
   }, [waitMs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On the lock screen, offer the fingerprint right away when it's set up on this phone.
+  useEffect(() => {
+    if (phase !== "locked" || !bioOn || bioTried.current || waitMs > 0) return;
+    bioTried.current = true;
+    void unlockBio();
+  }, [phase, bioOn]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Set up / unlock / recover / erase ─────────────────────────────────────
   async function doSetup() {
     setLockError(null);
@@ -240,9 +255,35 @@ export default function VaultPage() {
     setBusy(true);
     try {
       const { recoveryCode: code } = await createVault(userId!, pass1);
-      setRecoveryCode(code); setCodeSaved(false); setPass1(""); setPass2("");
+      setRecoveryCode(code); setCodeSaved(false); setBioPass(pass1); setPass1(""); setPass2("");
       setPhase("show-code");
     } catch (e: any) { setLockError(e?.message ?? "Couldn't create the Vault."); }
+    finally { setBusy(false); }
+  }
+
+  // After a passphrase unlock or set-up: offer fingerprint/face once, if this phone can and it isn't on yet.
+  function afterUnlock(passUsed: string) {
+    if (userId && bioOk && !bioEnrolled(userId) && !bioDeclined(userId)) { setBioPass(passUsed); setPhase("offer-bio"); }
+    else setPhase("unlocked");
+  }
+
+  async function unlockBio() {
+    if (!userId) return;
+    setLockError(null); setBusy(true);
+    try { await unlockWithBio(userId); setPhase("unlocked"); }
+    catch (e: any) { setLockError(e?.message ?? "Fingerprint unlock didn't work."); setBioOn(bioEnrolled(userId)); }
+    finally { setBusy(false); }
+  }
+
+  async function turnOnBio(pw: string) {
+    if (!userId) return;
+    setLockError(null); setBusy(true);
+    try {
+      const raw = await vaultKeyFromPassphrase(userId, pw);
+      if (!raw) throw new Error("That passphrase didn't open the vault.");
+      await enrollBio(userId, raw);
+      setBioOn(true); setBioPass(""); setPhase("unlocked");
+    } catch (e: any) { setLockError(e?.name === "NotAllowedError" ? "Fingerprint setup was cancelled." : (e?.message ?? "Couldn't turn on fingerprint unlock.")); }
     finally { setBusy(false); }
   }
 
@@ -253,8 +294,9 @@ export default function VaultPage() {
     try {
       await unlockVault(userId!, pass1);
       saveFails({ count: 0, until: 0 });
+      const used = pass1;
       setPass1("");
-      setPhase("unlocked");
+      afterUnlock(used);
     } catch (e: any) {
       const next = recordFailure(fails, Date.now());
       saveFails(next);
@@ -268,7 +310,7 @@ export default function VaultPage() {
     setBusy(true);
     try {
       const { recoveryCode: code } = await recoverVault(userId!, recoveryInput, pass1);
-      setRecoveryCode(code); setCodeSaved(false); setPass1(""); setPass2(""); setRecoveryInput("");
+      setRecoveryCode(code); setCodeSaved(false); setBioPass(pass1); setPass1(""); setPass2(""); setRecoveryInput("");
       setPhase("show-code");
     } catch (e: any) { setLockError(e?.message ?? "Couldn't recover the Vault."); }
     finally { setBusy(false); }
@@ -464,7 +506,21 @@ export default function VaultPage() {
           <input type="checkbox" checked={codeSaved} onChange={(e) => setCodeSaved(e.target.checked)} style={{ marginTop: 3 }} />
           I've saved my recovery code. I understand that without it and my passphrase, my entries can't be recovered by anyone.
         </label>
-        {btn("Open my Vault", () => { setRecoveryCode(null); setPhase("unlocked"); }, { disabled: !codeSaved })}
+        {btn("Open my Vault", () => { setRecoveryCode(null); afterUnlock(bioPass || ""); }, { disabled: !codeSaved })}
+      </div>
+    );
+  }
+
+  if (phase === "offer-bio") {
+    return (
+      <div style={wrap}>
+        {lockIcon}
+        {title("Unlock with your fingerprint or face?")}
+        {body("Next time, open the Vault with a touch instead of typing your passphrase. It only works on this phone, and your passphrase and recovery code still work.")}
+        {!bioPass && pwInput(pass1, setPass1, "Vault passphrase")}
+        {errLine}
+        {btn("Turn on", () => void turnOnBio(bioPass || pass1), { busy, disabled: !bioPass && !pass1 })}
+        {link("Not now", () => { if (userId) declineBio(userId); setBioPass(""); setPhase("unlocked"); })}
       </div>
     );
   }
@@ -505,6 +561,7 @@ export default function VaultPage() {
         {lockIcon}
         {title("Vault Locked")}
         {waitMs > 0 && <div style={errorStyle}>Too many wrong tries. Try again in {fmtWait(waitMs)}.</div>}
+        {bioOn && btn("Unlock with fingerprint / face", () => void unlockBio(), { busy })}
         {pwInput(pass1, setPass1, "Passphrase", () => void doUnlock())}
         {errLine}
         {btn("Unlock", () => void doUnlock(), { busy, disabled: !pass1 || waitMs > 0 })}
@@ -521,6 +578,12 @@ export default function VaultPage() {
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
           {entries.length} {entries.length === 1 ? "entry" : "entries"}
         </div>
+        {bioOk && (
+          <button onClick={() => { if (!userId) return; if (bioOn) { removeBio(userId); setBioOn(false); } else { setBioPass(""); setPass1(""); setLockError(null); setPhase("offer-bio"); } }}
+            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 700, cursor: "pointer", marginLeft: "auto", marginRight: 12 }}>
+            {bioOn ? "Fingerprint on · turn off" : "Turn on fingerprint"}
+          </button>
+        )}
         <button onClick={lockNow} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
           <LockIcon size={13} color="rgba(255,255,255,0.45)" /> Lock
         </button>

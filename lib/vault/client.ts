@@ -10,6 +10,7 @@ import {
 } from "./crypto";
 import { openEntry, sealEntry, SENSITIVE_KEYS, type EntryRow } from "./entries";
 import { setVaultKey } from "./session";
+import { removeBio } from "./biometric";
 
 type KeyRow = { user_id: string; kdf: Kdf; wrapped_passphrase: string; wrapped_recovery: string };
 
@@ -52,10 +53,15 @@ export async function createVault(userId: string, passphrase: string): Promise<{
   return { recoveryCode: formatRecovery(rec) };
 }
 
-export async function unlockVault(userId: string, passphrase: string): Promise<void> {
+/** The vault key's raw bytes from the passphrase (for setting up fingerprint unlock); null when it's wrong. */
+export async function vaultKeyFromPassphrase(userId: string, passphrase: string): Promise<Uint8Array | null> {
   const row = await getKeyRow(userId);
   if (!row) throw new Error("No vault set up.");
-  const raw = await unwrap(row.wrapped_passphrase, await passphraseKey(passphrase, row.kdf));
+  return unwrap(row.wrapped_passphrase, await passphraseKey(passphrase, row.kdf));
+}
+
+export async function unlockVault(userId: string, passphrase: string): Promise<void> {
+  const raw = await vaultKeyFromPassphrase(userId, passphrase);
   if (!raw) throw new Error("That passphrase didn't open the vault.");
   const vk = await importVaultKey(raw);
   setVaultKey(vk);
@@ -85,6 +91,7 @@ export async function recoverVault(userId: string, code: string, newPassphrase: 
 /** Deletes every entry and the keys. There is no way back. */
 export async function eraseVault(userId: string): Promise<void> {
   setVaultKey(null);
+  removeBio(userId);
   const a = await supabase.from("vault_entries").delete().eq("user_id", userId);
   if (a.error) throw new Error(a.error.message);
   const b = await supabase.from("vault_keys").delete().eq("user_id", userId);
