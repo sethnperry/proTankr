@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { autoLinkAllDrivers, providerFor } from "@/lib/telematics/server";
+import { autoLinkAllDrivers, driverOwnProviders, hosOwnFirst, providerFor } from "@/lib/telematics/server";
 import { airMiles } from "@/lib/trips/deliveryLocations";
 import { dropFuelStops, planStopNotice } from "@/lib/push/stopAlertCore";
 import { planHosAlerts, type DriverCase } from "@/lib/push/hosAlertCore";
@@ -72,9 +72,10 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
   const hosOf = new Map<string, { driveLeftMin: number | null; dutyLeftMin: number | null; at: string }>();
   const stopsOf = new Map<string, { at: string; code: string; resumedAt: string | null; droveFrom: string }[]>();
   const need = driverIds.filter((u) => provUser.has(u));
+  const own = await driverOwnProviders(companyId, need);
   for (let i = 0; i < need.length; i += 4) {
     await Promise.all(need.slice(i, i + 4).map(async (u) => {
-      try { const x = await p.hos(provUser.get(u)!); if (x) { hosOf.set(u, { driveLeftMin: x.driveLeftMin, dutyLeftMin: x.dutyLeftMin, at: x.at }); stopsOf.set(u, x.stops ?? []); } } catch { /* no clocks for this driver */ }
+      try { const x = await hosOwnFirst(p, own, u, provUser.get(u)!); if (x) { hosOf.set(u, { driveLeftMin: x.driveLeftMin, dutyLeftMin: x.dutyLeftMin, at: x.at }); stopsOf.set(u, x.stops ?? []); } } catch { /* no clocks for this driver */ }
     }));
   }
 

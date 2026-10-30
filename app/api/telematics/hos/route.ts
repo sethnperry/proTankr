@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { autoLinkAllDrivers, autoLinkDriver, callerId, companyRole, providerFor, providerForDriver } from "@/lib/telematics/server";
+import { autoLinkAllDrivers, autoLinkDriver, callerId, companyRole, providerFor, providerForDriver, driverOwnProviders, hosOwnFirst } from "@/lib/telematics/server";
 import type { HosAvailability } from "@/lib/telematics/types";
 
 export const runtime = "nodejs";
@@ -58,9 +58,10 @@ export async function GET(req: NextRequest) {
     const { data } = await getServiceSupabase().from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId);
     const rows = (data ?? []) as { provider_user_id: string; user_id: string }[];
     const hos: Record<string, HosAvailability> = {};
+    const own = await driverOwnProviders(companyId, rows.map((x) => x.user_id));
     for (let i = 0; i < rows.length; i += 4) {
       await Promise.all(rows.slice(i, i + 4).map(async (m) => {
-        try { const h = await p.hos(m.provider_user_id); if (h) hos[m.user_id] = h; } catch { /* that driver shows no hours */ }
+        try { const h = await hosOwnFirst(p, own, m.user_id, m.provider_user_id); if (h) hos[m.user_id] = h; } catch { /* that driver shows no hours */ }
       }));
     }
     cache.set(companyId, { at: Date.now(), hos });

@@ -52,6 +52,33 @@ export async function providerForDriver(companyId: string, userId: string): Prom
   return providerFor(companyId);
 }
 
+/** Drivers who connected their own login: user id -> a provider signed in as them. Everyone else uses the company's. */
+export async function driverOwnProviders(companyId: string, userIds: string[]): Promise<Map<string, TelematicsProvider>> {
+  const out = new Map<string, TelematicsProvider>();
+  if (!userIds.length) return out;
+  const admin = getServiceSupabase();
+  const [cr, cn] = await Promise.all([
+    admin.from("telematics_driver_credentials").select("user_id, user_name, credentials_enc, status").eq("company_id", companyId).in("user_id", userIds),
+    admin.from("telematics_connections").select("database_name, status").eq("company_id", companyId).maybeSingle(),
+  ]);
+  const conn = cn.data as { database_name: string; status: string } | null;
+  if (!conn || conn.status !== "active") return out;
+  for (const r of (cr.data ?? []) as { user_id: string; user_name: string; credentials_enc: string; status: string }[]) {
+    if (r.status !== "active") continue;
+    try { out.set(r.user_id, geotabProvider({ database: conn.database_name, userName: r.user_name, password: decryptSecret(r.credentials_enc) })); } catch { /* falls back to the company login */ }
+  }
+  return out;
+}
+
+/** A driver's hours: their own login first, the company login as the backup. */
+export async function hosOwnFirst(
+  company: TelematicsProvider, own: Map<string, TelematicsProvider>, userId: string, providerUserId: string,
+): Promise<import("./types").HosAvailability | null> {
+  const mine = own.get(userId);
+  if (mine) { try { const h = await mine.hos(providerUserId); if (h) return h; } catch { /* use the company login */ } }
+  return company.hos(providerUserId);
+}
+
 /** The company's members with the identity fields used to match provider drivers. */
 export async function rosterMembers(companyId: string): Promise<Member[]> {
   const admin = getServiceSupabase();
