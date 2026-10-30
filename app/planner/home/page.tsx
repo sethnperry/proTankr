@@ -37,7 +37,7 @@ import {
 import { newId } from "@/lib/trips/tripStore";
 import { useTripHydration } from "@/lib/trips/useTripHydration";
 import { rememberTanks, useDeliveryLocationList, useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
-import { locationPlace, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
+import { airMiles, locationPlace, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { useActiveOutageBanner } from "../hooks/useTerminalOutageReports";
@@ -92,7 +92,7 @@ import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadShe
 import { CancelTripSheet, type CancelTripSubmit } from "../components/trip/CancelTripSheet";
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 import { truckLastKnownPlace } from "@/lib/trips/startPlace";
-import { useTruckReading, fetchTruckShipments } from "@/lib/telematics/useTruckReading";
+import { useTruckReading, fetchTruckShipments, fetchTruckReading } from "@/lib/telematics/useTruckReading";
 import { shipmentsForPickup } from "@/lib/telematics/shipmentMatch";
 import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
@@ -1269,7 +1269,7 @@ export default function HomePage() {
   const [stopClock, setStopClock] = useState(() => Date.now());
   useEffect(() => { const t = window.setInterval(() => setStopClock(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
   const hopPickup = snap && step.kind === "planner" ? snap.pickups.find((p) => p.arrived_at && !p.left_at && p.outcome !== "no_load") ?? null : null;
-  const dutyStop = useMemo(() => {
+  const dutyStopRaw = useMemo(() => {
     const waiting = step.kind === "arrive_pickup" || step.kind === "arrive_delivery";
     if (!openTrip || !snap || (!waiting && !hopPickup)) return null;
     const stamps = [openTrip.started_at, ...snap.pickups.flatMap((p) => [p.arrived_at, p.left_at]), ...snap.deliveries.flatMap((d) => [d.arrived_at, d.left_at])]
@@ -1288,6 +1288,21 @@ export default function HomePage() {
     return p ? { ...p, answerId: undefined as string | undefined, answer: undefined as "arrived" | "delay" | "yes" | "no" | undefined, reason: undefined as string | null | undefined, reported: false } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuelOn, runningDelay, stopClock, stopAnswers]);
+  // "Did you arrive?" only when the truck is near the stop it is headed to: a pull-off at a scale house or a
+  // rest stop is not an arrival. Checked once per stop; no position or no stop coordinates still asks.
+  const [stopFar, setStopFar] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const st = dutyStopRaw;
+    const target = arrivalTarget?.catalog ?? null;
+    if (!st || st.answerId || hopPickup || !target || !truckId || stopFar[st.at] !== undefined) return;
+    let off = false;
+    void fetchTruckReading(truckId).then((r) => {
+      if (off || !r || r.lat == null || r.lon == null) return;
+      setStopFar((m) => ({ ...m, [st.at]: airMiles({ lat: r.lat!, lon: r.lon! }, target) > 1 }));
+    });
+    return () => { off = true; };
+  }, [dutyStopRaw?.at, dutyStopRaw?.answerId, arrivalTarget?.catalog, truckId, hopPickup?.pickup_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dutyStop = dutyStopRaw && !dutyStopRaw.answerId && stopFar[dutyStopRaw.at] === true ? null : dutyStopRaw;
   // A stop made while fueling was the fuel stop, not an arrival: it is never asked about afterwards.
   useEffect(() => {
     if (!fuel.active || !userId) return;
