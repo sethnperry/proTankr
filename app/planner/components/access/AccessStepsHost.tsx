@@ -16,6 +16,7 @@ import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { expiryStateFor } from "@/lib/expiry";
 import { addDaysISO_ } from "../../utils/dates";
 import { requirementsComplete, type AccessRequirements } from "@/lib/terminals/accessSteps";
+import { TRAINING_CAMPAIGN_KEY, readCampaignEnabled } from "@/lib/platformSettings";
 import { TerminalAccessSheet } from "./TerminalAccessSheet";
 import { OPEN_ACCESS_STEPS_EVENT, invalidateAccess, type OpenAccessStepsDetail } from "./useAccessSteps";
 
@@ -41,6 +42,13 @@ export function AccessStepsHost({ userId, companyId, onCardIssued }: {
       if (!d.fromLoad) { setOpen({ terminalId: d.terminalId, fromLoad: false }); return; }
       if (!userId) return;
       try {
+        // Campaign off: nobody is asked what a terminal requires, and steps only start for terminals
+        // that are already described.
+        const campaignOn = await readCampaignEnabled(TRAINING_CAMPAIGN_KEY);
+        if (!campaignOn) {
+          const { data: r0 } = await supabase.from("terminal_access_requirements").select("*").eq("terminal_id", d.terminalId).maybeSingle();
+          if (!requirementsComplete(r0 as AccessRequirements | null)) return;
+        }
         const t = ((catalog ?? []) as CatalogRow[]).find((x) => String(x.terminal_id) === d.terminalId);
         const renewal = Number(t?.renewal_days ?? 90) || 90;
         const prev = d.fromLoad.prevCardedOn ? String(d.fromLoad.prevCardedOn).slice(0, 10) : null;

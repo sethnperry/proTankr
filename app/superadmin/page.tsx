@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import NavMenu from "@/lib/ui/NavMenu";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
+import { TRAINING_CAMPAIGN_KEY, readCampaignEnabled } from "@/lib/platformSettings";
 import { DEFAULT_STALE_API_DAYS } from "@/lib/config/plannerSafety";
 
 type CompanyRow = {
@@ -56,6 +57,18 @@ export default function ProTankrDashPage() {
   const [fRegionOpts, setFRegionOpts] = useState<string[]>([]);
   const [fBusy, setFBusy] = useState(false);
   const [fMsg, setFMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Campaigns (platform-wide switches)
+  const [trainingCampaign, setTrainingCampaign] = useState<boolean | null>(null);
+  const [campaignErr, setCampaignErr] = useState<string | null>(null);
+  useEffect(() => { void readCampaignEnabled(TRAINING_CAMPAIGN_KEY).then(setTrainingCampaign); }, []);
+  async function toggleTrainingCampaign() {
+    const next = !(trainingCampaign ?? true);
+    setCampaignErr(null);
+    const { error: err } = await supabase.from("platform_settings").upsert({ key: TRAINING_CAMPAIGN_KEY, value: { enabled: next }, updated_at: new Date().toISOString() });
+    if (err) { setCampaignErr(err.message); return; }
+    setTrainingCampaign(next);
+  }
 
   // Invite a new solo driver
   const [sEmail, setSEmail] = useState("");
@@ -370,6 +383,25 @@ export default function ProTankrDashPage() {
                  : "Free — comped, non-expiring access. For testers and people helping with feedback."}
         </div>
         {msgLine(sMsg)}
+      </div>
+
+      {/* Campaigns */}
+      <div style={card}>
+        <div style={cardTitle}>Campaigns</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Terminal training req campaign</div>
+            <div style={{ ...cardSub, marginBottom: 0 }}>
+              When on, the first driver to load at a terminal nobody has described yet is asked what it requires (training, orientation, letter, loads). Off asks nobody. Terminals already described still show their steps.
+            </div>
+          </div>
+          <button type="button" disabled={trainingCampaign == null} onClick={() => void toggleTrainingCampaign()}
+            style={{ flexShrink: 0, padding: "10px 16px", border: "none", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800,
+              background: trainingCampaign ? "rgba(74,222,128,0.16)" : "rgba(255,255,255,0.08)", color: trainingCampaign ? "#4ade80" : "rgba(255,255,255,0.6)" }}>
+            {trainingCampaign == null ? "…" : trainingCampaign ? "ON" : "OFF"}
+          </button>
+        </div>
+        {campaignErr && <div style={{ fontSize: 12, color: "#f87171", marginTop: 8 }}>{campaignErr}</div>}
       </div>
 
       {/* Planner Safety (placeholder) */}
