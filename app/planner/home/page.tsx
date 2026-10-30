@@ -125,7 +125,7 @@ import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
 import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type FinishDeliverySubmit, type ProductInfo } from "../components/trip/DeliveryDashboard";
-import { LocationPicker } from "../components/trip/LocationPicker";
+import { LocationPicker, LocationBrowser } from "../components/trip/LocationPicker";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
@@ -2552,18 +2552,11 @@ export default function HomePage() {
         );
       })()}
 
-      <LocationPicker
-        open={manageLocsOpen}
-        title="Delivery locations"
-        origin={origin}
-        locations={locations}
-        tanks={locList.tanks}
-        companyId={companyId}
-        userId={userId}
-        onLocationAdded={() => void locList.reload()}
-        onChanged={() => void locList.reload()}
-        onClose={() => setManageLocsOpen(false)}
-      />
+      <FullscreenModal open={manageLocsOpen} title="Delivery locations" onClose={() => setManageLocsOpen(false)} footer={null}>
+        {manageLocsOpen && (
+          <LocationBrowser origin={origin} locations={locations} tanks={locList.tanks} companyId={companyId} userId={userId} onChanged={() => void locList.reload()} />
+        )}
+      </FullscreenModal>
 
       <LocationPicker
         open={!!picker}
