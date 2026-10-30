@@ -114,7 +114,7 @@ test("color tiers by age: <=6h green, <=12h white, <=24h orange, older red", () 
   assert.equal(apiTierColor("tuned"), "#ffffff");
 });
 
-import { isPlausibleApi } from "./apiBasis.ts";
+import { apiRangeProblem, isPlausibleApi } from "./apiBasis.ts";
 test("an API that can't be real for the product is ignored (diesel at 51)", () => {
   assert.equal(isPlausibleApi(51.2, 35), false);
   assert.equal(isPlausibleApi(38.9, 35), true);
@@ -129,4 +129,12 @@ test("DEF reads a slightly negative API", () => {
   assert.equal(isPlausibleApi(-1.7, -1.7), true);
   assert.equal(isPlausibleApi(-1.7, 35), false);
   assert.equal(isPlausibleApi(-30, -1.7), false);
+});
+
+test("API range block", () => {
+  assert.equal(apiRangeProblem(36, 33, 39), null);
+  assert.equal(apiRangeProblem(33, 33, 39), null);
+  assert.match(apiRangeProblem(41, 33, 39) ?? "", /outside this product/);
+  assert.equal(apiRangeProblem(41, null, null), null);
+  assert.equal(apiRangeProblem(-1.7, -2.04, -1.31), null);
 });

@@ -3,6 +3,8 @@
 //
 // Finish Loading / Edit Load: one window per product (BOL, API, temp, gross, net), split loads, then times and signature on a trip.
 
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { apiRangeProblem } from "../../utils/apiBasis";
 import { useSequencePrefill } from "./useSequencePrefill";
 import { useSequenceState } from "./useSequenceState";
 import { numOrNull } from "../../components/trip/tripUi";
@@ -18,6 +20,7 @@ import type { useLoadingBasics } from "./useLoadingBasics";
 export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof useLoadingBasics>) {
   const { productNameById, persistedCapForComp, report, onEditLoad, onLoaded, trip, editingReport, setEditingReport, orderedCompLines } = b;
   const st = useSequenceState(b);
+  const catalog = useProductsCatalog().data;
   const {
     compSeqIndex,
     setCompSeqIndex,
@@ -179,6 +182,10 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
       setSeqError("Enter API, temp and gross.");
       return;
     }
+
+    const prod = catalog.find((p) => p.product_id === group.productId);
+    const rangeMsg = apiRangeProblem(apiN, prod?.api_min, prod?.api_max);
+    if (rangeMsg) { setSeqError(rangeMsg); return; }
 
     // Sanity check against what these compartments can hold (a typo, not a
     // real BOL, is the only way past it). Editing a logged load skips it:

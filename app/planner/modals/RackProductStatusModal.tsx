@@ -22,7 +22,7 @@
 // terminal card"). Behavior is otherwise unchanged from the original.
 
 import React, { useEffect, useState } from "react";
-import { isPlausibleApi } from "../utils/apiBasis";
+import { apiRangeProblem, isPlausibleApi } from "../utils/apiBasis";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -90,6 +90,8 @@ export default function RackProductStatusModal({
     const apiNum = api.trim() ? Number(api) : null;
     const tempNum = tempF.trim() ? Number(tempF) : null;
     const refApi = catalog.find((p) => p.product_id === productId)?.api_60;
+    const rangeMsg = apiNum != null ? apiRangeProblem(apiNum, (catalog.find((p) => p.product_id === productId) as any)?.api_min, (catalog.find((p) => p.product_id === productId) as any)?.api_max) : null;
+    if (rangeMsg) { setError(rangeMsg); setSaving(false); return; }
     if (apiNum != null && !isPlausibleApi(apiNum, refApi)) {
       setError(`${apiNum} API doesn't look right for this product${refApi != null ? ` (about ${Math.round(Number(refApi))})` : ""}. Check the reading.`);
       setSaving(false);

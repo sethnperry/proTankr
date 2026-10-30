@@ -53,6 +53,16 @@ export function isPlausibleApi(api: number | null | undefined, ref?: number | nu
   return Number.isFinite(r) ? Math.abs(api - r) <= 15 : true;
 }
 
+/** Typed API outside the product's published range (products.api_min / api_max), or null when it is inside.
+ *  No range on file = nothing to check against. Entry points show the message and refuse the value. */
+export function apiRangeProblem(api: number, min: number | null | undefined, max: number | null | undefined): string | null {
+  const lo = min == null ? null : Number(min), hi = max == null ? null : Number(max);
+  if (lo == null || hi == null || !Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+  if (api >= lo && api <= hi) return null;
+  const f = (n: number) => String(Math.round(n * 100) / 100);
+  return `${f(api)} API is outside this product's range (${f(lo)} to ${f(hi)}).`;
+}
+
 const HOUR_MS = 3600 * 1000;
 const LAST_READING_MAX_AGE_MS = 7 * 24 * HOUR_MS;
 

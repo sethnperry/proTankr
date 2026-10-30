@@ -4,6 +4,8 @@
 // The "Load basis" panel in Plan Review.
 
 import { useState } from "react";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { apiRangeProblem } from "../../utils/apiBasis";
 import ValueEntryOverlay from "../../components/ValueEntryOverlay";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../../cards/cardTheme";
 
@@ -35,18 +37,24 @@ export function TunePanel({
   const [editing, setEditing] = useState<TuneRow | null>(null);
   const [apiStr, setApiStr] = useState("");
   const [tempStr, setTempStr] = useState("");
+  const [tuneErr, setTuneErr] = useState<string | null>(null);
+  const catalog = useProductsCatalog().data;
 
   if (!rows || rows.length === 0) return null;
 
   function openEdit(r: TuneRow) {
     setTempStr(String(Math.round(r.tempF * 10) / 10));
     setApiStr(r.api != null ? String(Math.round(r.api * 10) / 10) : "");
+    setTuneErr(null);
     setEditing(r);
   }
   function commit() {
     if (!editing) return;
     const api = Number(apiStr);
     const t = Number(tempStr);
+    const prod = catalog.find((p) => p.product_id === editing.productId);
+    const rangeMsg = Number.isFinite(api) ? apiRangeProblem(api, prod?.api_min, prod?.api_max) : null;
+    if (rangeMsg) { setTuneErr(rangeMsg); return; }
     if (Number.isFinite(api) && api > -10 && apiStr.trim() !== "" && apiStr.trim() !== "-" && Number.isFinite(t)) {
       onTune(editing.productId, Math.round(api * 10) / 10, Math.round(t * 10) / 10);
     }
@@ -112,6 +120,7 @@ export function TunePanel({
 
       <ValueEntryOverlay
         open={!!editing}
+        error={tuneErr}
         title={editing ? `Tune ${editing.code}` : "Tune"}
         dotColor={editing?.dotColor}
         fields={[
