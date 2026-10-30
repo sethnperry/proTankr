@@ -336,6 +336,8 @@ export function DeliveryDashboard({
 
   // Every carrier's recent drops at this store.
   const store = useStoreDeliveries(open ? delivery.location_id : null, open, 10);
+  // The first delivery to a store must have tank readings: that is how its tank layout gets established.
+  const firstDrop = !!delivery.location_id && store.loaded && store.items.length === 0;
 
   // Trailer compartment sizes, for the bar widths.
   useEffect(() => {
@@ -750,10 +752,10 @@ export function DeliveryDashboard({
       return setWstep("details");
     }
     if (wstep === "details") {
-      if (settings.require_tank_readings) {
+      if (settings.require_tank_readings || firstDrop) {
         const missing = products.findIndex((p) => !readingsDone(p));
         if (missing >= 0) {
-          setStepErr("Tank readings are required before you can finish.");
+          setStepErr(firstDrop && !settings.require_tank_readings ? "Required for the first delivery in order to establish tank layout." : "Tank readings are required before you can finish.");
           setStep({ productIdx: missing, phase: "before" });
           return;
         }
@@ -961,7 +963,7 @@ export function DeliveryDashboard({
     ? "—"
     : readingsCount === products.length
       ? `Entered ✓${waterEntered.length ? " · water" : ""}`
-      : settings.require_tank_readings ? "Required" : readingsCount ? `${readingsCount} of ${products.length}` : "Optional";
+      : settings.require_tank_readings || firstDrop ? "Required" : readingsCount ? `${readingsCount} of ${products.length}` : "Optional";
   const bioComps = delivered.filter((c) => isDieselLike(productInfo(c.product_id).name));
   const bioSummary = bioComps.filter((c) => bio[c.compartment_load_id]).map((c) => `C${c.comp_number} ${bio[c.compartment_load_id]}`).join(" · ") || "None";
   const additiveSummary = additives.map(additiveLabel).join(", ") || "None";
@@ -1063,7 +1065,7 @@ export function DeliveryDashboard({
           <div style={{ ...miniLabel, margin: "2px 2px 8px" }}>How it went · all optional</div>
           <div style={{ ...sectionCard, padding: 0 }}>
             <Section title="Tank readings" summary={readingsSummary}
-              summaryColor={settings.require_tank_readings && readingsCount < products.length ? "#fbbf24" : undefined}
+              summaryColor={firstDrop && readingsCount < products.length ? "#fb923c" : settings.require_tank_readings && readingsCount < products.length ? "#fbbf24" : undefined}
               open={section === "readings"} onToggle={() => toggle("readings")}>
               {products.length === 0 && <div style={{ fontSize: 13, color: muted }}>Pick tanks for the compartments first.</div>}
               {products.map((p, i) => {

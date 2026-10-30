@@ -97,8 +97,10 @@ export type StoreDelivery = {
 export function useStoreDeliveries(locationId: string | null, refreshKey: unknown, limit = 10) {
   const [items, setItems] = useState<StoreDelivery[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false); // the lookup finished without an error
 
   useEffect(() => {
+    setLoaded(false);
     if (!locationId) { setItems([]); return; }
     let cancelled = false;
     (async () => {
@@ -122,7 +124,7 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
             unit: t.unit === "inches" ? "inches" : "gallons",
           })),
         }));
-        if (!cancelled) setItems(out);
+        if (!cancelled) { setItems(out); setLoaded(true); }
       } catch (e) {
         console.warn("[dashboard] store deliveries failed:", e);
         if (!cancelled) setItems([]);
@@ -133,7 +135,7 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
     return () => { cancelled = true; };
   }, [locationId, refreshKey, limit]);
 
-  return { items, loading };
+  return { items, loading, loaded };
 }
 
 // Everything coming due on one truck or trailer: permits + service
