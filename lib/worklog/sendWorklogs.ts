@@ -20,7 +20,15 @@ export async function runWorklogs(nowMs = Date.now()): Promise<number> {
   const companies = (cps ?? []) as { company_id: string; period_type: PayPeriodType; anchor_date: string; send_after_days: number; tz: string }[];
   if (!companies.length) return 0;
   const { data: members } = await admin.from("user_companies").select("user_id, company_id").in("company_id", companies.map((c) => c.company_id));
-  const mem = (members ?? []) as { user_id: string; company_id: string }[];
+  const allMem = (members ?? []) as { user_id: string; company_id: string }[];
+  if (!allMem.length) return 0;
+  // A driver in more than one company gets one report, for their active company. (Their progress is kept
+  // per driver, so reporting for two companies would let one mark the other's period done.)
+  const { data: act } = await admin.from("user_settings").select("user_id, active_company_id").in("user_id", [...new Set(allMem.map((m) => m.user_id))]);
+  const active = new Map(((act ?? []) as { user_id: string; active_company_id: string | null }[]).map((r) => [r.user_id, r.active_company_id]));
+  const perUser = new Map<string, number>();
+  for (const m of allMem) perUser.set(m.user_id, (perUser.get(m.user_id) ?? 0) + 1);
+  const mem = allMem.filter((m) => (perUser.get(m.user_id) ?? 0) < 2 || active.get(m.user_id) === m.company_id);
   if (!mem.length) return 0;
   const ids = mem.map((m) => m.user_id);
   const [{ data: st }, { data: pay }] = await Promise.all([
@@ -54,10 +62,11 @@ export async function runWorklogs(nowMs = Date.now()): Promise<number> {
     try {
       const [{ data: u }, { data: prof }] = await Promise.all([admin.auth.admin.getUserById(uid), admin.from("profiles").select("display_name").eq("user_id", uid).maybeSingle()]);
       const email = u?.user?.email;
-      if (!email) { await mark({ last_period_end: d.period.end }); continue; }
+      if (!email) { console.warn("[worklog] skipped, no email on file:", uid); await mark({ last_period_end: d.period.end }); continue; }
       const w = await buildDriverWorklog({ companyId: d.m.company_id, userId: uid, range: d.period, tz: d.c.tz, title: PERIOD_TITLE[d.type], driverName: ((prof as any)?.display_name ?? "").trim() || email });
-      if (!w.summary.loads && !w.summary.worked) { await mark({ last_period_end: d.period.end }); continue; }
+      if (!w.summary.loads && !w.summary.worked) { console.warn("[worklog] skipped, no loads or hours in", d.period.start, "to", d.period.end, "for", uid); await mark({ last_period_end: d.period.end }); continue; }
       await sendWorklogEmail(email, w);
+      console.log("[worklog] sent", d.period.start, "to", d.period.end, "for", uid);
       await mark({ last_period_end: d.period.end });
       sent++;
     } catch (e) { console.warn("[cron] worklog failed:", (e as Error).message); await mark({}); }
