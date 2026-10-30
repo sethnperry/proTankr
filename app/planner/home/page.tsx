@@ -125,7 +125,8 @@ import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
 import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type FinishDeliverySubmit, type ProductInfo } from "../components/trip/DeliveryDashboard";
-import { LocationPicker, LocationBrowser } from "../components/trip/LocationPicker";
+import { LocationPicker } from "../components/trip/LocationPicker";
+import { DeliveryLocationsModal, deliveriesTool } from "../components/trip/DeliveryLocationsModal";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
@@ -2417,7 +2418,7 @@ export default function HomePage() {
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
             onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
-          { icon: "store", label: "Deliveries", sub: "Set up locations", onClick: () => setManageLocsOpen(true) },
+          deliveriesTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
@@ -2552,11 +2553,7 @@ export default function HomePage() {
         );
       })()}
 
-      <FullscreenModal open={manageLocsOpen} title="Delivery locations" onClose={() => setManageLocsOpen(false)} footer={null}>
-        {manageLocsOpen && (
-          <LocationBrowser origin={origin} locations={locations} tanks={locList.tanks} companyId={companyId} userId={userId} onChanged={() => void locList.reload()} />
-        )}
-      </FullscreenModal>
+      <DeliveryLocationsModal open={manageLocsOpen} onClose={() => setManageLocsOpen(false)} locations={locations} tanks={locList.tanks} companyId={companyId} userId={userId} origin={origin} onChanged={() => void locList.reload()} />
 
       <LocationPicker
         open={!!picker}
