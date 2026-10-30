@@ -19,7 +19,15 @@ export type VaultCard = {
   card_number: string | null;
   card_exp: string | null;
   card_pin: string | null;
+  /** Readable without the key: the last digits, and whether the details are sealed until the Vault is unlocked. */
+  card_last4?: string | null;
+  locked?: boolean;
 };
+
+/** "•••• 1234" from the last digits alone (so it works while the Vault is locked). */
+export function maskLast4(last4: string | null | undefined): string {
+  return last4 ? `•••• ${last4}` : "";
+}
 
 // How many trailing digits a card shows. Amex prints the last 5
 // ("ending in 51005"); everyone else the last 4.

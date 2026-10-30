@@ -35,7 +35,10 @@ import {
 } from "@/lib/fuel/types";
 import { currentCity } from "@/lib/trips/startPlace";
 import { resolveStopPlace } from "@/lib/fuel/stopPlace";
-import { COMPANY_CARD, PERSONAL_CARD, maskCard, type VaultCard } from "@/lib/vault/cards";
+import { COMPANY_CARD, PERSONAL_CARD, maskCard, maskLast4, type VaultCard } from "@/lib/vault/cards";
+import { openRows } from "@/lib/vault/client";
+import { getVaultKey, onVaultKeyChange } from "@/lib/vault/session";
+import { VaultUnlockInline } from "./VaultUnlockInline";
 
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.10)";
@@ -183,11 +186,15 @@ export default function FuelSheet({
     if (!open || !userId) return;
     void supabase.from("profiles").select("employee_number").eq("user_id", userId).maybeSingle()
       .then(({ data }) => setDriverNo(((data as { employee_number?: string | null } | null)?.employee_number ?? "").trim() || null));
-    void supabase.from("vault_entries").select("id,label,category,card_name,card_brand,card_number,card_exp,card_pin")
+    // Card details are sealed in the Vault. Label, brand, expiry and last digits show without the key;
+    // the name and PIN need it, so they fill in once the Vault is unlocked (and clear when it locks).
+    const loadCards = () => void supabase.from("vault_entries").select("*")
       .eq("user_id", userId).in("category", [COMPANY_CARD, PERSONAL_CARD]).order("label")
-      .then(({ data }) => setCards((data ?? []) as VaultCard[]));
+      .then(async ({ data }) => setCards((await openRows(getVaultKey(), (data ?? []) as any[])) as unknown as VaultCard[]));
+    loadCards();
     void supabase.from("driver_fuel_pins").select("method_id,pin").eq("user_id", userId)
       .then(({ data }) => setPins(Object.fromEntries(((data ?? []) as { method_id: string; pin: string }[]).map((r) => [r.method_id, r.pin]))));
+    return onVaultKeyChange(loadCards);
   }, [open, userId]);
 
   // The card picked for this stop, kept on the phone until the stop is saved.
@@ -677,12 +684,13 @@ export default function FuelSheet({
                 <button key={c.id} type="button" onClick={() => { setCardId(c.id); setChoosingCard(false); }}
                   style={{ border: `1px solid ${card?.id === c.id ? "#fff" : hair}`, background: "rgba(255,255,255,0.04)", color: "#fff", padding: "12px", textAlign: "left", cursor: "pointer" }}>
                   <div style={{ fontWeight: 800, fontSize: 15 }}>{c.label}</div>
-                  <div style={{ fontSize: 13, color: muted }}>{[c.card_brand, maskCard(c.card_number, c.card_brand), c.card_name].filter(Boolean).join(" · ")}</div>
+                  <div style={{ fontSize: 13, color: muted }}>{[c.card_brand, maskLast4(c.card_last4) || maskCard(c.card_number, c.card_brand), c.card_name].filter(Boolean).join(" · ")}</div>
                 </button>
               ))}
             </div>
           </div>
         )}
+        {isCard && !pickList && card?.locked && userId && <VaultUnlockInline userId={userId} />}
         {isCard && !pickList && card && (
           <div style={{ ...box, background: "linear-gradient(135deg, #2a2a2c, #161618)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
@@ -690,7 +698,7 @@ export default function FuelSheet({
               <span style={{ ...lab, color: "rgba(255,255,255,0.7)" }}>{card.card_brand ?? ""}</span>
             </div>
             <div className="dash-num" style={{ fontSize: 24, fontWeight: 900, letterSpacing: "0.08em", margin: "14px 0 10px" }}>
-              {maskCard(card.card_number, card.card_brand) || "No number saved"}
+              {maskLast4(card.card_last4) || maskCard(card.card_number, card.card_brand) || "No number saved"}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
               <div style={{ minWidth: 0 }}>

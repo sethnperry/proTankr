@@ -42,10 +42,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
-import PatternLock, { LockIcon } from "./PatternLock";
+import { LockIcon } from "./PatternLock";
+import { createVault, getKeyRow, openRows, passphraseProblem, recoverVault, unlockVault, eraseVault } from "@/lib/vault/client";
+import { getVaultKey, onVaultKeyChange, setVaultKey } from "@/lib/vault/session";
+import { sealEntry } from "@/lib/vault/entries";
 import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, cardExpIso, groupCard, isCardCategory, maskCard, maskCardGroups } from "@/lib/vault/cards";
 import { shadeFor } from "@/lib/vault/grays";
-import { CLIPBOARD_CLEAR_MS, IDLE_LOCK_MS, fmtWait, recordFailure, shouldLockAfterHidden, waitLeft, type FailState } from "@/lib/vault/guard";
+import { CLIPBOARD_CLEAR_MS, fmtWait, recordFailure, waitLeft, type FailState } from "@/lib/vault/guard";
 import { EXPIRY_COLOR, EXPIRY_PRINT_COLOR, expiryStateFor } from "@/lib/expiry";
 import { WalletOverlay } from "../components/wallet/WalletOverlay";
 
@@ -140,25 +143,21 @@ function CategoryChip({ active, label, onClick }: { active: boolean; label: stri
 
 type EntryGroup = { key: string; label: string; entries: VaultEntryRow[] };
 
-type Phase = "loading" | "create" | "locked" | "unlocked" | "reset-sent" | "reset-confirm";
+type Phase = "loading" | "setup" | "show-code" | "locked" | "recover" | "erase" | "unlocked";
 
 export default function VaultPage() {
   const shell = useCalculatorShell();
   const userId = shell.effectiveUserId;
 
   const [phase, setPhase] = useState<Phase>("loading");
-  const [pinHash, setPinHash] = useState<string | null>(null);
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [forgotMode, setForgotMode] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  // Email-recovery flow state
-  const [resetToken, setResetToken] = useState<string | null>(null);
-  const [resetConfirmError, setResetConfirmError] = useState<string | null>(null);
-  const [resetConfirmBusy, setResetConfirmBusy] = useState(false);
-  const [requestBusy, setRequestBusy] = useState(false);
-  const [requestError, setRequestError] = useState<string | null>(null);
-  const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [pass1, setPass1] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [recoveryInput, setRecoveryInput] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [codeSaved, setCodeSaved] = useState(false);
+  const [eraseText, setEraseText] = useState("");
 
   const [entries, setEntries] = useState<VaultEntryRow[]>([]);
   const [entriesLoading, setEntriesLoading] = useState(false);
@@ -183,120 +182,41 @@ export default function VaultPage() {
   const [fCardExp, setFCardExp] = useState("");
   const [fCardPin, setFCardPin] = useState("");
 
-  // resetTokenRef mirrors resetToken state but is read (not reacted to) by
-  // the lock-resolution effect below -- see that effect's own comment for
-  // why a ref instead of the state itself is what determines whether the
-  // reset-confirm screen shows.
-  const resetTokenRef = useRef<string | null>(null);
-
-  // ── Detect a one-time reset link on mount ─────────────────────────────────
-  // Deliberately does NOT call confirm-reset here -- only capture the raw
-  // token and strip it from the visible URL. The actual verification only
-  // fires from an explicit tap on the reset-confirm screen below.
-  useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const t = params.get("resetToken");
-      if (t) {
-        resetTokenRef.current = t;
-        setResetToken(t);
-        params.delete("resetToken");
-        const rest = params.toString();
-        window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
-      }
-    } catch {}
-  }, []);
-
-  // Shared DB-driven resolution -- also called directly from cancelReset()
-  // below, not just this effect.
+  // Which screen: no key set up yet, locked, or open (the key is in memory only; see lib/vault/session.ts).
   async function resolveLockState() {
     if (!userId) return;
-    const { data } = await supabase.from("user_vault_pin").select("pin_hash").eq("user_id", userId).maybeSingle();
-    if (!data) { setPhase("create"); return; }
-    setPinHash(data.pin_hash);
-    let unlocked = false;
-    try { unlocked = sessionStorage.getItem(UNLOCK_KEY) === "1"; } catch {}
-    setPhase(unlocked ? "unlocked" : "locked");
+    try {
+      const row = await getKeyRow(userId);
+      if (!row) { setPhase("setup"); return; }
+      setPhase(getVaultKey() ? "unlocked" : "locked");
+    } catch (e: any) {
+      setLockError(e?.message ?? "Couldn't reach your Vault.");
+      setPhase("locked");
+    }
   }
+  useEffect(() => { void resolveLockState(); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Resolve lock state ────────────────────────────────────────────────────
-  // Deliberately keyed on `[userId]` only, NOT `resetToken` -- a real bug,
-  // found live: confirmResetTap() (below) clears resetToken as part of
-  // moving to phase "create" so a fresh pattern can be drawn. With
-  // `resetToken` in this effect's dependency array, that clear re-ran this
-  // effect, which (since a pin_hash row from BEFORE the reset still exists
-  // in the DB) immediately queried it and overwrote the just-set "create"
-  // phase back to "locked" -- the user saw the reset-confirm screen, tapped
-  // Continue, and landed straight back on a lock screen instead of ever
-  // getting to draw a new pattern. Reading resetTokenRef (set synchronously
-  // by the effect above, on the very first commit, before this effect's own
-  // first run) instead of the resetToken *state* means later clearing that
-  // state can no longer re-trigger this branch -- the reset-confirm ->
-  // create -> unlocked sequence is now driven entirely by explicit phase
-  // transitions in confirmResetTap()/handlePatternSet(), never re-derived
-  // from the DB mid-flow.
-  useEffect(() => {
-    if (!userId) return;
-    if (resetTokenRef.current) { setPhase("reset-confirm"); return; }
-    void resolveLockState();
-  }, [userId]);
+  // When the key is cleared (idle, background, Lock), clear what's on screen and go back to the lock screen.
+  useEffect(() => onVaultKeyChange(() => {
+    if (getVaultKey()) return;
+    setEntries([]); setRevealed({}); setExpandedId(null); setFormOpen(false); setPass1(""); setPass2("");
+    setPhase((p) => (p === "unlocked" ? "locked" : p));
+  }), []);
 
   async function fetchEntries() {
     setEntriesLoading(true);
     const { data } = await supabase.from("vault_entries").select("*").eq("user_id", userId).order("label");
-    setEntries((data ?? []) as VaultEntryRow[]);
+    const opened = await openRows(getVaultKey(), (data ?? []) as any[]);
+    setEntries(opened as unknown as VaultEntryRow[]);
     setEntriesLoading(false);
   }
-
   useEffect(() => {
     if (phase !== "unlocked" || !userId) return;
     void fetchEntries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, userId]);
 
-  // ── Pattern set / verify ──────────────────────────────────────────────────
-
-  async function handlePatternSet(path: number[]) {
-    setPinError(null);
-    setBusy(true);
-    try {
-      const hash = await sha256Hex(path.join("-"));
-      const { error } = await supabase
-        .from("user_vault_pin")
-        .upsert({ user_id: userId, pin_hash: hash, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      if (error) throw error;
-      try { sessionStorage.setItem(UNLOCK_KEY, "1"); } catch {}
-      setPinHash(hash);
-      setForgotMode(false);
-      setPhase("unlocked");
-    } catch (e: any) {
-      setPinError(e?.message ?? "Failed to save pattern.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleVerifyAttempt(path: number[]) {
-    setPinError(null);
-    if (waitLeft(fails, Date.now()) > 0) return;
-    setBusy(true);
-    try {
-      const hash = await sha256Hex(path.join("-"));
-      if (hash !== pinHash) {
-        const next = recordFailure(fails, Date.now());
-        saveFails(next);
-        setPinError(waitLeft(next, Date.now()) > 0 ? "Incorrect pattern. Too many tries." : "Incorrect pattern.");
-        return;
-      }
-      saveFails({ count: 0, until: 0 });
-      try { sessionStorage.setItem(UNLOCK_KEY, "1"); } catch {}
-      setPhase("unlocked");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Wrong patterns in a row (kept on this phone): a growing wait after five.
+  // Wrong passphrases in a row (kept on this phone): a growing wait after five.
   const FAIL_KEY = "protankr_vault_fail_v1";
   const [fails, setFails] = useState<FailState>({ count: 0, until: 0 });
   const [now, setNow] = useState(() => Date.now());
@@ -311,28 +231,60 @@ export default function VaultPage() {
     return () => window.clearInterval(id);
   }, [waitMs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lock on its own: idle for a few minutes, in the background for a minute, or when leaving the Vault.
-  useEffect(() => {
-    if (phase !== "unlocked") return;
-    let idle = window.setTimeout(lockNow, IDLE_LOCK_MS);
-    const bump = () => { window.clearTimeout(idle); idle = window.setTimeout(lockNow, IDLE_LOCK_MS); };
-    let hiddenAt = 0;
-    const vis = () => {
-      if (document.visibilityState === "hidden") hiddenAt = Date.now();
-      else if (hiddenAt && shouldLockAfterHidden(hiddenAt, Date.now())) lockNow();
-      else bump();
-    };
-    const evs = ["pointerdown", "keydown", "scroll", "touchstart"];
-    evs.forEach((e) => window.addEventListener(e, bump, { passive: true }));
-    document.addEventListener("visibilitychange", vis);
-    return () => {
-      window.clearTimeout(idle);
-      evs.forEach((e) => window.removeEventListener(e, bump));
-      document.removeEventListener("visibilitychange", vis);
-      // Leaving the Vault locks it, so the next visit asks for the pattern again.
-      try { sessionStorage.removeItem(UNLOCK_KEY); } catch { /* ignore */ }
-    };
-  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Set up / unlock / recover / erase ─────────────────────────────────────
+  async function doSetup() {
+    setLockError(null);
+    if (pass1 !== pass2) { setLockError("The two passphrases don't match."); return; }
+    const bad = passphraseProblem(pass1);
+    if (bad) { setLockError(bad); return; }
+    setBusy(true);
+    try {
+      const { recoveryCode: code } = await createVault(userId!, pass1);
+      setRecoveryCode(code); setCodeSaved(false); setPass1(""); setPass2("");
+      setPhase("show-code");
+    } catch (e: any) { setLockError(e?.message ?? "Couldn't create the Vault."); }
+    finally { setBusy(false); }
+  }
+
+  async function doUnlock() {
+    setLockError(null);
+    if (waitLeft(fails, Date.now()) > 0 || !pass1) return;
+    setBusy(true);
+    try {
+      await unlockVault(userId!, pass1);
+      saveFails({ count: 0, until: 0 });
+      setPass1("");
+      setPhase("unlocked");
+    } catch (e: any) {
+      const next = recordFailure(fails, Date.now());
+      saveFails(next);
+      setLockError(e?.message ?? "Couldn't unlock.");
+    } finally { setBusy(false); }
+  }
+
+  async function doRecover() {
+    setLockError(null);
+    if (pass1 !== pass2) { setLockError("The two passphrases don't match."); return; }
+    setBusy(true);
+    try {
+      const { recoveryCode: code } = await recoverVault(userId!, recoveryInput, pass1);
+      setRecoveryCode(code); setCodeSaved(false); setPass1(""); setPass2(""); setRecoveryInput("");
+      setPhase("show-code");
+    } catch (e: any) { setLockError(e?.message ?? "Couldn't recover the Vault."); }
+    finally { setBusy(false); }
+  }
+
+  async function doErase() {
+    setLockError(null);
+    if (eraseText.trim().toUpperCase() !== "ERASE") return;
+    setBusy(true);
+    try {
+      await eraseVault(userId!);
+      setEntries([]); setEraseText(""); setPass1(""); setPass2("");
+      setPhase("setup");
+    } catch (e: any) { setLockError(e?.message ?? "Couldn't erase the Vault."); }
+    finally { setBusy(false); }
+  }
 
   // Copy a secret, then clear the clipboard shortly after.
   const [copied, setCopied] = useState<string | null>(null);
@@ -345,65 +297,8 @@ export default function VaultPage() {
   }
 
   function lockNow() {
-    try { sessionStorage.removeItem(UNLOCK_KEY); } catch {}
-    setRevealed({});
-    setExpandedId(null);
+    setVaultKey(null);
     setPhase("locked");
-  }
-
-  // ── Email-confirmed recovery ──────────────────────────────────────────────
-
-  async function requestReset() {
-    setRequestBusy(true);
-    setRequestError(null);
-    try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error("Not signed in.");
-      const res = await fetch("/api/vault/request-reset", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "Failed to send reset email.");
-      setMaskedEmail(json.maskedEmail ?? null);
-      setPhase("reset-sent");
-    } catch (e: any) {
-      setRequestError(e?.message ?? "Failed to send reset email.");
-    } finally {
-      setRequestBusy(false);
-    }
-  }
-
-  async function confirmResetTap() {
-    setResetConfirmBusy(true);
-    setResetConfirmError(null);
-    try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error("Not signed in.");
-      const res = await fetch("/api/vault/confirm-reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ resetToken }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "Failed to confirm reset.");
-      resetTokenRef.current = null;
-      setResetToken(null);
-      setForgotMode(true);
-      setPinHash(null);
-      setPhase("create");
-    } catch (e: any) {
-      setResetConfirmError(e?.message ?? "Failed to confirm reset.");
-    } finally {
-      setResetConfirmBusy(false);
-    }
-  }
-
-  function cancelReset() {
-    resetTokenRef.current = null;
-    setResetToken(null);
-    setResetConfirmError(null);
-    void resolveLockState();
   }
 
   // ── Entry CRUD ─────────────────────────────────────────────────────────────
@@ -436,22 +331,26 @@ export default function VaultPage() {
     setFormError(null);
     try {
       const isCard = isCardCategory(fCategory);
-      const payload = {
-        label: fLabel.trim(), category: fCategory.trim() || null, notes: fNotes.trim() || null,
+      const vk = getVaultKey();
+      if (!vk) throw new Error("The Vault is locked. Unlock it and try again.");
+      const id = editingId ?? crypto.randomUUID();
+      const sealed = await sealEntry(vk, id, {
+        label: fLabel.trim(), category: fCategory.trim() || null,
+        card_brand: isCard ? fCardBrand || null : null,
+        card_exp: isCard ? fCardExp.trim() || null : null,
+        notes: fNotes.trim() || null,
         website: isCard ? null : fWebsite.trim() || null,
         username: isCard ? null : fUsername.trim() || null,
         secret: isCard ? null : fSecret || null,
         card_name: isCard ? fCardName.trim() || null : null,
-        card_brand: isCard ? fCardBrand || null : null,
         card_number: isCard ? fCardNumber.replace(/\D/g, "") || null : null,
-        card_exp: isCard ? fCardExp.trim() || null : null,
         card_pin: isCard ? fCardPin.trim() || null : null,
-      };
+      });
       if (editingId) {
-        const { error } = await supabase.from("vault_entries").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", editingId);
+        const { error } = await supabase.from("vault_entries").update(sealed).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("vault_entries").insert({ user_id: userId, ...payload });
+        const { error } = await supabase.from("vault_entries").insert({ id, user_id: userId, ...sealed });
         if (error) throw error;
       }
       setFormOpen(false);
@@ -517,73 +416,100 @@ export default function VaultPage() {
 
   if (phase === "loading") return null;
 
-  if (phase === "reset-confirm") {
+  const wrap: React.CSSProperties = { maxWidth: 360, margin: "40px auto 0", padding: "0 4px" };
+  const title = (t: string) => <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", marginBottom: 10, textAlign: "center" }}>{t}</div>;
+  const body = (t: React.ReactNode) => <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.55, marginBottom: 16 }}>{t}</div>;
+  const btn = (label: string, onClick: () => void, o: { disabled?: boolean; danger?: boolean; busy?: boolean } = {}) => (
+    <button type="button" aria-busy={!!o.busy} onClick={onClick} disabled={o.disabled || o.busy}
+      style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "none", background: o.danger ? "#b91c1c" : "#fff", color: o.danger ? "#fff" : "#000", fontSize: 15, fontWeight: 800, cursor: "pointer", opacity: o.disabled ? 0.5 : 1, marginBottom: 10 }}>{o.busy ? "Working…" : label}</button>
+  );
+  const link = (label: string, onClick: () => void) => (
+    <button type="button" onClick={onClick} style={{ display: "block", margin: "6px auto 0", background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>{label}</button>
+  );
+  const pwInput = (value: string, set: (v: string) => void, placeholder: string, onEnter?: () => void) => (
+    <input type="password" value={value} onChange={(e) => set(e.target.value)} placeholder={placeholder} autoComplete="off"
+      onKeyDown={(e) => { if (e.key === "Enter" && onEnter) onEnter(); }} style={{ ...inputStyle, marginBottom: 10 }} />
+  );
+  const lockIcon = <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}><LockIcon size={32} /></div>;
+  const errLine = lockError ? <div style={errorStyle}>{lockError}</div> : null;
+
+  if (phase === "setup") {
     return (
-      <div style={{ maxWidth: 340, margin: "60px auto 0", padding: "0 4px", textAlign: "center" as const }}>
-        <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}><LockIcon size={32} /></div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 10 }}>Reset your Vault pattern?</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 20, lineHeight: 1.5 }}>
-          Continuing will let you draw a new unlock pattern. Your saved logins and passwords are never affected either way.
-        </div>
-        {resetConfirmError && <div style={errorStyle}>{resetConfirmError}</div>}
-        <button aria-busy={!!(resetConfirmBusy)} onClick={confirmResetTap} disabled={resetConfirmBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
-          {resetConfirmBusy ? "Confirming…" : "Continue"}
-        </button>
-        {resetConfirmError && (
-          <button aria-busy={!!(requestBusy)} onClick={requestReset} disabled={requestBusy} style={{ width: "100%", padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
-            {requestBusy ? "Sending…" : "Send another email"}
-          </button>
-        )}
-        <button onClick={cancelReset} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
-          Cancel
-        </button>
+      <div style={wrap}>
+        {lockIcon}
+        {title("Create your Vault")}
+        {body(<>Only you can open this Vault. Your passphrase stays on this phone and is never sent to ProTankr, so <b style={{ color: "#fff" }}>nobody else can read what's inside, including us, your company and your admin.</b> The other side of that: <b style={{ color: "#fff" }}>if you lose both your passphrase and your recovery code, your entries are gone for good.</b></>)}
+        {pwInput(pass1, setPass1, "Passphrase (a few words, 10+ characters)")}
+        {pwInput(pass2, setPass2, "Type it again", doSetup)}
+        {errLine}
+        {btn("Create Vault", () => void doSetup(), { busy, disabled: !pass1 || !pass2 })}
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "center" }}>Anything already saved here is encrypted when you create it.</div>
       </div>
     );
   }
 
-  if (phase === "reset-sent") {
+  if (phase === "show-code") {
     return (
-      <div style={{ maxWidth: 320, margin: "60px auto 0", padding: "0 4px", textAlign: "center" as const }}>
-        <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}><LockIcon size={32} /></div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 10 }}>Check your email</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 24, lineHeight: 1.5 }}>
-          We sent a reset link to {maskedEmail ?? "your email"}. Open it on this device to set a new pattern.
+      <div style={wrap}>
+        {lockIcon}
+        {title("Your recovery code")}
+        {body("This code is the only other way into your Vault. We can't show it again and can't look it up. Write it down or print it and keep it somewhere safe, away from this phone.")}
+        <div style={{ fontFamily: "monospace", fontSize: 19, fontWeight: 800, letterSpacing: 1.5, color: "#fff", textAlign: "center", lineHeight: 1.7, padding: "14px 8px", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 4, marginBottom: 12, wordBreak: "break-word" }}>{recoveryCode}</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <button type="button" onClick={() => recoveryCode && void copySecret(recoveryCode, "Recovery code")} style={{ flex: 1, padding: "10px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Copy</button>
+          <button type="button" onClick={() => window.print()} style={{ flex: 1, padding: "10px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Print</button>
         </div>
-        <button onClick={() => setPhase("locked")} style={{ background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 2, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", padding: "12px 0", width: "100%" }}>
-          Back
-        </button>
+        {copied && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 10, textAlign: "center" }}>{copied}</div>}
+        <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: "#fff", marginBottom: 14, cursor: "pointer" }}>
+          <input type="checkbox" checked={codeSaved} onChange={(e) => setCodeSaved(e.target.checked)} style={{ marginTop: 3 }} />
+          I've saved my recovery code. I understand that without it and my passphrase, my entries can't be recovered by anyone.
+        </label>
+        {btn("Open my Vault", () => { setRecoveryCode(null); setPhase("unlocked"); }, { disabled: !codeSaved })}
       </div>
     );
   }
 
-  if (phase === "create") {
+  if (phase === "recover") {
     return (
-      <div style={{ maxWidth: 340, margin: "40px auto 0", padding: "0 4px", textAlign: "center" as const }}>
-        <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}><LockIcon size={28} /></div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 6 }}>
-          {forgotMode ? "Set a new Vault pattern" : "Create a Vault pattern"}
-        </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 20, lineHeight: 1.5 }}>
-          Connect at least 4 dots to set your pattern. This is a simple lock, not encryption — anyone already past your device login can already reach everything else in the app.
-        </div>
-        {pinError && <div style={errorStyle}>{pinError}</div>}
-        <PatternLock mode="confirm" onComplete={handlePatternSet} disabled={busy} />
+      <div style={wrap}>
+        {lockIcon}
+        {title("Use your recovery code")}
+        {body("Enter the code you saved, then choose a new passphrase. You'll get a new recovery code, and the old one stops working.")}
+        <input value={recoveryInput} onChange={(e) => setRecoveryInput(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" style={{ ...inputStyle, marginBottom: 10, fontFamily: "monospace", letterSpacing: 1 }} />
+        {pwInput(pass1, setPass1, "New passphrase")}
+        {pwInput(pass2, setPass2, "Type it again", doRecover)}
+        {errLine}
+        {btn("Recover my Vault", () => void doRecover(), { busy, disabled: !recoveryInput || !pass1 || !pass2 })}
+        {link("Back", () => { setLockError(null); setPhase("locked"); })}
+      </div>
+    );
+  }
+
+  if (phase === "erase") {
+    return (
+      <div style={wrap}>
+        {lockIcon}
+        {title("Erase your Vault?")}
+        {body(<>This permanently deletes <b style={{ color: "#fff" }}>every entry</b> and your keys. It can't be undone and nobody, including us, can bring them back. You'll be able to start a new, empty Vault.</>)}
+        <input value={eraseText} onChange={(e) => setEraseText(e.target.value)} placeholder='Type ERASE to confirm' autoComplete="off" style={{ ...inputStyle, marginBottom: 10 }} />
+        {errLine}
+        {btn("Erase everything", () => void doErase(), { danger: true, busy, disabled: eraseText.trim().toUpperCase() !== "ERASE" })}
+        {link("Back", () => { setLockError(null); setEraseText(""); setPhase("locked"); })}
       </div>
     );
   }
 
   if (phase === "locked") {
     return (
-      <div style={{ maxWidth: 320, margin: "50px auto 0", padding: "0 4px", textAlign: "center" as const }}>
-        <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><LockIcon size={32} /></div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 20 }}>Vault Locked</div>
-        {waitMs > 0 && <div style={errorStyle}>Too many wrong patterns. Try again in {fmtWait(waitMs)}.</div>}
-        {pinError && waitMs <= 0 && <div style={errorStyle}>{pinError}</div>}
-        <PatternLock mode="verify" onComplete={handleVerifyAttempt} disabled={busy || waitMs > 0} />
-        <button aria-busy={!!(requestBusy)} onClick={requestReset} disabled={requestBusy} style={{ marginTop: 20, background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
-          {requestBusy ? "Sending…" : "Forgot Pattern?"}
-        </button>
-        {requestError && <div style={{ ...errorStyle, marginTop: 10 }}>{requestError}</div>}
+      <div style={wrap}>
+        {lockIcon}
+        {title("Vault Locked")}
+        {waitMs > 0 && <div style={errorStyle}>Too many wrong tries. Try again in {fmtWait(waitMs)}.</div>}
+        {pwInput(pass1, setPass1, "Passphrase", () => void doUnlock())}
+        {errLine}
+        {btn("Unlock", () => void doUnlock(), { busy, disabled: !pass1 || waitMs > 0 })}
+        {link("Use my recovery code", () => { setLockError(null); setPass1(""); setPhase("recover"); })}
+        {link("Forgot both? Erase the Vault", () => { setLockError(null); setPass1(""); setPhase("erase"); })}
       </div>
     );
   }
