@@ -16,8 +16,8 @@ export type StopNotice = { at: string; title: string; body: string; kind: "arriv
 const ms = (v: string | null | undefined) => (v ? Date.parse(v) : NaN);
 const hm = (iso: string, tz: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
-/** Wait this long after a stop before asking, so a fuel stop (or another clock) can be started first. */
-export const STOP_GRACE_MS = 5 * 60_000;
+/** Wait this long after a stop before asking: long enough to pull over for directions, check the tires or start a fuel stop. */
+export const STOP_GRACE_MS = 15 * 60_000;
 const FUEL_LEAD_MS = 10 * 60_000;
 
 export type FuelWindow = { started_at: string; completed_at: string | null };
