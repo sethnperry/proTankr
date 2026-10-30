@@ -43,7 +43,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
 import PatternLock, { LockIcon } from "./PatternLock";
-import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, groupCard, isCardCategory, maskCard } from "@/lib/vault/cards";
+import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, cardExpIso, groupCard, isCardCategory, maskCard, maskCardGroups } from "@/lib/vault/cards";
+import { shadeFor } from "@/lib/vault/grays";
+import { EXPIRY_COLOR, EXPIRY_PRINT_COLOR, expiryStateFor } from "@/lib/expiry";
+import { WalletOverlay } from "../components/wallet/WalletOverlay";
 
 type VaultEntryRow = {
   id: string;
@@ -93,13 +96,14 @@ const sectionHeaderStyle: React.CSSProperties = {
 // every other bit of this file just reads from one object instead of
 // scattering `category === "Work" ? ... : ...` everywhere.
 function themeFor(category: string | null | undefined) {
-  const isWork = category === "Work";
+  const sh = shadeFor(category);
+  const isWork = sh.fg !== "#ffffff"; // a light shade: dark text and controls
   return {
     isWork,
-    cardBg: isWork ? "#f7f6f2" : "rgba(255,255,255,0.03)",
-    cardBorder: isWork ? "1px solid rgba(0,0,0,0.10)" : "1px solid rgba(255,255,255,0.10)",
-    text: isWork ? "#111111" : "#ffffff",
-    subtext: isWork ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.45)",
+    cardBg: sh.bg,
+    cardBorder: sh.border,
+    text: sh.fg,
+    subtext: sh.sub,
     pillBg: isWork ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.07)",
     pillText: isWork ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.55)",
     secretText: isWork ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.85)",
@@ -419,6 +423,8 @@ export default function VaultPage() {
     }
   }
 
+  const openEntry = entries.find((x) => x.id === expandedId) ?? null;
+
   // ── Grouping ───────────────────────────────────────────────────────────────
 
   const groups = useMemo<EntryGroup[]>(() => {
@@ -554,111 +560,108 @@ export default function VaultPage() {
         </div>
       )}
 
-      {groups.map((group) => (
-        <div key={group.key} style={{ marginBottom: 18 }}>
-          <div style={sectionHeaderStyle}>{group.label}</div>
-          <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
-            {group.entries.map((e) => {
-              const isExpanded = expandedId === e.id;
-              const isRevealed = !!revealed[e.id];
-              const t = themeFor(e.category);
-              return (
-                <div key={e.id} style={{ borderRadius: 2, border: t.cardBorder, background: t.cardBg, overflow: "hidden" }}>
-                  <div onClick={() => setExpandedId(isExpanded ? null : e.id)} style={{ padding: 14, cursor: "pointer" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                          {e.label}
-                        </div>
-                        {isCardCategory(e.category) ? (
-                          <div style={{ fontSize: 12, color: t.subtext, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                            {[e.card_brand, maskCard(e.card_number, e.card_brand)].filter(Boolean).join(" ")}
-                          </div>
-                        ) : e.username && (
-                          <div style={{ fontSize: 12, color: t.subtext, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                            {e.username}
-                          </div>
-                        )}
-                      </div>
-                      {e.category && (
-                        <div style={{ fontSize: 10, fontWeight: 700, color: t.pillText, background: t.pillBg, borderRadius: 2, padding: "3px 9px", flexShrink: 0, whiteSpace: "nowrap" as const }}>
-                          {e.category}
-                        </div>
-                      )}
-                    </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridAutoFlow: "dense", gap: 10 }}>
+        {groups.flatMap((g) => g.entries).map((e) => {
+          const t = themeFor(e.category);
+          if (isCardCategory(e.category)) {
+            const st = expiryStateFor(cardExpIso(e.card_exp));
+            const expColor = (t.isWork ? EXPIRY_PRINT_COLOR : EXPIRY_COLOR)[st];
+            return (
+              <button key={e.id} type="button" className="dash-press" onClick={() => setExpandedId(e.id)}
+                style={{ gridColumn: "1 / -1", aspectRatio: "1.586 / 1", maxHeight: 230, display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left", padding: "14px 16px",
+                  borderRadius: 10, border: t.cardBorder, background: t.cardBg, color: t.text, cursor: "pointer", boxSizing: "border-box" }}>
+                <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4, color: t.subtext, flexShrink: 0 }}>{e.card_brand ?? ""}</span>
+                </span>
+                <span style={{ fontSize: 20, fontFamily: "monospace", letterSpacing: 1.5, fontWeight: 700 }}>{maskCardGroups(e.card_number, e.card_brand) || "•••• •••• •••• ••••"}</span>
+                <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-end" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: t.subtext, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.card_name ?? ""}</span>
+                  <span style={{ textAlign: "right", flexShrink: 0 }}>
+                    <span style={{ display: "block", fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: t.subtext }}>EXP</span>
+                    <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "monospace", color: e.card_exp ? expColor : t.subtext }}>{e.card_exp || "––/––"}</span>
+                  </span>
+                </span>
+              </button>
+            );
+          }
+          return (
+            <button key={e.id} type="button" className="dash-press" onClick={() => setExpandedId(e.id)}
+              style={{ aspectRatio: "1.25 / 1", display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left", padding: "12px 12px",
+                borderRadius: 8, border: t.cardBorder, background: t.cardBg, color: t.text, cursor: "pointer", boxSizing: "border-box", minWidth: 0, overflow: "hidden" }}>
+              <span style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{e.label}</span>
+              <span style={{ fontSize: 12, color: t.subtext, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.username ?? e.website ?? ""}</span>
+            </button>
+          );
+        })}
+      </div>
 
-                    {isExpanded && (
-                      <div style={{ marginTop: 12 }} onClick={(ev) => ev.stopPropagation()}>
-                        {isCardCategory(e.category) && (() => {
-                          const row = (k: string, shown: string, hidden: string | null) => (
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                              <div style={{ fontSize: 13, color: t.secretText, minWidth: 0 }}>
-                                <span style={{ color: t.subtext }}>{k} </span>
-                                <span style={{ fontFamily: "monospace", letterSpacing: 0.5 }}>{isRevealed || hidden == null ? shown : hidden}</span>
-                              </div>
-                            </div>
-                          );
-                          return (
-                            <>
-                              {e.card_name && row("Name", e.card_name, null)}
-                              {e.card_number && row("Number", groupCard(e.card_number, e.card_brand), maskCard(e.card_number, e.card_brand))}
-                              {e.card_exp && row("Exp", e.card_exp, null)}
-                              {e.card_pin && row("PIN", e.card_pin, "•".repeat(e.card_pin.length))}
-                              {(e.card_number || e.card_pin) && (
-                                <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                                  style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", marginBottom: 10 }}>
-                                  {isRevealed ? "Hide" : "Show number & PIN"}
-                                </button>
-                              )}
-                            </>
-                          );
-                        })()}
-                        {e.website && (
-                          <div style={{ fontSize: 13, color: t.subtext, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                            {e.website}
-                          </div>
-                        )}
-                        {e.secret && (
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: t.secretText, fontFamily: "monospace", letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                              {isRevealed ? e.secret : "•".repeat(Math.min(14, Math.max(6, e.secret.length)))}
-                            </div>
-                            <button
-                              onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                              style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}
-                            >
-                              {isRevealed ? "Hide" : "Show"}
-                            </button>
-                          </div>
-                        )}
-                        {e.notes && (
-                          <div style={{ fontSize: 13, color: t.notesText, lineHeight: 1.5, whiteSpace: "pre-wrap" as const, marginBottom: 12 }}>
-                            {e.notes}
-                          </div>
-                        )}
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button onClick={() => openEditForm(e)} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.btnBorder, background: t.btnBg, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                            Edit
-                          </button>
-                          {confirmDeleteId === e.id ? (
-                            <button aria-busy={!!(busy)} onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-                              {busy ? "Deleting…" : "Confirm delete"}
-                            </button>
-                          ) : (
-                            <button onClick={() => setConfirmDeleteId(e.id)} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerBorder, background: t.dangerBg, color: t.dangerText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                              Delete
-                            </button>
-                          )}
-                        </div>
+      <WalletOverlay open={!!openEntry} onClose={() => { setExpandedId(null); setConfirmDeleteId(null); }}>
+        {openEntry && (() => {
+          const e = openEntry;
+          const t = themeFor(e.category);
+          const isRevealed = !!revealed[e.id];
+          return (
+            <div style={{ borderRadius: 10, border: t.cardBorder, background: t.cardBg, padding: 16, color: t.text }}>
+              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 2 }}>{e.label}</div>
+              {!isCardCategory(e.category) && e.username && <div style={{ fontSize: 13, color: t.subtext, marginBottom: 10 }}>{e.username}</div>}
+              <div style={{ marginTop: 10 }}>
+                {isCardCategory(e.category) && (() => {
+                  const row = (k: string, shown: string, hidden: string | null) => (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, color: t.secretText, minWidth: 0 }}>
+                        <span style={{ color: t.subtext }}>{k} </span>
+                        <span style={{ fontFamily: "monospace", letterSpacing: 0.5 }}>{isRevealed || hidden == null ? shown : hidden}</span>
                       </div>
-                    )}
+                    </div>
+                  );
+                  return (
+                    <>
+                      {e.card_name && row("Name", e.card_name, null)}
+                      {e.card_number && row("Number", groupCard(e.card_number, e.card_brand), maskCard(e.card_number, e.card_brand))}
+                      {e.card_exp && row("Exp", e.card_exp, null)}
+                      {e.card_pin && row("PIN", e.card_pin, "•".repeat(e.card_pin.length))}
+                      {(e.card_number || e.card_pin) && (
+                        <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                          style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", marginBottom: 10 }}>
+                          {isRevealed ? "Hide" : "Show number & PIN"}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+                {e.website && (
+                  <div style={{ fontSize: 13, color: t.subtext, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{e.website}</div>
+                )}
+                {e.secret && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: t.secretText, fontFamily: "monospace", letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                      {isRevealed ? e.secret : "•".repeat(Math.min(14, Math.max(6, e.secret.length)))}
+                    </div>
+                    <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                      style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
+                      {isRevealed ? "Hide" : "Show"}
+                    </button>
                   </div>
+                )}
+                {e.notes && (
+                  <div style={{ fontSize: 13, color: t.notesText, lineHeight: 1.5, whiteSpace: "pre-wrap" as const, marginBottom: 12 }}>{e.notes}</div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => { setExpandedId(null); openEditForm(e); }} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.btnBorder, background: t.btnBg, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Edit</button>
+                  {confirmDeleteId === e.id ? (
+                    <button aria-busy={!!(busy)} onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                      {busy ? "Deleting…" : "Confirm delete"}
+                    </button>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteId(e.id)} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerBorder, background: t.dangerBg, color: t.dangerText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Delete</button>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+              </div>
+            </div>
+          );
+        })()}
+      </WalletOverlay>
 
       {formOpen && (
         <div onClick={() => setFormOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>

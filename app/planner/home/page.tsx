@@ -1614,6 +1614,7 @@ export default function HomePage() {
       { title: "Terminals", rows: rows("terminal") },
       { title: "Credentials", rows: rows("credential") },
       { title: "Badges", rows: rows("badge") },
+      { title: "Cards", rows: rows("card") },
       { title: "Truck", rows: unit(truckAlerts, "truck"), more: { label: "Odometer & details", onClick: () => { setExpSheetOpen(false); setUnitAlertsOpen("truck"); } } },
       { title: "Trailer", rows: unit(trailerAlerts, "trailer") },
     ];

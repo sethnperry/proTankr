@@ -42,3 +42,25 @@ export function groupCard(number: string | null | undefined, brand: string | nul
   if (brand === "Amex" && d.length === 15) return `${d.slice(0, 4)} ${d.slice(4, 10)} ${d.slice(10)}`;
   return d.replace(/(.{4})(?=.)/g, "$1 ");
 }
+
+/** "•••• •••• •••• 1234" in the card's own grouping (Amex: "•••• •••••• 51005"); a short number is shown as is. */
+export function maskCardGroups(number: string | null | undefined, brand: string | null | undefined): string {
+  const d = (number ?? "").replace(/\D/g, "");
+  if (!d) return "";
+  const n = shownDigits(brand);
+  const dots = (k: number) => "•".repeat(k);
+  if (brand === "Amex") return `${dots(4)} ${dots(6)} ${d.slice(-5)}`;
+  const last = d.slice(-n);
+  return `${dots(4)} ${dots(4)} ${dots(4)} ${last}`;
+}
+
+/** The last day of a card's expiry month as an ISO date, from "MM/YY" or "MM/YYYY"; null when it isn't one. */
+export function cardExpIso(exp: string | null | undefined): string | null {
+  const m = /^\s*(\d{1,2})\s*[\/-]\s*(\d{2}|\d{4})\s*$/.exec(exp ?? "");
+  if (!m) return null;
+  const month = Number(m[1]);
+  if (month < 1 || month > 12) return null;
+  const year = m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]);
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+}

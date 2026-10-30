@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { cardExpIso } from "@/lib/vault/cards";
 import { ACCESS_GRACE_DAYS, EXP_SOON_DAYS, EXP_WARN_DAYS, expiryStateForDays, type ExpiryState } from "@/lib/expiry";
 
 export type ExpirationItem = {
@@ -10,7 +11,7 @@ export type ExpirationItem = {
   label: string;
   entityName: string;      // truck name, trailer name, terminal name, badge name, or "License"/"Medical"/"TWIC"
   entitySubtitle: string;  // doc type for equipment, city/state for terminals
-  entityType: "truck" | "trailer" | "terminal" | "badge" | "credential";
+  entityType: "truck" | "trailer" | "terminal" | "badge" | "credential" | "card";
   entityId: string;
   expiresISO: string;
   daysLeft: number;
@@ -103,6 +104,7 @@ export function useExpirations(opts: {
   const [credsLoaded, setCredsLoaded] = useState(false);
 
   const [trainingRows, setTrainingRows] = useState<{ terminal_id: string; expires_at: string }[]>([]);
+  const [vaultCards, setVaultCards] = useState<{ id: string; label: string; card_exp: string }[]>([]);
   const [deferred,   setDeferred]   = useState<Set<string>>(() => loadDeferred());
 
   // Fetch truck permits
@@ -155,6 +157,15 @@ export function useExpirations(opts: {
     (async () => {
       const { data } = await supabase.from("driver_terminal_training").select("terminal_id, expires_at").eq("user_id", userId).not("expires_at", "is", null);
       setTrainingRows((data ?? []) as { terminal_id: string; expires_at: string }[]);
+    })();
+  }, [userId]);
+
+  // Cards in the Vault (credit, fuel and company cards): their expiry month counts like any other expiration.
+  useEffect(() => {
+    if (!userId) { setVaultCards([]); return; }
+    (async () => {
+      const { data } = await supabase.from("vault_entries").select("id, label, card_exp").eq("user_id", userId).not("card_exp", "is", null);
+      setVaultCards(((data ?? []) as { id: string; label: string; card_exp: string }[]).filter((r) => cardExpIso(r.card_exp)));
     })();
   }, [userId]);
 
@@ -239,6 +250,13 @@ export function useExpirations(opts: {
       });
     }
 
+    for (const c of vaultCards) {
+      const iso = cardExpIso(c.card_exp)!;
+      const days = daysUntil(iso);
+      if (days > CREDENTIAL_WARN_DAYS) continue;
+      push({ id: `vaultcard-${c.id}`, label: c.label, entityName: c.label, entitySubtitle: "Card", entityType: "card", entityId: String(c.id), expiresISO: iso, daysLeft: days, expired: days < 0 });
+    }
+
     for (const b of badgeRows) {
       const iso = b.expiration_date;
       if (!iso) continue;
@@ -264,7 +282,7 @@ export function useExpirations(opts: {
 
     out.sort((a, b) => a.daysLeft - b.daysLeft);
     return out;
-  }, [truckPermits, trailerPermits, truckId, trailerId, truckName, trailerName, accessDateByTerminalId, terminals, terminalCatalog, addDaysISO_, trainingRows, badgeRows, licenseExp, medicalExp, twicExp]);
+  }, [truckPermits, trailerPermits, truckId, trailerId, truckName, trailerName, accessDateByTerminalId, terminals, terminalCatalog, addDaysISO_, trainingRows, vaultCards, badgeRows, licenseExp, medicalExp, twicExp]);
 
   // Auto-remove from deferred only when data is fully loaded
   // Guards against wiping deferred state during initial load before data arrives
