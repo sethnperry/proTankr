@@ -134,7 +134,10 @@ test("DEF reads a slightly negative API", () => {
 test("API range block", () => {
   assert.equal(apiRangeProblem(36, 33, 39), null);
   assert.equal(apiRangeProblem(33, 33, 39), null);
-  assert.match(apiRangeProblem(41, 33, 39) ?? "", /outside this product/);
+  assert.equal(apiRangeProblem(41, 33, 39), null); // within the 2 point margin
+  assert.equal(apiRangeProblem(31, 33, 39), null);
+  assert.match(apiRangeProblem(41.1, 33, 39) ?? "", /outside this product/);
+  assert.match(apiRangeProblem(30.9, 33, 39) ?? "", /outside this product/);
   assert.equal(apiRangeProblem(41, null, null), null);
   assert.equal(apiRangeProblem(-1.7, -2.04, -1.31), null);
 });
