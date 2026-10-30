@@ -10,10 +10,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "../home/dashLook";
 import { supabase } from "@/lib/supabase/client";
-import { CompartmentStrip, type StripSlot } from "../components/trip/CompartmentStrip";
+import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { LocationPicker } from "../components/trip/LocationPicker";
-import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
-import { productColorFor } from "../utils/productColor";
 import { locationPlace, locationTitle, type DeliveryLocation } from "@/lib/trips/deliveryLocations";
 import { deliveryPlace, type Place } from "@/lib/trips/fleetProgress";
 import { activePickup } from "@/lib/trips/tripFlow";
@@ -68,22 +66,8 @@ export function EnRouteSheet({ open, rows, fleetTrips, locations, terminals, del
   const ftOf = (id: string) => fleetTrips.find((f) => f.trip.trip_id === id) ?? null;
   const editFt = editing ? ftOf(editing) : null;
 
-  // Compartment sizes for the trailers in the open destination.
-  const trailerIds = useMemo(() => [...new Set((sel?.rows ?? []).map((r) => ftOf(r.tripId)?.trip.trailer_id).filter((x): x is string => !!x))], [sel, fleetTrips]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [sizes, setSizes] = useState<Map<string, Map<number, number>>>(new Map());
-  useEffect(() => {
-    if (!trailerIds.length) return;
-    let off = false;
-    void supabase.from("trailer_compartments").select("trailer_id, comp_number, max_gallons").in("trailer_id", trailerIds).then(({ data }) => {
-      if (off) return;
-      const m = new Map<string, Map<number, number>>();
-      for (const r of (data ?? []) as any[]) { const c = m.get(r.trailer_id) ?? new Map<number, number>(); c.set(Number(r.comp_number), Number(r.max_gallons) || 1); m.set(r.trailer_id, c); }
-      setSizes(m);
-    });
-    return () => { off = true; };
-  }, [trailerIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
-  const products = useProductsCatalog().data;
-  const colorOf = (id: string | null) => { const p = id ? products.find((x: any) => x.product_id === id) : null; return p ? (p.hex_code?.trim() || productColorFor(p.display_name ?? p.product_name)) : null; };
+  // One lookup for every trailer in the open destination.
+  const hdr = useTrailerHeaderData((sel?.rows ?? []).map((r) => ftOf(r.tripId)?.trip.trailer_id));
 
   const tm = (id: string | number | null) => { const t = terminals.find((x) => String(x.terminal_id) === String(id)); return t ? `${t.terminal_name}${t.city ? `, ${t.city}` : ""}` : null; };
 
@@ -112,7 +96,7 @@ export function EnRouteSheet({ open, rows, fleetTrips, locations, terminals, del
         {sel?.rows.map((r) => {
           const ft = ftOf(r.tripId);
           if (!ft) return null;
-          return <TripCard key={r.tripId} ft={ft} row={r} locations={locations} deliveryLocs={deliveryLocs} sizes={sizes.get(ft.trip.trailer_id ?? "")} colorOf={colorOf} tm={tm}
+          return <TripCard key={r.tripId} ft={ft} row={r} locations={locations} deliveryLocs={deliveryLocs} hdr={hdr} tm={tm}
             actor={userId ?? ""} onChanged={onChanged} onEdit={() => setEditing(r.tripId, "edit")} onCancel={() => setEditing(r.tripId, "cancel")} onOpen={() => { setDestKey(null); onClose(); onOpenTrip(r.tripId); }} />;
         })}
       </FullscreenModal>
@@ -128,15 +112,14 @@ export function EnRouteSheet({ open, rows, fleetTrips, locations, terminals, del
   );
 }
 
-function TripCard({ ft, row, locations, deliveryLocs, sizes, colorOf, tm, actor, onChanged, onEdit, onCancel, onOpen }: {
+function TripCard({ ft, row, locations, deliveryLocs, hdr, tm, actor, onChanged, onEdit, onCancel, onOpen }: {
   actor: string; onChanged: () => void; onCancel: () => void;
-  ft: FleetTrip; row: LiveRow; locations: Map<string, Place>; deliveryLocs: DeliveryLocation[]; sizes?: Map<number, number>;
-  colorOf: (id: string | null) => string | null; tm: (id: string | number | null) => string | null; onEdit: () => void; onOpen: () => void;
+  ft: FleetTrip; row: LiveRow; locations: Map<string, Place>; deliveryLocs: DeliveryLocation[]; hdr: import("../components/TrailerViews").TrailerHeaderData;
+  tm: (id: string | number | null) => string | null; onEdit: () => void; onOpen: () => void;
 }) {
   const L = useDashLook();
   const muted = L.muted;
   const aboard = new Map(ft.compLoads.filter((c) => c.disposition === "loaded").map((c) => [c.comp_number, c.product_id]));
-  const slots: StripSlot[] = [...new Set([...(sizes?.keys() ?? []), ...aboard.keys()])].map((n) => ({ comp: n, size: sizes?.get(n) ?? 1, color: colorOf(aboard.get(n) ?? null) }));
   const current = activePickup(ft.pickups.filter((p) => p.outcome !== "no_load"));
   const eta = row.etaMs;
   return (
@@ -146,7 +129,7 @@ function TripCard({ ft, row, locations, deliveryLocs, sizes, colorOf, tm, actor,
         <span style={{ fontSize: 12, color: muted, flex: 1 }}>{ft.driverName ?? ""}{ft.trailerName ? ` · Trailer ${ft.trailerName}` : ""}</span>
         <span style={{ fontSize: 13, fontWeight: 700 }}>{ft.orderNumbers[0] ? `Order ${ft.orderNumbers[0]}` : "No order #"}</span>
       </div>
-      {slots.length > 0 && <div style={{ marginBottom: 8 }}><CompartmentStrip slots={slots} /></div>}
+      <div style={{ marginBottom: 8 }}><TrailerHeader variant="side" trailerId={ft.trip.trailer_id} loaded={Object.fromEntries(aboard)} data={hdr} height={12} /></div>
       <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
         Current trip · {STATUS[ft.trip.status] ?? ft.trip.status}{eta ? ` · ETA ${clock(eta)}` : ""}
       </div>

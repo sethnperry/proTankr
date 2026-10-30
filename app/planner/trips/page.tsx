@@ -16,7 +16,7 @@ import { dispatchedForDriver } from "@/lib/trips/tripLogic";
 import { swapRunOrder } from "@/lib/dispatch/dispatchTrip";
 import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
-import { BirdTab, segsFor, useTrailerSizes } from "../components/TrailerViews";
+import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { productColorFor } from "../utils/productColor";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
@@ -116,14 +116,13 @@ export default function TripsPage() {
         const loadedBy: Record<number, string | null> = {};
         for (const c of store.list("trip_compartment_loads", (x) => x.trip_id === t.trip_id)) {
           if (c.disposition === "cancelled" || !c.product_id) continue;
-          const p = catalog.data.find((x) => x.product_id === c.product_id);
-          loadedBy[c.comp_number] = p?.hex_code || productColorFor(p ? p.display_name || p.product_name : "");
+          loadedBy[c.comp_number] = c.product_id;
         }
         return { trip: t, loadedBy, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, state, locs, catalog.data]);
-  const sizes = useTrailerSizes(rows.map((r) => r.trip.trailer_id));
+  const hdr = useTrailerHeaderData(rows.map((r) => r.trip.trailer_id));
 
   const hiddenCount = rows.filter((r) => r.trip.driver_hidden).length;
   const visible = showHidden ? rows : rows.filter((r) => !r.trip.driver_hidden);
@@ -159,7 +158,6 @@ export default function TripsPage() {
         </div>
       )}
       {visible.map(({ trip, order, more, route, loadedBy }) => {
-        const segs = segsFor(trip.trailer_id ? sizes[trip.trailer_id] : undefined, loadedBy);
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
@@ -210,7 +208,7 @@ export default function TripsPage() {
               )}
             </div>
             </div>
-            <BirdTab segs={segs} />
+            <TrailerHeader variant="bird" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} />
           </div>
         );
       })}

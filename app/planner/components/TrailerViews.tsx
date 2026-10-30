@@ -13,6 +13,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { CompartmentStrip } from "./trip/CompartmentStrip";
 import { segsFor, type StripSeg } from "@/lib/equipment/trailerStrip";
+import { fetchTrailerResidue, type TrailerCompSizes, type TrailerResidue } from "@/lib/equipment/fetchTrailerResidue";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
+import { productColorFor } from "../utils/productColor";
 
 export { segsFor };
 export type { StripSeg };
@@ -63,3 +66,55 @@ export function useTrailerSizes(trailerIds: (string | null | undefined)[]): Reco
   return q.data ?? EMPTY;
 }
 const EMPTY: Record<string, { comp: number; size: number | null }[]> = {};
+
+// ── The one trailer header ───────────────────────────────────────────────────
+// <TrailerHeader trailerId loaded variant="side" | "bird" /> draws a trailer anywhere in the app: sizes,
+// residue (what it last held, cleared by a wash) and product colors are all handled here, so a change to
+// how any of that works shows up everywhere. A list of trailers calls useTrailerHeaderData once and passes
+// `data` to every header, so a long list is one lookup, not one per row.
+
+export type TrailerHeaderData = { sizes: TrailerCompSizes; residue: TrailerResidue };
+const NO_DATA: TrailerHeaderData = { sizes: {}, residue: {} };
+
+export function useTrailerHeaderData(trailerIds: (string | null | undefined)[], refreshKey?: unknown): TrailerHeaderData {
+  const ids = [...new Set(trailerIds.filter((x): x is string => !!x))].sort();
+  const key = ids.join(",");
+  const q = useQuery({
+    queryKey: ["trailerHeaderData", key, refreshKey ?? null],
+    enabled: ids.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => { const r = await fetchTrailerResidue(ids); return { sizes: r.sizes, residue: r.residue } as TrailerHeaderData; },
+  });
+  return q.data ?? NO_DATA;
+}
+
+/** Product id -> fill color, from the catalog's hex or the family color. */
+export function useProductColor(): (productId: string | null | undefined) => string | null {
+  const catalog = useProductsCatalog().data;
+  return (id) => {
+    if (!id) return null;
+    const p = catalog.find((x) => x.product_id === id);
+    return p ? (p.hex_code?.trim() || productColorFor(p.display_name ?? p.product_name)) : null;
+  };
+}
+
+export function TrailerHeader({ trailerId, loaded, variant = "side", data, height, width }: {
+  trailerId: string | null | undefined;
+  /** What is in each compartment now: compartment number -> product id. */
+  loaded: Record<number, string | null | undefined>;
+  variant?: "side" | "bird";
+  /** From useTrailerHeaderData for a list; omitted, this header looks up its own trailer. */
+  data?: TrailerHeaderData;
+  height?: number;
+  width?: number;
+}) {
+  const own = useTrailerHeaderData(data ? [] : [trailerId]);
+  const d = data ?? own;
+  const colorOf = useProductColor();
+  const colors: Record<number, string | null> = {};
+  for (const [n, pid] of Object.entries(loaded)) colors[Number(n)] = colorOf(pid ?? null);
+  const res: Record<number, string> = {};
+  for (const [n, pid] of Object.entries(trailerId ? d.residue[trailerId] ?? {} : {})) { const c = colorOf(pid); if (c) res[Number(n)] = c; }
+  const segs = segsFor(trailerId ? d.sizes[trailerId] : undefined, colors, res);
+  return variant === "bird" ? <BirdTab segs={segs} width={width} /> : <SideView segs={segs} height={height} />;
+}

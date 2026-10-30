@@ -136,38 +136,6 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
   return { items, loading };
 }
 
-// What the trailer last carried, per compartment: the newest completed load
-// on any combo with this trailer. Shown as residue when the trailer is empty.
-export function useTrailerResidue(trailerId: string | null, refreshKey?: unknown) {
-  const [residue, setResidue] = useState<Record<number, string>>({});
-  useEffect(() => {
-    setResidue({});
-    if (!trailerId) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const combos = await supabase.from("equipment_combos").select("combo_id").eq("trailer_id", trailerId);
-        const ids = ((combos.data ?? []) as { combo_id: string }[]).map((c) => c.combo_id);
-        if (!ids.length) return;
-        const last = await supabase.from("load_log").select("load_id")
-          .in("combo_id", ids).eq("status", "loaded")
-          .order("completed_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
-        const loadId = (last.data as { load_id?: string } | null)?.load_id;
-        if (!loadId) return;
-        const lines = await supabase.from("load_lines").select("comp_number, product_id").eq("load_id", loadId);
-        const m: Record<number, string> = {};
-        for (const r of (lines.data ?? []) as { comp_number: number; product_id: string | null }[]) {
-          const n = Number(r.comp_number);
-          if (Number.isFinite(n) && r.product_id) m[n] = String(r.product_id);
-        }
-        if (alive) setResidue(m);
-      } catch { /* fail open: no residue */ }
-    })();
-    return () => { alive = false; };
-  }, [trailerId, refreshKey]);
-  return residue;
-}
-
 // Everything coming due on one truck or trailer: permits + service
 // (lib/equipment/unitAlerts.ts). Truck miles come from trip odometer readings.
 export function useUnitAlerts(unit: "truck" | "trailer", unitId: string | null, companyId: string | null, refreshKey?: unknown, engineHours?: number | null) {

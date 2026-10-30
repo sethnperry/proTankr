@@ -128,7 +128,7 @@ import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type Fini
 import { LocationPicker } from "../components/trip/LocationPicker";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
-import { CompartmentStrip } from "../components/trip/CompartmentStrip";
+import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "../utils/productColor";
@@ -149,7 +149,7 @@ import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
 import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
 import { HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard } from "../components/trip/DashboardCards";
-import { useTrailerResidue, useUnitAlerts } from "../hooks/useDashboardCards";
+import { useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
 import { DispatchedCard, type DispatchedItem } from "./DispatchedCard";
 import { useFuelStop } from "@/lib/fuel/useFuelStop";
@@ -1014,22 +1014,14 @@ export default function HomePage() {
     return m;
   }, [aboardRows]);
   // What the trailer last carried, for empty compartments (residue).
-  const residue = useTrailerResidue(tripTrailerId, `${openTrip?.status ?? ""}|${aboardRows.length}`);
-  const stripSlots = Object.keys(compSizes).map(Number).map((n) => {
-    const a = aboard[n];
-    const info = a ? productInfo(a.product_id) : null;
-    const r = !a && residue[n] ? productInfo(residue[n]) : null;
-    return {
-      comp: n, size: compSizes[n] || 1,
-      color: info ? info.hex ?? productColorFor(info.name) : null,
-      residue: r ? r.hex ?? productColorFor(r.name) : null,
-      title: info ? `C${n} · ${info.name}` : r ? `C${n} · empty, last held ${r.name}` : `C${n} · empty`,
-    };
-  });
-  const hasResidue = stripSlots.some((x) => x.residue);
+  const trailerHdr = useTrailerHeaderData([tripTrailerId], `${openTrip?.status ?? ""}|${aboardRows.length}`);
+  const residue = (tripTrailerId ? trailerHdr.residue[tripTrailerId] : undefined) ?? {};
+  const compCount = Object.keys(compSizes).length;
+  // A compartment with nothing aboard that last held something is residue.
+  const hasResidue = Object.keys(compSizes).map(Number).some((n) => !aboard[n] && !!residue[n]);
   // The trailer, full width like a header to its card; the gross (or Residue / Empty) goes under it.
-  const trailerBar = stripSlots.length > 0 ? <CompartmentStrip slots={stripSlots} /> : null;
-  const trailerLabel = stripSlots.length === 0 ? null : aboardRows.length > 0 && currentGross != null ? (
+  const trailerBar = compCount > 0 ? <TrailerHeader variant="side" trailerId={tripTrailerId} loaded={Object.fromEntries(Object.entries(aboard).map(([n, a]) => [Number(n), a.product_id]))} data={trailerHdr} /> : null;
+  const trailerLabel = compCount === 0 ? null : aboardRows.length > 0 && currentGross != null ? (
     <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
       {currentGross.toLocaleString("en-US")}
       <span style={{ fontSize: 10, fontWeight: 700, color: LOOK.muted, marginLeft: 3, letterSpacing: "0.08em" }}>LBS</span>

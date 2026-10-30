@@ -9,11 +9,9 @@
 // loading terminal(s) in the middle, the destination on the right. A dot shows where the truck is.
 
 import React, { useState } from "react";
-import { SideView, BirdTab, segsFor, useTrailerSizes } from "@/app/planner/components/TrailerViews";
+import { TrailerHeader, useTrailerHeaderData, type TrailerHeaderData } from "@/app/planner/components/TrailerViews";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
-import { useQuery } from "@tanstack/react-query";
-import { fetchTrailerResidue } from "@/lib/equipment/fetchTrailerResidue";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
@@ -135,16 +133,16 @@ function RouteLine({ route, parked, live, delayed }: { route: TripRoute; parked:
   );
 }
 
-function ProductChips({ ft, product, sizes }: { ft: FleetTrip; product: (id: string | null) => BoardProduct; sizes: Record<string, { comp: number; size: number | null }[]> }) {
+function ProductChips({ ft, product, hdr }: { ft: FleetTrip; product: (id: string | null) => BoardProduct; hdr: TrailerHeaderData }) {
   const aboard = ft.compLoads
     .filter((c) => c.disposition === "loaded" || c.disposition === "retained")
     .sort((a, b) => b.comp_number - a.comp_number);
   if (aboard.length === 0) return null;
   const loaded: Record<number, string | null> = {};
-  for (const c of aboard) { const p = product(c.product_id); loaded[c.comp_number] = p.hex ?? productColorFor(p.name); }
+  for (const c of aboard) loaded[c.comp_number] = c.product_id;
   return (
     <div style={{ marginTop: 6 }}>
-      <SideView segs={segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded)} height={12} />
+      <TrailerHeader variant="side" trailerId={ft.trip.trailer_id} loaded={loaded} data={hdr} height={12} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 5 }}>
         {aboard.map((c) => {
           const p = product(c.product_id);
@@ -322,11 +320,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
   now: Date;
   onOpenTrip: (tripId: string) => void; // opens the PTD in progress
 }) {
-  const sizes = useTrailerSizes(trips.map((t) => t.trip.trailer_id));
-  // What each trailer last held, so an empty compartment is outlined in its residue color like everywhere else.
-  const trailerKey = [...new Set(trips.map((t) => t.trip.trailer_id).filter((x): x is string => !!x))].sort().join(",");
-  const residueQ = useQuery({ queryKey: ["trailerResidue", trailerKey], enabled: trailerKey.length > 0, staleTime: 5 * 60_000, queryFn: async () => (await fetchTrailerResidue(trailerKey.split(","))).residue });
-  const residueBy = residueQ.data ?? {};
+  const hdr = useTrailerHeaderData(trips.map((t) => t.trip.trailer_id));
   const live = trips.filter((t) => t.trip.status !== "parked");
   const parked = trips.filter((t) => t.trip.status === "parked");
   const show = (x: BoardSection) => !sections || sections.includes(x);
@@ -366,11 +360,8 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const lv = liveFor(ft, route, ft.trip.truck_id ? positions?.get(ft.trip.truck_id) : undefined, terminalLL, locationLL, now);
         const id = ft.trip.trip_id;
         const isOpen = expanded.has(id);
-        const loaded: Record<number, string | null> = {};
-        for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) { const pr = product(c.product_id); loaded[c.comp_number] = pr.hex ?? productColorFor(pr.name); }
-        const resColors: Record<number, string> = {};
-        for (const [c, pid] of Object.entries(ft.trip.trailer_id ? residueBy[ft.trip.trailer_id] ?? {} : {})) { const pr = product(pid); resColors[Number(c)] = pr.hex ?? productColorFor(pr.name); }
-        const segs = segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded, resColors);
+        const loadedNow: Record<number, string | null> = {};
+        for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) loadedNow[c.comp_number] = c.product_id;
         // Late: headed to the store and the estimated arrival is after the time dispatch planned the drop to end.
         const plannedEnd = ft.trip.planned_end_at ? Date.parse(ft.trip.planned_end_at) : NaN;
         const late = !!lv?.etaMs && route.nodes[route.position.at]?.kind === "delivery" && Number.isFinite(plannedEnd) && lv.etaMs > plannedEnd;
@@ -427,7 +418,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                 </>
               )}
             </div>
-            <BirdTab segs={segs} />
+            <TrailerHeader variant="bird" trailerId={ft.trip.trailer_id} loaded={loadedNow} data={hdr} />
           </div>
         );
       })}
@@ -475,7 +466,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
               {ft.orderNumbers.length > 0 ? ` · Order ${ft.orderNumbers.join(", ")}` : ""}
             </div>
             {t.parked_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{t.parked_note}&rdquo;</div>}
-            <ProductChips ft={ft} product={product} sizes={sizes} />
+            <ProductChips ft={ft} product={product} hdr={hdr} />
           </button>
         );
       })}
