@@ -12,6 +12,8 @@ import React, { useState } from "react";
 import { SideView, BirdTab, segsFor, useTrailerSizes } from "@/app/planner/components/TrailerViews";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
+import { useQuery } from "@tanstack/react-query";
+import { fetchTrailerResidue } from "@/lib/equipment/fetchTrailerResidue";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
@@ -321,6 +323,10 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
   onOpenTrip: (tripId: string) => void; // opens the PTD in progress
 }) {
   const sizes = useTrailerSizes(trips.map((t) => t.trip.trailer_id));
+  // What each trailer last held, so an empty compartment is outlined in its residue color like everywhere else.
+  const trailerKey = [...new Set(trips.map((t) => t.trip.trailer_id).filter((x): x is string => !!x))].sort().join(",");
+  const residueQ = useQuery({ queryKey: ["trailerResidue", trailerKey], enabled: trailerKey.length > 0, staleTime: 5 * 60_000, queryFn: async () => (await fetchTrailerResidue(trailerKey.split(","))).residue });
+  const residueBy = residueQ.data ?? {};
   const live = trips.filter((t) => t.trip.status !== "parked");
   const parked = trips.filter((t) => t.trip.status === "parked");
   const show = (x: BoardSection) => !sections || sections.includes(x);
@@ -362,7 +368,9 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const isOpen = expanded.has(id);
         const loaded: Record<number, string | null> = {};
         for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) { const pr = product(c.product_id); loaded[c.comp_number] = pr.hex ?? productColorFor(pr.name); }
-        const segs = segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded);
+        const resColors: Record<number, string> = {};
+        for (const [c, pid] of Object.entries(ft.trip.trailer_id ? residueBy[ft.trip.trailer_id] ?? {} : {})) { const pr = product(pid); resColors[Number(c)] = pr.hex ?? productColorFor(pr.name); }
+        const segs = segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded, resColors);
         // Late: headed to the store and the estimated arrival is after the time dispatch planned the drop to end.
         const plannedEnd = ft.trip.planned_end_at ? Date.parse(ft.trip.planned_end_at) : NaN;
         const late = !!lv?.etaMs && route.nodes[route.position.at]?.kind === "delivery" && Number.isFinite(plannedEnd) && lv.etaMs > plannedEnd;
