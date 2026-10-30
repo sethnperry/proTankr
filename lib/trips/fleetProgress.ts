@@ -2,9 +2,9 @@
 //
 // The route line on the Dispatch Dashboard's loads-in-progress board: one row,
 // origin on the left, the loading terminal(s) in the middle, the destination
-// (store) on the right.
+// (customer and store number) on the right.
 //
-//   Brandon ●──────── BN - Tampa ●──────── #495 - Lakeland ●
+//   Brandon ●──────── BN - Tampa ●──────── Loves 495 ●
 //
 // Pure: positions are fractions (0 = left, 1 = right), rows are "top" or
 // "bottom". The page turns them into SVG.
@@ -80,10 +80,11 @@ export function buildTripRoute(
   }
   ds.forEach((d) => {
     const place = deliveryPlace(d, locations);
-    const head = place.number ? `#${place.number}` : place.name;
+    // The destination reads as the customer and the store number: "Loves 495".
+    const label = [trip.customer?.trim() || place.name, place.number].filter(Boolean).join(" ");
     nodes.push({
       key: d.delivery_id, kind: "delivery", row: "top", x: 0,
-      label: head ? withCity(head, place.city) : place.city ?? "Delivery", sub: place.city ? place.name : null,
+      label: label || place.city || "Delivery", sub: place.city ? place.name : null,
       state: d.status === "complete" ? "done" : "upcoming",
     });
   });

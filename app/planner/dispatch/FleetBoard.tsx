@@ -9,7 +9,9 @@
 // loading terminal(s) in the middle, the destination on the right. A dot shows where the truck is.
 
 import React, { useState } from "react";
-import { SideView, segsFor, useTrailerSizes } from "@/app/planner/components/TrailerViews";
+import { SideView, BirdTab, segsFor, useTrailerSizes } from "@/app/planner/components/TrailerViews";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
 import { buildTripRoute, elapsed, type Place, type TripRoute } from "@/lib/trips/fleetProgress";
 import type { FleetTrip } from "@/lib/trips/useFleetTrips";
@@ -291,7 +293,8 @@ function liveFor(ft: FleetTrip, route: TripRoute, pos: LivePos | undefined, term
   }
   // Stops still ahead, in order, for the drive-time check.
   const ahead = route.nodes.slice(at).map((n) => llOf(n.key));
-  return { ...line, fraction, remainingDriveMin: remainingDriveMin({ lat: pos.lat, lon: pos.lon }, ahead) };
+  const etaMs = route.position.enRoute && !line.stale && nextLL ? now.getTime() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, nextLL) * 60000 : null;
+  return { ...line, fraction, etaMs, remainingDriveMin: remainingDriveMin({ lat: pos.lat, lon: pos.lon }, ahead) };
 }
 
 export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, onReassignCancelled, positions, hos, geo, terminalLL, locationLL }: {
@@ -319,65 +322,126 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
   const live = trips.filter((t) => t.trip.status !== "parked");
   const parked = trips.filter((t) => t.trip.status === "parked");
   const show = (x: BoardSection) => !sections || sections.includes(x);
+  // Hundreds of loads: cards start collapsed, and the list can be narrowed by origin, terminal or destination.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setExpanded((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const [pick, setPick] = useState<null | "kind" | "origin" | "terminal" | "destination">(null);
+  const [filter, setFilter] = useState<null | { kind: "origin" | "terminal" | "destination"; label: string }>(null);
+  const routed = live.map((ft) => ({ ft, route: buildTripRoute(ft.trip, ft.pickups, ft.deliveries, locations, ft.start) }));
+  const keysOf = (r: TripRoute, kind: "origin" | "terminal" | "destination"): string[] =>
+    kind === "origin" ? [r.nodes[0].label]
+      : kind === "terminal" ? r.nodes.filter((n) => n.kind === "pickup").map((n) => n.label)
+      : r.nodes.filter((n) => n.kind === "delivery").map((n) => n.label);
+  const values = (kind: "origin" | "terminal" | "destination"): [string, number][] => {
+    const m = new Map<string, number>();
+    for (const x of routed) for (const k of new Set(keysOf(x.route, kind))) m.set(k, (m.get(k) ?? 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  };
+  const shown = filter ? routed.filter((x) => keysOf(x.route, filter.kind).includes(filter.label)) : routed;
 
   return (
     <div style={{ marginBottom: 18 }}>
       {show("live") && <>
-      <div style={sectionLabel}>Loads in progress ({live.length})</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 8px" }}>
+        <div style={{ ...sectionLabel, margin: 0, flex: 1 }}>Loads in progress ({shown.length}{filter ? ` of ${live.length}` : ""})</div>
+        <button type="button" onClick={() => (filter ? setFilter(null) : setPick("kind"))}
+          style={filter
+            ? { border: "none", background: "#fff", color: "#000", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "7px 12px", cursor: "pointer" }
+            : { border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "7px 12px", cursor: "pointer" }}>
+          {filter ? `Reset · ${filter.label}` : "Search"}
+        </button>
+      </div>
       {live.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No loads in progress.</div>}
-      {live.map((ft) => {
-        const route = buildTripRoute(ft.trip, ft.pickups, ft.deliveries, locations, ft.start);
+      {live.length > 0 && shown.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>No loads match.</div>}
+      {shown.map(({ ft, route }) => {
         const since = elapsed(route.since, now);
         const lv = liveFor(ft, route, ft.trip.truck_id ? positions?.get(ft.trip.truck_id) : undefined, terminalLL, locationLL, now);
+        const id = ft.trip.trip_id;
+        const isOpen = expanded.has(id);
+        const loaded: Record<number, string | null> = {};
+        for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) { const pr = product(c.product_id); loaded[c.comp_number] = pr.hex ?? productColorFor(pr.name); }
+        const segs = segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded);
+        const first = route.nodes[0], last = route.nodes[route.nodes.length - 1];
+        const mid = route.nodes.filter((n) => n.kind === "pickup").map((n) => n.label);
+        const eta = lv?.etaMs ? new Date(lv.etaMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
         return (
-          <button key={ft.trip.trip_id} type="button" style={card} onClick={() => onOpenTrip(ft.trip.trip_id)} {...busyProps(openingId === ft.trip.trip_id)}>
-            <CardBusy on={openingId === ft.trip.trip_id} />
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-              <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {ft.driverName ?? "Driver"}
-              </span>
-              <span style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>{unitLabel(ft)}</span>
-            </div>
-            <div style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ color: MOVING, fontWeight: 700 }}>{route.status}</span>
-              {since && <span style={{ color: muted }}>{since}</span>}
-              {ft.orderNumbers.length > 0 && <span style={{ color: muted }}>· Order {ft.orderNumbers.join(", ")}</span>}
-            </div>
-            {lv && <div style={{ fontSize: 12, marginTop: 4, color: lv.stale ? muted : MOVING }}>● Live · {lv.text}</div>}
-            {(() => {
-              const pos = ft.trip.truck_id ? positions?.get(ft.trip.truck_id) : undefined;
-              // Geotab's hooked trailer vs the one the trip says (only when both are known and linked).
-              if (!pos?.trailerId || !ft.trip.trailer_id || pos.trailerId === ft.trip.trailer_id) return null;
-              return <div style={{ fontSize: 12, marginTop: 3, color: "#fb923c", fontWeight: 700 }}>⚠ Geotab shows a different trailer hooked than the trip's{ft.trailerName ? ` (${ft.trailerName})` : ""}</div>;
-            })()}
-            {(() => {
-              const g = geo?.get(ft.trip.trip_id);
-              if (!g) return null;
-              const mins = Math.max(0, Math.round((now.getTime() - g.sinceMs) / 60000));
-              return (
-                <div style={{ fontSize: 12, marginTop: 3, color: g.overdue ? "#fb923c" : MOVING, fontWeight: g.overdue ? 700 : 400 }}>
-                  ◎ At {g.stopName} · {mins} min{g.overdue ? " · driver hasn't tapped Arrive" : ""}
+          <div key={id} style={{ ...card, cursor: "default", display: "flex", alignItems: "stretch", padding: "9px 0 9px 12px", marginBottom: 6 }}>
+            <CardBusy on={openingId === id} />
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+              <button type="button" onClick={() => toggle(id)} aria-expanded={isOpen}
+                style={{ display: "block", width: "100%", background: "none", border: "none", padding: 0, color: "#fff", textAlign: "left", cursor: "pointer" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {ft.driverName ?? "Driver"}{ft.truckName ? ` - ${ft.truckName}` : ""}
+                  </span>
+                  {eta && <span className="dash-num" style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>ETA {eta}</span>}
                 </div>
-              );
-            })()}
-            {(() => {
-              const h = ft.trip.driver_id ? hos?.get(ft.trip.driver_id) : undefined;
-              if (!h) return null;
-              const t = hosText(h, now.getTime());
-              // Won't make the remaining stops on the drive time left (a rough, optimistic estimate).
-              const short = lv && !lv.stale && h.driveLeftMin != null && lv.remainingDriveMin > h.driveLeftMin;
-              return (
-                <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: t.color }}>
-                  Hours · {t.text}
-                  {short && <span style={{ color: "#f87171", fontWeight: 700 }}> · about {(lv!.remainingDriveMin / 60).toFixed(1)} h of driving left to run, {(Math.max(0, h.driveLeftMin!) / 60).toFixed(1)} h on the clock</span>}
-                </div>
-              );
-            })()}
-            <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
-            <ProductChips ft={ft} product={product} sizes={sizes} />
-          </button>
+                {!isOpen && (
+                  <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {[first.label, ...mid, last.kind === "delivery" ? last.label : null].filter(Boolean).join(" → ")}
+                  </div>
+                )}
+              </button>
+              {isOpen && (
+                <>
+                  {since && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{since}</div>}
+                  {lv && <div style={{ fontSize: 12, marginTop: 4, color: lv.stale ? muted : MOVING }}>● Live · {lv.text}</div>}
+                  {(() => {
+                    const pos = ft.trip.truck_id ? positions?.get(ft.trip.truck_id) : undefined;
+                    // Geotab's hooked trailer vs the one the trip says (only when both are known and linked).
+                    if (!pos?.trailerId || !ft.trip.trailer_id || pos.trailerId === ft.trip.trailer_id) return null;
+                    return <div style={{ fontSize: 12, marginTop: 3, color: "#fb923c", fontWeight: 700 }}>⚠ Geotab shows a different trailer hooked than the trip's{ft.trailerName ? ` (${ft.trailerName})` : ""}</div>;
+                  })()}
+                  {(() => {
+                    const g = geo?.get(id);
+                    if (!g) return null;
+                    const mins = Math.max(0, Math.round((now.getTime() - g.sinceMs) / 60000));
+                    return (
+                      <div style={{ fontSize: 12, marginTop: 3, color: g.overdue ? "#fb923c" : MOVING, fontWeight: g.overdue ? 700 : 400 }}>
+                        ◎ At {g.stopName} · {mins} min{g.overdue ? " · driver hasn't tapped Arrive" : ""}
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    const h = ft.trip.driver_id ? hos?.get(ft.trip.driver_id) : undefined;
+                    if (!h) return null;
+                    const t = hosText(h, now.getTime());
+                    // Won't make the remaining stops on the drive time left (a rough, optimistic estimate).
+                    const short = lv && !lv.stale && h.driveLeftMin != null && lv.remainingDriveMin > h.driveLeftMin;
+                    return (
+                      <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: t.color }}>
+                        Hours · {t.text}
+                        {short && <span style={{ color: "#f87171", fontWeight: 700 }}> · about {(lv!.remainingDriveMin / 60).toFixed(1)} h of driving left to run, {(Math.max(0, h.driveLeftMin!) / 60).toFixed(1)} h on the clock</span>}
+                      </div>
+                    );
+                  })()}
+                  <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
+                  <button type="button" onClick={() => onOpenTrip(id)} {...busyProps(openingId === id)}
+                    style={{ background: "none", border: "none", color: muted, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "2px 0 0" }}>Open PTD ›</button>
+                </>
+              )}
+            </div>
+            <BirdTab segs={segs} />
+          </div>
         );
       })}
+
+      <FullscreenModal open={pick === "kind"} title="Search loads by" onClose={() => setPick(null)}>
+        {(["origin", "terminal", "destination"] as const).map((k) => (
+          <button key={k} type="button" onClick={() => setPick(k)}
+            style={{ display: "block", width: "100%", textAlign: "left", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 15, fontWeight: 700, padding: "13px 14px", marginBottom: 6, borderRadius: 2, cursor: "pointer" }}>
+            {k === "origin" ? "Origin" : k === "terminal" ? "Terminal" : "Destination"} ›
+          </button>
+        ))}
+      </FullscreenModal>
+      <FullscreenModal open={pick === "origin" || pick === "terminal" || pick === "destination"} title={pick === "origin" ? "Origins" : pick === "terminal" ? "Terminals" : "Destinations"} onClose={() => setPick(null)}>
+        {pick && pick !== "kind" && values(pick).map(([label, n]) => (
+          <button key={label} type="button" onClick={() => { setFilter({ kind: pick, label }); setPick(null); }}
+            style={{ display: "flex", justifyContent: "space-between", width: "100%", textAlign: "left", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 14, fontWeight: 700, padding: "11px 14px", marginBottom: 6, borderRadius: 2, cursor: "pointer" }}>
+            <span>{label}</span><span style={{ color: muted }}>{n}</span>
+          </button>
+        ))}
+      </FullscreenModal>
 
       </>}
 

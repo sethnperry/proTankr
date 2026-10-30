@@ -11,7 +11,7 @@ const start: Place = { name: "Yard", city: "Brandon", state: "FL" };
 test("one row: origin left, terminal in the middle, store on the right", () => {
   const r = buildTripRoute(trip, [p()], [d()], locs, start);
   assert.deepEqual(r.nodes.map((n) => [n.kind, n.row, n.x, n.label]), [
-    ["start", "top", 0, "Brandon"], ["pickup", "top", 0.5, "MA - Tampa"], ["delivery", "top", 1, "#12 - Lakeland"],
+    ["start", "top", 0, "Brandon"], ["pickup", "top", 0.5, "MA - Tampa"], ["delivery", "top", 1, "Store 12 12"],
   ]);
   assert.equal(r.position.at, 1);
   assert.equal(r.position.enRoute, true);
@@ -26,7 +26,7 @@ test("progress through loading, delivery, two drops", () => {
 
   const loaded = p({ arrived_at: "a", left_at: "2026-10-12T12:00:00Z" });
   r = buildTripRoute(trip, [loaded], [d(), d({ delivery_id: "d2", seq: 2, location_id: "L2" })], locs, start);
-  assert.deepEqual(r.nodes.filter((n) => n.kind === "delivery").map((n) => [n.label, n.x]), [["#12 - Lakeland", 2 / 3], ["Store 40 - Plant City", 1]]);
+  assert.deepEqual(r.nodes.filter((n) => n.kind === "delivery").map((n) => [n.label, n.x]), [["Store 12 12", 2 / 3], ["Store 40", 1]]);
   assert.equal(r.status, "En route to Store 12");
   assert.equal(r.since, "2026-10-12T12:00:00Z");
 
