@@ -44,9 +44,12 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
 import { LockIcon } from "./PatternLock";
 import { VaultDetails } from "./VaultDetails";
+import { CardStack, CategoryLegend, EntryDetail, LoginList, categoriesOf, cardsExpiring, filterEntries, mmss, useCountdown, type VEntry } from "./VaultUi";
+import { GaugePanel } from "../home/DashboardChrome";
+import { DashStyles, SectionLabel } from "../home/dashLook";
 import { createVault, getKeyRow, openRows, passphraseProblem, recoverVault, unlockVault, eraseVault, vaultKeyFromPassphrase } from "@/lib/vault/client";
 import { bioDeclined, bioEnrolled, bioSupported, declineBio, enrollBio, removeBio, unlockWithBio } from "@/lib/vault/biometric";
-import { getVaultKey, onVaultKeyChange, setVaultKey } from "@/lib/vault/session";
+import { getLockAt, getVaultKey, onVaultKeyChange, setVaultKey } from "@/lib/vault/session";
 import { sealEntry } from "@/lib/vault/entries";
 import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, cardExpIso, groupCard, isCardCategory, maskCard, maskCardGroups } from "@/lib/vault/cards";
 import { shadeFor } from "@/lib/vault/grays";
@@ -190,6 +193,10 @@ export default function VaultPage() {
   const [fCardNumber, setFCardNumber] = useState("");
   const [fCardExp, setFCardExp] = useState("");
   const [fCardPin, setFCardPin] = useState("");
+
+  const [q, setQ] = useState("");
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  const lockIn = useCountdown(getLockAt);
 
   // Which screen: no key set up yet, locked, or open (the key is in memory only; see lib/vault/session.ts).
   async function resolveLockState() {
@@ -575,150 +582,70 @@ export default function VaultPage() {
   }
 
   // unlocked
+  const shown = filterEntries(entries as unknown as VEntry[], q, catFilter);
+  const cardRows = shown.filter((e) => isCardCategory(e.category));
+  const loginRows = shown.filter((e) => !isCardCategory(e.category));
+  const openV = openEntry as unknown as VEntry | null;
+  const expiringCards = cardsExpiring(entries as unknown as VEntry[]);
+  const lockSoon = lockIn != null && lockIn < 30_000;
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-          {entries.length} {entries.length === 1 ? "entry" : "entries"}
+      <DashStyles />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 22, fontWeight: 800, color: "#fff" }}>
+          <LockIcon size={18} /> Vault
         </div>
-        {bioOk && (
-          <button onClick={() => { if (!userId) return; if (bioOn) { removeBio(userId); setBioOn(false); } else { setBioPass(""); setPass1(""); setLockError(null); setPhase("offer-bio"); } }}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 700, cursor: "pointer", marginLeft: "auto", marginRight: 12 }}>
-            {bioOn ? "Fingerprint on · turn off" : "Turn on fingerprint"}
-          </button>
-        )}
-        <button onClick={lockNow} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-          <LockIcon size={13} color="rgba(255,255,255,0.45)" /> Lock
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {bioOk && (
+            <button onClick={() => { if (!userId) return; if (bioOn) { removeBio(userId); setBioOn(false); } else { setBioPass(""); setPass1(""); setLockError(null); setPhase("offer-bio"); } }}
+              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+              {bioOn ? "Fingerprint on" : "Use fingerprint"}
+            </button>
+          )}
+          <button onClick={lockNow} style={{ background: "#fff", border: "none", color: "#000", fontSize: 12, fontWeight: 800, cursor: "pointer", padding: "7px 12px", letterSpacing: "0.06em", textTransform: "uppercase" }}>Lock</button>
+        </div>
       </div>
 
-      <button
-        onClick={openAddForm}
-        style={{ width: "100%", padding: "12px 0", borderRadius: 2, border: "1px dashed rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}
-      >
-        + Add entry
-      </button>
+      <GaugePanel equal top={12} cells={[
+        { label: "Entries", value: String(entries.length) },
+        { label: "Cards", value: String(entries.filter((e) => isCardCategory(e.category)).length) },
+        { label: "Cards due", value: String(expiringCards), color: expiringCards ? "#f97316" : "rgba(255,255,255,0.4)" },
+        { label: "Auto-locks", value: lockIn == null ? "–" : mmss(lockIn), color: lockSoon ? "#f97316" : undefined },
+      ]} />
 
-      {listError && <div style={errorStyle}>{listError}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your Vault" autoComplete="off"
+          style={{ flex: 1, minWidth: 0, background: "#0f0f10", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 15, padding: "11px 12px", borderRadius: 2, boxSizing: "border-box" }} />
+        <button onClick={openAddForm} style={{ flexShrink: 0, background: "#fff", border: "none", color: "#000", fontSize: 14, fontWeight: 800, padding: "0 16px", cursor: "pointer" }}>+ New</button>
+      </div>
 
+      <CategoryLegend cats={categoriesOf(entries as unknown as VEntry[])} value={catFilter} onChange={setCatFilter} />
+
+      {listError && <div style={{ ...errorStyle, marginTop: 10 }}>{listError}</div>}
       {entriesLoading && <div style={{ textAlign: "center" as const, color: "rgba(255,255,255,0.3)", fontSize: 13, padding: 20 }}>Loading…</div>}
-
       {!entriesLoading && entries.length === 0 && (
         <div style={{ textAlign: "center" as const, color: "rgba(255,255,255,0.3)", fontSize: 14, padding: "40px 20px", lineHeight: 1.5 }}>
-          Nothing saved yet.<br />Add logins, account numbers, anything you need to keep track of.
+          Nothing saved yet.<br />Add logins, account numbers, cards, anything you need to keep track of.
         </div>
       )}
+      {!entriesLoading && entries.length > 0 && shown.length === 0 && (
+        <div style={{ textAlign: "center" as const, color: "rgba(255,255,255,0.35)", fontSize: 14, padding: "30px 20px" }}>Nothing matches.</div>
+      )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridAutoFlow: "dense", gap: 10 }}>
-        {groups.flatMap((g) => g.entries).map((e) => {
-          const t = themeFor(e.category);
-          if (isCardCategory(e.category)) {
-            const st = expiryStateFor(cardExpIso(e.card_exp));
-            const expColor = (t.isWork ? EXPIRY_PRINT_COLOR : EXPIRY_COLOR)[st];
-            return (
-              <button key={e.id} type="button" className="dash-press" onClick={() => setExpandedId(e.id)}
-                style={{ gridColumn: "1 / -1", aspectRatio: "1.586 / 1", maxHeight: 230, display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left", padding: "14px 16px",
-                  borderRadius: 10, border: t.cardBorder, background: t.cardBg, color: t.text, cursor: "pointer", boxSizing: "border-box" }}>
-                <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ fontSize: 16, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4, color: t.subtext, flexShrink: 0 }}>{e.card_brand ?? ""}</span>
-                </span>
-                <span style={{ fontSize: 20, fontFamily: "monospace", letterSpacing: 1.5, fontWeight: 700 }}>{maskCardGroups(e.card_number, e.card_brand) || "•••• •••• •••• ••••"}</span>
-                <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-end" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: t.subtext, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.card_name ?? ""}</span>
-                  <span style={{ textAlign: "right", flexShrink: 0 }}>
-                    <span style={{ display: "block", fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: t.subtext }}>EXP</span>
-                    <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "monospace", color: e.card_exp ? expColor : t.subtext }}>{e.card_exp || "––/––"}</span>
-                  </span>
-                </span>
-              </button>
-            );
-          }
-          return (
-            <button key={e.id} type="button" className="dash-press" onClick={() => setExpandedId(e.id)}
-              style={{ aspectRatio: "1.25 / 1", display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left", padding: "12px 12px",
-                borderRadius: 8, border: t.cardBorder, background: t.cardBg, color: t.text, cursor: "pointer", boxSizing: "border-box", minWidth: 0, overflow: "hidden" }}>
-              <span style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{e.label}</span>
-              <span style={{ fontSize: 12, color: t.subtext, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.username ?? e.website ?? ""}</span>
-            </button>
-          );
-        })}
-      </div>
+      {cardRows.length > 0 && (<><SectionLabel>Cards</SectionLabel><CardStack cards={cardRows} onOpen={(id) => setExpandedId(id)} /></>)}
+      {loginRows.length > 0 && (<><SectionLabel>Logins</SectionLabel><LoginList rows={loginRows} onOpen={(id) => setExpandedId(id)} onCopy={(t, w) => void copySecret(t, w)} /></>)}
+      {copied && expandedId == null && <div style={{ position: "fixed", left: 0, right: 0, bottom: 24, display: "flex", justifyContent: "center", zIndex: 650, pointerEvents: "none" }}><span style={{ background: "#fff", color: "#000", fontSize: 13, fontWeight: 800, padding: "9px 14px" }}>{copied}</span></div>}
 
-      <WalletOverlay open={!!openEntry} onClose={() => { setExpandedId(null); setConfirmDeleteId(null); }}>
-        {openEntry && (() => {
-          const e = openEntry;
-          const t = themeFor(e.category);
-          const isRevealed = !!revealed[e.id];
-          return (
-            <div style={{ borderRadius: 10, border: t.cardBorder, background: t.cardBg, padding: 16, color: t.text }}>
-              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 2 }}>{e.label}</div>
-              {!isCardCategory(e.category) && e.username && <div style={{ fontSize: 13, color: t.subtext, marginBottom: 10 }}>{e.username}</div>}
-              <div style={{ marginTop: 10 }}>
-                {isCardCategory(e.category) && (() => {
-                  const row = (k: string, shown: string, hidden: string | null) => (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                      <div style={{ fontSize: 13, color: t.secretText, minWidth: 0 }}>
-                        <span style={{ color: t.subtext }}>{k} </span>
-                        <span style={{ fontFamily: "monospace", letterSpacing: 0.5 }}>{isRevealed || hidden == null ? shown : hidden}</span>
-                      </div>
-                    </div>
-                  );
-                  return (
-                    <>
-                      {e.card_name && row("Name", e.card_name, null)}
-                      {e.card_number && row("Number", groupCard(e.card_number, e.card_brand), maskCard(e.card_number, e.card_brand))}
-                      {e.card_exp && row("Exp", e.card_exp, null)}
-                      {e.card_pin && row("PIN", e.card_pin, "•".repeat(e.card_pin.length))}
-                      {(e.card_number || e.card_pin) && (
-                        <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                          style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", marginBottom: 10 }}>
-                          {isRevealed ? "Hide" : "Show number & PIN"}
-                        </button>
-                      )}
-                      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                        {e.card_number && <button onClick={() => void copySecret(e.card_number!.replace(/\D/g, ""), "Card number")} style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer" }}>Copy number</button>}
-                        {e.card_pin && <button onClick={() => void copySecret(e.card_pin!, "PIN")} style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer" }}>Copy PIN</button>}
-                      </div>
-                    </>
-                  );
-                })()}
-                {e.website && (
-                  <div style={{ fontSize: 13, color: t.subtext, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{e.website}</div>
-                )}
-                {e.secret && (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: t.secretText, fontFamily: "monospace", letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                      {isRevealed ? e.secret : "•".repeat(Math.min(14, Math.max(6, e.secret.length)))}
-                    </div>
-                    <button onClick={() => setRevealed((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                      style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
-                      {isRevealed ? "Hide" : "Show"}
-                    </button>
-                    <button onClick={() => void copySecret(e.secret!, "Password")}
-                      style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
-                      Copy
-                    </button>
-                  </div>
-                )}
-                {copied && <div style={{ fontSize: 12, fontWeight: 700, color: t.subtext, marginBottom: 8 }}>{copied}</div>}
-                {e.notes && (
-                  <div style={{ fontSize: 13, color: t.notesText, lineHeight: 1.5, whiteSpace: "pre-wrap" as const, marginBottom: 12 }}>{e.notes}</div>
-                )}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => { setExpandedId(null); openEditForm(e); }} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.btnBorder, background: t.btnBg, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Edit</button>
-                  {confirmDeleteId === e.id ? (
-                    <button aria-busy={!!(busy)} onClick={() => deleteEntry(e.id)} disabled={busy} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerConfirmBorder, background: t.dangerConfirmBg, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-                      {busy ? "Deleting…" : "Confirm delete"}
-                    </button>
-                  ) : (
-                    <button onClick={() => setConfirmDeleteId(e.id)} style={{ flex: 1, padding: "9px 0", borderRadius: 2, border: t.dangerBorder, background: t.dangerBg, color: t.dangerText, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Delete</button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+      <WalletOverlay open={!!openV} onClose={() => { setExpandedId(null); setConfirmDeleteId(null); }}>
+        {openV && (
+          <EntryDetail e={openV} copied={copied} confirmDelete={confirmDeleteId === openV.id} busy={busy}
+            onCopy={(t, w) => void copySecret(t, w)}
+            onEdit={() => { setExpandedId(null); openEditForm(openEntry!); }}
+            onConfirmDelete={() => setConfirmDeleteId(openV.id)}
+            onDelete={() => void deleteEntry(openV.id)}
+            onClose={() => { setExpandedId(null); setConfirmDeleteId(null); }} />
+        )}
       </WalletOverlay>
 
       {formOpen && (
