@@ -102,6 +102,7 @@ export function useExpirations(opts: {
   const [twicExp, setTwicExp] = useState<string | null>(null);
   const [credsLoaded, setCredsLoaded] = useState(false);
 
+  const [trainingRows, setTrainingRows] = useState<{ terminal_id: string; expires_at: string }[]>([]);
   const [deferred,   setDeferred]   = useState<Set<string>>(() => loadDeferred());
 
   // Fetch truck permits
@@ -145,6 +146,15 @@ export function useExpirations(opts: {
       setMedicalExp((medRow as any)?.expiration_date ?? null);
       setTwicExp((twicRow as any)?.expiration_date ?? null);
       setCredsLoaded(true);
+    })();
+  }, [userId]);
+
+  // Terminal training dates (separate from card renewal).
+  useEffect(() => {
+    if (!userId) { setTrainingRows([]); return; }
+    (async () => {
+      const { data } = await supabase.from("driver_terminal_training").select("terminal_id, expires_at").eq("user_id", userId).not("expires_at", "is", null);
+      setTrainingRows((data ?? []) as { terminal_id: string; expires_at: string }[]);
     })();
   }, [userId]);
 
@@ -216,6 +226,19 @@ export function useExpirations(opts: {
       }
     }
 
+    for (const tr of trainingRows) {
+      const days = daysUntil(tr.expires_at);
+      if (days > TERMINAL_WARN_DAYS) continue;
+      const terminal = terminalCatalog?.find((t: any) => String(t.terminal_id) === String(tr.terminal_id));
+      const city = terminal?.city ? String(terminal.city) : "";
+      const state = terminal?.state ? String(terminal.state) : "";
+      push({
+        id: `training-${tr.terminal_id}`, label: "Training", entityName: `${terminal?.terminal_name ?? "Terminal"} training`,
+        entitySubtitle: "Training", entityType: "terminal", entityId: String(tr.terminal_id),
+        expiresISO: tr.expires_at, daysLeft: days, expired: days < 0, city: city || undefined, state: state || undefined,
+      });
+    }
+
     for (const b of badgeRows) {
       const iso = b.expiration_date;
       if (!iso) continue;
@@ -241,7 +264,7 @@ export function useExpirations(opts: {
 
     out.sort((a, b) => a.daysLeft - b.daysLeft);
     return out;
-  }, [truckPermits, trailerPermits, truckId, trailerId, truckName, trailerName, accessDateByTerminalId, terminals, terminalCatalog, addDaysISO_, badgeRows, licenseExp, medicalExp, twicExp]);
+  }, [truckPermits, trailerPermits, truckId, trailerId, truckName, trailerName, accessDateByTerminalId, terminals, terminalCatalog, addDaysISO_, trainingRows, badgeRows, licenseExp, medicalExp, twicExp]);
 
   // Auto-remove from deferred only when data is fully loaded
   // Guards against wiping deferred state during initial load before data arrives

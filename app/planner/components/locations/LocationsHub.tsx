@@ -3,8 +3,8 @@
 //
 // The Locations tool, shared by the Driver and Dispatch dashboards. Tapping it asks what kind of location
 // (Terminals, Deliveries; yards and maintenance facilities will be more rows here), then opens the shared
-// modal for that kind. Terminals keep everything about one terminal together: racks and products,
-// suppliers, and terminal cards. Dispatch, lead and admin get the editing parts; drivers see suppliers.
+// modal for that kind. Terminals keep everything about one terminal together: training and the company letter,
+// gauging time, racks and products, suppliers, and terminal cards. Dispatch, lead and admin get the editing parts; drivers see suppliers.
 
 import React, { useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -16,6 +16,8 @@ import EditTerminalModal from "@/app/planner/modals/EditTerminalModal";
 import { SuppliersModal } from "@/app/planner/dispatch/SuppliersModal";
 import type { TerminalOption } from "@/app/planner/dispatch/PlanLoadCard";
 import FleetCardsModal from "@/app/admin/FleetCardsModal";
+import { TerminalTrainingSection } from "./TerminalTrainingSection";
+import { GaugingAskSheet } from "../trip/GaugingAskSheet";
 import type { ToolItem } from "@/app/planner/home/DashboardChrome";
 import type { DeliveryLocation, LatLon } from "@/lib/trips/deliveryLocations";
 import { AreaChooser } from "../trip/AreaChooser";
@@ -26,7 +28,7 @@ export const locationsTool = (onClick: () => void): ToolItem => ({ icon: "store"
 
 type Kind = "terminals" | "deliveries";
 const KINDS: { kind: Kind; label: string; sub: string }[] = [
-  { kind: "terminals", label: "Terminals", sub: "Racks, suppliers and cards" },
+  { kind: "terminals", label: "Terminals", sub: "Training, gauging, racks, suppliers, cards" },
   { kind: "deliveries", label: "Deliveries", sub: "Stores and customer sites" },
 ];
 
@@ -83,6 +85,14 @@ function TerminalsBody({ onClose, companyId, userId, role, isSuperAdmin }: { onC
     return options.filter((t) => ids.has(t.id));
   }, [options, asLocs, area, q]);
   const picked = options.find((t) => t.id === tid) ?? null;
+  const [gaugeOpen, setGaugeOpen] = useState(false);
+  const pickedRow = catalog.find((t) => String(t.terminal_id) === tid) ?? null;
+  const gaugeText = (() => {
+    const c = pickedRow?.gauging_cutoff, m = pickedRow?.gauging_minutes;
+    if (!c || m == null) return "Not known yet";
+    const end = (Number(c.slice(0, 2)) * 60 + Number(c.slice(3)) + m) % 1440;
+    return `${c} to ${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")} terminal time`;
+  })();
   const row = { ...L.secondary, display: "flex", width: "100%", textAlign: "left" as const, color: "#fff", padding: "12px 14px", marginBottom: 8, cursor: "pointer", justifyContent: "space-between", gap: 8, fontSize: 15, fontWeight: 700 };
   return (
     <>
@@ -112,6 +122,8 @@ function TerminalsBody({ onClose, companyId, userId, role, isSuperAdmin }: { onC
         ) : (
           <>
             <div style={{ fontSize: 13, color: L.muted, marginBottom: 10 }}>{picked.place ?? ""}</div>
+            <TerminalTrainingSection terminalId={picked.id} terminalName={picked.name} userId={userId} companyId={companyId} staff={staff} />
+            <button type="button" className="dash-press" onClick={() => setGaugeOpen(true)} style={row}><span>Gauging<span style={{ display: "block", fontSize: 12, fontWeight: 500, color: L.muted }}>{gaugeText}</span></span><span style={{ color: L.muted }}>Edit ›</span></button>
             {staff && <button type="button" className="dash-press" onClick={() => setSub("racks")} style={row}><span>Racks &amp; products</span><span style={{ color: L.muted }}>›</span></button>}
             <button type="button" className="dash-press" onClick={() => setSub("suppliers")} style={row}><span>Suppliers</span><span style={{ color: L.muted }}>›</span></button>
             {manager && <button type="button" className="dash-press" onClick={() => setSub("cards")} style={row}><span>Terminal cards</span><span style={{ color: L.muted }}>›</span></button>}
@@ -119,6 +131,7 @@ function TerminalsBody({ onClose, companyId, userId, role, isSuperAdmin }: { onC
         )}
       </FullscreenModal>
       <AreaChooser open={areaOpen && !picked} noCounty locations={asLocs} value={area} onPick={(p) => { setArea(p); setLimit(60); setQ(""); }} onClose={() => setAreaOpen(false)} />
+      {picked && gaugeOpen && <GaugingAskSheet terminalId={picked.id} terminalName={picked.name} initial={{ cutoff: pickedRow?.gauging_cutoff ?? null, minutes: pickedRow?.gauging_minutes ?? null }} onClose={() => setGaugeOpen(false)} />}
       {picked && sub === "racks" && <EditTerminalModal open onClose={() => setSub(null)} terminalId={picked.id} terminalName={picked.name} onChanged={() => {}} />}
       {picked && sub === "suppliers" && companyId && userId && (
         <SuppliersModal open onClose={() => setSub(null)} companyId={companyId} userId={userId} canManage={manager} terminals={options} initialTerminalId={picked.id} />

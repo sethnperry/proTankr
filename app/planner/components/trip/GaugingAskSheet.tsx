@@ -12,10 +12,12 @@ import { TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
 import { gaugingFromTimes } from "@/lib/trips/gaugingAsk";
 import { fieldInput, fieldLabel, muted, primaryBtn } from "./tripUi";
 
-export function GaugingAskSheet({ terminalId, terminalName, onClose }: { terminalId: string; terminalName: string; onClose: () => void }) {
+const hm = (mins: number) => `${String(Math.floor(mins / 60) % 24).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+
+export function GaugingAskSheet({ terminalId, terminalName, initial, onClose }: { terminalId: string; terminalName: string; initial?: { cutoff: string | null; minutes: number | null }; onClose: () => void }) {
   const qc = useQueryClient();
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [start, setStart] = useState(initial?.cutoff ?? "");
+  const [end, setEnd] = useState(initial?.cutoff && initial.minutes != null ? hm(Number(initial.cutoff.slice(0, 2)) * 60 + Number(initial.cutoff.slice(3)) + initial.minutes) : "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const parsed = gaugingFromTimes(start, end);
