@@ -209,9 +209,12 @@ export function SignatureAccept({ savedPath, onSave, accepted, onAccept, who }: 
   if (!savedPath || redraw) {
     return (
       <div>
-        <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>Draw your signature once. After this it's a tap to accept.</div>
+        <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>{savedPath ? "Draw your new signature. It replaces the saved one on your future loads." : "Draw your signature once. After this it's a tap to accept."}</div>
         <SignaturePad onChange={onDraft} />
         {err && <div style={{ color: "#f87171", fontSize: 13, marginTop: 6 }}>{err}</div>}
+        {savedPath && redraw && (
+          <button type="button" onClick={() => { setRedraw(false); setDraft(null); setErr(null); }} style={{ ...linkBtn, marginTop: 8, color: muted }}>Keep my current signature</button>
+        )}
         <button type="button" disabled={!draft}
           onClick={async () => {
             if (!draft) return;
@@ -232,14 +235,17 @@ export function SignatureAccept({ savedPath, onSave, accepted, onAccept, who }: 
   }
   return (
     <div>
-      <div style={{ color: "#fff", background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: 6 }}>
+      <div style={{ position: "relative", color: "#fff", background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: 6 }}>
         <SignatureView path={savedPath} />
+        <button type="button" onClick={() => setRedraw(true)} aria-label="Edit your signature"
+          style={{ position: "absolute", top: 6, right: 6, border: "1px solid rgba(255,255,255,0.4)", background: "rgba(0,0,0,0.5)", color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 2, cursor: "pointer" }}>
+          Edit
+        </button>
       </div>
       <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontSize: 15, cursor: "pointer" }}>
         <input type="checkbox" checked={accepted} onChange={(e) => onAccept(e.target.checked)} style={{ width: 22, height: 22 }} />
         I accept this as {who}
       </label>
-      <button type="button" onClick={() => setRedraw(true)} style={{ ...linkBtn, marginTop: 8, color: muted }}>Redraw signature</button>
     </div>
   );
 }
