@@ -15,7 +15,10 @@ import { supabase } from "@/lib/supabase/client";
 import { useCalculatorShell } from "../../CalculatorShellContext";
 import { formatMDY, formatMDYWithCountdown_ } from "../../utils/dates";
 import WalletBack from "../WalletBack";
-import FlippableCard from "../FlippableCard";
+import { IdCardFace } from "../../components/wallet/IdCardFace";
+import { WalletOverlay } from "../../components/wallet/WalletOverlay";
+import { PhotoButton, uploadWalletPhoto, useSignedUrl } from "../../components/wallet/walletPhoto";
+import { DateField } from "@/lib/ui/DateField";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import {
@@ -30,6 +33,7 @@ type BadgeRow = {
   port_name: string;
   category: string | null;
   expiration_date: string | null;
+  image_path?: string | null;
 };
 
 const CATEGORY_SUGGESTIONS = ["Port", "Rail Yard", "Refinery", "Other"];
@@ -41,122 +45,67 @@ function initialsFor(name: string): string {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
-// ── Portrait badge card (front + back) ──────────────────────────────────────
+// ── Badge editor (the back, opened full size over the others) ───────────────
 
-function BadgeCard({
-  badge, isFlipped, onFlipOpen, onFlipClose, onSave, onRemove,
+function BadgeEditor({
+  badge, companyId, userId, onSave, onRemove, onClose,
 }: {
-  badge: BadgeRow;
-  isFlipped: boolean;
-  onFlipOpen: () => void;
-  onFlipClose: () => void;
-  onSave: (patch: { port_name: string; category: string | null; expiration_date: string | null }) => void;
-  onRemove: () => void;
+  badge: BadgeRow; companyId: string | null; userId: string | null;
+  onSave: (patch: { port_name: string; category: string | null; expiration_date: string | null; image_path?: string | null }) => void;
+  onRemove: () => void; onClose: () => void;
 }) {
   const [name, setName] = useState(badge.port_name);
   const [category, setCategory] = useState(badge.category ?? "");
   const [expiration, setExpiration] = useState(badge.expiration_date ?? "");
+  const [imagePath, setImagePath] = useState<string | null>(badge.image_path ?? null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const src = useSignedUrl(imagePath);
 
-  useEffect(() => {
-    if (isFlipped) {
-      setName(badge.port_name);
-      setCategory(badge.category ?? "");
-      setExpiration(badge.expiration_date ?? "");
-      setConfirmRemove(false);
-    }
-  }, [isFlipped, badge]);
-
-  const state = cardStateFor(badge.expiration_date);
-  const inactive = state === "inactive";
-
-  const handleDone = () => {
-    onSave({ port_name: name.trim() || badge.port_name, category: category.trim() || null, expiration_date: expiration || null });
-    onFlipClose();
+  const done = () => { onSave({ port_name: name.trim() || badge.port_name, category: category.trim() || null, expiration_date: expiration || null, image_path: imagePath }); onClose(); };
+  const takePhoto = async (f: File) => {
+    if (!companyId || !userId) return;
+    setBusy(true); setErr(null);
+    try { setImagePath(await uploadWalletPhoto(f, companyId, userId)); } catch (e: any) { setErr(e?.message ?? "Couldn't upload the photo."); }
+    setBusy(false);
   };
 
-  const front = (
-    <div style={{
-      height: "100%", borderRadius: 2, padding: 14, boxSizing: "border-box",
-      background: CARD_BG, border: CARD_BORDER,
-      boxShadow: "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
-      display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" as const,
-      aspectRatio: "3 / 4",
-      opacity: inactive ? 0.55 : 1, filter: inactive ? "grayscale(0.5)" : "none",
-    }}>
-      <div style={{
-        width: 52, height: 52, borderRadius: "50%", background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.7)", marginTop: 6,
-      }}>
-        {initialsFor(badge.port_name)}
+  return (
+    <div style={{ borderRadius: 3, overflow: "hidden", background: CARD_BG, border: CARD_BORDER }}>
+      <div style={{ background: "#000", padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>Edit Badge</div>
+        <button type="button" onClick={done} style={{ border: "none", background: "none", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: "4px 6px" }}>Done</button>
       </div>
-      <div style={{ fontSize: 14, fontWeight: 800, color: "rgba(255,255,255,0.92)", marginTop: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, width: "100%" }}>
-        {badge.port_name}
-      </div>
-      {badge.category && (
-        <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.08)", borderRadius: 2, padding: "2px 8px", marginTop: 6, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>
-          {badge.category}
-        </div>
-      )}
-      <div style={{ flex: 1 }} />
-      {inactive && (
-        <div style={{ fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", borderRadius: 2, padding: "2px 6px", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 6 }}>
-          Inactive
-        </div>
-      )}
-      <div style={{ fontSize: 11, fontWeight: 800, color: DARK_EXP_COLOR[state] }}>
-        {badge.expiration_date ? formatMDY(badge.expiration_date) : "No expiration"}
-      </div>
-    </div>
-  );
-
-  const back = (
-    <div style={{
-      height: "100%", borderRadius: 2, overflow: "hidden", boxSizing: "border-box",
-      background: CARD_BG, border: CARD_BORDER,
-      boxShadow: "0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
-    }}>
-      <div style={{ background: "rgba(0,0,0,0.35)", padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>Edit Badge</div>
-        <button type="button" onClick={handleDone} style={{ border: "none", background: "none", color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "3px 5px" }}>Done</button>
-      </div>
-      <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8 }} onClick={(e) => e.stopPropagation()}>
-        <div>
-          <div style={fieldLabel}>Name</div>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={fieldInput} />
-        </div>
+      {src && <img src={src} alt={badge.port_name} style={{ width: "100%", maxHeight: 220, objectFit: "cover", display: "block" }} />}
+      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <PhotoButton hasPhoto={!!imagePath} busy={busy} onFile={(f) => void takePhoto(f)} onRemove={() => setImagePath(null)} />
+        {err && <div style={{ fontSize: 12, color: "#f87171" }}>{err}</div>}
+        <div><div style={fieldLabel}>Name</div><input type="text" value={name} onChange={(e) => setName(e.target.value)} style={fieldInput} /></div>
         <div>
           <div style={fieldLabel}>Category</div>
           <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Port, Rail Yard…" style={fieldInput} />
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const, marginTop: 5 }}>
             {CATEGORY_SUGGESTIONS.map((c) => (
-              <button key={c} type="button" onClick={() => setCategory(c)} style={{ fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: category === c ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>
-                {c}
-              </button>
+              <button key={c} type="button" onClick={() => setCategory(c)} style={{ fontSize: 11, fontWeight: 700, padding: "4px 8px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: category === c ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>{c}</button>
             ))}
           </div>
         </div>
-        <div>
-          <div style={fieldLabel}>Expiration</div>
-          <input type="date" value={expiration} onChange={(e) => setExpiration(e.target.value)} style={fieldInput} />
-        </div>
+        <div><div style={fieldLabel}>Expiration</div><DateField value={expiration} onChange={setExpiration} title="Badge expires" placeholder="Set expiration" /></div>
         {!confirmRemove ? (
-          <button type="button" onClick={() => setConfirmRemove(true)} style={{ ...btnDanger, width: "100%", marginTop: 2 }}>Remove</button>
+          <button type="button" onClick={() => setConfirmRemove(true)} style={{ ...btnDanger, width: "100%" }}>Remove</button>
         ) : (
           <div style={{ padding: 8, borderRadius: 2, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>Remove this badge?</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>Remove this badge?</div>
             <div style={{ display: "flex", gap: 6 }}>
-              <button type="button" onClick={onRemove} style={{ ...btnDanger, flex: 1, padding: "8px 0" }}>Yes</button>
-              <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { onRemove(); onClose(); }} style={{ ...btnDanger, flex: 1, padding: "8px 0" }}>Yes</button>
+              <button type="button" onClick={() => setConfirmRemove(false)} style={{ flex: 1, padding: "8px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-
-  return <FlippableCard flipped={isFlipped} onFlipToBack={onFlipOpen} front={front} back={back} />;
 }
 
 // ── Add Badge sheet ──────────────────────────────────────────────────────────
@@ -188,7 +137,7 @@ function AddBadgeSheet({ open, onClose, onAdd }: { open: boolean; onClose: () =>
         </div>
         <div>
           <div className="text-xs text-white/40 mb-1 font-medium">Expiration (optional)</div>
-          <input type="date" value={expiration} onChange={(e) => setExpiration(e.target.value)} className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm text-white" />
+          <DateField value={expiration} onChange={setExpiration} title="Badge expires" placeholder="Set expiration" />
         </div>
         <button
           type="button"
@@ -239,7 +188,7 @@ export default function BadgesPage() {
     setError(null);
     const { data, error: err } = await supabase
       .from("driver_port_ids")
-      .select("id, port_name, category, expiration_date")
+      .select("id, port_name, category, expiration_date, image_path")
       .eq("user_id", targetUserId)
       .order("expiration_date", { ascending: true, nullsFirst: false });
     if (err) setError(err.message);
@@ -249,12 +198,13 @@ export default function BadgesPage() {
 
   useEffect(() => { load(); }, [targetUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const openBadge = badges.find((b) => b.id === flippedId) ?? null;
   const filtered = useMemo(
     () => badges.filter((b) => matchesFilter(cardStateFor(b.expiration_date), filter)),
     [badges, filter]
   );
 
-  const handleSave = async (id: string, patch: { port_name: string; category: string | null; expiration_date: string | null }) => {
+  const handleSave = async (id: string, patch: { port_name: string; category: string | null; expiration_date: string | null; image_path?: string | null }) => {
     setBadges((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
     const { error: err } = await supabase.from("driver_port_ids").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
     if (err) setError(err.message);
@@ -271,7 +221,7 @@ export default function BadgesPage() {
     const { data, error: err } = await supabase
       .from("driver_port_ids")
       .insert({ user_id: targetUserId, company_id: shell.companyId, ...v })
-      .select("id, port_name, category, expiration_date")
+      .select("id, port_name, category, expiration_date, image_path")
       .single();
     if (err) { setError(err.message); return; }
     setBadges((prev) => [...prev, data as BadgeRow]);
@@ -307,18 +257,21 @@ export default function BadgesPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {filtered.map((b) => (
-              <BadgeCard
-                key={b.id}
-                badge={b}
-                isFlipped={flippedId === b.id}
-                onFlipOpen={() => setFlippedId(b.id)}
-                onFlipClose={() => setFlippedId(null)}
-                onSave={(patch) => handleSave(b.id, patch)}
-                onRemove={() => handleRemove(b.id)}
-              />
-            ))}
+            {filtered.map((b) => {
+              const st = cardStateFor(b.expiration_date);
+              return (
+                <IdCardFace key={b.id} header={b.port_name} sub={b.category} imagePath={b.image_path}
+                  footer={b.expiration_date ? formatMDY(b.expiration_date) : "No expiration"} footerColor={DARK_EXP_COLOR[st]}
+                  inactive={st === "inactive"} onClick={() => setFlippedId(b.id)} />
+              );
+            })}
           </div>
+          <WalletOverlay open={!!openBadge} onClose={() => setFlippedId(null)}>
+            {openBadge && (
+              <BadgeEditor key={openBadge.id} badge={openBadge} companyId={shell.companyId ?? null} userId={targetUserId ?? null}
+                onSave={(patch) => handleSave(openBadge.id, patch)} onRemove={() => handleRemove(openBadge.id)} onClose={() => setFlippedId(null)} />
+            )}
+          </WalletOverlay>
         </>
       )}
 

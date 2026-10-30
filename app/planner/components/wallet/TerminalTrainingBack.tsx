@@ -11,7 +11,8 @@ import { supabase } from "@/lib/supabase/client";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import { expiresAfterCompletion, trainingModeLabel, trainingStatus } from "@/lib/terminals/training";
 import { TRAINING_QUERY_KEY, useTrainingDetail } from "../locations/TerminalTrainingSection";
-import { fieldInput, fieldLabel, btnSecondary, btnPrimary } from "../../cards/cardTheme";
+import { DateField } from "@/lib/ui/DateField";
+import { fieldLabel, btnSecondary, btnPrimary } from "../../cards/cardTheme";
 
 const url = (u: string) => (/^https?:\/\//i.test(u.trim()) ? u.trim() : `https://${u.trim()}`);
 const fmt = (iso: string | null | undefined) => { if (!iso) return ""; const [y, m, d] = iso.split("-"); return `${m}/${d}/${y.slice(2)}`; };
@@ -102,7 +103,7 @@ export function TerminalTrainingBack({ terminalId, userId, companyId }: { termin
           </div>
           {dateEdit != null && (
             <div style={{ display: "flex", gap: 6 }}>
-              <input type="date" value={dateEdit} onChange={(e) => setDateEdit(e.target.value)} style={{ ...fieldInput, flex: 1 }} />
+              <div style={{ flex: 1 }}><DateField value={dateEdit} onChange={setDateEdit} title="Training expires" placeholder="Pick a date" allowClear={false} /></div>
               <button type="button" disabled={!dateEdit || busy} onClick={() => { void save({ completed_at: mine?.completed_at ?? null, expires_at: dateEdit }).then(() => setDateEdit(null)); }} style={btnSecondary}>Save</button>
             </div>
           )}

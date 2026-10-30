@@ -7,6 +7,7 @@
 import React, { useMemo, useState } from "react";
 import FlippableCard from "./FlippableCard";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { DateField } from "@/lib/ui/DateField";
 import { formatMDY, formatMDYWithCountdown_ } from "../utils/dates";
 import {
   DARK_EXP_COLOR, fieldLabel, fieldInput, btnPrimary, btnSecondary, btnDanger,
@@ -100,7 +101,7 @@ export function TerminalCard({
         <div>
           <div style={fieldLabel}>Last Visit</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <input type="date" value={lastVisitISO} onChange={(e) => onSetAccessDate(e.target.value)} style={{ ...fieldInput, flex: 1 }} />
+            <div style={{ flex: 1 }}><DateField value={lastVisitISO} onChange={onSetAccessDate} title="Last visit" placeholder="Set last visit" allowClear={false} /></div>
             <button type="button" onClick={() => onSetAccessDate(new Date().toISOString().slice(0, 10))} style={btnSecondary}>Today</button>
           </div>
           <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: DARK_EXP_COLOR[state] }}>
@@ -246,7 +247,7 @@ export function AddCardSheet({
           <div>
             <div className="text-xs text-white/40 mb-1 font-medium">Last load here (optional) · your access runs from this date</div>
             <div className="flex gap-2">
-              <input type="date" value={lastVisit} onChange={(e) => setLastVisit(e.target.value)} className="flex-1 min-w-0 rounded-[2px] border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white" />
+              <div className="flex-1 min-w-0"><DateField value={lastVisit} onChange={setLastVisit} title="Last load here" placeholder="Set date" /></div>
               <button type="button" onClick={() => setLastVisit(new Date().toISOString().slice(0, 10))} className="rounded-[2px] border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/70 hover:bg-white/10 whitespace-nowrap">Today</button>
             </div>
           </div>
