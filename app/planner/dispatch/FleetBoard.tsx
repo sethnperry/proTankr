@@ -39,6 +39,7 @@ const sectionLabel: React.CSSProperties = {
 
 const MOVING = "#4ade80";
 const PARKED = "#93c5fd";
+const DELAYED = "#ef4444"; // the truck is held past the company's delay threshold
 
 // Horizontal layout: fractions 0..1 map to LEFT..RIGHT percent of the width.
 const LEFT = 5;
@@ -47,9 +48,9 @@ const px = (x: number) => LEFT + (RIGHT - LEFT) * x;
 const TOP_Y = 10;
 const HEIGHT = 44;
 
-function RouteLine({ route, parked, live }: { route: TripRoute; parked: boolean; live?: number | null }) {
+function RouteLine({ route, parked, live, delayed }: { route: TripRoute; parked: boolean; live?: number | null; delayed?: boolean }) {
   const { nodes, position } = route;
-  const dotColor = parked ? PARKED : MOVING;
+  const dotColor = delayed ? DELAYED : parked ? PARKED : MOVING;
   const y = (row: "top" | "bottom") => TOP_Y;
 
   // Segments between consecutive nodes. The top→bottom hop goes down the
@@ -297,7 +298,8 @@ function liveFor(ft: FleetTrip, route: TripRoute, pos: LivePos | undefined, term
   return { ...line, fraction, etaMs, remainingDriveMin: remainingDriveMin({ lat: pos.lat, lon: pos.lon }, ahead) };
 }
 
-export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, onReassignCancelled, positions, hos, geo, terminalLL, locationLL }: {
+export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancelled, cancelledDays = 30, openingId, sections, onDismissCancelled, onDismissAllCancelled, onReassignCancelled, delayedTrips, positions, hos, geo, terminalLL, locationLL }: {
+  delayedTrips?: Set<string>;                  // trips held past the delay threshold: the truck dot turns red
   positions?: Map<string, LivePos>;            // truck id -> live position
   hos?: Map<string, HosAvailability>;          // driver user id -> clocks
   geo?: Map<string, GeoState>;                 // trip id -> truck is at its next stop's geofence
@@ -375,7 +377,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                   {eta && <span className="dash-num" style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>ETA {eta}</span>}
                 </div>
               </button>
-              <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
+              <RouteLine route={route} parked={false} live={lv?.fraction ?? null} delayed={delayedTrips?.has(id)} />
               {isOpen && (
                 <>
                   {since && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{since}</div>}

@@ -1002,7 +1002,7 @@ export default function DispatchPage() {
         onOpenDriver={(id) => setSelectedDriverId(id)}
         hosAlerts={lowHours}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
-          positions={livePositions} hos={fleetHos} geo={geo}
+          positions={livePositions} hos={fleetHos} geo={geo} delayedTrips={new Set(liveRows.filter((r) => r.delayed).map((r) => r.tripId))}
           terminalLL={terminalLLOf} locationLL={locationLLOf}
           onOpenTrip={openTrip} openingId={nav.openingId("trip")} />}
         dispatchedBoard={!dispatchedShown.length ? undefined : <DispatchedBoard trips={dispatchedShown}
