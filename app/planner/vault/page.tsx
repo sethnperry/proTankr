@@ -43,6 +43,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
 import { LockIcon } from "./PatternLock";
+import { VaultDetails } from "./VaultDetails";
 import { createVault, getKeyRow, openRows, passphraseProblem, recoverVault, unlockVault, eraseVault, vaultKeyFromPassphrase } from "@/lib/vault/client";
 import { bioDeclined, bioEnrolled, bioSupported, declineBio, enrollBio, removeBio, unlockWithBio } from "@/lib/vault/biometric";
 import { getVaultKey, onVaultKeyChange, setVaultKey } from "@/lib/vault/session";
@@ -486,6 +487,7 @@ export default function VaultPage() {
         {errLine}
         {btn("Create Vault", () => void doSetup(), { busy, disabled: !pass1 || !pass2 })}
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "center" }}>Anything already saved here is encrypted when you create it.</div>
+        <VaultDetails />
       </div>
     );
   }
@@ -567,6 +569,7 @@ export default function VaultPage() {
         {btn("Unlock", () => void doUnlock(), { busy, disabled: !pass1 || waitMs > 0 })}
         {link("Use my recovery code", () => { setLockError(null); setPass1(""); setPhase("recover"); })}
         {link("Forgot both? Erase the Vault", () => { setLockError(null); setPass1(""); setPhase("erase"); })}
+        <VaultDetails />
       </div>
     );
   }
@@ -795,6 +798,7 @@ export default function VaultPage() {
           </div>
         </div>
       )}
+      <VaultDetails />
     </div>
   );
 }
