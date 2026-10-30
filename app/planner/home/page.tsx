@@ -121,6 +121,8 @@ import { TripEquipmentSheets } from "../components/trip/TripEquipmentSheets";
 import { reportDelayIssue, submitOutageReport, type OutageReportType } from "../hooks/useTerminalOutageReports";
 import { isTerminalIssueCode, noLoadReasonLabel } from "@/lib/trips/terminalIssues";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
+import { GaugingAskSheet } from "../components/trip/GaugingAskSheet";
+import { needsGaugingAnswer } from "@/lib/trips/gaugingAsk";
 import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
@@ -257,6 +259,13 @@ export default function HomePage() {
     setRunningDelay(null);
     void syncNow();
   };
+  // First time a terminal is reported down for gauging, ask when it normally gauges.
+  const [gaugingAsk, setGaugingAsk] = useState<{ id: string; name: string } | null>(null);
+  const askGauging = (terminalId: string | null | undefined) => {
+    if (!terminalId) return;
+    const t = (terminalCatalog ?? []).find((x) => String(x.terminal_id) === String(terminalId));
+    if (t && needsGaugingAnswer(t)) setGaugingAsk({ id: String(t.terminal_id), name: t.terminal_name ?? "this terminal" });
+  };
   const startDelay = (code: string, note: string | null) => {
     if (!userId || !openTrip || !delayLeg) return;
     const d: RunningDelay = {
@@ -270,6 +279,7 @@ export default function HomePage() {
     // Long line / rack down / terminal issue at the rack also warn other drivers heading there.
     const issue = delayIssueCode(code);
     const pk = "pickup" in step ? step.pickup : null;
+    if (code === "gauging" && delayLeg === "at_rack") askGauging(pk?.terminal_id ? String(pk.terminal_id) : snap?.pickups.find((p) => p.arrived_at && !p.left_at && !p.outcome)?.terminal_id as string | undefined);
     if (issue && delayLeg === "at_rack" && pk?.terminal_id && companyId) {
       void submitOutageReport({
         terminalId: String(pk.terminal_id), selectedRackId: pk.rack_id ?? null, productIds: [], reportType: issue,
@@ -732,6 +742,10 @@ export default function HomePage() {
         endMiles: v.endMiles, cancelledAt: v.cancelledAt, rackReason: rackReasonFor(v.reasons), ...clock(),
       });
       setCancelOpen(false);
+      if (v.reasons.includes("terminal_gauging")) {
+        const last = snap ? activePickup(snap.pickups) ?? [...snap.pickups].reverse().find((x) => x.terminal_id) : null;
+        askGauging(last?.terminal_id ? String(last.terminal_id) : null);
+      }
       void syncNow();
     } catch (e: any) {
       setCancelErr(e?.message ?? "Couldn't cancel the load.");
@@ -2101,6 +2115,7 @@ export default function HomePage() {
       {delayLeg && !openingPlanner && (
         <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />
       )}
+      {gaugingAsk && <GaugingAskSheet terminalId={gaugingAsk.id} terminalName={gaugingAsk.name} onClose={() => setGaugingAsk(null)} />}
       {undoable && !openingPlanner && (
         <div style={{ textAlign: "center", fontSize: 13, marginTop: 8 }}>
           {!undoConfirm ? (
