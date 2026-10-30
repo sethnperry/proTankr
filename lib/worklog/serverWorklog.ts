@@ -10,7 +10,8 @@ import { loadWorklogInputs } from "./loadWorklogInputs";
 import { buildWorklog, type Worklog } from "./buildWorklog";
 import { dailyHours } from "./dutyHours";
 import { isOtRule, type OtRule } from "./overtime";
-import { addDays } from "./time";
+import { addDays, localMidnightMs } from "./time";
+import { aggregateUtilization } from "@/lib/capacity/computeUtilization";
 
 export async function companyOvertimeRule(companyId: string): Promise<OtRule> {
   const { data } = await getServiceSupabase().from("company_report_period").select("overtime_rule").eq("company_id", companyId).maybeSingle();
@@ -43,5 +44,16 @@ export async function buildDriverWorklog(o: {
     }
   } catch (e) { console.warn("[worklog] duty hours unavailable:", (e as Error).message); }
 
-  return buildWorklog({ driverName: o.driverName, range: o.range, tz: o.tz, title: o.title, trips, purchases, dutyHours, overtimeRule: rule });
+  const w = buildWorklog({ driverName: o.driverName, range: o.range, tz: o.tz, title: o.title, trips, purchases, dutyHours, overtimeRule: rule });
+  // The period's utilization score: this driver's loads in the period, gallon-weighted over eligible loads.
+  try {
+    const since = new Date(localMidnightMs(o.range.start, o.tz)).toISOString();
+    const until = new Date(localMidnightMs(addDays(o.range.end, 1), o.tz)).toISOString();
+    const { data } = await admin.from("load_utilization")
+      .select("effective_available_gallons, actual_gallons, unused_gallons, eligibility")
+      .eq("driver_id", o.userId).gte("loaded_at", since).lt("loaded_at", until);
+    const u = aggregateUtilization((data ?? []) as any[]);
+    w.utilization = { pct: u.utilization_pct, loads: u.eligible_loads, excluded: u.excluded_safety + u.excluded_constraint + u.excluded_incomplete_data };
+  } catch (e) { console.warn("[worklog] utilization unavailable:", (e as Error).message); }
+  return w;
 }

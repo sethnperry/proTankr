@@ -55,6 +55,8 @@ export type WlMonth = { month: string; days: number; hours: number; loads: numbe
 export type Worklog = {
   driverName: string; range: { start: string; end: string }; tz: string; title: string;
   summary: WlSummary; days: WlDay[]; months: WlMonth[]; purchases: WlPurchase[];
+  /** Payload utilization for the period (gallon-weighted over eligible loads); filled in by the server builder. */
+  utilization?: { pct: number | null; loads: number; excluded: number };
 };
 
 export function tripMiles(t: { beginMiles: number | null; endMiles: number | null }): number {

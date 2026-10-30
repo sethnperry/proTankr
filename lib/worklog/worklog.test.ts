@@ -55,7 +55,7 @@ test("range clips a trip that crosses the period end", () => {
 
 test("render: subject, sections, mobile and print rules", () => {
   const w = buildWorklog({ driverName: "A <b>", range: { start: "2026-10-25", end: "2026-10-26" }, tz: TZ, title: "Weekly", trips: [trip({})], purchases: [] });
-  assert.equal(worklogSubject(w), "ProTankr - Weekly Worklog Report (10/25 to 10/26)");
+  assert.equal(worklogSubject(w), "Weekly, DROP Report");
   const html = renderWorklogBody(w);
   assert.match(html, /A &lt;b&gt;/);
   assert.match(html, /MIDNIGHT/);

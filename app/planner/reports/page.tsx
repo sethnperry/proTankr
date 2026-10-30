@@ -378,7 +378,7 @@ export default function ReportsPage() {
               onClick={() => setMyLoadsOpen(true)}
             />
             <ReportTile
-              title="Work Log"
+              title="DROP Report"
               sub="Trips, hours, miles and gallons by day for a period"
               onClick={() => router.push("/planner/reports/worklog")}
             />

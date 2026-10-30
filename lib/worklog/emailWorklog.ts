@@ -16,7 +16,7 @@ const longDate = (iso: string) => {
 };
 
 export function worklogMessage(w: Pick<Worklog, "range" | "title">): string {
-  const kind = ["Weekly", "Biweekly", "Semi-monthly", "Monthly"].includes(w.title) ? `${w.title.toLowerCase()} report` : "work log report";
+  const kind = ["Weekly", "Biweekly", "Semi-monthly", "Monthly"].includes(w.title) ? `${w.title.toLowerCase()} DROP report` : "DROP report";
   return `Attached is your ${kind} for the period ${longDate(w.range.start)} - ${longDate(w.range.end)}. Save this email for your personal records and/or print the attachment to file as payroll backup.`;
 }
 

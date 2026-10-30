@@ -3,6 +3,7 @@
 // The Work Log as a PDF (Letter, 0.6 in margins, page numbers). Built with pdf-lib so it runs in a
 // serverless function without a browser. Plain black on white: it is printed and filed.
 
+import { DROP_SUBTITLE, dropTitle, summaryLists } from "./summaryLists.ts";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { OT_RULES } from "./overtime.ts";
 import { shortDate, weekday } from "./time.ts";
@@ -20,9 +21,9 @@ const safe = (s: string) => s.replace(/[^\x20-\x7E -ÿ–—…•‘’“”]
 const KIND: Record<string, string> = { Weekly: "W", Biweekly: "BW", "Semi-monthly": "SM", Monthly: "M" };
 const mmddyy = (iso: string) => { const [y, m, d] = iso.split("-"); return `${m}${d}${y.slice(2)}`; };
 
-/** e.g. ProTankr-WWL-102126-to-102726.pdf (W = weekly, WL = work log). */
+/** e.g. ProTankr-WWL-102126-to-102726.pdf (W = weekly). */
 export function worklogFileName(w: Pick<Worklog, "range" | "title">): string {
-  return `ProTankr-${KIND[w.title] ?? "C"}WL-${mmddyy(w.range.start)}-to-${mmddyy(w.range.end)}.pdf`;
+  return `ProTankr-${KIND[w.title] ?? "C"}DROP-${mmddyy(w.range.start)}-to-${mmddyy(w.range.end)}.pdf`;
 }
 
 export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condensed"; logo?: Uint8Array | null } = {}): Promise<Uint8Array> {
@@ -54,43 +55,39 @@ export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condens
   const h2 = (t: string) => { need(34); y -= 22; text(t.toUpperCase(), M, 9.5, bold); y -= 5; rule(1.4, INK); y -= 4; };
 
   // Header
-  text(`${w.title} Work Log`.toUpperCase(), M, 17, bold);
-  if (logo) page.drawImage(logo, { x: W - M - 26, y: y - 8, width: 26, height: 26 });
-  y -= 14; rule(2, INK); y -= 17;
+  const TEAL = rgb(0.059, 0.463, 0.431);
+  text(dropTitle(w.title).toUpperCase(), M, 17, bold);
+  y -= 13; text(DROP_SUBTITLE.toUpperCase(), M, 8, reg, TEAL);
+  y -= 8; rule(2, TEAL); y -= 17;
   text(w.driverName, M, 12.5, bold);
   text(`${shortDate(w.range.start)} to ${shortDate(w.range.end)}`, W - M, 11, reg, MUTE, true);
   y -= 6;
 
-  // Summary cells
-  const s = w.summary, m = s.miles;
-  const cells = (items: [string, string, string?][]) => {
-    const cw = (W - 2 * M) / items.length, ch = 40;
-    need(ch + 4);
-    items.forEach(([k, v, sub], i) => {
-      const x = M + i * cw;
-      page.drawRectangle({ x: x + 1, y: y - ch - 2, width: cw - 2, height: ch, color: CELL });
-      const keep = y;
-      y = keep - 12; text(k.toUpperCase(), x + 7, 7, reg, MUTE);
-      y = keep - 28; text(v, x + 7, 15, bold);
-      if (sub) { y = keep - 37; text(sub, x + 7, 7, reg, MUTE); }
-      y = keep;
-    });
-    y -= ch + 6;
-  };
+  // Summary: two plain lists side by side, no boxes
+  const s = w.summary;
   y -= 8;
-  const hasDuty = s.nonRev != null;
-  cells([
-    ["Hours worked", hr(s.worked), hasDuty ? `on duty; trip ${hr(s.tripHours)}, non-rev ${hr(s.nonRev ?? 0)}` : `${s.daysWorked} day${s.daysWorked === 1 ? "" : "s"} worked`],
-    ["Regular hours", hr(s.regular)],
-    ["Overtime hours", hr(s.overtime + s.double), s.double > 0 ? `incl. ${hr(s.double)} double time` : undefined],
-  ]);
-  cells([
-    ["Non-rev hours", s.nonRev == null ? "–" : hr(s.nonRev), s.nonRev == null ? "needs electronic log" : "on duty, not on a trip"],
-    ["Loads", String(s.loads)],
-    ["Days worked", String(s.daysWorked)],
-  ]);
-  cells([["Gross gallons", num(s.gross)], ["Net gallons", num(s.net)], ["Paid by you", money(s.spend), "card or cash"]]);
-  cells([["Loaded miles", m.loaded == null ? "–" : num(m.loaded), m.partial ? "tracked trips only" : undefined], ["Empty miles", m.empty == null ? "–" : num(m.empty)], ["Total miles", num(m.total)]]);
+  const lists = summaryLists(w);
+  const colW = (W - 2 * M - 30) / 2;
+  const top = y;
+  need(150);
+  let bottom = y;
+  lists.forEach((l, i) => {
+    const x = M + i * (colW + 30);
+    let yy = top;
+    page.drawText(l.title.toUpperCase(), { x, y: yy - 9, size: 8, font: bold, color: TEAL });
+    yy -= 16;
+    l.rows.forEach((r) => {
+      const lab = page.drawText(r.k, { x, y: yy - 10, size: 9.5, font: reg, color: INK });
+      void lab;
+      if (r.sub) page.drawText(r.sub, { x: x + reg.widthOfTextAtSize(r.k, 9.5) + 5, y: yy - 10, size: 7, font: reg, color: MUTE });
+      const vc = r.tone === "good" ? rgb(0.082, 0.502, 0.239) : r.tone === "warn" ? rgb(0.706, 0.325, 0.035) : INK;
+      page.drawText(r.v, { x: x + colW - bold.widthOfTextAtSize(r.v, 10), y: yy - 10, size: 10, font: bold, color: vc });
+      yy -= 15;
+      page.drawLine({ start: { x, y: yy + 1.5 }, end: { x: x + colW, y: yy + 1.5 }, thickness: 0.4, color: LINE });
+    });
+    bottom = Math.min(bottom, yy);
+  });
+  y = bottom - 6;
   const otLabel = OT_RULES.find((r) => r.id === s.otRule)?.label ?? "";
   y -= 3; text(`Regular and overtime are estimated from hours worked using: ${otLabel}.`, M, 7.5, ital, MUTE); y -= 4;
 
@@ -174,7 +171,10 @@ export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condens
   const pages = pdf.getPages();
   pages.forEach((p, i) => {
     const label = `Page ${i + 1} of ${pages.length}`;
-    p.drawText(label, { x: W / 2 - reg.widthOfTextAtSize(label, 7.5) / 2, y: 22, size: 7.5, font: reg, color: MUTE });
+    p.drawText(label, { x: W - M - reg.widthOfTextAtSize(label, 7.5), y: 22, size: 7.5, font: reg, color: MUTE });
+    p.drawLine({ start: { x: M, y: 36 }, end: { x: W - M, y: 36 }, thickness: 1.5, color: TEAL });
+    if (logo) p.drawImage(logo, { x: M, y: 18, width: 14, height: 14 });
+    p.drawText("PROTANKR", { x: M + (logo ? 19 : 0), y: 22, size: 7.5, font: bold, color: MUTE });
   });
   return pdf.save();
 }

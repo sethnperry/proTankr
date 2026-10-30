@@ -73,7 +73,7 @@ export default function WorklogPage() {
     setBusy(true); setErr("");
     (async () => {
       try {
-        const title = periodId.startsWith("p:") && effective ? PERIOD_TITLE[effective.type] : periodId === "custom" ? "Custom" : options.find((o) => o.id === periodId)?.label.split(" (")[0] ?? "Work Log";
+        const title = periodId.startsWith("p:") && effective ? PERIOD_TITLE[effective.type] : periodId === "custom" ? "Custom" : options.find((o) => o.id === periodId)?.label.split(" (")[0] ?? "DROP Report";
         const { data: sess } = await supabase.auth.getSession();
         const r = await fetch("/api/worklog", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess.session?.access_token ?? ""}` }, body: JSON.stringify({ ...range, tz, title, format: "json" }) });
         const w = (await r.json()) as Worklog & { error?: string };
@@ -141,7 +141,7 @@ export default function WorklogPage() {
   return (
     <div>
       <button onClick={() => router.back()} style={{ background: "none", border: 0, color: "rgba(255,255,255,0.5)", fontSize: 13, padding: 0, marginBottom: 10 }}>‹ Reports</button>
-      <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>Work Log</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>DROP Report</div>
       <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 2, marginBottom: 14 }}>Your trips, hours, miles and gallons by day.</div>
 
       <div style={{ ...box, marginBottom: 12 }}>
@@ -195,7 +195,7 @@ export default function WorklogPage() {
           <CustomSelect value={ms.type} onChange={(v) => setMs({ ...ms, type: v as PayPeriodType | "" })} options={[{ value: "", label: company ? "Company period" : "Not set" }, ...TYPES.map(([v, l]) => ({ value: v, label: l }))]} />
           {ms.type && (<><div style={lbl}>A date a period began</div><input type="date" value={ms.anchor} onChange={(e) => setMs({ ...ms, anchor: e.target.value })} style={inp} /></>)}
           <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, fontSize: 13, color: "rgba(255,255,255,0.8)" }}>
-            <input type="checkbox" checked={ms.email} onChange={(e) => setMs({ ...ms, email: e.target.checked })} /> Email me my Work Log after each period
+            <input type="checkbox" checked={ms.email} onChange={(e) => setMs({ ...ms, email: e.target.checked })} /> Email me my DROP Report after each period
           </label>
           <div style={{ marginTop: 10 }}><button style={btn} onClick={saveMine}>Save my settings</button></div>
           {note && <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>{note}</div>}
