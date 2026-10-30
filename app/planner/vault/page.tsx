@@ -45,6 +45,7 @@ import { supabase } from "@/lib/supabase/client";
 import PatternLock, { LockIcon } from "./PatternLock";
 import { CARD_BRANDS, COMPANY_CARD, PERSONAL_CARD, cardExpIso, groupCard, isCardCategory, maskCard, maskCardGroups } from "@/lib/vault/cards";
 import { shadeFor } from "@/lib/vault/grays";
+import { CLIPBOARD_CLEAR_MS, IDLE_LOCK_MS, fmtWait, recordFailure, shouldLockAfterHidden, waitLeft, type FailState } from "@/lib/vault/guard";
 import { EXPIRY_COLOR, EXPIRY_PRINT_COLOR, expiryStateFor } from "@/lib/expiry";
 import { WalletOverlay } from "../components/wallet/WalletOverlay";
 
@@ -277,15 +278,70 @@ export default function VaultPage() {
 
   async function handleVerifyAttempt(path: number[]) {
     setPinError(null);
+    if (waitLeft(fails, Date.now()) > 0) return;
     setBusy(true);
     try {
       const hash = await sha256Hex(path.join("-"));
-      if (hash !== pinHash) { setPinError("Incorrect pattern."); return; }
+      if (hash !== pinHash) {
+        const next = recordFailure(fails, Date.now());
+        saveFails(next);
+        setPinError(waitLeft(next, Date.now()) > 0 ? "Incorrect pattern. Too many tries." : "Incorrect pattern.");
+        return;
+      }
+      saveFails({ count: 0, until: 0 });
       try { sessionStorage.setItem(UNLOCK_KEY, "1"); } catch {}
       setPhase("unlocked");
     } finally {
       setBusy(false);
     }
+  }
+
+  // Wrong patterns in a row (kept on this phone): a growing wait after five.
+  const FAIL_KEY = "protankr_vault_fail_v1";
+  const [fails, setFails] = useState<FailState>({ count: 0, until: 0 });
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    try { const raw = localStorage.getItem(FAIL_KEY); if (raw) setFails(JSON.parse(raw) as FailState); } catch { /* none */ }
+  }, []);
+  function saveFails(f: FailState) { setFails(f); try { localStorage.setItem(FAIL_KEY, JSON.stringify(f)); } catch { /* ignore */ } }
+  const waitMs = waitLeft(fails, now);
+  useEffect(() => {
+    if (waitMs <= 0) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [waitMs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lock on its own: idle for a few minutes, in the background for a minute, or when leaving the Vault.
+  useEffect(() => {
+    if (phase !== "unlocked") return;
+    let idle = window.setTimeout(lockNow, IDLE_LOCK_MS);
+    const bump = () => { window.clearTimeout(idle); idle = window.setTimeout(lockNow, IDLE_LOCK_MS); };
+    let hiddenAt = 0;
+    const vis = () => {
+      if (document.visibilityState === "hidden") hiddenAt = Date.now();
+      else if (hiddenAt && shouldLockAfterHidden(hiddenAt, Date.now())) lockNow();
+      else bump();
+    };
+    const evs = ["pointerdown", "keydown", "scroll", "touchstart"];
+    evs.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+    document.addEventListener("visibilitychange", vis);
+    return () => {
+      window.clearTimeout(idle);
+      evs.forEach((e) => window.removeEventListener(e, bump));
+      document.removeEventListener("visibilitychange", vis);
+      // Leaving the Vault locks it, so the next visit asks for the pattern again.
+      try { sessionStorage.removeItem(UNLOCK_KEY); } catch { /* ignore */ }
+    };
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Copy a secret, then clear the clipboard shortly after.
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copySecret(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(`${what} copied. Clears in ${CLIPBOARD_CLEAR_MS / 1000}s.`);
+      window.setTimeout(() => { void navigator.clipboard.writeText("").catch(() => {}); setCopied(null); }, CLIPBOARD_CLEAR_MS);
+    } catch { setCopied("Couldn't copy."); window.setTimeout(() => setCopied(null), 3000); }
   }
 
   function lockNow() {
@@ -521,8 +577,9 @@ export default function VaultPage() {
       <div style={{ maxWidth: 320, margin: "50px auto 0", padding: "0 4px", textAlign: "center" as const }}>
         <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><LockIcon size={32} /></div>
         <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 20 }}>Vault Locked</div>
-        {pinError && <div style={errorStyle}>{pinError}</div>}
-        <PatternLock mode="verify" onComplete={handleVerifyAttempt} disabled={busy} />
+        {waitMs > 0 && <div style={errorStyle}>Too many wrong patterns. Try again in {fmtWait(waitMs)}.</div>}
+        {pinError && waitMs <= 0 && <div style={errorStyle}>{pinError}</div>}
+        <PatternLock mode="verify" onComplete={handleVerifyAttempt} disabled={busy || waitMs > 0} />
         <button aria-busy={!!(requestBusy)} onClick={requestReset} disabled={requestBusy} style={{ marginTop: 20, background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
           {requestBusy ? "Sending…" : "Forgot Pattern?"}
         </button>
@@ -627,6 +684,10 @@ export default function VaultPage() {
                           {isRevealed ? "Hide" : "Show number & PIN"}
                         </button>
                       )}
+                      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                        {e.card_number && <button onClick={() => void copySecret(e.card_number!.replace(/\D/g, ""), "Card number")} style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer" }}>Copy number</button>}
+                        {e.card_pin && <button onClick={() => void copySecret(e.card_pin!, "PIN")} style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer" }}>Copy PIN</button>}
+                      </div>
                     </>
                   );
                 })()}
@@ -642,8 +703,13 @@ export default function VaultPage() {
                       style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
                       {isRevealed ? "Hide" : "Show"}
                     </button>
+                    <button onClick={() => void copySecret(e.secret!, "Password")}
+                      style={{ fontSize: 11, fontWeight: 700, color: t.showHideText, background: t.showHideBg, border: t.showHideBorder, borderRadius: 2, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
+                      Copy
+                    </button>
                   </div>
                 )}
+                {copied && <div style={{ fontSize: 12, fontWeight: 700, color: t.subtext, marginBottom: 8 }}>{copied}</div>}
                 {e.notes && (
                   <div style={{ fontSize: 13, color: t.notesText, lineHeight: 1.5, whiteSpace: "pre-wrap" as const, marginBottom: 12 }}>{e.notes}</div>
                 )}
