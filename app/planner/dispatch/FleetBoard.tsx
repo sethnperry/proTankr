@@ -361,8 +361,6 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const loaded: Record<number, string | null> = {};
         for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) { const pr = product(c.product_id); loaded[c.comp_number] = pr.hex ?? productColorFor(pr.name); }
         const segs = segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded);
-        const first = route.nodes[0], last = route.nodes[route.nodes.length - 1];
-        const mid = route.nodes.filter((n) => n.kind === "pickup").map((n) => n.label);
         const eta = lv?.etaMs ? new Date(lv.etaMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
         return (
           <div key={id} style={{ ...card, cursor: "default", display: "flex", alignItems: "stretch", padding: "9px 0 9px 12px", marginBottom: 6 }}>
@@ -376,12 +374,8 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                   </span>
                   {eta && <span className="dash-num" style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>ETA {eta}</span>}
                 </div>
-                {!isOpen && (
-                  <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {[first.label, ...mid, last.kind === "delivery" ? last.label : null].filter(Boolean).join(" → ")}
-                  </div>
-                )}
               </button>
+              <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
               {isOpen && (
                 <>
                   {since && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{since}</div>}
@@ -415,7 +409,6 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                       </div>
                     );
                   })()}
-                  <RouteLine route={route} parked={false} live={lv?.fraction ?? null} />
                   <button type="button" onClick={() => onOpenTrip(id)} {...busyProps(openingId === id)}
                     style={{ background: "none", border: "none", color: muted, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "2px 0 0" }}>Open PTD ›</button>
                 </>
