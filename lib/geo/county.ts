@@ -87,3 +87,28 @@ export async function countyForPlace(p: PlaceInput, cityCenter?: { lat: number; 
   }
   return city && state ? nominatim(`${city}, ${state}`) : null;
 }
+
+/** Zip code for a street address: the Census address geocoder, then Nominatim. Null when it can't be found. */
+export async function zipForAddress(p: PlaceInput): Promise<string | null> {
+  const street = t(p.address), city = t(p.city), state = t(p.state);
+  if (!street || !city || !state) return null;
+  try {
+    const q = new URLSearchParams({ street, city, state, benchmark: "Public_AR_Current", format: "json" });
+    const r = await fetch(`https://geocoding.geo.census.gov/geocoder/locations/address?${q}`, { cache: "no-store", signal: AbortSignal.timeout(7000) });
+    if (r.ok) {
+      const j = (await r.json()) as { result?: { addressMatches?: { addressComponents?: { zip?: unknown } }[] } };
+      const z = j.result?.addressMatches?.[0]?.addressComponents?.zip;
+      if (typeof z === "string" && /^\d{5}/.test(z.trim())) return z.trim().slice(0, 5);
+    }
+  } catch { /* try the next source */ }
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${street}, ${city}, ${state}`, format: "json", addressdetails: "1", limit: "1", countrycodes: "us" })}`,
+      { cache: "no-store", headers: { "User-Agent": UA }, signal: AbortSignal.timeout(7000) });
+    if (r.ok) {
+      const j = (await r.json()) as { address?: { postcode?: unknown } }[];
+      const z = j[0]?.address?.postcode;
+      if (typeof z === "string" && /^\d{5}/.test(z.trim())) return z.trim().slice(0, 5);
+    }
+  } catch { /* none found */ }
+  return null;
+}

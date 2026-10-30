@@ -2417,7 +2417,6 @@ export default function HomePage() {
           { icon: "terminal", label: "Terminal", sub: statusTerminalName ?? "Not set",
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
             onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
-          { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },

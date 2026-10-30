@@ -13,11 +13,13 @@ import { linkBtn, muted } from "./tripUi";
 
 type Step = "state" | "county" | "city";
 
-export function AreaChooser({ open, locations, value, requireCity, onPick, onSearch, onClose }: {
+export function AreaChooser({ open, locations, value, requireCity, noCounty, onPick, onSearch, onClose }: {
   open: boolean;
   locations: DeliveryLocation[];
   value: AreaPick;
   requireCity?: boolean;
+  /** Terminals: state, then city, no county step. */
+  noCounty?: boolean;
   onPick: (p: AreaPick) => void;
   /** Optional: "Search by number, name or city" instead of narrowing by area. */
   onSearch?: () => void;
@@ -34,13 +36,13 @@ export function AreaChooser({ open, locations, value, requireCity, onPick, onSea
   useEffect(() => {
     if (!open) return;
     setPick({ state: "", county: "", city: "" });
-    setStep(states.length === 1 ? "county" : "state");
+    setStep(states.length === 1 ? (noCounty ? "city" : "county") : "state");
     if (states.length === 1) setPick({ state: states[0].value, county: "", city: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const afterState = (state: string) => {
-    const cs = countyOptions(locations, state);
+    const cs = noCounty ? [] : countyOptions(locations, state);
     if (cs.length <= 1) { setPick({ state, county: cs[0]?.value ?? "", city: "" }); setStep("city"); }
     else { setPick({ state, county: "", city: "" }); setStep("county"); }
   };
@@ -59,7 +61,7 @@ export function AreaChooser({ open, locations, value, requireCity, onPick, onSea
   const total = (os: AreaOption[]) => os.reduce((t, o) => t + o.count, 0);
 
   const title = step === "state" ? "Choose a state" : step === "county" ? `Choose a county${pick.state ? ` in ${pick.state}` : ""}` : "Choose a city";
-  const back = step === "city" && (counties.length > 1) ? () => setStep("county")
+  const back = step === "city" && !noCounty && (counties.length > 1) ? () => setStep("county")
     : step !== "state" && states.length > 1 ? () => setStep("state") : null;
 
   return (

@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { stateCode } from "@/lib/geo/usStates";
-import { countyFor, countyForPlace } from "@/lib/geo/county";
+import { countyFor, countyForPlace, zipForAddress } from "@/lib/geo/county";
 
 export const runtime = "nodejs";
 
@@ -63,6 +63,11 @@ export async function GET(req: NextRequest) {
       zip: a.postcode ? String(a.postcode).slice(0, 5) : null,
       county: (await countyFor(lat, lon)) ?? a.county ?? null,
     });
+  }
+
+  // Zip code for a street address: ?zip=1&address=&city=&state=. No OpenWeather key needed.
+  if (sp.get("zip") === "1" && city && state) {
+    return NextResponse.json({ zip: await zipForAddress({ address: sp.get("address"), city, state }) });
   }
 
   // County for a place by its address (never the phone's position): ?county=1&city=&state=[&address=&zip=].

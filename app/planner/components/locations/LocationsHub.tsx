@@ -17,7 +17,9 @@ import { SuppliersModal } from "@/app/planner/dispatch/SuppliersModal";
 import type { TerminalOption } from "@/app/planner/dispatch/PlanLoadCard";
 import FleetCardsModal from "@/app/admin/FleetCardsModal";
 import type { ToolItem } from "@/app/planner/home/DashboardChrome";
-import type { LatLon } from "@/lib/trips/deliveryLocations";
+import type { DeliveryLocation, LatLon } from "@/lib/trips/deliveryLocations";
+import { AreaChooser } from "../trip/AreaChooser";
+import { areaLabel, inArea, type AreaPick } from "@/lib/trips/areaTree";
 
 /** The grid tile. */
 export const locationsTool = (onClick: () => void): ToolItem => ({ icon: "store", label: "Locations", sub: "Terminals & deliveries", onClick });
@@ -61,16 +63,25 @@ function TerminalsBody({ onClose, companyId, userId, role, isSuperAdmin }: { onC
   const [q, setQ] = useState("");
   const [tid, setTid] = useState<string | null>(null);
   const [sub, setSub] = useState<null | "racks" | "suppliers" | "cards">(null);
+  // Same state / city Change window as the delivery locations (no county for terminals).
+  const [area, setArea] = useState<AreaPick>({ state: "", county: "", city: "" });
+  const [areaOpen, setAreaOpen] = useState(false);
+  const [limit, setLimit] = useState(60);
   const staff = isSuperAdmin || role === "admin" || role === "dispatch" || role === "lead";
   const manager = isSuperAdmin || role === "admin" || role === "dispatch";
   const options = useMemo<TerminalOption[]>(() => catalog.map((t) => ({
     id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", used: false,
     place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null, city: t.city ?? null, state: t.state ?? null,
   })), [catalog]);
+  // The terminals as location-shaped rows, so the area chooser and filter are the delivery ones.
+  const asLocs = useMemo(() => options.map((t) => ({ location_id: t.id, city: t.city, state: t.state, county: null, is_active: true } as unknown as DeliveryLocation)), [options]);
+  const searching = !!q.trim();
   const hits = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return options.filter((t) => !s || `${t.name} ${t.place ?? ""}`.toLowerCase().includes(s)).slice(0, 50);
-  }, [options, q]);
+    if (s) return options.filter((t) => `${t.name} ${t.place ?? ""}`.toLowerCase().includes(s));
+    const ids = new Set(inArea(asLocs, area).map((l) => l.location_id));
+    return options.filter((t) => ids.has(t.id));
+  }, [options, asLocs, area, q]);
   const picked = options.find((t) => t.id === tid) ?? null;
   const row = { ...L.secondary, display: "flex", width: "100%", textAlign: "left" as const, color: "#fff", padding: "12px 14px", marginBottom: 8, cursor: "pointer", justifyContent: "space-between", gap: 8, fontSize: 15, fontWeight: 700 };
   return (
@@ -78,13 +89,25 @@ function TerminalsBody({ onClose, companyId, userId, role, isSuperAdmin }: { onC
       <FullscreenModal open={!sub} title={picked ? picked.name : "Terminals"} onClose={() => (picked ? setTid(null) : onClose())} footer={null}>
         {!picked ? (
           <>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search terminal or city" autoFocus
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>
+              <span>{searching ? "Search results" : <>Showing <span style={{ color: "#fff" }}>{areaLabel(area)}</span></>}</span>
+              <button type="button" onClick={() => setAreaOpen(true)}
+                style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>Change</button>
+            </div>
+            <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(60); }} placeholder="Search terminal or city"
               style={{ width: "100%", boxSizing: "border-box", background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "11px 12px", borderRadius: 2, marginBottom: 10 }} />
-            {hits.map((t) => (
+            {hits.length === 0 && <div style={{ fontSize: 14, color: L.muted }}>{searching ? "No matches." : "No terminals here."}</div>}
+            {hits.slice(0, limit).map((t) => (
               <button key={t.id} type="button" className="dash-press" onClick={() => setTid(t.id)} style={row}>
                 <span>{t.name}</span><span style={{ color: L.muted, fontWeight: 600 }}>{t.place ?? ""}</span>
               </button>
             ))}
+            {hits.length > limit && (
+              <button type="button" onClick={() => setLimit((n) => n + 60)}
+                style={{ width: "100%", marginTop: 6, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Show {Math.min(60, hits.length - limit)} more ▼
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -95,6 +118,7 @@ function TerminalsBody({ onClose, companyId, userId, role, isSuperAdmin }: { onC
           </>
         )}
       </FullscreenModal>
+      <AreaChooser open={areaOpen && !picked} noCounty locations={asLocs} value={area} onPick={(p) => { setArea(p); setLimit(60); setQ(""); }} onClose={() => setAreaOpen(false)} />
       {picked && sub === "racks" && <EditTerminalModal open onClose={() => setSub(null)} terminalId={picked.id} terminalName={picked.name} onChanged={() => {}} />}
       {picked && sub === "suppliers" && companyId && userId && (
         <SuppliersModal open onClose={() => setSub(null)} companyId={companyId} userId={userId} canManage={manager} terminals={options} initialTerminalId={picked.id} />

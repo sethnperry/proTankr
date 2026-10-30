@@ -14,7 +14,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import type { PinResult } from "./PinMap";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { locationPlace, locationTitle, type DeliveryLocation, type LocationTank } from "@/lib/trips/deliveryLocations";
@@ -71,7 +70,6 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   };
 }
 
-const PinMap = dynamic(() => import("./PinMap"), { ssr: false });
 
 async function countyOf(place: { address: string; city: string; state: string; zip: string }): Promise<string | null> {
   try {
@@ -129,8 +127,6 @@ export function LocationEditor({
 }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(location, tanks, seedName));
   const [geoPinned, setGeoPinned] = useState(false); // coordinates came from GPS or the map, keep them
-  const [mapOpen, setMapOpen] = useState(false);
-  const [pinCounty, setPinCounty] = useState<string | null>(null); // county from a dropped pin
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [confirmRetire, setConfirmRetire] = useState(false);
@@ -174,13 +170,25 @@ export function LocationEditor({
   const patchTank = (i: number, p: Partial<TankDraft>) =>
     setDraft((d) => ({ ...d, tanks: d.tanks.map((t, j) => (j === i ? { ...t, ...p } : t)) }));
 
-  const usePin = (r: PinResult) => {
-    setDraft((d) => ({
-      ...d, lat: r.lat, lon: r.lon,
-      address: r.address ?? d.address, city: r.city ?? d.city, state: r.state ?? d.state, zip: r.zip ?? d.zip,
-    }));
-    setGeoPinned(true); setPinCounty(r.county); setErr(null);
-  };
+  // Zip code from the street address, once the address, city and state are in (and only while the zip is blank).
+  useEffect(() => {
+    const { address, city, state, zip } = draft;
+    if (zip.trim() || !address.trim() || !city.trim() || state.trim().length < 2) return;
+    let off = false;
+    const t = window.setTimeout(async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+        const q = new URLSearchParams({ zip: "1", address: address.trim(), city: city.trim(), state: state.trim() });
+        const res = await fetch(`/api/geocode?${q}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const j = (await res.json()) as { zip?: string | null };
+        if (!off && j.zip) setDraft((d) => (d.zip.trim() ? d : { ...d, zip: j.zip! }));
+      } catch { /* the zip can be typed */ }
+    }, 900);
+    return () => { off = true; window.clearTimeout(t); };
+  }, [draft.address, draft.city, draft.state, draft.zip]);
   const useMyLocation = () => {
     if (!navigator.geolocation) return setErr("This device can't share its location.");
     navigator.geolocation.getCurrentPosition(
@@ -212,7 +220,7 @@ export function LocationEditor({
       }
       // County comes from the address (or the city), never from the pin: the person adding this may not be at the site.
       const addressChanged = !location || (location.address ?? "") !== draft.address.trim();
-      const county = pinCounty ? pinCounty : placeChanged || addressChanged || !location?.county
+      const county = placeChanged || addressChanged || !location?.county
         ? await countyOf({ address: draft.address.trim(), city: draft.city.trim(), state: draft.state.trim(), zip: draft.zip.trim() })
         : null;
       const now = new Date().toISOString();
@@ -343,7 +351,6 @@ export function LocationEditor({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: muted }}>
           <span>{draft.lat != null && draft.lon != null ? `${draft.lat.toFixed(3)}, ${draft.lon.toFixed(3)}${geoPinned ? " (pinned)" : ""}` : "No coordinates yet"}</span>
           <span style={{ display: "flex", gap: 14 }}>
-            <button type="button" onClick={() => setMapOpen(true)} style={{ ...linkBtn, fontWeight: 700 }}>Set on map</button>
             <button type="button" onClick={useMyLocation} style={linkBtn}>Use my location</button>
           </span>
         </div>
@@ -399,9 +406,6 @@ export function LocationEditor({
         </div>
       )}
 
-      <PinMap open={mapOpen} start={draft.lat != null && draft.lon != null ? { lat: draft.lat, lon: draft.lon } : null}
-        startQuery={[draft.address, draft.city, draft.state].map((x) => x.trim()).filter(Boolean).join(", ")}
-        onUse={usePin} onClose={() => setMapOpen(false)} />
       {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
       <button aria-busy={!!(busy)} type="button" onClick={() => void save()} disabled={busy || sameStores.length > 0} style={{ ...primaryBtn, opacity: busy || sameStores.length > 0 ? 0.5 : 1 }}>
         {busy ? "Saving…" : similar.length > 0 && ackSimilar ? "Save as a new location anyway" : "Save"}

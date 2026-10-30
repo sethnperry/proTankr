@@ -18,3 +18,11 @@ test("inArea and the label", () => {
   assert.equal(areaLabel({ state: "FL", county: "Hillsborough County", city: "Tampa" }), "Tampa, FL");
   assert.equal(areaLabel({ state: "", county: "", city: "" }), "all locations");
 });
+
+test("a city with locations in two counties shows up under both", () => {
+  const l = (id: string, city: string, county: string) => ({ location_id: id, city, state: "FL", county, is_active: true }) as any;
+  const ls = [l("1", "Plant City", "Hillsborough County"), l("2", "Plant City", "Polk County"), l("3", "Tampa", "Hillsborough County")];
+  assert.deepEqual(cityOptions(ls, "FL", "Hillsborough County").map((o) => o.value), ["Plant City", "Tampa"]);
+  assert.deepEqual(cityOptions(ls, "FL", "Polk County").map((o) => o.value), ["Plant City"]);
+  assert.equal(inArea(ls, { state: "FL", county: "", city: "Plant City" }).length, 2); // no county picked: both
+});
