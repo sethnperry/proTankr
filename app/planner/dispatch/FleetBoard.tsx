@@ -363,6 +363,9 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const loaded: Record<number, string | null> = {};
         for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) { const pr = product(c.product_id); loaded[c.comp_number] = pr.hex ?? productColorFor(pr.name); }
         const segs = segsFor(ft.trip.trailer_id ? sizes[ft.trip.trailer_id] : undefined, loaded);
+        // Late: headed to the store and the estimated arrival is after the time dispatch planned the drop to end.
+        const plannedEnd = ft.trip.planned_end_at ? Date.parse(ft.trip.planned_end_at) : NaN;
+        const late = !!lv?.etaMs && route.nodes[route.position.at]?.kind === "delivery" && Number.isFinite(plannedEnd) && lv.etaMs > plannedEnd;
         const eta = lv?.etaMs ? new Date(lv.etaMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
         return (
           <div key={id} style={{ ...card, cursor: "default", display: "flex", alignItems: "stretch", padding: "9px 0 9px 12px", marginBottom: 6 }}>
@@ -374,7 +377,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                   <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {ft.driverName ?? "Driver"}{ft.truckName ? ` - ${ft.truckName}` : ""}
                   </span>
-                  {eta && <span className="dash-num" style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>ETA {eta}</span>}
+                  {eta && <span className="dash-num" style={{ fontSize: 12, color: late ? "#f87171" : muted, fontWeight: late ? 800 : 400, whiteSpace: "nowrap" }}>ETA {eta}</span>}
                 </div>
               </button>
               <RouteLine route={route} parked={false} live={lv?.fraction ?? null} delayed={delayedTrips?.has(id)} />
