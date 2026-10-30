@@ -30,12 +30,12 @@ export async function uploadWalletPhoto(file: File, companyId: string, userId: s
 }
 
 /** Take or choose a photo. Shows "Replace photo" once there is one. */
-export function PhotoButton({ hasPhoto, busy, onFile, onRemove }: { hasPhoto: boolean; busy?: boolean; onFile: (f: File) => void; onRemove?: () => void }) {
+export function PhotoButton({ hasPhoto, busy, onFile, onRemove, label }: { label?: string; hasPhoto: boolean; busy?: boolean; onFile: (f: File) => void; onRemove?: () => void }) {
   const btn: React.CSSProperties = { flex: 1, padding: "10px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: busy ? "default" : "pointer", textAlign: "center", opacity: busy ? 0.5 : 1 };
   return (
     <div style={{ display: "flex", gap: 6 }}>
       <label style={btn}>
-        {busy ? "Uploading…" : hasPhoto ? "Replace photo" : "Take photo (optional)"}
+        {busy ? "Uploading…" : hasPhoto ? `Replace ${label ? label.toLowerCase() + " " : ""}photo` : `Take ${label ? label.toLowerCase() + " " : ""}photo (optional)`}
         <input type="file" accept="image/*" capture="environment" disabled={busy} style={{ display: "none" }}
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onFile(f); }} />
       </label>

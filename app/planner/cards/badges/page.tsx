@@ -34,6 +34,7 @@ type BadgeRow = {
   category: string | null;
   expiration_date: string | null;
   image_path?: string | null;
+  image_back_path?: string | null;
 };
 
 const CATEGORY_SUGGESTIONS = ["Port", "Rail Yard", "Refinery", "Other"];
@@ -51,19 +52,22 @@ function BadgeEditor({
   badge, companyId, userId, onSave, onRemove, onClose,
 }: {
   badge: BadgeRow; companyId: string | null; userId: string | null;
-  onSave: (patch: { port_name: string; category: string | null; expiration_date: string | null; image_path?: string | null }) => void;
+  onSave: (patch: { port_name: string; category: string | null; expiration_date: string | null; image_path?: string | null; image_back_path?: string | null }) => void;
   onRemove: () => void; onClose: () => void;
 }) {
   const [name, setName] = useState(badge.port_name);
   const [category, setCategory] = useState(badge.category ?? "");
   const [expiration, setExpiration] = useState(badge.expiration_date ?? "");
   const [imagePath, setImagePath] = useState<string | null>(badge.image_path ?? null);
+  const [backPath, setBackPath] = useState<string | null>(badge.image_back_path ?? null);
+  const [busyBack, setBusyBack] = useState(false);
+  const backSrc = useSignedUrl(backPath);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const src = useSignedUrl(imagePath);
 
-  const done = () => { onSave({ port_name: name.trim() || badge.port_name, category: category.trim() || null, expiration_date: expiration || null, image_path: imagePath }); onClose(); };
+  const done = () => { onSave({ port_name: name.trim() || badge.port_name, category: category.trim() || null, expiration_date: expiration || null, image_path: imagePath, image_back_path: backPath }); onClose(); };
   const takePhoto = async (f: File) => {
     if (!companyId || !userId) return;
     setBusy(true); setErr(null);
@@ -79,7 +83,14 @@ function BadgeEditor({
       </div>
       {src && <img src={src} alt={badge.port_name} style={{ width: "100%", maxHeight: 220, objectFit: "cover", display: "block" }} />}
       <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-        <PhotoButton hasPhoto={!!imagePath} busy={busy} onFile={(f) => void takePhoto(f)} onRemove={() => setImagePath(null)} />
+        <PhotoButton label="Front" hasPhoto={!!imagePath} busy={busy} onFile={(f) => void takePhoto(f)} onRemove={() => setImagePath(null)} />
+        {backSrc && <img src={backSrc} alt={`${badge.port_name} back`} style={{ width: "100%", maxHeight: 220, objectFit: "cover", display: "block", borderRadius: 2 }} />}
+        <PhotoButton label="Back" hasPhoto={!!backPath} busy={busyBack} onRemove={() => setBackPath(null)} onFile={async (f) => {
+          if (!companyId || !userId) return;
+          setBusyBack(true); setErr(null);
+          try { setBackPath(await uploadWalletPhoto(f, companyId, userId)); } catch (e: any) { setErr(e?.message ?? "Couldn't upload the photo."); }
+          setBusyBack(false);
+        }} />
         {err && <div style={{ fontSize: 12, color: "#f87171" }}>{err}</div>}
         <div><div style={fieldLabel}>Name</div><input type="text" value={name} onChange={(e) => setName(e.target.value)} style={fieldInput} /></div>
         <div>
@@ -188,7 +199,7 @@ export default function BadgesPage() {
     setError(null);
     const { data, error: err } = await supabase
       .from("driver_port_ids")
-      .select("id, port_name, category, expiration_date, image_path")
+      .select("id, port_name, category, expiration_date, image_path, image_back_path")
       .eq("user_id", targetUserId)
       .order("expiration_date", { ascending: true, nullsFirst: false });
     if (err) setError(err.message);
@@ -204,7 +215,7 @@ export default function BadgesPage() {
     [badges, filter]
   );
 
-  const handleSave = async (id: string, patch: { port_name: string; category: string | null; expiration_date: string | null; image_path?: string | null }) => {
+  const handleSave = async (id: string, patch: { port_name: string; category: string | null; expiration_date: string | null; image_path?: string | null; image_back_path?: string | null }) => {
     setBadges((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
     const { error: err } = await supabase.from("driver_port_ids").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
     if (err) setError(err.message);
