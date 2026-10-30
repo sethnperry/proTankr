@@ -8,13 +8,13 @@
 // Coordinates feed Near Me. "Use my location" takes the phone's GPS while
 // standing at the site; otherwise the city/state is geocoded on save.
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { linkBtn, muted } from "../components/trip/tripUi";
 import { LocationBrowser } from "../components/trip/LocationPicker";
-import { supabase } from "@/lib/supabase/client";
+import { useCountySweep } from "../components/trip/DeliveryLocationsModal";
 
 import { usePending } from "@/lib/ui/pending";
 export default function LocationsPage() {
@@ -25,28 +25,7 @@ export default function LocationsPage() {
   const companyId = shell.companyId || null;
   const locList = useDeliveryLocationList(companyId, userId);
 
-  // Counties are looked up from each location's address, a few at a time, until none are left.
-  const sweeping = useRef(false);
-  useEffect(() => {
-    if (sweeping.current || locList.loading) return;
-    if (!locList.locations.some((l) => l.county == null)) return;
-    sweeping.current = true;
-    void (async () => {
-      try {
-        for (let i = 0; i < 40; i++) {
-          const { data } = await supabase.auth.getSession();
-          const token = data.session?.access_token;
-          if (!token) break;
-          const res = await fetch("/api/locations/county-backfill", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-          if (!res.ok) break;
-          const j = (await res.json()) as { done: number; remaining: number };
-          if (!j.done || !j.remaining) break;
-        }
-        await locList.reload();
-      } catch { /* try again next visit */ }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locList.loading, locList.locations.length]);
+  useCountySweep(true, locList.locations, locList.loading, locList.reload);
 
   return (
     <div style={{ padding: "12px 16px 40px", maxWidth: 640, margin: "0 auto", color: "#fff" }}>
