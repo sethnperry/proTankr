@@ -943,6 +943,7 @@ export default function DispatchPage() {
         notify={notifier.permission} onEnableNotify={() => { void enablePush(companyId || "").finally(() => void notifier.enable()); }}
         onAck={acks.ack} ackError={acks.error}
         terminal={terminalInfo} product={boardProduct} initialsOf={(id) => initialsOf(plan.roster.find((m) => m.user_id === id)?.display_name)} onOpenTrip={openTrip} openingId={nav.openingId("trip")}
+        regionNote={regionOn ? `Filtered to region: ${[...regionSel].join(", ")}` : null}
         alerts={alerts} planCounts={pCounts} planLoading={plan.loading}
         allocation={allContracts.some((c) => c.per_day != null || c.per_week != null) ? { ...allocChip, onOpen: () => setAllocOpen(true) } : null}
         focusCount={planning ? ranked.focusIds.size : null}

@@ -196,7 +196,7 @@ export function usePlanData(companyId: string | null) {
   const load = useCallback(async () => {
     if (!companyId || userIds.length === 0) return;
     try {
-      const [acc, lic, med, twic, port, trk, trl, per, sty, srec, trp] = await Promise.all([
+      const [acc, lic, med, twic, port, trk, trl, per, sty, srec, trp, trn] = await Promise.all([
         supabase.from("terminal_access").select("user_id, terminal_id, carded_on").in("user_id", userIds),
         supabase.from("driver_licenses").select("user_id, expiration_date").in("user_id", userIds),
         supabase.from("driver_medical_cards").select("user_id, expiration_date").in("user_id", userIds),
@@ -210,6 +210,8 @@ export function usePlanData(companyId: string | null) {
         supabase.from("service_records").select("service_type_id, date, reading_value, created_at, truck_id, trailer_id").eq("company_id", companyId),
         supabase.from("trips").select("truck_id, begin_miles, end_miles, created_at, completed_at").eq("company_id", companyId)
           .order("created_at", { ascending: false }).limit(400),
+        // Terminal training dates. Non-fatal like service.
+        supabase.from("driver_terminal_training").select("user_id, terminal_id, expires_at").in("user_id", userIds),
       ]);
       const firstErr = [acc, trk, trl, per].find((x) => x.error)?.error;
       if (firstErr) throw firstErr;
@@ -231,6 +233,7 @@ export function usePlanData(companyId: string | null) {
         access: (acc.data ?? []) as any[],
         credentials: [...cred(lic, "license"), ...cred(med, "medical"), ...cred(twic, "twic")],
         badges: (port.data ?? []) as any[],
+        training: (trn.data ?? []) as any[],
         trucks, trailers,
         permits: ((per.data ?? []) as any[]).map((p) => ({
           truck_id: p.truck_id, trailer_id: p.trailer_id, expiration_date: p.expiration_date, permit_name: p.permit_types?.name ?? null,

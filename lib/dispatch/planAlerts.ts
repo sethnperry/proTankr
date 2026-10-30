@@ -8,7 +8,7 @@
 
 import { daysUntilIso, expiryStateForDays, type ExpiryState } from "../expiry.ts";
 
-export type AlertKind = "access" | "no_access" | "license" | "medical" | "twic" | "badge" | "permit" | "service";
+export type AlertKind = "access" | "no_access" | "license" | "medical" | "twic" | "badge" | "permit" | "service" | "training";
 
 export type PlanAlert = {
   key: string;
@@ -31,6 +31,7 @@ export type PlanInputs = {
   terminals: Map<string, { name: string; renewal_days: number | null }>;
   credentials: { user_id: string; kind: "license" | "medical" | "twic"; expiration_date: string | null }[];
   badges: { user_id: string; port_name: string | null; expiration_date: string | null }[];
+  training?: { user_id: string; terminal_id: string; expires_at: string | null }[];
   permits: { truck_id: string | null; trailer_id: string | null; expiration_date: string | null; permit_name: string | null }[];
   trucks: Map<string, string>;
   trailers: Map<string, string>;
@@ -80,6 +81,11 @@ export function planAlerts(input: PlanInputs, horizonDays = 30, todayIso?: strin
     push({ key: `b:${b.user_id}:${i}`, kind: "badge", subject: who(b.user_id), subjectId: b.user_id, isEquipment: false,
       label: `${b.port_name ?? "Port"} badge`, iso: b.expiration_date });
   });
+  for (const t of input.training ?? []) {
+    if (!input.names.has(t.user_id) || !t.expires_at) continue;
+    push({ key: `t:${t.user_id}:${t.terminal_id}`, kind: "training", subject: who(t.user_id), subjectId: t.user_id, isEquipment: false,
+      label: `${input.terminals.get(t.terminal_id)?.name ?? "Terminal"} training`, iso: t.expires_at });
+  }
   input.permits.forEach((p, i) => {
     if (!p.expiration_date) return;
     const truck = p.truck_id ? input.trucks.get(p.truck_id) : null;

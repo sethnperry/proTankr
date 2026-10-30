@@ -1599,9 +1599,6 @@ export default function HomePage() {
     void syncNow();
   };
 
-  const expired = expirations.expiredCount ?? 0;
-  const warning = expirations.warningCount ?? 0;
-  const soonCount = expirations.soonCount ?? 0;
   // Every expiration in one chip, grouped by type. Truck and trailer come from
   // their own alerts (permits plus service); the rest from the shared list.
   const expGroups: ExpGroup[] = (() => {
@@ -1612,7 +1609,7 @@ export default function HomePage() {
     }));
     const unit = (s: UnitAlertSummary, w: string): ExpRow[] => s.alerts.map((a, n) => ({ key: `${w}${n}`, name: a.name, sub: a.kind === "permit" ? "Permit" : "Service", detail: a.detail, state: a.state }));
     return [
-      { title: "Terminal access", rows: rows("terminal") },
+      { title: "Terminals", rows: rows("terminal") },
       { title: "Credentials", rows: rows("credential") },
       { title: "Badges", rows: rows("badge") },
       { title: "Truck", rows: unit(truckAlerts, "truck"), more: { label: "Odometer & details", onClick: () => { setExpSheetOpen(false); setUnitAlertsOpen("truck"); } } },
@@ -1679,16 +1676,6 @@ export default function HomePage() {
     return terminalReadiness(rows, { city: readinessPlace.city, state: readinessPlace.state, todayIso: isoToday_(), pickupTerminalId: readinessPlace.pickupId });
   })();
   const readinessLabel = [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
-  // Terminal access alerts in cities other than the one the strip shows.
-  const otherCityAccess = (() => {
-    const norm = (v: string | null | undefined) => String(v ?? "").trim().toLowerCase();
-    const items = expirations.activeItems.filter((i) =>
-      i.entityType === "terminal" &&
-      !(norm(i.city) === norm(readinessPlace.city) && norm(i.state) === norm(readinessPlace.state)));
-    if (items.length === 0) return null;
-    const worst = items.some((i) => i.level === "expired") ? "expired" : items.some((i) => i.level === "expiring") ? "expiring" : "soon";
-    return { count: items.length, color: EXPIRY_COLOR[worst], onOpen: () => shell.setExpModalOpen(true) };
-  })();
   const openTerminalList = (terminalId: string | null) => {
     if (terminalId) shell.setExpandedTerminalId(terminalId);
     setTerminalNowOpen(false);
@@ -1728,7 +1715,7 @@ export default function HomePage() {
       onOpenTerminal={openTerminalList}
       onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
       onChangeCity={() => { setTerminalNowOpen(false); shell.setLocOpen(true); }}
-      otherCities={otherCityAccess}
+      otherCities={null}
     />
   );
 
@@ -2310,7 +2297,7 @@ export default function HomePage() {
         onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
       />
 
-      <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} onManage={() => { setExpSheetOpen(false); shell.setExpModalOpen(true); }} />
+      <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
       <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onClose={() => setLoadsSheetOpen(false)}
         onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); beginDispatchedLoad(id); }} />
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
@@ -2436,8 +2423,7 @@ export default function HomePage() {
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
-            sub: expired > 0 ? `${expired} expired` : warning > 0 ? `${warning} within 7 days` : soonCount > 0 ? `${soonCount} within 30 days` : "All current",
-            subColor: expired > 0 ? EXPIRY_COLOR.expired : warning > 0 ? EXPIRY_COLOR.expiring : soonCount > 0 ? EXPIRY_COLOR.soon : undefined,
+            sub: "Terminals, badges, credentials",
             onClick: () => nav.go("cards", "/planner/cards"), busy: nav.is("cards") }] : []),
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
           { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => nav.go("reports", "/planner/reports"), busy: nav.is("reports") },

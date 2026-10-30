@@ -117,7 +117,7 @@ function ReportTile({ title, sub, stat, statColor, onClick, disabled }: {
 export default function ReportsPage() {
   const router = useRouter();
   const shell = useCalculatorShell();
-  const { effectiveUserId, equipment, terminals, expirations, role } = shell;
+  const { effectiveUserId, equipment, terminals, role } = shell;
 
   // Other drivers' loads/credentials are dispatch+admin only, matching the
   // permission matrix already documented in CLAUDE.md ("Other drivers'
@@ -326,7 +326,6 @@ export default function ReportsPage() {
     return count;
   }, [terminals.terminals, terminals.terminalDisplayInfo]);
 
-  const expiringCount = expirations.expiredCount + expirations.warningCount;
 
   const cityOptions = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -449,13 +448,6 @@ export default function ReportsPage() {
               sub={washSubFinal}
               onClick={() => setWashHistoryOpen(true)}
               disabled={!hasEquipment}
-            />
-            <ReportTile
-              title="Expiring Items"
-              sub="Truck & trailer permits, terminal card renewals"
-              stat={expiringCount > 0 ? `${expiringCount}` : "None"}
-              statColor={expiringCount > 0 ? "#b91c1c" : undefined}
-              onClick={() => shell.setExpModalOpen(true)}
             />
           </div>
         </div>

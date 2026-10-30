@@ -52,8 +52,6 @@ type ShellValue = {
   terminalFilters: ReturnType<typeof useTerminalFilters<TerminalRow, TerminalCatalogRow>>;
   equipOpen: boolean;
   setEquipOpen: (v: boolean) => void;
-  expModalOpen: boolean;
-  setExpModalOpen: (v: boolean) => void;
   termOpen: boolean;
   setTermOpen: (v: boolean) => void;
   // Location picker (state -> city) -- termOpen (above) already covers "pick
@@ -256,7 +254,6 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
   });
 
   const [equipOpen, setEquipOpen] = useState(false);
-  const [expModalOpen, setExpModalOpen] = useState(false);
   const [termOpen, setTermOpen] = useState(false);
   const [locOpen, setLocOpen] = useState(false);
   const [statePickerOpen, setStatePickerOpen] = useState(false);
@@ -589,7 +586,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     authEmail, authUserId, setupSession, effectiveUserId,
     equipment, location, terminals, expirations,
     myTerminalIdSet, terminalFilters,
-    equipOpen, setEquipOpen, expModalOpen, setExpModalOpen,
+    equipOpen, setEquipOpen,
     termOpen, setTermOpen,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
@@ -605,7 +602,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     authEmail, authUserId, setupSession, effectiveUserId,
     equipment, location, terminals, expirations,
     myTerminalIdSet, terminalFilters,
-    equipOpen, setEquipOpen, expModalOpen, setExpModalOpen,
+    equipOpen, setEquipOpen,
     termOpen, setTermOpen,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,

@@ -24,7 +24,6 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import NavMenu from "@/lib/ui/NavMenu";
 import EquipmentModal from "./modals/EquipmentModal";
-import ExpirationModal from "./modals/ExpirationModal";
 import SettingsModal from "@/lib/ui/driver/SettingsModal";
 import LocationModal from "./modals/LocationModal";
 import MyTerminalsModal from "./modals/MyTerminalsModal";
@@ -38,21 +37,6 @@ import { normState } from "./utils/normalize";
 import { themeIconStroke } from "./theme";
 import { useTripStore } from "@/lib/trips/useTripStore";
 
-function BellIcon({ count, onClick, stroke }: { count: number; onClick: () => void; stroke: string }) {
-  return (
-    <button type="button" onClick={onClick} aria-label="Alerts" style={{ position: "relative", border: "none", background: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
-        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-      </svg>
-      {count > 0 && (
-        <span style={{ position: "absolute", top: -4, right: -8, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 2, background: "#ef4444", font: "500 9px Outfit", lineHeight: "15px", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
 
 // outageBanner is now a prop, not fetched inside Header itself -- landscape
 // mode needs the SAME data rendered in a different spot (ShellChrome, above
@@ -84,7 +68,6 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
   // row, Truck/Trailer squares, the access strip), so the bell is retired there.
   // No bell on the Driver Dashboard (it has its own Expirations card) or on the
   // Plan page (bare /planner), which is a plan editor.
-  const showBell = !pathname?.startsWith("/planner/home") && pathname !== "/planner";
 
   // The OS status bar / PWA chrome strip above this header is drawn by the
   // browser from <meta name="theme-color">, not from any CSS on the page --
@@ -151,7 +134,6 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
         height: "100%",
       }}>
         {navEl}
-        {showBell && <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />}
         <div id="planner-header-icons-slot" style={{ display: "contents" }} />
       </div>
     );
@@ -196,7 +178,6 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
         padding: "0 calc(env(safe-area-inset-right, 0px) + 16px) 0 calc(env(safe-area-inset-left, 0px) + 16px)",
       }}>
         {navEl}
-        {showBell && <BellIcon count={shell.expirations.expiredCount + shell.expirations.warningCount} onClick={() => shell.setExpModalOpen(true)} stroke={iconStroke} />}
         {/* Portal target for the Planner page's own plan-letter/Equipment/
             Location/Temperature cluster -- per explicit direction to try
             it merged into this shared header row for a few days ("I think
@@ -331,16 +312,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         onRefreshCurrentEquipment={shell.equipment.loadCurrentEquipment}
       />
 
-      <ExpirationModal
-        open={shell.expModalOpen}
-        onClose={() => shell.setExpModalOpen(false)}
-        items={shell.expirations.items}
-        activeItems={shell.expirations.activeItems}
-        onOpenEquipment={() => shell.setEquipOpen(true)}
-        onOpenTerminals={() => shell.setTermOpen(true)}
-        formatMDYWithCountdown_={formatMDYWithCountdown_}
-        onDeactivateTerminal={shell.terminals.deleteAccessDateForTerminal}
-      />
+
 
       <SettingsModal
         open={settingsOpen}

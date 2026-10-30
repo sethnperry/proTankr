@@ -27,6 +27,7 @@ import { groupBySubject } from "@/lib/dispatch/planAlerts";
 import type { HosAlert } from "@/lib/dispatch/hosAlerts";
 import type { BoardProduct } from "./FleetBoard";
 import { CardBusy, busyProps } from "@/lib/ui/pending";
+import { ExpirationsSheet } from "../home/DashboardSheets";
 import { DelayedSheet } from "./LiveSheet";
 import { EnRouteSheet } from "./EnRouteSheet";
 import { liveChipCounts, type LiveRow } from "@/lib/dispatch/liveGroups";
@@ -301,6 +302,7 @@ export function DispatchDashboardView(props: {
   openingId?: string | null;
   // PLAN
   alerts: PlanAlert[];
+  regionNote?: string | null;
   planCounts: PlanCounts;
   planLoading?: boolean;
   // Planning a load: the picker card, how many drivers the expirations are narrowed to, and the not-carded chip.
@@ -497,16 +499,16 @@ export function DispatchDashboardView(props: {
         )}
         {p.parkedBoard}
       </FullscreenModal>
-      <FullscreenModal open={expOpen} title={`Expirations · next 30 days${scope}`} onClose={() => setExpOpen(false)}>
-        {p.planLoading && groups.length === 0 ? (
-          <div style={{ fontSize: 14, color: L.muted }}>Loading…</div>
-        ) : groups.length === 0 ? (
-          <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>Nothing expired or expiring in the next 30 days.</div>
-        ) : groups.map((g) => (
-          <AlertGroup key={g.subjectId} subject={g.subject} isEquipment={g.isEquipment} items={g.items}
-            onOpen={g.isEquipment ? undefined : () => { setExpOpen(false); p.onOpenDriver(g.subjectId); }} />
-        ))}
-      </FullscreenModal>
+      <ExpirationsSheet open={expOpen} onClose={() => setExpOpen(false)} title={`Expirations${scope}`} loading={p.planLoading}
+        note={p.regionNote ?? null}
+        groups={groups.map((g) => ({
+          title: g.subject,
+          onOpen: g.isEquipment ? undefined : () => { setExpOpen(false); p.onOpenDriver(g.subjectId); },
+          rows: g.items.map((a) => ({
+            key: a.key, name: a.label, sub: a.detail ? null : mdy(a.iso), state: a.state,
+            detail: a.detail ?? daysText(a.days),
+          })),
+        }))} />
     </div>
   );
 }
