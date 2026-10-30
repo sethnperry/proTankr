@@ -743,6 +743,8 @@ export default function HomePage() {
   const [loadedOpen, setLoadedOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [picker, setPicker] = useState<PickerMode | null>(null);
+  // The Deliveries tool: the same location modal with no pick, so tapping a store opens its setup.
+  const [manageLocsOpen, setManageLocsOpen] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tripId: string | null } | null>(null);
 
   // Fuel stop: tapping Fuel stamps the start time right away.
@@ -2415,6 +2417,7 @@ export default function HomePage() {
             subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
             onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           { icon: "store", label: "Delivery", sub: selectedLoc ? locationTitle(selectedLoc) : "Not set", onClick: () => setPicker({ mode: "select" }) },
+          { icon: "store", label: "Deliveries", sub: "Set up locations", onClick: () => setManageLocsOpen(true) },
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           ...(canCards ? [{ icon: "card" as const, label: "Cards",
@@ -2548,6 +2551,19 @@ export default function HomePage() {
           />
         );
       })()}
+
+      <LocationPicker
+        open={manageLocsOpen}
+        title="Delivery locations"
+        origin={origin}
+        locations={locations}
+        tanks={locList.tanks}
+        companyId={companyId}
+        userId={userId}
+        onLocationAdded={() => void locList.reload()}
+        onChanged={() => void locList.reload()}
+        onClose={() => setManageLocsOpen(false)}
+      />
 
       <LocationPicker
         open={!!picker}
