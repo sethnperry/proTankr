@@ -14,13 +14,15 @@ import { HAIR, MUTE, PANEL } from "./deliveryUi";
 
 type Step = "state" | "county" | "city";
 
-export function AreaChooser({ open, locations, value, requireCity, noCounty, onPick, onSearch, onClose }: {
+export function AreaChooser({ open, locations, value, requireCity, noCounty, noCity, onPick, onSearch, onClose }: {
   open: boolean;
   locations: DeliveryLocation[];
   value: AreaPick;
   requireCity?: boolean;
   /** Terminals: state, then city, no county step. */
   noCounty?: boolean;
+  /** Stop at the state (and county): the caller lists the cities itself. */
+  noCity?: boolean;
   onPick: (p: AreaPick) => void;
   /** Optional: "Search by number, name or city" instead of narrowing by area. */
   onSearch?: () => void;
@@ -44,10 +46,16 @@ export function AreaChooser({ open, locations, value, requireCity, noCounty, onP
 
   const afterState = (state: string) => {
     const cs = noCounty ? [] : countyOptions(locations, state);
-    if (cs.length <= 1) { setPick({ state, county: cs[0]?.value ?? "", city: "" }); setStep("city"); }
+    if (cs.length <= 1) {
+      if (noCity) { onPick({ state, county: cs[0]?.value ?? "", city: "" }); onClose(); return; }
+      setPick({ state, county: cs[0]?.value ?? "", city: "" }); setStep("city");
+    }
     else { setPick({ state, county: "", city: "" }); setStep("county"); }
   };
-  const afterCounty = (county: string) => { setPick((p) => ({ ...p, county, city: "" })); setStep("city"); };
+  const afterCounty = (county: string) => {
+    if (noCity) { onPick({ ...pick, county, city: "" }); onClose(); return; }
+    setPick((p) => ({ ...p, county, city: "" })); setStep("city");
+  };
   const finish = (city: string) => { onPick({ ...pick, city }); onClose(); };
 
   const row = (o: AreaOption, onTap: () => void, selected: boolean) => (

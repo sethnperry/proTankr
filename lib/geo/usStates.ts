@@ -26,3 +26,10 @@ export function stateCode(name: string | null | undefined): string | null {
   if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
   return CODES[t.toLowerCase()] ?? null;
 }
+
+/** "FL" -> "Florida" (the code back when it isn't known). */
+export function stateName(code: string | null | undefined): string {
+  const c = (code ?? "").trim().toUpperCase();
+  const hit = Object.entries(CODES).find(([, v]) => v === c);
+  return hit ? hit[0].replace(/\b\w/g, (m) => m.toUpperCase()).replace(/\bOf\b/, "of").replace(/\bAnd\b/, "and") : c;
+}

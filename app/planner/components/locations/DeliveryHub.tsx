@@ -122,7 +122,7 @@ export function DeliveryHub({ open, onClose, companyId, userId, origin = null }:
         <div style={{ marginTop: 10 }}><button type="button" onClick={() => setSearch(true)} style={dark}>Search Locations</button></div>
       </FullscreenModal>
 
-      <FullscreenModal open={open && search && !editing} title="Delivery locations" onClose={() => { setSearch(false); if (!loc) onClose(); }} footer={null}>
+      <FullscreenModal open={open && search && !editing} title="Select Location" onClose={() => { setSearch(false); if (!loc) onClose(); }} footer={null}>
         {search && (
           <LocationBrowser origin={origin} locations={list.locations} tanks={list.tanks} companyId={companyId} userId={userId}
             selectedLocationId={loc?.location_id ?? null}
