@@ -19,18 +19,8 @@ import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { locationPlace, locationTitle, type DeliveryLocation, type LocationTank } from "@/lib/trips/deliveryLocations";
 import { sameStore, similarLocations } from "@/lib/trips/refs";
 import type { DeliveryType } from "@/lib/trips/types";
-import {
-  dashedBtn,
-  fieldInput,
-  fieldLabel,
-  linkBtn,
-  muted,
-  numOrNull,
-  primaryBtn,
-  sectionCard,
-  sectionTitle,
-  smallInput,
-} from "./tripUi";
+import { linkBtn, numOrNull } from "./tripUi";
+import { CAPS, Chip, FIELD, FIELD_SM, Field, HAIR, Label, MUTE, PANEL, Segmented, primary } from "./deliveryUi";
 
 type TankDraft = { tank_id: string | null; tank_number: string; product_id: string; capacity: string; hose: string };
 type Draft = {
@@ -297,106 +287,93 @@ export function LocationEditor({
     onRetired?.();
   };
 
-  const toggle = (on: boolean): React.CSSProperties => ({
-    flex: 1, padding: "9px 0", borderRadius: 2, fontSize: 14, fontWeight: 700, cursor: "pointer",
-    border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
-    background: on ? "rgba(255,255,255,0.12)" : "transparent", color: on ? "#fff" : muted,
-  });
+  const F = (label: string, node: React.ReactNode, style?: React.CSSProperties) => <Field label={label} style={style}>{node}</Field>;
+  const chips = (items: string[], cur: string, onTap: (v: string) => void) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {items.map((r) => <Chip key={r} on={cur === r} onClick={() => onTap(r)}>{r}</Chip>)}
+    </div>
+  );
 
   return (
     <div>
-      <div style={sectionCard}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10, marginBottom: 10 }}>
-          <div><div style={fieldLabel}>Name</div><input value={draft.name} onChange={(e) => patch({ name: e.target.value })} style={fieldInput} placeholder="Loves" /></div>
-          <div><div style={fieldLabel}>Number</div><input value={draft.location_number} onChange={(e) => patch({ location_number: e.target.value })} style={fieldInput} placeholder="Store #" /></div>
+      <Label first>Location</Label>
+      <div style={{ ...PANEL, padding: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10, marginBottom: 12 }}>
+          {F("Name", <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} style={FIELD} placeholder="Loves" />)}
+          {F("Number", <input value={draft.location_number} onChange={(e) => patch({ location_number: e.target.value })} style={FIELD} placeholder="Store #" />)}
         </div>
-        <div style={fieldLabel}>Street address</div>
-        <input value={draft.address} onChange={(e) => patch({ address: e.target.value })} style={{ ...fieldInput, marginBottom: 10 }} placeholder="123 Main St" />
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 1fr", gap: 10, marginBottom: 10 }}>
-          <div><div style={fieldLabel}>City</div><input value={draft.city} onChange={(e) => { patch({ city: e.target.value }); setGeoPinned(false); }} style={fieldInput} /></div>
-          <div><div style={fieldLabel}>State</div><input value={draft.state} maxLength={2} onChange={(e) => { patch({ state: e.target.value }); setGeoPinned(false); }} style={fieldInput} placeholder="FL" /></div>
-          <div><div style={fieldLabel}>Zip</div><input value={draft.zip} maxLength={10} inputMode="numeric" onChange={(e) => patch({ zip: e.target.value })} style={fieldInput} /></div>
+        {F("Street address", <input value={draft.address} onChange={(e) => patch({ address: e.target.value })} style={FIELD} placeholder="123 Main St" />, { marginBottom: 12 })}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 1fr", gap: 10 }}>
+          {F("City", <input value={draft.city} onChange={(e) => { patch({ city: e.target.value }); setGeoPinned(false); }} style={FIELD} />)}
+          {F("State", <input value={draft.state} maxLength={2} onChange={(e) => { patch({ state: e.target.value }); setGeoPinned(false); }} style={FIELD} placeholder="FL" />)}
+          {F("Zip", <input value={draft.zip} maxLength={10} inputMode="numeric" onChange={(e) => patch({ zip: e.target.value })} style={FIELD} />)}
         </div>
-        {regionOptions.length > 0 && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={fieldLabel}>Region</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {regionOptions.map((r) => {
-                const on = draft.region === r;
-                return (
-                  <button key={r} type="button" onClick={() => patch({ region: on ? "" : r, local_area: "" })}
-                    style={{ padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
-                      border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)", background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)" }}>{r}</button>
-                );
-              })}
-            </div>
-            <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Used when a load headed here is parked.</div>
-          </div>
-        )}
-        {draft.region && areaRows.some((a) => a.region === draft.region) && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={fieldLabel}>Local area</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {areaRows.filter((a) => a.region === draft.region).map((a) => {
-                const on = draft.local_area === a.name;
-                return (
-                  <button key={a.name} type="button" onClick={() => patch({ local_area: on ? "" : a.name })}
-                    style={{ padding: "7px 12px", borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: "pointer",
-                      border: on ? "1px solid #fff" : "1px solid rgba(255,255,255,0.18)", background: on ? "#fff" : "transparent", color: on ? "#000" : "rgba(255,255,255,0.8)" }}>{a.name}</button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: muted }}>
-          <span>{draft.lat != null && draft.lon != null ? `${draft.lat.toFixed(3)}, ${draft.lon.toFixed(3)}${geoPinned ? " (pinned)" : ""}` : "No coordinates yet"}</span>
-          <span style={{ display: "flex", gap: 14 }}>
-            <button type="button" onClick={useMyLocation} style={linkBtn}>Use my location</button>
-          </span>
-        </div>
-        <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>Standing at the site? Use your location. Otherwise the city is looked up on save.</div>
       </div>
 
-      <div style={sectionCard}>
-        <div style={sectionTitle}>Delivery type</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" style={toggle(draft.delivery_type === "drop")} onClick={() => patch({ delivery_type: "drop" })}>Drop</button>
-          <button type="button" style={toggle(draft.delivery_type === "pump_off")} onClick={() => patch({ delivery_type: "pump_off" })}>Pump off</button>
+      {(regionOptions.length > 0 || (draft.region && areaRows.some((a) => a.region === draft.region))) && (
+        <>
+          <Label>Territory</Label>
+          <div style={{ ...PANEL, padding: 14 }}>
+            {regionOptions.length > 0 && F("Region", <>
+              {chips(regionOptions, draft.region, (r) => patch({ region: draft.region === r ? "" : r, local_area: "" }))}
+              <div style={{ fontSize: 12, color: MUTE, marginTop: 6 }}>Used when a load headed here is parked.</div>
+            </>)}
+            {draft.region && areaRows.some((a) => a.region === draft.region) && F("Local area",
+              chips(areaRows.filter((a) => a.region === draft.region).map((a) => a.name), draft.local_area, (n) => patch({ local_area: draft.local_area === n ? "" : n })),
+              { marginTop: regionOptions.length > 0 ? 14 : 0 })}
+          </div>
+        </>
+      )}
+
+      <Label>Position</Label>
+      <div style={{ ...PANEL, padding: 14, display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="dash-num" style={{ fontSize: 15, fontWeight: 700 }}>
+            {draft.lat != null && draft.lon != null ? `${draft.lat.toFixed(3)}, ${draft.lon.toFixed(3)}${geoPinned ? " · pinned" : ""}` : "No coordinates yet"}
+          </div>
+          <div style={{ fontSize: 12, color: MUTE, marginTop: 3 }}>At the site? Use your location. Otherwise the city is looked up on save.</div>
         </div>
-        <div style={{ ...fieldLabel, marginTop: 12 }}>Notes</div>
-        <textarea value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} rows={3}
-          placeholder="Gate code, where the fills are, anything to know before you get out…" style={{ ...fieldInput, resize: "vertical", fontFamily: "inherit" }} />
+        <button type="button" onClick={useMyLocation} style={{ flexShrink: 0, padding: "9px 12px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>Use mine</button>
       </div>
 
-      <div style={sectionCard}>
-        <div style={sectionTitle}>Tanks</div>
-        {draft.tanks.length === 0 && <div style={{ fontSize: 14, color: muted, marginBottom: 8 }}>None yet. Tanks are also remembered as you deliver.</div>}
+      <Label>Delivery type</Label>
+      <div style={{ ...PANEL, padding: 14 }}>
+        <Segmented value={draft.delivery_type as "drop" | "pump_off"} onChange={(v) => patch({ delivery_type: v })}
+          options={[{ id: "drop", label: "Drop" }, { id: "pump_off", label: "Pump off" }]} />
+        {F("Notes", <textarea value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} rows={3}
+          placeholder="Gate code, where the fills are, anything to know before you get out…" style={{ ...FIELD, resize: "vertical", fontFamily: "inherit" }} />, { marginTop: 14 })}
+      </div>
+
+      <Label right={<span className="dash-num" style={{ fontSize: 12, color: MUTE }}>{draft.tanks.length}</span>}>Tanks</Label>
+      <div style={{ ...PANEL }}>
+        {draft.tanks.length === 0 && <div style={{ fontSize: 14, color: MUTE, padding: 14 }}>None yet. Tanks are also remembered as you deliver.</div>}
         {draft.tanks.map((t, i) => (
-          <div key={t.tank_id ?? `new-${i}`} style={{ display: "grid", gridTemplateColumns: "56px 1fr 70px 62px 24px", gap: 6, alignItems: "center", marginBottom: 8 }}>
-            <input value={t.tank_number} onChange={(e) => patchTank(i, { tank_number: e.target.value })} placeholder="Tank" style={smallInput} />
-            <CustomSelect value={t.product_id} onChange={(v) => patchTank(i, { product_id: v })} options={productOptions} buttonStyle={smallInput} />
-            <input value={t.capacity} onChange={(e) => patchTank(i, { capacity: e.target.value })} placeholder="Gal" inputMode="numeric" style={smallInput} />
-            <input value={t.hose} onChange={(e) => patchTank(i, { hose: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="Hose ft" inputMode="decimal" style={smallInput} />
+          <div key={t.tank_id ?? `new-${i}`} style={{ display: "grid", gridTemplateColumns: "56px 1fr 70px 62px 24px", gap: 6, alignItems: "center", padding: "10px 12px", borderTop: i ? `1px solid ${HAIR}` : "none" }}>
+            <input value={t.tank_number} onChange={(e) => patchTank(i, { tank_number: e.target.value })} placeholder="Tank" style={FIELD_SM} />
+            <CustomSelect value={t.product_id} onChange={(v) => patchTank(i, { product_id: v })} options={productOptions} buttonStyle={FIELD_SM} />
+            <input value={t.capacity} onChange={(e) => patchTank(i, { capacity: e.target.value })} placeholder="Gal" inputMode="numeric" style={FIELD_SM} />
+            <input value={t.hose} onChange={(e) => patchTank(i, { hose: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="Hose ft" inputMode="decimal" style={FIELD_SM} />
             <button type="button" aria-label="Remove tank"
               onClick={() => setDraft((d) => ({ ...d, tanks: d.tanks.filter((_, j) => j !== i), removedTankIds: t.tank_id ? [...d.removedTankIds, t.tank_id] : d.removedTankIds }))}
-              style={{ border: "none", background: "transparent", color: muted, fontSize: 18, cursor: "pointer" }}>×</button>
+              style={{ border: "none", background: "transparent", color: MUTE, fontSize: 18, cursor: "pointer" }}>×</button>
           </div>
         ))}
-        <button type="button" onClick={() => setDraft((d) => ({ ...d, tanks: [...d.tanks, { tank_id: null, tank_number: "", product_id: "", capacity: "", hose: "" }] }))} style={dashedBtn}>
+        <button type="button" onClick={() => setDraft((d) => ({ ...d, tanks: [...d.tanks, { tank_id: null, tank_number: "", product_id: "", capacity: "", hose: "" }] }))}
+          style={{ width: "100%", padding: "12px 0", border: "none", borderTop: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>
           + Tank
         </button>
       </div>
 
       {similar.length > 0 && (
-        <div style={{ ...sectionCard, border: "1px solid rgba(251,191,36,0.5)" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fbbf24", marginBottom: 8 }}>
+        <div style={{ ...PANEL, border: "1px solid rgba(251,191,36,0.5)", padding: 14, marginTop: 18 }}>
+          <div style={{ ...CAPS, color: "#fbbf24", marginBottom: 8 }}>
             {similar.length === 1 ? "This looks like a saved location" : "These look like saved locations"}
           </div>
           {similar.slice(0, 3).map((l) => (
             <div key={l.location_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{locationTitle(l)}</div>
-                <div style={{ fontSize: 12, color: muted }}>{[l.address, locationPlace(l)].filter(Boolean).join(", ")}</div>
+                <div style={{ fontSize: 12, color: MUTE }}>{[l.address, locationPlace(l)].filter(Boolean).join(", ")}</div>
               </div>
               {onUseExisting && (
                 <button type="button" onClick={() => onUseExisting(l)} style={{ ...linkBtn, fontWeight: 700 }}>Use this one</button>
@@ -406,8 +383,9 @@ export function LocationEditor({
         </div>
       )}
 
-      {err && <div style={{ color: "#f87171", fontSize: 14, marginBottom: 10 }}>{err}</div>}
-      <button aria-busy={!!(busy)} type="button" onClick={() => void save()} disabled={busy || sameStores.length > 0} style={{ ...primaryBtn, opacity: busy || sameStores.length > 0 ? 0.5 : 1 }}>
+      {err && <div style={{ color: "#f87171", fontSize: 14, margin: "14px 0 0" }}>{err}</div>}
+      <button aria-busy={!!(busy)} type="button" onClick={() => void save()} disabled={busy || sameStores.length > 0}
+        style={{ ...primary, marginTop: 18, opacity: busy || sameStores.length > 0 ? 0.5 : 1 }}>
         {busy ? "Saving…" : similar.length > 0 && ackSimilar ? "Save as a new location anyway" : "Save"}
       </button>
 

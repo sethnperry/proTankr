@@ -21,7 +21,8 @@ import {
 import { areaLabel, inArea, type AreaPick } from "@/lib/trips/areaTree";
 import type { DeliveryDestination } from "@/lib/trips/tripFlow";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
-import { dashedBtn, fieldInput, linkBtn, muted } from "./tripUi";
+import { linkBtn } from "./tripUi";
+import { CAPS, FIELD, HAIR, MUTE, PANEL } from "./deliveryUi";
 import { LocationEditor } from "./LocationEditor";
 
 const PAGE = 60;
@@ -89,20 +90,17 @@ export function LocationBrowser({
   const card = (l: DeliveryLocation) => {
     const active = l.location_id === selectedLocationId;
     return (
-      <div key={l.location_id} style={{
-        display: "flex", alignItems: "stretch", borderRadius: 2, overflow: "hidden",
-        border: `1px solid ${active ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.10)"}`,
-        background: active ? "rgba(255,255,255,0.05)" : "transparent",
-      }}>
+      <div key={l.location_id} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${HAIR}`, background: "#0f0f10" }}>
+        <span aria-hidden style={{ width: 4, background: active ? "#fff" : "transparent", flexShrink: 0 }} />
         <button type="button" onClick={() => (onPick ? pick(l) : setEditing(l))}
-          style={{ flex: 3, minWidth: 0, textAlign: "left", border: "none", background: "transparent", color: "#fff", padding: "10px 12px", cursor: "pointer" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locationTitle(l)}</div>
-          <div style={{ marginTop: 4, fontSize: 12, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", color: "#fff", padding: "12px 12px", cursor: "pointer" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locationTitle(l)}</div>
+          <div style={{ marginTop: 3, fontSize: 12, color: MUTE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {[searching ? [l.city, l.state].filter(Boolean).join(", ") : null, l.address, l.delivery_type === "pump_off" ? "Pump off" : "Drop"].filter(Boolean).join(" · ")}
           </div>
         </button>
         <button type="button" aria-label={`Edit ${locationTitle(l)}`} onClick={() => setEditing(l)}
-          style={{ flex: 1, minWidth: 0, border: "none", borderLeft: "1px solid rgba(255,255,255,0.10)", background: "transparent", color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          style={{ width: 64, border: "none", borderLeft: `1px solid ${HAIR}`, background: "transparent", color: MUTE, ...CAPS, cursor: "pointer" }}>
           Edit ›
         </button>
       </div>
@@ -114,32 +112,36 @@ export function LocationBrowser({
       <AreaChooser open={areaOpen} locations={locations} value={area ?? { state: "", county: "", city: "" }}
         onPick={(p) => { setArea(p); setLimit(PAGE); setQuery(""); }} onClose={() => setAreaOpen(false)} />
       {locations.length === 0 ? (
-        <div style={{ fontSize: 14, color: muted, padding: "12px 0" }}>No saved locations yet.</div>
+        <div style={{ ...PANEL, fontSize: 14, color: MUTE, padding: 14 }}>No saved locations yet.</div>
       ) : (
         <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>
-            <span>{searching ? "Search results" : <>Showing <span style={{ color: "#fff" }}>{areaLabel(area ?? { state: "", county: "", city: "" })}</span></>}</span>
+          <div style={{ ...PANEL, display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", marginBottom: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={CAPS}>{searching ? "Search results" : "Showing"}</div>
+              {!searching && <div style={{ marginTop: 3, fontSize: 16, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{areaLabel(area ?? { state: "", county: "", city: "" })}</div>}
+            </div>
             <button type="button" onClick={() => setAreaOpen(true)}
-              style={{ flexShrink: 0, border: "none", background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+              style={{ flexShrink: 0, padding: "8px 14px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>
               Change
             </button>
           </div>
           <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Search number, name or city"
-            style={{ ...fieldInput, marginBottom: 10 }} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {list.length === 0 && <div style={{ fontSize: 14, color: muted, padding: "8px 0" }}>{searching ? "No matches." : "No locations here."}</div>}
+            style={{ ...FIELD, marginBottom: 10 }} />
+          <div style={{ ...PANEL, display: "flex", flexDirection: "column" }}>
+            {list.length === 0 && <div style={{ fontSize: 14, color: MUTE, padding: 14 }}>{searching ? "No matches." : "No locations here."}</div>}
             {list.slice(0, limit).map(card)}
           </div>
           {list.length > limit && (
             <button type="button" onClick={() => setLimit((n) => n + PAGE)}
-              style={{ width: "100%", marginTop: 10, padding: "10px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              style={{ width: "100%", marginTop: 8, padding: "12px 0", border: `1px solid ${HAIR}`, background: "#0f0f10", color: MUTE, ...CAPS, cursor: "pointer" }}>
               Show {Math.min(PAGE, list.length - limit)} more ▼
             </button>
           )}
         </>
       )}
       {companyId && userId && (
-        <button type="button" onClick={() => setEditing(null)} style={{ ...dashedBtn, marginTop: 14 }}>
+        <button type="button" onClick={() => setEditing(null)}
+          style={{ width: "100%", marginTop: 12, padding: "14px 0", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
           + New location{query.trim() ? ` “${query.trim()}”` : ""}
         </button>
       )}

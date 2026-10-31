@@ -9,7 +9,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { DeliveryLocation } from "@/lib/trips/deliveryLocations";
 import { cityOptions, countyOptions, stateOptions, type AreaOption, type AreaPick } from "@/lib/trips/areaTree";
-import { linkBtn, muted } from "./tripUi";
+import { linkBtn } from "./tripUi";
+import { HAIR, MUTE, PANEL } from "./deliveryUi";
 
 type Step = "state" | "county" | "city";
 
@@ -51,10 +52,11 @@ export function AreaChooser({ open, locations, value, requireCity, noCounty, onP
 
   const row = (o: AreaOption, onTap: () => void, selected: boolean) => (
     <button key={o.value} type="button" onClick={onTap}
-      style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px", borderRadius: 2, cursor: "pointer", textAlign: "left", color: "#fff",
-        border: `1px solid ${selected ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.10)"}`, background: selected ? "rgba(255,255,255,0.05)" : "transparent" }}>
-      <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{o.label}</span>
-      <span style={{ fontSize: 12, color: muted }}>{o.count} location{o.count === 1 ? "" : "s"}</span>
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px 13px 0", cursor: "pointer", textAlign: "left", color: "#fff", border: "none", borderTop: `1px solid ${HAIR}`, background: "#0f0f10" }}>
+      <span aria-hidden style={{ width: 4, alignSelf: "stretch", background: selected ? "#fff" : "transparent", flexShrink: 0 }} />
+      <span style={{ flex: 1, fontSize: 15, fontWeight: 700 }}>{o.label}</span>
+      <span className="dash-num" style={{ fontSize: 12, color: MUTE }}>{o.count}</span>
+      <span style={{ color: "rgba(255,255,255,0.35)" }}>›</span>
     </button>
   );
   const allRow = (label: string, count: number, onTap: () => void) => row({ value: "", label, count }, onTap, false);
@@ -70,7 +72,7 @@ export function AreaChooser({ open, locations, value, requireCity, noCounty, onP
         {back ? <button type="button" onClick={back} style={linkBtn}>‹ Back</button> : <span />}
         {onSearch && <button type="button" onClick={onSearch} style={linkBtn}>Search by number or name</button>}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ ...PANEL, display: "flex", flexDirection: "column" }}>
         {step === "state" && (
           <>
             {!requireCity && allRow("All states", total(states), () => { onPick({ state: "", county: "", city: "" }); onClose(); })}
