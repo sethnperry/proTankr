@@ -44,6 +44,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { supabase } from "@/lib/supabase/client";
 import { LockIcon } from "./PatternLock";
 import { VaultDetails } from "./VaultDetails";
+import { VaultForm } from "./VaultForm";
 import { CardStack, CategoryLegend, EntryDetail, LoginList, categoriesOf, cardsExpiring, filterEntries, mmss, useCountdown, type VEntry } from "./VaultUi";
 import { GaugePanel } from "../home/DashboardChrome";
 import { DashStyles, SectionLabel } from "../home/dashLook";
@@ -648,83 +649,25 @@ export default function VaultPage() {
         )}
       </WalletOverlay>
 
-      {formOpen && (
-        <div onClick={() => setFormOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div onClick={(ev) => ev.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#111518", borderRadius: "2px 2px 0 0", border: "1px solid rgba(255,255,255,0.10)", borderBottom: "none", padding: "20px 18px 28px", maxHeight: "85dvh", overflowY: "auto" }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 16 }}>
-              {editingId ? "Edit Entry" : "New Entry"}
-            </div>
+      <VaultForm
+        key={`${editingId ?? "new"}:${formOpen}`}
+        open={formOpen} editing={!!editingId} busy={busy} error={formError}
+        form={{ label: fLabel, category: fCategory, website: fWebsite, username: fUsername, secret: fSecret, notes: fNotes, cardName: fCardName, cardBrand: fCardBrand, cardNumber: fCardNumber, cardExp: fCardExp, cardPin: fCardPin }}
+        set={(p) => {
+          if (p.label !== undefined) setFLabel(p.label);
+          if (p.category !== undefined) setFCategory(p.category);
+          if (p.website !== undefined) setFWebsite(p.website);
+          if (p.username !== undefined) setFUsername(p.username);
+          if (p.secret !== undefined) setFSecret(p.secret);
+          if (p.notes !== undefined) setFNotes(p.notes);
+          if (p.cardName !== undefined) setFCardName(p.cardName);
+          if (p.cardBrand !== undefined) setFCardBrand(p.cardBrand);
+          if (p.cardNumber !== undefined) setFCardNumber(p.cardNumber);
+          if (p.cardExp !== undefined) setFCardExp(p.cardExp);
+          if (p.cardPin !== undefined) setFCardPin(p.cardPin);
+        }}
+        onSave={() => void saveEntry()} onCancel={() => setFormOpen(false)} />
 
-            <label style={labelStyle}>Label</label>
-            <input value={fLabel} onChange={(e) => setFLabel(e.target.value)} placeholder={isCardCategory(fCategory) ? "e.g. Comdata, Chase Visa" : "e.g. ELD Login, Company Slack"} style={{ ...inputStyle, marginBottom: 14 }} />
-
-            <label style={labelStyle}>Category (optional)</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: fCategoryCustomOpen ? 8 : 14 }}>
-              <CategoryChip active={fCategory === "Work"} label="Work" onClick={() => { setFCategory("Work"); setFCategoryCustomOpen(false); }} />
-              <CategoryChip active={fCategory === "Personal"} label="Personal" onClick={() => { setFCategory("Personal"); setFCategoryCustomOpen(false); }} />
-              <CategoryChip
-                active={fCategoryCustomOpen}
-                label="+ Custom"
-                onClick={() => { setFCategoryCustomOpen(true); if (fCategory === "Work" || fCategory === "Personal" || isCardCategory(fCategory)) setFCategory(""); }}
-              />
-              <CategoryChip active={fCategory === COMPANY_CARD} label="Company Card" onClick={() => { setFCategory(COMPANY_CARD); setFCategoryCustomOpen(false); }} />
-              <CategoryChip active={fCategory === PERSONAL_CARD} label="Personal Card" onClick={() => { setFCategory(PERSONAL_CARD); setFCategoryCustomOpen(false); }} />
-            </div>
-            {fCategoryCustomOpen && (
-              <input value={fCategory} onChange={(e) => setFCategory(e.target.value)} placeholder="Custom category name" style={{ ...inputStyle, marginBottom: 14 }} />
-            )}
-
-            {isCardCategory(fCategory) ? (
-              <>
-                <label style={labelStyle}>Name on card</label>
-                <input value={fCardName} onChange={(e) => setFCardName(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
-                <label style={labelStyle}>Card type</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-                  {CARD_BRANDS.map((b) => <CategoryChip key={b} active={fCardBrand === b} label={b} onClick={() => setFCardBrand(b)} />)}
-                </div>
-                <label style={labelStyle}>Card number</label>
-                <input value={fCardNumber} inputMode="numeric" autoComplete="off" onChange={(e) => setFCardNumber(e.target.value)} style={{ ...inputStyle, marginBottom: 14, fontFamily: "monospace" }} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div>
-                    <label style={labelStyle}>Exp (MM/YY)</label>
-                    <input value={fCardExp} inputMode="numeric" placeholder="08/28" maxLength={5} onChange={(e) => setFCardExp(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>PIN</label>
-                    <input value={fCardPin} inputMode="numeric" autoComplete="off" onChange={(e) => setFCardPin(e.target.value)} style={{ ...inputStyle, marginBottom: 14, fontFamily: "monospace" }} />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-            <label style={labelStyle}>Website (optional)</label>
-            <input value={fWebsite} onChange={(e) => setFWebsite(e.target.value)} placeholder="e.g. transflo.com" style={{ ...inputStyle, marginBottom: 14 }} />
-
-            <label style={labelStyle}>Username / ID (optional)</label>
-            <input value={fUsername} onChange={(e) => setFUsername(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
-
-            <label style={labelStyle}>Password (optional)</label>
-            <input value={fSecret} onChange={(e) => setFSecret(e.target.value)} placeholder="Password, PIN, or account #" style={{ ...inputStyle, marginBottom: 14, fontFamily: "monospace" }} />
-
-              </>
-            )}
-
-            <label style={labelStyle}>Notes (optional)</label>
-            <textarea value={fNotes} onChange={(e) => setFNotes(e.target.value)} style={{ ...inputStyle, minHeight: 80, fontFamily: "inherit", resize: "vertical" as const, marginBottom: 20 }} />
-
-            {formError && <div style={{ ...errorStyle, marginBottom: 14 }}>{formError}</div>}
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setFormOpen(false)} disabled={busy} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                Cancel
-              </button>
-              <button aria-busy={!!(busy)} onClick={saveEntry} disabled={busy || !fLabel.trim()} style={{ flex: 1, padding: "13px 0", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: fLabel.trim() ? 1 : 0.5 }}>
-                {busy ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <VaultDetails />
     </div>
   );
