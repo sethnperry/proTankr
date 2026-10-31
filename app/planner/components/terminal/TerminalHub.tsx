@@ -20,7 +20,7 @@ import { headingToTerminal } from "@/lib/trips/dashboardCards";
 import { HeadingToTerminalCard, TerminalStatusCard } from "../trip/DashboardCards";
 import { TerminalStatusSheet } from "../trip/TerminalStatusSheet";
 import { GaugingAskSheet } from "../trip/GaugingAskSheet";
-import { TerminalTrainingSection } from "../locations/TerminalTrainingSection";
+import { TerminalDriversTraining, TerminalTrainingSection } from "../locations/TerminalTrainingSection";
 import TerminalOutageDetailModal from "../../modals/TerminalOutageDetailModal";
 import EditTerminalModal from "../../modals/EditTerminalModal";
 import { SuppliersModal } from "../../dispatch/SuppliersModal";
@@ -68,6 +68,7 @@ function TerminalHubBody() {
   const [racksOpen, setRacksOpen] = useState(false);
   const [cardsOpen, setCardsOpen] = useState(false);
   const [gaugeOpen, setGaugeOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const close = () => { shell.setTerminalHubOpen(false); };
   // Search always starts at the city picker (favorites on top) so the driver can change city.
@@ -149,13 +150,28 @@ function TerminalHubBody() {
             <button type="button" className="dash-press" onClick={() => openAccessSteps({ terminalId: tid })} style={row}><span>Access steps</span><span style={{ color: L.muted }}>›</span></button>
 
             <div style={{ ...caps, margin: "16px 0 8px" }}>Training and letter</div>
-            <TerminalTrainingSection terminalId={tid} terminalName={name} userId={userId} companyId={companyId} staff={staff} />
+            <TerminalTrainingSection terminalId={tid} terminalName={name} userId={userId} companyId={companyId} staff={false} />
 
             <button type="button" className="dash-press" onClick={() => setGaugeOpen(true)} style={row}>
               <span>Gauging<span style={{ display: "block", fontSize: 12, fontWeight: 500, color: L.muted }}>{gaugeText}</span></span><span style={{ color: L.muted }}>Edit ›</span>
             </button>
-            {staff && <button type="button" className="dash-press" onClick={() => setRacksOpen(true)} style={row}><span>Racks &amp; products</span><span style={{ color: L.muted }}>›</span></button>}
-            {manager && <button type="button" className="dash-press" onClick={() => setCardsOpen(true)} style={row}><span>Terminal cards</span><span style={{ color: L.muted }}>›</span></button>}
+
+            {/* Everything an admin, dispatcher or lead can do here that a driver can't. */}
+            {staff && (
+              <div style={{ marginTop: 18 }}>
+                <button type="button" className="dash-press" onClick={() => setAdminOpen((v) => !v)} aria-expanded={adminOpen}
+                  style={{ ...row, marginBottom: adminOpen ? 8 : 0, background: "#050505", border: `1px solid ${L.hairline}` }}>
+                  <span>Admin</span><span style={{ color: L.muted }}>{adminOpen ? "▲" : "▼"}</span>
+                </button>
+                {adminOpen && (
+                  <div>
+                    <TerminalDriversTraining terminalId={tid} userId={userId} companyId={companyId} />
+                    <button type="button" className="dash-press" onClick={() => setRacksOpen(true)} style={row}><span>Racks &amp; products</span><span style={{ color: L.muted }}>›</span></button>
+                    {manager && <button type="button" className="dash-press" onClick={() => setCardsOpen(true)} style={row}><span>Terminal cards</span><span style={{ color: L.muted }}>›</span></button>}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </FullscreenModal>

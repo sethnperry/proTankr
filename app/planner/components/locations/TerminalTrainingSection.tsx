@@ -197,21 +197,30 @@ export function TerminalTrainingSection({ terminalId, terminalName, userId, comp
         </label>
       </div>
 
-      {staff && req?.required && (
-        <div style={card}>
-          <div style={label}>Drivers</div>
-          {roster.members.map((m) => {
-            const rec = data?.all.find((x) => x.user_id === m.user_id) ?? null;
-            const s = trainingStatus(req, rec);
-            return (
-              <div key={m.user_id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "5px 0", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <span>{nameOf(m.user_id)}</span>
-                <span style={{ color: s.state === "none" ? L.muted : EXPIRY_COLOR[s.state], fontWeight: 700 }}>{rec?.expires_at ? `${fmt(rec.expires_at)} · ${s.text}` : s.text}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </>
+  );
+}
+
+/** Each driver's training date at this terminal (dispatch, lead and admin). */
+export function TerminalDriversTraining({ terminalId, userId, companyId }: { terminalId: string; userId: string | null; companyId: string | null }) {
+  const L = useDashLook();
+  const { data } = useTrainingDetail(terminalId, userId, true);
+  const roster = useCompanyRoster(companyId);
+  const req = data?.req ?? null;
+  if (!req?.required) return <div style={{ fontSize: 13, color: L.muted, padding: "6px 0" }}>No training required here, so there is nothing to track.</div>;
+  return (
+    <div style={{ ...L.secondary, padding: 12, marginBottom: 10, color: "#fff" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: L.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Driver training</div>
+      {roster.members.map((m) => {
+        const rec = data?.all.find((x) => x.user_id === m.user_id) ?? null;
+        const st = trainingStatus(req, rec);
+        return (
+          <div key={m.user_id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "5px 0", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <span>{m.display_name}</span>
+            <span style={{ color: st.state === "none" ? L.muted : EXPIRY_COLOR[st.state], fontWeight: 700 }}>{rec?.expires_at ? `${fmt(rec.expires_at)} · ${st.text}` : st.text}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
