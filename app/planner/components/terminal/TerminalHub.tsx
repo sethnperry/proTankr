@@ -20,7 +20,10 @@ import { headingToTerminal } from "@/lib/trips/dashboardCards";
 import { HeadingToTerminalCard, TerminalStatusCard } from "../trip/DashboardCards";
 import { TerminalStatusSheet } from "../trip/TerminalStatusSheet";
 import { GaugingAskSheet } from "../trip/GaugingAskSheet";
-import { TerminalDriversTraining, TerminalTrainingSection } from "../locations/TerminalTrainingSection";
+import { TerminalDriversTraining, TerminalTrainingSection, useTrainingDetail } from "../locations/TerminalTrainingSection";
+import { TerminalCardEdit } from "./TerminalCardEdit";
+import { trainingStatus } from "@/lib/terminals/training";
+import { EXPIRY_COLOR } from "@/lib/expiry";
 import TerminalOutageDetailModal from "../../modals/TerminalOutageDetailModal";
 import EditTerminalModal from "../../modals/EditTerminalModal";
 import { SuppliersModal } from "../../dispatch/SuppliersModal";
@@ -69,6 +72,8 @@ function TerminalHubBody() {
   const [cardsOpen, setCardsOpen] = useState(false);
   const [gaugeOpen, setGaugeOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [cardEditOpen, setCardEditOpen] = useState(false);
+  const trainingDetail = useTrainingDetail(tid ?? "", userId, false).data;
 
   const close = () => { shell.setTerminalHubOpen(false); };
   // Search always starts at the city picker (favorites on top) so the driver can change city.
@@ -111,50 +116,55 @@ function TerminalHubBody() {
               </button>
             </div>
 
-            <TerminalStatusCard
-              defaultOpen
-              placeLabel={place}
-              terminalName={name}
-              rackName={status.rackCount > 1 ? status.rackName : null}
-              products={status.products}
-              reports={alerts.reports}
-              onOpenReports={() => setAlertsOpen(true)}
-              onChangeTerminal={searchCities}
-              onUpdate={() => setStudOpen(true)}
-            />
+            {/* Your card: training certification, access expiration, card number and PIN. Tap to edit. */}
+            {(() => {
+              const tr = trainingStatus(trainingDetail?.req, trainingDetail?.mine);
+              const trText = tr.state === "none" ? "Not required" : trainingDetail?.mine?.expires_at ? `${formatMDYWithCountdown_(trainingDetail.mine.expires_at)}` : tr.text;
+              const trColor = tr.state === "none" ? L.muted : EXPIRY_COLOR[tr.state];
+              const line = (label: string, value: React.ReactNode, color?: string) => (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", fontSize: 14 }}>
+                  <span style={{ color: L.muted }}>{label}</span><span style={{ fontWeight: 700, color: color ?? "#fff", textAlign: "right" }}>{value}</span>
+                </div>
+              );
+              return (
+                <button type="button" className="dash-press" onClick={() => setCardEditOpen(true)} aria-label="Edit card"
+                  style={{ ...L.primary, width: "100%", textAlign: "left", color: "#fff", padding: "10px 14px", marginBottom: 10, cursor: "pointer", display: "block" }}>
+                  {line("Training certification", trText, trColor)}
+                  {line("Access expiration", expiresISO ? formatMDYWithCountdown_(expiresISO) : "Not carded", expiresISO ? DARK_EXP_COLOR[cardState] : L.muted)}
+                  {line("Card number · PIN", <span className="dash-num" style={{ fontFamily: "monospace" }}>{card?.cardNumber || "—"}<span style={{ color: L.muted }}> · </span>{card?.pin || "—"}</span>)}
+                </button>
+              );
+            })()}
+
+            <HeadingToTerminalCard defaultOpen terminalName={name} items={headed} productInfo={productInfo} emptyText="No other company trucks headed here right now." />
+
             <div style={{ marginTop: 10 }}>
-              <HeadingToTerminalCard defaultOpen terminalName={name} items={headed} productInfo={productInfo} emptyText="No other company trucks headed here right now." />
+              <TerminalStatusCard
+                defaultOpen
+                placeLabel={place}
+                terminalName={name}
+                rackName={status.rackCount > 1 ? status.rackName : null}
+                products={status.products}
+                reports={alerts.reports}
+                onOpenReports={() => setAlertsOpen(true)}
+                onChangeTerminal={searchCities}
+                onUpdate={() => setStudOpen(true)}
+              />
             </div>
 
-            <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
-              <button type="button" className="dash-press" onClick={() => setStudOpen(true)} style={{ width: "100%", padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>STUD</button>
-              {companyId && (
-                <button type="button" className="dash-press" onClick={() => setSuppliersOpen(true)} style={{ width: "100%", padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.secondary, color: "#fff", cursor: "pointer" }}>Suppliers · {name}</button>
-              )}
-              <button type="button" className="dash-press" onClick={searchCities} style={dark}>Search Terminals</button>
-            </div>
+            <button type="button" className="dash-press" onClick={() => setStudOpen(true)} style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>STUD</button>
 
-            <div style={{ ...caps, margin: "20px 0 8px" }}>Your card here</div>
-            <div style={{ ...L.secondary, padding: "10px 14px", marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
-                <span style={{ color: L.muted }}>Expiration</span>
-                <span style={{ fontWeight: 700, color: expiresISO ? DARK_EXP_COLOR[cardState] : L.muted }}>{expiresISO ? formatMDYWithCountdown_(expiresISO) : "Not carded"}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
-                <span style={{ color: L.muted }}>Card number</span><span style={{ fontWeight: 700 }}>{card?.cardNumber || "—"}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
-                <span style={{ color: L.muted }}>PIN</span><span style={{ fontWeight: 700 }}>{card?.pin || "—"}</span>
-              </div>
-            </div>
+            <div style={{ ...caps, margin: "20px 0 8px" }}>Training and access</div>
+            <TerminalTrainingSection terminalId={tid} terminalName={name} userId={userId} companyId={companyId} staff={false} />
             <button type="button" className="dash-press" onClick={() => openAccessSteps({ terminalId: tid })} style={row}><span>Access steps</span><span style={{ color: L.muted }}>›</span></button>
 
-            <div style={{ ...caps, margin: "16px 0 8px" }}>Training and letter</div>
-            <TerminalTrainingSection terminalId={tid} terminalName={name} userId={userId} companyId={companyId} staff={false} />
-
-            <button type="button" className="dash-press" onClick={() => setGaugeOpen(true)} style={row}>
+            <button type="button" className="dash-press" onClick={() => setGaugeOpen(true)} style={{ ...row, marginTop: 10 }}>
               <span>Gauging<span style={{ display: "block", fontSize: 12, fontWeight: 500, color: L.muted }}>{gaugeText}</span></span><span style={{ color: L.muted }}>Edit ›</span>
             </button>
+            {companyId && (
+              <button type="button" className="dash-press" onClick={() => setSuppliersOpen(true)} style={row}><span>Suppliers · {name}</span><span style={{ color: L.muted }}>›</span></button>
+            )}
+            <button type="button" className="dash-press" onClick={searchCities} style={{ ...dark, marginBottom: 8 }}>Search Terminals</button>
 
             {/* Everything an admin, dispatcher or lead can do here that a driver can't. */}
             {staff && (
@@ -191,6 +201,7 @@ function TerminalHubBody() {
               terminals={catalog.map((x) => ({ id: String(x.terminal_id), name: x.terminal_name ?? "Terminal", used: false, place: x.city ? `${x.city}${x.state ? `, ${x.state}` : ""}` : null, city: x.city ?? null, state: x.state ?? null }))}
               initialTerminalId={tid} />
           )}
+          <TerminalCardEdit open={cardEditOpen} terminalId={tid} terminalName={name} onClose={() => setCardEditOpen(false)} />
           {gaugeOpen && <GaugingAskSheet terminalId={tid} terminalName={name} initial={{ cutoff: t?.gauging_cutoff ?? null, minutes: t?.gauging_minutes ?? null }} onClose={() => setGaugeOpen(false)} />}
           {racksOpen && <EditTerminalModal open onClose={() => setRacksOpen(false)} terminalId={tid} terminalName={name} onChanged={() => { void status.reload(); void shell.terminals.loadMyTerminals(); }} />}
           {cardsOpen && companyId && <FleetCardsModal open onClose={() => setCardsOpen(false)} companyId={companyId} initialTerminalId={tid} />}

@@ -29,7 +29,7 @@ type Detail = { req: TrainingReq | null; mine: (TrainingRecord & { id: string })
 export function useTrainingDetail(terminalId: string, userId: string | null, staff: boolean) {
   return useQuery({
     queryKey: [TRAINING_QUERY_KEY, terminalId, userId, staff],
-    enabled: !!userId,
+    enabled: !!userId && !!terminalId,
     queryFn: async (): Promise<Detail> => {
       const [r, m, a, l] = await Promise.all([
         supabase.from("terminal_training").select("*").eq("terminal_id", terminalId).maybeSingle(),
