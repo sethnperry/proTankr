@@ -109,7 +109,7 @@ export function LocationBrowser({
 
   return (
     <>
-      <AreaChooser open={areaOpen} locations={locations} value={area ?? { state: "", county: "", city: "" }}
+      <AreaChooser userId={userId} open={areaOpen} locations={locations} value={area ?? { state: "", county: "", city: "" }}
         onPick={(p) => { setArea(p); setLimit(PAGE); setQuery(""); }} onClose={() => setAreaOpen(false)} />
       {locations.length === 0 ? (
         <div style={{ ...PANEL, fontSize: 14, color: MUTE, padding: 14 }}>No saved locations yet.</div>
