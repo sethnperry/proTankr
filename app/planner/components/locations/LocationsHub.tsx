@@ -10,10 +10,9 @@ import React, { useState } from "react";
 import { useCalculatorShell } from "../../CalculatorShellContext";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "@/app/planner/home/dashLook";
-import { useDeliveryLocationList } from "@/lib/trips/useTripData";
-import { DeliveryLocationsModal } from "../trip/DeliveryLocationsModal";
+import { DeliveryHub } from "./DeliveryHub";
 import type { ToolItem } from "@/app/planner/home/DashboardChrome";
-import type { DeliveryLocation, LatLon } from "@/lib/trips/deliveryLocations";
+import type { LatLon } from "@/lib/trips/deliveryLocations";
 
 /** The grid tile. */
 export const locationsTool = (onClick: () => void): ToolItem => ({ icon: "store", label: "Locations", sub: "Terminals & deliveries", onClick });
@@ -49,6 +48,5 @@ export function LocationsHub(props: { open: boolean; onClose: () => void; compan
 }
 
 function DeliveriesBody({ onClose, companyId, userId, origin }: { onClose: () => void; companyId: string | null; userId: string | null; origin?: LatLon | null }) {
-  const list = useDeliveryLocationList(companyId, userId);
-  return <DeliveryLocationsModal open onClose={onClose} locations={list.locations} tanks={list.tanks} companyId={companyId} userId={userId} origin={origin} onChanged={() => void list.reload()} />;
+  return <DeliveryHub open onClose={onClose} companyId={companyId} userId={userId} origin={origin} />;
 }

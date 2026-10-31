@@ -28,7 +28,7 @@ import { LocationEditor } from "./LocationEditor";
 const PAGE = 60;
 
 export function LocationBrowser({
-  origin = null, locations, tanks = [], companyId, userId, onPick, onChanged, selectedLocationId = null,
+  origin = null, locations, tanks = [], companyId, userId, onPick, onChanged, selectedLocationId = null, onToggleStar,
 }: {
   origin?: LatLon | null;
   locations: DeliveryLocation[];
@@ -40,11 +40,14 @@ export function LocationBrowser({
   /** After a location is added, edited or retired, so the caller can reload its list. */
   onChanged?: () => void;
   selectedLocationId?: string | null;
+  /** Star or unstar a location (kept per driver). */
+  onToggleStar?: (locationId: string, star: boolean) => void | Promise<void>;
 }) {
   const [area, setArea] = useState<AreaPick | null>(null);
   const [areaOpen, setAreaOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
+  const [showAll, setShowAll] = useState(false);
   // undefined = the list; null = a new location; a row = editing it.
   const [editing, setEditing] = useState<DeliveryLocation | null | undefined>(undefined);
   const { data: products } = useProductsCatalog();
@@ -62,6 +65,10 @@ export function LocationBrowser({
     const base = searching ? filterLocations(locations, { origin: null, nearMe: false, query }) : inArea(locations, area ?? { state: "", county: "", city: "" });
     return [...base].sort(byNumberThenName);
   }, [locations, area, query, searching]);
+  // Starred stores are always up top, in every area; the rest of the area waits behind "Show all".
+  const favorites = useMemo(() => locations.filter((l) => l.starred && l.is_active !== false).sort(byNumberThenName), [locations]);
+  const others = useMemo(() => list.filter((l) => !l.starred), [list]);
+  const shown = searching ? list : showAll || favorites.length === 0 ? others : [];
 
   const pick = (l: DeliveryLocation) => onPick?.({ locationId: l.location_id, oneOffName: null, deliveryType: l.delivery_type });
   const done = () => { onChanged?.(); setEditing(undefined); };
@@ -92,6 +99,10 @@ export function LocationBrowser({
     return (
       <div key={l.location_id} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${HAIR}`, background: "#0f0f10" }}>
         <span aria-hidden style={{ width: 4, background: active ? "#fff" : "transparent", flexShrink: 0 }} />
+        {onToggleStar && (
+          <button type="button" aria-label={l.starred ? "Unstar" : "Star"} onClick={() => void onToggleStar(l.location_id, !l.starred)}
+            style={{ flexShrink: 0, width: 44, border: "none", background: "transparent", fontSize: 18, cursor: "pointer", color: l.starred ? "rgba(234,179,8,0.95)" : "rgba(255,255,255,0.3)" }}>{l.starred ? "★" : "☆"}</button>
+        )}
         <button type="button" onClick={() => (onPick ? pick(l) : setEditing(l))}
           style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", color: "#fff", padding: "12px 12px", cursor: "pointer" }}>
           <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locationTitle(l)}</div>
@@ -109,8 +120,8 @@ export function LocationBrowser({
 
   return (
     <>
-      <AreaChooser userId={userId} open={areaOpen} locations={locations} value={area ?? { state: "", county: "", city: "" }}
-        onPick={(p) => { setArea(p); setLimit(PAGE); setQuery(""); }} onClose={() => setAreaOpen(false)} />
+      <AreaChooser open={areaOpen} locations={locations} value={area ?? { state: "", county: "", city: "" }}
+        onPick={(p) => { setArea(p); setLimit(PAGE); setQuery(""); setShowAll(false); }} onClose={() => setAreaOpen(false)} />
       {locations.length === 0 ? (
         <div style={{ ...PANEL, fontSize: 14, color: MUTE, padding: 14 }}>No saved locations yet.</div>
       ) : (
@@ -127,14 +138,28 @@ export function LocationBrowser({
           </div>
           <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Search number, name or city"
             style={{ ...FIELD, marginBottom: 10 }} />
-          <div style={{ ...PANEL, display: "flex", flexDirection: "column" }}>
-            {list.length === 0 && <div style={{ fontSize: 14, color: MUTE, padding: 14 }}>{searching ? "No matches." : "No locations here."}</div>}
-            {list.slice(0, limit).map(card)}
-          </div>
-          {list.length > limit && (
+          {!searching && favorites.length > 0 && (
+            <>
+              <div style={{ ...CAPS, margin: "4px 0 8px" }}>Favorites</div>
+              <div style={{ ...PANEL, display: "flex", flexDirection: "column", marginBottom: 12 }}>{favorites.map(card)}</div>
+            </>
+          )}
+          {!searching && others.length > 0 && favorites.length > 0 && (
+            <button type="button" onClick={() => setShowAll((v) => !v)}
+              style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "12px 14px", marginBottom: 8, border: `1px solid ${HAIR}`, background: "#050505", color: MUTE, ...CAPS, cursor: "pointer" }}>
+              <span>{showAll ? "Hide other locations" : `Show other locations here (${others.length})`}</span><span>{showAll ? "▲" : "▼"}</span>
+            </button>
+          )}
+          {(searching || showAll || favorites.length === 0) && (
+            <div style={{ ...PANEL, display: "flex", flexDirection: "column" }}>
+              {shown.length === 0 && <div style={{ fontSize: 14, color: MUTE, padding: 14 }}>{searching ? "No matches." : "No locations here."}</div>}
+              {shown.slice(0, limit).map(card)}
+            </div>
+          )}
+          {shown.length > limit && (
             <button type="button" onClick={() => setLimit((n) => n + PAGE)}
               style={{ width: "100%", marginTop: 8, padding: "12px 0", border: `1px solid ${HAIR}`, background: "#0f0f10", color: MUTE, ...CAPS, cursor: "pointer" }}>
-              Show {Math.min(PAGE, list.length - limit)} more ▼
+              Show {Math.min(PAGE, shown.length - limit)} more ▼
             </button>
           )}
         </>
@@ -150,7 +175,7 @@ export function LocationBrowser({
 }
 
 export function LocationPicker({
-  open, title, origin = null, locations, tanks = [], companyId, userId, onPick, onClose, onLocationAdded, selectedLocationId = null,
+  open, title, origin = null, locations, tanks = [], companyId, userId, onPick, onClose, onLocationAdded, selectedLocationId = null, onToggleStar,
 }: {
   open: boolean;
   title: string;
@@ -164,12 +189,13 @@ export function LocationPicker({
   // Called after a location is added, edited or retired, so the caller can reload its list.
   onLocationAdded?: () => void;
   selectedLocationId?: string | null;
+  onToggleStar?: (locationId: string, star: boolean) => void | Promise<void>;
 }) {
   return (
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
       {open && (
         <LocationBrowser origin={origin} locations={locations} tanks={tanks} companyId={companyId} userId={userId}
-          onPick={onPick} onChanged={onLocationAdded} selectedLocationId={selectedLocationId} />
+          onPick={onPick} onChanged={onLocationAdded} selectedLocationId={selectedLocationId} onToggleStar={onToggleStar} />
       )}
     </FullscreenModal>
   );
