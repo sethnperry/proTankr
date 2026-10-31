@@ -76,6 +76,8 @@ export default function MyTerminalsModal(props: {
   // the card itself shows the right number. Optional so callers that don't
   // have this wired (none currently) degrade to the pre-existing behavior.
   onLoadMyTerminals?: () => void | Promise<void>;
+  // Called after a terminal is picked (the list has closed).
+  onPicked?: () => void;
 }) {
   const {
     open, onClose,
@@ -120,6 +122,7 @@ export default function MyTerminalsModal(props: {
     // load, a typed card, or finishing the access steps.
     setSelectedTerminalId(tid);
     setTermOpen(false);
+    props.onPicked?.();
   };
 
   const sorted = [...terminalsFiltered].sort((a, b) => {
@@ -132,7 +135,7 @@ export default function MyTerminalsModal(props: {
   });
 
   return (
-    <FullscreenModal open={open} title="My Terminals" onClose={onClose}>
+    <FullscreenModal open={open} title="Terminals" onClose={onClose}>
       {!selectedState || !selectedCity ? (
         <div className="text-sm text-white/60">Select a city first.</div>
       ) : (
@@ -209,119 +212,8 @@ export default function MyTerminalsModal(props: {
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedTerminalId(isExpanded ? null : tid)}
-                        aria-label={isExpanded ? "Collapse terminal details" : "Expand terminal details"}
-                        aria-expanded={isExpanded}
-                        className="flex-shrink-0 self-stretch px-3 flex items-center text-white/35 text-xs select-none hover:text-white/70 hover:bg-white/5"
-                        style={{ background: "none", border: "none", cursor: "pointer" }}
-                      >
-                        {isExpanded ? "▲" : "▼"}
-                      </button>
                     </div>
 
-                    {/* Expanded panel -- read-only copy; edit on the Cards tab */}
-                    {isExpanded && (
-                      <div className="border-t border-white/10 px-3 pt-3 pb-3 space-y-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/40 font-medium">Expiration</span>
-                          <span className={["tabular-nums font-semibold", expired ? "text-red-400" : "text-white/70"].join(" ")}>
-                            {expiresISO ? formatMDYWithCountdown_(expiresISO) : "Not carded"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/40 font-medium">Card Number</span>
-                          <span className="text-white/70 font-semibold tabular-nums">{card?.cardNumber || "—"}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/40 font-medium">PIN</span>
-                          <span className="text-white/70 font-semibold tabular-nums">{card?.pin || "—"}</span>
-                        </div>
-                        {canSeeCardsFooter && (
-                          <div className="pt-1 text-[11px] text-white/25">
-                            Edit card details from the Cards tab.
-                          </div>
-                        )}
-
-                        {/* Rack status/edit -- relocated from the deleted
-                            Terminal tab. Only meaningful once this row's own
-                            rack fetch has resolved. */}
-                        <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
-                          {racksLoading && (
-                            <div className="text-xs text-white/35">Loading racks…</div>
-                          )}
-                          {racksError && (
-                            <div className="text-xs text-red-400">{racksError}</div>
-                          )}
-                          {!racksLoading && expandedRacks.length === 0 && !racksError && (
-                            <div className="text-xs text-white/35">
-                              No racks configured yet{canEditTerminal ? " — use Edit Terminal below to add one." : "."}
-                            </div>
-                          )}
-                          {!racksLoading && expandedRacks.length > 0 && (
-                            <CustomSelect
-                              value={expandedRackId}
-                              onChange={setExpandedRackId}
-                              options={expandedRacks.map((r) => ({ value: r.rack_id, label: r.rack_name }))}
-                            />
-                          )}
-
-                          {/* The actual rack product list -- this was the
-                              real gap from the first pass at this move: STUD
-                              (the ACTION) and the product list (the VIEW it
-                              acts on) are two different things, and only the
-                              action came over. Verbatim port of the deleted
-                              Terminal tab's own rendering (dot color, code,
-                              name, is_out strikethrough+dim, API/temp with
-                              "API —"/"—°F" placeholders) -- same
-                              expandedRackProducts/productsById data already
-                              being fetched for the STUD modal, just never
-                              rendered anywhere itself. */}
-                          <RackProductList expandedRackId={expandedRackId} expandedRackProducts={expandedRackProducts} productsById={productsById} />
-
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={!expandedRackId}
-                              onClick={() => setStudOpen(true)}
-                              style={{
-                                flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2,
-                                border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
-                                color: "#fff", cursor: expandedRackId ? "pointer" : "not-allowed",
-                                opacity: expandedRackId ? 1 : 0.4,
-                              }}
-                            >
-                              STUD
-                            </button>
-                            {canEditTerminal && (
-                              <button
-                                type="button"
-                                onClick={() => setEditTerminalOpen(true)}
-                                style={{
-                                  flex: 1, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2,
-                                  border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
-                                  color: "#fff", cursor: "pointer",
-                                }}
-                              >
-                                Edit Terminal
-                              </button>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => openAccessSteps({ terminalId: tid })}
-                            style={{
-                              width: "100%", marginTop: 8, fontSize: 12, fontWeight: 700, padding: "8px 10px", borderRadius: 2,
-                              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)",
-                              color: "#fff", cursor: "pointer",
-                            }}
-                          >
-                            Access Steps
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -330,44 +222,6 @@ export default function MyTerminalsModal(props: {
         </div>
       )}
 
-      {activeRack && (
-        <RackProductStatusModal
-          open={studOpen}
-          onClose={() => setStudOpen(false)}
-          rack={activeRack}
-          terminalCity={expandedTerminalRow?.city ?? ""}
-          terminalState={expandedTerminalRow?.state ?? ""}
-          rackProducts={expandedRackProducts}
-          productsById={productsById}
-          authUserId={authUserId}
-          companyId={companyId}
-          onSaved={() => loadExpandedRackProducts(expandedRackId)}
-        />
-      )}
-
-      {expandedTerminalId && canEditTerminal && (
-        <EditTerminalModal
-          open={editTerminalOpen}
-          onClose={() => setEditTerminalOpen(false)}
-          terminalId={expandedTerminalId}
-          terminalName={expandedTerminalRow?.terminal_name}
-          onChanged={() => {
-            // Re-fetch racks (a rename/add/delete may have changed the list,
-            // or renewal_days changed) -- keeps the currently-picked rack
-            // selected if it still exists. The rack-products effect above
-            // re-fires on its own once expandedRackId resolves.
-            if (expandedTerminalId) loadExpandedRacks(expandedTerminalId, { keepRackId: expandedRackId });
-            // Also refresh the live my_terminals_with_status state -- a
-            // renewal_days edit needs this refreshed too, not just the
-            // shared terminals-catalog cache (EditTerminalModal's own save
-            // already invalidates that one), or the Expiration bell/report
-            // (which prefers this live state, see useExpirations.ts) can
-            // keep showing the pre-edit countdown even after the card
-            // itself is correct.
-            onLoadMyTerminals?.();
-          }}
-        />
-      )}
     </FullscreenModal>
   );
 }

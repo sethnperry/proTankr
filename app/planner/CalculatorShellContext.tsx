@@ -54,6 +54,12 @@ type ShellValue = {
   setEquipOpen: (v: boolean) => void;
   termOpen: boolean;
   setTermOpen: (v: boolean) => void;
+  // The one Terminal screen (status, STUD, suppliers, training, racks, cards) and whether the terminal list
+  // being picked from should open it afterwards.
+  terminalHubOpen: boolean;
+  setTerminalHubOpen: (v: boolean) => void;
+  hubAfterPick: boolean;
+  setHubAfterPick: (v: boolean) => void;
   // Location picker (state -> city) -- termOpen (above) already covers "pick
   // a terminal within the current city"; this is the step before it. Shared
   // (not local to page.tsx) so any tab can open the SAME LocationModal/
@@ -255,6 +261,8 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
 
   const [equipOpen, setEquipOpen] = useState(false);
   const [termOpen, setTermOpen] = useState(false);
+  const [terminalHubOpen, setTerminalHubOpen] = useState(false);
+  const [hubAfterPick, setHubAfterPick] = useState(false);
   const [locOpen, setLocOpen] = useState(false);
   const [statePickerOpen, setStatePickerOpen] = useState(false);
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null);
@@ -587,7 +595,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     equipment, location, terminals, expirations,
     myTerminalIdSet, terminalFilters,
     equipOpen, setEquipOpen,
-    termOpen, setTermOpen,
+    termOpen, setTermOpen, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
     isCityStarred, toggleCityStar,
@@ -603,7 +611,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     equipment, location, terminals, expirations,
     myTerminalIdSet, terminalFilters,
     equipOpen, setEquipOpen,
-    termOpen, setTermOpen,
+    termOpen, setTermOpen, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
     isCityStarred, toggleCityStar,

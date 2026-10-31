@@ -185,10 +185,6 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
               </span>
             </div>
           ))}
-          <div style={{ ...rowStyle, display: "flex", color: muted, fontSize: 12 }}>
-            <span style={{ flex: 1 }}>{newest ? `Last reading ${ago(newest)}` : ""}</span>
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>Update status ›</span>
-          </div>
         </button>
       )}
     </div>

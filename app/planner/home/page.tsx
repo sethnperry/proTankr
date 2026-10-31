@@ -1544,11 +1544,6 @@ export default function HomePage() {
   const dropCount = storeLive.length;
   // 1 (usually just me) is white; more than one truck going there is red.
   const countColor = (n: number) => (n === 0 ? LOOK.muted : n === 1 ? "#fff" : "#f87171");
-  const switchTerminal = () => {
-    setTerminalNowOpen(false);
-    if (location.selectedCity) shell.setTermOpen(true);
-    else shell.setLocOpen(true);
-  };
   const loadLine = (c: TripCompartmentLoadRow) =>
     `C${c.comp_number} · ${productName(c.product_id)}${c.gross_gallons != null ? ` · ${Math.round(Number(c.gross_gallons)).toLocaleString("en-US")} gal` : ""}`;
   const onBoardLines = (compLoads: TripCompartmentLoadRow[] | undefined) =>
@@ -1679,9 +1674,10 @@ export default function HomePage() {
     return terminalReadiness(rows, { city: readinessPlace.city, state: readinessPlace.state, todayIso: isoToday_(), pickupTerminalId: readinessPlace.pickupId });
   })();
   const readinessLabel = [readinessPlace.city, readinessPlace.state].filter(Boolean).join(", ") || null;
+  // A bar on the access strip opens that terminal's screen; with none it goes to the picker.
   const openTerminalList = (terminalId: string | null) => {
-    if (terminalId) shell.setExpandedTerminalId(terminalId);
-    setTerminalNowOpen(false);
+    if (terminalId) { shell.chooseTerminal(terminalId); shell.setTerminalHubOpen(true); return; }
+    shell.setHubAfterPick(true);
     if (location.selectedCity) shell.setTermOpen(true);
     else shell.setLocOpen(true);
   };
@@ -1709,7 +1705,7 @@ export default function HomePage() {
   // to load more (an Add Pickup rack not left yet, or Next Rack). Otherwise it
   // lives in the Terminal sheet, under Switch Terminal.
   const headingToLoadMore = !!snap && (!!activePickup(snap.pickups) || step.kind === "next_rack");
-  const accessCollapsed = aboardRows.length > 0 && !headingToLoadMore;
+  const accessCollapsed = false; // the strip always stays on the dashboard now
   const accessStrip = (
     <TerminalAccessStrip
       place={readinessLabel}
@@ -1717,7 +1713,7 @@ export default function HomePage() {
       loading={terminals.termLoading}
       onOpenTerminal={openTerminalList}
       onOpenSteps={(tid) => openAccessSteps({ terminalId: tid })}
-      onChangeCity={() => { setTerminalNowOpen(false); shell.setLocOpen(true); }}
+      onChangeCity={() => { shell.setHubAfterPick(true); shell.setLocOpen(true); }}
       otherCities={null}
     />
   );
@@ -1753,7 +1749,7 @@ export default function HomePage() {
           { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
             onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
           { label: "To Rack", value: String(rackCount), unit: rackCount === 1 ? "trk" : "trks",
-            color: countColor(rackCount), onClick: () => setTerminalNowOpen(true) },
+            color: countColor(rackCount), onClick: () => shell.setTerminalHubOpen(true) },
           { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount), unit: dropCount === 1 ? "load" : "loads",
             color: countColor(dropCount), onClick: () => setDropNowOpen(true) },
         ]} />
@@ -2245,60 +2241,6 @@ export default function HomePage() {
       {/* Terminal: right-now status of the selected terminal + who's headed
           there, with a switch button. Opened from the Terminal tool and the
           To Rack gauge. */}
-      <FullscreenModal open={terminalNowOpen} title={statusTerminalName ?? "Terminal"} onClose={() => setTerminalNowOpen(false)} footer={null}>
-        <TerminalStatusCard
-          defaultOpen
-          placeLabel={statusPlace}
-          terminalName={statusTerminalName}
-          rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
-          products={terminalStatus.products}
-          reports={terminalAlerts.reports}
-          onOpenReports={() => setAlertsOpen(true)}
-          onChangeTerminal={switchTerminal}
-          onUpdate={() => setStatusOpen(true)}
-        />
-        <div style={{ marginTop: 10 }}>
-          <HeadingToTerminalCard defaultOpen terminalName={statusTerminalName} items={toMyTerminal} productInfo={productInfo}
-            emptyText="No other company trucks headed here right now." />
-        </div>
-        <button type="button" onClick={switchTerminal} className="dash-press"
-          style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.cta }}>
-          Switch Terminal
-        </button>
-        {companyId && alertTerminalId && (
-          <button type="button" onClick={() => setSuppliersOpen(true)} className="dash-press"
-            style={{ width: "100%", marginTop: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, ...L.secondary }}>
-            Suppliers
-          </button>
-        )}
-        {accessCollapsed && (
-          <>
-            <div style={{ marginTop: 18 }}><SectionLabel>Terminal access</SectionLabel></div>
-            {accessStrip}
-          </>
-        )}
-      </FullscreenModal>
-      {companyId && userId && alertTerminalId && (
-        <SuppliersModal open={suppliersOpen} onClose={() => setSuppliersOpen(false)} companyId={companyId} userId={userId}
-          canManage={shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin}
-          terminals={terminalCatalog.map((t) => ({ id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", used: false, place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null, city: t.city ?? null, state: t.state ?? null }))}
-          initialTerminalId={alertTerminalId} />
-      )}
-      {/* After the Terminal sheet so Update status opens on top of it. */}
-      <TerminalStatusSheet
-        open={statusOpen}
-        onClose={() => setStatusOpen(false)}
-        terminalId={alertTerminalId}
-        terminalName={statusTerminalName}
-        rackId={terminalStatus.rackId}
-        rackName={terminalStatus.rackCount > 1 ? terminalStatus.rackName : null}
-        products={terminalStatus.products}
-        reports={terminalAlerts.reports}
-        companyId={companyId}
-        userId={userId}
-        truckLabel={equipment.currentTruckName ?? ""}
-        onChanged={() => { void terminalStatus.reload(); terminalAlerts.refresh(); }}
-      />
 
       <WalletHub open={walletOpen} onClose={() => setWalletOpen(false)} />
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
@@ -2420,9 +2362,6 @@ export default function HomePage() {
         const tools: ToolItem[] = [
           { icon: "plan", label: "Plan", sub: "Set up load plans", onClick: () => nav.go("plan", "/planner?plan=1"), busy: nav.is("plan") },
           { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
-          { icon: "terminal", label: "Terminal", sub: statusTerminalName ?? "Not set",
-            subColor: terminalAlerts.reports.length ? "#f87171" : undefined,
-            onClick: () => (statusTerminalName ? setTerminalNowOpen(true) : switchTerminal()) },
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },

@@ -27,6 +27,7 @@ import EquipmentModal from "./modals/EquipmentModal";
 import SettingsModal from "@/lib/ui/driver/SettingsModal";
 import LocationModal from "./modals/LocationModal";
 import MyTerminalsModal from "./modals/MyTerminalsModal";
+import { TerminalHub } from "./components/terminal/TerminalHub";
 import RackSelectSheet from "./components/RackSelectSheet";
 import TerminalOutageBanner from "./components/TerminalOutageBanner";
 import { useActiveOutageBanner } from "./hooks/useTerminalOutageReports";
@@ -327,8 +328,10 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
           the Terminal tab's identity header both open THIS modal pair, both
           read/write the one shared shell.location, so picking a city/
           terminal from either tab is instantly reflected in the other. */}
+      {/* The Terminal screen is mounted BEFORE the pickers so they open on top of it. */}
+      <TerminalHub />
       <LocationModal
-        open={shell.locOpen} onClose={() => shell.setLocOpen(false)}
+        open={shell.locOpen} onClose={() => { shell.setLocOpen(false); shell.setHubAfterPick(false); }}
         selectedState={shell.location.selectedState}
         selectedStateLabel={shell.selectedStateLabel}
         selectedStateName={shell.selectedStateName}
@@ -353,7 +356,8 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
       />
 
       <MyTerminalsModal
-        open={shell.termOpen} onClose={() => shell.setTermOpen(false)}
+        open={shell.termOpen} onClose={() => { shell.setTermOpen(false); shell.setHubAfterPick(false); }}
+        onPicked={() => { if (shell.hubAfterPick) { shell.setHubAfterPick(false); shell.setTerminalHubOpen(true); } }}
         selectedState={shell.location.selectedState}
         selectedCity={shell.location.selectedCity}
         termError={shell.terminals.termError}
