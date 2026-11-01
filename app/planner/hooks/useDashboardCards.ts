@@ -182,7 +182,13 @@ export function useTerminalLoads(terminalId: string | null, refreshKey?: unknown
   return { items, loading };
 }
 
-export type OtherCarrierTruck = { tripId: string; who: string; arrived: boolean; comps: { compNumber: number; productId: string | null; gallons: number }[] };
+export type OtherCarrierTruck = {
+  tripId: string; who: string; arrived: boolean;
+  comps: { compNumber: number; productId: string | null; gallons: number }[];
+  // The trailer's compartments and what each last held (residue); empty when not known.
+  sizes: { comp: number; size: number | null }[];
+  residue: Record<number, string>;
+};
 
 // Other carriers' live trucks headed to a terminal or a store (nothing secret: company name, status, what is
 // aboard). Our own company's trucks come from the normal trips read. Refreshes every minute.
@@ -197,7 +203,9 @@ export function useOtherCarriers(kind: "terminal" | "location", id: string | nul
           kind === "terminal" ? { p_terminal_id: id } : { p_location_id: id });
         if (error) throw error;
         const rows = (Array.isArray(data) ? data : []) as any[];
-        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), arrived: !!r.arrived, comps: mapComps(r) })));
+        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), arrived: !!r.arrived, comps: mapComps(r),
+          sizes: ((r.sizes ?? []) as any[]).map((z) => ({ comp: Number(z.comp_number), size: z.size != null ? Number(z.size) : null })),
+          residue: Object.fromEntries(((r.residue ?? []) as any[]).filter((z) => z.product_id).map((z) => [Number(z.comp_number), String(z.product_id)])) })));
       } catch (e) {
         console.warn("[dashboard] other carriers failed:", e);
         if (!cancelled) setItems([]);

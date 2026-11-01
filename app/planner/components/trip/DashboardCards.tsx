@@ -119,6 +119,20 @@ export function CompsStrip({ comps, productInfo }: { comps: { compNumber: number
   for (const c of comps) colors[c.compNumber] = colorOf(productInfo(c.productId));
   return <SideView height={12} segs={segsFor(comps.map((c) => ({ comp: c.compNumber, size: Math.max(1, c.gallons) })), colors)} />;
 }
+/** Another carrier's trailer: what they are loading (filled) and what the rest last held (outlined). */
+export function CarrierStrip({ comps, sizes, residue, productInfo }: {
+  comps: { compNumber: number; productId: string | null; gallons: number }[];
+  sizes: { comp: number; size: number | null }[];
+  residue: Record<number, string>;
+  productInfo: ProductInfoFn;
+}) {
+  if (sizes.length === 0) return <CompsStrip comps={comps} productInfo={productInfo} />;
+  const loaded: Record<number, string> = {};
+  for (const c of comps) loaded[c.compNumber] = colorOf(productInfo(c.productId));
+  const res: Record<number, string> = {};
+  for (const [n, pid] of Object.entries(residue)) res[Number(n)] = colorOf(productInfo(pid));
+  return <SideView height={12} segs={segsFor(sizes, loaded, res)} />;
+}
 const nameStyle: React.CSSProperties = { flex: "0 1 auto", minWidth: 0, maxWidth: "55%", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
 const rowStyle: React.CSSProperties = {

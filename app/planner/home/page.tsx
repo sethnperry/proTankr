@@ -153,7 +153,7 @@ import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
 import { WalletHub, walletTool } from "../components/wallet/WalletHub";
 import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
-import { CompsStrip, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard, initialsOf, runLabel } from "../components/trip/DashboardCards";
+import { CarrierStrip, CompsStrip, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard, initialsOf, runLabel } from "../components/trip/DashboardCards";
 import { useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
 import { DispatchedCard, type DispatchedItem } from "./DispatchedCard";
@@ -2326,8 +2326,8 @@ export default function HomePage() {
           const rows = [
             ...(meToRack ? [{ key: "me", text: myLabel, trailerId: trailerId, arrived: !!myPickup?.arrived_at }] : []),
             ...toMyTerminal.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName }), trailerId: x.trailerId, arrived: x.arrived })),
-            ...otherToRack.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: false, who: x.who, truck: null }), trailerId: null as string | null, arrived: x.arrived, comps: x.comps })),
-          ] as { key: string; text: string; trailerId: string | null; arrived: boolean; comps?: { compNumber: number; productId: string | null; gallons: number }[] }[];
+            ...otherToRack.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: false, who: x.who, truck: null }), trailerId: null as string | null, arrived: x.arrived, other: x })),
+          ] as { key: string; text: string; trailerId: string | null; arrived: boolean; other?: ReturnType<typeof useOtherCarriers>[number] }[];
           return (
             <>
               {label(`En route · ${rows.length}`)}
@@ -2339,7 +2339,7 @@ export default function HomePage() {
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>{x.text}</span>
                         <span style={{ ...cap, color: x.arrived ? "#4ade80" : muted }}>{x.arrived ? "At rack" : "En route"}</span>
                       </div>
-                      <div style={{ marginTop: 6 }}>{x.comps ? <CompsStrip comps={x.comps} productInfo={productInfo} /> : <TrailerHeader variant="side" trailerId={x.trailerId} loaded={{}} data={rackTrailerHdr} height={12} />}</div>
+                      <div style={{ marginTop: 6 }}>{x.other ? <CarrierStrip comps={x.other.comps} sizes={x.other.sizes} residue={x.other.residue} productInfo={productInfo} /> : <TrailerHeader variant="side" trailerId={x.trailerId} loaded={{}} data={rackTrailerHdr} height={12} />}</div>
                     </div>
                   ))}
                 </div>
