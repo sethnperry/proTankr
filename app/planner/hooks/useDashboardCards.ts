@@ -93,8 +93,11 @@ export type StoreDelivery = {
   truck: string | null;
   // What was delivered (or loaded) in each compartment, for the trailer view.
   comps: { compNumber: number; productId: string | null; gallons: number }[];
+  // The trailer's compartments, to draw the empty ones too.
+  sizes: { comp: number; size: number | null }[];
 };
 
+const mapSizes = (r: any) => ((r.sizes ?? []) as any[]).map((z) => ({ comp: Number(z.comp_number), size: z.size != null ? Number(z.size) : null }));
 const mapComps = (r: any) => ((r.comps ?? []) as any[]).map((c) => ({ compNumber: Number(c.comp_number), productId: c.product_id ?? null, gallons: Number(c.gallons ?? 0) }));
 
 // Recent deliveries at one store, every carrier. The server matches the same
@@ -131,6 +134,7 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
           })),
           truck: r.truck ?? null,
           comps: mapComps(r),
+          sizes: mapSizes(r),
         }));
         if (!cancelled) { setItems(out); setLoaded(true); }
       } catch (e) {
@@ -165,7 +169,7 @@ export function useTerminalLoads(terminalId: string | null, refreshKey?: unknown
           for (const c of comps) by.set(c.productId, (by.get(c.productId) ?? 0) + c.gallons);
           return {
             deliveryId: String(r.pickup_id), tripId: r.trip_id ? String(r.trip_id) : null, isMine: !!r.is_mine, ownCompany: !!r.own_company,
-            who: String(r.who ?? "Driver"), leftAt: r.left_at ?? null, truck: r.truck ?? null, comps, tanks: [],
+            who: String(r.who ?? "Driver"), leftAt: r.left_at ?? null, truck: r.truck ?? null, comps, sizes: mapSizes(r), tanks: [],
             products: [...by].map(([productId, gallons]) => ({ productId, gallons })),
           };
         });
@@ -183,7 +187,7 @@ export function useTerminalLoads(terminalId: string | null, refreshKey?: unknown
 }
 
 export type OtherCarrierTruck = {
-  tripId: string; who: string; arrived: boolean;
+  tripId: string; who: string; arrived: boolean; arrivedAt: string | null;
   comps: { compNumber: number; productId: string | null; gallons: number }[];
   // The trailer's compartments and what each last held (residue); empty when not known.
   sizes: { comp: number; size: number | null }[];
@@ -203,8 +207,8 @@ export function useOtherCarriers(kind: "terminal" | "location", id: string | nul
           kind === "terminal" ? { p_terminal_id: id } : { p_location_id: id });
         if (error) throw error;
         const rows = (Array.isArray(data) ? data : []) as any[];
-        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), arrived: !!r.arrived, comps: mapComps(r),
-          sizes: ((r.sizes ?? []) as any[]).map((z) => ({ comp: Number(z.comp_number), size: z.size != null ? Number(z.size) : null })),
+        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), arrived: !!r.arrived, arrivedAt: r.arrived_at ?? null, comps: mapComps(r),
+          sizes: mapSizes(r),
           residue: Object.fromEntries(((r.residue ?? []) as any[]).filter((z) => z.product_id).map((z) => [Number(z.comp_number), String(z.product_id)])) })));
       } catch (e) {
         console.warn("[dashboard] other carriers failed:", e);

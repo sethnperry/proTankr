@@ -262,7 +262,7 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
               <span style={{ ...nameStyle, maxWidth: "34%", color: d.ownCompany ? "#fff" : "rgba(255,255,255,0.8)" }}>
                 {runLabel({ ownCompany: d.ownCompany, who: d.who, truck: d.truck })}
               </span>
-              <span style={{ flex: 1, minWidth: 0 }}><CompsStrip comps={d.comps} productInfo={productInfo} /></span>
+              <span style={{ flex: 1, minWidth: 0 }}><CarrierStrip comps={d.comps} sizes={d.sizes} residue={{}} productInfo={productInfo} /></span>
               <span style={{ color: muted, fontSize: 12, flexShrink: 0 }}>{when(d.leftAt)}</span>
             </button>
             {isOpen && (

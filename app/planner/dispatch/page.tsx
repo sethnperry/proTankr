@@ -75,6 +75,7 @@ import FleetCardsModal from "@/app/admin/FleetCardsModal";
 import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
 import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
+import { SiteBoard } from "./SiteBoard";
 import { PlanLoadCard, DriverList, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
 import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
@@ -98,7 +99,7 @@ import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, typ
 import { useTrailerPlan } from "@/lib/dispatch/useTrailerPlan";
 import { CompartmentPlanCard } from "./CompartmentPlanCard";
 import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, swapDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
-import { onBoard, activePickup } from "@/lib/trips/tripFlow";
+import { onBoard, activePickup, plannedDeliveries } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
 // Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
@@ -232,7 +233,9 @@ export default function DispatchPage() {
   // ── Dispatch Dashboard (no driver picked) ─────────────────────────────────
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
-  const livePositions = useFleetPositions(companyId || null, mode === "live");
+  const [planLocationId, setPlanLocationId] = useState<string | null>(null);
+  const [planTerminalId, setPlanTerminalId] = useState<string | null>(null);
+  const livePositions = useFleetPositions(companyId || null, mode === "live" || !!planTerminalId || !!planLocationId);
   const [hosNonce, setHosNonce] = useState(0);
   const fleetHos = useFleetHos(companyId || null, true, hosNonce);
   // Picking a driver for the timeline: link them to Geotab now (if they match), then reload clocks.
@@ -361,6 +364,15 @@ export default function DispatchPage() {
     if (!dest || !pos || Date.now() - Date.parse(pos.at ?? "") > 30 * 60000) return null;
     return Date.now() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, dest) * 60000;
   };
+  // The same for a truck headed to its next delivery.
+  const storeEta = (tripId: string): number | null => {
+    const ft = fleetTrips.find((f) => f.trip.trip_id === tripId);
+    const d = ft ? plannedDeliveries(ft.deliveries)[0] : null;
+    const dest = d?.location_id ? locationLLOf(d.location_id) : null;
+    const pos = ft?.trip.truck_id ? livePositions.get(ft.trip.truck_id) : undefined;
+    if (!dest || !pos || Date.now() - Date.parse(pos.at ?? "") > 30 * 60000) return null;
+    return Date.now() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, dest) * 60000;
+  };
   const rawConflicts = useMemo(
     () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad, arrivalEta),
     [fleetTrips, fleetReports.reports, fleetReports.plannedByLoad, livePositions, terminalsCatalog], // eslint-disable-line react-hooks/exhaustive-deps
@@ -378,8 +390,6 @@ export default function DispatchPage() {
     [fleetTrips],
   );
   // ── Planning a load: drop location -> terminal -> drivers ───────────────
-  const [planLocationId, setPlanLocationId] = useState<string | null>(null);
-  const [planTerminalId, setPlanTerminalId] = useState<string | null>(null);
   const [showNotCarded, setShowNotCarded] = useState(false);
   const [locPickerOpen, setLocPickerOpen] = useState(false);
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
@@ -1003,6 +1013,8 @@ export default function DispatchPage() {
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
+            {planTerminalId && <SiteBoard kind="terminal" id={planTerminalId} name={planTerminal?.name ?? "Terminal"} trips={fleetTrips} product={boardProduct} now={new Date()} etaFor={arrivalEta} onOpenTrip={openTrip} />}
+            {planLocationId && <SiteBoard kind="location" id={planLocationId} name={planLocation ? locationTitle(planLocation) : "Delivery"} trips={fleetTrips} product={boardProduct} now={new Date()} etaFor={storeEta} onOpenTrip={openTrip} />}
           </div>
         )}
         onOpenDriver={(id) => setSelectedDriverId(id)}
