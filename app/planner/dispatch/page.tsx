@@ -88,6 +88,7 @@ import { forecastLoad, typicalStartMinutes, clock } from "@/lib/dispatch/forecas
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
 import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
 import { LocationPicker } from "../components/trip/LocationPicker";
+import { TripsBrowser } from "../components/trip/TripsBrowser";
 import { LocationsHub, locationsTool } from "../components/locations/LocationsHub";
 import { useDeliveryLocationList, useTripSettings } from "@/lib/trips/useTripData";
 import { classifyLive } from "@/lib/dispatch/liveGroups";
@@ -383,6 +384,7 @@ export default function DispatchPage() {
   const [locPickerOpen, setLocPickerOpen] = useState(false);
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
   const [locsOpen, setLocsOpen] = useState(false); // the Locations tool
+  const [tripsOpen, setTripsOpen] = useState(false); // the Trips tool
   const lowHours = useMemo(
     () => buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now()),
     [fleetTrips, fleetHos]);
@@ -917,6 +919,7 @@ export default function DispatchPage() {
     const openTrip = (id: string) => nav.go(`trip:${id}`, `/planner/trips/${id}`);
     const dashTools: ToolItem[] = [
       { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
+      { icon: "route" as const, label: "Trips", onClick: () => setTripsOpen(true) },
       { icon: "locate" as const, label: "Track", onClick: () => setFindTruckOpen(true) },
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       locationsTool(() => setLocsOpen(true)),
@@ -1037,6 +1040,9 @@ export default function DispatchPage() {
         tools={dashTools}
       />
       <LocationsHub open={locsOpen} onClose={() => setLocsOpen(false)} companyId={companyId || null} userId={authUserId || null} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} />
+      <FullscreenModal open={tripsOpen} title="Trips" onClose={() => setTripsOpen(false)} footer={null}>
+        {tripsOpen && <TripsBrowser mode="company" userId={authUserId || null} companyId={companyId || null} onOpen={openTrip} />}
+      </FullscreenModal>
       <FullscreenModal open={!!reassigning} title="Reassign to which driver?" onClose={() => setReassigning(null)}>
         {reassigning && (
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>
