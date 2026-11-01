@@ -377,10 +377,21 @@ export default function HomePage() {
   const terminalStatus = useTerminalStatus(alertTerminalId, statusRackId);
   const fleet = useFleetTrips(companyId);
   const myDelivery = snap ? plannedDeliveries(snap.deliveries)[0] ?? null : null;
-  const toMyTerminal = useMemo(() => headingToTerminal(fleet.trips, alertTerminalId, userId), [fleet.trips, alertTerminalId, userId]);
+  // The To Rack chip follows where this trip is loading (its active pickup), else the terminal picked.
+  const myPickup = snap ? activePickup(snap.pickups) : null;
+  const rackTerminalId = String(myPickup?.terminal_id || "") || alertTerminalId;
+  const toMyTerminal = useMemo(() => headingToTerminal(fleet.trips, rackTerminalId, userId), [fleet.trips, rackTerminalId, userId]);
   // My own truck counts too: headed to this rack until I've left it, and
   // headed to the drop while loaded with a delivery set.
-  const meToRack = !!snap && !!alertTerminalId && String(activePickup(snap.pickups)?.terminal_id ?? "") === alertTerminalId;
+  const meToRack = !!myPickup && !!rackTerminalId && String(myPickup.terminal_id ?? "") === rackTerminalId;
+  const rackStatus = useTerminalStatus(rackTerminalId, myPickup?.rack_id && String(myPickup.terminal_id ?? "") === rackTerminalId ? myPickup.rack_id : null);
+  const rackAlerts = useActiveOutageBanner(rackTerminalId, userId || null, "all");
+  const rackName = useMemo(() => {
+    const t = rackTerminalId ? terminalCatalog.find((x) => String(x.terminal_id) === rackTerminalId) : null;
+    return t?.terminal_name ? String(t.terminal_name) : "Terminal";
+  }, [rackTerminalId, terminalCatalog]);
+  const [rackSheetOpen, setRackSheetOpen] = useState(false);
+  const [rackStudOpen, setRackStudOpen] = useState(false);
   const rackCount = toMyTerminal.length + (meToRack ? 1 : 0);
   const nearbyParked = useMemo(() => parkedPreloads(fleet.trips, trailerId), [fleet.trips, trailerId]);
   const completedDeliveries = useMemo(
@@ -1541,7 +1552,8 @@ export default function HomePage() {
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fleet.trips, fleet.dispatched, selectedLoc?.location_id, userId, myDelivery?.location_id, myDelivery?.arrived_at, openTrip?.trip_id, aboardRows]);
-  const dropCount = storeLive.length;
+  // Trucks actually on the way (begun); dispatched loads nobody has begun yet are not counted.
+  const dropCount = storeLive.filter((x) => x.state !== "planned").length;
   // 1 (usually just me) is white; more than one truck going there is red.
   const countColor = (n: number) => (n === 0 ? LOOK.muted : n === 1 ? "#fff" : "#f87171");
   const loadLine = (c: TripCompartmentLoadRow) =>
@@ -1749,8 +1761,8 @@ export default function HomePage() {
           { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
             onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
           { label: "To Rack", value: String(rackCount), unit: rackCount === 1 ? "trk" : "trks",
-            color: countColor(rackCount), onClick: () => shell.setTerminalHubOpen(true) },
-          { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount), unit: dropCount === 1 ? "load" : "loads",
+            color: countColor(rackCount), onClick: () => setRackSheetOpen(true) },
+          { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount), unit: dropCount === 1 ? "trk" : "trks",
             color: countColor(dropCount), onClick: () => setDropNowOpen(true) },
         ]} />
       </div>
@@ -2284,6 +2296,56 @@ export default function HomePage() {
           );
         })()}
       </FullscreenModal>
+      <FullscreenModal open={rackSheetOpen} title={rackName} onClose={() => setRackSheetOpen(false)} footer={null}>
+        {(() => {
+          const hair = "rgba(255,255,255,0.12)";
+          const cap: React.CSSProperties = { fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: muted };
+          const panel: React.CSSProperties = { background: "#0f0f10", border: `1px solid ${hair}` };
+          const label = (t: string, right?: React.ReactNode) => (
+            <div style={{ display: "flex", alignItems: "baseline", margin: "18px 0 8px", paddingBottom: 6, borderBottom: `1px solid ${hair}` }}><span style={{ ...cap, flex: 1 }}>{t}</span>{right}</div>
+          );
+          const mine = meToRack ? [{ key: "me", who: "You", sub: equipment.currentTruckName ?? "", arrived: !!myPickup?.arrived_at, ids: [...new Set((myPickup?.planned_comps ?? []).map((c) => c.product_id).filter(Boolean))] as string[] }] : [];
+          const rows = [...mine, ...toMyTerminal.map((x) => ({ key: x.tripId, who: x.driverName ?? "Driver", sub: x.truckName ?? "", arrived: x.arrived, ids: x.productIds as string[] }))];
+          return (
+            <>
+              {label(`En route · ${rows.length}`)}
+              {rows.length === 0 ? <div style={{ ...panel, padding: "11px 14px", color: muted, fontSize: 14 }}>No company trucks headed here right now.</div> : (
+                <div style={panel}>
+                  {rows.map((x, i) => (
+                    <div key={x.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: i ? `1px solid ${hair}` : "none", fontSize: 14 }}>
+                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: x.key === "me" ? 800 : 500 }}>{x.who}{x.sub ? <span style={{ color: muted }}> · {x.sub}</span> : null}</span>
+                      {x.ids.map((id) => { const pi = productInfo(id); return <span key={id} style={{ ...cap, color: "#fff", display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: pi.hex ?? "#fff", display: "inline-block" }} />{pi.code}</span>; })}
+                      <span style={{ ...cap, color: x.arrived ? "#4ade80" : muted }}>{x.arrived ? "At rack" : "En route"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {label("Products", rackStatus.rackName ? <span style={{ ...cap, color: "rgba(255,255,255,0.4)" }}>{rackStatus.rackName}</span> : null)}
+              <div style={panel}>
+                {rackStatus.products.length === 0 ? <div style={{ padding: "11px 14px", color: muted, fontSize: 14 }}>No products on file for this rack.</div> : rackStatus.products.map((p, i) => (
+                  <div key={p.productId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px 10px 0", borderTop: i ? `1px solid ${hair}` : "none", opacity: p.isOut ? 0.55 : 1 }}>
+                    <span aria-hidden style={{ width: 4, alignSelf: "stretch", background: p.hex ?? "#fff", flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: p.isOut ? "line-through" : undefined }}>{p.name}</span>
+                    {p.isOut && <span style={{ ...cap, color: "#f87171" }}>Out</span>}
+                    <span className="dash-num" style={{ fontSize: 13, fontWeight: 700, color: p.lastApi != null ? "#fff" : muted }}>{p.lastApi != null ? p.lastApi.toFixed(1) : "—"}</span>
+                    <span className="dash-num" style={{ fontSize: 13, color: muted, width: 44, textAlign: "right" }}>{p.lastTempF != null ? `${p.lastTempF.toFixed(0)}°F` : "—"}</span>
+                  </div>
+                ))}
+              </div>
+              {rackTerminalId && <button type="button" className="dash-press" onClick={() => setRackStudOpen(true)} style={{ width: "100%", marginTop: 12, padding: "15px 0", fontSize: 15, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer" }}>STUD</button>}
+            </>
+          );
+        })()}
+      </FullscreenModal>
+      {rackTerminalId && (
+        <TerminalStatusSheet
+          open={rackStudOpen} onClose={() => setRackStudOpen(false)} terminalId={rackTerminalId} terminalName={rackName}
+          rackId={rackStatus.rackId} rackName={rackStatus.rackCount > 1 ? rackStatus.rackName : null}
+          products={rackStatus.products} reports={rackAlerts.reports} companyId={companyId} userId={userId}
+          truckLabel={equipment.currentTruckName ?? ""}
+          onChanged={() => { void rackStatus.reload(); rackAlerts.refresh(); }}
+        />
+      )}
       <FullscreenModal open={dropNowOpen} title={selectedLoc ? locationTitle(selectedLoc) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
         <StoreActivityCard
           storeName={selectedLoc ? locationTitle(selectedLoc) : null}
