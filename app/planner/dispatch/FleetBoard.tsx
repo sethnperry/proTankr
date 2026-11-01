@@ -366,7 +366,7 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         // Same wording as the driver's To Drop list: delivering, loaded and on the way, or begun but not loaded yet.
         const nextDrop = ft.deliveries.filter((d) => d.status === "planned").sort((a, b) => a.seq - b.seq)[0];
         const state: "delivering" | "enroute" | "loading" = nextDrop?.arrived_at ? "delivering" : aboardNow.length > 0 ? "enroute" : "loading";
-        const stateText = state === "delivering" ? { t: "Delivering now", c: "#4ade80" } : state === "enroute" ? { t: "Loaded, en route", c: "#fff" } : { t: "Not loaded, en route to load", c: "#fbbf24" };
+        const stateText = state === "delivering" ? { t: "Delivering now", c: "#4ade80" } : state === "enroute" ? { t: "Loaded, en route", c: "#fff" } : { t: "Planned", c: "rgba(255,255,255,0.5)" };
         const byProduct = new Map<string | null, number | null>();
         if (aboardNow.length > 0) for (const c of aboardNow) byProduct.set(c.product_id, (byProduct.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
         else for (const pk of ft.pickups) for (const c of pk.planned_comps ?? []) if (c.product_id) { byProduct.set(c.product_id, null); loadedNow[c.comp_number] = c.product_id; }
@@ -375,24 +375,20 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const late = !!lv?.etaMs && route.nodes[route.position.at]?.kind === "delivery" && Number.isFinite(plannedEnd) && lv.etaMs > plannedEnd;
         const eta = lv?.etaMs ? new Date(lv.etaMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
         return (
-          <div key={id} style={{ ...card, cursor: "default", display: "flex", alignItems: "stretch", padding: "9px 0 9px 12px", marginBottom: 6 }}>
+          <div key={id} style={{ ...card, cursor: "default", display: "flex", alignItems: "stretch", padding: "9px 12px", marginBottom: 6 }}>
             <CardBusy on={openingId === id} />
-            <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <button type="button" onClick={() => toggle(id)} aria-expanded={isOpen}
                 style={{ display: "block", width: "100%", background: "none", border: "none", padding: 0, color: "#fff", textAlign: "left", cursor: "pointer" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
                   <span style={{ fontSize: 15, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {ft.driverName ?? "Driver"}{ft.truckName ? ` - ${ft.truckName}` : ""}
+                    {[(ft.driverName ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", ft.truckName].filter(Boolean).join(" ")}
                   </span>
                   {eta && <span className="dash-num" style={{ fontSize: 12, color: late ? "#f87171" : muted, fontWeight: late ? 800 : 400, whiteSpace: "nowrap" }}>ETA {eta}</span>}
                 </div>
               </button>
               <div style={{ fontSize: 12, fontWeight: 700, color: stateText.c, marginTop: 2 }}>{stateText.t}</div>
-              {byProduct.size > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 3, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-                  {[...byProduct].map(([pid, g]) => <span key={String(pid)}>{product(pid).code}{g != null ? ` ${Math.round(g).toLocaleString("en-US")}` : ""}</span>)}
-                </div>
-              )}
+              <div style={{ marginTop: 6 }}><TrailerHeader variant="side" trailerId={ft.trip.trailer_id} loaded={loadedNow} data={hdr} height={12} /></div>
               <RouteLine route={route} parked={false} live={lv?.fraction ?? null} delayed={delayedTrips?.has(id)} />
               {isOpen && (
                 <>
@@ -432,7 +428,6 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                 </>
               )}
             </div>
-            <TrailerHeader variant="bird" trailerId={ft.trip.trailer_id} loaded={loadedNow} data={hdr} />
           </div>
         );
       })}
