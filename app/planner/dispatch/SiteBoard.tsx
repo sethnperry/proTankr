@@ -52,7 +52,7 @@ function Section({ title, rows, empty }: { title: string; rows: Row[]; empty: st
   );
 }
 
-export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenTrip }: {
+export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenTrip, canOpen, hideName }: {
   kind: "terminal" | "location";
   id: string;
   name: string;
@@ -63,6 +63,9 @@ export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenT
   /** When a truck on its way gets there (live position and straight-line time), or null. */
   etaFor: (tripId: string) => number | null;
   onOpenTrip: (tripId: string) => void;
+  /** A driver can open only their own PTD. Default: every trip. */
+  canOpen?: (tripId: string) => boolean;
+  hideName?: boolean;
 }) {
   const other = useOtherCarriers(kind, id);
   const terminalLoads = useTerminalLoads(kind === "terminal" ? id : null, id, 5);
@@ -96,7 +99,7 @@ export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenT
     label: runLabel({ ownCompany: true, who: o.ft.driverName, truck: o.ft.truckName }),
     strip: <TrailerHeader variant="side" trailerId={o.ft.trip.trailer_id} loaded={o.loaded} data={hdr} height={12} />,
     right: onSite ? elapsed(o.arrivedAt, now) ?? "—" : (() => { const e = etaFor(o.ft.trip.trip_id); return e ? clock(e) : "—"; })(),
-    onClick: () => onOpenTrip(o.ft.trip.trip_id),
+    onClick: !canOpen || canOpen(o.ft.trip.trip_id) ? () => onOpenTrip(o.ft.trip.trip_id) : undefined,
   });
   const otherRow = (x: (typeof other)[number], onSite: boolean): Row => ({
     key: `o-${x.tripId}`,
@@ -112,13 +115,13 @@ export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenT
     strip: <CarrierStrip comps={d.comps} sizes={d.sizes} residue={{}} productInfo={product} />,
     right: shortWhen(d.leftAt),
     rightColor: MUTE,
-    onClick: d.tripId ? () => onOpenTrip(d.tripId!) : undefined,
+    onClick: d.tripId && (!canOpen || canOpen(d.tripId)) ? () => onOpenTrip(d.tripId!) : undefined,
   }));
   void initialsOf;
 
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ fontSize: 16, fontWeight: 800 }}>{name}</div>
+    <div style={{ marginTop: hideName ? 0 : 16 }}>
+      {!hideName && <div style={{ fontSize: 16, fontWeight: 800 }}>{name}</div>}
       <Section title="En route" rows={enRoute} empty="No trucks on the way." />
       <Section title="On site" rows={onSite} empty="Nobody there right now." />
       <Section title="Previous 5" rows={prevRows} empty="No history here yet." />

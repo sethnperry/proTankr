@@ -153,6 +153,7 @@ import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
 import { WalletHub, walletTool } from "../components/wallet/WalletHub";
 import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
+import { SiteBoard } from "../dispatch/SiteBoard";
 import { CarrierStrip, CompsStrip, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard, initialsOf, runLabel } from "../components/trip/DashboardCards";
 import { useUnitAlerts } from "../hooks/useDashboardCards";
 import FuelSheet from "../components/fuel/FuelSheet";
@@ -392,12 +393,10 @@ export default function HomePage() {
     return t?.terminal_name ? String(t.terminal_name) : "Terminal";
   }, [rackTerminalId, terminalCatalog]);
   const [rackSheetOpen, setRackSheetOpen] = useState(false);
-  const rackLoads = useTerminalLoads(rackSheetOpen ? rackTerminalId : null, rackSheetOpen, 5);
   const rackCity = useMemo(() => {
     const t = rackTerminalId ? terminalCatalog.find((x) => String(x.terminal_id) === rackTerminalId) : null;
     return t?.city ? String(t.city) : "";
   }, [rackTerminalId, terminalCatalog]);
-  const rackTrailerHdr = useTrailerHeaderData([trailerId, ...toMyTerminal.map((x) => x.trailerId)]);
   const [rackStudOpen, setRackStudOpen] = useState(false);
   const otherToRack = useOtherCarriers("terminal", rackTerminalId);
   const rackCount = toMyTerminal.length + otherToRack.length + (meToRack ? 1 : 0);
@@ -2323,31 +2322,11 @@ export default function HomePage() {
           const label = (t: string, right?: React.ReactNode) => (
             <div style={{ display: "flex", alignItems: "baseline", margin: "18px 0 8px", paddingBottom: 6, borderBottom: `1px solid ${hair}` }}><span style={{ ...cap, flex: 1 }}>{t}</span>{right}</div>
           );
-          const rows = [
-            ...(meToRack ? [{ key: "me", text: myLabel, trailerId: trailerId, arrived: !!myPickup?.arrived_at }] : []),
-            ...toMyTerminal.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName }), trailerId: x.trailerId, arrived: x.arrived })),
-            ...otherToRack.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: false, who: x.who, truck: null }), trailerId: null as string | null, arrived: x.arrived, other: x })),
-          ] as { key: string; text: string; trailerId: string | null; arrived: boolean; other?: ReturnType<typeof useOtherCarriers>[number] }[];
           return (
             <>
-              {label(`En route · ${rows.length}`)}
-              {rows.length === 0 ? <div style={{ ...panel, padding: "11px 14px", color: muted, fontSize: 14 }}>No company trucks headed here right now.</div> : (
-                <div style={panel}>
-                  {rows.map((x, i) => (
-                    <div key={x.key} style={{ padding: "10px 14px", borderTop: i ? `1px solid ${hair}` : "none" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>{x.text}</span>
-                        <span style={{ ...cap, color: x.arrived ? "#4ade80" : muted }}>{x.arrived ? "At rack" : "En route"}</span>
-                      </div>
-                      <div style={{ marginTop: 6 }}>{x.other ? <CarrierStrip comps={x.other.comps} sizes={x.other.sizes} residue={x.other.residue} productInfo={productInfo} /> : <TrailerHeader variant="side" trailerId={x.trailerId} loaded={{}} data={rackTrailerHdr} height={12} />}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div style={{ marginTop: 14 }}>
-                <RecentDeliveriesCard alwaysOpen max={5} title="Previous 5 loads" storeName={rackName} items={rackLoads.items} productInfo={productInfo}
-                  onOpenTrip={(id) => { setRackSheetOpen(false); nav.go(`trip:${id}`, `/planner/trips/${id}`); }} onPickStore={() => {}} openingId={nav.openingId("trip")} />
-              </div>
+              <SiteBoard kind="terminal" id={rackTerminalId ?? ""} name={rackName} hideName trips={fleet.trips} product={productInfo} now={new Date()}
+                etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
+                onOpenTrip={(tid) => { setRackSheetOpen(false); nav.go(`trip:${tid}`, `/planner/trips/${tid}`); }} />
               {label("Products", rackStatus.rackName ? <span style={{ ...cap, color: "rgba(255,255,255,0.4)" }}>{rackStatus.rackName}</span> : null)}
               <div style={panel}>
                 {rackStatus.products.length === 0 ? <div style={{ padding: "11px 14px", color: muted, fontSize: 14 }}>No products on file for this rack.</div> : rackStatus.products.map((p, i) => (
@@ -2375,23 +2354,16 @@ export default function HomePage() {
         />
       )}
       <FullscreenModal open={dropNowOpen} title={selectedLoc ? locationTitle(selectedLoc) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
-        <StoreActivityCard
-          storeName={selectedLoc ? locationTitle(selectedLoc) : null}
-          items={storeLive}
-          productInfo={productInfo}
-          onPickStore={() => { setDropNowOpen(false); setPicker({ mode: "select" }); }}
-          myLabel={myLabel}
-        />
-        <div style={{ marginTop: 12 }}>
-          <RecentDeliveriesCard
-            alwaysOpen max={5}
-            storeName={selectedLoc ? locationTitle(selectedLoc) : null}
-            items={recent.items}
-            productInfo={productInfo}
-            onOpenTrip={(id) => { setDropNowOpen(false); nav.go(`trip:${id}`, `/planner/trips/${id}`); }} openingId={nav.openingId("trip")}
-            onPickStore={() => { setDropNowOpen(false); setPicker({ mode: "select" }); }}
-          />
-        </div>
+        {selectedLoc ? (
+          <SiteBoard kind="location" id={selectedLoc.location_id} name={locationTitle(selectedLoc)} hideName trips={fleet.trips} product={productInfo} now={new Date()}
+            etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
+            onOpenTrip={(tid) => { setDropNowOpen(false); nav.go(`trip:${tid}`, `/planner/trips/${tid}`); }} />
+        ) : (
+          <button type="button" onClick={() => { setDropNowOpen(false); setPicker({ mode: "select" }); }}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: 14, background: "#0f0f10", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 14, cursor: "pointer" }}>
+            No delivery location selected. Pick one ›
+          </button>
+        )}
       </FullscreenModal>
       <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")} />
       <TerminalOutageDetailModal
