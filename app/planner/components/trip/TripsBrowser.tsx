@@ -17,8 +17,7 @@ import { ptdCode } from "@/lib/trips/code39";
 import { TrailerHeader, useTrailerHeaderData } from "../TrailerViews";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useCompanyRoster } from "@/app/planner/hooks/useCompanyRoster";
-import DriverGroupPicker from "@/app/admin/DriverGroupPicker";
-import { CustomSelect } from "@/lib/ui/CustomSelect";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import { fmtDateTime } from "../../trips/PtdDocument";
 import { usePending } from "@/lib/ui/pending";
@@ -61,13 +60,42 @@ async function fetchChildren(ids: string[], isLive: () => boolean, onPart: (p: P
   }
 }
 
-export function TripsBrowser({ mode, userId, companyId, onOpen }: {
+/** One pick from a list, with search at the top. "" = no filter. */
+function PickSheet({ open, title, allLabel, options, value, onPick, onClose }: {
+  open: boolean; title: string; allLabel: string; options: { value: string; label: string }[]; value: string; onPick: (v: string) => void; onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  useEffect(() => { if (open) setQ(""); }, [open]);
+  const shown = options.filter((o) => !q.trim() || o.label.toLowerCase().includes(q.trim().toLowerCase()));
+  const row = (v: string, label: string) => (
+    <button key={v || "all"} type="button" onClick={() => { onPick(v); onClose(); }}
+      style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "13px 14px 13px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.12)", background: "#0f0f10", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+      <span aria-hidden style={{ width: 4, alignSelf: "stretch", background: value === v ? "#fff" : "transparent", marginRight: 12 }} />
+      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </button>
+  );
+  return (
+    <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" autoFocus
+        style={{ width: "100%", boxSizing: "border-box", background: "#0a0a0b", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 16, padding: "11px 12px", borderRadius: 0, outline: "none", marginBottom: 10 }} />
+      <div style={{ background: "#0f0f10", border: "1px solid rgba(255,255,255,0.12)" }}>
+        {!q.trim() && row("", allLabel)}
+        {shown.length === 0 && <div style={{ padding: 14, fontSize: 14, color: "rgba(255,255,255,0.5)" }}>No matches.</div>}
+        {shown.map((o) => row(o.value, o.label))}
+      </div>
+    </FullscreenModal>
+  );
+}
+
+export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }: {
   mode: "driver" | "company";
   /** The signed-in (or impersonated) user. Driver mode lists only this user's trips. */
   userId: string | null;
   companyId?: string | null;
   /** Open a trip's PTD. Defaults to the route; the caller can add a busy state. */
   onOpen?: (tripId: string) => void;
+  /** The Dispatch board's Region filter, when one is on: only these drivers and trucks. */
+  region?: { label: string; driverIds: Set<string>; truckOk: (truckId: string) => boolean } | null;
 }) {
   const nav = usePending();
   const open = onOpen ?? ((id: string) => nav.go(id, `/planner/trips/${id}`));
@@ -80,16 +108,18 @@ export function TripsBrowser({ mode, userId, companyId, onOpen }: {
 
   // ── company filters ──
   const roster = useCompanyRoster(company ? companyId ?? null : null);
-  const [drivers, setDrivers] = useState<Set<string> | null>(null); // null = every driver
-  const [driversOpen, setDriversOpen] = useState(false);
+  const [driverId, setDriverId] = useState("");
   const [truckId, setTruckId] = useState("");
+  const [area, setArea] = useState("");
+  const [orderNo, setOrderNo] = useState("");
+  const [sheet, setSheet] = useState<null | "order" | "area" | "driver" | "truck">(null);
   const [period, setPeriod] = useState("30");
-  const [trucks, setTrucks] = useState<{ truck_id: string; truck_name: string }[]>([]);
+  const [trucks, setTrucks] = useState<{ truck_id: string; truck_name: string; local_area: string | null }[]>([]);
   const [server, setServer] = useState<Bundle>(EMPTY);
   useEffect(() => {
     if (!company || !companyId) return;
-    void supabase.from("trucks").select("truck_id, truck_name").eq("company_id", companyId).order("truck_name")
-      .then((r) => setTrucks((r.data ?? []) as { truck_id: string; truck_name: string }[]));
+    void supabase.from("trucks").select("truck_id, truck_name, local_area").eq("company_id", companyId).order("truck_name")
+      .then((r) => setTrucks(((r.data ?? []) as { truck_id: string; truck_name: string; local_area?: string | null }[]).map((t) => ({ ...t, local_area: t.local_area ?? null }))));
   }, [company, companyId]);
   const truckName = useMemo(() => new Map(trucks.map((t) => [t.truck_id, t.truck_name])), [trucks]);
   const driverName = useMemo(() => new Map(roster.members.map((m) => [m.user_id, m.display_name])), [roster.members]);
@@ -130,7 +160,10 @@ export function TripsBrowser({ mode, userId, companyId, onOpen }: {
   }, [company, store, userId]);
 
   // Dispatch: the company's trips for the filters picked.
-  const driverKey = drivers ? [...drivers].sort().join(",") : "";
+  const regionTrucks = useMemo(() => trucks.filter((t) => !region || region.truckOk(t.truck_id)), [trucks, region]);
+  const areaTruckIds = useMemo(() => (area ? regionTrucks.filter((t) => (t.local_area ?? "").trim() === area).map((t) => t.truck_id) : null), [area, regionTrucks]);
+  const regionKey = region ? `${region.label}:${region.driverIds.size}` : "";
+  const areaKey = areaTruckIds ? areaTruckIds.join(",") : "";
   useEffect(() => {
     if (!company || !companyId) return;
     let cancelled = false;
@@ -140,8 +173,11 @@ export function TripsBrowser({ mode, userId, companyId, onOpen }: {
         let q = supabase.from("trips").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(120);
         const days = PERIODS.find((p) => p.id === period)?.days ?? 0;
         if (days) q = q.gte("created_at", new Date(Date.now() - days * 86400000).toISOString());
+        const NONE = ["00000000-0000-0000-0000-000000000000"];
         if (truckId) q = q.eq("truck_id", truckId);
-        if (drivers) q = q.in("driver_id", drivers.size ? [...drivers] : ["00000000-0000-0000-0000-000000000000"]);
+        else if (areaTruckIds) q = q.in("truck_id", areaTruckIds.length ? areaTruckIds : NONE);
+        if (driverId) q = q.eq("driver_id", driverId);
+        else if (region) q = q.in("driver_id", region.driverIds.size ? [...region.driverIds] : NONE);
         const t = await q;
         if (cancelled || t.error) return;
         const trips = (t.data ?? []) as TripRow[];
@@ -158,7 +194,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen }: {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company, companyId, truckId, period, driverKey]);
+  }, [company, companyId, truckId, period, driverId, areaKey, regionKey]);
 
   const bundle: Bundle = useMemo(() => {
     if (company) return server;
@@ -204,7 +240,9 @@ export function TripsBrowser({ mode, userId, companyId, onOpen }: {
   const hdr = useTrailerHeaderData(rows.map((r) => r.trip.trailer_id));
 
   const hiddenCount = company ? 0 : rows.filter((r) => r.trip.driver_hidden).length;
-  const visible = showHidden || company ? rows : rows.filter((r) => !r.trip.driver_hidden);
+  const orderNumbers = useMemo(() => [...new Set(bundle.orders.map((o) => o.order_number).filter(Boolean) as string[])].sort(), [bundle.orders]);
+  const hasOrder = (tripId: string) => bundle.orders.some((o) => o.trip_id === tripId && o.order_number === orderNo);
+  const visible = (showHidden || company ? rows : rows.filter((r) => !r.trip.driver_hidden)).filter((r) => !orderNo || hasOrder(r.trip.trip_id));
   const setHidden = (tripId: string, hidden: boolean) => {
     if (!store) return;
     setTripHidden(store, tripId, hidden);
@@ -222,23 +260,28 @@ export function TripsBrowser({ mode, userId, companyId, onOpen }: {
     void syncNow();
   };
 
-  const driverCount = drivers ? drivers.size : roster.members.length;
+  const areas = useMemo(() => [...new Set(regionTrucks.map((t) => (t.local_area ?? "").trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y)), [regionTrucks]);
+  const memberOpts = roster.members.filter((m) => !region || region.driverIds.has(m.user_id)).map((m) => ({ value: m.user_id, label: m.display_name }));
+  const filterBtn = (key: "order" | "area" | "driver" | "truck", label: string, value: string) => (
+    <button key={key} type="button" onClick={() => setSheet(key)}
+      style={{ ...(value ? chipOn : chip), padding: "10px 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || label}</button>
+  );
   return (
     <div>
       {company && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <button type="button" onClick={() => setDriversOpen(true)} style={{ ...(drivers ? chipOn : chip), textAlign: "left" }}>
-              {drivers ? `${driverCount} of ${roster.members.length} drivers` : "All drivers"} ▾
-            </button>
-            <CustomSelect value={truckId} onChange={setTruckId}
-              options={[{ value: "", label: "All trucks" }, ...trucks.map((t) => ({ value: t.truck_id, label: `Truck ${t.truck_name}` }))]}
-              buttonStyle={{ ...(truckId ? chipOn : chip), width: "100%", textAlign: "left" }} />
+          {region && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>Region: {region.label}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {filterBtn("order", "Order", orderNo)}
+            {filterBtn("area", "Area", area)}
+            {filterBtn("driver", "Driver", driverName.get(driverId) ?? "")}
+            {filterBtn("truck", "Truck", truckId ? `Truck ${truckName.get(truckId) ?? ""}` : "")}
+            {PERIODS.map((p) => <button key={p.id} type="button" onClick={() => setPeriod(p.id)} style={{ ...(period === p.id ? chipOn : chip), padding: "10px 4px" }}>{p.label}</button>)}
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {PERIODS.map((p) => <button key={p.id} type="button" onClick={() => setPeriod(p.id)} style={{ ...(period === p.id ? chipOn : chip), flex: 1 }}>{p.label}</button>)}
-          </div>
-          <DriverGroupPicker open={driversOpen} onClose={() => setDriversOpen(false)} companyId={companyId ?? null} selectedIds={drivers} onChange={setDrivers} />
+          <PickSheet open={sheet === "order"} title="Order" allLabel="All orders" options={orderNumbers.map((n) => ({ value: n, label: n }))} value={orderNo} onPick={setOrderNo} onClose={() => setSheet(null)} />
+          <PickSheet open={sheet === "area"} title="Area" allLabel="All areas" options={areas.map((a) => ({ value: a, label: a }))} value={area} onPick={(v) => { setArea(v); if (v) setTruckId(""); }} onClose={() => setSheet(null)} />
+          <PickSheet open={sheet === "driver"} title="Driver" allLabel="All drivers" options={memberOpts} value={driverId} onPick={setDriverId} onClose={() => setSheet(null)} />
+          <PickSheet open={sheet === "truck"} title="Truck" allLabel="All trucks" options={regionTrucks.map((t) => ({ value: t.truck_id, label: `Truck ${t.truck_name}` }))} value={truckId} onPick={(v) => { setTruckId(v); if (v) setArea(""); }} onClose={() => setSheet(null)} />
         </div>
       )}
       {visible.length === 0 && (
