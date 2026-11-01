@@ -9,7 +9,7 @@
 import { activePickup } from "../trips/tripFlow.ts";
 import type { TripPickupRow, TripRow } from "../trips/types.ts";
 
-export type ReportType = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue";
+export type ReportType = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue" | "rack_down";
 
 export type ActiveReport = {
   reportId: string;
@@ -54,7 +54,7 @@ export type Conflict = {
   newestAt: string;
 };
 
-const TERMINAL_WIDE: ReportType[] = ["long_line", "terminal_issue"];
+const TERMINAL_WIDE: ReportType[] = ["long_line", "terminal_issue", "rack_down"];
 
 // Products a truck is headed to load: the pickup's planned compartments,
 // else what its planned load lists (passed in by pickup id). Empty = unknown.

@@ -109,7 +109,7 @@ export default function TerminalOutageDetailModal({
     onCleared();
   }
 
-  const terminalReports = reports.filter((r) => r.reportType === "long_line" || r.reportType === "terminal_issue");
+  const terminalReports = reports.filter((r) => r.reportType === "long_line" || r.reportType === "terminal_issue" || r.reportType === "rack_down");
   const productReports = reports.filter((r) => r.reportType === "out_of_product");
   const allocationReports = reports.filter((r) => r.reportType === "out_of_allocation");
 

@@ -6,7 +6,11 @@
 // usePlanner() and hands LoadingModal what it shows. Mount it anywhere under
 // PlannerProvider.
 
+import { useState } from "react";
 import ConnectedSupplierPanel from "../components/ConnectedSupplierPanel";
+import RackDelaySheet from "../components/RackDelaySheet";
+import { readRunningDelay, writeRunningDelay, type RunningDelay } from "@/lib/trips/delays";
+import { reportRows } from "../utils/reportRows";
 import LoadingModal from "../modals/LoadingModal";
 import { styles } from "../ui/styles";
 import { usePlanner } from "../PlannerContext";
@@ -42,11 +46,36 @@ export default function PlanReviewFlow() {
     reportFromDashboard,
     handleTapTerminalInLoadingModal,
     handleBackToPlannerNoUpdate,
-    openCancelLoadSheet,
     handleCouldntLoad,
+    handleSubmitOutageReport,
+    tripPickup,
+    tripWaitingPickup,
+    compPlan,
+    terminalProducts,
   } = usePlanner();
 
+  // ── Rack Delay: a reason starts the running delay (same one the dashboard's Delay button shows) and warns
+  // other drivers headed to this terminal. Plan Review stays open.
+  const [rackDelayOpen, setRackDelayOpen] = useState(false);
+  const rackProducts = [...new Map(
+    reportRows(effectivePlanRows as any[], compPlan as any, (terminalProducts ?? []) as any[])
+      .filter((r) => r?.productId && Number(r.planned_gallons ?? 0) > 0)
+      .map((r) => [String(r.productId), { productId: String(r.productId), name: productNameById?.get(String(r.productId)) ?? "Product" }]),
+  ).values()];
+  const startRackDelay = async (code: any, productIds: string[]): Promise<string | null> => {
+    const pickup = tripPickup ?? tripWaitingPickup ?? null;
+    if (effectiveUserId && pickup && !readRunningDelay(effectiveUserId)) {
+      const d: RunningDelay = { tripId: pickup.trip_id, leg: "at_rack", code, note: null, startedAt: new Date().toISOString(), pickupId: pickup.pickup_id, deliveryId: null };
+      writeRunningDelay(effectiveUserId, d);
+      try { window.dispatchEvent(new Event("protankr:delay")); } catch { /* not a browser */ }
+    }
+    const r = await handleSubmitOutageReport(code, productIds);
+    return r?.error ? "The delay started, but the warning to other drivers didn't go out. Try again from the Terminal sheet." : null;
+  };
+
   return (
+    <>
+    <RackDelaySheet open={rackDelayOpen} products={rackProducts} onClose={() => setRackDelayOpen(false)} onSubmit={startRackDelay} />
     <LoadingModal
       supplierSection={<ConnectedSupplierPanel />}
       open={loadWorkflow.loadingOpen}
@@ -104,8 +133,9 @@ export default function PlanReviewFlow() {
       trip={tripModeForLoading}
       onFinishLoadingStart={loadGeoShips}
       onUpdateCardOnly={handleCouldntLoad}
-      onReportTerminalIssue={() => openCancelLoadSheet()}
-      onBackToPlanner={handleBackToPlannerNoUpdate}
+      onRackDelay={() => setRackDelayOpen(true)}
+      // Back to Planner leaves the load, the arrival time and the card exactly as they are.
+      onBackToPlanner={() => loadWorkflow.setLoadingOpen(false)}
       onAdjustPlan={handleBackToPlannerNoUpdate}
       loadedDisabled={loadWorkflow.completeBusy}
       loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Finish Loading"}
@@ -120,5 +150,6 @@ export default function PlanReviewFlow() {
       liveFuelPct={recentFuelPct}
       onSaveFuelTankGallons={saveFuelTankGallons}
     />
+    </>
   );
 }

@@ -173,9 +173,11 @@ export type LoadingModalProps = {
   onFinishLoadingStart?: () => void;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
-  // Report Terminal Issue: hands off to CancelLoadSheet's report flow.
-  onReportTerminalIssue: () => void;
-  // Back to Planner: genuinely undoes the load + re-card (page.tsx).
+  // Rack Delay: why the truck is held up at the rack (starts a delay, warns other drivers).
+  onRackDelay?: () => void;
+  // Report Terminal Issue (no longer a button here; the Couldn't Load flow carries the reasons).
+  onReportTerminalIssue?: () => void;
+  // Back to Planner: leaves Plan Review open-ended. The load, arrival and card stay as they are.
   onBackToPlanner: () => void;
 
   // Disables the action buttons + relabels Log the Load while completing.

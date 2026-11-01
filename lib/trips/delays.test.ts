@@ -47,6 +47,6 @@ test("minutes already explained at one drop count only that delivery's at-drop d
 import { delayIssueCode } from "./delays.ts";
 test("rack delay reasons map to terminal warnings", () => {
   assert.equal(delayIssueCode("long_line"), "long_line");
-  assert.equal(delayIssueCode("rack_down"), "terminal_issue");
+  assert.equal(delayIssueCode("rack_down"), "rack_down");
   assert.equal(delayIssueCode("gauging"), null);
 });

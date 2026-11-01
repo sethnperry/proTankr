@@ -42,12 +42,12 @@ import { resolveEffectiveRackId } from "../utils/rack";
 import { MANUAL_REPORT_CAP_MS, outageAge, outageExpiresAtMs, outageIsActive } from "../utils/dates";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 
-export type OutageReportType = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue";
+export type OutageReportType = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue" | "rack_down";
 
 // Long Line and Terminal Issue are about the whole terminal, not a product
 // (product_id is null), and show to every driver headed there.
 export function isTerminalWide(t: OutageReportType): boolean {
-  return t === "long_line" || t === "terminal_issue";
+  return t === "long_line" || t === "terminal_issue" || t === "rack_down";
 }
 
 const OUTAGE_POLL_MS = 90_000;
@@ -332,7 +332,7 @@ export function useActiveOutageBanner(
     const composed: ComposedOutageReport[] = rows.map((r) => {
       const wide = isTerminalWide(r.report_type);
       const productName = wide
-        ? (r.report_type === "long_line" ? "Long Line" : "Terminal Issue")
+        ? (r.report_type === "long_line" ? "Long Line" : r.report_type === "rack_down" ? "Rack Down" : "Terminal Issue")
         : (productFullById.get(r.product_id ?? "") ?? "product");
       const shortName = wide ? productName : (productShortById.get(r.product_id ?? "") ?? productName);
       const createdAtMs = new Date(r.created_at).getTime();
@@ -407,7 +407,7 @@ export async function reportDelayIssue(args: {
   const choice = args.delayChoice ?? "";
   if (!choice.startsWith("issue:") || !args.terminalId) return;
   const code = choice.slice("issue:".length) as OutageReportType;
-  if (!["out_of_product", "out_of_allocation", "long_line", "terminal_issue"].includes(code)) return;
+  if (!["out_of_product", "out_of_allocation", "long_line", "terminal_issue", "rack_down"].includes(code)) return;
   const { error } = await submitOutageReport({
     terminalId: args.terminalId, selectedRackId: args.rackId, productIds: [...new Set(args.productIds)],
     reportType: code, companyId: args.companyId, userId: args.userId, truckLabel: args.truckLabel,

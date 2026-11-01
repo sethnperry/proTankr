@@ -7,10 +7,11 @@
 // Long Line and Terminal Issue are terminal-wide. Out of Allocation only
 // warns the reporter's own company (RLS); the rest warn everyone.
 
-export type TerminalIssueCode = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue";
+export type TerminalIssueCode = "out_of_product" | "out_of_allocation" | "long_line" | "terminal_issue" | "rack_down";
 
 export const TERMINAL_ISSUES: { code: TerminalIssueCode; label: string; productScoped: boolean }[] = [
   { code: "long_line", label: "Long Line", productScoped: false },
+  { code: "rack_down", label: "Rack Down", productScoped: false },
   { code: "out_of_product", label: "Out of Product", productScoped: true },
   { code: "out_of_allocation", label: "Out of Allocation", productScoped: true },
   { code: "terminal_issue", label: "Terminal Issue", productScoped: false },

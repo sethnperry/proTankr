@@ -248,6 +248,12 @@ export default function HomePage() {
   useEffect(() => {
     if (userId) setRunningDelay(readRunningDelay(userId));
   }, [userId]);
+  // Plan Review's Rack Delay starts one from the Planner overlay: pick it up here.
+  useEffect(() => {
+    const h = () => { if (userId) setRunningDelay(readRunningDelay(userId)); };
+    window.addEventListener("protankr:delay", h);
+    return () => window.removeEventListener("protankr:delay", h);
+  }, [userId]);
   const delayLeg = openTrip ? legForStep(step.kind) : null;
   const endDelay = (atIso?: string) => {
     if (!store || !userId) return;

@@ -167,8 +167,9 @@ export function dropDelayMinutes(delays: LoggedDelay[], deliveryId: string): num
 }
 
 /** The terminal warning (if any) a rack delay reason should also post for other drivers. */
-export function delayIssueCode(code: string | null | undefined): "long_line" | "terminal_issue" | null {
+export function delayIssueCode(code: string | null | undefined): "long_line" | "terminal_issue" | "rack_down" | null {
   if (code === "long_line") return "long_line";
-  if (code === "terminal_issue" || code === "rack_down") return "terminal_issue";
+  if (code === "rack_down") return "rack_down";
+  if (code === "terminal_issue") return "terminal_issue";
   return null;
 }

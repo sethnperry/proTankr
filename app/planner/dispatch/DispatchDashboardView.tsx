@@ -62,6 +62,7 @@ export function reportText(r: ActiveReport, product: (id: string | null) => Boar
     case "out_of_allocation": return `No allocation${r.supplierName ? ` · ${r.supplierName}` : ""}${code ? ` (${code})` : ""}`;
     case "long_line": return "Long line";
     case "terminal_issue": return "Terminal issue";
+    case "rack_down": return "Rack down";
   }
 }
 
