@@ -376,6 +376,7 @@ export function HeadingToDeliveryCard({ deliveryName, items, productInfo, defaul
 const STATE_LABEL: Record<StoreActivityState, { text: string; color: string }> = {
   delivering: { text: "Delivering now", color: "#4ade80" },
   enroute: { text: "Loaded, en route", color: "#fff" },
+  loading: { text: "In progress, not loaded yet", color: "#fbbf24" },
   planned: { text: "Planned", color: muted },
 };
 

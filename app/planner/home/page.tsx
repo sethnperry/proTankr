@@ -1534,7 +1534,7 @@ export default function HomePage() {
       for (const c of aboardRows) by.set(c.product_id, (by.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
       list.unshift({
         tripId: openTrip.trip_id, isMine: true, driverName: null, truckName: null, plannedStartAt: null,
-        state: myDelivery.arrived_at ? "delivering" : aboardRows.length > 0 ? "enroute" : "planned",
+        state: myDelivery.arrived_at ? "delivering" : aboardRows.length > 0 ? "enroute" : "loading",
         products: [...by].map(([productId, gallons]) => ({ productId, gallons })),
       });
     }

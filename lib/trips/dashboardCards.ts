@@ -87,7 +87,8 @@ export function parkedPreloads(trips: FleetTripLike[], myTrailerId: string | nul
     .sort((a, b) => String(b.trip.parked_at ?? "").localeCompare(String(a.trip.parked_at ?? "")));
 }
 
-export type StoreActivityState = "delivering" | "enroute" | "planned";
+// "loading" = begun but not loaded yet (heading to the rack, or loading); "planned" = dispatched, not begun.
+export type StoreActivityState = "delivering" | "enroute" | "loading" | "planned";
 export type StoreActivity = {
   tripId: string;
   state: StoreActivityState;
@@ -99,7 +100,7 @@ export type StoreActivity = {
   plannedStartAt: string | null;
 };
 
-const STATE_RANK: Record<StoreActivityState, number> = { delivering: 0, enroute: 1, planned: 2 };
+const STATE_RANK: Record<StoreActivityState, number> = { delivering: 0, enroute: 1, loading: 2, planned: 3 };
 
 // Everyone in the company who has this store on their trip right now: delivering there, loaded and on
 // the way, or planned (dispatched or still loading). `dispatched` are trips dispatched but not begun.
@@ -117,8 +118,8 @@ export function storeActivity(trips: FleetTripLike[], dispatched: FleetTripLike[
     const byProduct = new Map<string | null, number>();
     for (const c of aboard) byProduct.set(c.product_id, (byProduct.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
     let products: StoreActivity["products"] = [...byProduct].map(([productId, gallons]) => ({ productId, gallons }));
-    const state: StoreActivityState = d.arrived_at ? "delivering" : aboard.length > 0 ? "enroute" : "planned";
-    if (state === "planned") {
+    const state: StoreActivityState = d.arrived_at ? "delivering" : aboard.length > 0 ? "enroute" : f.trip.status === "dispatched" ? "planned" : "loading";
+    if (state === "planned" || state === "loading") {
       const planned = new Map<string | null, null>();
       for (const p of f.pickups) for (const c of p.planned_comps ?? []) planned.set(c.product_id ?? null, null);
       products = [...planned.keys()].map((productId) => ({ productId, gallons: null }));
