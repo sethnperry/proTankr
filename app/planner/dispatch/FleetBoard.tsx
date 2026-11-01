@@ -361,7 +361,15 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
         const id = ft.trip.trip_id;
         const isOpen = expanded.has(id);
         const loadedNow: Record<number, string | null> = {};
-        for (const c of ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained")) loadedNow[c.comp_number] = c.product_id;
+        const aboardNow = ft.compLoads.filter((x) => x.disposition === "loaded" || x.disposition === "retained");
+        for (const c of aboardNow) loadedNow[c.comp_number] = c.product_id;
+        // Same wording as the driver's To Drop list: delivering, loaded and on the way, or begun but not loaded yet.
+        const nextDrop = ft.deliveries.filter((d) => d.status === "planned").sort((a, b) => a.seq - b.seq)[0];
+        const state: "delivering" | "enroute" | "loading" = nextDrop?.arrived_at ? "delivering" : aboardNow.length > 0 ? "enroute" : "loading";
+        const stateText = state === "delivering" ? { t: "Delivering now", c: "#4ade80" } : state === "enroute" ? { t: "Loaded, en route", c: "#fff" } : { t: "Not loaded, en route to load", c: "#fbbf24" };
+        const byProduct = new Map<string | null, number | null>();
+        if (aboardNow.length > 0) for (const c of aboardNow) byProduct.set(c.product_id, (byProduct.get(c.product_id) ?? 0) + Number(c.gross_gallons ?? 0));
+        else for (const pk of ft.pickups) for (const c of pk.planned_comps ?? []) if (c.product_id) { byProduct.set(c.product_id, null); loadedNow[c.comp_number] = c.product_id; }
         // Late: headed to the store and the estimated arrival is after the time dispatch planned the drop to end.
         const plannedEnd = ft.trip.planned_end_at ? Date.parse(ft.trip.planned_end_at) : NaN;
         const late = !!lv?.etaMs && route.nodes[route.position.at]?.kind === "delivery" && Number.isFinite(plannedEnd) && lv.etaMs > plannedEnd;
@@ -379,6 +387,12 @@ export function FleetBoard({ trips, locations, product, now, onOpenTrip, cancell
                   {eta && <span className="dash-num" style={{ fontSize: 12, color: late ? "#f87171" : muted, fontWeight: late ? 800 : 400, whiteSpace: "nowrap" }}>ETA {eta}</span>}
                 </div>
               </button>
+              <div style={{ fontSize: 12, fontWeight: 700, color: stateText.c, marginTop: 2 }}>{stateText.t}</div>
+              {byProduct.size > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 3, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
+                  {[...byProduct].map(([pid, g]) => <span key={String(pid)}>{product(pid).code}{g != null ? ` ${Math.round(g).toLocaleString("en-US")}` : ""}</span>)}
+                </div>
+              )}
               <RouteLine route={route} parked={false} live={lv?.fraction ?? null} delayed={delayedTrips?.has(id)} />
               {isOpen && (
                 <>
