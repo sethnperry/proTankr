@@ -388,6 +388,7 @@ export function StoreActivityCard({ storeName, items, productInfo, onPickStore }
   productInfo: ProductInfoFn;
   onPickStore: () => void;
 }) {
+  const hdr = useTrailerHeaderData(items.map((x) => x.trailerId));
   if (!storeName) {
     return (
       <div style={cardStyle}>
@@ -402,7 +403,8 @@ export function StoreActivityCard({ storeName, items, productInfo, onPickStore }
       {items.map((x) => {
         const st = STATE_LABEL[x.state];
         return (
-          <div key={x.tripId} style={rowStyle}>
+          <div key={x.tripId} style={{ ...rowStyle, display: "flex", padding: "0 0 0 14px" }}>
+            <div style={{ flex: 1, minWidth: 0, padding: "9px 12px 9px 0" }}>
             <div style={{ display: "flex", gap: 8 }}>
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {x.isMine ? "You" : x.driverName ?? "Driver"}{x.truckName ? <span style={{ color: muted }}> · Truck {x.truckName}</span> : null}
@@ -413,11 +415,13 @@ export function StoreActivityCard({ storeName, items, productInfo, onPickStore }
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
                 {x.products.map((a) => {
                   const info = productInfo(a.productId);
-                  return <span key={String(a.productId)} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Dot color={colorOf(info)} />{info.code}{a.gallons != null ? ` ${gal(a.gallons)}` : ""}</span>;
+                  return <span key={String(a.productId)}>{info.code}{a.gallons != null ? ` ${gal(a.gallons)}` : ""}</span>;
                 })}
                 {x.plannedStartAt && <span style={{ color: muted }}>starts {when(x.plannedStartAt)}</span>}
               </div>
             )}
+            </div>
+            <TrailerHeader variant="bird" trailerId={x.trailerId} loaded={x.loaded} data={hdr} />
           </div>
         );
       })}

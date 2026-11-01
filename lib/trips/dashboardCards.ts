@@ -98,6 +98,9 @@ export type StoreActivity = {
   // What's on the truck (delivering / en route) or what's planned to load (dispatched).
   products: { productId: string | null; gallons: number | null }[];
   plannedStartAt: string | null;
+  // The trailer and what is in (or planned for) each compartment, for the bird's-eye view.
+  trailerId: string | null;
+  loaded: Record<number, string | null>;
 };
 
 const STATE_RANK: Record<StoreActivityState, number> = { delivering: 0, enroute: 1, loading: 2, planned: 3 };
@@ -124,9 +127,13 @@ export function storeActivity(trips: FleetTripLike[], dispatched: FleetTripLike[
       for (const p of f.pickups) for (const c of p.planned_comps ?? []) planned.set(c.product_id ?? null, null);
       products = [...planned.keys()].map((productId) => ({ productId, gallons: null }));
     }
+    const loaded: Record<number, string | null> = {};
+    if (aboard.length > 0) for (const c of aboard) loaded[c.comp_number] = c.product_id;
+    else for (const p of f.pickups) for (const c of p.planned_comps ?? []) if (c.product_id) loaded[c.comp_number] = c.product_id;
     out.push({
       tripId: f.trip.trip_id, state, isMine: f.trip.driver_id === myUserId, driverName: f.driverName, truckName: f.truckName,
       products, plannedStartAt: f.trip.status === "dispatched" ? f.trip.planned_start_at ?? null : null,
+      trailerId: f.trip.trailer_id ?? null, loaded,
     });
   }
   return out.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state]);
