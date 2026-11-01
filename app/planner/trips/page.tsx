@@ -21,7 +21,7 @@ export default function TripsPage() {
           Blank PTD
         </button>
       </div>
-      <TripsBrowser mode="driver" userId={shell.effectiveUserId || null} />
+      <TripsBrowser mode="driver" userId={shell.effectiveUserId || null} companyId={shell.companyId || null} />
     </div>
   );
 }

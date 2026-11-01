@@ -107,7 +107,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
   const catalog = useProductsCatalog();
 
   // ── company filters ──
-  const roster = useCompanyRoster(company ? companyId ?? null : null);
+  const roster = useCompanyRoster(companyId ?? null);
   const [driverId, setDriverId] = useState("");
   const [truckId, setTruckId] = useState("");
   const [area, setArea] = useState("");
@@ -117,10 +117,10 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
   const [trucks, setTrucks] = useState<{ truck_id: string; truck_name: string; local_area: string | null }[]>([]);
   const [server, setServer] = useState<Bundle>(EMPTY);
   useEffect(() => {
-    if (!company || !companyId) return;
+    if (!companyId) return;
     void supabase.from("trucks").select("truck_id, truck_name, local_area").eq("company_id", companyId).order("truck_name")
       .then((r) => setTrucks(((r.data ?? []) as { truck_id: string; truck_name: string; local_area?: string | null }[]).map((t) => ({ ...t, local_area: t.local_area ?? null }))));
-  }, [company, companyId]);
+  }, [companyId]);
   const truckName = useMemo(() => new Map(trucks.map((t) => [t.truck_id, t.truck_name])), [trucks]);
   const driverName = useMemo(() => new Map(roster.members.map((m) => [m.user_id, m.display_name])), [roster.members]);
 
@@ -293,7 +293,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
-        const who = company ? [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", trip.truck_id ? truckName.get(trip.truck_id) : null].filter(Boolean).join(" ") : "";
+        const who = [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", trip.truck_id ? truckName.get(trip.truck_id) : null].filter(Boolean).join(" ");
         return (
           <div key={trip.trip_id} role="button" tabIndex={0} aria-busy={nav.is(trip.trip_id)}
             onClick={() => open(trip.trip_id)}
@@ -314,7 +314,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
                 {route || [trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
               </div>
               {reasons && <div style={{ fontSize: 13, color: "#f87171", marginTop: 2 }}>{reasons}</div>}
-              {company && (
+              {(
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center", gap: 10, marginTop: 8 }}>
                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14, fontWeight: 700 }}>{who}</span>
                   <span style={{ minWidth: 0 }}><TrailerHeader variant="side" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} height={12} /></span>
@@ -324,9 +324,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 2 }}>
-                {!company && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-                  {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
-                </div>}
+                <span />
                 {trip.status === "dispatched" && queue.length > 1 && (
                   <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 2 }}>
                     <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginRight: 4 }}>Run order</span>
@@ -351,7 +349,6 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
                 )}
               </div>
             </div>
-            {!company && <TrailerHeader variant="bird" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} />}
           </div>
         );
       })}
