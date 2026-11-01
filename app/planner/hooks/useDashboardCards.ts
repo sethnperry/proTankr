@@ -182,6 +182,34 @@ export function useTerminalLoads(terminalId: string | null, refreshKey?: unknown
   return { items, loading };
 }
 
+export type OtherCarrierTruck = { tripId: string; who: string; arrived: boolean; comps: { compNumber: number; productId: string | null; gallons: number }[] };
+
+// Other carriers' live trucks headed to a terminal or a store (nothing secret: company name, status, what is
+// aboard). Our own company's trucks come from the normal trips read. Refreshes every minute.
+export function useOtherCarriers(kind: "terminal" | "location", id: string | null) {
+  const [items, setItems] = useState<OtherCarrierTruck[]>([]);
+  useEffect(() => {
+    if (!id) { setItems([]); return; }
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { data, error } = await supabase.rpc(kind === "terminal" ? "other_carriers_to_terminal" : "other_carriers_to_location",
+          kind === "terminal" ? { p_terminal_id: id } : { p_location_id: id });
+        if (error) throw error;
+        const rows = (Array.isArray(data) ? data : []) as any[];
+        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), arrived: !!r.arrived, comps: mapComps(r) })));
+      } catch (e) {
+        console.warn("[dashboard] other carriers failed:", e);
+        if (!cancelled) setItems([]);
+      }
+    };
+    void run();
+    const t = window.setInterval(() => void run(), 60_000);
+    return () => { cancelled = true; window.clearInterval(t); };
+  }, [kind, id]);
+  return items;
+}
+
 // Everything coming due on one truck or trailer: permits + service
 // (lib/equipment/unitAlerts.ts). Truck miles come from trip odometer readings.
 export function useUnitAlerts(unit: "truck" | "trailer", unitId: string | null, companyId: string | null, refreshKey?: unknown, engineHours?: number | null) {

@@ -138,7 +138,7 @@ import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
-import { useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
+import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
 import { useCompanyRoster } from "../hooks/useCompanyRoster";
 import { SuppliersModal } from "../dispatch/SuppliersModal";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
@@ -399,7 +399,8 @@ export default function HomePage() {
   }, [rackTerminalId, terminalCatalog]);
   const rackTrailerHdr = useTrailerHeaderData([trailerId, ...toMyTerminal.map((x) => x.trailerId)]);
   const [rackStudOpen, setRackStudOpen] = useState(false);
-  const rackCount = toMyTerminal.length + (meToRack ? 1 : 0);
+  const otherToRack = useOtherCarriers("terminal", rackTerminalId);
+  const rackCount = toMyTerminal.length + otherToRack.length + (meToRack ? 1 : 0);
   const nearbyParked = useMemo(() => parkedPreloads(fleet.trips, trailerId), [fleet.trips, trailerId]);
   const completedDeliveries = useMemo(
     () => Object.values(state.rows.trip_deliveries ?? {}).filter((d: any) => d.status === "complete").length,
@@ -1548,6 +1549,7 @@ export default function HomePage() {
   const [loadsSheetOpen, setLoadsSheetOpen] = useState(false);
   // Everyone in the company with the SELECTED store on their trip: delivering there, loaded and on the way, or
   // planned. My own trip is included (from the server list, or from this phone when it hasn't synced yet).
+  const otherToStore = useOtherCarriers("location", selectedLoc?.location_id ?? null);
   const storeLive = useMemo(() => {
     const list = storeActivity(fleet.trips, fleet.dispatched, selectedLoc?.location_id ?? null, userId);
     if (selectedLoc && myDelivery?.location_id === selectedLoc.location_id && openTrip && !list.some((x) => x.isMine)) {
@@ -1560,9 +1562,15 @@ export default function HomePage() {
         products: [...by].map(([productId, gallons]) => ({ productId, gallons })),
       });
     }
+    for (const o of otherToStore) {
+      list.push({
+        tripId: o.tripId, isMine: false, driverName: o.who, truckName: null, plannedStartAt: null, trailerId: null, loaded: {},
+        state: o.arrived ? "delivering" : o.comps.length > 0 ? "enroute" : "loading", products: [], external: { comps: o.comps },
+      });
+    }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fleet.trips, fleet.dispatched, selectedLoc?.location_id, userId, myDelivery?.location_id, myDelivery?.arrived_at, openTrip?.trip_id, aboardRows]);
+  }, [otherToStore, fleet.trips, fleet.dispatched, selectedLoc?.location_id, userId, myDelivery?.location_id, myDelivery?.arrived_at, openTrip?.trip_id, aboardRows]);
   // Trucks actually on the way (begun); dispatched loads nobody has begun yet are not counted.
   const dropCount = storeLive.filter((x) => x.state !== "planned").length;
   // 1 (usually just me) is white; more than one truck going there is red.
@@ -2318,7 +2326,8 @@ export default function HomePage() {
           const rows = [
             ...(meToRack ? [{ key: "me", text: myLabel, trailerId: trailerId, arrived: !!myPickup?.arrived_at }] : []),
             ...toMyTerminal.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName }), trailerId: x.trailerId, arrived: x.arrived })),
-          ];
+            ...otherToRack.map((x) => ({ key: x.tripId, text: runLabel({ ownCompany: false, who: x.who, truck: null }), trailerId: null as string | null, arrived: x.arrived, comps: x.comps })),
+          ] as { key: string; text: string; trailerId: string | null; arrived: boolean; comps?: { compNumber: number; productId: string | null; gallons: number }[] }[];
           return (
             <>
               {label(`En route · ${rows.length}`)}
@@ -2330,7 +2339,7 @@ export default function HomePage() {
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>{x.text}</span>
                         <span style={{ ...cap, color: x.arrived ? "#4ade80" : muted }}>{x.arrived ? "At rack" : "En route"}</span>
                       </div>
-                      <div style={{ marginTop: 6 }}><TrailerHeader variant="side" trailerId={x.trailerId} loaded={{}} data={rackTrailerHdr} height={12} /></div>
+                      <div style={{ marginTop: 6 }}>{x.comps ? <CompsStrip comps={x.comps} productInfo={productInfo} /> : <TrailerHeader variant="side" trailerId={x.trailerId} loaded={{}} data={rackTrailerHdr} height={12} />}</div>
                     </div>
                   ))}
                 </div>

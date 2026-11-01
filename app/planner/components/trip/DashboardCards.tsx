@@ -413,7 +413,7 @@ export function StoreActivityCard({ storeName, items: all, productInfo, onPickSt
       {items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No company loads are delivering, on the way or planned for {storeName}.</div>}
       {items.map((x) => {
         const st = STATE_LABEL[x.state];
-        const label = x.isMine && myLabel ? myLabel : runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName });
+        const label = x.external ? runLabel({ ownCompany: false, who: x.driverName, truck: null }) : x.isMine && myLabel ? myLabel : runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName });
         return (
           <div key={x.tripId} style={rowStyle}>
             <div style={{ display: "flex", gap: 8 }}>
@@ -421,7 +421,7 @@ export function StoreActivityCard({ storeName, items: all, productInfo, onPickSt
               <span style={{ fontSize: 12, fontWeight: 700, color: st.color }}>{st.text}</span>
             </div>
             <div style={{ marginTop: 6 }}>
-              <TrailerHeader variant="side" trailerId={x.trailerId} loaded={x.loaded} data={hdr} height={12} />
+              {x.external ? <CompsStrip comps={x.external.comps} productInfo={productInfo} /> : <TrailerHeader variant="side" trailerId={x.trailerId} loaded={x.loaded} data={hdr} height={12} />}
             </div>
           </div>
         );

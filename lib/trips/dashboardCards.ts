@@ -103,6 +103,8 @@ export type StoreActivity = {
   // The trailer and what is in (or planned for) each compartment, for the bird's-eye view.
   trailerId: string | null;
   loaded: Record<number, string | null>;
+  // Another carrier: the label is its company name and the trailer is drawn from these compartments.
+  external?: { comps: { compNumber: number; productId: string | null; gallons: number }[] };
 };
 
 const STATE_RANK: Record<StoreActivityState, number> = { delivering: 0, enroute: 1, loading: 2, planned: 3 };
