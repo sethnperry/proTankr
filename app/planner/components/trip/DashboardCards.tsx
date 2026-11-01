@@ -9,7 +9,7 @@
 
 import { parseTicker, TICKER_TONE_COLOR } from "../../utils/tickerMarkup";
 import React, { useState } from "react";
-import { TrailerHeader, useTrailerHeaderData } from "../TrailerViews";
+import { TrailerHeader, SideView, segsFor, useTrailerHeaderData } from "../TrailerViews";
 import { CardBusy, Spinner, busyProps } from "@/lib/ui/pending";
 import { apiTierColor, type ApiTier } from "../../utils/apiBasis";
 import type { TerminalProductStatus, StoreDelivery } from "../../hooks/useDashboardCards";
@@ -106,6 +106,21 @@ export function CollapsibleCard({ title, summary, summaryColor, children }: {
   );
 }
 
+// ── Shared run rows: "SP 25184" (our own drivers) or the carrier's name, then the trailer drawn sideways ──
+export const initialsOf = (name: string | null | undefined) => (name ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase();
+export function runLabel(o: { ownCompany: boolean; who: string | null; truck: string | null }): string {
+  if (!o.ownCompany) return o.who || "Carrier";
+  return [initialsOf(o.who) || "Driver", o.truck].filter(Boolean).join(" ");
+}
+/** What was loaded or delivered in each compartment, drawn sideways with C1 on the right. */
+export function CompsStrip({ comps, productInfo }: { comps: { compNumber: number; productId: string | null; gallons: number }[]; productInfo: ProductInfoFn }) {
+  if (comps.length === 0) return null;
+  const colors: Record<number, string> = {};
+  for (const c of comps) colors[c.compNumber] = colorOf(productInfo(c.productId));
+  return <SideView height={12} segs={segsFor(comps.map((c) => ({ comp: c.compNumber, size: Math.max(1, c.gallons) })), colors)} />;
+}
+const nameStyle: React.CSSProperties = { flex: "0 1 auto", minWidth: 0, maxWidth: "55%", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+
 const rowStyle: React.CSSProperties = {
   padding: "9px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: 14,
 };
@@ -195,7 +210,8 @@ export function TerminalStatusCard({ placeLabel, terminalName, rackName, product
 // For the selected delivery location, every carrier. Collapsed shows the
 // latest drop; tap a drop for the store's tank levels after it.
 
-export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore, openingId, alwaysOpen = false, max }: {
+export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip, onPickStore, openingId, alwaysOpen = false, max, title }: {
+  title?: string;
   openingId?: string | null;
   // Inside the To Drop window: no collapse, list up to `max`.
   alwaysOpen?: boolean;
@@ -218,7 +234,7 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
   const shown = (open || alwaysOpen ? items : items.slice(0, 1)).slice(0, max ?? items.length);
   return (
     <div style={cardStyle}>
-      <CardHeader title={alwaysOpen && max ? `Previous ${max} deliveries` : "Recent Deliveries"} summary={storeName} open={open || alwaysOpen} onToggle={() => { if (!alwaysOpen) setOpen((o) => !o); }} />
+      <CardHeader title={title ?? (alwaysOpen && max ? `Previous ${max} deliveries` : "Recent Deliveries")} summary={storeName} open={open || alwaysOpen} onToggle={() => { if (!alwaysOpen) setOpen((o) => !o); }} />
       {shown.map((d) => {
         const isOpen = expanded === d.deliveryId;
         return (
@@ -229,19 +245,10 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
               aria-expanded={isOpen}
               style={{ ...rowStyle, borderTop: "none", width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}
             >
-              <span style={{ flex: "0 1 auto", minWidth: 0, maxWidth: "40%", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: d.ownCompany ? "#fff" : "rgba(255,255,255,0.8)" }}>
-                {d.isMine ? "You" : d.who}
+              <span style={{ ...nameStyle, maxWidth: "34%", color: d.ownCompany ? "#fff" : "rgba(255,255,255,0.8)" }}>
+                {runLabel({ ownCompany: d.ownCompany, who: d.who, truck: d.truck })}
               </span>
-              <span style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-                {d.products.map((x) => {
-                  const info = productInfo(x.productId);
-                  return (
-                    <span key={String(x.productId)} style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
-                      <Dot color={colorOf(info)} />{info.code} {gal(x.gallons)}
-                    </span>
-                  );
-                })}
-              </span>
+              <span style={{ flex: 1, minWidth: 0 }}><CompsStrip comps={d.comps} productInfo={productInfo} /></span>
               <span style={{ color: muted, fontSize: 12, flexShrink: 0 }}>{when(d.leftAt)}</span>
             </button>
             {isOpen && (
@@ -376,18 +383,22 @@ export function HeadingToDeliveryCard({ deliveryName, items, productInfo, defaul
 const STATE_LABEL: Record<StoreActivityState, { text: string; color: string }> = {
   delivering: { text: "Delivering now", color: "#4ade80" },
   enroute: { text: "Loaded, en route", color: "#fff" },
-  loading: { text: "Not loaded, en route to load", color: "#fbbf24" },
+  loading: { text: "Planned", color: muted },
   planned: { text: "Planned", color: muted },
 };
 
 // Who in the company has this store on their trip right now: delivering there, loaded and on the way, or
 // planned. The previous deliveries (every carrier) are the card below it.
-export function StoreActivityCard({ storeName, items, productInfo, onPickStore }: {
+export function StoreActivityCard({ storeName, items: all, productInfo, onPickStore, myLabel }: {
   storeName: string | null;
   items: StoreActivity[];
   productInfo: ProductInfoFn;
   onPickStore: () => void;
+  /** "SP 25184" for the signed-in driver's own row. */
+  myLabel?: string;
 }) {
+  // Only trucks actually on the way: a load nobody has begun yet is not listed.
+  const items = all.filter((x) => x.state !== "planned");
   const hdr = useTrailerHeaderData(items.map((x) => x.trailerId));
   if (!storeName) {
     return (
@@ -402,26 +413,16 @@ export function StoreActivityCard({ storeName, items, productInfo, onPickStore }
       {items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No company loads are delivering, on the way or planned for {storeName}.</div>}
       {items.map((x) => {
         const st = STATE_LABEL[x.state];
+        const label = x.isMine && myLabel ? myLabel : runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName });
         return (
-          <div key={x.tripId} style={{ ...rowStyle, display: "flex", padding: "0 0 0 14px" }}>
-            <div style={{ flex: 1, minWidth: 0, padding: "9px 12px 9px 0" }}>
+          <div key={x.tripId} style={rowStyle}>
             <div style={{ display: "flex", gap: 8 }}>
-              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {x.isMine ? "You" : x.driverName ?? "Driver"}{x.truckName ? <span style={{ color: muted }}> · Truck {x.truckName}</span> : null}
-              </span>
+              <span style={{ ...nameStyle, flex: 1, maxWidth: "none" }}>{label}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: st.color }}>{st.text}</span>
             </div>
-            {(x.products.length > 0 || x.plannedStartAt) && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4, fontSize: 13, color: "rgba(255,255,255,0.75)" }}>
-                {x.products.map((a) => {
-                  const info = productInfo(a.productId);
-                  return <span key={String(a.productId)}>{info.code}{a.gallons != null ? ` ${gal(a.gallons)}` : ""}</span>;
-                })}
-                {x.plannedStartAt && <span style={{ color: muted }}>starts {when(x.plannedStartAt)}</span>}
-              </div>
-            )}
+            <div style={{ marginTop: 6 }}>
+              <TrailerHeader variant="side" trailerId={x.trailerId} loaded={x.loaded} data={hdr} height={12} />
             </div>
-            <TrailerHeader variant="bird" trailerId={x.trailerId} loaded={x.loaded} data={hdr} />
           </div>
         );
       })}

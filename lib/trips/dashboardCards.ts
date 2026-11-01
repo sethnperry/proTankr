@@ -23,6 +23,7 @@ export type HeadingToTerminal = {
   driverName: string | null;
   truckName: string | null;
   arrived: boolean;
+  trailerId: string | null;
   // Products picked for the pickup (a second pickup on a partly loaded
   // trailer). Empty when unknown: a driver's plan isn't readable by others.
   productIds: string[];
@@ -50,6 +51,7 @@ export function headingToTerminal(trips: FleetTripLike[], terminalId: string | n
       driverName: f.driverName,
       truckName: f.truckName,
       arrived: !!p.arrived_at,
+      trailerId: f.trip.trailer_id ?? null,
       productIds: [...new Set((p.planned_comps ?? []).map((c) => c.product_id).filter(Boolean))],
     });
   }

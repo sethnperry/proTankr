@@ -89,7 +89,13 @@ export type StoreDelivery = {
   leftAt: string | null;
   products: { productId: string | null; gallons: number }[];
   tanks: { tankNumber: string; productId: string | null; after: number; unit: "gallons" | "inches" }[];
+  // Our own company's truck number (other carriers show only their company name).
+  truck: string | null;
+  // What was delivered (or loaded) in each compartment, for the trailer view.
+  comps: { compNumber: number; productId: string | null; gallons: number }[];
 };
+
+const mapComps = (r: any) => ((r.comps ?? []) as any[]).map((c) => ({ compNumber: Number(c.comp_number), productId: c.product_id ?? null, gallons: Number(c.gallons ?? 0) }));
 
 // Recent deliveries at one store, every carrier. The server matches the same
 // store saved by other companies (recent_deliveries_at_location).
@@ -123,6 +129,8 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
             after: Number(t.after ?? 0),
             unit: t.unit === "inches" ? "inches" : "gallons",
           })),
+          truck: r.truck ?? null,
+          comps: mapComps(r),
         }));
         if (!cancelled) { setItems(out); setLoaded(true); }
       } catch (e) {
@@ -136,6 +144,42 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
   }, [locationId, refreshKey, limit]);
 
   return { items, loading, loaded };
+}
+
+// The last few loads at one terminal, every carrier (recent_loads_at_terminal), in the same shape as the deliveries.
+export function useTerminalLoads(terminalId: string | null, refreshKey?: unknown, limit = 5) {
+  const [items, setItems] = useState<StoreDelivery[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!terminalId) { setItems([]); return; }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.rpc("recent_loads_at_terminal", { p_terminal_id: terminalId, p_limit: limit });
+        if (error) throw error;
+        const rows = (Array.isArray(data) ? data : []) as any[];
+        const out = rows.map((r): StoreDelivery => {
+          const comps = mapComps(r);
+          const by = new Map<string | null, number>();
+          for (const c of comps) by.set(c.productId, (by.get(c.productId) ?? 0) + c.gallons);
+          return {
+            deliveryId: String(r.pickup_id), tripId: r.trip_id ? String(r.trip_id) : null, isMine: !!r.is_mine, ownCompany: !!r.own_company,
+            who: String(r.who ?? "Driver"), leftAt: r.left_at ?? null, truck: r.truck ?? null, comps, tanks: [],
+            products: [...by].map(([productId, gallons]) => ({ productId, gallons })),
+          };
+        });
+        if (!cancelled) setItems(out);
+      } catch (e) {
+        console.warn("[dashboard] terminal loads failed:", e);
+        if (!cancelled) setItems([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [terminalId, refreshKey, limit]);
+  return { items, loading };
 }
 
 // Everything coming due on one truck or trailer: permits + service
