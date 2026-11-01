@@ -293,7 +293,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
-        const who = company ? [driverName.get(trip.driver_id), trip.truck_id ? truckName.get(trip.truck_id) && `Truck ${truckName.get(trip.truck_id)}` : null].filter(Boolean).join(" · ") : "";
+        const who = company ? [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", trip.truck_id ? truckName.get(trip.truck_id) : null].filter(Boolean).join(" ") : "";
         return (
           <div key={trip.trip_id} role="button" tabIndex={0} aria-busy={nav.is(trip.trip_id)}
             onClick={() => open(trip.trip_id)}
@@ -309,15 +309,24 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: s.color, flexShrink: 0 }}>{s.label}</div>
               </div>
-              {who && <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{who}</div>}
+
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
                 {route || [trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
               </div>
               {reasons && <div style={{ fontSize: 13, color: "#f87171", marginTop: 2 }}>{reasons}</div>}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 2 }}>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-                  {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
+              {company && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center", gap: 10, marginTop: 8 }}>
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14, fontWeight: 700 }}>{who}</span>
+                  <span style={{ minWidth: 0 }}><TrailerHeader variant="side" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} height={12} /></span>
+                  <span className="dash-num" style={{ textAlign: "right", fontSize: 12, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap" }}>
+                    {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
+                  </span>
                 </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 2 }}>
+                {!company && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+                  {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
+                </div>}
                 {trip.status === "dispatched" && queue.length > 1 && (
                   <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 2 }}>
                     <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginRight: 4 }}>Run order</span>
@@ -342,7 +351,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
                 )}
               </div>
             </div>
-            <TrailerHeader variant="bird" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} />
+            {!company && <TrailerHeader variant="bird" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} />}
           </div>
         );
       })}
