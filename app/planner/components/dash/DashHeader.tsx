@@ -42,7 +42,8 @@ export function DashHeader(p: DashHeaderProps) {
           </button>
           {p.line != null && <div className="dash-num" style={{ fontSize: 18, fontWeight: 700, color: L.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.line}</div>}
         </div>
-        {p.right && <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0 }}>{p.right}</div>}
+        {p.right && <div className="dash-hright" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0 }}>{p.right}</div>}
+        <style>{`@media (max-width: 640px){.dash-hright{flex-direction:column;align-items:flex-end !important;gap:6px !important}}`}</style>
       </div>
 
       <FullscreenModal open={open} title="Switch" onClose={() => setOpen(false)} footer={null}>

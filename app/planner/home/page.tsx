@@ -138,7 +138,7 @@ import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
-import { ShiftBar } from "../components/shift/ShiftBar";
+import { ShiftBar, ShiftControls } from "../components/shift/ShiftBar";
 import { useShift } from "../hooks/useShift";
 import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
@@ -1773,9 +1773,9 @@ export default function HomePage() {
       }}
     >
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
-      <ConnectedDashHeader current="driver" line={equipmentLabel} />
+      <ConnectedDashHeader current="driver" line={equipmentLabel} right={<ShiftControls shift={shift.current} onStart={shift.start} onEnd={shift.end} />} />
 
-      <ShiftBar shift={shift.current} prompt={shift.prompt} onStart={shift.start} onEnd={shift.end} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
+      <ShiftBar shift={shift.current} prompt={shift.prompt} onEnd={shift.end} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
       {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
       <div style={{ marginBottom: 14 }}>
