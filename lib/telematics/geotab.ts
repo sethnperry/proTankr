@@ -95,7 +95,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
   const odoCache = new Map<string, { at: number; v: number | null }>();
   const odometer = async (id: string): Promise<number | null> => {
     const hit = odoCache.get(id);
-    if (hit && Date.now() - hit.at < (hit.v == null ? 20 : 5) * 60_000) return hit.v;
+    if (hit && Date.now() - hit.at < (hit.v == null ? 2 : 5) * 60_000) return hit.v;
     const v = await odometerLookup(id);
     odoCache.set(id, { at: Date.now(), v });
     return v;

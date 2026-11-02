@@ -114,6 +114,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, shipments, driverName, lastDriver, heldByName, hos });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
-    return none();
+    // A provider hiccup is not "no telematics": answer with an error so the app asks again soon instead of
+    // giving up (a truck that is connected but briefly unreachable would otherwise never fill the odometer).
+    return NextResponse.json({ connected: false, error: "The telematics provider didn't answer." }, { status: 502 });
   }
 }
