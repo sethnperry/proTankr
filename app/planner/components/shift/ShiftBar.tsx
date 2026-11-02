@@ -17,11 +17,8 @@ export function ShiftControls({ shift, onStart, onEnd }: { shift: Shift | null; 
   const mins = shift ? Math.max(0, Math.round(shift.hours * 60)) : 0;
   const elapsed = `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
   const btn: React.CSSProperties = { width: HEADER_CTRL_W, boxSizing: "border-box", cursor: "pointer", padding: "8px 0", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", flexShrink: 0 };
-  const cell = (label: string, value: string, on: boolean): React.ReactNode => (
-    <span style={{ flex: 1, textAlign: "center", padding: "4px 0", borderRadius: 1, background: on ? "#fff" : "transparent", color: on ? "#000" : LOOK.muted }}>
-      <span style={{ display: "block", fontSize: 8, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.75 }}>{label}</span>
-      <span className="dash-num" style={{ display: "block", fontSize: 14, fontWeight: 800, marginTop: 1 }}>{value}</span>
-    </span>
+  const cell = (value: string, on: boolean): React.ReactNode => (
+    <span className="dash-num" style={{ flex: 1, textAlign: "center", padding: "7px 0", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", borderRadius: 1, background: on ? "#fff" : "transparent", color: on ? "#000" : LOOK.muted }}>{value}</span>
   );
   return (
     <>
@@ -29,8 +26,8 @@ export function ShiftControls({ shift, onStart, onEnd }: { shift: Shift | null; 
         ? <button type="button" onClick={onEnd} className="dash-press" style={{ ...btn, border: "1px solid #fff", background: "#0f0f10", color: "#fff" }}>End shift</button>
         : <button type="button" onClick={onStart} className="dash-press" style={{ ...btn, border: "none", background: "#fff", color: "#000" }}>Start shift</button>}
       <div role="group" aria-label="Shift" style={{ display: "flex", padding: 2, border: `1px solid ${LOOK.hairline}`, background: "#0f0f10", flexShrink: 0, width: HEADER_CTRL_W, boxSizing: "border-box" }}>
-        {cell("Began", began, true)}
-        {cell("Time", elapsed, false)}
+        {cell(began, true)}
+        {cell(elapsed, false)}
       </div>
     </>
   );
