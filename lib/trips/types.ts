@@ -216,6 +216,24 @@ export type WorkOrderRow = {
   reported_by: string;
 };
 
+// A driver's inspection of one truck or trailer. Insert-only in the offline store; an admin's review happens on
+// the server (see lib/maintenance).
+export type InspectionCondition = "good" | "fair" | "replace_soon";
+export type UnitInspectionRow = {
+  inspection_id: string;
+  company_id: string;
+  unit_kind: "truck" | "trailer";
+  truck_id: string | null;
+  trailer_id: string | null;
+  driver_id: string;
+  campaign_id: string | null;
+  items: { key: string; label: string; condition: InspectionCondition; note: string | null }[];
+  overall: InspectionCondition;
+  notes: string | null;
+  capture_id: string | null;
+  review_status: "none" | "pending";
+};
+
 export type CompartmentReadinessRow = Synced & {
   trailer_id: string;
   comp_number: number;
@@ -237,6 +255,7 @@ export type TripTableRows = {
   trip_events: TripEventRow;
   shift_events: ShiftEventRow;
   work_orders: WorkOrderRow;
+  unit_inspections: UnitInspectionRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -254,6 +273,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   trip_events: ["event_id"],
   shift_events: ["event_id"],
   work_orders: ["work_order_id"],
+  unit_inspections: ["inspection_id"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -270,11 +290,12 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "trip_events",
   "shift_events",
   "work_orders",
+  "unit_inspections",
   "compartment_readiness",
 ];
 
 // Tables the server only ever inserts into (no update policy).
-export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders"]);
+export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders", "unit_inspections"]);
 
 export function rowKey<T extends TripTable>(table: T, row: TripTableRows[T]): string {
   const r = row as Record<string, unknown>;

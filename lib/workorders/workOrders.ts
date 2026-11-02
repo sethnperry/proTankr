@@ -33,7 +33,7 @@ export function startingStatus(source: WorkOrderSource): WorkOrderStatus {
 
 export function createWorkOrder(
   store: TripStore,
-  o: { companyId: string; reportedBy: string; subject: string; source: WorkOrderSource; truckId?: string | null; trailerId?: string | null; sourceRef?: string | null; detail?: Record<string, unknown>; id?: string },
+  o: { companyId: string; reportedBy: string; subject: string; source: WorkOrderSource; truckId?: string | null; trailerId?: string | null; sourceRef?: string | null; detail?: Record<string, unknown>; id?: string; status?: WorkOrderStatus },
 ): WorkOrderRow {
   const subject = o.subject.trim();
   if (!subject) throw new Error("A work order needs a subject.");
@@ -48,7 +48,7 @@ export function createWorkOrder(
     trailer_id: o.trailerId ?? null,
     subject,
     source: o.source,
-    status: startingStatus(o.source),
+    status: o.status ?? startingStatus(o.source),
     source_ref: o.sourceRef ?? null,
     detail: o.detail ?? {},
     reported_by: o.reportedBy,

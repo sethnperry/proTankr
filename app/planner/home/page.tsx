@@ -144,6 +144,9 @@ import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanatio
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
+import { InspectionSheet, type InspectUnit } from "../components/maintenance/InspectionSheet";
+import { useOpenCampaigns } from "../hooks/useOpenCampaigns";
+import { createInspection } from "@/lib/maintenance/inspection";
 import { PaperLogSheet } from "../components/shift/PaperLogSheet";
 import { DocumentSheet } from "../components/shift/DocumentSheet";
 import { CaptureSheet } from "../components/capture/CaptureSheet";
@@ -230,6 +233,8 @@ export default function HomePage() {
   const { settings, reasons } = useTripSettings(companyId);
   const [paperLogOpen, setPaperLogOpen] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const [downTimeOpen, setDownTimeOpen] = useState(false);
@@ -254,6 +259,27 @@ export default function HomePage() {
     if (r === "sent") return `${unitText} is now Deadline and the repair request was emailed for approval.`;
     if (r === "waiting") return `Saved. ${unitText} will go to Deadline and the email will send when you have signal.`;
     return `${unitText} is Deadline. No approver email is set for your company, so this is waiting in the work order list.`;
+  };
+  // Inspect a unit: written through the offline store; a failed item plans a work order.
+  const openCampaigns = useOpenCampaigns(companyId, inspectOpen, unitRegions);
+  useEffect(() => {
+    if (!inspectOpen) return;
+    void (async () => {
+      const [t, r] = await Promise.all([
+        truckId ? supabase.from("trucks").select("truck_id, region").eq("truck_id", truckId).maybeSingle() : Promise.resolve({ data: null }),
+        trailerId ? supabase.from("trailers").select("trailer_id, region").eq("trailer_id", trailerId).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      setUnitRegions({ ...(truckId ? { [truckId]: (t.data as any)?.region ?? null } : {}), ...(trailerId ? { [trailerId]: (r.data as any)?.region ?? null } : {}) });
+    })();
+  }, [inspectOpen, truckId, trailerId]);
+  const submitInspection = async (o: { unit: InspectUnit; ratings: any; campaignId: string | null; notes: string; captureId: string | null }): Promise<string> => {
+    if (!store || !userId || !companyId) throw new Error("Not signed in.");
+    const { data: prof } = await supabase.from("profiles").select("display_name").eq("user_id", userId).maybeSingle();
+    const { inspection, workOrder } = createInspection(store, { companyId, driverId: userId, driverName: String((prof as any)?.display_name ?? ""), kind: o.unit.kind, unitId: o.unit.id, unitName: o.unit.name, ratings: o.ratings, campaignId: o.campaignId, notes: o.notes, captureId: o.captureId });
+    void syncNow();
+    const what = `${o.unit.kind === "truck" ? "Truck" : "Trailer"} ${o.unit.name}`;
+    return inspection.overall === "good" ? `${what} is good. The inspection is saved.`
+      : workOrder ? `Saved. ${what} has an item that needs replacing soon, so a work order was planned for it.` : `Saved. ${what} has items to watch.`;
   };
   const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else shift.end(); };
   const signature = useDriverSignature(userId);
@@ -2463,6 +2489,7 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <InspectionSheet open={inspectOpen} onClose={() => setInspectOpen(false)} units={repairUnits} campaignsFor={openCampaigns.campaignsFor} companyId={companyId} userId={userId} onSubmit={submitInspection} />
       <RepairSheet open={repairOpen} onClose={() => setRepairOpen(false)} units={repairUnits} onSend={sendRepairRequest} />
       <PaperLogSheet open={paperLogOpen} onClose={() => setPaperLogOpen(false)} companyId={companyId} userId={userId || null}
         reasons={reasonsOrDefault(reasons as any, "paper_log")}
@@ -2494,6 +2521,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
           { icon: "truck", label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
           { icon: "plan", label: "Document", sub: "Submit a document", onClick: () => setDocOpen(true) },
           { icon: "locate", label: "Down time", sub: "Photo, no timer", onClick: () => setDownTimeOpen(true) },
