@@ -26,6 +26,8 @@ import type {
   TripRow,
 } from "@/lib/trips/types";
 import { PrintPortal, PtdDocument } from "../PtdDocument";
+import { DeadheadLayer } from "../DeadheadLayer";
+import { tripSegments, type Flags } from "@/lib/trips/deadhead";
 import { DispatchedPreview } from "./DispatchedPreview";
 
 const btn: React.CSSProperties = {
@@ -47,6 +49,10 @@ export default function TripPtdPage() {
   const [loading, setLoading] = useState(true);
   const [names, setNames] = useState<Record<string, string>>({});
   const [locNames, setLocNames] = useState<Record<string, string>>({});
+  const [flags, setFlags] = useState<Flags>({});
+  const [flagBusy, setFlagBusy] = useState<string | null>(null);
+  const [locPlaces, setLocPlaces] = useState<Record<string, { city: string | null; state: string | null }>>({});
+  const isAdmin = shell.role === "admin" || shell.isSuperAdmin;
   const [equip, setEquip] = useState<{ truck: string | null; trailer: string | null }>({ truck: null, trailer: null });
 
   // Pull the trip and everything under it into the store.
@@ -134,8 +140,9 @@ export default function TripPtdPage() {
     if (!locIds.length) return;
     let cancelled = false;
     (async () => {
-      const { data: rows } = await supabase.from("delivery_locations").select("location_id,name,location_number").in("location_id", locIds);
+      const { data: rows } = await supabase.from("delivery_locations").select("location_id,name,location_number,city,state").in("location_id", locIds);
       if (cancelled) return;
+      setLocPlaces(Object.fromEntries(((rows ?? []) as { location_id: string; city: string | null; state: string | null }[]).map((r) => [r.location_id, { city: r.city, state: r.state }])));
       setLocNames(Object.fromEntries(((rows ?? []) as { location_id: string; name: string; location_number: string | null }[])
         .map((r) => [r.location_id, locationTitle(r)])));
     })();
@@ -180,6 +187,27 @@ export default function TripPtdPage() {
     });
   }, [data, products, locNames, names, reasons]);
 
+  // The admin layer: empty segments and their billable flags (company admins only; never printed).
+  const segments = useMemo(() => (data && isAdmin ? tripSegments(data.trip, data.pickups, data.deliveries, (d) => ({ name: (d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery", city: (d.location_id && locPlaces[d.location_id]?.city) || null, state: (d.location_id && locPlaces[d.location_id]?.state) || null })) : []), [data, isAdmin, locNames, locPlaces]);
+  useEffect(() => {
+    if (!isAdmin || !tripId) return;
+    let off = false;
+    void supabase.from("trip_billing_flags").select("segment_key, billable").eq("trip_id", tripId).then(({ data: rows }) => {
+      if (!off) setFlags(Object.fromEntries(((rows ?? []) as { segment_key: string; billable: boolean }[]).map((r) => [r.segment_key, r.billable])));
+    });
+    return () => { off = true; };
+  }, [isAdmin, tripId]);
+  const setFlag = async (key: string, billable: boolean | null) => {
+    if (!data) return;
+    setFlagBusy(key);
+    const { data: u } = await supabase.auth.getUser();
+    const res = billable == null
+      ? await supabase.from("trip_billing_flags").delete().eq("trip_id", tripId).eq("segment_key", key)
+      : await supabase.from("trip_billing_flags").upsert({ trip_id: tripId, segment_key: key, company_id: data.trip.company_id, billable, set_by: u.user?.id ?? null, set_at: new Date().toISOString() }, { onConflict: "trip_id,segment_key" });
+    setFlagBusy(null);
+    if (!res.error) setFlags((f) => { const n = { ...f }; if (billable == null) delete n[key]; else n[key] = billable; return n; });
+  };
+
   if (data && data.trip.status === "dispatched") {
     return (
       <DispatchedPreview trip={data.trip} pickups={data.pickups} deliveries={data.deliveries} locNames={locNames} products={products}
@@ -203,6 +231,7 @@ export default function TripPtdPage() {
           <div style={{ overflowX: "auto" }}>
             <PtdDocument ptd={ptd} truckName={equip.truck} trailerName={equip.trailer} viewerId={userId} viewerSignature={signature.svg} />
           </div>
+          {isAdmin && <DeadheadLayer segments={segments} flags={flags} onSet={(k, b) => void setFlag(k, b)} busyKey={flagBusy} />}
           <PrintPortal>
             <PtdDocument print ptd={ptd} truckName={equip.truck} trailerName={equip.trailer} viewerId={userId} viewerSignature={signature.svg} />
           </PrintPortal>

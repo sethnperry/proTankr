@@ -262,16 +262,15 @@ export default function HomePage() {
   };
   // Inspect a unit: written through the offline store; a failed item plans a work order.
   const openCampaigns = useOpenCampaigns(companyId, inspectOpen, unitRegions);
+  // A campaign's region is matched against the driver's own region (their profile), not the unit's.
   useEffect(() => {
-    if (!inspectOpen) return;
+    if (!inspectOpen || !userId) return;
     void (async () => {
-      const [t, r] = await Promise.all([
-        truckId ? supabase.from("trucks").select("truck_id, region").eq("truck_id", truckId).maybeSingle() : Promise.resolve({ data: null }),
-        trailerId ? supabase.from("trailers").select("trailer_id, region").eq("trailer_id", trailerId).maybeSingle() : Promise.resolve({ data: null }),
-      ]);
-      setUnitRegions({ ...(truckId ? { [truckId]: (t.data as any)?.region ?? null } : {}), ...(trailerId ? { [trailerId]: (r.data as any)?.region ?? null } : {}) });
+      const { data: prof } = await supabase.from("profiles").select("region").eq("user_id", userId).maybeSingle();
+      const region = ((prof as any)?.region as string | null) ?? null;
+      setUnitRegions({ ...(truckId ? { [truckId]: region } : {}), ...(trailerId ? { [trailerId]: region } : {}) });
     })();
-  }, [inspectOpen, truckId, trailerId]);
+  }, [inspectOpen, userId, truckId, trailerId]);
   const submitInspection = async (o: { unit: InspectUnit; ratings: any; campaignId: string | null; notes: string; captureId: string | null }): Promise<string> => {
     if (!store || !userId || !companyId) throw new Error("Not signed in.");
     const { data: prof } = await supabase.from("profiles").select("display_name").eq("user_id", userId).maybeSingle();
