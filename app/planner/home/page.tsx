@@ -169,6 +169,7 @@ import { DOCUMENT_EVENT, DOWN_TIME_EVENT, documentPayload, downTimePayload } fro
 import { PAPER_LOG_EVENT, paperLogPayload } from "@/lib/shifts/paperLog";
 import { reasonsOrDefault } from "@/lib/reasons/reasons";
 import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
+import { SAFETY_MEETING_EVENT } from "@/lib/safety/onDuty";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { useShift } from "../hooks/useShift";
 import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
@@ -2526,7 +2527,12 @@ export default function HomePage() {
       <TankCheckSheet open={tankCheckOpen} onClose={() => setTankCheckOpen(false)} locations={locations} tanks={locList.tanks} productName={(id) => productInfo(id).name} origin={origin} companyId={companyId} userId={userId} onLocationAdded={() => void locList.reload()}
         onSave={(a) => tankChecks.saveCheck({ locationId: a.locationId, locationName: a.locationName, truckId: equipment.currentTruckId ?? null, entries: a.entries, productOf: a.productOf, paths: a.paths, note: a.note })} />
       <LanternflySheet open={slfOpen} onClose={() => setSlfOpen(false)} missing={lanternfly.missing} attested={lanternfly.attested} hasTrip={!!openTrip} hasZone={lanternfly.hasZone} onAttest={lanternfly.attest} />
-      <SafetyMeetingSheet open={safetyOpen} onClose={() => setSafetyOpen(false)} meetings={safety.meetings} signed={safety.signed} loading={safety.loading} onSign={safety.sign} onMaterial={(p) => void safety.openMaterial(p)} />
+      <SafetyMeetingSheet open={safetyOpen} onClose={() => setSafetyOpen(false)} meetings={safety.meetings} signed={safety.signed} loading={safety.loading} onSign={async (m, path) => {
+        const err = await safety.sign(m, path);
+        // Signing in is on-duty time: leave a shift event for the timeline (the work log counts it from the signature).
+        if (!err && companyId && userId) recordShiftEvent(getTripStore(userId), { companyId, userId, actorId: userId, type: SAFETY_MEETING_EVENT, payload: { meeting_id: m.meeting_id, title: m.title, started_at: m.started_at, ended_at: m.ended_at, on_duty: true } });
+        return err;
+      }} onMaterial={(p) => void safety.openMaterial(p)} />
       <TerminalWorkSheet open={termWorkOpen} onClose={() => setTermWorkOpen(false)} current={termWork.current} defaults={termWork.defaults}
         defaultTerminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
         terminals={(terminals.terminals ?? []).map((t: any) => ({ value: String(t.terminal_id), label: [t.terminal_name, t.city].filter(Boolean).join(", ") }))}

@@ -43,8 +43,12 @@ test("the roster lists every driver and lead, unsigned first, and exports for an
   assert.equal(unsignedCount(rows), 2);
   const csv = auditCsv(mtg({ started_at: "2026-11-03T14:00:00Z" }), rows).split("\r\n");
   assert.equal(csv[0], "Meeting,Monthly safety");
-  assert.ok(csv.includes("Driver,Status,Signed at"));
+  assert.ok(csv.includes("Driver,Status,Signed at,Minutes on duty"));
   assert.ok(csv.some((l) => l.startsWith("Bob,Not signed")));
+  assert.ok(csv.some((l) => l.startsWith("Counts as,")));
+  // A meeting that ran 14:00 to 15:30 counts 90 minutes for each signer.
+  const ran = auditCsv(mtg({ started_at: "2026-11-03T14:00:00Z", ended_at: "2026-11-03T15:30:00Z" }), rows).split("\r\n");
+  assert.ok(ran.some((l) => l.startsWith("Amy,Signed,") && l.endsWith(",90")));
 });
 
 test("reminders are for the one scheduler: a day-before to drivers, a day-after to whoever hasn't signed", () => {

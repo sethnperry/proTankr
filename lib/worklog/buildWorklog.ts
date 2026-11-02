@@ -26,6 +26,8 @@ export type WlInput = {
   trips: WlTrip[]; purchases: WlPurchase[];
   /** Hours on duty per local date from the electronic log; null/absent = not known. */
   dutyHours?: Record<string, number> | null;
+  /** Hours per local date in safety meetings that count as on duty and aren't already in the electronic log. */
+  meetingHours?: Record<string, number> | null;
   overtimeRule?: OtRule;
 };
 
@@ -39,6 +41,8 @@ export type WlDay = {
   rows: WlRow[]; midnightAfter: boolean;
   /** On duty before, between and after trips (needs the electronic log); null = not known. */
   nonRev: number | null; worked: number;
+  /** Safety meeting hours counted as on duty that day (already inside `worked`). */
+  meeting: number;
   /** Trip hours beyond the electronic log's on-duty time that day (off duty or no log during a trip). */
   tripOverDuty: number;
 };
@@ -103,7 +107,7 @@ export function buildWorklog(i: WlInput): Worklog {
   const dayMap = new Map<string, WlDay>();
   const dayOf = (date: string): WlDay => {
     let d = dayMap.get(date);
-    if (!d) { d = { date, label: `${weekday(date)} ${shortDate(date)}`, from: "", to: "", hours: 0, miles: 0, loads: 0, gross: 0, net: 0, rows: [], midnightAfter: false, nonRev: null, worked: 0, tripOverDuty: 0 }; dayMap.set(date, d); }
+    if (!d) { d = { date, label: `${weekday(date)} ${shortDate(date)}`, from: "", to: "", hours: 0, miles: 0, loads: 0, gross: 0, net: 0, rows: [], midnightAfter: false, nonRev: null, worked: 0, meeting: 0, tripOverDuty: 0 }; dayMap.set(date, d); }
     return d;
   };
   const windows = new Map<string, { from: number; to: number }>();
@@ -163,16 +167,22 @@ export function buildWorklog(i: WlInput): Worklog {
   // On-duty time with no trip around it still counts as worked: add those days.
   const duty = i.dutyHours ?? null;
   if (duty) for (const [date, h] of Object.entries(duty)) if (inRange(date) && h >= 0.25 && !dayMap.has(date)) dayOf(date);
+  const mh = i.meetingHours ?? {};
+  for (const [date, h] of Object.entries(mh)) if (inRange(date) && h >= 0.05 && !dayMap.has(date)) dayOf(date);
+  const anyMeeting = Object.entries(mh).some(([date, h]) => inRange(date) && h >= 0.05);
   const days = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
   for (const d of days) {
     const w = windows.get(d.date);
     if (w) { d.from = clock(w.from, tz); d.to = w.to >= localMidnightMs(addDays(d.date, 1), tz) ? "12:00a" : clock(w.to, tz); }
     d.hours = r1(d.hours); d.miles = Math.round(d.miles);
-    d.nonRev = duty ? r1(Math.max(0, (duty[d.date] ?? 0) - d.hours)) : null;
+    // A safety meeting counts as on duty; the part the log already shows was removed before it got here.
+    const meet = mh[d.date] ?? 0;
+    d.meeting = r1(meet);
+    d.nonRev = duty ? r1(Math.max(0, (duty[d.date] ?? 0) + meet - d.hours)) : meet >= 0.05 ? r1(meet) : null;
     // With the electronic log, the day's on-duty total is the hours worked (all on-duty time is paid);
     // trips only split it into trip time and non-rev. No log for that day: trip time stands.
-    const onDuty = duty?.[d.date] ?? 0;
-    d.worked = duty ? r1(onDuty) : r1(d.hours);
+    const onDuty = (duty?.[d.date] ?? 0) + meet;
+    d.worked = duty ? r1(onDuty) : r1(d.hours + meet);
     d.tripOverDuty = duty ? r1(Math.max(0, d.hours - onDuty)) : 0;
     d.midnightAfter = d.rows.some((r) => r.continues);
     for (const r of d.rows) { r.hours = r1(r.hours); r.miles = Math.round(r.miles); }
@@ -199,7 +209,7 @@ export function buildWorklog(i: WlInput): Worklog {
       miles: { total: Math.round(totalMiles), loaded: hasLoaded ? Math.round(loadedKnown) : null, empty: hasLoaded ? Math.round(emptyKnown) : null, partial: hasLoaded && anyUnknown },
       spend: Math.round(purchases.reduce((a, p) => a + (p.amount ?? 0), 0) * 100) / 100,
       worked: r1(days.reduce((a, d) => a + d.worked, 0)), tripHours: r1(days.reduce((a, d) => a + d.hours, 0)),
-      nonRev: duty ? r1(days.reduce((a, d) => a + (d.nonRev ?? 0), 0)) : null,
+      nonRev: duty || anyMeeting ? r1(days.reduce((a, d) => a + (d.nonRev ?? 0), 0)) : null,
       regular: r1(ot.regular), overtime: r1(ot.overtime), double: r1(ot.double), otRule: rule,
     },
   };

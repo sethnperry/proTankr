@@ -64,3 +64,20 @@ test("render: subject, sections, mobile and print rules", () => {
   assert.match(html, /15,456 Ggal/);
   assert.doesNotMatch(renderWorklogBody(w, { mode: "condensed" }), /MIDNIGHT/);
 });
+
+test("a safety meeting counts as on duty: added to the day, with or without the electronic log", () => {
+  const range = { start: "2026-10-27", end: "2026-10-27" };
+  // No trip, no log: the meeting alone makes a worked day.
+  const only = buildWorklog({ driverName: "S", range, tz: TZ, title: "W", trips: [], purchases: [], meetingHours: { "2026-10-27": 1.5 } });
+  assert.equal(only.days.length, 1);
+  assert.equal(only.days[0].worked, 1.5);
+  assert.equal(only.days[0].meeting, 1.5);
+  // With the log, the meeting adds to the log's on-duty time (overlap was already removed upstream).
+  const logged = buildWorklog({ driverName: "S", range, tz: TZ, title: "W", trips: [], purchases: [], dutyHours: { "2026-10-27": 6 }, meetingHours: { "2026-10-27": 1 } });
+  assert.equal(logged.days[0].worked, 7);
+  assert.equal(logged.summary.worked, 7);
+  // No meeting: nothing changes.
+  const none = buildWorklog({ driverName: "S", range, tz: TZ, title: "W", trips: [], purchases: [], dutyHours: { "2026-10-27": 6 } });
+  assert.equal(none.days[0].worked, 6);
+  assert.equal(none.days[0].meeting, 0);
+});

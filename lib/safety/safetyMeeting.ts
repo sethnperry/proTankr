@@ -4,6 +4,7 @@
 // ended, closed), who has and hasn't signed, the reminders (made for the one scheduler, never sent from here), and
 // the roster export for an audit. Pure: no Supabase.
 
+import { meetingMinutes, meetingWindow } from "./onDuty.ts";
 import { addDays } from "../worklog/time.ts";
 import type { ShellColumn, ShellFilter } from "../reports/reportShell.ts";
 import type { Cadence, Recipient } from "../notify/schedule.ts";
@@ -74,8 +75,8 @@ export const rosterFilters: ShellFilter<RosterRow>[] = [{ id: "status", label: "
 /** The audit export for one meeting: what it was, when it ran, and every signer with the time. */
 export function auditCsv(m: Meeting, rows: RosterRow[]): string {
   const esc = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const head = [["Meeting", m.title], ["Scheduled for", m.scheduled_for], ["Started", when(m.started_at)], ["Ended", when(m.ended_at)], ["Closed", when(m.closed_at)], ["Zoom", m.zoom_url ?? ""], ["Material", m.attachment_name ?? ""]];
-  return [...head.map(([k, v]) => `${esc(k)},${esc(v)}`), "", "Driver,Status,Signed at", ...rows.map((r) => [r.name, r.signed ? "Signed" : "Not signed", when(r.signedAt)].map(esc).join(","))].join("\r\n");
+  const head = [["Meeting", m.title], ["Scheduled for", m.scheduled_for], ["Started", when(m.started_at)], ["Ended", when(m.ended_at)], ["Closed", when(m.closed_at)], ["Zoom", m.zoom_url ?? ""], ["Material", m.attachment_name ?? ""], ["Counts as", "On-duty time for every signer"]];
+  return [...head.map(([k, v]) => `${esc(k)},${esc(v)}`), "", "Driver,Status,Signed at,Minutes on duty", ...rows.map((r) => [r.name, r.signed ? "Signed" : "Not signed", when(r.signedAt), r.signed ? String(meetingMinutes(meetingWindow(m, r.signedAt as string))) : ""].map(esc).join(","))].join("\r\n");
 }
 
 // ── Reminders, for the one scheduler ───────────────────────────────────────────────────────────────────────

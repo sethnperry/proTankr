@@ -9,6 +9,8 @@ import { autoLinkDriver, providerFor } from "@/lib/telematics/server";
 import { loadWorklogInputs } from "./loadWorklogInputs";
 import { buildWorklog, type Worklog } from "./buildWorklog";
 import { dailyHours } from "./dutyHours";
+import { segments } from "../telematics/cycleRecap";
+import { hoursByDay, meetingWindow, uncovered, type Window } from "../safety/onDuty";
 import { isOtRule, type OtRule } from "./overtime";
 import { addDays, localMidnightMs } from "./time";
 import { milesByState } from "@/lib/ifta/milesByState";
@@ -53,6 +55,7 @@ export async function buildDriverWorklog(o: {
   ]);
 
   let dutyHours: Record<string, number> | null = null;
+  let onDutySpans: Window[] = [];
   try {
     if (provider) {
       const { data } = await admin.from("telematics_driver_map").select("provider_user_id").eq("company_id", o.companyId).eq("user_id", o.userId).maybeSingle();
@@ -62,12 +65,28 @@ export async function buildDriverWorklog(o: {
         const toIso = new Date(Date.parse(`${addDays(o.range.end, 2)}T00:00:00Z`)).toISOString();
         const logs = await provider.dutyLogs(pid, fromIso, toIso);
         dutyHours = {};
+        onDutySpans = segments(logs, Date.now()).filter((x) => x.code === "D" || x.code === "ON" || x.code === "YM").map((x) => ({ from: x.from, to: x.to }));
         for (const d of dailyHours(logs, o.tz, o.range.start, o.range.end)) dutyHours[d.date] = (d.driveMin + d.onDutyMin) / 60;
       }
     }
   } catch (e) { console.warn("[worklog] duty hours unavailable:", (e as Error).message); }
 
-  const w = buildWorklog({ driverName: o.driverName, range: o.range, tz: o.tz, title: o.title, trips, purchases, dutyHours, overtimeRule: rule });
+  // Safety meetings the driver signed in the period count as on duty (minus time the log already shows on duty).
+  let meetingHours: Record<string, number> | null = null;
+  try {
+    const fromIso = new Date(localMidnightMs(addDays(o.range.start, -1), o.tz)).toISOString();
+    const toIso = new Date(localMidnightMs(addDays(o.range.end, 2), o.tz)).toISOString();
+    const { data: sg } = await admin.from("safety_meeting_signatures").select("meeting_id, signed_at").eq("user_id", o.userId).eq("company_id", o.companyId).gte("signed_at", fromIso).lt("signed_at", toIso);
+    const sigs = (sg ?? []) as { meeting_id: string; signed_at: string }[];
+    if (sigs.length) {
+      const { data: ms } = await admin.from("safety_meetings").select("meeting_id, started_at, ended_at").in("meeting_id", sigs.map((x) => x.meeting_id));
+      const byId = new Map(((ms ?? []) as { meeting_id: string; started_at: string | null; ended_at: string | null }[]).map((m) => [m.meeting_id, m]));
+      const windows = sigs.flatMap((x) => { const m = byId.get(x.meeting_id); const w = m ? meetingWindow(m, x.signed_at) : null; return w ? uncovered(w, onDutySpans) : []; });
+      meetingHours = hoursByDay(windows, o.tz);
+    }
+  } catch (e) { console.warn("[worklog] safety meetings unavailable:", (e as Error).message); }
+
+  const w = buildWorklog({ driverName: o.driverName, range: o.range, tz: o.tz, title: o.title, trips, purchases, dutyHours, meetingHours, overtimeRule: rule });
   // The period's utilization score: this driver's loads in the period, gallon-weighted over eligible loads.
   try {
     const since = new Date(localMidnightMs(o.range.start, o.tz)).toISOString();
