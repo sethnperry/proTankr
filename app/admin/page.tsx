@@ -12,6 +12,14 @@ import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/drive
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
+import { ModeSwitch, RegionButton } from "@/app/planner/components/dash/DashChrome";
+import { ToolPanel, type ToolItem } from "@/app/planner/home/DashboardChrome";
+import { PeriodPicker } from "@/lib/ui/PeriodPicker";
+import { rangeBounds, deviceTz, type DateRange } from "@/lib/reports/dateRange";
+import { localDateOf, localMidnightMs } from "@/lib/worklog/time";
+import { CompanyDashboardView, type CompanyMode } from "./CompanyDashboardView";
+import { useCompanyDashboard } from "./useCompanyDashboard";
+import { dayRibbon, fleetStrip, gauges as buildGauges, heatmap as buildHeatmap, campaignBars, inRegions, needsYou, regionOptions, worstState, type GaugeKey, type NeedsItem } from "@/lib/company/company";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { DashStyles } from "@/app/planner/home/dashLook";
 
@@ -1282,6 +1290,10 @@ export default function AdminPage() {
   const [iftaOpen, setIftaOpen] = useState(false);
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
   const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
+  const [recordsMenuOpen, setRecordsMenuOpen] = useState(false);
+  const [setupMenuOpen, setSetupMenuOpen] = useState(false);
+  const [dashMode, setDashModeState] = useState<CompanyMode>("now");
+  const [periodRange, setPeriodRange] = useState<DateRange>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [terminalsMenuOpen, setTerminalsMenuOpen] = useState(false);
   const [workOrdersOpen, setWorkOrdersOpen] = useState(false);
@@ -1531,13 +1543,18 @@ export default function AdminPage() {
   const myRegion = myProfile?.region ?? null;
   const myLocalArea = myProfile?.local_area ?? null;
   const hasOwnScope = Boolean(myRegion || myLocalArea);
-  const [viewScope, setViewScope] = useState<"mine" | "all">("mine");
-  const activeScope = (viewScope === "mine" && hasOwnScope) ? { region: myRegion, localArea: myLocalArea } : null;
-  function matchesScope(regionVal: string | null | undefined, localAreaVal: string | null | undefined): boolean {
-    if (!activeScope) return true;
-    if (activeScope.region) return regionVal === activeScope.region;
-    if (activeScope.localArea) return localAreaVal === activeScope.localArea;
-    return true;
+  // The region filter (shared with the Dispatch Dashboard) replaces the old "mine or all" toggle. It starts on this
+  // admin's own region, if they have one; an empty selection shows everything.
+  const [regionSel, setRegionSel] = useState<Set<string>>(new Set());
+  const regionSeeded = React.useRef(false);
+  useEffect(() => {
+    if (regionSeeded.current || !myProfile) return;
+    regionSeeded.current = true;
+    if (myRegion) setRegionSel(new Set([myRegion.trim()]));
+  }, [myProfile, myRegion]);
+  const viewScope = useMemo(() => [...regionSel].sort().join("|"), [regionSel]);
+  function matchesScope(regionVal: string | null | undefined, _localAreaVal?: string | null | undefined): boolean {
+    return inRegions(regionSel, regionVal);
   }
   const trucksById = useMemo(() => new Map(trucks.map(t => [t.truck_id, t])), [trucks]);
   const trailersById = useMemo(() => new Map(trailers.map(t => [t.trailer_id, t])), [trailers]);
@@ -1875,6 +1892,43 @@ export default function AdminPage() {
     return cs;
   }, [combos, comboSearch, trucksById, trailersById, viewScope, myRegion, myLocalArea]);
 
+  // ── Company Dashboard (Now / Period / Desk) ───────────────────────────────
+  useEffect(() => { try { const m = localStorage.getItem("proTankr:companyMode"); if (m === "now" || m === "period" || m === "desk") setDashModeState(m); } catch { /* storage blocked */ } }, []);
+  const setDashMode = (m: CompanyMode) => { setDashModeState(m); try { localStorage.setItem("proTankr:companyMode", m); } catch { /* ignore */ } };
+  const dashTz = useMemo(() => deviceTz(), []);
+  const dashToday = localDateOf(Date.now(), dashTz);
+  const dayStartMs = useMemo(() => localMidnightMs(dashToday, dashTz), [dashToday, dashTz]);
+  const dashRange = useMemo(() => {
+    if (dashMode === "period" && periodRange) { const b = rangeBounds(periodRange, dashTz); return { ...b, fromDate: periodRange.start, toDate: periodRange.end }; }
+    if (dashMode === "period") { const from = new Date(Date.now() - 365 * 86400_000); return { fromIso: from.toISOString(), toIso: new Date(Date.now() + 86400_000).toISOString(), fromDate: from.toISOString().slice(0, 10), toDate: dashToday }; }
+    const b = rangeBounds({ start: dashToday, end: dashToday }, dashTz);
+    return { ...b, fromDate: dashToday, toDate: dashToday };
+  }, [dashMode, periodRange, dashTz, dashToday]);
+  const dashEnabled = !isSolo && (myRole === "admin" || myRole === "lead" || myRole === "dispatch");
+  const dash = useCompanyDashboard({ companyId: companyId ?? null, enabled: dashEnabled, isAdmin: myRole === "admin", range: dashRange, dayStartMs });
+  const rosterRegion = useMemo(() => new Map(dash.plan.roster.map((m) => [m.user_id, m.region])), [dash.plan.roster]);
+  const dashFleet = useMemo(() => fleetStrip(dash.units, Date.now(), regionSel), [dash.units, regionSel]);
+  const dashRibbon = useMemo(() => dayRibbon(dash.segs, dayStartMs, dayStartMs + 86400_000, regionSel), [dash.segs, dayStartMs, regionSel]);
+  const dashHeat = useMemo(() => buildHeatmap(dash.alerts, (id) => rosterRegion.get(id) ?? dash.plan.unitRegions.get(id) ?? null, dash.heatExtras, regionSel), [dash.alerts, rosterRegion, dash.plan.unitRegions, dash.heatExtras, regionSel]);
+  const dashCampaigns = useMemo(() => campaignBars(dash.boards).filter((b) => b.total > 0), [dash.boards]);
+  const dashHosRisk = useMemo(() => dash.hosRisk.filter((h) => inRegions(regionSel, rosterRegion.get(h.userId))), [dash.hosRisk, regionSel, rosterRegion]);
+  const dashNeeds = useMemo(() => needsYou({ repairsAwaiting: dash.repairsAwaiting, unconfirmedShifts: dash.shifts.unconfirmed + longShifts.missing, unreviewedBillable: dash.unreviewedBillable, pendingReviews: dash.pendingReviews }), [dash.repairsAwaiting, dash.shifts.unconfirmed, longShifts.missing, dash.unreviewedBillable, dash.pendingReviews]);
+  const dashGauges = useMemo(() => {
+    const cells = dashHeat.rows.flatMap((r) => r.cells);
+    const onShift = [...dash.shifts.onShiftUsers].filter((u) => inRegions(regionSel, rosterRegion.get(u))).length;
+    return buildGauges({
+      needs: dashNeeds.total, down: dashFleet.counts.deadline, hoursRisk: dashHosRisk.length,
+      complianceWorst: worstState(cells.flatMap((c) => (c.worst ? [c.worst] : []))), complianceCount: dashHeat.rows.reduce((t, r) => t + r.total, 0),
+      onShift, delayedMin: dash.delayedMin, callouts: dash.callouts.count, calloutsBlocking: dash.callouts.blocking, billableMin: dash.billableMin,
+    });
+  }, [dashHeat, dash.shifts.onShiftUsers, regionSel, rosterRegion, dashNeeds.total, dashFleet.counts.deadline, dashHosRisk.length, dash.delayedMin, dash.callouts, dash.billableMin]);
+  const regionFilter = useMemo(() => ({
+    options: regionOptions([...trucks.map((t) => t.region), ...trailers.map((t) => t.region), ...members.map((m) => m.region)]),
+    selected: regionSel, onChange: setRegionSel,
+  }), [trucks, trailers, members, regionSel]);
+  const onGauge = (k: GaugeKey) => { if (k === "delayed") setDelaysOpen(true); else if (k === "callouts") setCalloutsOpen(true); else if (k === "billable") setDeadheadOpen(true); };
+  const onOpenNeed = (k: NeedsItem["key"]) => { if (k === "repairs") setWorkOrdersOpen(true); else if (k === "shifts") setLongShiftsOpen(true); else if (k === "billable") setDeadheadOpen(true); else setMaintenanceOpen(true); };
+
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err)     return <div style={css.page}><Banner msg={err} type="error" /></div>;
 
@@ -1887,18 +1941,7 @@ export default function AdminPage() {
   };
   const filterRow: React.CSSProperties = { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" };
 
-  return (
-    <div style={css.page} className="admin-page-root">
-      <DashStyles />
-      <div className="admin-header-row" style={{ marginBottom: 20 }}>
-        <ConnectedDashHeader current="company" line={companyName} />
-      </div>
-
-      {/* Dashboard -- at-a-glance stats, same simple tile pattern as
-          ProTankr Dash's own stat row. Sits above everything else on the
-          page (Needs Attention included) since it's meant to be the first
-          thing an admin sees, not one more section among the others. */}
-      {dashboardStats.length > 0 && (
+  const statsNode = dashboardStats.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
           {dashboardStats.map(s => (
             <div key={s.key} style={{
@@ -1913,15 +1956,8 @@ export default function AdminPage() {
             </div>
           ))}
         </div>
-      )}
-
-      {/* ── NEEDS ATTENTION (admin/lead only -- same equipment/combo data
-           Equipment gates below, dispatch never sees equipment on this
-           page either) -- renders nothing at all when the fleet is clean,
-           matching this page's own established practice of only showing
-           UI that has something to say. Sits directly under the dashboard
-           stats above, ahead of Quick Find and the button grid. ── */}
-      {(myRole === "admin" || myRole === "lead") && attentionItems.length > 0 && (() => {
+      );
+  const needsNode = (myRole === "admin" || myRole === "lead") && attentionItems.length > 0 && (() => {
         const visible = attentionExpanded ? attentionItems : attentionItems.slice(0, ATTENTION_COLLAPSED_COUNT);
         const hiddenCount = attentionItems.length - visible.length;
         return (
@@ -1969,7 +2005,57 @@ export default function AdminPage() {
             )}
           </section>
         );
-      })()}
+      })();
+
+  const recordTiles = ([
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Work orders", go: () => setWorkOrdersOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Scale records", go: () => setScaleRecordsOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Maintenance", go: () => setMaintenanceOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Long shifts", go: () => setLongShiftsOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Documents", go: () => setDocumentsOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Paper logs", go: () => setPaperLogsOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Call-outs", go: () => setCalloutsOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Freight", go: () => setFreightAdminOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Tank readings", go: () => setTankReadingsOpen(true) },
+    myRole === "admin" && { label: "Lanternfly", go: () => setSlfAdminOpen(true) },
+    myRole === "admin" && { label: "Safety meetings", go: () => setSafetyOpen(true) },
+    myRole === "admin" && { label: "Terminal work", go: () => setTermWorkAdminOpen(true) },
+    myRole === "admin" && { label: "Per diem", go: () => setPerDiemAdminOpen(true) },
+    myRole === "admin" && { label: "Billable time", go: () => setDeadheadOpen(true) },
+    myRole === "admin" && { label: "Reimbursements", go: () => setReimbOpen(true) },
+  ].filter(Boolean)) as { label: string; go: () => void }[];
+  const setupTiles = ([
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Trip Settings", go: () => setTripSettingsOpen(true) },
+    myRole === "admin" && { label: "Fuel", go: () => setFuelSettingsOpen(true) },
+    myRole === "admin" && { label: "Telematics", go: () => setTelematicsOpen(true) },
+    myRole === "admin" && { label: "IFTA", go: () => setIftaOpen(true) },
+    myRole === "admin" && { label: "Call-out routing", go: () => setCalloutRoutesOpen(true) },
+    myRole === "admin" && { label: "Accounts", go: () => setAccountsOpen(true) },
+    myRole === "admin" && { label: isSolo ? "Settings" : "Company Settings", go: () => setSettingsOpen(true) },
+    myRole === "admin" && !isSolo && { label: "Target Weight", go: () => setTargetWeightPolicyOpen(true) },
+    myRole === "admin" && { label: "Period Report", go: () => setPayrollReportOpen(true) },
+  ].filter(Boolean)) as { label: string; go: () => void }[];
+  const toolItems: ToolItem[] = [
+    !isSolo && (myRole === "admin" || myRole === "dispatch") && { icon: "people" as const, label: "Users", onClick: () => setUsersOpen(true) },
+    (myRole === "admin" || myRole === "lead") && { icon: "truck" as const, label: "Equipment", onClick: () => setEquipOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "terminal" as const, label: "Terminals", onClick: () => setTerminalsMenuOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "chart" as const, label: "Utilization", onClick: () => setFleetUtilOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "route" as const, label: "Delays", onClick: () => setDelaysOpen(true) },
+    recordTiles.length > 0 && { icon: "plan" as const, label: "Records", onClick: () => setRecordsMenuOpen(true) },
+    setupTiles.length > 0 && { icon: "lock" as const, label: "Setup", onClick: () => setSetupMenuOpen(true) },
+  ].filter(Boolean) as ToolItem[];
+
+  return (
+    <div style={css.page} className="admin-page-root">
+      <DashStyles />
+      <div className="admin-header-row" style={{ marginBottom: 20 }}>
+        <ConnectedDashHeader current="company" line={companyName} right={dashEnabled ? (
+          <>
+            <ModeSwitch mode={dashMode} modes={[{ id: "now", label: "Now" }, { id: "period", label: "Period" }, { id: "desk", label: "Desk" }]} onMode={setDashMode} />
+            <RegionButton r={regionFilter} />
+          </>
+        ) : undefined} />
+      </div>
 
       {/* Quick Find -- one box across Users/Equipment/Terminals instead of
           three independent per-section search boxes (see quickFindResults
@@ -2042,202 +2128,44 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Region/area view-scope pill -- only shown at all when this admin
-          actually has a region/local_area on their own profile (nothing to
-          narrow to otherwise). Always visible whenever it applies, in
-          either state, so scoping is never silent -- "showing my area"
-          reads as a deliberate, reversible view, not a hidden filter. */}
-      {hasOwnScope && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 20,
-          padding: "8px 12px", borderRadius: 2,
-          border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)",
-        }}>
-          <span style={{ fontSize: 12, color: T.muted }}>
-            {viewScope === "mine"
-              ? <>Showing <strong style={{ color: T.text }}>{myRegion || myLocalArea}</strong> only</>
-              : <>Showing <strong style={{ color: T.text }}>all regions</strong></>}
-          </span>
-          <button
-            type="button"
-            onClick={() => setViewScope(v => v === "mine" ? "all" : "mine")}
-            style={{ ...css.btn("subtle"), marginLeft: "auto", padding: "4px 10px", fontSize: 11 }}
-          >
-            {viewScope === "mine" ? "Show All Regions" : `Show ${myRegion || myLocalArea} Only`}
-          </button>
-        </div>
+      {isSolo ? (
+        <ToolPanel items={toolItems} />
+      ) : (
+        <CompanyDashboardView
+          mode={dashMode}
+          gauges={dashGauges}
+          onGauge={onGauge}
+          fleet={dashFleet}
+          ribbon={{ lanes: dashRibbon, dayLabel: "today" }}
+          heat={dashHeat}
+          campaigns={dashCampaigns}
+          needs={dashNeeds}
+          hosRisk={dashHosRisk}
+          tools={toolItems}
+          periodSlot={<PeriodPicker companyId={companyId ?? null} userId={undefined} allowAll onChange={setPeriodRange} />}
+          statsSlot={statsNode}
+          needsSlot={needsNode}
+          deskSlot={undefined}
+          onOpenNeed={onOpenNeed}
+        />
       )}
 
-      {/* Square, large-tap-target tiles in a fixed 3-column grid -- replaces
-          the old pill row, which ran off the right edge on mobile with no
-          way to reach the later buttons or the hamburger (previously
-          patched with a horizontal-scroll strip; this replaces that fix
-          entirely rather than layering on top of it). Deliberately
-          universal (not a mobile-only breakpoint) -- "no more than three
-          wide" is a fixed layout choice regardless of viewport, not a
-          responsive fallback, and it already scales cleanly to more
-          buttons than the 4 here today (extra ones just start a new row). */}
-      <div className="admin-header-btns" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: reportsMenuOpen ? 10 : 28 }}>
-        {/* Users/Equipment/Terminals -- previously inline collapsible
-            accordions directly on the page; now the same content, opened
-            as a modal from its own tile here, matching the pattern every
-            other tile (Fleet Cards, Utilization, etc.) already uses.
-
-            Users and Fleet Cards are both fundamentally "browse every other
-            company driver" tools -- hidden entirely for a solo company,
-            where that roster is always just yourself. Solo's own profile is
-            still reachable via the Settings tile's Profile row below; a
-            roster browser of one and a fleet-wide card lookup with one
-            possible driver are both pure noise, not a smaller version of
-            something still useful. */}
-        {!isSolo && (myRole === "admin" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setUsersOpen(true)}>
-            Users
+      <FullscreenModal open={recordsMenuOpen} title="Records" onClose={() => setRecordsMenuOpen(false)} footer={null}>
+        {recordTiles.map((r) => (
+          <button key={r.label} type="button" className="admin-header-tile" style={{ width: "100%", aspectRatio: "auto", textAlign: "left", padding: "14px", marginBottom: 8, display: "block" }}
+            onClick={() => { setRecordsMenuOpen(false); r.go(); }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.label} ›</div>
           </button>
-        )}
-        {(myRole === "admin" || myRole === "lead") && (
-          <button type="button" className="admin-header-tile" onClick={() => setEquipOpen(true)}>
-            Equipment
+        ))}
+      </FullscreenModal>
+      <FullscreenModal open={setupMenuOpen} title="Setup" onClose={() => setSetupMenuOpen(false)} footer={null}>
+        {setupTiles.map((r) => (
+          <button key={r.label} type="button" className="admin-header-tile" style={{ width: "100%", aspectRatio: "auto", textAlign: "left", padding: "14px", marginBottom: 8, display: "block" }}
+            onClick={() => { setSetupMenuOpen(false); r.go(); }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.label} ›</div>
           </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setTerminalsMenuOpen(true)}>
-            Terminals
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setFleetUtilOpen(true)}>
-            Utilization
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setDelaysOpen(true)}>
-            Delays
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setTripSettingsOpen(true)}>
-            Trip Settings
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setWorkOrdersOpen(true)}>
-            Work orders
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setScaleRecordsOpen(true)}>
-            Scale records
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setMaintenanceOpen(true)}>
-            Maintenance
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setLongShiftsOpen(true)}>
-            Long shifts
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setDocumentsOpen(true)}>
-            Documents
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setPaperLogsOpen(true)}>
-            Paper logs
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setCalloutsOpen(true)}>
-            Call-outs
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setAccountsOpen(true)}>
-            Accounts
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setFreightAdminOpen(true)}>
-            Freight
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setTankReadingsOpen(true)}>
-            Tank readings
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setSlfAdminOpen(true)}>
-            Lanternfly
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setSafetyOpen(true)}>
-            Safety meetings
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setTermWorkAdminOpen(true)}>
-            Terminal work
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setCalloutRoutesOpen(true)}>
-            Call-out routing
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setPerDiemAdminOpen(true)}>
-            Per diem
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setDeadheadOpen(true)}>
-            Billable time
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setReimbOpen(true)}>
-            Reimbursements
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setFuelSettingsOpen(true)}>
-            Fuel
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setTelematicsOpen(true)}>
-            Telematics
-          </button>
-        )}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setIftaOpen(true)}>
-            IFTA
-          </button>
-        )}
-        {/* Period Report and Target Weight are both admin-only, rarer
-            actions than Fleet Cards/Utilization -- collapsed into one
-            "Reports" tile with a small inline menu instead of each getting
-            its own permanent grid slot. */}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setReportsMenuOpen(v => !v)}>
-            Period &amp; Target
-          </button>
-        )}
-        {/* Label matches the merged SettingsModal's own title logic exactly
-            (isSolo -> "Settings", fleet admin -> "Company Settings") -- one
-            modal, one entry point, same name wherever it's opened from. */}
-        {myRole === "admin" && (
-          <button type="button" className="admin-header-tile" onClick={() => setSettingsOpen(true)}>
-            {isSolo ? "Settings" : "Company Settings"}
-          </button>
-        )}
-      </div>
+        ))}
+      </FullscreenModal>
 
       <div style={{ marginBottom: 20 }}><SharedToolsPanel /></div>
 
@@ -2255,21 +2183,6 @@ export default function AdminPage() {
           </button>
         ))}
       </FullscreenModal>
-
-      {myRole === "admin" && reportsMenuOpen && (
-        <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 28 }}>
-          <button type="button" onClick={() => { setPayrollReportOpen(true); setReportsMenuOpen(false); }}
-            style={{ ...css.btn("subtle"), width: "100%", justifyContent: "flex-start" as const }}>
-            Period Report
-          </button>
-          {!isSolo && (
-            <button type="button" onClick={() => { setTargetWeightPolicyOpen(true); setReportsMenuOpen(false); }}
-              style={{ ...css.btn("subtle"), width: "100%", justifyContent: "flex-start" as const }}>
-              Target Weight
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Every input/select/textarea on this page bumped to 16px on mobile:
           several inline styles set them as small as 11-12px, and iOS
