@@ -139,6 +139,11 @@ import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChoo
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
 import { ShiftBar, ShiftControls } from "../components/shift/ShiftBar";
+import { PaperLogSheet } from "../components/shift/PaperLogSheet";
+import { PAPER_LOG_EVENT, paperLogPayload } from "@/lib/shifts/paperLog";
+import { reasonsOrDefault } from "@/lib/reasons/reasons";
+import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
+import { getTripStore } from "@/lib/trips/useTripStore";
 import { useShift } from "../hooks/useShift";
 import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
@@ -215,6 +220,7 @@ export default function HomePage() {
   const [syncOpen, setSyncOpen] = useState(false);
   useTripHydration(store, userId, truckId, trailerId);
   const { settings, reasons } = useTripSettings(companyId);
+  const [paperLogOpen, setPaperLogOpen] = useState(false);
   useStuckSyncReporter(state, userId || null, companyId || null);
   const shift = useShift({ store, state, syncNow, userId: userId || null, companyId: companyId || null, maxHours: Number(settings.max_shift_hours ?? 12) });
   const signature = useDriverSignature(userId);
@@ -2421,6 +2427,13 @@ export default function HomePage() {
         onClose={() => setSyncOpen(false)}
       />
 
+      <PaperLogSheet open={paperLogOpen} onClose={() => setPaperLogOpen(false)} companyId={companyId} userId={userId || null}
+        reasons={reasonsOrDefault(reasons as any, "paper_log")}
+        onDone={(pick, cap) => {
+          if (companyId && userId) recordShiftEvent(getTripStore(userId), { companyId, userId, actorId: userId, type: PAPER_LOG_EVENT, payload: { ...paperLogPayload(pick, cap) } });
+          setPaperLogOpen(false);
+        }} />
+
       <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId} role={shell.role ?? null} myTruckId={truckId} myTrailerId={trailerId} />
 
       {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
@@ -2432,6 +2445,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "plan", label: "Paper log", sub: "ELD down or on paper", onClick: () => setPaperLogOpen(true) },
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
         ];
         return <SharedToolsPanel extra={tools} />;

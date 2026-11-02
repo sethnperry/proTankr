@@ -20,6 +20,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { CaptureSheet } from "../components/capture/CaptureSheet";
+import { CITATION_LABEL, SCALE_TYPE_LABEL, buildSnapshot, buildWeightRecordRow, netOf, weighProblem, type CitationKind, type ScaleType } from "@/lib/scale/scaleRecord";
 
 type LoadLine = {
   comp_number: number;
@@ -88,6 +90,15 @@ export default function WeightRecordModal({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [scaleType, setScaleType] = useState<ScaleType>("private");
+  const [captureId, setCaptureId] = useState<string | null>(null);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [citation, setCitation] = useState(false);
+  const [citationKind, setCitationKind] = useState<CitationKind | null>(null);
+  const [citationNumber, setCitationNumber] = useState("");
+  const [citationAmount, setCitationAmount] = useState("");
+  const [citationNote, setCitationNote] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -96,6 +107,8 @@ export default function WeightRecordModal({
     setUpdateTare(false);
     setNotes("");
     setErr(null);
+    setScaleType("private"); setCaptureId(null); setPhotoCount(0); setCitation(false); setCitationKind(null);
+    setCitationNumber(""); setCitationAmount(""); setCitationNote("");
     setLoadingLoad(true);
     (async () => {
       const { data: loadRow } = await supabase
@@ -138,7 +151,7 @@ export default function WeightRecordModal({
 
   const heavyNum = heavy.trim() ? Number(heavy) : null;
   const lightNum = light.trim() ? Number(light) : null;
-  const netWeight = heavyNum != null && lightNum != null ? heavyNum - lightNum : null;
+  const netWeight = netOf(heavyNum, lightNum);
   const plannerDiff = netWeight != null && load?.actual_total_lbs != null ? Math.round(netWeight - load.actual_total_lbs) : null;
   const tareDiff = lightNum != null && currentTareLbs != null ? Math.round(lightNum - currentTareLbs) : null;
 
@@ -146,30 +159,27 @@ export default function WeightRecordModal({
   const grossDiff = computedGross != null && load?.gross_limit_lbs != null ? Math.round(computedGross - load.gross_limit_lbs) : null;
 
   async function save() {
-    if (heavyNum == null || lightNum == null) { setErr("Enter both Heavy and Light weight."); return; }
+    const input = { scaleType, heavy, light, citation, citationKind, citationNumber, citationAmount, citationNote };
+    const problem = weighProblem(input);
+    if (problem) { setErr(problem); return; }
     setBusy(true);
     setErr(null);
     try {
-      const { error } = await supabase.from("weight_records").insert({
-        company_id: companyId,
-        combo_id: comboId,
-        load_id: load?.load_id ?? null,
-        heavy_weight_lbs: heavyNum,
-        light_weight_lbs: lightNum,
-        planner_weight_lbs: load?.actual_total_lbs ?? null,
-        prior_tare_lbs: currentTareLbs,
-        tare_updated: updateTare && tareDiff !== 0,
-        notes: notes.trim() || null,
-        created_by: authUserId,
+      const snapshot = buildSnapshot({
+        now: new Date().toISOString(), loadId: load?.load_id ?? null, loadCompletedAt: load?.completed_at ?? null, tareLbs: currentTareLbs,
+        grossLimitLbs: load?.gross_limit_lbs ?? null, plannedNetLbs: load?.actual_total_lbs ?? null,
+        lines: (load?.lines ?? []).map((l) => ({ comp: l.comp_number, product: l.products?.button_code ?? null, gallons: l.actual_gallons, lbs: l.actual_lbs, temp_f: l.actual_temp_f, api: l.actual_api })),
       });
+      const row = buildWeightRecordRow({ input, companyId, comboId, userId: authUserId, loadId: load?.load_id ?? null, plannedNetLbs: load?.actual_total_lbs ?? null, priorTareLbs: currentTareLbs, updateTare, notes, captureId, snapshot });
+      const { error } = await supabase.from("weight_records").insert(row);
       if (error) throw error;
 
-      if (updateTare && tareDiff !== 0) {
+      if (row.tare_updated && lightNum != null) {
         const { error: tareErr } = await supabase.from("equipment_combos").update({ tare_lbs: lightNum }).eq("combo_id", comboId);
         if (tareErr) throw tareErr;
       }
 
-      onSaved(updateTare && tareDiff !== 0 ? lightNum : undefined);
+      onSaved(row.tare_updated && lightNum != null ? lightNum : undefined);
       onClose();
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save weight record.");
@@ -215,17 +225,26 @@ export default function WeightRecordModal({
 
           {err && <div style={S.err}>{err}</div>}
 
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {(["private", "dot"] as ScaleType[]).map((t) => (
+              <button key={t} type="button" onClick={() => setScaleType(t)}
+                style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", border: `1px solid ${scaleType === t ? "#fff" : "rgba(255,255,255,0.18)"}`, background: scaleType === t ? "#fff" : "transparent", color: scaleType === t ? "#000" : "#fff" }}>
+                {SCALE_TYPE_LABEL[t]}
+              </button>
+            ))}
+          </div>
+
           <div style={{ marginBottom: 16 }}>
             <label style={S.label}>Heavy weight (lbs)</label>
             <input type="number" inputMode="numeric" placeholder="e.g. 79840" value={heavy} onChange={(e) => setHeavy(e.target.value)} style={S.input} />
           </div>
 
           <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>
-            Drop and reweigh to correct the record and planner.
+            {scaleType === "dot" ? "A DOT stop is often one weigh. Add the empty weight only if you reweighed." : "Drop and reweigh to correct the record and planner."}
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={S.label}>Light weight (lbs)</label>
+            <label style={S.label}>Light weight (lbs){scaleType === "dot" ? " (optional)" : ""}</label>
             <input type="number" inputMode="numeric" placeholder="e.g. 25265" value={light} onChange={(e) => setLight(e.target.value)} style={S.input} />
           </div>
 
@@ -265,6 +284,39 @@ export default function WeightRecordModal({
           )}
 
           <div style={{ marginBottom: 16 }}>
+            <button type="button" onClick={() => setPhotoOpen(true)}
+              style={{ width: "100%", padding: "13px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: "#fff" }}>
+              {photoCount > 0 ? `✓ ${photoCount} ticket photo${photoCount === 1 ? "" : "s"} · tap to change` : "📷 Photo of scale ticket"}
+            </button>
+          </div>
+
+          <div style={{ marginBottom: 16, border: "1px solid rgba(255,255,255,0.14)", padding: 12 }}>
+            <div onClick={() => setCitation((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <div style={{ width: 20, height: 20, border: "1px solid rgba(255,255,255,0.3)", background: citation ? "#ef4444" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {citation && <span style={{ fontSize: 13, fontWeight: 900, color: "#000" }}>✓</span>}
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>I received a citation</span>
+            </div>
+            {citation && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                  {(Object.keys(CITATION_LABEL) as CitationKind[]).map((k) => (
+                    <button key={k} type="button" onClick={() => setCitationKind(k)}
+                      style={{ padding: "9px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", border: `1px solid ${citationKind === k ? "#fff" : "rgba(255,255,255,0.18)"}`, background: citationKind === k ? "#fff" : "transparent", color: citationKind === k ? "#000" : "#fff" }}>{CITATION_LABEL[k]}</button>
+                  ))}
+                </div>
+                <label style={S.label}>Citation number</label>
+                <input value={citationNumber} onChange={(e) => setCitationNumber(e.target.value)} style={{ ...S.input, fontSize: 16, marginBottom: 12 }} />
+                <label style={S.label}>Fine ($)</label>
+                <input inputMode="decimal" value={citationAmount} onChange={(e) => setCitationAmount(e.target.value)} style={{ ...S.input, fontSize: 16, marginBottom: 12 }} />
+                <label style={S.label}>What happened</label>
+                <textarea value={citationNote} onChange={(e) => setCitationNote(e.target.value)} style={{ ...S.input, minHeight: 60, fontSize: 15, fontFamily: "inherit", fontWeight: 500 }} />
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>What the planner said right now is saved with this record.</div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
             <label style={S.label}>Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...S.input, minHeight: 70, fontFamily: "inherit", fontWeight: 500, resize: "vertical" as const }} />
           </div>
@@ -285,6 +337,8 @@ export default function WeightRecordModal({
           </button>
         </div>
       </div>
+      <CaptureSheet open={photoOpen} purpose="scale_ticket" title="Scale ticket" companyId={companyId} userId={authUserId} refType="weight_record"
+        onDone={(r) => { setCaptureId(r.captureId); setPhotoCount(r.paths.length); setPhotoOpen(false); }} onClose={() => setPhotoOpen(false)} />
     </FullscreenModal>
   );
 }

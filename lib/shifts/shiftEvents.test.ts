@@ -30,3 +30,23 @@ test("a dispatcher's entry for a driver is manual", () => {
   assert.equal(e.source, "manual");
   assert.equal(e.user_id, "driver");
 });
+
+import { paperLogPayload, paperLogProblem } from "./paperLog.ts";
+
+test("paper log: a reason is required, 'Other' needs words, defaults aren't stored as ids", () => {
+  assert.match(paperLogProblem(null)!, /why/i);
+  assert.match(paperLogProblem({ reasonId: null, label: "Other", category: "other", note: " " })!, /why/i);
+  assert.equal(paperLogProblem({ reasonId: "default-0", label: "ELD or tablet not working", category: null, note: null }), null);
+  const p = paperLogPayload({ reasonId: "default-0", label: "ELD or tablet not working", category: null, note: null }, { captureId: "c1", paths: ["a", "b"] });
+  assert.deepEqual(p, { reason: "ELD or tablet not working", reason_id: null, category: null, note: null, capture_id: "c1", photo_count: 2 });
+});
+
+import { paperLogColumns, type PaperLogRow } from "./paperLog.ts";
+import { toCsv } from "../reports/reportShell.ts";
+
+test("paper log list reads reason and note with the driver's name", () => {
+  const rows: PaperLogRow[] = [{ event_id: "e", user_id: "u", occurred_at: "2026-11-03T10:00:00Z", payload: { reason: "Other", note: "Tablet cracked", photo_count: 3 } }];
+  const lines = toCsv(paperLogColumns(() => "Seth"), rows).split("\r\n");
+  assert.equal(lines[0], "Date,Driver,Reason,Pages");
+  assert.ok(lines[1].includes("Seth,Other · Tablet cracked,3"));
+});

@@ -28,6 +28,8 @@ import FleetUtilizationModal from "./FleetUtilizationModal";
 import TripSettingsModal from "./TripSettingsModal";
 import WorkOrdersModal from "./WorkOrdersModal";
 import ReimbursementsModal from "./ReimbursementsModal";
+import ScaleRecordsModal from "./ScaleRecordsModal";
+import PaperLogsModal from "./PaperLogsModal";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TerminalSetupModal from "./TerminalSetupModal";
@@ -1270,6 +1272,8 @@ export default function AdminPage() {
   const [terminalsMenuOpen, setTerminalsMenuOpen] = useState(false);
   const [workOrdersOpen, setWorkOrdersOpen] = useState(false);
   const [reimbOpen, setReimbOpen] = useState(false);
+  const [scaleRecordsOpen, setScaleRecordsOpen] = useState(false);
+  const [paperLogsOpen, setPaperLogsOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -2085,6 +2089,16 @@ export default function AdminPage() {
             Work orders
           </button>
         )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setScaleRecordsOpen(true)}>
+            Scale records
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setPaperLogsOpen(true)}>
+            Paper logs
+          </button>
+        )}
         {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setReimbOpen(true)}>
             Reimbursements
@@ -2552,6 +2566,8 @@ export default function AdminPage() {
       )}
       <WorkOrdersModal open={workOrdersOpen} onClose={() => setWorkOrdersOpen(false)} companyId={companyId!} canEdit={myRole === "admin" || myRole === "lead" || myRole === "dispatch"} />
       {myRole === "admin" && <ReimbursementsModal open={reimbOpen} onClose={() => setReimbOpen(false)} companyId={companyId!} />}
+      <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
+      <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
       <ConnectedDashFooter />
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />

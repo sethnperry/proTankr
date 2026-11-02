@@ -217,6 +217,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       {reasonList("delivery")}
       {reasonList("shift_explanation")}
       {reasonList("callout")}
+      {reasonList("paper_log")}
     </FullscreenModal>
   );
 }
