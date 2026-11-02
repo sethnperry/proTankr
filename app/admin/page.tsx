@@ -38,6 +38,7 @@ import PerDiemModal from "./PerDiemModal";
 import CalloutsModal from "./CalloutsModal";
 import TerminalWorkModal from "./TerminalWorkModal";
 import SafetyMeetingsModal from "./SafetyMeetingsModal";
+import LanternflyModal from "./LanternflyModal";
 import CalloutRoutesModal from "./CalloutRoutesModal";
 import { useLongShifts } from "./useLongShifts";
 import DelaysModal from "./DelaysModal";
@@ -1292,6 +1293,7 @@ export default function AdminPage() {
   const [calloutsOpen, setCalloutsOpen] = useState(false);
   const [termWorkAdminOpen, setTermWorkAdminOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [slfAdminOpen, setSlfAdminOpen] = useState(false);
   const [calloutRoutesOpen, setCalloutRoutesOpen] = useState(false);
   const longShifts = useLongShifts(companyId ?? null, myRole === "admin" || myRole === "lead" || myRole === "dispatch");
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
@@ -2148,6 +2150,11 @@ export default function AdminPage() {
           </button>
         )}
         {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setSlfAdminOpen(true)}>
+            Lanternfly
+          </button>
+        )}
+        {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setSafetyOpen(true)}>
             Safety meetings
           </button>
@@ -2642,6 +2649,7 @@ export default function AdminPage() {
       <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
       <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
       <CalloutsModal open={calloutsOpen} onClose={() => setCalloutsOpen(false)} companyId={companyId!} userId={currentUserId ?? null} canEdit={myRole === "admin" || myRole === "dispatch" || myRole === "lead"} />
+      {myRole === "admin" && <LanternflyModal open={slfAdminOpen} onClose={() => setSlfAdminOpen(false)} companyId={companyId!} userId={currentUserId ?? null} />}
       {myRole === "admin" && <SafetyMeetingsModal open={safetyOpen} onClose={() => setSafetyOpen(false)} companyId={companyId!} userId={currentUserId ?? null} />}
       {myRole === "admin" && <TerminalWorkModal open={termWorkAdminOpen} onClose={() => setTermWorkAdminOpen(false)} companyId={companyId!} />}
       {myRole === "admin" && <CalloutRoutesModal open={calloutRoutesOpen} onClose={() => setCalloutRoutesOpen(false)} companyId={companyId!} />}
