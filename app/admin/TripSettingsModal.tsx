@@ -107,6 +107,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       delivery_prep_minutes: Math.min(120, Math.max(0, settings.delivery_prep_minutes ?? 15)),
       pump_gal_per_min: Math.min(2000, Math.max(20, settings.pump_gal_per_min ?? 450)),
       unaccounted_grace_minutes: Math.min(120, Math.max(0, settings.unaccounted_grace_minutes ?? 10)),
+      tank_feed_tolerance_gal: Math.min(2000, Math.max(0, settings.tank_feed_tolerance_gal ?? 50)),
       repair_approver_email: (settings.repair_approver_email ?? "").trim() || null,
     }, { onConflict: "company_id" }).select("company_id");
     setBusy(false);
@@ -176,6 +177,11 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           value={settings.pump_gal_per_min ?? 450} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, pump_gal_per_min: n }))} />
         <NumRow label="Grace (min)" help="Time over the estimate that isn't questioned. Past this, the driver says whether there was a delay."
           value={settings.unaccounted_grace_minutes ?? 10} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, unaccounted_grace_minutes: n }))} />
+      </div>
+      <div style={card}>
+        <div style={title}>Tank readings</div>
+        <NumRow label="Live feed tolerance (gal)" help="When a store's tank monitor feeds into ProTankr, a driver's reading more than this far from the feed is flagged. Stored now; used once a feed is connected."
+          value={settings.tank_feed_tolerance_gal ?? 50} disabled={!isAdmin} onChange={(n) => setSettings((s) => ({ ...s, tank_feed_tolerance_gal: n }))} />
       </div>
       <div style={card}>
         <div style={title}>Dispatch timeline</div>

@@ -287,6 +287,17 @@ export type TerminalWorkRow = Synced & {
 
 // A driver's Spotted Lanternfly attestation for one county a trip entered. Keyed by trip, state and county, so
 // attesting twice is one record; the three checks are the cab exterior, frame rails and tool box, and the trailer.
+export type TankCheckRow = Synced & {
+  check_id: string; company_id: string; user_id: string;
+  location_id: string | null; location_name: string | null; truck_id: string | null;
+  delivery_id: string | null; read_at: string; photo_paths: string[]; note: string | null;
+  source: "geotab" | "app" | "manual";
+};
+export type TankCheckReadingRow = Synced & {
+  check_id: string; tank_number: string; product_id: string | null;
+  reading: number | null; reading_unit: "gallons" | "inches"; water_inches: number | null;
+};
+
 export type SlfAttestationRow = Synced & {
   trip_id: string;
   state: string;
@@ -326,6 +337,8 @@ export type TripTableRows = {
   callouts: CalloutRow;
   terminal_work: TerminalWorkRow;
   slf_attestations: SlfAttestationRow;
+  tank_checks: TankCheckRow;
+  tank_check_readings: TankCheckReadingRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -348,6 +361,8 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   callouts: ["callout_id"],
   terminal_work: ["work_id"],
   slf_attestations: ["trip_id", "state", "county"],
+  tank_checks: ["check_id"],
+  tank_check_readings: ["check_id", "tank_number"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -369,11 +384,13 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "callouts",
   "terminal_work",
   "slf_attestations",
+  "tank_checks",
+  "tank_check_readings",
   "compartment_readiness",
 ];
 
 // Tables the server only ever inserts into (no update policy).
-export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders", "unit_inspections", "slf_attestations"]);
+export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders", "unit_inspections", "slf_attestations", "tank_checks", "tank_check_readings"]);
 
 export function rowKey<T extends TripTable>(table: T, row: TripTableRows[T]): string {
   const r = row as Record<string, unknown>;

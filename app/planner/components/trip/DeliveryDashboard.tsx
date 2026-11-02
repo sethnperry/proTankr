@@ -63,6 +63,7 @@ import type { DeliveryLocation, LocationTank } from "@/lib/trips/deliveryLocatio
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripDeliveryTankRow } from "@/lib/trips/types";
 import { saveTankOrder, type DelayReason, type TripSettings } from "@/lib/trips/useTripData";
 import { TankPickList } from "./TankPickList";
+import { CaptureSheet } from "@/app/planner/components/capture/CaptureSheet";
 import {
   SignatureAccept,
   SignaturePad,
@@ -239,7 +240,7 @@ const fmtDayTime = (iso: string | null) => {
 
 export function DeliveryDashboard({
   open, title, delivery, location, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
-  otherPlanned, beginMiles, liveOdometer, productInfo, signature, recordedDelayMin = 0, recordedDelayLabels = [], onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
+  otherPlanned, beginMiles, liveOdometer, productInfo, signature, recordedDelayMin = 0, recordedDelayLabels = [], companyId = null, userId = null, ticketPhotos = 0, onTicketPhotos, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
 }: {
   // The loading BOL / supplier / signature were left for later (Finish Later): finishing the delivery waits for them.
   // Park Preloaded, offered until the delivery begins.
@@ -263,6 +264,11 @@ export function DeliveryDashboard({
   // Delay the driver already logged at this drop (the Delay button), subtracted before asking.
   recordedDelayMin?: number;
   recordedDelayLabels?: string[];
+  // The meter ticket printed after the drop: photographed through the shared capture sheet.
+  companyId?: string | null;
+  userId?: string | null;
+  ticketPhotos?: number;
+  onTicketPhotos?: (paths: string[]) => void;
   onSaveSignature: (path: string) => Promise<void>;
   onSaveProgress: (p: DeliveryProgress) => void;
   onSubmit: (v: FinishDeliverySubmit) => void;
@@ -312,6 +318,7 @@ export function DeliveryDashboard({
   const [step, setStep] = useState<Step | null>(null);
   const [stepErr, setStepErr] = useState<string | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [consigneeOpen, setConsigneeOpen] = useState(false);
@@ -1092,6 +1099,12 @@ export function DeliveryDashboard({
                   {waterEntered.length ? `Water: ${waterEntered.map((n) => `Tank ${n} ${water[n]} in`).join(", ")} ›` : "Water present? Tap to record"}
                 </button>
               )}
+              {onTicketPhotos && (
+                <button type="button" onClick={() => setTicketOpen(true)}
+                  style={{ ...rowBtn, padding: "10px 0", borderBottom: "none", color: ticketPhotos > 0 ? "#4ade80" : muted, fontSize: 13, fontWeight: 700 }}>
+                  {ticketPhotos > 0 ? `Meter ticket: ${ticketPhotos} photo${ticketPhotos === 1 ? "" : "s"} ✓ ›` : "Meter ticket photo (after the drop) ›"}
+                </button>
+              )}
             </Section>
 
             {bioComps.length > 0 && (
@@ -1268,6 +1281,11 @@ export function DeliveryDashboard({
         submitLabel={step && step.phase === "after" && step.productIdx === products.length - 1 ? "Done" : "Next"}
         onSubmit={goNext}
       />
+
+      {onTicketPhotos && (
+        <CaptureSheet open={ticketOpen} purpose="tank_ticket" title="Meter ticket" companyId={companyId} userId={userId} refType="delivery" refId={delivery.delivery_id}
+          onDone={(r) => { onTicketPhotos(r.paths); setTicketOpen(false); }} onClose={() => setTicketOpen(false)} />
+      )}
 
       <ValueEntryOverlay
         open={waterOpen}

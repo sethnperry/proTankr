@@ -144,6 +144,8 @@ import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanatio
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
+import { TankCheckSheet } from "../components/trip/TankCheckSheet";
+import { useTankChecks } from "../hooks/useTankChecks";
 import { LanternflySheet } from "../components/slf/LanternflySheet";
 import { useLanternfly } from "../hooks/useLanternfly";
 import { SafetyMeetingSheet } from "../components/safety/SafetyMeetingSheet";
@@ -250,6 +252,7 @@ export default function HomePage() {
   const [termWorkOpen, setTermWorkOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [slfOpen, setSlfOpen] = useState(false);
+  const [tankCheckOpen, setTankCheckOpen] = useState(false);
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -321,6 +324,7 @@ export default function HomePage() {
 
   const trips = useMemo(() => Object.values(state.rows.trips ?? {}) as TripRow[], [state]);
   const openTrip = userId ? openTripForDriver(trips, userId) : null;
+  const tankChecks = useTankChecks({ store, syncNow, userId: userId || null, companyId: companyId || null });
   const lanternfly = useLanternfly({ store, state, syncNow, userId: userId || null, companyId: companyId || null, tripId: openTrip?.trip_id ?? null });
   const children = useMemo(
     () => (store && openTrip ? tripChildren(store, openTrip.trip_id) : null),
@@ -2510,6 +2514,8 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <TankCheckSheet open={tankCheckOpen} onClose={() => setTankCheckOpen(false)} locations={locations} tanks={locList.tanks} productName={(id) => productInfo(id).name} origin={origin} companyId={companyId} userId={userId} onLocationAdded={() => void locList.reload()}
+        onSave={(a) => tankChecks.saveCheck({ locationId: a.locationId, locationName: a.locationName, truckId: equipment.currentTruckId ?? null, entries: a.entries, productOf: a.productOf, paths: a.paths, note: a.note })} />
       <LanternflySheet open={slfOpen} onClose={() => setSlfOpen(false)} missing={lanternfly.missing} attested={lanternfly.attested} hasTrip={!!openTrip} hasZone={lanternfly.hasZone} onAttest={lanternfly.attest} />
       <SafetyMeetingSheet open={safetyOpen} onClose={() => setSafetyOpen(false)} meetings={safety.meetings} signed={safety.signed} loading={safety.loading} onSign={safety.sign} onMaterial={(p) => void safety.openMaterial(p)} />
       <TerminalWorkSheet open={termWorkOpen} onClose={() => setTermWorkOpen(false)} current={termWork.current} defaults={termWork.defaults}
@@ -2557,6 +2563,7 @@ export default function HomePage() {
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           { icon: "locate", label: "Lanternfly", sub: lanternfly.missing.length ? `${lanternfly.missing.length} to attest` : lanternfly.attested.length ? "Attested" : null, subColor: lanternfly.missing.length ? "#fbbf24" : undefined, onClick: () => setSlfOpen(true) },
+          ...(shell.isSolo === false ? [{ icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) }] : []),
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
           { icon: "people", label: "Call out", sub: "Can't make a shift", onClick: () => setCalloutOpen(true) },
@@ -2685,6 +2692,10 @@ export default function HomePage() {
             signature={signature.svg}
             recordedDelayMin={dropDelayMinutes(tripDelays, finishDeliveryRow.delivery_id)}
             recordedDelayLabels={tripDelays.filter((d) => d.deliveryId === finishDeliveryRow.delivery_id && d.leg === "at_drop").map((d) => `${d.label} ${d.minutes} min`)}
+            companyId={companyId}
+            userId={userId}
+            ticketPhotos={store.list("tank_checks", (c) => c.delivery_id === finishDeliveryRow.delivery_id).reduce((n, c) => n + c.photo_paths.length, 0)}
+            onTicketPhotos={(paths) => tankChecks.saveTicket({ deliveryId: finishDeliveryRow.delivery_id, locationId: finishDeliveryRow.location_id, locationName: locations.find((l) => l.location_id === finishDeliveryRow.location_id)?.name ?? finishDeliveryRow.one_off_name ?? null, truckId: openTrip?.truck_id ?? null, paths })}
             onSaveSignature={signature.save}
             onSaveProgress={onDeliveryProgress}
             onSubmit={(v) => void onFinishSubmit(v)}

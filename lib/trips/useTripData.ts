@@ -32,6 +32,8 @@ export type TripSettings = {
   delivery_prep_minutes?: number;
   pump_gal_per_min?: number;
   unaccounted_grace_minutes?: number;
+  // Gallons a driver's tank reading may differ from a live tank feed (20261112000000).
+  tank_feed_tolerance_gal?: number;
 };
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {
