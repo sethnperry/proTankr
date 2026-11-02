@@ -285,6 +285,21 @@ export type TerminalWorkRow = Synced & {
   source: "geotab" | "app" | "manual";
 };
 
+// A driver's Spotted Lanternfly attestation for one county a trip entered. Keyed by trip, state and county, so
+// attesting twice is one record; the three checks are the cab exterior, frame rails and tool box, and the trailer.
+export type SlfAttestationRow = Synced & {
+  trip_id: string;
+  state: string;
+  county: string;
+  company_id: string;
+  user_id: string;
+  cab_exterior: boolean;
+  frame_tool_box: boolean;
+  trailer: boolean;
+  attested_at: string;
+  source: "geotab" | "app" | "manual";
+};
+
 export type CompartmentReadinessRow = Synced & {
   trailer_id: string;
   comp_number: number;
@@ -310,6 +325,7 @@ export type TripTableRows = {
   per_diem_days: PerDiemDayRow;
   callouts: CalloutRow;
   terminal_work: TerminalWorkRow;
+  slf_attestations: SlfAttestationRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -331,6 +347,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   per_diem_days: ["user_id", "day"],
   callouts: ["callout_id"],
   terminal_work: ["work_id"],
+  slf_attestations: ["trip_id", "state", "county"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -351,11 +368,12 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "per_diem_days",
   "callouts",
   "terminal_work",
+  "slf_attestations",
   "compartment_readiness",
 ];
 
 // Tables the server only ever inserts into (no update policy).
-export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders", "unit_inspections"]);
+export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders", "unit_inspections", "slf_attestations"]);
 
 export function rowKey<T extends TripTable>(table: T, row: TripTableRows[T]): string {
   const r = row as Record<string, unknown>;

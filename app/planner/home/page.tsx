@@ -144,6 +144,8 @@ import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanatio
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
+import { LanternflySheet } from "../components/slf/LanternflySheet";
+import { useLanternfly } from "../hooks/useLanternfly";
 import { SafetyMeetingSheet } from "../components/safety/SafetyMeetingSheet";
 import { useSafetyMeetings } from "../hooks/useSafetyMeetings";
 import { TerminalWorkSheet } from "../components/terminalwork/TerminalWorkSheet";
@@ -247,6 +249,7 @@ export default function HomePage() {
   const [calloutOpen, setCalloutOpen] = useState(false);
   const [termWorkOpen, setTermWorkOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [slfOpen, setSlfOpen] = useState(false);
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -318,6 +321,7 @@ export default function HomePage() {
 
   const trips = useMemo(() => Object.values(state.rows.trips ?? {}) as TripRow[], [state]);
   const openTrip = userId ? openTripForDriver(trips, userId) : null;
+  const lanternfly = useLanternfly({ store, state, syncNow, userId: userId || null, companyId: companyId || null, tripId: openTrip?.trip_id ?? null });
   const children = useMemo(
     () => (store && openTrip ? tripChildren(store, openTrip.trip_id) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2506,6 +2510,7 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <LanternflySheet open={slfOpen} onClose={() => setSlfOpen(false)} missing={lanternfly.missing} attested={lanternfly.attested} hasTrip={!!openTrip} hasZone={lanternfly.hasZone} onAttest={lanternfly.attest} />
       <SafetyMeetingSheet open={safetyOpen} onClose={() => setSafetyOpen(false)} meetings={safety.meetings} signed={safety.signed} loading={safety.loading} onSign={safety.sign} onMaterial={(p) => void safety.openMaterial(p)} />
       <TerminalWorkSheet open={termWorkOpen} onClose={() => setTermWorkOpen(false)} current={termWork.current} defaults={termWork.defaults}
         defaultTerminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
@@ -2551,6 +2556,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "locate", label: "Lanternfly", sub: lanternfly.missing.length ? `${lanternfly.missing.length} to attest` : lanternfly.attested.length ? "Attested" : null, subColor: lanternfly.missing.length ? "#fbbf24" : undefined, onClick: () => setSlfOpen(true) },
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
           { icon: "people", label: "Call out", sub: "Can't make a shift", onClick: () => setCalloutOpen(true) },
