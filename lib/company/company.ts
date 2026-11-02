@@ -46,14 +46,15 @@ export function fleetStrip(units: FleetUnit[], nowMs: number, regions: Set<strin
 }
 
 // ── Needs you ──────────────────────────────────────────────────────────────────────────────────────────────
-export type NeedsKey = "repairs" | "shifts" | "billable" | "reviews";
+export type NeedsKey = "repairs" | "shifts" | "billable" | "reviews" | "errors";
 export type NeedsItem = { key: NeedsKey; label: string; count: number };
-export function needsYou(n: { repairsAwaiting: number; unconfirmedShifts: number; unreviewedBillable: number; pendingReviews: number }): { items: NeedsItem[]; total: number } {
+export function needsYou(n: { repairsAwaiting: number; unconfirmedShifts: number; unreviewedBillable: number; pendingReviews: number; deskErrors?: number }): { items: NeedsItem[]; total: number } {
   const all: NeedsItem[] = [
     { key: "repairs", label: "Repair approvals waiting", count: n.repairsAwaiting },
     { key: "shifts", label: "Shifts nobody confirmed", count: n.unconfirmedShifts },
     { key: "billable", label: "Billable time not reviewed", count: n.unreviewedBillable },
     { key: "reviews", label: "Inspections to review", count: n.pendingReviews },
+    { key: "errors", label: "Problems on the Desk", count: n.deskErrors ?? 0 },
   ];
   const items = all.filter((i) => i.count > 0);
   return { items, total: items.reduce((t, i) => t + i.count, 0) };

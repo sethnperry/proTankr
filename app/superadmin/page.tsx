@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
 import { DashStyles } from "@/app/planner/home/dashLook";
+import SuperDeskModal from "./SuperDeskModal";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { TRAINING_CAMPAIGN_KEY, readCampaignEnabled } from "@/lib/platformSettings";
@@ -47,6 +48,7 @@ export default function ProTankrDashPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deskOpen, setDeskOpen] = useState(false);
 
   const [selectedId, setSelectedId] = useState<string>("");
   const [nameDraft, setNameDraft] = useState<string>("");
@@ -355,6 +357,14 @@ export default function ProTankrDashPage() {
           )}
         </div>
       )}
+
+      {/* Desk -- errors, stuck syncs and driver timelines across every company. */}
+      <div style={card}>
+        <div style={cardTitle}>Desk</div>
+        <div style={cardSub}>Failed emails, phones that can't sync and broken Geotab links, in every company.</div>
+        <button type="button" onClick={() => setDeskOpen(true)} style={primaryBtn}>Open Desk</button>
+      </div>
+      <SuperDeskModal open={deskOpen} onClose={() => setDeskOpen(false)} />
 
       {/* Invite Solo Driver */}
       <div style={card}>

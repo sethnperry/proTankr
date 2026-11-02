@@ -19,6 +19,11 @@ import { rangeBounds, deviceTz, type DateRange } from "@/lib/reports/dateRange";
 import { localDateOf, localMidnightMs } from "@/lib/worklog/time";
 import { CompanyDashboardView, type CompanyMode } from "./CompanyDashboardView";
 import { useCompanyDashboard } from "./useCompanyDashboard";
+import { DeskView } from "./DeskView";
+import { useDesk } from "./useDesk";
+import { useDashIdentity } from "@/lib/ui/driver/useDashIdentity";
+import { startSetupSession } from "@/lib/setupSession";
+import { deskScope, groupErrors, openCount, stuckList, visibleErrors } from "@/lib/desk/desk";
 import { dayRibbon, fleetStrip, gauges as buildGauges, heatmap as buildHeatmap, campaignBars, inRegions, needsYou, regionOptions, worstState, type GaugeKey, type NeedsItem } from "@/lib/company/company";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { DashStyles } from "@/app/planner/home/dashLook";
@@ -1907,12 +1912,22 @@ export default function AdminPage() {
   const dashEnabled = !isSolo && (myRole === "admin" || myRole === "lead" || myRole === "dispatch");
   const dash = useCompanyDashboard({ companyId: companyId ?? null, enabled: dashEnabled, isAdmin: myRole === "admin", range: dashRange, dayStartMs });
   const rosterRegion = useMemo(() => new Map(dash.plan.roster.map((m) => [m.user_id, m.region])), [dash.plan.roster]);
+  // The Desk: the error inbox, stuck syncs and a driver's timeline. Admin: own company. Super admin: every company
+  // (on the ProTankr Dashboard). Dispatch: their own region, read only.
+  const identity = useDashIdentity();
+  const scope = useMemo(() => deskScope(myRole ?? null, identity.isSuperAdmin), [myRole, identity.isSuperAdmin]);
+  const desk = useDesk({ companyId: companyId ?? null, allCompanies: false, enabled: dashEnabled && !!scope });
+  const deskVisible = useMemo(() => (scope ? visibleErrors(desk.rows, scope, myRegion, (id) => desk.people.get(id)?.region) : []), [scope, desk.rows, myRegion, desk.people]);
+  const deskName = (id: string) => desk.people.get(id)?.name ?? "Driver";
+  const deskGroups = useMemo(() => groupErrors(deskVisible, deskName, Date.now()), [deskVisible, desk.people]); // eslint-disable-line react-hooks/exhaustive-deps
+  const deskStuck = useMemo(() => stuckList(deskVisible, deskName, Date.now()), [deskVisible, desk.people]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const dashFleet = useMemo(() => fleetStrip(dash.units, Date.now(), regionSel), [dash.units, regionSel]);
   const dashRibbon = useMemo(() => dayRibbon(dash.segs, dayStartMs, dayStartMs + 86400_000, regionSel), [dash.segs, dayStartMs, regionSel]);
   const dashHeat = useMemo(() => buildHeatmap(dash.alerts, (id) => rosterRegion.get(id) ?? dash.plan.unitRegions.get(id) ?? null, dash.heatExtras, regionSel), [dash.alerts, rosterRegion, dash.plan.unitRegions, dash.heatExtras, regionSel]);
   const dashCampaigns = useMemo(() => campaignBars(dash.boards).filter((b) => b.total > 0), [dash.boards]);
   const dashHosRisk = useMemo(() => dash.hosRisk.filter((h) => inRegions(regionSel, rosterRegion.get(h.userId))), [dash.hosRisk, regionSel, rosterRegion]);
-  const dashNeeds = useMemo(() => needsYou({ repairsAwaiting: dash.repairsAwaiting, unconfirmedShifts: dash.shifts.unconfirmed + longShifts.missing, unreviewedBillable: dash.unreviewedBillable, pendingReviews: dash.pendingReviews }), [dash.repairsAwaiting, dash.shifts.unconfirmed, longShifts.missing, dash.unreviewedBillable, dash.pendingReviews]);
+  const dashNeeds = useMemo(() => needsYou({ repairsAwaiting: dash.repairsAwaiting, unconfirmedShifts: dash.shifts.unconfirmed + longShifts.missing, unreviewedBillable: dash.unreviewedBillable, pendingReviews: dash.pendingReviews, deskErrors: scope?.canResolve ? openCount(deskVisible) : 0 }), [dash.repairsAwaiting, dash.shifts.unconfirmed, longShifts.missing, dash.unreviewedBillable, dash.pendingReviews, scope, deskVisible]);
   const dashGauges = useMemo(() => {
     const cells = dashHeat.rows.flatMap((r) => r.cells);
     const onShift = [...dash.shifts.onShiftUsers].filter((u) => inRegions(regionSel, rosterRegion.get(u))).length;
@@ -1927,7 +1942,7 @@ export default function AdminPage() {
     selected: regionSel, onChange: setRegionSel,
   }), [trucks, trailers, members, regionSel]);
   const onGauge = (k: GaugeKey) => { if (k === "delayed") setDelaysOpen(true); else if (k === "callouts") setCalloutsOpen(true); else if (k === "billable") setDeadheadOpen(true); };
-  const onOpenNeed = (k: NeedsItem["key"]) => { if (k === "repairs") setWorkOrdersOpen(true); else if (k === "shifts") setLongShiftsOpen(true); else if (k === "billable") setDeadheadOpen(true); else setMaintenanceOpen(true); };
+  const onOpenNeed = (k: NeedsItem["key"]) => { if (k === "repairs") setWorkOrdersOpen(true); else if (k === "shifts") setLongShiftsOpen(true); else if (k === "billable") setDeadheadOpen(true); else if (k === "errors") setDashMode("desk"); else setMaintenanceOpen(true); };
 
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err)     return <div style={css.page}><Banner msg={err} type="error" /></div>;
@@ -2051,7 +2066,7 @@ export default function AdminPage() {
       <div className="admin-header-row" style={{ marginBottom: 20 }}>
         <ConnectedDashHeader current="company" line={companyName} right={dashEnabled ? (
           <>
-            <ModeSwitch mode={dashMode} modes={[{ id: "now", label: "Now" }, { id: "period", label: "Period" }, { id: "desk", label: "Desk" }]} onMode={setDashMode} />
+            <ModeSwitch mode={dashMode} modes={[{ id: "now", label: "Now" }, { id: "period", label: "Period" }, ...(scope ? [{ id: "desk" as const, label: "Desk" }] : [])]} onMode={setDashMode} />
             <RegionButton r={regionFilter} />
           </>
         ) : undefined} />
@@ -2145,7 +2160,13 @@ export default function AdminPage() {
           periodSlot={<PeriodPicker companyId={companyId ?? null} userId={undefined} allowAll onChange={setPeriodRange} />}
           statsSlot={statsNode}
           needsSlot={needsNode}
-          deskSlot={undefined}
+          deskSlot={scope ? (
+            <DeskView groups={deskGroups} stuck={deskStuck} canResolve={scope.canResolve} canUseAs={scope.canUseAs} loading={desk.loading} error={desk.error}
+              onResolve={desk.resolve}
+              onRetry={async (i) => (i.retry ? desk.retry(i.id, i.retry) : null)}
+              onUseAs={(userId, name) => { startSetupSession({ targetUserId: userId, targetDisplayName: name, adminUserId: currentUserId ?? "", returnTo: "/admin" }); window.location.href = "/planner"; }}
+              loadTimeline={desk.loadTimeline} />
+          ) : undefined}
           onOpenNeed={onOpenNeed}
         />
       )}

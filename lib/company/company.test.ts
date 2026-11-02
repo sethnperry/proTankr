@@ -27,6 +27,8 @@ test("needs you totals only what is waiting", () => {
   const n = needsYou({ repairsAwaiting: 2, unconfirmedShifts: 0, unreviewedBillable: 3, pendingReviews: 0 });
   assert.equal(n.total, 5);
   assert.deepEqual(n.items.map((i) => i.key), ["repairs", "billable"]);
+  const withDesk = needsYou({ repairsAwaiting: 0, unconfirmedShifts: 0, unreviewedBillable: 0, pendingReviews: 0, deskErrors: 4 });
+  assert.deepEqual([withDesk.total, withDesk.items[0].key], [4, "errors"]);
 });
 
 test("gauges grey out at zero and go red when it matters", () => {

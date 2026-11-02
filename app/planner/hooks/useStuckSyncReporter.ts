@@ -18,8 +18,8 @@ export function useStuckSyncReporter(state: TripStoreState, userId: string | nul
       const s = stuckWrites(state, Date.now());
       if (s.count === 0) return;
       const key = `proTankr:u:${userId}:stuckLogged`;
-      const today = new Date().toISOString().slice(0, 10);
-      try { if (localStorage.getItem(key) === today) return; localStorage.setItem(key, today); } catch { /* storage blocked: log anyway */ }
+      const now = Date.now();
+      try { const last = Number(localStorage.getItem(key)); if (Number.isFinite(last) && now - last < 6 * 3600_000) return; localStorage.setItem(key, String(now)); } catch { /* storage blocked: log anyway */ }
       void logAppError({ companyId, kind: "sync_stuck", message: `${s.count} write${s.count === 1 ? "" : "s"} stuck on this phone`, payload: { ...s } });
     };
     check();
