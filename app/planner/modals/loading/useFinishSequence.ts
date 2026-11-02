@@ -3,6 +3,7 @@
 //
 // Finish Loading / Edit Load: one window per product (BOL, API, temp, gross, net), split loads, then times and signature on a trip.
 
+import { useRef } from "react";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { apiRangeProblem } from "../../utils/apiBasis";
 import { useSequencePrefill } from "./useSequencePrefill";
@@ -20,6 +21,7 @@ import type { useLoadingBasics } from "./useLoadingBasics";
 export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof useLoadingBasics>) {
   const { productNameById, persistedCapForComp, report, onEditLoad, onLoaded, trip, editingReport, setEditingReport, orderedCompLines } = b;
   const st = useSequenceState(b);
+  const capWarned = useRef<string | null>(null);
   const catalog = useProductsCatalog().data;
   const {
     compSeqIndex,
@@ -187,19 +189,25 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
     const rangeMsg = apiRangeProblem(apiN, prod?.api_min, prod?.api_max);
     if (rangeMsg) { setSeqError(rangeMsg); return; }
 
-    // Sanity check against what these compartments can hold. The cap is a safety
-    // figure, and a real BOL can run a little over it, so only a gross well past the
-    // cap (10%) is treated as a typo. Editing a logged load skips it:
-    // there's no live plan cap to bound against.
+    // The cap here is the compartments' safety cap (never the driver's own plan cap: a custom cap can be loaded
+    // right up to the safety cap). Going over the safety cap warns once and the second Next logs it, because a real
+    // BOL can run past it. Only a gross far past it (25%) is treated as a typo and blocked.
     if (!editingReport && persistedCapForComp) {
       const caps = group.comps.map((c) => persistedCapForComp(c));
       if (caps.every((c) => c != null)) {
         const hold = caps.reduce((t, c) => t + (c as number), 0);
-        if (gallonsN > hold * 1.1 + 1) {
-          setSeqError(
-            `More than ${group.comps.length > 1 ? "these compartments hold" : "this compartment holds"} (${Math.round(hold).toLocaleString()} gal).`,
-          );
+        const which = group.comps.length > 1 ? "these compartments" : "this compartment";
+        if (gallonsN > hold * 1.25 + 1) {
+          setSeqError(`That's far more than ${which} hold (${Math.round(hold).toLocaleString()} gal). Check the gross.`);
           return;
+        }
+        if (gallonsN > hold + 1) {
+          const key = `${compSeqIndex}|${gallonsN}`;
+          if (capWarned.current !== key) {
+            capWarned.current = key;
+            setSeqError(`Over the safety cap for ${which} (${Math.round(hold).toLocaleString()} gal). Tap Next again to log it anyway.`);
+            return;
+          }
         }
       }
     }
