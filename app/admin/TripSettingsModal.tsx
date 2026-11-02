@@ -107,6 +107,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       delivery_prep_minutes: Math.min(120, Math.max(0, settings.delivery_prep_minutes ?? 15)),
       pump_gal_per_min: Math.min(2000, Math.max(20, settings.pump_gal_per_min ?? 450)),
       unaccounted_grace_minutes: Math.min(120, Math.max(0, settings.unaccounted_grace_minutes ?? 10)),
+      require_shipper_customer: settings.require_shipper_customer !== false,
       tank_feed_tolerance_gal: Math.min(2000, Math.max(0, settings.tank_feed_tolerance_gal ?? 50)),
       repair_approver_email: (settings.repair_approver_email ?? "").trim() || null,
     }, { onConflict: "company_id" }).select("company_id");
@@ -209,6 +210,11 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
         <div style={title}>Truck position</div>
         <CheckRow label="Stamp departure from the truck" help="Needs the Geotab link. Departure defaults to when the truck really left. Arrival is never stamped automatically: the driver is asked, so a fuel stop or a delay can be logged first. Drivers can always correct a time."
           value={settings.auto_stamp_arrival !== false} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, auto_stamp_arrival: v }))} />
+      </div>
+      <div style={card}>
+        <div style={title}>Begin Trip requires</div>
+        <CheckRow label="Shipper and customer" help="Every load has both. Account rules email a customer when its loads are complete."
+          value={settings.require_shipper_customer !== false} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_shipper_customer: v }))} />
       </div>
       <div style={card}>
         <div style={title}>Finish Delivery requires</div>

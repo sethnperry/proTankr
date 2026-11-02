@@ -2594,6 +2594,7 @@ export default function HomePage() {
       <StartLoadSheet
         breakNote={breakNote}
         planRequired={!(editing && children?.pickup?.load_id)}
+        requireShipperCustomer={settings.require_shipper_customer !== false}
         onPlanDetour={planDetour}
         open={sheetOpen}
         editing={editing}

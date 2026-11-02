@@ -34,6 +34,8 @@ export type TripSettings = {
   unaccounted_grace_minutes?: number;
   // Gallons a driver's tank reading may differ from a live tank feed (20261112000000).
   tank_feed_tolerance_gal?: number;
+  // Every load has a shipper and a customer (20261114000000). Absent = required.
+  require_shipper_customer?: boolean;
 };
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {

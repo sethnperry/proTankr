@@ -17,6 +17,7 @@ import { sendPush, type StoredSub } from "@/lib/push/send";
 import { pushTerminalReports } from "@/lib/push/terminalReportPush";
 import { runWorklogs } from "@/lib/worklog/sendWorklogs";
 import { runNotifications } from "@/lib/notify/server";
+import { runAccountRules } from "@/lib/accounts/server";
 import type { Level } from "@/lib/telematics/hosTripNotify";
 
 export const runtime = "nodejs";
@@ -184,6 +185,7 @@ async function handle(req: NextRequest) {
   try { worklogs = await runWorklogs(); } catch (e) { console.warn("[cron] worklogs failed:", (e as Error).message); }
   // Scheduled reminders and recaps (notification_schedules) ride the same five-minute tick.
   let notifications: unknown = null;
+  try { await runAccountRules(); } catch (e) { console.warn("[cron] account rules failed:", (e as Error).message); }
   try { notifications = await runNotifications(); } catch (e) { console.warn("[cron] notifications failed:", (e as Error).message); }
   const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active");
   const out: Record<string, { sent: number; drivers: number } | string> = {};

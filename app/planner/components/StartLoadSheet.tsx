@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SideView, segsFor } from "./TrailerViews";
 import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
+import { namesProblem } from "@/lib/accounts/accountRules";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
 import { locationPlace, locationTitle, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
@@ -59,10 +60,13 @@ export function StartLoadSheet({
   liveMiles,
   breakNote,
   planRequired = true,
+  requireShipperCustomer = false,
   onPlanDetour,
 }: {
   // A plan must be chosen unless the pickup is already loaded or dispatch sent one.
   planRequired?: boolean;
+  // Company setting: every load has a shipper and a customer (account rules email by them).
+  requireShipperCustomer?: boolean;
   // Make or change a plan in the Planner, then come back here ("new" or an existing slot).
   onPlanDetour?: (what: "new" | number, v: StartLoadValues) => void;
   // Shown only when the 30-minute break isn't done and driving is already well along since the last one.
@@ -199,6 +203,7 @@ export function StartLoadSheet({
   if (!v.beginMiles.trim() || !Number.isFinite(Number(v.beginMiles))) missing.push("begin miles");
   if (!v.orderNumber.trim() || v.extraOrderNumbers.some((n) => !n.trim())) missing.push("order number");
   if (!v.startCity.trim()) missing.push("starting from");
+  if (requireShipperCustomer) missing.push(...namesProblem(v.shipper, v.customer));
   if (!pickupLabel) missing.push("pickup");
   if (v.deliveries.some((d) => !d.locationId && !d.oneOffName?.trim())) missing.push("delivery");
   if (planRequired && !dispatchPlan && v.planSlot == null) missing.push("plan");
