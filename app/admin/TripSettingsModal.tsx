@@ -107,6 +107,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       delivery_prep_minutes: Math.min(120, Math.max(0, settings.delivery_prep_minutes ?? 15)),
       pump_gal_per_min: Math.min(2000, Math.max(20, settings.pump_gal_per_min ?? 450)),
       unaccounted_grace_minutes: Math.min(120, Math.max(0, settings.unaccounted_grace_minutes ?? 10)),
+      repair_approver_email: (settings.repair_approver_email ?? "").trim() || null,
     }, { onConflict: "company_id" }).select("company_id");
     setBusy(false);
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
@@ -190,6 +191,13 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           <input type="time" disabled={!isAdmin} value={(settings.gauging_cutoff ?? "23:30").slice(0, 5)}
             onChange={(e) => setSettings((s) => ({ ...s, gauging_cutoff: e.target.value || "23:30" }))} style={{ ...input, width: 120, textAlign: "left" }} />
         </div>
+      </div>
+      <div style={card}>
+        <div style={title}>Repair requests</div>
+        <div style={{ fontSize: 15, color: "#fff" }}>Approver email</div>
+        <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>When a driver reports a unit down, this person gets one email with approve and deny links. It comes from servicerequest@protankr.com. Leave blank to decide repairs in Work orders instead.</div>
+        <input type="email" disabled={!isAdmin} value={settings.repair_approver_email ?? ""} placeholder="maintenance@yourcompany.com"
+          onChange={(e) => setSettings((s) => ({ ...s, repair_approver_email: e.target.value }))} style={{ ...input, width: "100%", textAlign: "left", boxSizing: "border-box" }} />
       </div>
       <div style={card}>
         <div style={title}>Truck position</div>

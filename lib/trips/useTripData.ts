@@ -13,6 +13,8 @@ import { supabase } from "@/lib/supabase/client";
 import type { DeliveryLocation, LocationTank } from "./deliveryLocations";
 
 export type TripSettings = {
+  /** The one address that approves repair requests (Truck Down). */
+  repair_approver_email?: string | null;
   begin_offset_minutes: number; // old single offset, the fallback for both below
   loading_begin_offset_minutes: number | null;
   delivery_begin_offset_minutes: number | null;

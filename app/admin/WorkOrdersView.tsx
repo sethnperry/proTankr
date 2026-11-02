@@ -44,7 +44,13 @@ export function WorkOrdersView(p: {
             {[i.sourceLabel, i.unit, when(i.createdAt)].filter(Boolean).join(" · ")}
           </div>
           {typeof i.detail.issue === "string" && i.detail.issue && <div style={{ fontSize: 13, marginTop: 6 }}>{i.detail.issue}</div>}
-          {p.canEdit && i.open && (
+          {p.canEdit && i.status === "awaiting_approval" && (
+            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <button type="button" style={btn(true)} disabled={p.busyId === i.id} onClick={() => p.onStatus(i.id, "approved")}>Approve</button>
+              <button type="button" style={btn()} disabled={p.busyId === i.id} onClick={() => p.onStatus(i.id, "denied")}>Deny</button>
+            </div>
+          )}
+          {p.canEdit && i.open && i.status !== "awaiting_approval" && (
             <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
               {i.status !== "planned" && <button type="button" style={btn()} disabled={p.busyId === i.id} onClick={() => p.onStatus(i.id, "planned")}>Planned</button>}
               <button type="button" style={btn(true)} disabled={p.busyId === i.id} onClick={() => p.onStatus(i.id, "done")}>Done</button>

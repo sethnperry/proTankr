@@ -60,7 +60,7 @@ export async function decideApproval(token: unknown): Promise<DecideResult> {
   if (!r.ok) return { ok: false, reason: r.reason ?? "unknown" };
   const status = statusFor(r.purpose!, r.decision!);
   if (status && r.purpose === "repair_request") {
-    await admin.from("work_orders").update({ status, updated_at: new Date().toISOString() }).eq("work_order_id", r.subject_id!).eq("company_id", r.company_id!);
+    await admin.from("work_orders").update({ status, updated_at: new Date().toISOString() }).eq("work_order_id", r.subject_id!).eq("company_id", r.company_id!).eq("status", "awaiting_approval"); // an admin who already decided in the app stands
   }
   return { ok: true, decision: r.decision!, purpose: r.purpose!, subjectId: r.subject_id!, companyId: r.company_id! };
 }

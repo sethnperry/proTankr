@@ -141,6 +141,9 @@ import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/da
 import { ShiftBar, ShiftControls } from "../components/shift/ShiftBar";
 import { ExplanationSheet } from "../components/shift/ExplanationSheet";
 import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanation";
+import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
+import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
+import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 import { PaperLogSheet } from "../components/shift/PaperLogSheet";
 import { DocumentSheet } from "../components/shift/DocumentSheet";
 import { CaptureSheet } from "../components/capture/CaptureSheet";
@@ -226,6 +229,7 @@ export default function HomePage() {
   useTripHydration(store, userId, truckId, trailerId);
   const { settings, reasons } = useTripSettings(companyId);
   const [paperLogOpen, setPaperLogOpen] = useState(false);
+  const [repairOpen, setRepairOpen] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const [downTimeOpen, setDownTimeOpen] = useState(false);
@@ -233,6 +237,24 @@ export default function HomePage() {
   const shift = useShift({ store, state, syncNow, userId: userId || null, companyId: companyId || null, maxHours: Number(settings.max_shift_hours ?? 12) });
   // Ending a shift that ran past the limit asks what happened first (skippable).
   const maxShiftHours = Number(settings.max_shift_hours ?? 12);
+  // Truck Down: the work order is written through the offline store, then the server sends the one email.
+  const repairUnits: RepairUnit[] = [
+    ...(truckId ? [{ kind: "truck" as const, id: truckId, name: equipment.truckNameById?.[truckId] ?? equipment.currentTruckName ?? "" }] : []),
+    ...(trailerId ? [{ kind: "trailer" as const, id: trailerId, name: equipment.trailerNameById?.[trailerId] ?? equipment.currentTrailerName ?? "" }] : []),
+  ];
+  useEffect(() => { if (userId) void retryRepairs(userId); }, [userId]);
+  const sendRepairRequest = async (unit: RepairUnit, input: { category: any; note: string }): Promise<string> => {
+    if (!store || !userId || !companyId) throw new Error("Not signed in.");
+    const { data: prof } = await supabase.from("profiles").select("display_name, region").eq("user_id", userId).maybeSingle();
+    const wo = createRepairWorkOrder(store, { companyId, reportedBy: userId, kind: unit.kind, unitId: unit.id, unitName: unit.name, driverName: String((prof as any)?.display_name ?? ""), region: ((prof as any)?.region as string | null) ?? null, category: input.category, note: input.note, captureId: null });
+    rememberRepair(userId, wo.work_order_id);
+    await syncNow();
+    const r = await sendRepair(userId, wo.work_order_id);
+    const unitText = `${unit.kind === "truck" ? "Truck" : "Trailer"} ${unit.name}`;
+    if (r === "sent") return `${unitText} is now Deadline and the repair request was emailed for approval.`;
+    if (r === "waiting") return `Saved. ${unitText} will go to Deadline and the email will send when you have signal.`;
+    return `${unitText} is Deadline. No approver email is set for your company, so this is waiting in the work order list.`;
+  };
   const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else shift.end(); };
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
@@ -2441,6 +2463,7 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <RepairSheet open={repairOpen} onClose={() => setRepairOpen(false)} units={repairUnits} onSend={sendRepairRequest} />
       <PaperLogSheet open={paperLogOpen} onClose={() => setPaperLogOpen(false)} companyId={companyId} userId={userId || null}
         reasons={reasonsOrDefault(reasons as any, "paper_log")}
         onDone={(pick, cap) => {
@@ -2471,6 +2494,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "truck", label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
           { icon: "plan", label: "Document", sub: "Submit a document", onClick: () => setDocOpen(true) },
           { icon: "locate", label: "Down time", sub: "Photo, no timer", onClick: () => setDownTimeOpen(true) },
           { icon: "plan", label: "Paper log", sub: "ELD down or on paper", onClick: () => setPaperLogOpen(true) },
