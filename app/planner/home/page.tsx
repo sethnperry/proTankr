@@ -139,6 +139,8 @@ import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChoo
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
 import { ShiftBar, ShiftControls } from "../components/shift/ShiftBar";
+import { ExplanationSheet } from "../components/shift/ExplanationSheet";
+import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanation";
 import { PaperLogSheet } from "../components/shift/PaperLogSheet";
 import { DocumentSheet } from "../components/shift/DocumentSheet";
 import { CaptureSheet } from "../components/capture/CaptureSheet";
@@ -224,10 +226,14 @@ export default function HomePage() {
   useTripHydration(store, userId, truckId, trailerId);
   const { settings, reasons } = useTripSettings(companyId);
   const [paperLogOpen, setPaperLogOpen] = useState(false);
+  const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const [downTimeOpen, setDownTimeOpen] = useState(false);
   useStuckSyncReporter(state, userId || null, companyId || null);
   const shift = useShift({ store, state, syncNow, userId: userId || null, companyId: companyId || null, maxHours: Number(settings.max_shift_hours ?? 12) });
+  // Ending a shift that ran past the limit asks what happened first (skippable).
+  const maxShiftHours = Number(settings.max_shift_hours ?? 12);
+  const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else shift.end(); };
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
   const locList = useDeliveryLocationList(companyId, userId);
@@ -1784,9 +1790,9 @@ export default function HomePage() {
       }}
     >
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
-      <ConnectedDashHeader current="driver" line={equipmentLabel} right={<ShiftControls shift={shift.current} onStart={shift.start} onEnd={shift.end} />} />
+      <ConnectedDashHeader current="driver" line={equipmentLabel} right={<ShiftControls shift={shift.current} onStart={shift.start} onEnd={requestEnd} />} />
 
-      <ShiftBar shift={shift.current} prompt={shift.prompt} onEnd={shift.end} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
+      <ShiftBar shift={shift.current} prompt={shift.prompt} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
       {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
       <div style={{ marginBottom: 14 }}>
@@ -2432,6 +2438,9 @@ export default function HomePage() {
         onClose={() => setSyncOpen(false)}
       />
 
+      <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
+        onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
+        onSkip={() => { shift.end(); setExplainOpen(false); }} />
       <PaperLogSheet open={paperLogOpen} onClose={() => setPaperLogOpen(false)} companyId={companyId} userId={userId || null}
         reasons={reasonsOrDefault(reasons as any, "paper_log")}
         onDone={(pick, cap) => {

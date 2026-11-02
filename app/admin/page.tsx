@@ -31,6 +31,8 @@ import ReimbursementsModal from "./ReimbursementsModal";
 import ScaleRecordsModal from "./ScaleRecordsModal";
 import PaperLogsModal from "./PaperLogsModal";
 import DocumentsModal from "./DocumentsModal";
+import LongShiftsModal from "./LongShiftsModal";
+import { useLongShifts } from "./useLongShifts";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TerminalSetupModal from "./TerminalSetupModal";
@@ -1276,6 +1278,8 @@ export default function AdminPage() {
   const [scaleRecordsOpen, setScaleRecordsOpen] = useState(false);
   const [paperLogsOpen, setPaperLogsOpen] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
+  const [longShiftsOpen, setLongShiftsOpen] = useState(false);
+  const longShifts = useLongShifts(companyId ?? null, myRole === "admin" || myRole === "lead" || myRole === "dispatch");
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -1692,8 +1696,16 @@ export default function AdminPage() {
       if (b.days == null) return -1;
       return a.days - b.days;
     });
+    // Shifts over the limit that the driver never explained.
+    if (longShifts.missing > 0) {
+      items.push({
+        key: "long-shifts", severity: "warning", label: "Long shifts",
+        detail: `${longShifts.missing} over ${longShifts.maxHours} h with no explanation`, days: null,
+        onOpen: () => setLongShiftsOpen(true),
+      });
+    }
     return items;
-  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea]);
+  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea, longShifts.missing, longShifts.maxHours]);
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
@@ -2094,6 +2106,11 @@ export default function AdminPage() {
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setScaleRecordsOpen(true)}>
             Scale records
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setLongShiftsOpen(true)}>
+            Long shifts
           </button>
         )}
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
@@ -2575,6 +2592,7 @@ export default function AdminPage() {
       {myRole === "admin" && <ReimbursementsModal open={reimbOpen} onClose={() => setReimbOpen(false)} companyId={companyId!} />}
       <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
       <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
+      <LongShiftsModal open={longShiftsOpen} onClose={() => setLongShiftsOpen(false)} companyId={companyId!} rows={longShifts.rows} maxHours={longShifts.maxHours} loading={longShifts.loading} error={longShifts.error} />
       <DocumentsModal open={documentsOpen} onClose={() => setDocumentsOpen(false)} companyId={companyId!} />
       <ConnectedDashFooter />
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />

@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { TripStore, TripStoreState } from "@/lib/trips/tripStore";
 import type { ShiftEventRow } from "@/lib/trips/types";
 import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
-import { SHIFT_END, SHIFT_IDLE_RESPONSE, SHIFT_LONG_ACK, SHIFT_START, deriveShifts, openShift, shiftPrompt, type Shift, type ShiftPrompt } from "@/lib/shifts/shiftLogic";
+import { SHIFT_EXPLANATION, SHIFT_END, SHIFT_IDLE_RESPONSE, SHIFT_LONG_ACK, SHIFT_START, deriveShifts, openShift, shiftPrompt, type Shift, type ShiftPrompt } from "@/lib/shifts/shiftLogic";
 
 type Args = {
   store: TripStore | null;
@@ -77,6 +77,8 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
     prompt,
     start: useCallback(() => write(SHIFT_START), [write]),
     end: useCallback(() => write(SHIFT_END), [write]),
+    /** The Shift Explanation, written just before the shift ends. */
+    explain: useCallback((payload: Record<string, unknown>) => write(SHIFT_EXPLANATION, payload), [write]),
     /** "Still on shift" after the long-shift question. */
     ackLong: useCallback(() => write(SHIFT_LONG_ACK), [write]),
     /** The idle question answered "still working". */

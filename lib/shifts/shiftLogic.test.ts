@@ -78,3 +78,33 @@ test("prompts: long once, then idle after a quiet stretch, quiet again after an 
   assert.equal(shiftPrompt(s2, "2026-11-01T21:00:00Z", { maxHours: 12, lastActivityAt: "2026-11-01T19:00:00Z" }), "idle");
   assert.equal(shiftPrompt(null, "2026-11-01T21:00:00Z", { maxHours: 12, lastActivityAt: null }), null);
 });
+
+import { endNeedsExplanation, explanationPayload, explanationProblem, longShifts, unexplained } from "./explanation.ts";
+
+test("explanation: asked only when ending a long shift nobody has explained", () => {
+  const open = deriveShifts([ev(SHIFT_START, "2026-11-01T06:00:00Z")], "u1", "2026-11-01T20:00:00Z")[0];
+  assert.equal(endNeedsExplanation(open, 12), true);
+  assert.equal(endNeedsExplanation(open, 16), false);
+  const answered = deriveShifts([ev(SHIFT_START, "2026-11-01T06:00:00Z"), ev(SHIFT_EXPLANATION, "2026-11-01T19:00:00Z")], "u1", "2026-11-01T20:00:00Z")[0];
+  assert.equal(endNeedsExplanation(answered, 12), false);
+  assert.equal(endNeedsExplanation(null, 12), false);
+});
+
+test("explanation: a reason is needed, Other needs words, defaults aren't stored as ids", () => {
+  assert.match(explanationProblem(null)!, /what happened/i);
+  assert.match(explanationProblem({ reasonId: null, label: "Other", category: "other", note: "" })!, /what happened/i);
+  assert.equal(explanationProblem({ reasonId: "default-0", label: "Weather", category: "traffic_weather", note: null }), null);
+  assert.deepEqual(explanationPayload({ reasonId: "default-0", label: "Weather", category: "traffic_weather", note: null }, 13.456), { reason: "Weather", reason_id: null, category: "traffic_weather", note: null, hours: 13.46 });
+});
+
+test("the manager's list: long shifts only, with or without an explanation, recent only", () => {
+  const events = [
+    ev(SHIFT_START, "2026-11-01T06:00:00Z"), ev(SHIFT_EXPLANATION, "2026-11-01T19:30:00Z"), ev(SHIFT_END, "2026-11-01T20:00:00Z"),   // 14 h, explained
+    ev(SHIFT_START, "2026-11-02T06:00:00Z"), ev(SHIFT_END, "2026-11-02T20:30:00Z"),                                                    // 14.5 h, not
+    ev(SHIFT_START, "2026-11-03T06:00:00Z"), ev(SHIFT_END, "2026-11-03T14:00:00Z"),                                                    // 8 h
+    ev(SHIFT_START, "2026-10-01T06:00:00Z"), ev(SHIFT_END, "2026-10-01T22:00:00Z"),                                                    // old
+  ];
+  const rows = longShifts(events, 12, "2026-11-04T00:00:00Z", "2026-10-25T00:00:00Z");
+  assert.deepEqual(rows.map((r) => [r.startedAt.slice(0, 10), !!r.explanation]), [["2026-11-02", false], ["2026-11-01", true]]);
+  assert.equal(unexplained(rows).length, 1);
+});
