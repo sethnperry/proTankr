@@ -1,7 +1,7 @@
 "use client";
 // app/planner/components/callouts/CalloutForm.tsx
 //
-// The one call-out screen: why, which shift (day and start time), department, a note. Used by the driver's own
+// The one call-out screen: why, which shift (day and start time), division, a note. Used by the driver's own
 // call-out and by dispatch entering or correcting one for a driver. Presentational.
 
 import React, { useEffect, useState } from "react";
@@ -15,11 +15,11 @@ const field: React.CSSProperties = { boxSizing: "border-box", padding: 10, fontS
 const chip = (on: boolean): React.CSSProperties => ({ padding: "10px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer", border: `1px solid ${on ? "#fff" : "rgba(255,255,255,0.18)"}`, background: on ? "#fff" : "#0a0a0b", color: on ? "#000" : "rgba(255,255,255,0.85)" });
 const cap: React.CSSProperties = { fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: MUTE, margin: "14px 0 6px" };
 
-export type CalloutFormValue = CalloutInput & { category: string | null; department: string | null };
+export type CalloutFormValue = CalloutInput & { category: string | null; division: string | null };
 
-export function CalloutForm({ reasons, departments, tz, initial, submitLabel, busy, onSubmit }: {
+export function CalloutForm({ reasons, divisions, tz, initial, submitLabel, busy, onSubmit }: {
   reasons: { reason_id: string; label: string; category: string | null }[];
-  departments: string[];
+  divisions: string[];
   tz: string;
   initial?: Partial<CalloutFormValue> & { pick?: ReasonPick | null };
   submitLabel: string;
@@ -30,7 +30,7 @@ export function CalloutForm({ reasons, departments, tz, initial, submitLabel, bu
   const [pick, setPick] = useState<ReasonPick | null>(initial?.pick ?? null);
   const [date, setDate] = useState(initial?.date ?? today);
   const [time, setTime] = useState(initial?.time ?? "06:00");
-  const [dept, setDept] = useState<string | null>(initial?.department ?? null);
+  const [dept, setDept] = useState<string | null>(initial?.division ?? null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { setErr(null); }, [pick, date, time]);
 
@@ -48,11 +48,11 @@ export function CalloutForm({ reasons, departments, tz, initial, submitLabel, bu
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ ...field, width: 130 }} />
       </div>
       <div style={{ fontSize: 12, color: MUTE, marginTop: 4 }}>The time the shift was to start. You can withdraw until then.</div>
-      {departments.length > 0 && (
+      {divisions.length > 0 && (
         <>
-          <div style={cap}>Department</div>
+          <div style={cap}>Division</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {departments.map((d) => <button key={d} type="button" style={chip(dept === d)} onClick={() => setDept(dept === d ? null : d)}>{d}</button>)}
+            {divisions.map((d) => <button key={d} type="button" style={chip(dept === d)} onClick={() => setDept(dept === d ? null : d)}>{d}</button>)}
           </div>
         </>
       )}
@@ -62,7 +62,7 @@ export function CalloutForm({ reasons, departments, tz, initial, submitLabel, bu
           const input: CalloutInput = { reason: pick?.label ?? "", reasonId: pick?.reasonId ?? null, note: pick?.note ?? "", date, time };
           const p = calloutProblem(input);
           if (p) { setErr(p); return; }
-          onSubmit({ ...input, category: pick?.category ?? null, department: dept });
+          onSubmit({ ...input, category: pick?.category ?? null, division: dept });
         }}
         style={{ width: "100%", marginTop: 18, padding: "16px 0", fontSize: 16, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", border: "none", background: "#fff", color: "#000", cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
         {busy ? "Saving…" : submitLabel}

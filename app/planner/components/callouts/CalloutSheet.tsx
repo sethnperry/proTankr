@@ -13,12 +13,12 @@ import type { CalloutRow } from "@/lib/trips/types";
 const MUTE = "rgba(255,255,255,0.5)";
 const when = (c: CalloutRow, tz: string) => `${new Date(c.shift_start_at).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: tz })} ${new Date(c.shift_start_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })}`;
 
-export function CalloutSheet({ open, onClose, reasons, departments, defaultDepartment, tz, mine, onCreate, onWithdraw }: {
+export function CalloutSheet({ open, onClose, reasons, divisions, defaultDivision, tz, mine, onCreate, onWithdraw }: {
   open: boolean;
   onClose: () => void;
   reasons: { reason_id: string; label: string; category: string | null }[];
-  departments: string[];
-  defaultDepartment: string | null;
+  divisions: string[];
+  defaultDivision: string | null;
   tz: string;
   mine: CalloutRow[];
   onCreate: (v: CalloutFormValue) => Promise<string>;
@@ -28,7 +28,7 @@ export function CalloutSheet({ open, onClose, reasons, departments, defaultDepar
   const [done, setDone] = useState<string | null>(null);
   const now = Date.now();
   const active = mine.filter((c) => c.status === "active" && Date.parse(c.shift_start_at) + 12 * 3600_000 > now);
-  const dept = departments.find((d) => d.toLowerCase() === (defaultDepartment ?? "").toLowerCase()) ?? null;
+  const dept = divisions.find((d) => d.toLowerCase() === (defaultDivision ?? "").toLowerCase()) ?? null;
 
   return (
     <FullscreenModal open={open} title="Call out" onClose={() => { setDone(null); onClose(); }} footer={null}>
@@ -55,7 +55,7 @@ export function CalloutSheet({ open, onClose, reasons, departments, defaultDepar
           <button type="button" onClick={() => setDone(null)} style={{ width: "100%", marginTop: 20, padding: "14px 0", fontSize: 14, fontWeight: 800, textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: "#fff", cursor: "pointer" }}>Another call-out</button>
         </div>
       ) : (
-        <CalloutForm reasons={reasons} departments={departments} tz={tz} initial={{ department: dept }} submitLabel="Send call-out" busy={busy}
+        <CalloutForm reasons={reasons} divisions={divisions} tz={tz} initial={{ division: dept }} submitLabel="Send call-out" busy={busy}
           onSubmit={async (v) => { setBusy(true); try { setDone(await onCreate(v)); } finally { setBusy(false); } }} />
       )}
     </FullscreenModal>

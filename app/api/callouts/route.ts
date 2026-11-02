@@ -3,8 +3,8 @@
 // Sends the email for a call-out event (created, edited, withdrawn) to dispatch and the regional manager, once per
 // event. The phone writes the call-out through the offline store first; this opens it as the signed-in user (RLS:
 // the driver it is for, or company staff) and routes the email by the driver's region, local area and the
-// call-out's department (lib/callouts). When dispatch made the change for a driver it reads as a correction.
-// A failed or unroutable email goes to the error log, so the Desk shows it.
+// call-out's division (lib/callouts). When dispatch made the change for a driver it reads as a correction and the
+// driver is emailed as well. A failed or unroutable email goes to the error log, so the Desk shows it.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -37,9 +37,13 @@ export async function POST(req: NextRequest) {
   if (c.notified?.[marker]) return json({ sent: true, already: true });
 
   const admin = getServiceSupabase();
-  const { data: rt } = await admin.from("callout_routes").select("route_id, kind, email, region, local_area, department").eq("company_id", c.company_id);
-  const to = resolveRoutes((rt ?? []) as CalloutRoute[], { region: c.region, localArea: c.local_area, department: c.department });
-  const recipients = [...new Set([...to.dispatch, ...to.manager].map((e) => e.toLowerCase()))];
+  const { data: rt } = await admin.from("callout_routes").select("route_id, kind, email, region, local_area, division").eq("company_id", c.company_id);
+  const to = resolveRoutes((rt ?? []) as CalloutRoute[], { region: c.region, localArea: c.local_area, division: c.division });
+  const byDispatch = u.user.id !== c.user_id;
+  // When dispatch entered or changed it for the driver, the driver gets the email too.
+  let driverEmail: string | null = null;
+  if (byDispatch) { const { data: du } = await admin.auth.admin.getUserById(c.user_id); driverEmail = du?.user?.email ?? null; }
+  const recipients = [...new Set([...to.dispatch, ...to.manager, ...(driverEmail ? [driverEmail] : [])].map((e) => e.toLowerCase()))];
   if (!recipients.length) {
     await logServerError({ companyId: c.company_id, userId: c.user_id, kind: "send_failed", message: "A call-out was made but no call-out email is set up for it. Add one in Call-out routing.", payload: { callout_id: c.callout_id } }, { dedupeMinutes: 60 });
     return json({ sent: false, reason: "no_recipients" });
@@ -54,7 +58,6 @@ export async function POST(req: NextRequest) {
   const { data: profs } = await admin.from("profiles").select("user_id, display_name").in("user_id", [c.user_id, u.user.id]);
   for (const p of (profs ?? []) as { user_id: string; display_name: string | null }[]) names.set(p.user_id, p.display_name ?? "");
   const driverName = names.get(c.user_id) || "A driver";
-  const byDispatch = u.user.id !== c.user_id;
   const mail = buildCalloutEmail({ event, callout: c, driverName, actorName: names.get(u.user.id) || "Dispatch", byDispatch, tz });
   try {
     const res = await fetch("https://api.resend.com/emails", {

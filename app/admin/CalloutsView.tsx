@@ -33,7 +33,7 @@ export function CalloutsView(p: {
       </div>
       <div style={{ fontSize: 13, marginTop: 2 }}>{when(c)} · {c.reason}{c.note ? `: ${c.note}` : ""}</div>
       <div style={{ fontSize: 12, color: MUTE, marginTop: 2 }}>
-        {[c.department, c.region, c.local_area].filter(Boolean).join(" · ")}
+        {[c.division, c.region, c.local_area].filter(Boolean).join(" · ")}
         {c.created_by !== c.user_id ? ` · entered by ${p.nameOf(c.created_by)}` : ""}
         {c.withdrawn_by && c.withdrawn_by !== c.user_id ? ` · withdrawn by ${p.nameOf(c.withdrawn_by)}` : ""}
       </div>

@@ -29,7 +29,7 @@ export default function CalloutsModal({ open, onClose, companyId, userId, canEdi
   const { reasons } = useTripSettings(open ? companyId : null);
   const { members } = useCompanyRoster(open ? companyId : null);
   const nameOf = (id: string) => members.find((m) => m.user_id === id)?.display_name ?? "Driver";
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [divisions, setDivisions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<{ mode: "new" | "edit"; row?: CalloutRow } | null>(null);
@@ -44,11 +44,11 @@ export default function CalloutsModal({ open, onClose, companyId, userId, canEdi
     const since = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
     void Promise.all([
       supabase.from("callouts").select("*").eq("company_id", companyId).gte("shift_date", since).limit(1000),
-      supabase.from("callout_routes").select("department").eq("company_id", companyId).not("department", "is", null),
+      supabase.from("callout_routes").select("division").eq("company_id", companyId).not("division", "is", null),
     ]).then(([c, r]) => {
       if (!alive) return;
       if (c.error) setError(c.error.message); else store.hydrate("callouts", (c.data ?? []) as CalloutRow[]);
-      setDepartments([...new Set(((r.data ?? []) as { department: string }[]).map((x) => x.department))].sort());
+      setDivisions([...new Set(((r.data ?? []) as { division: string }[]).map((x) => x.division))].sort());
       setLoading(false);
     });
     return () => { alive = false; };
@@ -75,7 +75,7 @@ export default function CalloutsModal({ open, onClose, companyId, userId, canEdi
         // A new call-out for a driver: their region, local area and division decide who is emailed.
         const { data } = await supabase.rpc("get_display_names_full", { p_user_ids: [driverId] });
         const d = ((data ?? []) as { region?: string | null; local_area?: string | null }[])[0] ?? {};
-        const row = createCallout(store, { companyId, driverId, actorId: userId, input: { reason: v.reason, reasonId: v.reasonId, note: v.note, date: v.date, time: v.time }, category: v.category, department: v.department, region: d.region ?? null, localArea: d.local_area ?? null, tz });
+        const row = createCallout(store, { companyId, driverId, actorId: userId, input: { reason: v.reason, reasonId: v.reasonId, note: v.note, date: v.date, time: v.time }, category: v.category, division: v.division, region: d.region ?? null, localArea: d.local_area ?? null, tz });
         await emailAfter(row.callout_id, "created");
       }
       setForm(null);
@@ -99,8 +99,8 @@ export default function CalloutsModal({ open, onClose, companyId, userId, canEdi
         onPick={(v) => { if (v) { setDriverId(v); setForm({ mode: "new" }); } }} onClose={() => setPickDriver(false)} />
       <FullscreenModal open={!!form} title={form?.mode === "edit" ? `Correct call-out · ${nameOf(form.row!.user_id)}` : `New call-out · ${nameOf(driverId)}`} onClose={() => setForm(null)} footer={null}>
         {form && (
-          <CalloutForm key={form.row?.callout_id ?? "new"} reasons={reasonsOrDefault(reasons as any, "callout")} departments={departments} tz={tz}
-            initial={form.row ? { pick: { reasonId: form.row.reason_id, label: form.row.reason, category: form.row.category, note: form.row.note }, date: form.row.shift_date, time: new Date(form.row.shift_start_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }), department: form.row.department } : { date: focusDate ?? undefined }}
+          <CalloutForm key={form.row?.callout_id ?? "new"} reasons={reasonsOrDefault(reasons as any, "callout")} divisions={divisions} tz={tz}
+            initial={form.row ? { pick: { reasonId: form.row.reason_id, label: form.row.reason, category: form.row.category, note: form.row.note }, date: form.row.shift_date, time: new Date(form.row.shift_start_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }), division: form.row.division } : { date: focusDate ?? undefined }}
             submitLabel={form.mode === "edit" ? "Save correction" : "Create call-out"} busy={busy} onSubmit={(v) => void save(v)} />
         )}
         {error && form && <div style={{ color: "#f87171", fontSize: 13, marginTop: 10 }}>{error}</div>}

@@ -2,7 +2,7 @@
 // app/admin/CalloutRoutesModal.tsx
 //
 // Company Dashboard → Call-out routing. Who is emailed when a driver calls out: dispatch and the regional manager,
-// by region, local area and department (DEF is a department). The most specific match wins; a row with none of the
+// by region, local area and division (DEF is a division). The most specific match wins; a row with none of the
 // three is the company default. Admin only. Thin data wrapper.
 
 import React, { useEffect, useState } from "react";
@@ -22,7 +22,7 @@ export default function CalloutRoutesModal({ open, onClose, companyId }: { open:
   const [email, setEmail] = useState(""); const [region, setRegion] = useState(""); const [area, setArea] = useState(""); const [dept, setDept] = useState("");
 
   const load = async () => {
-    const { data, error } = await supabase.from("callout_routes").select("route_id, kind, email, region, local_area, department").eq("company_id", companyId).order("created_at");
+    const { data, error } = await supabase.from("callout_routes").select("route_id, kind, email, region, local_area, division").eq("company_id", companyId).order("created_at");
     if (error) setErr(error.message); else setRoutes((data ?? []) as CalloutRoute[]);
   };
   useEffect(() => { if (open && companyId) { setErr(null); void load(); } }, [open, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -30,7 +30,7 @@ export default function CalloutRoutesModal({ open, onClose, companyId }: { open:
   const add = async () => {
     const p = routeProblem(email);
     if (p) { setErr(p); return; }
-    const { error } = await supabase.from("callout_routes").insert({ company_id: companyId, kind, email: email.trim(), region: region.trim() || null, local_area: area.trim() || null, department: dept.trim() || null });
+    const { error } = await supabase.from("callout_routes").insert({ company_id: companyId, kind, email: email.trim(), region: region.trim() || null, local_area: area.trim() || null, division: dept.trim() || null });
     if (error) { setErr(error.message); return; }
     setEmail(""); setRegion(""); setArea(""); setDept(""); setErr(null);
     await load();
@@ -39,7 +39,7 @@ export default function CalloutRoutesModal({ open, onClose, companyId }: { open:
 
   return (
     <FullscreenModal open={open} title="Call-out routing" onClose={onClose} footer={null}>
-      <div style={{ fontSize: 13, color: MUTE, marginBottom: 12, lineHeight: 1.5 }}>When a driver calls out, these people are emailed. The most specific match wins (department, local area and region). A row with none of those set is the company default.</div>
+      <div style={{ fontSize: 13, color: MUTE, marginBottom: 12, lineHeight: 1.5 }}>When a driver calls out, these people are emailed. The most specific match wins (division, local area and region). A row with none of those set is the company default.</div>
       {(["dispatch", "manager"] as RouteKind[]).map((k) => (
         <div key={k} style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: MUTE, marginBottom: 6 }}>{k === "dispatch" ? "Dispatch" : "Regional manager"}</div>
@@ -63,7 +63,7 @@ export default function CalloutRoutesModal({ open, onClose, companyId }: { open:
           <input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Region (optional)" style={field} />
           <input value={area} onChange={(e) => setArea(e.target.value)} placeholder="Local area (optional)" style={field} />
         </div>
-        <input value={dept} onChange={(e) => setDept(e.target.value)} placeholder="Department, e.g. DEF (optional)" style={{ ...field, marginBottom: 10 }} />
+        <input value={dept} onChange={(e) => setDept(e.target.value)} placeholder="Division, e.g. DEF (optional)" style={{ ...field, marginBottom: 10 }} />
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 8 }}>{err}</div>}
         <button type="button" style={{ ...btn(true), width: "100%" }} onClick={() => void add()}>Add</button>
       </div>

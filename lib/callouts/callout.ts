@@ -1,7 +1,7 @@
 // lib/callouts/callout.ts
 //
 // Call-outs, the rules only: what a call-out needs, when a driver may still withdraw it, who gets the email (by
-// region, local area and department, most specific first, company default last), when an active call-out blocks
+// region, local area and division, most specific first, company default last), when an active call-out blocks
 // the dispatch board, and what the emails say. Pure: no Supabase, no network.
 
 import { newId, type TripStore } from "../trips/tripStore.ts";
@@ -11,7 +11,7 @@ import { addDays, localDateOf, localMidnightMs } from "../worklog/time.ts";
 export type { CalloutRow };
 
 export type RouteKind = "dispatch" | "manager";
-export type CalloutRoute = { route_id: string; kind: RouteKind; email: string; region: string | null; local_area: string | null; department: string | null };
+export type CalloutRoute = { route_id: string; kind: RouteKind; email: string; region: string | null; local_area: string | null; division: string | null };
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
@@ -36,7 +36,7 @@ export const canWithdraw = (c: Pick<CalloutRow, "status" | "shift_start_at">, no
   c.status === "active" && (isStaff || Date.parse(c.shift_start_at) > nowMs);
 
 export function createCallout(store: TripStore, o: {
-  companyId: string; driverId: string; actorId: string; input: CalloutInput; category: string | null; department: string | null;
+  companyId: string; driverId: string; actorId: string; input: CalloutInput; category: string | null; division: string | null;
   region: string | null; localArea: string | null; tz: string; id?: string;
 }): CalloutRow {
   const id = o.id ?? newId();
@@ -45,7 +45,7 @@ export function createCallout(store: TripStore, o: {
   const row: CalloutRow = {
     callout_id: id, company_id: o.companyId, user_id: o.driverId, shift_date: o.input.date, shift_start_at: shiftStartAt(o.input.date, o.input.time, o.tz),
     reason: o.input.reason.trim(), reason_id: o.input.reasonId && !o.input.reasonId.startsWith("default-") ? o.input.reasonId : null, category: o.category,
-    note: o.input.note.trim() || null, department: o.department, region: o.region, local_area: o.localArea,
+    note: o.input.note.trim() || null, division: o.division, region: o.region, local_area: o.localArea,
     status: "active", created_by: o.actorId, updated_by: null, withdrawn_by: null, withdrawn_at: null,
   };
   store.put("callouts", row);
@@ -72,7 +72,7 @@ export function editCallout(store: TripStore, id: string, actorId: string, input
 }
 
 // ── Who gets the email ───────────────────────────────────────────────────────────────────────────────────────
-export type RouteContext = { region: string | null; localArea: string | null; department: string | null };
+export type RouteContext = { region: string | null; localArea: string | null; division: string | null };
 
 /**
  * For each kind, the routes that match the driver and are the most specific. A route matches when every field it
@@ -84,8 +84,8 @@ export function resolveRoutes(routes: CalloutRoute[], ctx: RouteContext): { disp
     const matching = routes.filter((r) => r.kind === kind
       && (!r.region || norm(r.region) === norm(ctx.region))
       && (!r.local_area || norm(r.local_area) === norm(ctx.localArea))
-      && (!r.department || norm(r.department) === norm(ctx.department)));
-    const score = (r: CalloutRoute) => Number(!!r.region) + Number(!!r.local_area) + Number(!!r.department);
+      && (!r.division || norm(r.division) === norm(ctx.division)));
+    const score = (r: CalloutRoute) => Number(!!r.region) + Number(!!r.local_area) + Number(!!r.division);
     const best = matching.reduce((m, r) => Math.max(m, score(r)), -1);
     const seen = new Set<string>();
     for (const r of matching.filter((x) => score(x) === best)) {
@@ -96,8 +96,8 @@ export function resolveRoutes(routes: CalloutRoute[], ctx: RouteContext): { disp
   return out;
 }
 
-export const routeLabel = (r: Pick<CalloutRoute, "region" | "local_area" | "department">) =>
-  [r.region, r.local_area, r.department].filter(Boolean).join(" · ") || "Company default";
+export const routeLabel = (r: Pick<CalloutRoute, "region" | "local_area" | "division">) =>
+  [r.region, r.local_area, r.division].filter(Boolean).join(" · ") || "Company default";
 
 export function routeProblem(email: string): string | null {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? null : "Enter a valid email address.";
@@ -129,7 +129,7 @@ export function buildCalloutEmail(o: { event: CalloutEvent; callout: CalloutRow;
     ["Driver", o.driverName],
     ["Shift", when],
     ["Reason", c.reason + (c.note ? `: ${c.note}` : "")],
-    ...(c.department ? ([["Department", c.department]] as [string, string][]) : []),
+    ...(c.division ? ([["Division", c.division]] as [string, string][]) : []),
     ...([c.region, c.local_area].filter(Boolean).length ? ([["Where", [c.region, c.local_area].filter(Boolean).join(" · ")]] as [string, string][]) : []),
     ...(o.byDispatch ? ([["Entered by", `${o.actorName} (dispatch)`]] as [string, string][]) : []),
   ];

@@ -2496,10 +2496,10 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
-      <CalloutSheet open={calloutOpen} onClose={() => setCalloutOpen(false)} reasons={reasonsOrDefault(reasons as any, "callout")} departments={callouts.departments} defaultDepartment={callouts.profile.division} tz={callouts.tz} mine={callouts.mine}
+      <CalloutSheet open={calloutOpen} onClose={() => setCalloutOpen(false)} reasons={reasonsOrDefault(reasons as any, "callout")} divisions={callouts.divisions} defaultDivision={callouts.profile.division} tz={callouts.tz} mine={callouts.mine}
         onWithdraw={callouts.withdraw}
         onCreate={async (v) => {
-          const r = await callouts.create({ reason: v.reason, reasonId: v.reasonId, note: v.note, date: v.date, time: v.time }, v.category, v.department);
+          const r = await callouts.create({ reason: v.reason, reasonId: v.reasonId, note: v.note, date: v.date, time: v.time }, v.category, v.division);
           return r === "sent" ? "Dispatch and your manager were emailed. You can withdraw it until your shift starts." : r === "waiting" ? "Saved. The email will go when you have signal." : "Saved, but no email is set up for your area yet. Tell dispatch.";
         }} />
       <PerDiemSheet open={perDiemOpen} onClose={() => setPerDiemOpen(false)} home={perDiem.home} cards={perDiem.cards} loading={perDiem.loading} onSaveHome={perDiem.saveHome} onClaim={perDiem.claim} onWithdraw={perDiem.withdraw} />

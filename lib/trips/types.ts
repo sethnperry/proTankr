@@ -259,7 +259,7 @@ export type CalloutRow = Synced & {
   reason_id: string | null;
   category: string | null;
   note: string | null;
-  department: string | null;
+  division: string | null;
   region: string | null;
   local_area: string | null;
   status: "active" | "withdrawn";
