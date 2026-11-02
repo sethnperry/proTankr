@@ -16,7 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
-import { locationPlace, locationTitle, type DeliveryLocation, type LocationTank } from "@/lib/trips/deliveryLocations";
+import { PLACE_KINDS, locationPlace, locationTitle, type DeliveryLocation, type LocationTank, type PlaceKind } from "@/lib/trips/deliveryLocations";
 import { sameStore, similarLocations } from "@/lib/trips/refs";
 import type { DeliveryType } from "@/lib/trips/types";
 import { linkBtn, numOrNull } from "./tripUi";
@@ -36,6 +36,7 @@ type Draft = {
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
+  place_kind: PlaceKind;
   notes: string;
   tanks: TankDraft[];
   removedTankIds: string[];
@@ -45,13 +46,13 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   if (!l) {
     return {
       location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "", region: "", local_area: "",
-      lat: null, lon: null, delivery_type: "drop", notes: "", tanks: [], removedTankIds: [],
+      lat: null, lon: null, delivery_type: "drop", place_kind: "store", notes: "", tanks: [], removedTankIds: [],
     };
   }
   return {
     location_id: l.location_id, name: l.name, location_number: l.location_number ?? "", address: l.address ?? "",
     city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", region: l.region ?? "", local_area: l.local_area ?? "", lat: l.lat, lon: l.lon,
-    delivery_type: l.delivery_type, notes: l.notes ?? "",
+    delivery_type: l.delivery_type, place_kind: l.place_kind ?? "store", notes: l.notes ?? "",
     tanks: tanks
       .filter((t) => t.location_id === l.location_id)
       .sort((a, b) => a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }))
@@ -227,6 +228,7 @@ export function LocationEditor({
         lat, lon,
         ...(county ? { county } : {}),
         delivery_type: draft.delivery_type,
+        place_kind: draft.place_kind,
         notes: draft.notes.trim() || null,
         client_updated_at: now,
       };
@@ -235,8 +237,8 @@ export function LocationEditor({
         : supabase.from("delivery_locations").insert({ ...r, created_by: userId }).select("location_id").single();
       let res = await write(row);
       // Before the 2026-10-11 migration there is no zip column; save without it.
-      if (res.error && /zip|region|local_area|county/i.test(res.error.message)) {
-        const { zip: _zip, region: _region, local_area: _la, ...older } = row;
+      if (res.error && /zip|region|local_area|county|place_kind/i.test(res.error.message)) {
+        const { zip: _zip, region: _region, local_area: _la, place_kind: _pk, ...older } = row;
         res = await write(older);
       }
       if (res.error) throw new Error(res.error.message);
@@ -334,6 +336,11 @@ export function LocationEditor({
           <div style={{ fontSize: 12, color: MUTE, marginTop: 3 }}>At the site? Use your location. Otherwise the city is looked up on save.</div>
         </div>
         <button type="button" onClick={useMyLocation} style={{ flexShrink: 0, padding: "9px 12px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>Use mine</button>
+      </div>
+
+      <Label>Kind of place</Label>
+      <div style={{ ...PANEL, padding: 14 }}>
+        <Segmented value={draft.place_kind} onChange={(v) => patch({ place_kind: v })} options={PLACE_KINDS} />
       </div>
 
       <Label>Delivery type</Label>

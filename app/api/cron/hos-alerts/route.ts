@@ -16,6 +16,7 @@ import { planHosAlerts, type DriverCase } from "@/lib/push/hosAlertCore";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import { pushTerminalReports } from "@/lib/push/terminalReportPush";
 import { runWorklogs } from "@/lib/worklog/sendWorklogs";
+import { runNotifications } from "@/lib/notify/server";
 import type { Level } from "@/lib/telematics/hosTripNotify";
 
 export const runtime = "nodejs";
@@ -181,10 +182,13 @@ async function handle(req: NextRequest) {
   try { reportPushes = await pushTerminalReports(); } catch (e) { console.warn("[cron] terminal report pushes failed:", (e as Error).message); }
   let worklogs = 0;
   try { worklogs = await runWorklogs(); } catch (e) { console.warn("[cron] worklogs failed:", (e as Error).message); }
+  // Scheduled reminders and recaps (notification_schedules) ride the same five-minute tick.
+  let notifications: unknown = null;
+  try { notifications = await runNotifications(); } catch (e) { console.warn("[cron] notifications failed:", (e as Error).message); }
   const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active");
   const out: Record<string, { sent: number; drivers: number } | string> = {};
   for (const c of (data ?? []) as { company_id: string }[]) {
     try { out[c.company_id] = await runCompany(c.company_id); } catch (e) { out[c.company_id] = (e as Error).message; }
   }
-  return NextResponse.json({ ok: true, reportPushes, worklogs, companies: out });
+  return NextResponse.json({ ok: true, reportPushes, worklogs, notifications, companies: out });
 }

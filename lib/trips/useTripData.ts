@@ -51,7 +51,7 @@ export function deliveryOffset(s: TripSettings): number {
   return s.delivery_begin_offset_minutes ?? s.begin_offset_minutes;
 }
 
-export type DelayReason = { reason_id: string; kind: "loading" | "delivery"; label: string; sort_order: number; is_active: boolean };
+export type DelayReason = { reason_id: string; kind: "loading" | "delivery" | "shift_explanation" | "callout" | "nonproductive" | "paper_log"; label: string; sort_order: number; is_active: boolean; category?: string | null };
 
 function readCache<T>(key: string): T | null {
   try {
@@ -79,7 +79,7 @@ export function useTripSettings(companyId: string | null) {
     try {
       const [s, r] = await Promise.all([
         supabase.from("trip_settings").select("*").eq("company_id", companyId).maybeSingle(),
-        supabase.from("delay_reasons").select("reason_id,kind,label,sort_order,is_active").eq("company_id", companyId)
+        supabase.from("delay_reasons").select("reason_id,kind,label,sort_order,is_active,category").eq("company_id", companyId)
           .order("sort_order").order("label"),
       ]);
       const next = { ...DEFAULT_TRIP_SETTINGS, ...((s.data as Partial<TripSettings>) ?? {}) };
@@ -157,12 +157,13 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
       const cols = "location_id,company_id,name,location_number,address,city,state,lat,lon,delivery_type,notes,is_active";
       const query = (c: string) => supabase.from("delivery_locations").select(c).eq("company_id", companyId).eq("is_active", true).order("name");
       const [withArea, s] = await Promise.all([
-        query(`${cols},zip,region,local_area,county`),
+        query(`${cols},zip,region,local_area,county,place_kind`),
         supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId),
       ]);
       // Before the 2026-10-11 migration there is no zip column; read without it.
       // region (2026-10-22) and zip (2026-10-11) may not exist yet.
-      const noCounty = withArea.error ? await query(`${cols},zip,region,local_area`) : withArea;
+      const noKind = withArea.error ? await query(`${cols},zip,region,local_area,county`) : withArea;
+      const noCounty = noKind.error ? await query(`${cols},zip,region,local_area`) : noKind;
       const withRegion = noCounty.error ? await query(`${cols},zip,region`) : noCounty;
       const first = withRegion.error ? await query(`${cols},zip`) : withRegion;
       const l = first.error ? await query(cols) : first;

@@ -8,6 +8,16 @@ import type { DeliveryType } from "./types.ts";
 
 export const NEAR_ME_MILES = 150;
 
+// What kind of place this is (20261102010000). Freight and terminal work can pick a yard or a shop; deliveries pick stores.
+export type PlaceKind = "store" | "yard" | "maintenance" | "terminal";
+export const PLACE_KINDS: { id: PlaceKind; label: string }[] = [
+  { id: "store", label: "Store" },
+  { id: "yard", label: "Yard" },
+  { id: "maintenance", label: "Maintenance" },
+  { id: "terminal", label: "Terminal" },
+];
+export const placeKindLabel = (k: string | null | undefined) => PLACE_KINDS.find((p) => p.id === k)?.label ?? "Store";
+
 export type DeliveryLocation = {
   location_id: string;
   company_id?: string;
@@ -26,6 +36,8 @@ export type DeliveryLocation = {
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
+  // Optional: missing before the 2026-11-02 migration, and a missing value means a store.
+  place_kind?: PlaceKind;
   notes: string | null;
   // Feet (20261019000000). Optional: missing before that migration.
   is_active?: boolean;

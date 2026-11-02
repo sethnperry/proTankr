@@ -138,6 +138,9 @@ import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
+import { ShiftBar } from "../components/shift/ShiftBar";
+import { useShift } from "../hooks/useShift";
+import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
 import { useCompanyRoster } from "../hooks/useCompanyRoster";
 import { SuppliersModal } from "../dispatch/SuppliersModal";
@@ -212,6 +215,8 @@ export default function HomePage() {
   const [syncOpen, setSyncOpen] = useState(false);
   useTripHydration(store, userId, truckId, trailerId);
   const { settings, reasons } = useTripSettings(companyId);
+  useStuckSyncReporter(state, userId || null, companyId || null);
+  const shift = useShift({ store, state, syncNow, userId: userId || null, companyId: companyId || null, maxHours: Number(settings.max_shift_hours ?? 12) });
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
   const locList = useDeliveryLocationList(companyId, userId);
@@ -1777,6 +1782,8 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      <ShiftBar shift={shift.current} prompt={shift.prompt} onStart={shift.start} onEnd={shift.end} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
       {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
       <div style={{ marginBottom: 14 }}>

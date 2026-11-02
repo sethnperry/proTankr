@@ -14,6 +14,8 @@ import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { DEFAULT_TRIP_SETTINGS, deliveryOffset, loadingOffset, type DelayReason, type TripSettings } from "@/lib/trips/useTripData";
 import { TERMINAL_ISSUES } from "@/lib/trips/terminalIssues";
+import { CustomSelect } from "@/lib/ui/CustomSelect";
+import { KINDS_WITH_CATEGORY, KIND_TITLE, SHIFT_CATEGORIES, categoryLabel, type ReasonKind } from "@/lib/reasons/reasons";
 
 const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 14, marginBottom: 14 };
@@ -65,14 +67,15 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
 }) {
   const [settings, setSettings] = useState<TripSettings>(DEFAULT_TRIP_SETTINGS);
   const [reasons, setReasons] = useState<DelayReason[]>([]);
-  const [newLabel, setNewLabel] = useState<{ loading: string; delivery: string }>({ loading: "", delivery: "" });
+  const [newLabel, setNewLabel] = useState<Record<string, string>>({});
+  const [newCategory, setNewCategory] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = async () => {
     const [s, r] = await Promise.all([
       supabase.from("trip_settings").select("*").eq("company_id", companyId).maybeSingle(),
-      supabase.from("delay_reasons").select("reason_id,kind,label,sort_order,is_active").eq("company_id", companyId).order("sort_order").order("label"),
+      supabase.from("delay_reasons").select("reason_id,kind,label,sort_order,is_active,category").eq("company_id", companyId).order("sort_order").order("label"),
     ]);
     setSettings({ ...DEFAULT_TRIP_SETTINGS, ...((s.data as Partial<TripSettings>) ?? {}) });
     setReasons((r.data ?? []) as DelayReason[]);
@@ -109,11 +112,11 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
   };
 
-  const addReason = async (kind: "loading" | "delivery") => {
-    const label = newLabel[kind].trim();
+  const addReason = async (kind: ReasonKind) => {
+    const label = (newLabel[kind] ?? "").trim();
     if (!label) return;
     const sort = reasons.filter((r) => r.kind === kind).reduce((m, r) => Math.max(m, r.sort_order), 0) + 1;
-    const { error } = await supabase.from("delay_reasons").insert({ company_id: companyId, kind, label, sort_order: sort });
+    const { error } = await supabase.from("delay_reasons").insert({ company_id: companyId, kind, label, sort_order: sort, category: KINDS_WITH_CATEGORY.has(kind) ? (newCategory[kind] || "other") : null });
     if (error) return setMsg({ ok: false, text: error.message });
     setNewLabel((n) => ({ ...n, [kind]: "" }));
     await load();
@@ -125,21 +128,25 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
     await load();
   };
 
-  const reasonList = (kind: "loading" | "delivery") => {
+  const reasonList = (kind: ReasonKind) => {
     const list = reasons.filter((r) => r.kind === kind);
     return (
       <div style={card}>
-        <div style={title}>{kind === "loading" ? "Loading delay reasons" : "Delivery delay reasons"}</div>
+        <div style={title}>{KIND_TITLE[kind]}</div>
         {list.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>None yet. Drivers can still type a note.</div>}
         {list.map((r) => (
           <div key={r.reason_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", opacity: r.is_active ? 1 : 0.45 }}>
-            <span style={{ fontSize: 15, color: "#fff" }}>{r.label}</span>
+            <span style={{ fontSize: 15, color: "#fff" }}>{r.label}{r.category ? <span style={{ fontSize: 12, color: muted, marginLeft: 8 }}>{categoryLabel(r.category)}</span> : null}</span>
             <button type="button" onClick={() => void setActive(r, !r.is_active)} style={link}>{r.is_active ? "Hide" : "Show"}</button>
           </div>
         ))}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <input value={newLabel[kind]} onChange={(e) => setNewLabel((n) => ({ ...n, [kind]: e.target.value }))}
-            placeholder={kind === "loading" ? "e.g. Waiting at rack" : "e.g. Customer not ready"} style={textInput} />
+          <input value={newLabel[kind] ?? ""} onChange={(e) => setNewLabel((n) => ({ ...n, [kind]: e.target.value }))}
+            placeholder={kind === "loading" ? "e.g. Waiting at rack" : kind === "delivery" ? "e.g. Customer not ready" : "e.g. Waiting on a repair"} style={textInput} />
+          {KINDS_WITH_CATEGORY.has(kind) && (
+            <CustomSelect value={newCategory[kind] || "other"} onChange={(v) => setNewCategory((n) => ({ ...n, [kind]: v }))}
+              options={SHIFT_CATEGORIES.map((c) => ({ value: c.code, label: c.label }))} buttonStyle={{ ...textInput, width: 150 }} />
+          )}
           <button type="button" onClick={() => void addReason(kind)} style={btn}>Add</button>
         </div>
       </div>
@@ -208,6 +215,8 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       </div>
       {reasonList("loading")}
       {reasonList("delivery")}
+      {reasonList("shift_explanation")}
+      {reasonList("callout")}
     </FullscreenModal>
   );
 }

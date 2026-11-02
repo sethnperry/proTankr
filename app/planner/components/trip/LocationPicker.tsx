@@ -17,6 +17,7 @@ import {
   type DeliveryLocation,
   type LatLon,
   type LocationTank,
+  type PlaceKind,
 } from "@/lib/trips/deliveryLocations";
 import { cityOptions, inArea, type AreaPick } from "@/lib/trips/areaTree";
 import { stateName } from "@/lib/geo/usStates";
@@ -29,7 +30,7 @@ import { LocationEditor } from "./LocationEditor";
 const PAGE = 60;
 
 export function LocationBrowser({
-  origin = null, locations, tanks = [], companyId, userId, onPick, onChanged, selectedLocationId = null, onToggleStar,
+  origin = null, locations: allLocations, tanks = [], companyId, userId, onPick, onChanged, selectedLocationId = null, onToggleStar, kinds,
 }: {
   origin?: LatLon | null;
   locations: DeliveryLocation[];
@@ -41,9 +42,12 @@ export function LocationBrowser({
   /** After a location is added, edited or retired, so the caller can reload its list. */
   onChanged?: () => void;
   selectedLocationId?: string | null;
+  /** Only these kinds of place (default: all). A delivery picks stores; freight and terminal work can pick a yard or a shop. */
+  kinds?: PlaceKind[];
   /** Star or unstar a location (kept per driver). */
   onToggleStar?: (locationId: string, star: boolean) => void | Promise<void>;
 }) {
+  const locations = useMemo(() => (kinds ? allLocations.filter((l) => kinds.includes(l.place_kind ?? "store")) : allLocations), [allLocations, kinds]);
   const [area, setArea] = useState<AreaPick | null>(null);
   const [areaOpen, setAreaOpen] = useState(false);
   const [query, setQuery] = useState("");

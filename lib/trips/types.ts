@@ -185,6 +185,37 @@ export type TripEventRow = {
   payload: Record<string, unknown>;
 };
 
+// A shift-level event (start shift, end shift, call-out, document drop ...): the same shape as a trip event
+// without a trip, plus whose shift it is and where the entry came from. Append-only on the server.
+export type ShiftSource = "geotab" | "app" | "manual";
+export type ShiftEventRow = {
+  event_id: string;
+  company_id: string;
+  user_id: string;
+  event_type: string;
+  occurred_at: string;
+  actor_id: string;
+  payload: Record<string, unknown>;
+  source: ShiftSource;
+};
+
+// A work order: something on a unit that needs doing (a pump down, a failed inspection, a repair request). The
+// phone creates it once; staff change its status on the server, so it is insert-only in the offline store.
+export type WorkOrderSource = "pump_down" | "failed_inspection" | "repair_request" | "other";
+export type WorkOrderStatus = "open" | "awaiting_approval" | "approved" | "denied" | "planned" | "done" | "cancelled";
+export type WorkOrderRow = {
+  work_order_id: string;
+  company_id: string;
+  truck_id: string | null;
+  trailer_id: string | null;
+  subject: string;
+  source: WorkOrderSource;
+  status: WorkOrderStatus;
+  source_ref: string | null;
+  detail: Record<string, unknown>;
+  reported_by: string;
+};
+
 export type CompartmentReadinessRow = Synced & {
   trailer_id: string;
   comp_number: number;
@@ -204,6 +235,8 @@ export type TripTableRows = {
   trip_delivery_tanks: TripDeliveryTankRow;
   trip_compartment_loads: TripCompartmentLoadRow;
   trip_events: TripEventRow;
+  shift_events: ShiftEventRow;
+  work_orders: WorkOrderRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -219,6 +252,8 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   trip_delivery_tanks: ["delivery_tank_id"],
   trip_compartment_loads: ["compartment_load_id"],
   trip_events: ["event_id"],
+  shift_events: ["event_id"],
+  work_orders: ["work_order_id"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -233,11 +268,13 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "trip_delivery_tanks",
   "trip_compartment_loads",
   "trip_events",
+  "shift_events",
+  "work_orders",
   "compartment_readiness",
 ];
 
 // Tables the server only ever inserts into (no update policy).
-export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events"]);
+export const INSERT_ONLY: ReadonlySet<TripTable> = new Set<TripTable>(["trip_events", "shift_events", "work_orders"]);
 
 export function rowKey<T extends TripTable>(table: T, row: TripTableRows[T]): string {
   const r = row as Record<string, unknown>;

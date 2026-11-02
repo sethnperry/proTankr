@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { stateCode } from "@/lib/geo/usStates";
 import { callerId, companyRole, providerFor, trailerNames } from "@/lib/telematics/server";
+import { logServerError } from "@/lib/errors/server";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   // A vehicle that isn't a ProTankr truck can be looked up by its provider id, with the company.
   const rawVehicleId = req.nextUrl.searchParams.get("vehicleId");
   if (!truckId && !(rawVehicleId && req.nextUrl.searchParams.get("companyId"))) return NextResponse.json({ error: "truckId is required." }, { status: 400 });
+  let loggedCompany: string | undefined;
   try {
     const admin = getServiceSupabase();
     let companyId: string | undefined;
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
       companyId = (t as { company_id?: string } | null)?.company_id;
     } else companyId = req.nextUrl.searchParams.get("companyId") ?? undefined;
     if (!companyId) return none();
+    loggedCompany = companyId;
     const r = await companyRole(uid, companyId);
     if (!r.role && !r.superAdmin) return NextResponse.json({ error: "Not in this company." }, { status: 403 });
     let vid: string | undefined;
@@ -114,6 +117,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, shipments, driverName, lastDriver, heldByName, hos });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
+    // A broken link shows up in the Desk error list (once an hour per company, not once per poll).
+    if (loggedCompany) await logServerError({ companyId: loggedCompany, userId: uid, kind: "telematics_link", message: `Geotab reading failed: ${(e as Error).message}`, payload: { truckId } }, { dedupeMinutes: 60 });
     // A provider hiccup is not "no telematics": answer with an error so the app asks again soon instead of
     // giving up (a truck that is connected but briefly unreachable would otherwise never fill the odometer).
     return NextResponse.json({ connected: false, error: "The telematics provider didn't answer." }, { status: 502 });
