@@ -30,6 +30,7 @@ import WorkOrdersModal from "./WorkOrdersModal";
 import ReimbursementsModal from "./ReimbursementsModal";
 import ScaleRecordsModal from "./ScaleRecordsModal";
 import PaperLogsModal from "./PaperLogsModal";
+import DocumentsModal from "./DocumentsModal";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TerminalSetupModal from "./TerminalSetupModal";
@@ -1274,6 +1275,7 @@ export default function AdminPage() {
   const [reimbOpen, setReimbOpen] = useState(false);
   const [scaleRecordsOpen, setScaleRecordsOpen] = useState(false);
   const [paperLogsOpen, setPaperLogsOpen] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -2095,6 +2097,11 @@ export default function AdminPage() {
           </button>
         )}
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setDocumentsOpen(true)}>
+            Documents
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setPaperLogsOpen(true)}>
             Paper logs
           </button>
@@ -2568,6 +2575,7 @@ export default function AdminPage() {
       {myRole === "admin" && <ReimbursementsModal open={reimbOpen} onClose={() => setReimbOpen(false)} companyId={companyId!} />}
       <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
       <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
+      <DocumentsModal open={documentsOpen} onClose={() => setDocumentsOpen(false)} companyId={companyId!} />
       <ConnectedDashFooter />
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />
