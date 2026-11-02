@@ -9,6 +9,9 @@ import React, { useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "@/app/planner/home/dashLook";
 
+/** Every control in a dashboard header's right column is exactly this wide, so Dispatch and Driver match. */
+export const HEADER_CTRL_W = 150;
+
 export function ModeSwitch<M extends string>({ mode, modes, onMode }: {
   mode: M;
   modes: { id: M; label: string }[];
@@ -16,12 +19,12 @@ export function ModeSwitch<M extends string>({ mode, modes, onMode }: {
 }) {
   const L = useDashLook();
   return (
-    <div role="group" aria-label="Dashboard mode" style={{ display: "inline-flex", padding: 2, border: `1px solid ${L.hairline}`, background: "#0f0f10", flexShrink: 0 }}>
+    <div role="group" aria-label="Dashboard mode" style={{ display: "inline-flex", padding: 2, border: `1px solid ${L.hairline}`, background: "#0f0f10", flexShrink: 0, width: HEADER_CTRL_W, boxSizing: "border-box" }}>
       {modes.map((m) => {
         const on = mode === m.id;
         return (
           <button key={m.id} type="button" onClick={() => onMode(m.id)} className="dash-press" aria-pressed={on}
-            style={{ border: "none", cursor: "pointer", padding: "7px 14px", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase",
+            style={{ flex: 1, border: "none", cursor: "pointer", padding: "7px 0", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase",
               background: on ? "#fff" : "transparent", color: on ? "#000" : L.muted, borderRadius: 1 }}>
             {m.label}
           </button>
@@ -52,7 +55,7 @@ export function RegionButton({ r }: { r: RegionFilter }) {
     <>
       <button type="button" onClick={() => setOpen(true)} className="dash-press" aria-label="Choose regions"
         style={{ border: `1px solid ${n ? "#fff" : L.hairline}`, background: "#0f0f10", color: n ? "#fff" : L.muted, cursor: "pointer", padding: "8px 10px", fontSize: 11, fontWeight: 800,
-          letterSpacing: "0.12em", textTransform: "uppercase", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0 }}>
+          letterSpacing: "0.12em", textTransform: "uppercase", width: HEADER_CTRL_W, boxSizing: "border-box", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0 }}>
         {label} ▾
       </button>
       <FullscreenModal open={open} title="Region" onClose={() => setOpen(false)}>

@@ -7,20 +7,30 @@
 import React from "react";
 import { clockHM, type Shift, type ShiftPrompt } from "@/lib/shifts/shiftLogic";
 import { LOOK } from "../../home/dashLook";
+import { HEADER_CTRL_W } from "../dash/DashChrome";
 
 /** Header controls in the same shape as the Dispatch region button and mode switch:
  *  Start/End shift on top, then a two-part readout: when the shift began | how long it has run. */
 export function ShiftControls({ shift, onStart, onEnd }: { shift: Shift | null; onStart: () => void; onEnd: () => void }) {
-  const began = shift ? new Date(shift.startedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase() : "—";
-  const seg: React.CSSProperties = { padding: "7px 12px", fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", borderRadius: 1 };
+  const hm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const began = shift ? hm(new Date(shift.startedAt)) : "--:--";
+  const mins = shift ? Math.max(0, Math.round(shift.hours * 60)) : 0;
+  const elapsed = `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+  const btn: React.CSSProperties = { width: HEADER_CTRL_W, boxSizing: "border-box", cursor: "pointer", padding: "8px 0", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", flexShrink: 0 };
+  const cell = (label: string, value: string, on: boolean): React.ReactNode => (
+    <span style={{ flex: 1, textAlign: "center", padding: "4px 0", borderRadius: 1, background: on ? "#fff" : "transparent", color: on ? "#000" : LOOK.muted }}>
+      <span style={{ display: "block", fontSize: 8, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.75 }}>{label}</span>
+      <span className="dash-num" style={{ display: "block", fontSize: 14, fontWeight: 800, marginTop: 1 }}>{value}</span>
+    </span>
+  );
   return (
     <>
       {shift
-        ? <button type="button" onClick={onEnd} className="dash-press" style={{ border: "1px solid #fff", background: "#0f0f10", color: "#fff", cursor: "pointer", padding: "8px 10px", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>End shift</button>
-        : <button type="button" onClick={onStart} className="dash-press" style={{ border: "none", background: "#fff", color: "#000", cursor: "pointer", padding: "9px 11px", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>Start shift</button>}
-      <div role="group" aria-label="Shift" className="dash-num" style={{ display: "inline-flex", padding: 2, border: `1px solid ${LOOK.hairline}`, background: "#0f0f10", flexShrink: 0 }}>
-        <span style={{ ...seg, background: "#fff", color: "#000" }}>Began {began}</span>
-        <span style={{ ...seg, color: LOOK.muted }}>{shift ? clockHM(shift.hours) : "0:00"}</span>
+        ? <button type="button" onClick={onEnd} className="dash-press" style={{ ...btn, border: "1px solid #fff", background: "#0f0f10", color: "#fff" }}>End shift</button>
+        : <button type="button" onClick={onStart} className="dash-press" style={{ ...btn, border: "none", background: "#fff", color: "#000" }}>Start shift</button>}
+      <div role="group" aria-label="Shift" style={{ display: "flex", padding: 2, border: `1px solid ${LOOK.hairline}`, background: "#0f0f10", flexShrink: 0, width: HEADER_CTRL_W, boxSizing: "border-box" }}>
+        {cell("Began", began, true)}
+        {cell("Time", elapsed, false)}
       </div>
     </>
   );
