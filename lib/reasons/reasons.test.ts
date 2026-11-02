@@ -12,7 +12,8 @@ test("only this kind, only shown, in order", () => {
 test("a company with no shift reasons starts from the built-in eight", () => {
   assert.equal(DEFAULT_SHIFT_REASONS.length, 8);
   assert.equal(reasonsOrDefault([], "shift_explanation").length, 8);
-  assert.equal(reasonsOrDefault([], "callout").length, 0);
+  assert.equal(reasonsOrDefault([], "callout").length, 5, "call-outs start from five built-in reasons too");
+  assert.equal(reasonsOrDefault([r("Mine", "callout")], "callout").length, 1, "a company's own list replaces them");
   assert.equal(reasonsOrDefault([r("Mine", "shift_explanation", { category: "breakdown" })], "shift_explanation").length, 1);
 });
 

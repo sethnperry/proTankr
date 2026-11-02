@@ -102,6 +102,9 @@ import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, u
 import { onBoard, activePickup, plannedDeliveries } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
+import CalloutsModal from "@/app/admin/CalloutsModal";
+import { useActiveCallouts } from "../hooks/useActiveCallouts";
+import { blockText, calloutBlock } from "@/lib/callouts/callout";
 import { ConnectedDashHeader, ConnectedDashFooter, useSharedToolItems } from "../components/dash/ConnectedDash";
 // Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
 // and credentials stay red however long ago they expired; terminal cards
@@ -529,11 +532,16 @@ export default function DispatchPage() {
     });
   }, [tlDriverId, planLocation, termRow, startMs, allLegs, tripHistory.trips, tlSettings, tlTz, fleetHos]);
   // Loads can't overlap: each one starts when the one before it ends, or later.
+  // A driver who called out for the day can't be planned for it until the call-out is corrected.
+  const activeCallouts = useActiveCallouts(companyId || null);
+  const [calloutsOpen, setCalloutsOpen] = useState(false);
+  const calloutHit = useMemo(() => (tlDriverId ? calloutBlock(activeCallouts.rows, tlDriverId, startMs, tlTz) : null), [activeCallouts.rows, tlDriverId, startMs, tlTz]);
   const blockMsg = useMemo(() => {
+    if (calloutHit) return blockText(calloutHit, plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "The driver") + " Open Call-outs below.";
     const last = allLegs[allLegs.length - 1];
     if (!last || startMs >= last.endMs) return null;
     return `Load ${allLegs.length} ends about ${clock(last.endMs)}. Start this one then or later.`;
-  }, [allLegs, startMs]);
+  }, [allLegs, startMs, calloutHit]);
   // The load as planned right now, ready to stack or dispatch.
   const [orderNumber, setOrderNumber] = useState("");
   const [shipper, setShipper] = useState("");
@@ -936,6 +944,7 @@ export default function DispatchPage() {
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       locationsTool(() => setLocsOpen(true)),
       { icon: "terminal" as const, label: "Suppliers", onClick: () => setSuppliersOpen("manage") },
+      { icon: "people" as const, label: "Call-outs", sub: activeCallouts.rows.length ? `${activeCallouts.rows.length} active` : null, subColor: activeCallouts.rows.length ? "#fbbf24" : undefined, onClick: () => setCalloutsOpen(true) },
       ...sharedTools,
     ];
     const driverListEl = (
@@ -1052,6 +1061,7 @@ export default function DispatchPage() {
         header={(controls) => <ConnectedDashHeader current="dispatch" right={controls} />}
         footer={<ConnectedDashFooter />}
       />
+      <CalloutsModal open={calloutsOpen} onClose={() => { setCalloutsOpen(false); void activeCallouts.reload(); }} companyId={companyId || ""} userId={authUserId || null} canEdit />
       <LocationsHub open={locsOpen} onClose={() => setLocsOpen(false)} companyId={companyId || null} userId={authUserId || null} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} />
       <FullscreenModal open={tripsOpen} title="Trips" onClose={() => setTripsOpen(false)} footer={null}>
         {tripsOpen && <TripsBrowser mode="company" userId={authUserId || null} companyId={companyId || null} onOpen={openTrip}

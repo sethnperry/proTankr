@@ -53,6 +53,15 @@ export const DEFAULT_PAPER_LOG_REASONS = [
   "No signal or app outage",
 ];
 
+/** Why a driver calls out, until the company writes its own. */
+export const DEFAULT_CALLOUT_REASONS: { label: string; category: ReasonCategory }[] = [
+  { label: "Sick", category: "other" },
+  { label: "Family emergency", category: "other" },
+  { label: "Personal", category: "other" },
+  { label: "Vehicle or transportation problem", category: "other" },
+  { label: "Weather", category: "traffic_weather" },
+];
+
 export function categoryLabel(code: string | null | undefined): string {
   return SHIFT_CATEGORIES.find((c) => c.code === code)?.label ?? "";
 }
@@ -67,6 +76,7 @@ export function reasonsOrDefault(list: Reason[], kind: ReasonKind): { reason_id:
   const own = activeReasons(list, kind);
   if (own.length) return own.map((r) => ({ reason_id: r.reason_id, label: r.label, category: r.category ?? null }));
   if (kind === "shift_explanation") return DEFAULT_SHIFT_REASONS.map((r, i) => ({ reason_id: `default-${i}`, label: r.label, category: r.category }));
+  if (kind === "callout") return DEFAULT_CALLOUT_REASONS.map((r, i) => ({ reason_id: `default-${i}`, label: r.label, category: r.category }));
   if (kind === "paper_log") return DEFAULT_PAPER_LOG_REASONS.map((label, i) => ({ reason_id: `default-${i}`, label, category: null }));
   return [];
 }

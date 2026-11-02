@@ -247,6 +247,28 @@ export type PerDiemDayRow = Synced & {
   note: string | null;
 };
 
+// A call-out of a shift. The driver (or a dispatcher for them) writes it; status 'withdrawn' takes it back. The
+// server marks which emails went (`notified`), so the phone never writes that column.
+export type CalloutRow = Synced & {
+  callout_id: string;
+  company_id: string;
+  user_id: string;
+  shift_date: string;
+  shift_start_at: string;
+  reason: string;
+  reason_id: string | null;
+  category: string | null;
+  note: string | null;
+  department: string | null;
+  region: string | null;
+  local_area: string | null;
+  status: "active" | "withdrawn";
+  created_by: string;
+  updated_by: string | null;
+  withdrawn_by: string | null;
+  withdrawn_at: string | null;
+};
+
 export type CompartmentReadinessRow = Synced & {
   trailer_id: string;
   comp_number: number;
@@ -270,6 +292,7 @@ export type TripTableRows = {
   work_orders: WorkOrderRow;
   unit_inspections: UnitInspectionRow;
   per_diem_days: PerDiemDayRow;
+  callouts: CalloutRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -289,6 +312,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   work_orders: ["work_order_id"],
   unit_inspections: ["inspection_id"],
   per_diem_days: ["user_id", "day"],
+  callouts: ["callout_id"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -307,6 +331,7 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "work_orders",
   "unit_inspections",
   "per_diem_days",
+  "callouts",
   "compartment_readiness",
 ];
 

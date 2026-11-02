@@ -35,6 +35,8 @@ import LongShiftsModal from "./LongShiftsModal";
 import MaintenanceModal from "./MaintenanceModal";
 import DeadheadModal from "./DeadheadModal";
 import PerDiemModal from "./PerDiemModal";
+import CalloutsModal from "./CalloutsModal";
+import CalloutRoutesModal from "./CalloutRoutesModal";
 import { useLongShifts } from "./useLongShifts";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
@@ -1285,6 +1287,8 @@ export default function AdminPage() {
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [deadheadOpen, setDeadheadOpen] = useState(false);
   const [perDiemAdminOpen, setPerDiemAdminOpen] = useState(false);
+  const [calloutsOpen, setCalloutsOpen] = useState(false);
+  const [calloutRoutesOpen, setCalloutRoutesOpen] = useState(false);
   const longShifts = useLongShifts(companyId ?? null, myRole === "admin" || myRole === "lead" || myRole === "dispatch");
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
@@ -2134,6 +2138,16 @@ export default function AdminPage() {
             Paper logs
           </button>
         )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setCalloutsOpen(true)}>
+            Call-outs
+          </button>
+        )}
+        {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setCalloutRoutesOpen(true)}>
+            Call-out routing
+          </button>
+        )}
         {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setPerDiemAdminOpen(true)}>
             Per diem
@@ -2613,6 +2627,8 @@ export default function AdminPage() {
       {myRole === "admin" && <ReimbursementsModal open={reimbOpen} onClose={() => setReimbOpen(false)} companyId={companyId!} />}
       <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
       <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
+      <CalloutsModal open={calloutsOpen} onClose={() => setCalloutsOpen(false)} companyId={companyId!} userId={currentUserId ?? null} canEdit={myRole === "admin" || myRole === "dispatch" || myRole === "lead"} />
+      {myRole === "admin" && <CalloutRoutesModal open={calloutRoutesOpen} onClose={() => setCalloutRoutesOpen(false)} companyId={companyId!} />}
       {myRole === "admin" && <PerDiemModal open={perDiemAdminOpen} onClose={() => setPerDiemAdminOpen(false)} companyId={companyId!} />}
       {myRole === "admin" && <DeadheadModal open={deadheadOpen} onClose={() => setDeadheadOpen(false)} companyId={companyId!} />}
       <MaintenanceModal open={maintenanceOpen} onClose={() => setMaintenanceOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
