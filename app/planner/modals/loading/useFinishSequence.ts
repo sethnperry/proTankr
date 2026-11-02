@@ -187,14 +187,15 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
     const rangeMsg = apiRangeProblem(apiN, prod?.api_min, prod?.api_max);
     if (rangeMsg) { setSeqError(rangeMsg); return; }
 
-    // Sanity check against what these compartments can hold (a typo, not a
-    // real BOL, is the only way past it). Editing a logged load skips it:
+    // Sanity check against what these compartments can hold. The cap is a safety
+    // figure, and a real BOL can run a little over it, so only a gross well past the
+    // cap (10%) is treated as a typo. Editing a logged load skips it:
     // there's no live plan cap to bound against.
     if (!editingReport && persistedCapForComp) {
       const caps = group.comps.map((c) => persistedCapForComp(c));
       if (caps.every((c) => c != null)) {
         const hold = caps.reduce((t, c) => t + (c as number), 0);
-        if (gallonsN > hold + 1) {
+        if (gallonsN > hold * 1.1 + 1) {
           setSeqError(
             `More than ${group.comps.length > 1 ? "these compartments hold" : "this compartment holds"} (${Math.round(hold).toLocaleString()} gal).`,
           );
