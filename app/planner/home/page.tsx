@@ -144,6 +144,9 @@ import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanatio
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
+import { TerminalWorkSheet } from "../components/terminalwork/TerminalWorkSheet";
+import { useTerminalWork } from "../hooks/useTerminalWork";
+import { minutesOf as workMinutes, clock as workClock } from "@/lib/terminalwork/terminalWork";
 import { CalloutSheet } from "../components/callouts/CalloutSheet";
 import { useMyCallouts } from "../hooks/useMyCallouts";
 import { PerDiemSheet } from "../components/perdiem/PerDiemSheet";
@@ -240,6 +243,7 @@ export default function HomePage() {
   const [inspectOpen, setInspectOpen] = useState(false);
   const [perDiemOpen, setPerDiemOpen] = useState(false);
   const [calloutOpen, setCalloutOpen] = useState(false);
+  const [termWorkOpen, setTermWorkOpen] = useState(false);
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -266,6 +270,7 @@ export default function HomePage() {
     if (r === "waiting") return `Saved. ${unitText} will go to Deadline and the email will send when you have signal.`;
     return `${unitText} is Deadline. No approver email is set for your company, so this is waiting in the work order list.`;
   };
+  const termWork = useTerminalWork({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: true });
   const callouts = useMyCallouts({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: calloutOpen });
   const perDiem = usePerDiem({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: perDiemOpen });
   // Inspect a unit: written through the offline store; a failed item plans a work order.
@@ -2496,6 +2501,11 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <TerminalWorkSheet open={termWorkOpen} onClose={() => setTermWorkOpen(false)} current={termWork.current} defaults={termWork.defaults}
+        defaultTerminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
+        terminals={(terminals.terminals ?? []).map((t: any) => ({ value: String(t.terminal_id), label: [t.terminal_name, t.city].filter(Boolean).join(", ") }))}
+        products={products.map((x: any) => ({ value: String(x.product_id), label: String(x.display_name || x.product_name || "Product") }))}
+        onStart={termWork.start} onStop={termWork.stop} />
       <CalloutSheet open={calloutOpen} onClose={() => setCalloutOpen(false)} reasons={reasonsOrDefault(reasons as any, "callout")} divisions={callouts.divisions} defaultDivision={callouts.profile.division} tz={callouts.tz} mine={callouts.mine}
         onWithdraw={callouts.withdraw}
         onCreate={async (v) => {
@@ -2535,6 +2545,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
           { icon: "people", label: "Call out", sub: "Can't make a shift", onClick: () => setCalloutOpen(true) },
           { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
           { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },

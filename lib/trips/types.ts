@@ -269,6 +269,22 @@ export type CalloutRow = Synced & {
   withdrawn_at: string | null;
 };
 
+// Time a driver spends on terminal or transload work, with a timer: ended_at is null while it runs.
+export type TerminalWorkRow = Synced & {
+  work_id: string;
+  company_id: string;
+  user_id: string;
+  activity: "rail_transload" | "vessel_transload" | "marshaling" | "truck_to_tank" | "loading_for_others" | "yard_work" | "training";
+  terminal_id: string | null;
+  terminal_name: string | null;
+  product_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  note: string | null;
+  billable: boolean;
+  source: "geotab" | "app" | "manual";
+};
+
 export type CompartmentReadinessRow = Synced & {
   trailer_id: string;
   comp_number: number;
@@ -293,6 +309,7 @@ export type TripTableRows = {
   unit_inspections: UnitInspectionRow;
   per_diem_days: PerDiemDayRow;
   callouts: CalloutRow;
+  terminal_work: TerminalWorkRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -313,6 +330,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   unit_inspections: ["inspection_id"],
   per_diem_days: ["user_id", "day"],
   callouts: ["callout_id"],
+  terminal_work: ["work_id"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -332,6 +350,7 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "unit_inspections",
   "per_diem_days",
   "callouts",
+  "terminal_work",
   "compartment_readiness",
 ];
 
