@@ -79,3 +79,13 @@ test("card: Finished Fueling goes straight to details with the end time", async 
   assert.equal(p.odometer, 311000);
   assert.equal(p.products, "diesel_def");
 });
+
+test("a pump down builds a work order from the stop and the attempt", async () => {
+  const { recordPumpDown } = await import("./fuelFlow.ts");
+  const { pumpDownWorkOrder } = await import("../workorders/pumpDown.ts");
+  const p = recordPumpDown(base(), { payKind: "personal_card", methodId: null, label: "My card", pumpNumber: "7", issue: "Card declined", storeName: "Love's", storeNumber: "412", city: "Ocala", state: "fl" }, "2026-10-15T10:02:00Z");
+  const wo = pumpDownWorkOrder(p, p.attempts![p.attempts!.length - 1]);
+  assert.equal(wo.subject, "Pump 7 down · Love's #412 · Ocala, FL");
+  assert.equal(wo.sourceRef, p.id);
+  assert.equal((wo.detail as any).issue, "Card declined");
+});

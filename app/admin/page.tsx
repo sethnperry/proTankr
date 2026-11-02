@@ -26,6 +26,7 @@ import FleetCardsModal from "./FleetCardsModal";
 import PayrollReportModal from "./PayrollReportModal";
 import FleetUtilizationModal from "./FleetUtilizationModal";
 import TripSettingsModal from "./TripSettingsModal";
+import WorkOrdersModal from "./WorkOrdersModal";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TerminalSetupModal from "./TerminalSetupModal";
@@ -1266,6 +1267,7 @@ export default function AdminPage() {
   const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [terminalsMenuOpen, setTerminalsMenuOpen] = useState(false);
+  const [workOrdersOpen, setWorkOrdersOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -2076,6 +2078,11 @@ export default function AdminPage() {
             Trip Settings
           </button>
         )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setWorkOrdersOpen(true)}>
+            Work orders
+          </button>
+        )}
         {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setFuelSettingsOpen(true)}>
             Fuel
@@ -2536,6 +2543,7 @@ export default function AdminPage() {
           companyId={companyId}
         />
       )}
+      <WorkOrdersModal open={workOrdersOpen} onClose={() => setWorkOrdersOpen(false)} companyId={companyId!} canEdit={myRole === "admin" || myRole === "lead" || myRole === "dispatch"} />
       <ConnectedDashFooter />
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />

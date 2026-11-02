@@ -33,6 +33,9 @@ import {
   KIND_LABEL, PUMP_ISSUES, fmtStamp, fmtTime, RECEIPT_BUCKET, isPersonal, isQuickKind, receiptPath,
   type FuelMethod, type FuelProducts, type FuelSettings, type PayKind,
 } from "@/lib/fuel/types";
+import { createWorkOrder } from "@/lib/workorders/workOrders";
+import { pumpDownWorkOrder } from "@/lib/workorders/pumpDown";
+import { getTripStore } from "@/lib/trips/useTripStore";
 import { currentCity } from "@/lib/trips/startPlace";
 import { resolveStopPlace } from "@/lib/fuel/stopPlace";
 import { COMPANY_CARD, PERSONAL_CARD, maskCard, maskLast4, type VaultCard } from "@/lib/vault/cards";
@@ -391,10 +394,16 @@ export default function FuelSheet({
     if (!issue) { setErr("Pick what's wrong."); return; }
     if (issue === "Other" && !issueNote.trim()) { setErr("Say what's wrong."); return; }
     if (!loc.storeName.trim() && !loc.city.trim()) { setErr("Pick the store, or tap Add store."); return; }
-    await stop.save(recordPumpDown(p, {
+    const downed = recordPumpDown(p, {
       payKind: choice.payKind, methodId: choice.method?.id ?? null, label: choice.label, pumpNumber: pump,
       issue: issue === "Other" ? issueNote : issue, storeName: loc.storeName, storeNumber: loc.storeNumber, city: loc.city, state: loc.state, pos: storePos(),
-    }, new Date().toISOString()));
+    }, new Date().toISOString());
+    await stop.save(downed);
+    // A down pump becomes a work order, whatever the payment method. Offline-safe: the trip store sends it later.
+    try {
+      const wo = pumpDownWorkOrder(downed, downed.attempts![downed.attempts!.length - 1]);
+      createWorkOrder(getTripStore(userId), { companyId: p.company_id, reportedBy: userId, subject: wo.subject, source: "pump_down", truckId: wo.truckId, sourceRef: wo.sourceRef, detail: wo.detail });
+    } catch { /* the pump-down itself is saved; a missing work order must not block the driver */ }
     closeChoice();
   });
 
