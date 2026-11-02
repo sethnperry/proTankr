@@ -34,6 +34,7 @@ import DocumentsModal from "./DocumentsModal";
 import LongShiftsModal from "./LongShiftsModal";
 import MaintenanceModal from "./MaintenanceModal";
 import DeadheadModal from "./DeadheadModal";
+import PerDiemModal from "./PerDiemModal";
 import { useLongShifts } from "./useLongShifts";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
@@ -1283,6 +1284,7 @@ export default function AdminPage() {
   const [longShiftsOpen, setLongShiftsOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [deadheadOpen, setDeadheadOpen] = useState(false);
+  const [perDiemAdminOpen, setPerDiemAdminOpen] = useState(false);
   const longShifts = useLongShifts(companyId ?? null, myRole === "admin" || myRole === "lead" || myRole === "dispatch");
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
@@ -2133,6 +2135,11 @@ export default function AdminPage() {
           </button>
         )}
         {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setPerDiemAdminOpen(true)}>
+            Per diem
+          </button>
+        )}
+        {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setDeadheadOpen(true)}>
             Billable time
           </button>
@@ -2606,6 +2613,7 @@ export default function AdminPage() {
       {myRole === "admin" && <ReimbursementsModal open={reimbOpen} onClose={() => setReimbOpen(false)} companyId={companyId!} />}
       <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
       <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
+      {myRole === "admin" && <PerDiemModal open={perDiemAdminOpen} onClose={() => setPerDiemAdminOpen(false)} companyId={companyId!} />}
       {myRole === "admin" && <DeadheadModal open={deadheadOpen} onClose={() => setDeadheadOpen(false)} companyId={companyId!} />}
       <MaintenanceModal open={maintenanceOpen} onClose={() => setMaintenanceOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
       <LongShiftsModal open={longShiftsOpen} onClose={() => setLongShiftsOpen(false)} companyId={companyId!} rows={longShifts.rows} maxHours={longShifts.maxHours} loading={longShifts.loading} error={longShifts.error} />

@@ -234,6 +234,19 @@ export type UnitInspectionRow = {
   review_status: "none" | "pending";
 };
 
+// A day a driver claims per diem (away from home base). Keyed by driver and day, so claiming the same day twice is
+// one row; status 'withdrawn' takes it back. Only the driver writes their own days.
+export type PerDiemDayRow = Synced & {
+  user_id: string;
+  day: string; // YYYY-MM-DD, the driver's local day
+  company_id: string;
+  city: string;
+  state: string;
+  source: "geotab" | "app" | "manual";
+  status: "claimed" | "withdrawn";
+  note: string | null;
+};
+
 export type CompartmentReadinessRow = Synced & {
   trailer_id: string;
   comp_number: number;
@@ -256,6 +269,7 @@ export type TripTableRows = {
   shift_events: ShiftEventRow;
   work_orders: WorkOrderRow;
   unit_inspections: UnitInspectionRow;
+  per_diem_days: PerDiemDayRow;
   compartment_readiness: CompartmentReadinessRow;
 };
 
@@ -274,6 +288,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   shift_events: ["event_id"],
   work_orders: ["work_order_id"],
   unit_inspections: ["inspection_id"],
+  per_diem_days: ["user_id", "day"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
 
@@ -291,6 +306,7 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "shift_events",
   "work_orders",
   "unit_inspections",
+  "per_diem_days",
   "compartment_readiness",
 ];
 
