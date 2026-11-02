@@ -16,6 +16,8 @@
 import React, { useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { DashStyles, SectionLabel, useDashLook } from "../home/dashLook";
+import { ModeSwitch, RegionButton, type RegionFilter } from "../components/dash/DashChrome";
+export type { RegionFilter };
 import { GaugePanel, ToolPanel, type GaugeCell, type ToolItem } from "../home/DashboardChrome";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import type { LiveCounts, ActiveReport } from "@/lib/dispatch/conflicts";
@@ -64,73 +66,6 @@ export function reportText(r: ActiveReport, product: (id: string | null) => Boar
     case "terminal_issue": return "Terminal issue";
     case "rack_down": return "Rack down";
   }
-}
-
-function ModeSwitch({ mode, onMode }: { mode: DispatchMode; onMode: (m: DispatchMode) => void }) {
-  const L = useDashLook();
-  const opt = (m: DispatchMode, label: string) => {
-    const on = mode === m;
-    return (
-      <button type="button" onClick={() => onMode(m)} className="dash-press" aria-pressed={on}
-        style={{ border: "none", cursor: "pointer", padding: "7px 14px", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase",
-          background: on ? "#fff" : "transparent", color: on ? "#000" : L.muted, borderRadius: 1 }}>
-        {label}
-      </button>
-    );
-  };
-  return (
-    <div role="group" aria-label="Dashboard mode" style={{ display: "inline-flex", padding: 2, border: `1px solid ${L.hairline}`, background: "#0f0f10", flexShrink: 0 }}>
-      {opt("plan", "Plan")}
-      {opt("live", "Live")}
-    </div>
-  );
-}
-
-export type RegionFilter = {
-  options: string[];            // every region seen (drivers and units)
-  selected: Set<string>;        // empty = all regions
-  onChange: (next: Set<string>) => void;
-};
-
-function RegionButton({ r }: { r: RegionFilter }) {
-  const L = useDashLook();
-  const [open, setOpen] = useState(false);
-  const n = r.selected.size;
-  const label = n === 0 ? "All regions" : n === 1 ? [...r.selected][0] : `${n} regions`;
-  const toggle = (name: string) => {
-    const next = new Set(r.selected);
-    if (next.has(name)) next.delete(name); else next.add(name);
-    r.onChange(next);
-  };
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="dash-press" aria-label="Choose regions"
-        style={{ border: `1px solid ${n ? "#fff" : L.hairline}`, background: "#0f0f10", color: n ? "#fff" : L.muted, cursor: "pointer", padding: "8px 10px", fontSize: 11, fontWeight: 800,
-          letterSpacing: "0.12em", textTransform: "uppercase", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0 }}>
-        {label} ▾
-      </button>
-      <FullscreenModal open={open} title="Region" onClose={() => setOpen(false)}>
-        <div style={{ fontSize: 13, color: L.muted, marginBottom: 10 }}>
-          Show only drivers, equipment and loads in the regions you pick. None picked shows everything.
-        </div>
-        <button type="button" onClick={() => r.onChange(new Set())} className="dash-press"
-          style={{ ...L.secondary, display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "12px 14px", marginBottom: 8, color: "#fff", cursor: "pointer", textAlign: "left", fontWeight: 800, fontSize: 14 }}>
-          <span aria-hidden style={{ width: 16, height: 16, border: `1px solid ${L.muted}`, background: n === 0 ? "#fff" : "transparent", flexShrink: 0 }} />
-          All regions
-        </button>
-        {r.options.map((name) => {
-          const on = r.selected.has(name);
-          return (
-            <button key={name} type="button" onClick={() => toggle(name)} className="dash-press" aria-pressed={on}
-              style={{ ...L.secondary, display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "12px 14px", marginBottom: 8, color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14 }}>
-              <span aria-hidden style={{ width: 16, height: 16, border: `1px solid ${L.muted}`, background: on ? "#fff" : "transparent", flexShrink: 0 }} />
-              {name}
-            </button>
-          );
-        })}
-      </FullscreenModal>
-    </>
-  );
 }
 
 const nameInitials = (n?: string | null) => (n ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -325,6 +260,9 @@ export function DispatchDashboardView(props: {
   dispatchedCount: number;
   cancelledCount: number;
   regions: RegionFilter;
+  /** The shared header, given the mode switch and region filter to place on its right. */
+  header?: (controls: React.ReactNode) => React.ReactNode;
+  footer?: React.ReactNode;
   dispatchedBoard?: React.ReactNode; // loads sent to drivers, not begun yet
   drivers?: React.ReactNode;  // driver picker (side column); omitted when the planner holds it
   tools: ToolItem[];
@@ -388,14 +326,21 @@ export function DispatchDashboardView(props: {
   return (
     <div className="dash-wrap" style={{ paddingTop: 4, paddingBottom: 24 }}>
       <DashStyles />
-      <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {p.companyName ?? "Fleet"}
-      </div>
-      <div style={{ ...L.title, fontSize: 11, color: L.muted, marginTop: 2 }}>Dispatch Dashboard</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 12 }}>
-        <RegionButton r={p.regions} />
-        <ModeSwitch mode={p.mode} onMode={p.onMode} />
-      </div>
+      {(() => {
+        const controls = (
+          <>
+            <RegionButton r={p.regions} />
+            <ModeSwitch mode={p.mode} modes={[{ id: "plan", label: "Plan" }, { id: "live", label: "Live" }]} onMode={p.onMode} />
+          </>
+        );
+        return p.header ? p.header(controls) : (
+          <>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.companyName ?? "Fleet"}</div>
+            <div style={{ ...L.title, fontSize: 11, color: L.muted, marginTop: 2 }}>Dispatch Dashboard</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 12 }}>{controls}</div>
+          </>
+        );
+      })()}
 
       <GaugePanel cells={cells} equal />
       {live && <GaugePanel cells={cells2} equal top={6} />}
@@ -422,6 +367,7 @@ export function DispatchDashboardView(props: {
       </div>
       <SectionLabel>Tools</SectionLabel>
       <ToolPanel items={p.tools} />
+      {p.footer}
       <FullscreenModal open={hosOpen} title={`Low on hours (${p.hosAlerts.length})`} onClose={() => setHosOpen(false)}>
         {p.hosAlerts.length === 0 ? (
           <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>No driver on a load has under 2 hours left on a clock.</div>

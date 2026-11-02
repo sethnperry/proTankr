@@ -28,3 +28,26 @@ test("each role lands on its own dashboard", () => {
   assert.equal(defaultLandingPath("admin", false, true), "/planner/home"); // solo driver
   assert.equal(defaultLandingPath("admin", true), null); // super admin is never redirected
 });
+
+import { reachableDashboards, dashboardForPath, homeDashboardHref } from "./dashboards.ts";
+
+test("each role reaches its own set of dashboards", () => {
+  const ids = (r: Parameters<typeof reachableDashboards>[0], sa: boolean, solo: boolean) => reachableDashboards(r, sa, solo).map((d) => d.id);
+  assert.deepEqual(ids("driver", false, false), ["driver"]);
+  assert.deepEqual(ids("lead", false, false), ["driver", "company"], "leads keep the Company Dashboard like the old menu");
+  assert.deepEqual(ids("admin", false, true), ["driver"], "solo driver");
+  assert.deepEqual(ids("dispatch", false, false), ["dispatch", "company"]);
+  assert.deepEqual(ids("admin", false, false), ["dispatch", "company"]);
+  assert.deepEqual(ids("admin", true, false), ["driver", "dispatch", "company", "protankr"]);
+});
+
+test("dashboard routes are recognised and the back row has somewhere to go", () => {
+  assert.equal(dashboardForPath("/planner/home"), "driver");
+  assert.equal(dashboardForPath("/planner/dispatch"), "dispatch");
+  assert.equal(dashboardForPath("/admin"), "company");
+  assert.equal(dashboardForPath("/superadmin"), "protankr");
+  assert.equal(dashboardForPath("/planner/reports"), null);
+  assert.equal(homeDashboardHref("driver", false, false), "/planner/home");
+  assert.equal(homeDashboardHref("dispatch", false, false), "/planner/dispatch");
+  assert.equal(homeDashboardHref(null, false, false), "/planner/home");
+});

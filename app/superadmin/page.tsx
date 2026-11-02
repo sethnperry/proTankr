@@ -14,7 +14,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import NavMenu from "@/lib/ui/NavMenu";
+import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
+import { DashStyles } from "@/app/planner/home/dashLook";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { TRAINING_CAMPAIGN_KEY, readCampaignEnabled } from "@/lib/platformSettings";
@@ -243,7 +244,8 @@ export default function ProTankrDashPage() {
   if (!authorized) {
     return (
       <div style={base}><div style={shell}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}><NavMenu /></div>
+        <DashStyles />
+        <div style={{ marginBottom: 20 }}><ConnectedDashHeader current="protankr" line="Not authorized" /></div>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Not authorized</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 16 }}>This tool is restricted to ProTankr super admins.</div>
         <button type="button" onClick={() => router.push("/planner")} style={ghostBtn}>Back to Planner</button>
@@ -257,10 +259,8 @@ export default function ProTankrDashPage() {
   return (
     <div style={base}><div style={shell}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-        <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.02 }}>ProTankr Dashboard</div>
-        <NavMenu />
-      </div>
+      <DashStyles />
+      <div style={{ marginBottom: 16 }}><ConnectedDashHeader current="protankr" line="All companies" /></div>
 
       {error && <div style={{ ...card, background: "rgba(180,40,40,0.16)", borderColor: "rgba(180,40,40,0.32)", fontSize: 13 }}>{error}</div>}
 
@@ -428,6 +428,8 @@ export default function ProTankrDashPage() {
           <div>• Terminal catalog / data-quality tools</div>
         </div>
       </div>
+      <div style={{ marginTop: 20 }}><SharedToolsPanel /></div>
+      <ConnectedDashFooter />
     </div></div>
   );
 }

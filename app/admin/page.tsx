@@ -11,7 +11,9 @@ import ComboEditModal from "@/lib/ui/driver/ComboEditModal";
 import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/driver/EquipmentDetails";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
-import NavMenu from "@/lib/ui/NavMenu";
+import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { DashStyles } from "@/app/planner/home/dashLook";
 
 import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "@/lib/ui/driver/tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "@/lib/ui/driver/primitives";
@@ -1263,6 +1265,7 @@ export default function AdminPage() {
   const [targetWeightPolicyOpen, setTargetWeightPolicyOpen] = useState(false);
   const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [terminalsMenuOpen, setTerminalsMenuOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -1842,9 +1845,9 @@ export default function AdminPage() {
 
   return (
     <div style={css.page} className="admin-page-root">
-      <div className="admin-header-row" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <NavMenu anchor="left" onOpenSettings={() => setSettingsOpen(true)} />
-        <div><h1 style={css.heading}>{companyName}</h1><p style={css.subheading}>Company Dashboard</p></div>
+      <DashStyles />
+      <div className="admin-header-row" style={{ marginBottom: 20 }}>
+        <ConnectedDashHeader current="company" line={companyName} />
       </div>
 
       {/* Dashboard -- at-a-glance stats, same simple tile pattern as
@@ -2053,14 +2056,9 @@ export default function AdminPage() {
             Equipment
           </button>
         )}
-        {(myRole === "admin" || myRole === "lead") && (
-          <button type="button" className="admin-header-tile" onClick={() => setTerminalsOpen(true)}>
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setTerminalsMenuOpen(true)}>
             Terminals
-          </button>
-        )}
-        {!isSolo && (myRole === "admin" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setFleetCardsOpen(true)}>
-            Fleet Cards
           </button>
         )}
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
@@ -2076,11 +2074,6 @@ export default function AdminPage() {
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setTripSettingsOpen(true)}>
             Trip Settings
-          </button>
-        )}
-        {(myRole === "admin" || myRole === "dispatch") && (
-          <button type="button" className="admin-header-tile" onClick={() => setTerminalSetupOpen(true)}>
-            Terminal Setup
           </button>
         )}
         {myRole === "admin" && (
@@ -2104,7 +2097,7 @@ export default function AdminPage() {
             its own permanent grid slot. */}
         {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setReportsMenuOpen(v => !v)}>
-            Reports
+            Period &amp; Target
           </button>
         )}
         {/* Label matches the merged SettingsModal's own title logic exactly
@@ -2116,6 +2109,23 @@ export default function AdminPage() {
           </button>
         )}
       </div>
+
+      <div style={{ marginBottom: 20 }}><SharedToolsPanel /></div>
+
+      <FullscreenModal open={terminalsMenuOpen} title="Terminals" onClose={() => setTerminalsMenuOpen(false)} footer={null}>
+        {([
+          (myRole === "admin" || myRole === "lead") && { label: "Terminals", sub: "Add and edit terminals", go: () => setTerminalsOpen(true) },
+          !isSolo && (myRole === "admin" || myRole === "dispatch") && { label: "Fleet Cards", sub: "Who is carded where", go: () => setFleetCardsOpen(true) },
+          (myRole === "admin" || myRole === "dispatch") && { label: "Terminal Setup", sub: "Steps and requirements", go: () => setTerminalSetupOpen(true) },
+        ].filter(Boolean) as { label: string; sub: string; go: () => void }[]).map((r) => (
+          <button key={r.label} type="button" className="admin-header-tile"
+            style={{ width: "100%", aspectRatio: "auto", textAlign: "left", padding: "14px", marginBottom: 8, display: "block" }}
+            onClick={() => { setTerminalsMenuOpen(false); r.go(); }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.label} ›</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{r.sub}</div>
+          </button>
+        ))}
+      </FullscreenModal>
 
       {myRole === "admin" && reportsMenuOpen && (
         <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 28 }}>
@@ -2526,6 +2536,7 @@ export default function AdminPage() {
           companyId={companyId}
         />
       )}
+      <ConnectedDashFooter />
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />
       <FleetUtilizationModal open={fleetUtilOpen} onClose={() => setFleetUtilOpen(false)} companyId={companyId!} />

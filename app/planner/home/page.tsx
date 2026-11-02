@@ -154,7 +154,7 @@ import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/a
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
-import { WalletHub, walletTool } from "../components/wallet/WalletHub";
+import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "../components/dash/ConnectedDash";
 import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
 import { SiteBoard } from "../dispatch/SiteBoard";
 import { CarrierStrip, CompsStrip, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard, initialsOf, runLabel } from "../components/trip/DashboardCards";
@@ -1554,7 +1554,6 @@ export default function HomePage() {
   const trailerAlerts = useUnitAlerts("trailer", trailerId, companyId);
   const [unitAlertsOpen, setUnitAlertsOpen] = useState<"truck" | "trailer" | null>(null);
   useEffect(() => { setTruckSheetWatch(unitAlertsOpen === "truck"); }, [unitAlertsOpen]);
-  const [walletOpen, setWalletOpen] = useState(false);
   const [expSheetOpen, setExpSheetOpen] = useState(false);
   const [loadsSheetOpen, setLoadsSheetOpen] = useState(false);
   // Everyone in the company with the SELECTED store on their trip: delivering there, loaded and on the way, or
@@ -1773,15 +1772,8 @@ export default function HomePage() {
         ["--dash-card-radius" as any]: `${L.secondary.borderRadius}px`,
       }}
     >
-      {/* Title: small label, the truck/trailer number under it in gray. */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={L.title}>Driver Dashboard</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 2 }}>
-          <div className="dash-num" style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 700, color: LOOK.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {equipmentLabel}
-          </div>
-        </div>
-      </div>
+      {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
+      <ConnectedDashHeader current="driver" line={equipmentLabel} />
 
       <ShiftBar shift={shift.current} prompt={shift.prompt} onStart={shift.start} onEnd={shift.end} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
@@ -2285,7 +2277,6 @@ export default function HomePage() {
           there, with a switch button. Opened from the Terminal tool and the
           To Rack gauge. */}
 
-      <WalletHub open={walletOpen} onClose={() => setWalletOpen(false)} />
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
       <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onClose={() => setLoadsSheetOpen(false)}
         onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); beginDispatchedLoad(id); }} />
@@ -2441,12 +2432,11 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
-          walletTool(() => setWalletOpen(true)),
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
-          { icon: "chart", label: "Reports", sub: "Loads & history", onClick: () => nav.go("reports", "/planner/reports"), busy: nav.is("reports") },
         ];
-        return <ToolPanel items={tools} />;
+        return <SharedToolsPanel extra={tools} />;
       })()}
+      <ConnectedDashFooter />
       </div>
       </div>
 

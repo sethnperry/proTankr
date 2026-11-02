@@ -29,6 +29,7 @@ import TerminalOutageDetailModal from "../../modals/TerminalOutageDetailModal";
 import EditTerminalModal from "../../modals/EditTerminalModal";
 import { SuppliersModal } from "../../dispatch/SuppliersModal";
 import FleetCardsModal from "@/app/admin/FleetCardsModal";
+import { WalletTerminalCards } from "../wallet/WalletTerminalCards";
 import { openAccessSteps } from "../access/useAccessSteps";
 import { accessStateFor, DARK_EXP_COLOR } from "../../cards/cardTheme";
 import { addDaysISO_, formatMDY } from "../../utils/dates";
@@ -120,6 +121,7 @@ function TerminalHubBody() {
   };
 
   const staff = shell.isSuperAdmin || shell.role === "admin" || shell.role === "dispatch" || shell.role === "lead";
+  const [walletOpen, setWalletOpen] = useState(false);
   const manager = shell.isSuperAdmin || shell.role === "admin" || shell.role === "dispatch";
 
   const [studOpen, setStudOpen] = useState(false);
@@ -251,6 +253,7 @@ function TerminalHubBody() {
             <div style={{ ...PANEL, marginTop: 12 }}>
               <Row label="Gauging" value={gaugeText} onClick={() => setGaugeOpen(true)} />
               {companyId && <Row label={`Suppliers · ${name}`} onClick={() => setSuppliersOpen(true)} />}
+              {(!manager || shell.isSolo) && <Row label="My terminal cards" onClick={() => setWalletOpen(true)} />}
             </div>
             <button type="button" className="dash-press" onClick={searchCities} style={{ width: "100%", marginTop: 12, padding: "15px 0", fontSize: 15, fontWeight: 800, background: "#050505", color: "#fff", border: `1px solid ${HAIR}`, cursor: "pointer" }}>Search Terminals</button>
 
@@ -294,6 +297,7 @@ function TerminalHubBody() {
           <TerminalCardEdit open={cardEditOpen} terminalId={tid} terminalName={name} onClose={() => setCardEditOpen(false)} />
           {gaugeOpen && <GaugingAskSheet terminalId={tid} terminalName={name} initial={{ cutoff: t?.gauging_cutoff ?? null, minutes: t?.gauging_minutes ?? null }} onClose={() => setGaugeOpen(false)} />}
           {racksOpen && <EditTerminalModal open onClose={() => setRacksOpen(false)} terminalId={tid} terminalName={name} onChanged={() => { void status.reload(); void shell.terminals.loadMyTerminals(); }} />}
+          <WalletTerminalCards open={walletOpen} onClose={() => setWalletOpen(false)} />
           {cardsOpen && companyId && <FleetCardsModal open onClose={() => setCardsOpen(false)} companyId={companyId} initialTerminalId={tid} />}
         </>
       )}

@@ -102,6 +102,7 @@ import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, u
 import { onBoard, activePickup, plannedDeliveries } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
+import { ConnectedDashHeader, ConnectedDashFooter, useSharedToolItems } from "../components/dash/ConnectedDash";
 // Expiration colors use the app-wide rule (lib/expiry.ts). Permits, badges
 // and credentials stay red however long ago they expired; terminal cards
 // time out to "no access" 30 days after expiring.
@@ -192,6 +193,7 @@ export default function DispatchPage() {
   const shell = useCalculatorShell();
   const router = useRouter();
   const nav = usePending();
+  const sharedTools = useSharedToolItems();
   const { selectedDriverId, setSelectedDriverId, companyId, effectiveUserId, authUserId } = shell;
   const canUseAppAs = shell.role === "admin" || shell.isSuperAdmin;
 
@@ -934,10 +936,7 @@ export default function DispatchPage() {
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       locationsTool(() => setLocsOpen(true)),
       { icon: "terminal" as const, label: "Suppliers", onClick: () => setSuppliersOpen("manage") },
-      { icon: "chart", label: "Reports", busy: nav.is("reports"), onClick: () => nav.go("reports", "/planner/reports") },
-      ...(shell.role === "admin" || shell.isSuperAdmin
-        ? [{ icon: "terminal" as const, label: "Company", busy: nav.is("company"), onClick: () => nav.go("company", "/admin") }]
-        : []),
+      ...sharedTools,
     ];
     const driverListEl = (
       <div id="dispatch-drivers"><DriverList result={ranked} showNotCarded={showNotCarded && !!planTerminalId}
@@ -1050,6 +1049,8 @@ export default function DispatchPage() {
         regions={{ options: regionOptions, selected: regionSel, onChange: changeRegions }}
         drivers={mode === "plan" ? undefined : driverListEl}
         tools={dashTools}
+        header={(controls) => <ConnectedDashHeader current="dispatch" right={controls} />}
+        footer={<ConnectedDashFooter />}
       />
       <LocationsHub open={locsOpen} onClose={() => setLocsOpen(false)} companyId={companyId || null} userId={authUserId || null} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} />
       <FullscreenModal open={tripsOpen} title="Trips" onClose={() => setTripsOpen(false)} footer={null}>

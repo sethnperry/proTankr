@@ -22,9 +22,9 @@ import PlannerHost from "./PlannerHost";
 import { AccessStepsHost } from "./components/access/AccessStepsHost";
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import NavMenu from "@/lib/ui/NavMenu";
+import { BackToDashboard } from "./components/dash/BackToDashboard";
+import { dashboardForPath } from "@/lib/ui/driver/dashboards";
 import EquipmentModal from "./modals/EquipmentModal";
-import SettingsModal from "@/lib/ui/driver/SettingsModal";
 import LocationModal from "./modals/LocationModal";
 import MyTerminalsModal from "./modals/MyTerminalsModal";
 import { TerminalHub } from "./components/terminal/TerminalHub";
@@ -45,8 +45,7 @@ import { useTripStore } from "@/lib/trips/useTripStore";
 // ticker) that Header can't reach from inside its own returned tree, so
 // useActiveOutageBanner moved up to ShellChrome (called once there) and
 // both Header (portrait) and ShellChrome (landscape) consume the one result.
-function Header({ onOpenSettings, isLandscape, outageBanner }: {
-  onOpenSettings: () => void;
+function Header({ isLandscape, outageBanner }: {
   isLandscape: boolean;
   outageBanner: ReturnType<typeof useActiveOutageBanner>;
 }) {
@@ -64,7 +63,10 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
       style={{ background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" }}>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={iconStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
     </button>
-  ) : <NavMenu darkMode={darkMode} onOpenSettings={onOpenSettings} />;
+  ) : <BackToDashboard compact={isLandscape} />;
+  // The dashboards carry their own header (title, switcher, controls), so the shell icon row is
+  // hidden on them; the outage banner stays.
+  const onDashboard = dashboardForPath(pathname) != null;
   // The Driver Dashboard shows every expiration alert itself (Expirations
   // row, Truck/Trailer squares, the access strip), so the bell is retired there.
   // No bell on the Driver Dashboard (it has its own Expirations card) or on the
@@ -124,6 +126,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
   // Settings (formerly its own gear icon here) now lives inside NavMenu's
   // own dropdown -- see NavMenu.tsx's onOpenSettings prop -- one fewer
   // icon in the rail, per explicit direction to reduce the icon count.
+  if (isLandscape && onDashboard) return null;
   if (isLandscape) {
     return (
       <div style={{
@@ -174,7 +177,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
           lives inside NavMenu's own dropdown instead -- see NavMenu.tsx's
           onOpenSettings prop -- one fewer icon in this row, per explicit
           direction to reduce the strip's icon count. */}
-      <div style={{
+      {!onDashboard && <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 calc(env(safe-area-inset-right, 0px) + 16px) 0 calc(env(safe-area-inset-left, 0px) + 16px)",
       }}>
@@ -197,7 +200,7 @@ function Header({ onOpenSettings, isLandscape, outageBanner }: {
             the four portaled ones into their own sub-cluster with a
             smaller, separately-set gap between them. */}
         <div id="planner-header-icons-slot" style={{ display: "contents" }} />
-      </div>
+      </div>}
       {/* Outage banner still renders right after the icon row either way
           -- when there's nothing to show it contributes zero height
           (see TerminalOutageBanner's own conditional return), so the
@@ -233,7 +236,6 @@ function TripSync({ userId }: { userId: string | null }) {
 
 function ShellChrome({ children }: { children: React.ReactNode }) {
   const shell = useCalculatorShell();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   // Default (unresolved SSR/first-paint) is false -- same neutral-first
   // pattern this codebase already established for useIsLandscape's own
   // consumers elsewhere (page.tsx, PlannerControls.tsx), so the initial
@@ -243,7 +245,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
   const outageBanner = useActiveOutageBanner(terminalId, shell.effectiveUserId || null, shell.plannedProductIds);
   return (
     <div style={{ height: "100dvh", background: "#0b0b0b", color: "#fff", display: "flex", flexDirection: isLandscape ? "row" : "column", overflow: "hidden" }}>
-      <Header onOpenSettings={() => setSettingsOpen(true)} isLandscape={isLandscape} outageBanner={outageBanner} />
+      <Header isLandscape={isLandscape} outageBanner={outageBanner} />
       {/* The content wrapper is rendered with an IDENTICAL structure in both
           orientations so {children} (the entire planner page) keeps the same
           position in the React tree across an orientation flip. A previous
@@ -315,13 +317,6 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
 
 
 
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        companyId={shell.companyId ?? ""}
-        myRole={shell.role ?? "driver"}
-        authUserId={shell.effectiveUserId ?? ""}
-      />
 
       {/* Location/Terminal picker -- shared single instance (same reasoning
           as EquipmentModal above): the Planner's "Select Location" card and
