@@ -10,7 +10,15 @@ export type Template = (payload: Record<string, unknown>) => Rendered;
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)) : []);
 
+const recap: Template = (p) => {
+  const title = str(p.title, "Recap");
+  const rows = lines(p.lines);
+  return { subject: title, text: [title, "", ...rows.map((l) => `- ${l}`)].join("\n"), push: rows.length ? `${title}: ${rows[0]}${rows.length > 1 ? ` (+${rows.length - 1})` : ""}` : title };
+};
+
 export const TEMPLATES: Record<string, Template> = {
+  // The freight recap: its lines are filled in when it runs (see runNotifications).
+  freight_recap: (p) => recap({ ...p, title: str(p.title, "Freight recap") }),
   // A plain reminder: subject and body come from the schedule itself.
   reminder: (p) => ({ subject: str(p.subject, "Reminder"), text: str(p.body, ""), push: str(p.subject, "Reminder") }),
   // A recap: a title and a list of lines.

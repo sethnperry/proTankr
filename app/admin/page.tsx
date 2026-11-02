@@ -40,6 +40,7 @@ import TerminalWorkModal from "./TerminalWorkModal";
 import SafetyMeetingsModal from "./SafetyMeetingsModal";
 import LanternflyModal from "./LanternflyModal";
 import TankReadingsModal from "./TankReadingsModal";
+import FreightModal from "./FreightModal";
 import CalloutRoutesModal from "./CalloutRoutesModal";
 import { useLongShifts } from "./useLongShifts";
 import DelaysModal from "./DelaysModal";
@@ -1296,6 +1297,7 @@ export default function AdminPage() {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [slfAdminOpen, setSlfAdminOpen] = useState(false);
   const [tankReadingsOpen, setTankReadingsOpen] = useState(false);
+  const [freightAdminOpen, setFreightAdminOpen] = useState(false);
   const [calloutRoutesOpen, setCalloutRoutesOpen] = useState(false);
   const longShifts = useLongShifts(companyId ?? null, myRole === "admin" || myRole === "lead" || myRole === "dispatch");
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
@@ -2152,6 +2154,11 @@ export default function AdminPage() {
           </button>
         )}
         {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
+          <button type="button" className="admin-header-tile" onClick={() => setFreightAdminOpen(true)}>
+            Freight
+          </button>
+        )}
+        {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && (
           <button type="button" className="admin-header-tile" onClick={() => setTankReadingsOpen(true)}>
             Tank readings
           </button>
@@ -2656,6 +2663,7 @@ export default function AdminPage() {
       <ScaleRecordsModal open={scaleRecordsOpen} onClose={() => setScaleRecordsOpen(false)} companyId={companyId!} />
       <PaperLogsModal open={paperLogsOpen} onClose={() => setPaperLogsOpen(false)} companyId={companyId!} />
       <CalloutsModal open={calloutsOpen} onClose={() => setCalloutsOpen(false)} companyId={companyId!} userId={currentUserId ?? null} canEdit={myRole === "admin" || myRole === "dispatch" || myRole === "lead"} />
+      {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && <FreightModal open={freightAdminOpen} onClose={() => setFreightAdminOpen(false)} companyId={companyId!} userId={currentUserId ?? null} />}
       {(myRole === "admin" || myRole === "lead" || myRole === "dispatch") && <TankReadingsModal open={tankReadingsOpen} onClose={() => setTankReadingsOpen(false)} companyId={companyId!} />}
       {myRole === "admin" && <LanternflyModal open={slfAdminOpen} onClose={() => setSlfAdminOpen(false)} companyId={companyId!} userId={currentUserId ?? null} />}
       {myRole === "admin" && <SafetyMeetingsModal open={safetyOpen} onClose={() => setSafetyOpen(false)} companyId={companyId!} userId={currentUserId ?? null} />}

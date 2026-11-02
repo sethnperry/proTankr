@@ -95,3 +95,14 @@ test("an 'unsigned' recipient is worked out when the schedule runs", async () =>
   await runDueSchedules(d);
   assert.deepEqual(log.pushes[0].sort(), ["a", "d"]);
 });
+
+test("a recap can fill its lines when it runs", async () => {
+  let body = "";
+  const { d } = deps({
+    loadDue: async () => [{ schedule_id: "s3", company_id: "c", kind: "recap", template_key: "freight_recap", recipients: [{ type: "email", value: "boss@x.com" }], channels: ["email"], cadence: { freq: "daily", at: "08:00", tz: NY }, payload: { days: 7 }, next_run_at: "2026-11-02T13:00:00Z" }],
+    payloadFor: async (s) => ({ ...s.payload, lines: ["2 on the road"] }),
+    sendEmail: async (_to, _subject, text) => { body = text; },
+  });
+  await runDueSchedules(d);
+  assert.match(body, /2 on the road/);
+});

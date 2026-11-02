@@ -17,6 +17,8 @@ export type RunDeps = {
   /** Saved after a run: when it ran and when it runs next (null = never again, so it is switched off). */
   saveRun: (scheduleId: string, lastRunAt: string, nextRunAt: string | null) => Promise<void>;
   /** The user ids who have not signed a safety meeting yet (for "unsigned" recipients). Optional. */
+  /** Fills a schedule's payload when it runs (a recap that reads live data). Optional; null = use the stored one. */
+  payloadFor?: (s: DueSchedule) => Promise<Record<string, unknown> | null>;
   unsignedFor?: (companyId: string, meetingId: string) => Promise<string[]>;
   logError: (companyId: string, kind: "send_failed" | "other", message: string, payload: Record<string, unknown>) => Promise<void>;
 };
@@ -26,7 +28,9 @@ export type RunSummary = { ran: number; emails: number; pushes: number; failed: 
 export async function runDueSchedules(d: RunDeps): Promise<RunSummary> {
   const out: RunSummary = { ran: 0, emails: 0, pushes: 0, failed: 0 };
   for (const s of await d.loadDue()) {
-    const msg = render(s.template_key, s.payload);
+    let payload = s.payload;
+    try { payload = (await d.payloadFor?.(s)) ?? s.payload; } catch (e) { await d.logError(s.company_id, "other", `Recap data failed: ${(e as Error).message}`, { schedule_id: s.schedule_id }); }
+    const msg = render(s.template_key, payload);
     // The next run is set first, so a crash mid-send can't send it twice on the next pass.
     const next = nextRunAfter(s.cadence, d.now);
     await d.saveRun(s.schedule_id, new Date(d.now).toISOString(), next == null ? null : new Date(next).toISOString());

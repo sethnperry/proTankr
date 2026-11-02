@@ -144,6 +144,8 @@ import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanatio
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
+import { FreightSheet } from "../components/freight/FreightSheet";
+import { useFreight } from "../hooks/useFreight";
 import { TankCheckSheet } from "../components/trip/TankCheckSheet";
 import { useTankChecks } from "../hooks/useTankChecks";
 import { LanternflySheet } from "../components/slf/LanternflySheet";
@@ -253,6 +255,7 @@ export default function HomePage() {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [slfOpen, setSlfOpen] = useState(false);
   const [tankCheckOpen, setTankCheckOpen] = useState(false);
+  const [freightOpen, setFreightOpen] = useState(false);
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -324,6 +327,7 @@ export default function HomePage() {
 
   const trips = useMemo(() => Object.values(state.rows.trips ?? {}) as TripRow[], [state]);
   const openTrip = userId ? openTripForDriver(trips, userId) : null;
+  const freight = useFreight({ store, state, syncNow, userId: userId || null, companyId: companyId || null });
   const tankChecks = useTankChecks({ store, syncNow, userId: userId || null, companyId: companyId || null });
   const lanternfly = useLanternfly({ store, state, syncNow, userId: userId || null, companyId: companyId || null, tripId: openTrip?.trip_id ?? null });
   const children = useMemo(
@@ -894,7 +898,7 @@ export default function HomePage() {
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
   const [truckSheetWatch, setTruckSheetWatch] = useState(false);
-  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || truckSheetWatch, finishOpen ? 60_000 : undefined);
+  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || freightOpen || truckSheetWatch, finishOpen ? 60_000 : undefined);
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
@@ -2514,6 +2518,11 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <FreightSheet open={freightOpen} onClose={() => setFreightOpen(false)} companyId={companyId} userId={userId}
+        truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
+        coupledTrailer={equipment.currentTrailerId ? { id: equipment.currentTrailerId, name: equipment.currentTrailerName ?? "Trailer" } : null}
+        liveOdometer={truckReading?.odometerMi ?? null} loads={freight.loads} stopsOf={freight.stopsOf}
+        onBegin={freight.begin} onDeliver={freight.deliver} onEndEmpty={freight.endEmpty} onCancel={freight.cancel} />
       <TankCheckSheet open={tankCheckOpen} onClose={() => setTankCheckOpen(false)} locations={locations} tanks={locList.tanks} productName={(id) => productInfo(id).name} origin={origin} companyId={companyId} userId={userId} onLocationAdded={() => void locList.reload()}
         onSave={(a) => tankChecks.saveCheck({ locationId: a.locationId, locationName: a.locationName, truckId: equipment.currentTruckId ?? null, entries: a.entries, productOf: a.productOf, paths: a.paths, note: a.note })} />
       <LanternflySheet open={slfOpen} onClose={() => setSlfOpen(false)} missing={lanternfly.missing} attested={lanternfly.attested} hasTrip={!!openTrip} hasZone={lanternfly.hasZone} onAttest={lanternfly.attest} />
@@ -2563,6 +2572,7 @@ export default function HomePage() {
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           { icon: "locate", label: "Lanternfly", sub: lanternfly.missing.length ? `${lanternfly.missing.length} to attest` : lanternfly.attested.length ? "Attested" : null, subColor: lanternfly.missing.length ? "#fbbf24" : undefined, onClick: () => setSlfOpen(true) },
+          { icon: "truck" as const, label: "Freight", sub: freight.loads.some((l) => l.status === "open") ? "Load open" : "Van, flatbed, LTS", subColor: freight.loads.some((l) => l.status === "open") ? "#4ade80" : undefined, onClick: () => setFreightOpen(true) },
           ...(shell.isSolo === false ? [{ icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) }] : []),
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },

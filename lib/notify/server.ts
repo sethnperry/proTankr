@@ -7,6 +7,7 @@ import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import { runDueSchedules, type RunDeps, type RunSummary } from "./runDue";
 import type { DueSchedule, Person } from "./schedule";
+import { freightRows, recapLines, type Load, type Stop } from "../freight/freight";
 
 async function sendEmail(to: string[], subject: string, text: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -55,6 +56,22 @@ export async function runNotifications(now = Date.now()): Promise<RunSummary> {
     },
     saveRun: async (id, lastRunAt, nextRunAt) => {
       await admin.from("notification_schedules").update({ last_run_at: lastRunAt, next_run_at: nextRunAt, is_active: nextRunAt != null }).eq("schedule_id", id);
+    },
+    payloadFor: async (s) => {
+      if (s.template_key !== "freight_recap") return null;
+      const days = Math.min(60, Math.max(1, Number(s.payload.days) || 7));
+      const since = new Date(now - 90 * 86400_000).toISOString();
+      const [{ data: loads }, { data: trucks }] = await Promise.all([
+        admin.from("freight_loads").select("*").eq("company_id", s.company_id).or(`status.eq.open,begun_at.gte.${since},delivered_at.gte.${since}`).limit(2000),
+        admin.from("trucks").select("truck_id, truck_name").eq("company_id", s.company_id),
+      ]);
+      const ls = (loads ?? []) as Load[];
+      const { data: stops } = ls.length ? await admin.from("freight_stops").select("*").in("freight_id", ls.map((l) => l.freight_id)) : { data: [] };
+      const { data: profs } = ls.length ? await admin.from("profiles").select("user_id, display_name").in("user_id", [...new Set(ls.map((l) => l.driver_id))]) : { data: [] };
+      const dn = new Map(((profs ?? []) as { user_id: string; display_name: string | null }[]).map((p) => [p.user_id, p.display_name ?? "Driver"]));
+      const tn = new Map(((trucks ?? []) as { truck_id: string; truck_name: string }[]).map((t) => [t.truck_id, t.truck_name]));
+      const rows = freightRows(ls, (stops ?? []) as Stop[], (id) => dn.get(id) ?? "Driver", (id) => (id ? tn.get(id) ?? "Truck" : "Truck"));
+      return { ...s.payload, lines: recapLines(rows, now, days) };
     },
     unsignedFor: async (companyId, meetingId) => {
       const [{ data: members }, { data: sigs }] = await Promise.all([

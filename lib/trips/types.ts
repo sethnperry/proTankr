@@ -298,6 +298,20 @@ export type TankCheckReadingRow = Synced & {
   reading: number | null; reading_unit: "gallons" | "inches"; water_inches: number | null;
 };
 
+export type FreightLoadRow = Synced & {
+  freight_id: string; company_id: string; driver_id: string;
+  truck_id: string | null; trailer_id: string | null;
+  trailer_kind: "van" | "flatbed" | "lowboy" | "other" | null; trailer_label: string | null;
+  preset: "standard" | "lts"; reference: string | null; customer: string | null;
+  origin_text: string | null; destination_text: string | null; route_number: string | null;
+  status: "open" | "delivered" | "cancelled";
+  begin_odometer: number | null; begun_at: string; end_odometer: number | null; delivered_at: string | null;
+  empty_end_odometer: number | null; empty_ended_at: string | null;
+  manifest_paths: string[]; manifest_signature: string | null; notes: string | null;
+  source: "geotab" | "app" | "manual";
+};
+export type FreightStopRow = Synced & { stop_id: string; freight_id: string; seq: number; name: string; casings: number; totes: number; note: string | null };
+
 export type SlfAttestationRow = Synced & {
   trip_id: string;
   state: string;
@@ -338,6 +352,8 @@ export type TripTableRows = {
   terminal_work: TerminalWorkRow;
   slf_attestations: SlfAttestationRow;
   tank_checks: TankCheckRow;
+  freight_loads: FreightLoadRow;
+  freight_stops: FreightStopRow;
   tank_check_readings: TankCheckReadingRow;
   compartment_readiness: CompartmentReadinessRow;
 };
@@ -362,6 +378,8 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   terminal_work: ["work_id"],
   slf_attestations: ["trip_id", "state", "county"],
   tank_checks: ["check_id"],
+  freight_loads: ["freight_id"],
+  freight_stops: ["stop_id"],
   tank_check_readings: ["check_id", "tank_number"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
@@ -385,6 +403,8 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "terminal_work",
   "slf_attestations",
   "tank_checks",
+  "freight_loads",
+  "freight_stops",
   "tank_check_readings",
   "compartment_readiness",
 ];
