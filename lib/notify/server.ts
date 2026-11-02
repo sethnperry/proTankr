@@ -56,6 +56,14 @@ export async function runNotifications(now = Date.now()): Promise<RunSummary> {
     saveRun: async (id, lastRunAt, nextRunAt) => {
       await admin.from("notification_schedules").update({ last_run_at: lastRunAt, next_run_at: nextRunAt, is_active: nextRunAt != null }).eq("schedule_id", id);
     },
+    unsignedFor: async (companyId, meetingId) => {
+      const [{ data: members }, { data: sigs }] = await Promise.all([
+        admin.from("user_companies").select("user_id, role").eq("company_id", companyId).in("role", ["driver", "lead"]),
+        admin.from("safety_meeting_signatures").select("user_id").eq("meeting_id", meetingId),
+      ]);
+      const signed = new Set(((sigs ?? []) as { user_id: string }[]).map((x) => x.user_id));
+      return ((members ?? []) as { user_id: string }[]).map((m) => m.user_id).filter((id) => !signed.has(id));
+    },
     logError: async (companyId, kind, message, payload) => {
       await admin.from("app_errors").insert({ company_id: companyId, kind, message, payload });
     },

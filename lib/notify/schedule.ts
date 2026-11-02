@@ -47,7 +47,8 @@ export function nextRunAfter(c: Cadence, after: number): number | null {
   return null;
 }
 
-export type Recipient = { type: "email" | "user" | "role"; value: string; region?: string | null };
+/** "unsigned": everyone in the company who has not signed the safety meeting with this id (worked out when it runs). */
+export type Recipient = { type: "email" | "user" | "role" | "unsigned"; value: string; region?: string | null };
 export type Person = { user_id: string; email: string | null; role: string; region: string | null };
 
 export type Resolved = { emails: string[]; userIds: string[] };

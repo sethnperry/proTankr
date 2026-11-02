@@ -86,3 +86,12 @@ test("a failed email goes to the error log and the run still finishes", async ()
   assert.equal(r.pushes, 3);
   assert.match(log.errors[0], /Resend down/);
 });
+
+test("an 'unsigned' recipient is worked out when the schedule runs", async () => {
+  const { d, log } = deps({
+    loadDue: async () => [{ schedule_id: "s2", company_id: "c", kind: "reminder", template_key: "reminder", recipients: [{ type: "unsigned", value: "m1" }], channels: ["push"], cadence: { freq: "once", at: "08:00", on: "2026-11-02", tz: NY }, payload: { subject: "Sign", body: "x" }, next_run_at: "2026-11-02T13:00:00Z" }],
+    unsignedFor: async (_c, m) => (m === "m1" ? ["a", "d"] : []),
+  });
+  await runDueSchedules(d);
+  assert.deepEqual(log.pushes[0].sort(), ["a", "d"]);
+});

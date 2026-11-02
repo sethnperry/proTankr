@@ -144,6 +144,8 @@ import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanatio
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
+import { SafetyMeetingSheet } from "../components/safety/SafetyMeetingSheet";
+import { useSafetyMeetings } from "../hooks/useSafetyMeetings";
 import { TerminalWorkSheet } from "../components/terminalwork/TerminalWorkSheet";
 import { useTerminalWork } from "../hooks/useTerminalWork";
 import { minutesOf as workMinutes, clock as workClock } from "@/lib/terminalwork/terminalWork";
@@ -244,6 +246,7 @@ export default function HomePage() {
   const [perDiemOpen, setPerDiemOpen] = useState(false);
   const [calloutOpen, setCalloutOpen] = useState(false);
   const [termWorkOpen, setTermWorkOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -270,6 +273,8 @@ export default function HomePage() {
     if (r === "waiting") return `Saved. ${unitText} will go to Deadline and the email will send when you have signal.`;
     return `${unitText} is Deadline. No approver email is set for your company, so this is waiting in the work order list.`;
   };
+  const safety = useSafetyMeetings(userId || null, companyId || null, true);
+  const openSafety = safety.meetings.filter((m) => m.started_at && !safety.signed[m.meeting_id]).length;
   const termWork = useTerminalWork({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: true });
   const callouts = useMyCallouts({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: calloutOpen });
   const perDiem = usePerDiem({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: perDiemOpen });
@@ -2501,6 +2506,7 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
         onSkip={() => { shift.end(); setExplainOpen(false); }} />
+      <SafetyMeetingSheet open={safetyOpen} onClose={() => setSafetyOpen(false)} meetings={safety.meetings} signed={safety.signed} loading={safety.loading} onSign={safety.sign} onMaterial={(p) => void safety.openMaterial(p)} />
       <TerminalWorkSheet open={termWorkOpen} onClose={() => setTermWorkOpen(false)} current={termWork.current} defaults={termWork.defaults}
         defaultTerminalId={location.selectedTerminalId ? String(location.selectedTerminalId) : null}
         terminals={(terminals.terminals ?? []).map((t: any) => ({ value: String(t.terminal_id), label: [t.terminal_name, t.city].filter(Boolean).join(", ") }))}
@@ -2545,6 +2551,7 @@ export default function HomePage() {
           locationsTool(() => setManageLocsOpen(true)),
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
           { icon: "people", label: "Call out", sub: "Can't make a shift", onClick: () => setCalloutOpen(true) },
           { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
