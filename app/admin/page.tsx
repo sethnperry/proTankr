@@ -27,6 +27,7 @@ import PayrollReportModal from "./PayrollReportModal";
 import FleetUtilizationModal from "./FleetUtilizationModal";
 import TripSettingsModal from "./TripSettingsModal";
 import WorkOrdersModal from "./WorkOrdersModal";
+import ReimbursementsModal from "./ReimbursementsModal";
 import DelaysModal from "./DelaysModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TerminalSetupModal from "./TerminalSetupModal";
@@ -1268,6 +1269,7 @@ export default function AdminPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [terminalsMenuOpen, setTerminalsMenuOpen] = useState(false);
   const [workOrdersOpen, setWorkOrdersOpen] = useState(false);
+  const [reimbOpen, setReimbOpen] = useState(false);
   const [truckModal,   setTruckModal]   = useState<Truck | null | "new">(null);
   const [trailerModal, setTrailerModal] = useState<Trailer | null | "new">(null);
   const [comboModal,   setComboModal]   = useState<Combo | null | "new">(null);
@@ -2084,6 +2086,11 @@ export default function AdminPage() {
           </button>
         )}
         {myRole === "admin" && (
+          <button type="button" className="admin-header-tile" onClick={() => setReimbOpen(true)}>
+            Reimbursements
+          </button>
+        )}
+        {myRole === "admin" && (
           <button type="button" className="admin-header-tile" onClick={() => setFuelSettingsOpen(true)}>
             Fuel
           </button>
@@ -2544,6 +2551,7 @@ export default function AdminPage() {
         />
       )}
       <WorkOrdersModal open={workOrdersOpen} onClose={() => setWorkOrdersOpen(false)} companyId={companyId!} canEdit={myRole === "admin" || myRole === "lead" || myRole === "dispatch"} />
+      {myRole === "admin" && <ReimbursementsModal open={reimbOpen} onClose={() => setReimbOpen(false)} companyId={companyId!} />}
       <ConnectedDashFooter />
       <FleetCardsModal open={fleetCardsOpen && !isSolo} onClose={() => setFleetCardsOpen(false)} companyId={companyId!} />
       <PayrollReportModal open={payrollReportOpen} onClose={() => setPayrollReportOpen(false)} companyId={companyId!} />

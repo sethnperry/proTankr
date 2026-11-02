@@ -36,6 +36,8 @@ import {
 import { createWorkOrder } from "@/lib/workorders/workOrders";
 import { pumpDownWorkOrder } from "@/lib/workorders/pumpDown";
 import { getTripStore } from "@/lib/trips/useTripStore";
+import { readReceiptPhoto } from "@/lib/capture/readReceipt";
+import type { OcrFields } from "@/lib/capture/capture";
 import { currentCity } from "@/lib/trips/startPlace";
 import { resolveStopPlace } from "@/lib/fuel/stopPlace";
 import { COMPANY_CARD, PERSONAL_CARD, maskCard, maskLast4, type VaultCard } from "@/lib/vault/cards";
@@ -178,6 +180,8 @@ export default function FuelSheet({
   const [d, setD] = useState<FuelDetails>({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
   const [total, setTotal] = useState("");
   const [receipt, setReceipt] = useState<string | null>(null);
+  // What the reader found on the receipt photo. A suggestion the driver taps to use.
+  const [suggest, setSuggest] = useState<OcrFields | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -415,6 +419,7 @@ export default function FuelSheet({
     if (error) throw error;
     setReceipt(path);
     setD((x) => ({ ...x, hasReceipt: true }));
+    void readReceiptPhoto(RECEIPT_BUCKET, path).then(setSuggest);
   });
 
   const needReceipt = receiptRequired(p.pay_kind, settings);
@@ -435,6 +440,7 @@ export default function FuelSheet({
     setShowDetails(false);
     setCardId(null);
     setReceipt(null);
+    setSuggest(null);
     setTotal("");
     setD({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
     onClose();
@@ -498,7 +504,7 @@ export default function FuelSheet({
             <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
               <span style={{ color: "#4ade80", fontWeight: 800 }}>✓ Photo saved</span>
               <button type="button" style={link} onClick={() => void openStoredFile(RECEIPT_BUCKET, receipt).catch(() => {})}>View</button>
-              <button type="button" style={{ ...link, color: "#f87171" }} onClick={() => { setReceipt(null); setD((x) => ({ ...x, hasReceipt: false })); }}>Retake</button>
+              <button type="button" style={{ ...link, color: "#f87171" }} onClick={() => { setReceipt(null); setSuggest(null); setD((x) => ({ ...x, hasReceipt: false })); }}>Retake</button>
             </div>
           ) : (
             <label style={{ ...secondary, display: "block", textAlign: "center", padding: "13px 0", fontSize: 15 }}>
@@ -508,6 +514,25 @@ export default function FuelSheet({
             </label>
           )}
         </div>
+
+        {suggest && (
+          <div style={{ ...box, borderColor: "rgba(255,255,255,0.3)" }}>
+            <div style={{ ...lab, marginBottom: 6 }}>Read from the receipt</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
+              {[suggest.station, suggest.gallons != null ? `${suggest.gallons} gal` : null, suggest.amount != null ? `$${suggest.amount.toFixed(2)}` : null].filter(Boolean).join(" · ")}
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button type="button" style={{ ...primary, padding: "11px 0", fontSize: 14, flex: 1 }}
+                onClick={() => {
+                  setD((x) => ({ ...x, dieselGallons: suggest.gallons != null ? String(suggest.gallons) : x.dieselGallons, storeName: x.storeName.trim() ? x.storeName : suggest.station ?? x.storeName }));
+                  if (suggest.amount != null) setTotal(suggest.amount.toFixed(2));
+                  setSuggest(null);
+                }}>Use these</button>
+              <button type="button" style={link} onClick={() => setSuggest(null)}>No</button>
+            </div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>Check them against the receipt before you save.</div>
+          </div>
+        )}
 
         <StoreBlock title="Store" value={d} onChange={(v) => setD({ ...d, ...v })} nearby={nearby} locating={locating} located={!!pos}
           picked={picked ? storeKey(picked.store_name, picked.store_number) : null} onPick={pickStore} adding={addingStore} onAdd={addStore} />
