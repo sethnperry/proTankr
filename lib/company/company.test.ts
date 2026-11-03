@@ -84,3 +84,14 @@ test("campaign bars show open campaigns with done and outstanding", () => {
   assert.equal(campaignBars([board(null), board("2026-11-01")]).length, 1);
   assert.deepEqual(campaignBars([board(null)])[0], { id: "c", name: "Tires", due: "2026-11-10", total: 3, done: 1, outstanding: 2, pending: 1, closed: false });
 });
+
+import { tripEnd as tripEndFn, tripSegments as tripSegs } from "./company.ts";
+test("a cancelled or parked trip stops being driven when it was cancelled or parked, not at the present moment", () => {
+  const now = Date.parse("2026-11-03T17:00:00Z");
+  const base = { userId: "u", name: "Seth", region: null, startedAt: "2026-11-03T02:09:00Z", completedAt: null, pickups: [{ arrived_at: "2026-11-03T03:00:00Z", left_at: null }], deliveries: [] };
+  assert.equal(tripEndFn({ status: "cancelled", completedAt: null, cancelledAt: "2026-11-03T05:38:00Z" }, now), Date.parse("2026-11-03T05:38:00Z"));
+  assert.equal(tripEndFn({ status: "parked", completedAt: null, parkedAt: "2026-11-03T06:00:00Z" }, now), Date.parse("2026-11-03T06:00:00Z"));
+  assert.equal(tripEndFn({ status: "in_transit", completedAt: null }, now), now);
+  const segs = tripSegs({ ...base, status: "cancelled", cancelledAt: "2026-11-03T05:38:00Z" }, now);
+  assert.ok(segs.every((s) => s.to <= Date.parse("2026-11-03T05:38:00Z")), "nothing runs past the cancel, including an unclosed rack");
+});

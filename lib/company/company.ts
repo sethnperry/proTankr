@@ -113,17 +113,25 @@ export function dayRibbon(raw: RawSeg[], dayStart: number, dayEnd: number, regio
   return [...lanes.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-type TripIn = { userId: string; name: string; region: string | null; startedAt: string | null; completedAt: string | null; pickups: { arrived_at: string | null; left_at: string | null }[]; deliveries: { arrived_at: string | null; left_at: string | null }[] };
+type TripIn = { userId: string; name: string; region: string | null; startedAt: string | null; completedAt: string | null; status?: string | null; cancelledAt?: string | null; parkedAt?: string | null; pickups: { arrived_at: string | null; left_at: string | null }[]; deliveries: { arrived_at: string | null; left_at: string | null }[] };
 const t = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
+/** When a trip stopped being driven: its completion, its cancellation, or the moment it was parked; else it is still going. */
+export function tripEnd(trip: Pick<TripIn, "status" | "completedAt" | "cancelledAt" | "parkedAt">, nowMs: number): number {
+  const pick = (iso: string | null | undefined) => (Number.isFinite(t(iso)) ? t(iso) : null);
+  if (trip.status === "cancelled") return pick(trip.cancelledAt) ?? pick(trip.completedAt) ?? nowMs;
+  if (trip.status === "parked") return pick(trip.parkedAt) ?? nowMs;
+  return pick(trip.completedAt) ?? nowMs;
+}
 /** A trip as segments: the whole trip is driving, with loading and delivering painted over it. */
 export function tripSegments(trip: TripIn, nowMs: number): RawSeg[] {
   const start = t(trip.startedAt);
   if (!Number.isFinite(start)) return [];
-  const end = Number.isFinite(t(trip.completedAt)) ? t(trip.completedAt) : nowMs;
+  const end = tripEnd(trip, nowMs);
   const base = { userId: trip.userId, name: trip.name, region: trip.region, source: "app" as Source };
   const out: RawSeg[] = [{ ...base, activity: "driving", from: start, to: end }];
-  for (const p of trip.pickups) if (Number.isFinite(t(p.arrived_at))) out.push({ ...base, activity: "loading", from: t(p.arrived_at), to: Number.isFinite(t(p.left_at)) ? t(p.left_at) : nowMs });
-  for (const d of trip.deliveries) if (Number.isFinite(t(d.arrived_at))) out.push({ ...base, activity: "delivering", from: t(d.arrived_at), to: Number.isFinite(t(d.left_at)) ? t(d.left_at) : nowMs });
+  // A stop that was never closed ends when the trip does, not at the present moment.
+  for (const p of trip.pickups) if (Number.isFinite(t(p.arrived_at))) out.push({ ...base, activity: "loading", from: t(p.arrived_at), to: Number.isFinite(t(p.left_at)) ? t(p.left_at) : end });
+  for (const d of trip.deliveries) if (Number.isFinite(t(d.arrived_at))) out.push({ ...base, activity: "delivering", from: t(d.arrived_at), to: Number.isFinite(t(d.left_at)) ? t(d.left_at) : end });
   return out;
 }
 

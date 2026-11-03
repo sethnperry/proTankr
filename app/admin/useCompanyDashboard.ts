@@ -82,7 +82,7 @@ export function useCompanyDashboard(o: { companyId: string | null; enabled: bool
     setCallouts({ count: co.length, blocking: co.filter((c) => c.shift_date >= today).length });
 
     // Trips in the range: unaccounted delay minutes, and the activity ribbon's segments.
-    const trips = (await q<any[]>(supabase.from("trips").select("trip_id, driver_id, started_at, completed_at, status").eq("company_id", companyId).not("started_at", "is", null).gte("started_at", new Date(Math.min(Date.parse(range.fromIso), dayStartMs) - 36 * 3600_000).toISOString()).limit(1500))) ?? [];
+    const trips = (await q<any[]>(supabase.from("trips").select("trip_id, driver_id, started_at, completed_at, status, cancelled_at, parked_at").eq("company_id", companyId).not("started_at", "is", null).gte("started_at", new Date(Math.min(Date.parse(range.fromIso), dayStartMs) - 36 * 3600_000).toISOString()).limit(1500))) ?? [];
     const ids = trips.map((t) => t.trip_id as string);
     const pickups: any[] = [], deliveries: any[] = [];
     for (const part of chunk(ids, 150)) {
@@ -103,7 +103,7 @@ export function useCompanyDashboard(o: { companyId: string | null; enabled: bool
     const raw: RawSeg[] = [];
     for (const t of trips) {
       const who = prof.get(t.driver_id) ?? { name: "Driver", region: null };
-      raw.push(...tripSegments({ userId: t.driver_id, name: who.name, region: who.region, startedAt: t.started_at, completedAt: t.completed_at,
+      raw.push(...tripSegments({ userId: t.driver_id, name: who.name, region: who.region, startedAt: t.started_at, completedAt: t.completed_at, status: t.status, cancelledAt: t.cancelled_at, parkedAt: t.parked_at,
         pickups: pickups.filter((p) => p.trip_id === t.trip_id), deliveries: deliveries.filter((d) => d.trip_id === t.trip_id) }, now));
     }
     const tw = (await q<any[]>(supabase.from("terminal_work").select("work_id, user_id, started_at, ended_at, billable, source").eq("company_id", companyId).gte("started_at", range.fromIso < new Date(dayStartMs).toISOString() ? range.fromIso : new Date(dayStartMs).toISOString()).limit(3000))) ?? [];
