@@ -1579,11 +1579,27 @@ export default function HomePage() {
         // when the driver taps Begin Loading, which may only open the Planner to fix the plan.
         setOpeningPlanner(true);
         // The Planner can be on another terminal (or none) after a rack hop or an undo: put it on this pickup's.
-        { const wp = snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome); if (wp) alignPlannerToPickup(wp); }
-        // Plan Review opens right over this screen (the Planner host stays
-        // mounted in the layout). If there is no plan, or it can't start, the
-        // host sends the driver to the Planner instead.
-        shell.postPlannerIntent("begin");
+        // An arrival stamped automatically at the gate never asked which rack, and a terminal with several racks has no
+        // product list until one is picked (every product then looks unavailable): ask now, before Plan Review.
+        {
+          const wp = snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome);
+          if (wp) alignPlannerToPickup(wp);
+          void (async () => {
+            try {
+              if (wp?.terminal_id && !wp.rack_id) {
+                const rackId = await shell.askRack(String(wp.terminal_id));
+                if (rackId) store.put("trip_pickups", { pickup_id: wp.pickup_id, rack_id: rackId });
+              } else if (wp?.rack_id) {
+                shell.location.setSelectedRackId(wp.rack_id);
+              }
+            } finally {
+              void syncNow();
+              // Plan Review opens right over this screen (the Planner host stays mounted in the layout). If there is
+              // no plan, or it can't start, the host sends the driver to the Planner instead.
+              shell.postPlannerIntent("begin");
+            }
+          })();
+        }
         break;
       case "arrive_pickup": {
         if (fuelOn) { setBlockNotice({ title: "Finish fueling first", text: "You can't arrive while a fuel stop is running. Finish fueling, then tap Arrive." }); break; }
@@ -2051,11 +2067,9 @@ export default function HomePage() {
               Current trip · {STATUS_LABEL[openTrip.status]}
             </div>
             {trailerLabel && <span style={{ marginLeft: "auto" }}>{trailerLabel}</span>}
-            {/* The trip record is locked once the driver has arrived anywhere:
-                from then on it's a record of what happened. */}
-            {!pickups.some((p) => p.arrived_at || p.load_id || p.left_at) && (
-              <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
-            )}
+            {/* Always available (the supplier, order numbers and planned stops can change mid-trip). Stops already
+                arrived at, loaded or finished are kept as they are when the trip is saved. */}
+            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
           </div>
           {(openTrip.shipper || openTrip.customer) && (
             <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
