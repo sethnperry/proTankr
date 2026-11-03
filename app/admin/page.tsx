@@ -31,6 +31,9 @@ import { DashStyles } from "@/app/planner/home/dashLook";
 import { T, css, fmtDate, expiryColor, daysUntil, expiryLabel } from "@/lib/ui/driver/tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "@/lib/ui/driver/primitives";
 import { MemberCard } from "@/lib/ui/driver/MemberCard";
+import { useFleetSetup } from "@/lib/setup/useFleetSetup";
+import { counterText } from "@/lib/setup/driverSetup";
+import { DriverSetupSheet } from "./DriverSetupSheet";
 import { DriverProfileModal } from "@/lib/ui/driver/DriverProfileModal";
 import type { Member, DriverProfile } from "@/lib/ui/driver/types";
 import type { Role } from "@/lib/ui/driver/role";
@@ -1252,6 +1255,8 @@ export default function AdminPage() {
   const [err,           setErr]           = useState<string | null>(null);
 
   const [usersOpen,      setUsersOpen]      = useState(false);
+  const fleetSetup = useFleetSetup(companyId, usersOpen && !isSolo && (myRole === "admin" || myRole === "dispatch"));
+  const [setupRowId, setSetupRowId] = useState<string | null>(null);
   const [equipOpen,      setEquipOpen]      = useState(false);
   const [equipTab,       setEquipTab]       = useState<"trucks"|"trailers"|"combos">("trucks");
   const [terminalsOpen,  setTerminalsOpen]  = useState(false);
@@ -2304,6 +2309,16 @@ export default function AdminPage() {
                 />
                 {(myRole === "admin" || myRole === "dispatch") && m.user_id !== currentUserId && (
                   <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", gap: 6 }}>
+                    {fleetSetup.byUser.get(m.user_id) && (() => {
+                      const r = fleetSetup.byUser.get(m.user_id)!;
+                      const bad = r.summary.requiredLeft > 0;
+                      return (
+                        <button type="button" onClick={() => setSetupRowId(m.user_id)}
+                          style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 2, border: `1px solid ${bad ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.12)"}`, background: "rgba(255,255,255,0.06)", color: bad ? "#f87171" : r.summary.complete ? "#4ade80" : "#fff", cursor: "pointer" }}>
+                          Setup {counterText(r.summary)}
+                        </button>
+                      );
+                    })()}
                     <button
                       type="button"
                       onClick={() => setLoadsModal({ userId: m.user_id, displayName: m.display_name ?? m.email ?? m.user_id })}
@@ -2318,6 +2333,8 @@ export default function AdminPage() {
           )}
         </Modal>
       )}
+
+      <DriverSetupSheet row={setupRowId ? fleetSetup.byUser.get(setupRowId) ?? null : null} onClose={() => setSetupRowId(null)} />
 
       {/* ── EQUIPMENT (Trucks, Trailers, Combos) -- modal opened via its own
            "Equipment" tile below. Admin/lead only, same as before. Content
