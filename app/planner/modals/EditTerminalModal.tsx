@@ -68,6 +68,7 @@ export default function EditTerminalModal({
   // the old /admin terminal editor; this is the same column, surfaced here
   // too since fleet staff manage terminals from here now.
   const [renewalDays, setRenewalDays] = useState<number | null>(null);
+  const [renewsOn, setRenewsOn] = useState<"gate" | "load">("gate");
   const [gauging, setGauging] = useState<{ cutoff: string | null; minutes: number | null }>({ cutoff: null, minutes: null });
   const queryClient = useQueryClient();
 
@@ -87,12 +88,22 @@ export default function EditTerminalModal({
   async function loadTerminalInfo() {
     const { data } = await supabase
       .from("terminals")
-      .select("renewal_days, gauging_cutoff, gauging_minutes")
+      .select("renewal_days, gauging_cutoff, gauging_minutes, renews_on")
       .eq("terminal_id", terminalId)
       .maybeSingle();
-    const row = data as { renewal_days: number | null; gauging_cutoff: string | null; gauging_minutes: number | null } | null;
+    const row = data as { renewal_days: number | null; gauging_cutoff: string | null; gauging_minutes: number | null; renews_on?: string | null } | null;
+    setRenewsOn(row?.renews_on === "load" ? "load" : "gate");
     setRenewalDays(row?.renewal_days ?? 90);
     setGauging({ cutoff: row?.gauging_cutoff ?? null, minutes: row?.gauging_minutes ?? null });
+  }
+
+  async function saveRenewsOn(next: "gate" | "load") {
+    setError(null);
+    const { error: err } = await supabase.from("terminals").update({ renews_on: next }).eq("terminal_id", terminalId);
+    if (err) { setError(err.message); return; }
+    setRenewsOn(next);
+    await queryClient.invalidateQueries({ queryKey: TERMINALS_CATALOG_QUERY_KEY });
+    onChanged();
   }
 
   async function saveGauging(next: { cutoff: string | null; minutes: number | null }) {
@@ -192,6 +203,8 @@ export default function EditTerminalModal({
           onDeleteRack={deleteRack}
           renewalDays={renewalDays}
           onSaveRenewalDays={saveRenewalDays}
+          renewsOn={renewsOn}
+          onSaveRenewsOn={saveRenewsOn}
           gauging={gauging}
           onSaveGauging={saveGauging}
         />

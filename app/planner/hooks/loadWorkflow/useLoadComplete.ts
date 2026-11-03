@@ -7,7 +7,8 @@ import { useCallback } from "react";
 import { completeLoad } from "@/lib/supabase/load";
 import { computeActualLbsForLine, resolveDensestReadingPerProduct } from "../../utils/planMath";
 import type { CompartmentActualReading } from "../../utils/planMath";
-import { updateTerminalTempBias, recordLoadUtilization, writeRackReadings } from "../../utils/loadSideEffects";
+import { updateTerminalTempBias, recordLoadUtilization, writeRackReadings, terminalRenewsOnLoad } from "../../utils/loadSideEffects";
+import { supabase } from "@/lib/supabase/client";
 import { clearActivePlannedLoad } from "../../utils/activePlannedLoad";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
@@ -263,6 +264,12 @@ export function useLoadComplete(
 
         // ── Post-load refresh (don't reset loadReport — it's set above) ─────────
         // Fire in parallel — neither touches loadReport state
+        // A terminal that only counts a printed BOL renews the card now, once the load is complete (not at the gate).
+        if (selectedTerminalId && authUserId && await terminalRenewsOnLoad(selectedTerminalId)) {
+          try {
+            await supabase.from("terminal_access").upsert({ user_id: authUserId, terminal_id: selectedTerminalId, carded_on: new Date().toISOString() }, { onConflict: "user_id,terminal_id" });
+          } catch (err) { console.warn("terminal_access renew after load failed (non-fatal):", err); }
+        }
         await Promise.allSettled([onRefreshTerminalProducts?.(), onRefreshTerminalAccess?.(), onPostLoadComplete?.()]);
       } catch (e: any) {
         console.error("complete_load failed:", e);

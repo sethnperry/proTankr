@@ -10,6 +10,7 @@ import { writeActivePlannedLoad } from "../../utils/activePlannedLoad";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import { linkLoadToOpenTrip } from "@/lib/trips/tripLogic";
+import { terminalRenewsOnLoad } from "../../utils/loadSideEffects";
 
 import type { Props } from "./types";
 import { friendlyLoadError } from "./friendlyError";
@@ -192,10 +193,12 @@ export function useLoadStart(props: Props, k: ReturnType<typeof useLoadWorkflowS
       }
 
       // Reset terminal access expiry — driver is actively loading, so re-card them now.
-      // begin_load doesn't touch terminal_access, so we do it here.
+      // begin_load doesn't touch terminal_access, so we do it here. A terminal that only counts a printed BOL
+      // (renews_on = 'load') renews when the load is completed instead (useLoadComplete).
       if (selectedTerminalId && authUserId) {
         (async () => {
           try {
+            if (await terminalRenewsOnLoad(selectedTerminalId)) return;
             await supabase
               .from("terminal_access")
               .upsert(

@@ -12,7 +12,7 @@ import type { TerminalRack } from "../rackProductTypes";
 export function RacksView({
   terminalName, racks, loading, error, newRackName, setNewRackName, onAddRack, saving,
   onEditProducts, onRenamed, onDeleteRack,
-  renewalDays, onSaveRenewalDays, gauging, onSaveGauging,
+  renewalDays, onSaveRenewalDays, renewsOn, onSaveRenewsOn, gauging, onSaveGauging,
 }: {
   terminalName?: string;
   racks: TerminalRack[];
@@ -27,6 +27,8 @@ export function RacksView({
   onDeleteRack: (rackId: string) => void;
   renewalDays: number | null;
   onSaveRenewalDays: (days: number) => void;
+  renewsOn: "gate" | "load";
+  onSaveRenewsOn: (v: "gate" | "load") => void;
   gauging: { cutoff: string | null; minutes: number | null };
   onSaveGauging: (next: { cutoff: string | null; minutes: number | null }) => void;
 }) {
@@ -78,6 +80,23 @@ export function RacksView({
             }}
           />
           <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>days</span>
+        </div>
+      </div>
+
+      <div style={{ borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)", padding: 12, display: "grid", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Card renews</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+            When a driver's card here counts as renewed: when they get through the gate and start loading, or only after the load is completed (the terminal needs a printed BOL).
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {([["gate", "At the gate"], ["load", "After loading"]] as const).map(([v, label]) => (
+            <button key={v} type="button" onClick={() => onSaveRenewsOn(v)}
+              style={{ flex: 1, padding: "9px 0", borderRadius: 2, fontSize: 13, fontWeight: 800, cursor: "pointer", border: `1px solid ${renewsOn === v ? "#fff" : "rgba(255,255,255,0.15)"}`, background: renewsOn === v ? "#fff" : "transparent", color: renewsOn === v ? "#000" : "#fff" }}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 

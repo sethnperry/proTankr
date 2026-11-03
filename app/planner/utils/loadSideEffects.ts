@@ -246,3 +246,13 @@ export async function writeRackReadings(args: {
     console.warn("rack_product_status upsert threw (non-fatal):", e);
   }
 }
+
+
+/** True when this terminal only counts a visit once the load is completed (a printed BOL), not at the gate. Fails open (false). */
+export async function terminalRenewsOnLoad(terminalId: string | null | undefined): Promise<boolean> {
+  if (!terminalId) return false;
+  try {
+    const { data, error } = await supabase.from("terminals").select("renews_on").eq("terminal_id", terminalId).maybeSingle();
+    return !error && (data as { renews_on?: string } | null)?.renews_on === "load";
+  } catch { return false; }
+}
