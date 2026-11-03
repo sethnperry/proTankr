@@ -6,7 +6,7 @@
 // stored per segment and kept off the PTD proper (it is internal). Pure: no Supabase.
 
 export type DhStop = { name: string; city: string | null; state: string | null; arrivedAt: string | null; leftAt: string | null; noLoad?: boolean };
-export type DhKind = "to_rack" | "rack_hop" | "return";
+export type DhKind = "to_rack" | "rack_hop" | "return" | "move";
 export type DhSegment = {
   key: string;
   kind: DhKind;
@@ -18,7 +18,7 @@ export type DhSegment = {
   eligible: boolean;
 };
 
-export const KIND_LABEL: Record<DhKind, string> = { to_rack: "To the rack", rack_hop: "Rack to rack", return: "Back after delivery" };
+export const KIND_LABEL: Record<DhKind, string> = { to_rack: "To the rack", rack_hop: "Rack to rack", return: "Back after delivery", move: "Empty move" };
 
 const place = (s: { name?: string; city: string | null; state: string | null }) => [s.city, s.state].filter(Boolean).join(", ") || s.name || "—";
 const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);

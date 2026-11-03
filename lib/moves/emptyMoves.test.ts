@@ -63,3 +63,14 @@ test("the driver is asked for an odometer only when telematics left it blank", (
   assert.equal(odometerMissing({ begin_miles: null, end_miles: null, ended_at: null }), "begin");
   assert.equal(odometerMissing({ begin_miles: 5, end_miles: null, ended_at: "x" }), "end");
 });
+
+import { emptyMoveRows } from "../trips/deadheadReport.ts";
+test("finished empty moves become report rows; open and cancelled ones do not", () => {
+  const done = { ...base, move_id: "a", ended_at: "2026-11-03T11:00:00Z", billable: true } as any;
+  const rows = emptyMoveRows([done, base as any, { ...done, move_id: "c", notes: "Cancelled" }], (id, t) => id ?? t ?? "?");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].moveId, "a");
+  assert.equal(rows[0].minutes, 60);
+  assert.equal(rows[0].billable, true);
+  assert.equal(rows[0].kind, "move");
+});

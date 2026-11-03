@@ -5,11 +5,13 @@
 
 import type { ShellColumn, ShellFilter } from "../reports/reportShell.ts";
 import { KIND_LABEL, fmtMin, tripSegments, type DhKind, type DhSegment, type Flags } from "./deadhead.ts";
-import type { TripDeliveryRow, TripPickupRow, TripRow } from "./types.ts";
+import type { EmptyMoveRow, TripDeliveryRow, TripPickupRow, TripRow } from "./types.ts";
+import { moveMinutes } from "../moves/emptyMoves.ts";
 
 export type DeadheadRow = {
   key: string;            // tripId|segmentKey
-  tripId: string;
+  tripId: string;         // empty for a stand-alone empty move
+  moveId?: string;        // set for a stand-alone empty move (its billable call lives on the move itself)
   segmentKey: string;
   driverId: string;
   date: string;
@@ -34,6 +36,18 @@ export function deadheadRows(
     }
   }
   return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** Finished stand-alone empty moves (the truck empty between trips) as report rows. A cancelled one carries no time. */
+export function emptyMoveRows(moves: EmptyMoveRow[], placeName: (id: string | null, text: string | null) => string): DeadheadRow[] {
+  const out: DeadheadRow[] = [];
+  for (const m of moves) {
+    if (!m.ended_at || m.notes === "Cancelled") continue;
+    const minutes = moveMinutes(m);
+    if (minutes <= 0) continue;
+    out.push({ key: `move|${m.move_id}`, tripId: "", moveId: m.move_id, segmentKey: "move", driverId: m.driver_id, date: m.started_at, kind: "move", from: placeName(m.from_place_id, m.from_text), to: placeName(m.to_place_id, m.to_text), minutes, billable: m.billable ?? null });
+  }
+  return out;
 }
 
 const day = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}` : ""; };
