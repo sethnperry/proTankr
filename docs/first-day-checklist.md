@@ -12,7 +12,6 @@ Company Dashboard, as admin.
 - [ ] **Accounts:** make one test rule that matches a customer name you'll use today, pointed at your own email.
 - [ ] **Setup → Fuel:** check the payment methods, steps and receipt rules.
 - [ ] Resend: confirm SPF, DKIM and DMARC are set for protankr.com, or the first emails land in spam.
-- [ ] Vercel has `ANTHROPIC_API_KEY` if you want the fuel receipt reader to fill in station, gallons and amount.
 
 ## 1. Open the app (2 minutes)
 
