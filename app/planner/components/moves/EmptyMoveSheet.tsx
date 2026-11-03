@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { LocationPicker } from "../trip/LocationPicker";
 import { locationTitle, nearbyPlaces, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
-import { MOVE_KINDS, moveKindLabel, moveMiles, moveMinutes, suggestKind, type MoveKind, type MovePlace } from "@/lib/moves/emptyMoves";
+import { MOVE_KINDS, moveKindLabel, moveMiles, moveMinutes, odometerProblem, suggestKind, type MoveKind, type MovePlace } from "@/lib/moves/emptyMoves";
 import type { EmptyMoveRow } from "@/lib/trips/types";
 
 const MUTE = "rgba(255,255,255,0.5)";
@@ -40,6 +40,9 @@ export function EmptyMoveSheet({ open, onClose, truck, hasTrailer, liveOdometer,
 
   const num = (s: string) => { const n = Number(s.replace(/,/g, "")); return s.trim() && Number.isFinite(n) ? n : null; };
   const destLabel = to.id ? nameOf(to.id, null) : toText.trim();
+  // The odometer is required at both ends: it can't be skipped, and the arrival reading can't be below the start.
+  const startProblem = odometerProblem(odo, null);
+  const endProblem = current ? odometerProblem(odo || guess, current.begin_miles) : null;
 
   return (
     <FullscreenModal open={open} onClose={onClose} title="Empty move" footer={null}>
@@ -48,9 +51,10 @@ export function EmptyMoveSheet({ open, onClose, truck, hasTrailer, liveOdometer,
           <div style={{ fontSize: 12, color: MUTE }}>{moveKindLabel(current.kind)} · {truck.name}</div>
           <div style={{ fontSize: 22, fontWeight: 800, margin: "4px 0 2px" }}>To {nameOf(current.to_place_id, current.to_text)}</div>
           <div style={{ color: MUTE, fontSize: 13 }}>Started {new Date(current.started_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {fmt(moveMinutes(current))} so far</div>
-          <div style={lab}>Odometer at arrival</div>
+          <div style={lab}>Odometer at arrival (required)</div>
           <input style={inp} inputMode="decimal" value={odo || guess} onChange={(e) => setOdo(e.target.value)} />
-          <button type="button" style={primary} onClick={() => { onEnd(current.move_id, num(odo || guess)); onClose(); }}>Arrived</button>
+          {endProblem && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 6 }}>{endProblem}</div>}
+          <button type="button" style={{ ...primary, opacity: endProblem ? 0.4 : 1 }} disabled={!!endProblem} onClick={() => { onEnd(current.move_id, num(odo || guess)); onClose(); }}>Arrived</button>
           {confirmDiscard ? (
             <button type="button" style={{ ...primary, background: "#b91c1c", color: "#fff" }} onClick={() => { onDiscard(current.move_id); onClose(); }}>Yes, cancel this move</button>
           ) : <button type="button" style={{ ...primary, background: "transparent", color: "#fff", border: `1px solid ${HAIR}` }} onClick={() => setConfirmDiscard(true)}>Cancel move</button>}
@@ -70,9 +74,10 @@ export function EmptyMoveSheet({ open, onClose, truck, hasTrailer, liveOdometer,
           )}
           <button type="button" style={{ ...chip(false), width: "100%", marginBottom: 8, textAlign: "left" }} onClick={() => setPickOpen(true)}>{to.id ? `✓ ${nameOf(to.id, null)} · change` : "Pick a place…"}</button>
           <input style={inp} placeholder="or type where" value={toText} onChange={(e) => { setToText(e.target.value); setTo({ id: null, text: null }); }} />
-          <div style={lab}>Odometer now</div>
+          <div style={lab}>Odometer now (required)</div>
           <input style={inp} inputMode="decimal" value={odo} onChange={(e) => setOdo(e.target.value)} />
-          <button type="button" style={{ ...primary, opacity: destLabel ? 1 : 0.4 }} disabled={!destLabel}
+          {odo && startProblem && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 6 }}>{startProblem}</div>}
+          <button type="button" style={{ ...primary, opacity: destLabel && !startProblem ? 1 : 0.4 }} disabled={!destLabel || !!startProblem}
             onClick={() => { onBegin({ kind, from: { id: null, text: null }, to: to.id ? to : { id: null, text: toText }, beginMiles: num(odo) }); onClose(); }}>Start move</button>
           {recent.length > 0 && (
             <>
