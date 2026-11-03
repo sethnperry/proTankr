@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeSetup, counterText, adminLine, STEPS, type SetupFacts } from "./driverSetup.ts";
+import { planHasProduct, computeSetup, counterText, adminLine, STEPS, type SetupFacts } from "./driverSetup.ts";
 
 const blank: SetupFacts = {
   tier: "solo", profile: {}, regionsDefined: false, license: {}, medical: {}, scheduleDays: 0,
@@ -85,4 +85,11 @@ test("the admin line says what is blocking", () => {
   assert.equal(adminLine(computeSetup(blank)).tone, "bad");
   assert.match(adminLine(computeSetup(blank)).text, /4 required left/);
   assert.equal(adminLine(computeSetup(filled())).tone, "warn");
+});
+
+test("a saved plan counts only when it has a product in it", () => {
+  assert.equal(planHasProduct({ compPlan: { "1": { productId: "p", empty: false }, "2": { empty: true } } }), true);
+  assert.equal(planHasProduct({ compPlan: { "1": { productId: null, empty: true } } }), false);
+  assert.equal(planHasProduct({ compPlan: {} }), false);
+  assert.equal(planHasProduct(null), false);
 });

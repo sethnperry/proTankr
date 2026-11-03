@@ -168,3 +168,9 @@ export function adminLine(s: SetupSummary): { text: string; tone: "ok" | "warn" 
   if (s.requiredLeft > 0) return { text: `${counterText(s)} · ${s.requiredLeft} required left`, tone: "bad" };
   return { text: `${counterText(s)} · only optional steps left`, tone: "warn" };
 }
+
+/** A saved plan is one with at least one product in it (slots 1 to 5; slot 0 is the live draft). */
+export function planHasProduct(payload: unknown): boolean {
+  const cp = (payload as { compPlan?: Record<string, { productId?: string | null; empty?: boolean }> } | null)?.compPlan;
+  return !!cp && Object.values(cp).some((c) => !!c?.productId && !c?.empty);
+}

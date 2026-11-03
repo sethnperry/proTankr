@@ -172,6 +172,8 @@ import { CalloutSheet } from "../components/callouts/CalloutSheet";
 import { useMyCallouts } from "../hooks/useMyCallouts";
 import { PerDiemSheet } from "../components/perdiem/PerDiemSheet";
 import { usePerDiem } from "../hooks/usePerDiem";
+import { useDriverSetup } from "@/lib/setup/useDriverSetup";
+import { counterText } from "@/lib/setup/driverSetup";
 import { InspectionSheet, type InspectUnit } from "../components/maintenance/InspectionSheet";
 import { useOpenCampaigns } from "../hooks/useOpenCampaigns";
 import { createInspection } from "@/lib/maintenance/inspection";
@@ -302,6 +304,17 @@ export default function HomePage() {
   const openSafety = safety.meetings.filter((m) => m.started_at && !safety.signed[m.meeting_id]).length;
   const termWork = useTerminalWork({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: true });
   const callouts = useMyCallouts({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: calloutOpen });
+  // Setup checklist: a "Finish setup" row until every step is done. Also the target of /planner/home?open=perdiem.
+  const setup = useDriverSetup(userId || null, companyId || null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("open") !== "perdiem") return;
+    params.delete("open");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    setPerDiemOpen(true);
+  }, []);
   const perDiem = usePerDiem({ store, state, syncNow, userId: userId || null, companyId: companyId || null, enabled: perDiemOpen });
   // Inspect a unit: written through the offline store; a failed item plans a work order.
   const openCampaigns = useOpenCampaigns(companyId, inspectOpen, unitRegions);
@@ -2518,9 +2531,19 @@ export default function HomePage() {
         const showExp = false;
         const showSync = pendingCount > 0 || failed.length > 0;
         const showFuel = !!fuel.active;
-        if (!showGross && !showExp && !showSync && !showFuel) return null;
+        const showSetup = !!setup.summary && !setup.summary.complete;
+        if (!showGross && !showExp && !showSync && !showFuel && !showSetup) return null;
         return (
           <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>
+            {showSetup && (
+              <InfoRow
+                label="Finish setup"
+                value={`${counterText(setup.summary!)}${setup.summary!.requiredLeft ? ` · ${setup.summary!.requiredLeft} required` : ""}`}
+                valueColor={setup.summary!.requiredLeft ? "#f87171" : "#fbbf24"}
+                onClick={() => nav.go("setup", "/planner/setup")}
+                last={!showGross && !showExp && !showSync && !showFuel}
+              />
+            )}
             {showFuel && (
               <InfoRow
                 label="Fuel stop"
