@@ -320,9 +320,8 @@ export default function HomePage() {
   useEffect(() => { if (!shiftOpen) return; setShiftNow(Date.now()); const t = window.setInterval(() => setShiftNow(Date.now()), 60_000); return () => window.clearInterval(t); }, [shiftOpen]);
   const shiftLocalEvents = useMemo(() => (store && userId ? store.list("shift_events", (e) => e.user_id === userId) : []), [store, userId, state]); // eslint-disable-line react-hooks/exhaustive-deps
   const shiftRecapData = useShiftRecap({ companyId: companyId || null, userId: userId || null, enabled: shiftOpen, localEvents: shiftLocalEvents, nowMs: shiftNow });
-  // Starting the shift automatically: a Begin Trip tap always asks; a fuel stop or inspection asks unless the driver
-  // said "not now" in the last four hours; Geotab showing them on duty or driving asks once per status. The driver
-  // always confirms the start time. The rules are in lib/shifts/autoStart.ts.
+  // Starting the shift automatically: a Begin Trip tap always asks; Geotab showing them on duty or driving asks
+  // once per status. The driver always confirms the start time. The rules are in lib/shifts/autoStart.ts.
   const [shiftAsk, setShiftAsk] = useState<{ reason: string; atMs: number; source: "app" | "geotab"; then?: () => void; always: boolean; since?: string } | null>(null);
   const shiftKey = (k: string) => `proTankr:u:${userId}:${k}`;
   const askShiftStart = (reason: string, then: () => void, o?: { always?: boolean }) => {
@@ -1007,7 +1006,7 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
-  const tapFuelNow = async () => {
+  const tapFuel = async () => {
     // Fuel, scale or any other stop waits until the delivery you're at is finished.
     const openDrop = snap?.deliveries.find((d) => d.arrived_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled");
     if (openDrop && !fuel.active) {
@@ -1024,8 +1023,6 @@ export default function HomePage() {
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
     setFuelOpen(true);
   };
-  // A new fuel stop is a sign the day has started: offer to start the shift first.
-  const tapFuel = () => { if (!fuel.active) askShiftStart("You're starting a fuel stop.", () => void tapFuelNow()); else void tapFuelNow(); };
   // A back-dated arrival (the geofence saw the truck come to rest earlier) sets this for one call.
   const arriveAtRef = useRef<Date | null>(null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
@@ -2633,7 +2630,7 @@ export default function HomePage() {
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
           { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
-          { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => askShiftStart("You're starting an inspection.", () => setInspectOpen(true)) },
+          { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
           { icon: "truck", label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
           { icon: "plan", label: "Document", sub: "Submit a document", onClick: () => setDocOpen(true) },
           { icon: "locate", label: "Down time", sub: "Photo, no timer", onClick: () => setDownTimeOpen(true) },
