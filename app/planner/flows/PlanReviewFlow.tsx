@@ -75,7 +75,6 @@ export default function PlanReviewFlow() {
 
   return (
     <>
-    <RackDelaySheet open={rackDelayOpen} products={rackProducts} onClose={() => setRackDelayOpen(false)} onSubmit={startRackDelay} />
     <LoadingModal
       supplierSection={<ConnectedSupplierPanel />}
       open={loadWorkflow.loadingOpen}
@@ -150,6 +149,8 @@ export default function PlanReviewFlow() {
       liveFuelPct={recentFuelPct}
       onSaveFuelTankGallons={saveFuelTankGallons}
     />
+    {/* After Plan Review in the page, so it stacks above it. */}
+    <RackDelaySheet open={rackDelayOpen} products={rackProducts} onClose={() => setRackDelayOpen(false)} onSubmit={startRackDelay} />
     </>
   );
 }

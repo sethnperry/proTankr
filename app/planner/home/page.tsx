@@ -1027,12 +1027,15 @@ export default function HomePage() {
   const arriveAtRef = useRef<Date | null>(null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
 
-  // A delay at the rack ends when loading begins: the pickup's Begin time is stamped (never before the delay started).
+  // A delay at the rack ends when loading begins (the pickup's Begin time stamped after the delay started) or, for a
+  // Rack Delay started inside Plan Review, when the driver leaves the rack. Never before the delay started.
   useEffect(() => {
     if (!runningDelay || runningDelay.leg !== "at_rack" || !snap) return;
     const p = snap.pickups.find((x) => x.pickup_id === runningDelay.pickupId);
-    if (!p?.begin_at) return;
-    endDelay(Date.parse(p.begin_at) >= Date.parse(runningDelay.startedAt) ? p.begin_at : undefined);
+    if (!p) return;
+    const started = Date.parse(runningDelay.startedAt);
+    const endAt = p.begin_at && Date.parse(p.begin_at) >= started ? p.begin_at : p.left_at && Date.parse(p.left_at) >= started ? p.left_at : null;
+    if (endAt) endDelay(endAt);
   }, [runningDelay, snap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadedPickup = step.kind === "loaded" ? step.pickup : null;
