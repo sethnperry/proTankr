@@ -98,6 +98,10 @@ export function LocationBrowser({
   const favStoresElsewhere = useMemo(() => locations.filter((l) => l.starred && l.is_active !== false
     && !cityStars.has(cityKey((l.state ?? "").trim(), (l.city ?? "").trim()))).sort(byNumberThenName), [locations, cityStars]);
 
+  // Places within a few miles of where the driver is, nearest first: the usual answer to "where am I going".
+  const nearby = useMemo(() => (searching ? [] : nearbyPlaces(locations, origin)), [locations, origin, searching]);
+  // (Keep every hook above the editor's early return below: a hook after it crashes the screen when Add is tapped.)
+
   const pick = (l: DeliveryLocation) => onPick?.({ locationId: l.location_id, oneOffName: null, deliveryType: l.delivery_type });
   const done = () => { onChanged?.(); setEditing(undefined); };
 
@@ -160,8 +164,6 @@ export function LocationBrowser({
     </button>
   ) : null;
 
-  // Places within a few miles of where the driver is, nearest first: the usual answer to "where am I going".
-  const nearby = useMemo(() => (searching ? [] : nearbyPlaces(locations, origin)), [locations, origin, searching]);
 
   const cityObj = area?.city ? { state: area.state, city: area.city } : null;
   const storesHere = cityObj ? list : [];
