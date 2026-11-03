@@ -8,6 +8,7 @@
 // is gone) reloads itself once, which is the fix.
 
 import React, { useEffect, useState } from "react";
+import { logCrash } from "@/lib/errors/client";
 
 const STALE = /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i;
 
@@ -18,7 +19,7 @@ export default function ErrorScreen({ error, reset }: { error: Error & { digest?
 
   useEffect(() => {
     console.error("[app error]", error);
-    if (!stale) return;
+    if (!stale) { void logCrash(error); return; }
     try {
       const last = Number(sessionStorage.getItem("proTankr:staleReload") ?? 0);
       if (Date.now() - last > 60_000) { sessionStorage.setItem("proTankr:staleReload", String(Date.now())); window.location.reload(); }
