@@ -199,7 +199,7 @@ import { accessSteps, inProgress, requirementsComplete } from "@/lib/terminals/a
 import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readiness";
 import { isoToday_ } from "../utils/dates";
 import { EXPIRY_COLOR, EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
-import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "../components/dash/ConnectedDash";
+import { ConnectedDashHeader, ConnectedDashFooter } from "../components/dash/ConnectedDash";
 import { ExpirationsSheet, LoadsSheet, type ExpGroup, type ExpRow } from "./DashboardSheets";
 import { SiteBoard } from "../dispatch/SiteBoard";
 import { CarrierStrip, CompsStrip, HeadingToTerminalCard, ParkedPreloadsCard, RecentDeliveriesCard, StoreActivityCard, TerminalStatusCard, initialsOf, runLabel } from "../components/trip/DashboardCards";
@@ -2010,7 +2010,7 @@ export default function HomePage() {
     <DashStyles />
     <div
       ref={setWrapEl}
-      className="dash-wrap"
+      className="dash-wrap d2"
       style={{
         position: "relative", zIndex: 1, padding: "12px 16px 40px", color: "#fff",
         // DashboardCards read their surface from these.
@@ -2024,9 +2024,12 @@ export default function HomePage() {
 
       <ShiftBar shift={shift.current} prompt={shift.prompt} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
+      <div className="d2-cols">
+      <div className="d2-left">
+      <div className="d2-o0">
       {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
       <div style={{ marginBottom: 14 }}>
-      <GaugePanel cells={[
+      <GaugePanel square cells={[
           { label: "Expiration", value: String(expTotal), color: expWorst ? EXPIRY_COLOR[expWorst] : LOOK.muted, onClick: () => setExpSheetOpen(true) },
           { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
             onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
@@ -2036,7 +2039,107 @@ export default function HomePage() {
             color: countColor(dropCount), onClick: () => setDropNowOpen(true) },
         ]} />
       </div>
-
+      </div>
+      <div className="d2-o2">
+      <div style={{ marginTop: 4, marginBottom: 14 }}>
+      {/* Next step. Hidden while the "Did you arrive?" card is waiting for an answer. */}
+      {!arriveCardPending && <button
+        type="button"
+        onClick={onBigButton}
+        className="dash-press"
+        {...busyProps(openingPlanner)}
+        style={{
+          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
+        }}
+      >
+        {openingPlanner ? busyText(true, "Opening Planner…") : parkRequested ? "Park it" : parked && step.kind === "start"
+          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
+          : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
+          : step.label}
+      </button>}
+      {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
+        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{parkRequested ? "Dispatch asked you to park this load" : step.detail}</div>
+      )}
+      {sigDelivery && !openingPlanner && (
+        <button type="button" className="dash-press" onClick={() => setConsigneeSignOpen(true)}
+          style={{ width: "100%", marginTop: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", background: "transparent", color: sigDelivery.consignee_signature ? "#4ade80" : "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
+          {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
+        </button>
+      )}
+      {delayLeg && !openingPlanner && (
+        <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
+          rackActions={step.kind === "planner" ? {
+            onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); },
+            onCancelLoad: () => { setCancelErr(null); setCancelOpen(true); },
+          } : undefined} />
+      )}
+      {gaugingAsk && <GaugingAskSheet terminalId={gaugingAsk.id} terminalName={gaugingAsk.name} onClose={() => setGaugingAsk(null)} />}
+      {undoable && !openingPlanner && (
+        <div style={{ textAlign: "center", fontSize: 13, marginTop: 8 }}>
+          {!undoConfirm ? (
+            <button type="button" onClick={() => setUndoConfirm(true)} style={{ background: "none", border: "none", color: muted, textDecoration: "underline", cursor: "pointer", fontSize: 13 }}>
+              Tapped Arrive by mistake? Undo
+            </button>
+          ) : (
+            <div>
+              <div style={{ color: "#fff", marginBottom: 6 }}>Undo arrival at {undoName}?</div>
+              <button type="button" onClick={doUndoArrival} style={{ padding: "8px 16px", fontWeight: 700, cursor: "pointer", background: "#fff", color: "#000", border: "none", borderRadius: 2, marginRight: 8 }}>Undo arrival</button>
+              <button type="button" onClick={() => setUndoConfirm(false)} style={{ padding: "8px 16px", cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>Keep</button>
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+      </div>
+      <div className="d2-o4">
+      {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
+      <SectionLabel>Tools</SectionLabel>
+      {(() => {
+        // Six tiles. Tiles with a list open a pop-out of smaller tools; the Reports tile holds every form.
+        const A = {
+          truckDown: { icon: "truck" as const, label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
+          inspect: { icon: "plan" as const, label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
+          tankCheck: { icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) },
+          termWork: { icon: "terminal" as const, label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
+          emptyMove: { icon: "locate" as const, label: "Empty move", sub: emptyMoves.current ? "In progress" : "Bobtail, repo", subColor: emptyMoves.current ? "#fbbf24" : undefined, onClick: () => setMoveOpen(true) },
+          freight: { icon: "truck" as const, label: "Freight", sub: freight.loads.some((l) => l.status === "open") ? "Load open" : "Van, flatbed, LTS", subColor: freight.loads.some((l) => l.status === "open") ? "#4ade80" : undefined, onClick: () => setFreightOpen(true) },
+        };
+        const tankCheckItems = shell.isSolo === false ? [A.tankCheck] : [];
+        const fleetWorkSub = openSafety ? "Sign in needed" : null;
+        const tools: ToolItem[] = [
+          { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
+          { icon: "plan", label: "Planner", sub: "Set up load plans", onClick: () => nav.go("plan", "/planner?plan=1"), busy: nav.is("plan") },
+          { icon: "truck", label: "Equipment", sub: equipmentLabel, subColor: undefined, onClick: openEquipment, group: [
+            { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
+            A.truckDown, A.inspect,
+          ] },
+          { icon: "store", label: "Location", sub: null, group: [
+            locationsTool(() => setManageLocsOpen(true)),
+            { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
+            ...tankCheckItems, A.termWork,
+          ] },
+          { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : null, subColor: openTrip ? "#4ade80" : undefined, group: [
+            { icon: "route", label: "Trips & PTDs", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
+            A.emptyMove, A.freight,
+          ] },
+          { icon: "chart", label: "Reports", sub: fleetWorkSub, subColor: openSafety ? "#fbbf24" : lanternfly.missing.length ? "#fbbf24" : undefined, group: [
+            { icon: "chart", label: "Reports & history", sub: "Loads, history, fuel", onClick: () => nav.go("reports", "/planner/reports"), busy: nav.is("reports") },
+            { icon: "plan", label: "Document hub", sub: "Submit a document", onClick: () => setDocOpen(true) },
+            { icon: "plan", label: "Paper log", sub: "ELD down or on paper", onClick: () => setPaperLogOpen(true) },
+            { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
+            { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
+            { icon: "locate", label: "Down time", sub: "Photo, no timer", onClick: () => setDownTimeOpen(true) },
+            { icon: "locate", label: "Lanternfly", sub: lanternfly.missing.length ? `${lanternfly.missing.length} to attest` : lanternfly.attested.length ? "Attested" : null, subColor: lanternfly.missing.length ? "#fbbf24" : undefined, onClick: () => setSlfOpen(true) },
+            ...tankCheckItems, A.termWork, A.truckDown, A.inspect,
+          ] },
+        ];
+        return <ToolPanel items={tools} />;
+      })()}
+      <ConnectedDashFooter onShift={() => setShiftOpen(true)} />
+      </div>
+      </div>
+      <div className="d2-right">
+      <div className="d2-o1">
       {myHos && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null) && (() => {
         const least = Math.min(myHos.driveLeftMin ?? Infinity, myHos.dutyLeftMin ?? Infinity);
         // Geotab gives time left; the chips show time used (limit minus left), colored by what is left.
@@ -2085,7 +2188,6 @@ export default function HomePage() {
           </div>
         );
       })()}
-
       {/* One order per load, just above the trip card, on the right. Opens the PTD. */}
       {openTrip && (
         <div style={{ display: "flex", justifyContent: "flex-end", margin: "6px 0 12px" }}>
@@ -2097,9 +2199,6 @@ export default function HomePage() {
           </button>
         </div>
       )}
-
-      <div className="dash-cols">
-      <div>
       <SectionLabel desktopOnly first>Trip</SectionLabel>
 
       {!openTrip && <DispatchedCard items={dispatchedItems.slice(0, 1)} />}
@@ -2353,56 +2452,8 @@ export default function HomePage() {
           <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>Park this load. Tap Park it to say where.</div>
         </div>
       )}
-      <div style={{ marginTop: 4, marginBottom: 14 }}>
-      {/* Next step. Hidden while the "Did you arrive?" card is waiting for an answer. */}
-      {!arriveCardPending && <button
-        type="button"
-        onClick={onBigButton}
-        className="dash-press"
-        {...busyProps(openingPlanner)}
-        style={{
-          width: "100%", padding: "20px 0", fontSize: 20, fontWeight: 800, cursor: "pointer", ...L.cta,
-        }}
-      >
-        {openingPlanner ? busyText(true, "Opening Planner…") : parkRequested ? "Park it" : parked && step.kind === "start"
-          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
-          : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
-          : step.label}
-      </button>}
-      {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
-        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{parkRequested ? "Dispatch asked you to park this load" : step.detail}</div>
-      )}
-      {sigDelivery && !openingPlanner && (
-        <button type="button" className="dash-press" onClick={() => setConsigneeSignOpen(true)}
-          style={{ width: "100%", marginTop: 8, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", background: "transparent", color: sigDelivery.consignee_signature ? "#4ade80" : "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
-          {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
-        </button>
-      )}
-      {delayLeg && !openingPlanner && (
-        <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
-          rackActions={step.kind === "planner" ? {
-            onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); },
-            onCancelLoad: () => { setCancelErr(null); setCancelOpen(true); },
-          } : undefined} />
-      )}
-      {gaugingAsk && <GaugingAskSheet terminalId={gaugingAsk.id} terminalName={gaugingAsk.name} onClose={() => setGaugingAsk(null)} />}
-      {undoable && !openingPlanner && (
-        <div style={{ textAlign: "center", fontSize: 13, marginTop: 8 }}>
-          {!undoConfirm ? (
-            <button type="button" onClick={() => setUndoConfirm(true)} style={{ background: "none", border: "none", color: muted, textDecoration: "underline", cursor: "pointer", fontSize: 13 }}>
-              Tapped Arrive by mistake? Undo
-            </button>
-          ) : (
-            <div>
-              <div style={{ color: "#fff", marginBottom: 6 }}>Undo arrival at {undoName}?</div>
-              <button type="button" onClick={doUndoArrival} style={{ padding: "8px 16px", fontWeight: 700, cursor: "pointer", background: "#fff", color: "#000", border: "none", borderRadius: 2, marginRight: 8 }}>Undo arrival</button>
-              <button type="button" onClick={() => setUndoConfirm(false)} style={{ padding: "8px 16px", cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>Keep</button>
-            </div>
-          )}
-        </div>
-      )}
       </div>
-
+      <div className="d2-o3">
       {sigDelivery && (
         <ConsigneeSignSheet key={`${sigDelivery.delivery_id}:${consigneeSignOpen}`} open={consigneeSignOpen}
           initialName={sigDelivery.consignee_name ?? ""} initialSig={sigDelivery.consignee_signature ?? null}
@@ -2517,9 +2568,6 @@ export default function HomePage() {
           />
         </>
       )}
-      </div>
-
-      <div className="dash-side">
       {/* Readouts: terminal status and recent deliveries always; the rest
           only when there's something to show. */}
       {/* Terminal: right-now status of the selected terminal + who's headed
@@ -2742,32 +2790,7 @@ export default function HomePage() {
 
       <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId} role={shell.role ?? null} myTruckId={truckId} myTrailerId={trailerId} />
 
-      {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
-      <SectionLabel>Tools</SectionLabel>
-      {(() => {
-        const tools: ToolItem[] = [
-          { icon: "plan", label: "Plan", sub: "Set up load plans", onClick: () => nav.go("plan", "/planner?plan=1"), busy: nav.is("plan") },
-          { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
-          locationsTool(() => setManageLocsOpen(true)),
-          { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
-          { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
-          { icon: "locate", label: "Lanternfly", sub: lanternfly.missing.length ? `${lanternfly.missing.length} to attest` : lanternfly.attested.length ? "Attested" : null, subColor: lanternfly.missing.length ? "#fbbf24" : undefined, onClick: () => setSlfOpen(true) },
-          { icon: "locate" as const, label: "Empty move", sub: emptyMoves.current ? "In progress" : "Bobtail, repo", subColor: emptyMoves.current ? "#fbbf24" : undefined, onClick: () => setMoveOpen(true) },
-          { icon: "truck" as const, label: "Freight", sub: freight.loads.some((l) => l.status === "open") ? "Load open" : "Van, flatbed, LTS", subColor: freight.loads.some((l) => l.status === "open") ? "#4ade80" : undefined, onClick: () => setFreightOpen(true) },
-          ...(shell.isSolo === false ? [{ icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) }] : []),
-          { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
-          { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
-          { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
-          { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
-          { icon: "truck", label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
-          { icon: "plan", label: "Document", sub: "Submit a document", onClick: () => setDocOpen(true) },
-          { icon: "locate", label: "Down time", sub: "Photo, no timer", onClick: () => setDownTimeOpen(true) },
-          { icon: "plan", label: "Paper log", sub: "ELD down or on paper", onClick: () => setPaperLogOpen(true) },
-          { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : "History & PTDs", onClick: () => nav.go("trips", "/planner/trips"), busy: nav.is("trips") },
-        ];
-        return <SharedToolsPanel extra={tools} />;
-      })()}
-      <ConnectedDashFooter onShift={() => setShiftOpen(true)} />
+      </div>
       </div>
       </div>
 

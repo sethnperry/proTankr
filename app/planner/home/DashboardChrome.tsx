@@ -9,6 +9,7 @@ import { useDashLook } from "./dashLook";
 import type { ReadinessSegment, ReadinessSummary } from "@/lib/terminals/readiness";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import { Spinner, busyProps } from "@/lib/ui/pending";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 
 // Shared expiration colors (lib/expiry.ts): white > 30 days, yellow 8-30,
 // orange 0-7, red expired.
@@ -172,10 +173,10 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenStep
 
 export type ToolIcon = "truck" | "terminal" | "store" | "card" | "route" | "chart" | "fuel" | "people" | "locate" | "plan" | "lock";
 
-function Icon({ name, color }: { name: ToolIcon; color: string }) {
+function Icon({ name, color, fluid }: { name: ToolIcon; color: string; fluid?: boolean }) {
   const p = { fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+    <svg {...(fluid ? { style: { width: "100%", height: "100%" } } : { width: 22, height: 22 })} viewBox="0 0 24 24" aria-hidden>
       {name === "truck" && (<g {...p}><path d="M2 16V7h10v9" /><path d="M12 10h4l3 3v3h-7" /><circle cx="6" cy="17.5" r="1.8" /><circle cx="16" cy="17.5" r="1.8" /></g>)}
       {name === "terminal" && (<g {...p}><path d="M4 21V9l8-5 8 5v12" /><path d="M9 21v-6h6v6" /><path d="M4 21h16" /></g>)}
       {name === "store" && (<g {...p}><path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" /><circle cx="12" cy="11" r="2.2" /></g>)}
@@ -193,48 +194,75 @@ function Icon({ name, color }: { name: ToolIcon; color: string }) {
 
 // ── Tools and gauge panel ───────────────────────────────────────────────────
 
-export type ToolItem = { icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick: () => void; busy?: boolean };
+export type ToolItem = {
+  icon: ToolIcon; label: string; sub?: string | null; subColor?: string; onClick?: () => void; busy?: boolean;
+  /** A tile that opens a list of smaller tools instead of doing one thing. */
+  group?: ToolItem[];
+};
 
-// Compact three-across icon panel, square, label under the icon.
+// Square tiles, three across, label under the icon. The grid is capped in width so the tiles stop growing
+// on a big screen; the page puts the grid in its own column there.
 export function ToolPanel({ items }: { items: ToolItem[] }) {
   const L = useDashLook();
+  const [openGroup, setOpenGroup] = React.useState<string | null>(null);
+  const group = items.find((t) => t.label === openGroup)?.group ?? null;
+  const cell: React.CSSProperties = { background: "#0f0f10", aspectRatio: "1 / 1", minWidth: 0 };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${L.hairline}`, background: L.hairline, gap: 1 }}>
-      {items.map((t) => (
-        <button key={t.label} type="button" onClick={t.onClick} className="dash-press" {...busyProps(!!t.busy)}
-          style={{ background: "#0f0f10", border: "none", color: "#fff", cursor: "pointer", padding: "14px 6px 12px",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 7, minHeight: 82 }}>
-          {t.busy
-            ? <span style={{ width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner size={16} /></span>
-            : <Icon name={t.icon} color={t.subColor ?? "rgba(255,255,255,0.85)"} />}
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>{t.label}</span>
-        </button>
-      ))}
-      {Array.from({ length: (3 - (items.length % 3)) % 3 }, (_, i) => <div key={`pad${i}`} style={{ background: "#0f0f10" }} />)}
-    </div>
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", border: `1px solid ${L.hairline}`, background: L.hairline, gap: 1, maxWidth: 480, margin: "0 auto", containerType: "inline-size" as const }}>
+        {items.map((t) => (
+          <button key={t.label} type="button" onClick={t.group ? () => setOpenGroup(t.label) : t.onClick} className="dash-press" {...busyProps(!!t.busy)}
+            style={{ ...cell, border: "none", color: "#fff", cursor: "pointer", padding: 4, position: "relative",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6cqw" }}>
+            {t.subColor && <span aria-hidden title={t.sub ?? undefined} style={{ position: "absolute", top: 7, right: 7, width: 7, height: 7, background: t.subColor }} />}
+            <span style={{ width: "clamp(20px, 9cqw, 40px)", height: "clamp(20px, 9cqw, 40px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {t.busy ? <Spinner size={16} /> : <Icon name={t.icon} color={t.subColor ?? "rgba(255,255,255,0.85)"} fluid />}
+            </span>
+            <span style={{ fontSize: "clamp(9px, 3cqw, 12px)", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.label}</span>
+          </button>
+        ))}
+        {Array.from({ length: (3 - (items.length % 3)) % 3 }, (_, i) => <div key={`pad${i}`} style={cell} />)}
+      </div>
+      <FullscreenModal open={!!group} title={openGroup ?? ""} onClose={() => setOpenGroup(null)} footer={null}>
+        {(group ?? []).map((g) => (
+          <button key={g.label} type="button" className="dash-press" {...busyProps(!!g.busy)}
+            onClick={() => { setOpenGroup(null); g.onClick?.(); }}
+            style={{ ...L.secondary, display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px", marginBottom: 8, color: "#fff", textAlign: "left", cursor: "pointer" }}>
+            <span style={{ width: 22, height: 22, flexShrink: 0 }}><Icon name={g.icon} color={g.subColor ?? "rgba(255,255,255,0.85)"} fluid /></span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 15, fontWeight: 800 }}>{g.label}</span>
+              {g.sub && <span style={{ display: "block", fontSize: 12, color: g.subColor ?? L.muted, marginTop: 2 }}>{g.sub}</span>}
+            </span>
+            <span style={{ color: L.faint }}>›</span>
+          </button>
+        ))}
+      </FullscreenModal>
+    </>
   );
 }
 
 // A row of big readouts under the main button.
 export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean; wide?: boolean };
-export function GaugePanel({ cells, equal, labelBelow, top = 12, small }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number; small?: boolean }) {
+export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number; small?: boolean; square?: boolean }) {
   const L = useDashLook();
   // equal: every cell the same width, the whole set scaling with its width
   // (text sized from the panel via container units) up to the screen height,
   // and labels truncating once they no longer fit.
-  const labelSize = equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
+  const labelSize = square ? "clamp(8px, 2.6cqw, 12px)" : equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
   const labelSpacing = equal ? "0.14em" : "0.06em"; // four labels have to fit a phone-width row
-  const valueSize = equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
+  const valueSize = square ? "clamp(20px, 9cqw, 40px)" : equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
   return (
     <div style={{
       display: "grid",
       gridTemplateColumns: equal ? `repeat(${cells.length}, minmax(0, 1fr))` : cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "),
       gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: top,
+      ...(square ? { maxWidth: 480, marginLeft: "auto", marginRight: "auto", containerType: "inline-size" as const, boxSizing: "border-box" as const, minWidth: 0 } : {}),
       ...(equal ? { containerType: "inline-size" as const, maxWidth: "100vh", width: "100%", boxSizing: "border-box" as const, minWidth: 0, overflow: "hidden" } : {}),
     }}>
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
-          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: "left", padding: small ? "7px 8px 6px" : "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0 }}>
+          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: square ? "center" : "left", padding: small ? "7px 8px 6px" : "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0,
+            ...(square ? { aspectRatio: "1 / 1", display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "4cqw" } : {}) }}>
           {(() => {
             const label = (
               <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>

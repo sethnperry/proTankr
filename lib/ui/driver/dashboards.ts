@@ -41,8 +41,7 @@ export function homeDashboardHref(role: Role | null, isSuperAdmin: boolean, isSo
   return list[0]?.href ?? "/planner/home";
 }
 
-// Tiles every dashboard shows (Vault and Reports). Same destinations whatever the role.
+// Tiles every dashboard shows (Reports). Same destination whatever the role. The Vault lives in Profile.
 export const SHARED_TOOLS = [
-  { id: "vault", label: "Vault", sub: "Passwords and cards", href: "/planner/vault", icon: "lock" },
   { id: "reports", label: "Reports", sub: "Loads, history, fuel", href: "/planner/reports", icon: "chart" },
 ] as const;

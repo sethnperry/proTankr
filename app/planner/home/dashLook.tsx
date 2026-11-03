@@ -74,6 +74,17 @@ export function DashStyles() {
 .dash-wrap{max-width:640px;margin:0 auto}
 .dash-cols{display:block}
 .dash-desk{display:none}
+/* Driver dashboard: one column on a phone held upright (left/right wrappers vanish, order puts the
+   pieces back in reading order); two columns once the screen is wider than it is tall. */
+.d2-cols{display:flex;flex-direction:column}
+.d2-left,.d2-right{display:contents}
+.d2-o0{order:0}.d2-o1{order:1}.d2-o2{order:2}.d2-o3{order:3}.d2-o4{order:4}
+@media (min-aspect-ratio: 1/1) and (min-width: 720px){
+  .dash-wrap.d2{max-width:1080px}
+  .d2-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+  .d2-left,.d2-right{display:block;min-width:0}
+  .d2-right .dash-desk{display:flex}
+}
 @media (min-width: 960px){
   .dash-wrap{max-width:1080px}
   .dash-cols{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,0.92fr);gap:28px;align-items:start}

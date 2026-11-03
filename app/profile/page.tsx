@@ -30,6 +30,7 @@ export default function ProfilePage() {
       <SelfProfileView />
 
       <div style={{ ...L.sectionLabel, marginTop: 28 }}>More</div>
+      <Link href="/planner/vault" className="dash-press" style={row}><span style={{ flex: 1 }}>Vault</span><span style={{ color: L.faint }}>›</span></Link>
       <Link href="/planner/cards/credentials" className="dash-press" style={row}><span style={{ flex: 1 }}>Credentials</span><span style={{ color: L.faint }}>›</span></Link>
       <Link href="/planner/cards/badges" className="dash-press" style={row}><span style={{ flex: 1 }}>Badges</span><span style={{ color: L.faint }}>›</span></Link>
       {id.companyId && (
