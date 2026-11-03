@@ -45,12 +45,13 @@ export async function GET(req: NextRequest) {
     if (req.nextUrl.searchParams.get("debug") === "position") {
       return NextResponse.json({ connected: true, vehicleId: vid, lines: await p.positionDebug(vid).catch((e) => [`error ${String((e as Error).message).slice(0, 100)}`]) });
     }
-    const reading = await p.reading(vid);
+    const slim = req.nextUrl.searchParams.get("slim") === "1";
+    const reading = await p.reading(vid, { slim });
     // Every trailer Geotab says is attached. Some are ProTankr trailers; others are just names in Geotab
     // (for example a BOL number kept as a trailer record), so those are listed as they appear there.
     let trailerId: string | null = null, trailerName: string | null = null, trailerKnown = false;
     const geotabTrailers: { name: string; comment: string | null; ours: boolean }[] = [];
-    try {
+    if (!slim) try {
       const attached = await p.attachedAll();
       trailerKnown = attached.size > 0;
       const ids = attached.get(vid) ?? [];
@@ -73,6 +74,8 @@ export async function GET(req: NextRequest) {
       city = typeof it?.name === "string" ? it.name : null;
       state = stateCode(typeof it?.state === "string" ? it.state : null);
     }
+    // The stamp pop-out only needs where the truck is and its odometer: skip the trailer, driver, hours and shipment calls.
+    if (slim) return NextResponse.json({ connected: true, ...reading, city, state });
     // Who is in the truck: the driver signed in to Geotab (or the last one who was), matched to a ProTankr
     // member when possible, plus who holds the truck in ProTankr, and the driver's hours.
     let driverName: string | null = null, heldByName: string | null = null;

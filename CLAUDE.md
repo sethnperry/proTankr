@@ -11978,3 +11978,15 @@ the screen before). Cancel: the odometer becomes the trip's `end_miles` and an `
 itself when the next trip begins (`begin_miles` and starting-from) or at End shift, whose `shift_events` payload now
 carries odometer, lat/lon, place and `location_source`. Pure rules: `lib/moves/emptyMoves.ts`; capture:
 `app/planner/hooks/useStampContext.ts`. A truck with no truck selected skips the odometer step. Not click-tested.
+
+### Geotab rate limit: shared cache, slim readings (2026-11-03)
+
+Geotab allows ~10 calls a minute per login ("API calls quota exceeded. Maximum admitted 10 per 1m" in the Desk).
+One truck reading used to make 9 to 17 calls, and the odometer's "cache" lived inside a per-request object, so it
+never remembered anything. Now `lib/telematics/cache.ts` (`cached`) shares recent answers through the
+`telematics_cache` table (`cacheStore.ts`, server only, an error is a miss): odometer 5 min (2 if missing), fuel
+5 min, engine hours 60 min, position 30 s, parked-truck fix 10 min, trailers/drivers 10 min, attachments and
+last-driver 2 min, shipments 5 min, hours of service 2 min, fleet positions 30 s. If Geotab fails, the last answer is
+served for up to 6 hours (a bad login is never hidden). The stamp pop-out asks for `?slim=1`, which skips fuel,
+hours, trailers, drivers, HOS and shipments. A quota error now names the call: `[Get:StatusData]`. Limits are per
+login: the company login is shared by everything; a driver who connects their own login (hours) gets their own.

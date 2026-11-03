@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { decryptSecret } from "./crypto";
 import { geotabProvider } from "./geotab";
+import { dbStore } from "./cacheStore";
 import type { TelematicsProvider } from "./types";
 import { matchDrivers, type Member } from "./matchDrivers";
 
@@ -36,7 +37,7 @@ export async function providerFor(companyId: string): Promise<TelematicsProvider
     .from("telematics_connections").select("database_name, user_name, credentials_enc, status").eq("company_id", companyId).maybeSingle();
   const c = data as { database_name: string; user_name: string; credentials_enc: string; status: string } | null;
   if (!c || c.status !== "active") return null;
-  return geotabProvider({ database: c.database_name, userName: c.user_name, password: decryptSecret(c.credentials_enc) });
+  return geotabProvider({ database: c.database_name, userName: c.user_name, password: decryptSecret(c.credentials_enc) }, fetch, dbStore(companyId));
 }
 
 /** A driver's own connection (their login, the company's database), else the company's. Hours come from this. */
@@ -47,7 +48,7 @@ export async function providerForDriver(companyId: string, userId: string): Prom
   if (d && d.status === "active") {
     const { data: c } = await admin.from("telematics_connections").select("database_name, status").eq("company_id", companyId).maybeSingle();
     const conn = c as { database_name: string; status: string } | null;
-    if (conn && conn.status === "active") return geotabProvider({ database: conn.database_name, userName: d.user_name, password: decryptSecret(d.credentials_enc) });
+    if (conn && conn.status === "active") return geotabProvider({ database: conn.database_name, userName: d.user_name, password: decryptSecret(d.credentials_enc) }, fetch, dbStore(companyId));
   }
   return providerFor(companyId);
 }
@@ -65,7 +66,7 @@ export async function driverOwnProviders(companyId: string, userIds: string[]): 
   if (!conn || conn.status !== "active") return out;
   for (const r of (cr.data ?? []) as { user_id: string; user_name: string; credentials_enc: string; status: string }[]) {
     if (r.status !== "active") continue;
-    try { out.set(r.user_id, geotabProvider({ database: conn.database_name, userName: r.user_name, password: decryptSecret(r.credentials_enc) })); } catch { /* falls back to the company login */ }
+    try { out.set(r.user_id, geotabProvider({ database: conn.database_name, userName: r.user_name, password: decryptSecret(r.credentials_enc) }, fetch, dbStore(companyId))); } catch { /* falls back to the company login */ }
   }
   return out;
 }

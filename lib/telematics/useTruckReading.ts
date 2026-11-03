@@ -16,13 +16,13 @@ export type TruckReading = { odometerMi: number | null; fuelLevelPct?: number | 
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; cycleLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null };
 
 /** The truck's reading, and whether asking failed (provider down, server hiccup) as opposed to "no connection". */
-export async function fetchTruckReadingResult(truckId: string | null): Promise<{ reading: TruckReading | null; failed: boolean }> {
+export async function fetchTruckReadingResult(truckId: string | null, o?: { slim?: boolean }): Promise<{ reading: TruckReading | null; failed: boolean }> {
   if (!truckId) return { reading: null, failed: false };
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return { reading: null, failed: false };
-    const r = await fetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const r = await fetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}${o?.slim ? "&slim=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
     if (!r.ok) return { reading: null, failed: true };
     const j = await r.json();
     return { reading: j?.connected ? (j as TruckReading) : null, failed: false };

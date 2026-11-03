@@ -8,6 +8,7 @@ import { drivingStops } from "./dutyStops.ts";
 import { breakLeftMin, cycleRecap, driveLeftMin, nonDrivingSinceMs, workdayLeftMin } from "./cycleRecap.ts";
 import { TelematicsAuthError, type Discovery, type DriverTimeline, type TimelineItem, type HosAvailability, type ProviderDriver, type ProviderGroup, type ProviderShipment, type ProviderTrailer, type ProviderVehicle, type TrailerEvent, type TelematicsProvider, type VehicleReading } from "./types.ts";
 import { dutyFromLogs, isDutyChange } from "./dutyLogs.ts";
+import { cached, mapToPairs, pairsToMap, type CacheStore } from "./cache.ts";
 
 export type GeotabCreds = { database: string; userName: string; password: string };
 type Fetch = typeof fetch;
@@ -32,7 +33,9 @@ async function rpc(f: Fetch, host: string, method: string, params: unknown): Pro
     const name = String(json.error?.errors?.[0]?.name ?? json.error?.name ?? "");
     const msg = String(json.error?.message ?? "Geotab error");
     if (/InvalidUser|Incorrect login|DbUnavailable|Authenticat/i.test(name + msg)) throw new TelematicsAuthError(msg);
-    throw new Error(msg);
+    // Say which call tripped a quota, so the Desk shows what to cache or slow down.
+    const tn = typeof (params as { typeName?: unknown } | null)?.typeName === "string" ? `:${(params as { typeName: string }).typeName}` : "";
+    throw new Error(/quota|limit/i.test(msg) ? `${msg} [${method}${tn}]` : msg);
   }
   return json?.result;
 }
@@ -77,7 +80,7 @@ const groupIdsOf = (d: any): { groupIds?: string[] } => {
   return ids.length ? { groupIds: ids } : {};
 };
 
-export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProvider {
+export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheStore): TelematicsProvider {
   // One retry with a fresh session if the cached one has expired.
   const call = async (method: string, params: Record<string, unknown>) => {
     let s = await session(f, c);
@@ -92,14 +95,9 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
 
   // Geotab answers only ~10 calls a minute. An odometer that isn't there costs up to four calls, so a
   // result (found or not) is remembered for a while instead of being searched for on every reading.
-  const odoCache = new Map<string, { at: number; v: number | null }>();
-  const odometer = async (id: string): Promise<number | null> => {
-    const hit = odoCache.get(id);
-    if (hit && Date.now() - hit.at < (hit.v == null ? 2 : 5) * 60_000) return hit.v;
-    const v = await odometerLookup(id);
-    odoCache.set(id, { at: Date.now(), v });
-    return v;
-  };
+  // The odometer changes slowly, so it is shared for a few minutes (a "not found" for less, to look again soon).
+  const odometer = (id: string): Promise<number | null> =>
+    cached(cache, `odo:${id}`, (v: number | null) => (v == null ? 2 : 5) * 60_000, () => odometerLookup(id));
   const odometerLookup = async (id: string): Promise<number | null> => {
     // The adjusted odometer is what MyGeotab shows; fall back to the engine's raw value. The odometer is only
     // logged now and then, so look back a week when the last day has nothing.
@@ -119,7 +117,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
   };
 
   // Engine hours (the hour meter), from seconds. The adjusted value is what MyGeotab shows.
-  const engineHours = async (id: string): Promise<number | null> => {
+  const engineHoursLookup = async (id: string): Promise<number | null> => {
     const from = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     for (const diag of ["DiagnosticEngineHoursAdjustmentId", "DiagnosticEngineHoursId"]) {
       const rows: any[] = await call("Get", { typeName: "StatusData", search: { deviceSearch: { id }, diagnosticSearch: { id: diag }, fromDate: from } });
@@ -130,7 +128,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
   };
 
   // Combined fuel level, percent. Null when the truck doesn't report it.
-  const fuelLevel = async (id: string): Promise<number | null> => {
+  const fuelLevelLookup = async (id: string): Promise<number | null> => {
     const from = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
     const rows: any[] = await call("Get", { typeName: "StatusData", search: { deviceSearch: { id }, diagnosticSearch: { id: "DiagnosticFuelLevelId" }, fromDate: from } });
     const last = (rows ?? []).filter((r) => Number.isFinite(Number(r?.data))).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime))).pop();
@@ -138,7 +136,10 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
     return Math.max(0, Math.min(100, Math.round(Number(last.data) * 10) / 10));
   };
 
-  return {
+  const engineHours = (id: string): Promise<number | null> => cached(cache, `hours:${id}`, 60 * 60_000, () => engineHoursLookup(id));
+  const fuelLevel = (id: string): Promise<number | null> => cached(cache, `fuel:${id}`, 5 * 60_000, () => fuelLevelLookup(id));
+
+  const base: TelematicsProvider = {
     async listVehicles(): Promise<ProviderVehicle[]> {
       const rows: any[] = await call("Get", { typeName: "Device" });
       return (rows ?? [])
@@ -601,12 +602,13 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       return out;
     },
 
-    async reading(id: string): Promise<VehicleReading> {
+    async reading(id: string, o?: { slim?: boolean }): Promise<VehicleReading> {
+      // slim: just the position and odometer (the stamp pop-out), skipping fuel and engine hours.
       const [info, odo, fuel, hours] = await Promise.all([
-        call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id } } }) as Promise<any[]>,
+        cached(cache, `status:${id}`, 30_000, () => call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id } } }) as Promise<any[]>),
         odometer(id).catch(() => null),
-        fuelLevel(id).catch(() => null),
-        engineHours(id).catch(() => null),
+        o?.slim ? Promise.resolve(null) : fuelLevel(id).catch(() => null),
+        o?.slim ? Promise.resolve(null) : engineHours(id).catch(() => null),
       ]);
       const s = (info ?? [])[0];
       const kmh = Number(s?.speed);
@@ -614,13 +616,17 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
       let fix: { lat: number; lon: number; at: string } | null = null;
       if (!(Number.isFinite(Number(s?.latitude)) && Number.isFinite(Number(s?.longitude)))) {
         // Newest window first (3 days, then back to 30, then 180), so a truck parked for weeks still
-        // shows where it last reported without reading a busy truck's whole history.
-        const DAY = 86400000, now = Date.now();
-        for (const [fromD, toD] of [[3, 0], [30, 3], [180, 30]]) {
-          const logs: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: new Date(now - fromD * DAY).toISOString(), toDate: new Date(now - toD * DAY).toISOString() }, resultsLimit: 5000 }).catch(() => []);
-          const lr = (logs ?? []).filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)) && r.dateTime).sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime))).pop();
-          if (lr) { fix = { lat: Number(lr.latitude), lon: Number(lr.longitude), at: String(lr.dateTime) }; break; }
-        }
+        // shows where it last reported without reading a busy truck's whole history. Only the answer is
+        // shared (the log rows are large).
+        fix = await cached(cache, `fix:${id}`, 10 * 60_000, async () => {
+          const DAY = 86400000, now = Date.now();
+          for (const [fromD, toD] of [[3, 0], [30, 3], [180, 30]]) {
+            const logs: any[] = await call("Get", { typeName: "LogRecord", search: { deviceSearch: { id }, fromDate: new Date(now - fromD * DAY).toISOString(), toDate: new Date(now - toD * DAY).toISOString() }, resultsLimit: 5000 }).catch(() => []);
+            const lr = (logs ?? []).filter((r) => Number.isFinite(Number(r?.latitude)) && Number.isFinite(Number(r?.longitude)) && r.dateTime).sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime))).pop();
+            if (lr) return { lat: Number(lr.latitude), lon: Number(lr.longitude), at: String(lr.dateTime) };
+          }
+          return null;
+        });
       }
       return {
         odometerMi: odo,
@@ -639,5 +645,18 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch): TelematicsProv
         communicating: typeof s?.isDeviceCommunicating === "boolean" ? s.isDeviceCommunicating : null,
       };
     },
+  };
+
+  // Slow-changing lookups are shared between callers (see cache.ts). Anything not listed here is not cached.
+  return {
+    ...base,
+    listTrailers: () => cached(cache, "trailers", 10 * 60_000, () => base.listTrailers()),
+    listDrivers: () => cached(cache, "drivers", 10 * 60_000, () => base.listDrivers()),
+    attachedAll: async () => pairsToMap<string, string[]>(await cached(cache, "attached", 2 * 60_000, async () => mapToPairs(await base.attachedAll()))),
+    activeShipments: (vehicleId: string) => cached(cache, `ship:${vehicleId}`, 5 * 60_000, () => base.activeShipments(vehicleId)),
+    lastDriverOf: (vehicleId: string) => cached(cache, `lastdrv:${vehicleId}`, 2 * 60_000, () => base.lastDriverOf(vehicleId)),
+    hos: (id: string, tz?: string) => cached(cache, `hos:${id}:${tz ?? ""}`, 2 * 60_000, () => base.hos(id, tz)),
+    positions: async () => pairsToMap<string, VehicleReading>(await cached(cache, "positions", 30_000, async () => mapToPairs(await base.positions()))),
+    currentDrivers: async () => pairsToMap<string, string>(await cached(cache, "currentdrivers", 30_000, async () => mapToPairs(await base.currentDrivers()))),
   };
 }

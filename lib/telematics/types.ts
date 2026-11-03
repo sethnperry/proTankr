@@ -89,7 +89,8 @@ export interface TelematicsProvider {
   /** Raw duty-status log rows for one driver inside a window (used for pay period recaps). */
   dutyLogs(driverId: string, fromIso: string, toIso: string): Promise<any[]>;
   listVehicles(): Promise<ProviderVehicle[]>;
-  reading(vehicleId: string): Promise<VehicleReading>;
+  /** slim: position and odometer only (fewer provider calls). */
+  reading(vehicleId: string, o?: { slim?: boolean }): Promise<VehicleReading>;
   /** GPS trail for one vehicle inside a window, oldest first (paged). */
   trail(vehicleId: string, fromIso: string, toIso: string): Promise<{ lat: number; lon: number; at: string }[]>;
   /** First and last odometer reading (miles) inside a window, if any. */

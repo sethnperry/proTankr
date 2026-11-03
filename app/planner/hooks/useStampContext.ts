@@ -44,7 +44,7 @@ export function useStampContext(o: { active: boolean; truckId: string | null; lo
     let alive = true;
     setCtx({ ...EMPTY, loading: true });
     void (async () => {
-      const [reading, pos] = await Promise.all([truckId ? fetchTruckReadingResult(truckId).then((r) => r.reading) : Promise.resolve(null), gps()]);
+      const [reading, pos] = await Promise.all([truckId ? fetchTruckReadingResult(truckId, { slim: true }).then((r) => r.reading) : Promise.resolve(null), gps()]);
       let place: { id: string | null; text: string | null } = { id: null, text: null };
       let source: StampSource = "none";
       let at = pos;
