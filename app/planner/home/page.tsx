@@ -1586,9 +1586,17 @@ export default function HomePage() {
           if (wp) alignPlannerToPickup(wp);
           void (async () => {
             try {
-              if (wp?.terminal_id && !wp.rack_id) {
+              // A rack that was deleted since the arrival (a rack made by mistake) no longer counts: ask again.
+              let rackOk = !!wp?.rack_id;
+              if (wp?.rack_id) {
+                try {
+                  const { data } = await supabase.from("terminal_racks").select("rack_id").eq("rack_id", wp.rack_id).maybeSingle();
+                  rackOk = !!data;
+                } catch { /* offline: keep it */ }
+              }
+              if (wp?.terminal_id && !rackOk) {
                 const rackId = await shell.askRack(String(wp.terminal_id));
-                if (rackId) store.put("trip_pickups", { pickup_id: wp.pickup_id, rack_id: rackId });
+                store.put("trip_pickups", { pickup_id: wp.pickup_id, rack_id: rackId ?? null });
               } else if (wp?.rack_id) {
                 shell.location.setSelectedRackId(wp.rack_id);
               }
