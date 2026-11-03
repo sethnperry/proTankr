@@ -2115,7 +2115,7 @@ export default function HomePage() {
           ] },
           { icon: "store", label: "Location", sub: null, group: [
             locationsTool(() => setManageLocsOpen(true)),
-            { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
+            ...(shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin ? [{ icon: "locate" as const, label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) }] : []),
             ...tankCheckItems, A.termWork,
           ] },
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : null, subColor: openTrip ? "#4ade80" : undefined, group: [
