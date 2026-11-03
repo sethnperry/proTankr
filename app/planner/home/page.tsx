@@ -1027,6 +1027,14 @@ export default function HomePage() {
   const arriveAtRef = useRef<Date | null>(null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
 
+  // A delay at the rack ends when loading begins: the pickup's Begin time is stamped (never before the delay started).
+  useEffect(() => {
+    if (!runningDelay || runningDelay.leg !== "at_rack" || !snap) return;
+    const p = snap.pickups.find((x) => x.pickup_id === runningDelay.pickupId);
+    if (!p?.begin_at) return;
+    endDelay(Date.parse(p.begin_at) >= Date.parse(runningDelay.startedAt) ? p.begin_at : undefined);
+  }, [runningDelay, snap]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadedPickup = step.kind === "loaded" ? step.pickup : null;
 
   // The truck's shipment numbers (BOLs) from the telematics app. Asked once when the Loaded sheet opens. Never polled.
@@ -1567,7 +1575,8 @@ export default function HomePage() {
         }), { always: true });
         break;
       case "planner":
-        endDelay();
+        // A delay at the rack (gauging, a long line) keeps running: it ends when loading really begins (below), not
+        // when the driver taps Begin Loading, which may only open the Planner to fix the plan.
         setOpeningPlanner(true);
         // The Planner can be on another terminal (or none) after a rack hop or an undo: put it on this pickup's.
         { const wp = snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome); if (wp) alignPlannerToPickup(wp); }
