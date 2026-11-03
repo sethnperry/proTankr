@@ -55,58 +55,37 @@ export function summarizeMoves(moves: EmptyMoveRow[], nowMs = Date.now()) {
   return { byKind, unreviewed, billableMin, totalMinutes: [...byKind.values()].reduce((s, k) => s + k.minutes, 0) };
 }
 
-// ── Automatic empty moves ────────────────────────────────────────────────────────────────────────
-// A move opens by itself when a trip ends (completed or cancelled) and the driver has nothing open; it closes when
-// the next trip begins, when the truck stops at a known place, or when the shift ends. Odometers come from telematics;
-// only when that fails does the driver get asked (odometerMissing).
+// ── Stamps: the odometer, time and place captured when the driver cancels a load or ends a shift ────────────────
+// A cancel opens an empty move from the stamp; the next trip's begin (or the shift end) closes it. The odometer is
+// always confirmed by the driver (prefilled from telematics when it answers), so the move never depends on a tracker.
 import { nearbyPlaces, type DeliveryLocation, type LatLon } from "../trips/deliveryLocations.ts";
-import type { TripRow } from "../trips/types.ts";
 
-export const AUTO_WINDOW_MS = 6 * 3600_000;   // a trip that ended longer ago than this is not "just now"
-export const ARRIVE_MILES = 0.3;               // within this of a saved place counts as being there
-export const MIN_MOVE_MIN = 5;                 // too short to be a move: a stop in the yard
-export const MAX_STILL_MPH = 2;
+export const ARRIVE_MILES = 0.3; // within this of a saved place counts as being there
 
-const endOf = (t: Pick<TripRow, "status" | "completed_at" | "cancelled_at">): string | null =>
-  t.status === "cancelled" ? (t.cancelled_at ?? t.completed_at ?? null) : t.status === "complete" ? (t.completed_at ?? null) : null;
+export type StampSource = "terminal" | "gps" | "geotab" | "none";
+export type Stamp = { at: string; odometer: number; lat: number | null; lon: number | null; placeId: string | null; placeText: string | null; source: StampSource };
 
-/** The trip whose end should open a move now: ended recently, nothing open, no move already begun since. */
-export function autoStartCandidate(o: { trips: TripRow[]; moves: EmptyMoveRow[]; driverId: string; hasOpenTrip: boolean; nowMs: number; windowMs?: number }): { tripId: string; endedAt: string } | null {
-  if (o.hasOpenTrip || openMove(o.moves, o.driverId)) return null;
-  const ended = o.trips
-    .filter((t) => t.driver_id === o.driverId && endOf(t))
-    .map((t) => ({ tripId: t.trip_id, endedAt: endOf(t)! }))
-    .sort((a, b) => b.endedAt.localeCompare(a.endedAt))[0];
-  if (!ended) return null;
-  const endMs = Date.parse(ended.endedAt);
-  if (!Number.isFinite(endMs) || o.nowMs - endMs > (o.windowMs ?? AUTO_WINDOW_MS) || o.nowMs < endMs) return null;
-  if (o.moves.some((m) => m.driver_id === o.driverId && Date.parse(m.started_at) >= endMs - 60_000)) return null;
-  return ended;
-}
-
-export type MovePos = { lat: number | null; lon: number | null; speedMph?: number | null };
-const hasPos = (p: MovePos | null | undefined): p is { lat: number; lon: number; speedMph?: number | null } => !!p && p.lat != null && p.lon != null;
-
-/** The saved place the truck is at, if any. */
-export function placeAt(locations: DeliveryLocation[], pos: MovePos | null | undefined): DeliveryLocation | null {
-  if (!hasPos(pos)) return null;
-  return nearbyPlaces(locations, { lat: pos.lat, lon: pos.lon } as LatLon, ARRIVE_MILES, 1)[0] ?? null;
-}
-
-export type EndReason = "trip_begun" | "arrived" | "shift_ended";
-/** Why the open move should close now, or null to keep going. */
-export function autoEndReason(o: { move: EmptyMoveRow; hasOpenTrip: boolean; shiftActive: boolean; pos: MovePos | null; locations: DeliveryLocation[]; nowMs: number }): { reason: EndReason; place: DeliveryLocation | null } | null {
-  const place = placeAt(o.locations, o.pos);
-  if (o.hasOpenTrip) return { reason: "trip_begun", place };
-  if (!o.shiftActive && moveMinutes(o.move, o.nowMs) >= 1) return { reason: "shift_ended", place };
-  const still = o.pos?.speedMph == null || o.pos.speedMph <= MAX_STILL_MPH;
-  if (place && still && moveMinutes(o.move, o.nowMs) >= MIN_MOVE_MIN && place.location_id !== o.move.from_place_id) return { reason: "arrived", place };
+/** Why an odometer entry can't be accepted, or null. `floor` is the lowest it may be (the move's start). */
+export function odometerProblem(raw: string, floor: number | null): string | null {
+  const t = raw.replace(/,/g, "").trim();
+  if (!t) return "Enter the odometer.";
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0) return "That isn't a valid odometer.";
+  if (floor != null && n < floor) return `Lower than the last reading (${Math.round(floor).toLocaleString("en-US")}).`;
   return null;
 }
+export const parseOdometer = (raw: string): number | null => (odometerProblem(raw, null) ? null : Number(raw.replace(/,/g, "").trim()));
 
-/** Which odometer the driver still has to type, if any. */
-export function odometerMissing(m: Pick<EmptyMoveRow, "begin_miles" | "end_miles" | "ended_at">): "begin" | "end" | null {
-  if (m.begin_miles == null) return "begin";
-  if (m.ended_at && m.end_miles == null) return "end";
-  return null;
+/** The saved place a position is at, else its city text. */
+export function placeFor(locations: DeliveryLocation[], pos: { lat: number; lon: number } | null, city: string | null): { id: string | null; text: string | null } {
+  if (pos) {
+    const at = nearbyPlaces(locations, pos as LatLon, ARRIVE_MILES, 1)[0];
+    if (at) return { id: at.location_id, text: null };
+  }
+  return { id: null, text: city?.trim() || null };
 }
+
+/** A new open move from a stamp (the load was cancelled here). */
+export const moveFromStamp = (o: { id: string; companyId: string; driverId: string; truckId: string | null; trailerId: string | null; stamp: Stamp }) =>
+  newMove({ id: o.id, companyId: o.companyId, driverId: o.driverId, truckId: o.truckId, trailerId: o.trailerId, kind: suggestKind(!!o.trailerId),
+    from: { id: o.stamp.placeId, text: o.stamp.placeText }, to: { id: null, text: null }, beginMiles: o.stamp.odometer, nowIso: o.stamp.at });

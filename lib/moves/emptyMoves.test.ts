@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { autoEndReason, autoStartCandidate, odometerMissing, placeAt, moveMiles, moveMinutes, newMove, openMove, suggestKind, summarizeMoves } from "./emptyMoves.ts";
+import { moveFromStamp, odometerProblem, parseOdometer, placeFor, moveMiles, moveMinutes, newMove, openMove, suggestKind, summarizeMoves } from "./emptyMoves.ts";
 import { nearbyPlaces } from "../trips/deliveryLocations.ts";
+import { emptyMoveRows } from "../trips/deadheadReport.ts";
 
 const base = newMove({ id: "m1", companyId: "c", driverId: "d", truckId: "t", trailerId: null, kind: "bobtail", from: { id: "p1", text: null }, to: { id: null, text: " Yard 2 " }, beginMiles: 100, nowIso: "2026-11-03T10:00:00Z" });
 
@@ -35,36 +36,30 @@ test("nearby places: within range, nearest first, no coords or retired left out"
   assert.deepEqual(nearbyPlaces([mk("a", 27.95, -82.46)], null), []);
 });
 
-const trip = (o: any) => ({ trip_id: "t1", driver_id: "d", status: "cancelled", cancelled_at: "2026-11-03T14:00:00Z", completed_at: null, ...o });
-const NOW = Date.parse("2026-11-03T14:30:00Z");
-test("a trip that just ended opens a move once", () => {
-  const c = autoStartCandidate({ trips: [trip({})] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW });
-  assert.equal(c?.tripId, "t1");
-  assert.equal(autoStartCandidate({ trips: [trip({})] as any, moves: [{ ...base, started_at: "2026-11-03T14:01:00Z" } as any], driverId: "d", hasOpenTrip: false, nowMs: NOW }), null);
-  assert.equal(autoStartCandidate({ trips: [trip({})] as any, moves: [], driverId: "d", hasOpenTrip: true, nowMs: NOW }), null);
-  assert.equal(autoStartCandidate({ trips: [trip({ cancelled_at: "2026-11-03T02:00:00Z" })] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW }), null);
-  assert.equal(autoStartCandidate({ trips: [trip({ status: "complete", completed_at: "2026-11-03T14:10:00Z" })] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW })?.tripId, "t1");
-  assert.equal(autoStartCandidate({ trips: [trip({ status: "in_transit" })] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW }), null);
+test("odometer entry: required, numeric, not below the start", () => {
+  assert.equal(odometerProblem("", null), "Enter the odometer.");
+  assert.equal(odometerProblem("abc", null), "That isn't a valid odometer.");
+  assert.equal(odometerProblem("0", null), "That isn't a valid odometer.");
+  assert.equal(odometerProblem("412,300", 412000), null);
+  assert.match(odometerProblem("411999", 412000)!, /Lower than the last reading \(412,000\)/);
+  assert.equal(parseOdometer(" 412,300 "), 412300);
+  assert.equal(parseOdometer(""), null);
 });
 const yard = { location_id: "y", name: "Yard", lat: 26.64, lon: -81.87, starred: false, is_active: true } as any;
-const mv = (o: any = {}) => ({ ...base, started_at: "2026-11-03T14:00:00Z", from_place_id: "other", ...o }) as any;
-test("move ends on a new trip, on a shift end, or when stopped at a saved place", () => {
-  const still = { lat: 26.6401, lon: -81.87, speedMph: 0 };
-  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: true, shiftActive: true, pos: null, locations: [], nowMs: NOW })?.reason, "trip_begun");
-  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: false, shiftActive: false, pos: null, locations: [], nowMs: NOW })?.reason, "shift_ended");
-  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: false, shiftActive: true, pos: still, locations: [yard], nowMs: NOW })?.place?.location_id, "y");
-  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: false, shiftActive: true, pos: { ...still, speedMph: 40 }, locations: [yard], nowMs: NOW }), null);
-  assert.equal(autoEndReason({ move: mv({ from_place_id: "y" }), hasOpenTrip: false, shiftActive: true, pos: still, locations: [yard], nowMs: NOW }), null);
-  assert.equal(autoEndReason({ move: mv({ started_at: "2026-11-03T14:28:00Z" }), hasOpenTrip: false, shiftActive: true, pos: still, locations: [yard], nowMs: NOW }), null);
-  assert.equal(placeAt([yard], { lat: 27, lon: -82 }), null);
+test("place: a saved place within 0.3 mi, else the city text, else blank", () => {
+  assert.deepEqual(placeFor([yard], { lat: 26.6401, lon: -81.87 }, "Fort Myers, FL"), { id: "y", text: null });
+  assert.deepEqual(placeFor([yard], { lat: 27, lon: -82 }, " Fort Myers, FL "), { id: null, text: "Fort Myers, FL" });
+  assert.deepEqual(placeFor([yard], null, null), { id: null, text: null });
 });
-test("the driver is asked for an odometer only when telematics left it blank", () => {
-  assert.equal(odometerMissing({ begin_miles: 5, end_miles: null, ended_at: null }), null);
-  assert.equal(odometerMissing({ begin_miles: null, end_miles: null, ended_at: null }), "begin");
-  assert.equal(odometerMissing({ begin_miles: 5, end_miles: null, ended_at: "x" }), "end");
+test("a cancel stamp opens a move at the stamp time and odometer; kind follows the trailer", () => {
+  const stamp = { at: "2026-11-03T05:38:00Z", odometer: 412000, lat: null, lon: null, placeId: "gs", placeText: null, source: "terminal" as const };
+  const m = moveFromStamp({ id: "m", companyId: "c", driverId: "d", truckId: "t", trailerId: null, stamp });
+  assert.equal(m.started_at, "2026-11-03T05:38:00Z");
+  assert.equal(m.begin_miles, 412000);
+  assert.equal(m.from_place_id, "gs");
+  assert.equal(m.kind, "bobtail");
+  assert.equal(moveFromStamp({ id: "m", companyId: "c", driverId: "d", truckId: "t", trailerId: "r", stamp }).kind, "empty_return");
 });
-
-import { emptyMoveRows } from "../trips/deadheadReport.ts";
 test("finished empty moves become report rows; open and cancelled ones do not", () => {
   const done = { ...base, move_id: "a", ended_at: "2026-11-03T11:00:00Z", billable: true } as any;
   const rows = emptyMoveRows([done, base as any, { ...done, move_id: "c", notes: "Cancelled" }], (id, t) => id ?? t ?? "?");

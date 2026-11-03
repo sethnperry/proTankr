@@ -155,8 +155,9 @@ import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } 
 import { FreightSheet } from "../components/freight/FreightSheet";
 import { useFreight } from "../hooks/useFreight";
 import { useEmptyMoves } from "../hooks/useEmptyMoves";
-import { useAutoEmptyMoves } from "../hooks/useAutoEmptyMoves";
-import ValueEntryOverlay from "../components/ValueEntryOverlay";
+import { useStampContext } from "../hooks/useStampContext";
+import { OdometerConfirmSheet } from "../components/moves/OdometerConfirmSheet";
+import { moveFromStamp } from "@/lib/moves/emptyMoves";
 import { EmptyMoveSheet } from "../components/moves/EmptyMoveSheet";
 import { TankCheckSheet } from "../components/trip/TankCheckSheet";
 import { useTankChecks } from "../hooks/useTankChecks";
@@ -361,7 +362,12 @@ export default function HomePage() {
       setEndAsk({ name: t.truck_name ?? "", sleeper: !!t.has_sleeper, loaded: !!openTrip && !!snap && onBoard(snap.compLoads).length > 0, status: t.status_code ?? null, notes: t.status_notes ?? null, sub: t.sub_status ?? null, area: t.local_area ?? null });
     } catch { /* no question: the status stays as it is */ }
   };
-  const finishShift = () => { const startedAt = shift.current?.startedAt ?? null; shift.end(); void askTruckStatus(startedAt); };
+  // Cancelling a load and ending a shift both stop to confirm the odometer first (see OdometerConfirmSheet).
+  const [stampAsk, setStampAsk] = useState<{ kind: "cancel"; v: CancelTripSubmit } | { kind: "shift" } | null>(null);
+  const finishShift = () => {
+    if (truckId) { setStampAsk({ kind: "shift" }); return; }
+    const startedAt = shift.current?.startedAt ?? null; shift.end(); void askTruckStatus(startedAt);
+  };
   const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else finishShift(); };
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
@@ -1220,8 +1226,48 @@ export default function HomePage() {
     });
     return () => { alive = false; };
   }, [tripTrailerId]);
-  const autoMoves = useAutoEmptyMoves({ moves: emptyMoves, trips, userId: userId || null, truckId, hasTrailer: !!trailerId, hasOpenTrip: !!openTrip, shiftActive: !!shift.current, locations, ready: !!store && !!userId && !!companyId });
-  const [moveOdo, setMoveOdo] = useState("");
+  // ── Odometer stamp: cancel a load / end a shift ────────────────────────────
+  // Where the truck is when the load is cancelled: the rack the driver is still at, else GPS (see useStampContext).
+  const stampRack = useMemo(() => {
+    if (stampAsk?.kind !== "cancel" || !snap) return null;
+    const p = snap.pickups.find((x) => x.arrived_at && !x.left_at && x.outcome !== "no_load");
+    if (!p) return null;
+    const loc = locations.find((l) => l.place_kind === "terminal" && l.name.trim().toLowerCase() === String(p.name ?? "").trim().toLowerCase());
+    return { id: loc?.location_id ?? null, text: [p.name, [p.city, p.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || null };
+  }, [stampAsk, snap, locations]);
+  const stampCtx = useStampContext({ active: !!stampAsk && !!truckId, truckId, locations, terminalPlaceId: stampRack?.id ?? null, terminalText: stampRack?.text ?? null });
+  const stampPlaceLabel = (() => {
+    if (stampCtx.placeId) { const l = locations.find((x) => x.location_id === stampCtx.placeId); if (l) return l.name; }
+    return stampCtx.placeText;
+  })();
+  const stampFloor = stampAsk?.kind === "cancel" ? openTrip?.begin_miles ?? null : emptyMoves.current?.begin_miles ?? null;
+  const confirmStamp = async (odo: number) => {
+    const ask = stampAsk;
+    if (!ask) return;
+    const at = new Date().toISOString();
+    if (ask.kind === "cancel") {
+      setStampAsk(null);
+      await onCancelSubmit({ ...ask.v, endMiles: odo });
+      if (truckId) {
+        emptyMoves.begin({ truckId, trailerId, kind: trailerId ? "empty_return" : "bobtail", from: { id: stampCtx.placeId, text: stampCtx.placeText }, to: { id: null, text: null }, beginMiles: odo, at: ask.v.cancelledAt || at, source: stampCtx.guess === odo ? "geotab" : "app" });
+      }
+      return;
+    }
+    // End shift: the shift record carries the same stamp, and an open move ends here.
+    const startedAt = shift.current?.startedAt ?? null;
+    setStampAsk(null);
+    shift.end({ odometer: odo, lat: stampCtx.lat, lon: stampCtx.lon, place_id: stampCtx.placeId, place_text: stampPlaceLabel, location_source: stampCtx.source, odometer_source: stampCtx.guess === odo ? "truck" : "typed" });
+    const m = emptyMoves.current;
+    if (m) emptyMoves.end(m.move_id, odo, { id: stampCtx.placeId, text: stampCtx.placeText }, at);
+    void askTruckStatus(startedAt);
+  };
+  // An empty move ends where the next trip begins: its beginning miles and starting-from.
+  useEffect(() => {
+    const m = emptyMoves.current;
+    if (!m || !openTrip?.started_at || Date.parse(openTrip.started_at) < Date.parse(m.started_at)) return;
+    emptyMoves.end(m.move_id, openTrip.begin_miles ?? null, { id: null, text: [openTrip.start_city, openTrip.start_state].filter(Boolean).join(", ") || null }, openTrip.started_at);
+  }, [emptyMoves.current?.move_id, openTrip?.trip_id, openTrip?.started_at]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A terminal becomes one of the company's places the first time a driver arrives there (best effort; once per terminal per visit).
   const placedTerminals = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -2627,11 +2673,11 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
-      <ValueEntryOverlay open={!!autoMoves.ask} title={autoMoves.ask?.field === "end" ? "Odometer where you stopped" : "Odometer where the empty run began"}
-        hint="The truck's tracker didn't report it. Skip if you don't know."
-        fields={[{ key: "o", label: "Odometer", value: moveOdo, onChange: setMoveOdo, decimal: true }]}
-        onCancel={() => { setMoveOdo(""); autoMoves.skip(); }} cancelLabel="Skip" submitLabel="Save"
-        onSubmit={() => { const n = Number(moveOdo.replace(/,/g, "")); autoMoves.answer(moveOdo.trim() && Number.isFinite(n) ? n : null); setMoveOdo(""); }} />
+      <OdometerConfirmSheet open={!!stampAsk && !!truckId}
+        title={stampAsk?.kind === "shift" ? "End shift" : "Load cancelled"}
+        lead={stampAsk?.kind === "shift" ? "Confirm the truck's odometer to end your shift." : "Confirm the truck's odometer. The empty run starts here."}
+        placeLabel={stampPlaceLabel} loading={stampCtx.loading} guess={stampCtx.guess} floor={stampFloor}
+        onConfirm={(n) => void confirmStamp(n)} onBack={() => setStampAsk(null)} />
       <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
         locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}
@@ -2774,7 +2820,7 @@ export default function HomePage() {
         title={children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "Load"}
         busy={cancelBusy}
         error={cancelErr}
-        onSubmit={(v) => void onCancelSubmit(v)}
+        onSubmit={(v) => { if (truckId && companyId) setStampAsk({ kind: "cancel", v }); else void onCancelSubmit(v); }}
         onClose={() => setCancelOpen(false)}
       />
       <NoLoadSheet

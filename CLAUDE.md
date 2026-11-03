@@ -11968,3 +11968,13 @@ Not click-tested; typecheck, 425 tests, and a static render of the tank map and 
 - Begin Trip is a report: label left, value right, tap to edit in a pop-out. A new trip opens miles, then order number, automatically. Dispatched loads show "Sent by dispatch" with the plan dots and ask Run once / Save as Plan X (next empty slot, replaces E if full), optionally "Change it in the Planner first" (opens `/planner?plan=1`). `savePresetPlan` writes the same local key and `user_plan_slots` row the Planner uses.
 - Plan Review: supplier card is one collapsed line (tap to expand steps/change); Total is a card like the compartments ("Total Gallons", no "GAL" labels).
 - Delivery tank map: every trailer compartment is drawn (empty and next-stop ones dashed, not linkable); lids only for products aboard; lid labels use the product name.
+
+### Empty moves from stamps, not from Geotab (2026-11-03)
+
+Replaced the polling "auto empty move" hook. Cancelling a load and ending a shift both stop at `OdometerConfirmSheet`
+(prefilled from the truck's tracker when it answers; otherwise the big number pad opens; **no skip**, Back only returns to
+the screen before). Cancel: the odometer becomes the trip's `end_miles` and an `empty_moves` row opens from the stamp
+(time, odometer, place: the rack the driver is still at, else phone GPS, else tracker, else blank). The move closes by
+itself when the next trip begins (`begin_miles` and starting-from) or at End shift, whose `shift_events` payload now
+carries odometer, lat/lon, place and `location_source`. Pure rules: `lib/moves/emptyMoves.ts`; capture:
+`app/planner/hooks/useStampContext.ts`. A truck with no truck selected skips the odometer step. Not click-tested.

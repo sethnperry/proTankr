@@ -32,7 +32,6 @@ export function CancelTripSheet({ open, title, busy, error, onSubmit, onClose }:
   const [picked, setPicked] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [returnedTo, setReturnedTo] = useState("");
-  const [miles, setMiles] = useState("");
   const [at, setAt] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
@@ -41,7 +40,6 @@ export function CancelTripSheet({ open, title, busy, error, onSubmit, onClose }:
     setPicked([]);
     setNote("");
     setReturnedTo("");
-    setMiles("");
     setAt(toLocalInput(new Date().toISOString()));
     setErr(null);
   }, [open]);
@@ -54,9 +52,8 @@ export function CancelTripSheet({ open, title, busy, error, onSubmit, onClose }:
     if (picked.includes("other") && !note.trim()) return setErr("Add a note for Other.");
     const when = fromLocalInput(at);
     if (!when) return setErr("Enter the time.");
-    const m = miles.trim() ? Number(miles) : null;
-    if (m != null && !Number.isFinite(m)) return setErr("Ending miles must be a number.");
-    onSubmit({ reasons: picked, note: note.trim() || null, returnedTo: returnedTo.trim() || null, endMiles: m, cancelledAt: when });
+    // The odometer is confirmed on the next pop-out, so it is not asked here.
+    onSubmit({ reasons: picked, note: note.trim() || null, returnedTo: returnedTo.trim() || null, endMiles: null, cancelledAt: when });
   };
 
   return (
@@ -102,9 +99,6 @@ export function CancelTripSheet({ open, title, busy, error, onSubmit, onClose }:
           placeholder="What happened? Times, who you talked to…" style={{ ...fieldInput, resize: "vertical", marginBottom: 10 }} />
         <div style={fieldLabel}>Headed to (optional)</div>
         <input value={returnedTo} onChange={(e) => setReturnedTo(e.target.value)} placeholder="Yard, parking location…"
-          style={{ ...fieldInput, marginBottom: 10 }} />
-        <div style={fieldLabel}>Ending miles (optional)</div>
-        <input value={miles} onChange={(e) => setMiles(e.target.value)} inputMode="numeric" placeholder="Odometer"
           style={{ ...fieldInput, marginBottom: 10 }} />
         <div style={fieldLabel}>Cancelled at</div>
         <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} style={fieldInput} />

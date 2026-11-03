@@ -77,7 +77,7 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
     prompt,
     /** Start the shift now, or at a time the driver confirmed (telematics: when they went on duty). */
     start: useCallback((at?: string, source?: ShiftSource) => write(SHIFT_START, undefined, { at, source }), [write]),
-    end: useCallback(() => write(SHIFT_END), [write]),
+    end: useCallback((payload?: Record<string, unknown>) => write(SHIFT_END, payload), [write]),
     /** The Shift Explanation, written just before the shift ends. */
     explain: useCallback((payload: Record<string, unknown>) => write(SHIFT_EXPLANATION, payload), [write]),
     /** "Still on shift" after the long-shift question. */
