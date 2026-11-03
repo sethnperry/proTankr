@@ -2115,7 +2115,6 @@ export default function HomePage() {
           ] },
           { icon: "store", label: "Location", sub: null, group: [
             locationsTool(() => setManageLocsOpen(true)),
-            ...(shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin ? [{ icon: "locate" as const, label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) }] : []),
             ...tankCheckItems, A.termWork,
           ] },
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : null, subColor: openTrip ? "#4ade80" : undefined, group: [
@@ -2133,6 +2132,10 @@ export default function HomePage() {
             ...tankCheckItems, A.termWork, A.truckDown, A.inspect,
           ] },
         ];
+        // Track is its own tile, for admin and dispatch only (not on a driver's board).
+        if (shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin) {
+          tools.push({ icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) });
+        }
         return <ToolPanel items={tools} />;
       })()}
       <ConnectedDashFooter onShift={() => setShiftOpen(true)} />
