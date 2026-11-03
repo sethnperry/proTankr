@@ -179,6 +179,9 @@ export type LoadingModalProps = {
   // button reads Begin Loading, which ends the delay.
   rackDelayStartedAt?: string | null;
   onBeginLoading?: () => void;
+  // Plan Review opens on Begin Loading (timestamps the start and ends any delay); after that the button reads Finish Loading.
+  // Absent or true = already begun (a load with no trip has no clock to start).
+  loadingBegun?: boolean;
   // Cancel the load altogether (asks first): undoes the load and the card, and ends any running delay.
   onCancelLoad?: () => void;
   // Report Terminal Issue (no longer a button here; the Couldn't Load flow carries the reasons).

@@ -17,6 +17,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     onRackDelay,
     rackDelayStartedAt,
     onBeginLoading,
+    loadingBegun,
     onCancelLoad,
     onUpdateCardOnly,
     startLogSequence,
@@ -25,6 +26,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   // The running delay's clock, ticking once a second.
   const delayRunning = !!rackDelayStartedAt;
+  const needsBegin = loadingBegun === false && !!onBeginLoading;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!rackDelayStartedAt) return;
@@ -45,18 +47,18 @@ export function PlanActions({ m }: { m: LoadingModel }) {
       <button
         ref={logLoadButtonRef}
         type="button"
-        onClick={delayRunning && onBeginLoading ? onBeginLoading : startLogSequence}
+        onClick={needsBegin ? onBeginLoading : startLogSequence}
         disabled={busy}
         aria-busy={busy}
         style={{ ...(styles as any).doneBtn, opacity: busy ? 0.55 : 1, width: "100%" }}
       >
-        {delayRunning ? "Begin Loading" : loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}
+        {needsBegin ? "Begin Loading" : loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}
       </button>
 
       <button
         type="button"
         onClick={onRackDelay}
-        disabled={busy || delayRunning || !onRackDelay}
+        disabled={busy || delayRunning || !needsBegin || !onRackDelay}
         style={{
           width: "100%",
           padding: "12px 16px",

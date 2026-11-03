@@ -299,11 +299,10 @@ export function linkLoadToOpenTrip(
   // A pickup already left is done; a rack hop adds a new one.
   const target = pickups.find((p) => !p.load_id && !p.left_at);
   if (!target) return false;
-  // Start Loading is tapped when loading actually begins: that instant is the
-  // pickup's begin time (Finish Loading prefills leave = now).
+  // Opening Plan Review attaches the load but does not start the clock: the driver taps Begin Loading in Plan Review
+  // when loading actually begins, and that tap is the pickup's begin time.
   store.put("trip_pickups", {
     pickup_id: target.pickup_id, load_id: args.loadId, ...pickupFields(args.pickup),
-    begin_at: target.begin_at ?? args.now.toISOString(),
   });
   store.put("trips", { trip_id: trip.trip_id, status: "loading" });
   event(store, args.newId, {

@@ -2301,14 +2301,6 @@ export default function HomePage() {
       {delayLeg && !openingPlanner && (
         <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
           rackActions={step.kind === "planner" ? {
-            // Begin Loading stops the delay, stamps now as the real begin time and opens Plan Review.
-            onBeginLoading: () => {
-              const at = new Date().toISOString();
-              endDelay(at);
-              const wp = snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome);
-              if (store && wp) store.put("trip_pickups", { pickup_id: wp.pickup_id, begin_at: at });
-              onBigButton();
-            },
             onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); },
             onCancelLoad: () => { setCancelErr(null); setCancelOpen(true); },
           } : undefined} />

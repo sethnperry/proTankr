@@ -71,7 +71,7 @@ export default function PlanReviewFlow() {
     window.addEventListener("protankr:delay", read);
     return () => window.removeEventListener("protankr:delay", read);
   }, [effectiveUserId, loadWorkflow.loadingOpen]);
-  // Begin Loading: stops the delay and stamps now as the time loading really began.
+  // Begin Loading: ends any delay and stamps now as the time loading really began.
   const beginLoadingAfterDelay = () => {
     const store = tripStoreHook.store;
     if (!effectiveUserId || !store) return;
@@ -160,6 +160,7 @@ export default function PlanReviewFlow() {
       onRackDelay={() => setRackDelayOpen(true)}
       rackDelayStartedAt={rackDelayStartedAt}
       onBeginLoading={beginLoadingAfterDelay}
+      loadingBegun={!(tripPickup ?? tripWaitingPickup) || !!(tripPickup ?? tripWaitingPickup)?.begin_at}
       onCancelLoad={cancelLoadAltogether}
       // Back to Planner leaves the load, the arrival time and the card exactly as they are.
       onBackToPlanner={() => loadWorkflow.setLoadingOpen(false)}

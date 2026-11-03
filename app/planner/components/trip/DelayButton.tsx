@@ -3,7 +3,7 @@
 //
 // The Delay button under the big step button. Tap it when something is
 // holding the truck up: pick why (the list depends on the leg), and a small
-// timer runs until the driver taps it again or taps Arrive (at the rack: until loading begins). See lib/trips/delays.ts.
+// timer runs until the driver taps it again or taps Arrive (at the rack: until Begin Loading in Plan Review). See lib/trips/delays.ts.
 
 import React, { useEffect, useState } from "react";
 import { DELAY_REASONS, LEG_LABEL, OTHER_CODE, delayReasonLabel, type DelayLeg, type RunningDelay } from "@/lib/trips/delays";
@@ -17,15 +17,15 @@ const mmss = (ms: number) => {
   return h > 0 ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
 };
 
-export type RackActions = { onBeginLoading: () => void; onAnotherRack: () => void; onCancelLoad: () => void };
+export type RackActions = { onAnotherRack: () => void; onCancelLoad: () => void };
 
 export function DelayButton({ leg, running, onStart, onEnd, rackActions }: {
   leg: DelayLeg;
   running: RunningDelay | null;
   onStart: (code: string, note: string | null) => void;
   onEnd: () => void;
-  /** At the rack before loading: the delay can't be tapped away, it ends when loading begins, the driver leaves for
-   *  another rack, or the load is cancelled. These three are right here. */
+  /** At the rack before loading: the delay can't be tapped away, it ends at Begin Loading in Plan Review, when the driver
+   *  leaves for another rack, or when the load is cancelled. The last two are right here. */
   rackActions?: RackActions;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -58,7 +58,6 @@ export function DelayButton({ leg, running, onStart, onEnd, rackActions }: {
         </div>
         {!confirmCancel ? (
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-            <button type="button" onClick={rackActions.onBeginLoading} style={{ ...sb, background: "#fff", color: "#000", border: "none" }}>Begin Loading</button>
             <button type="button" onClick={rackActions.onAnotherRack} style={sb}>Another rack</button>
             <button type="button" onClick={() => setConfirmCancel(true)} style={{ ...sb, color: "#f87171" }}>Cancel load</button>
           </div>
