@@ -189,7 +189,7 @@ test("a Planner load attaches to the open trip and a cancel puts it back", () =>
   assert.equal(p.terminal_id, "term-2");
   assert.equal(p.name, "Global South");
   assert.equal(p.city, "Tampa", "fields not passed are kept");
-  assert.equal(p.begin_at, NOW.toISOString(), "Start Loading is the begin time");
+  assert.equal(p.begin_at ?? null, null, "attaching the load doesn't start the clock: Begin Loading in Plan Review does");
 
   // Same load again is a no-op success, not a second pickup.
   assert.ok(linkLoadToOpenTrip(s, { userId: ME, loadId: "load-1", pickup: { terminalId: "x", rackId: null }, now: NOW, newId }));
