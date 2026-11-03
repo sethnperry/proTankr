@@ -43,7 +43,7 @@ const fieldLabel: React.CSSProperties = {
 
 export default function EquipmentStatusModal({
   open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes,
-  currentSubStatus, homeLocalArea, onSaved, locationOptional = false,
+  currentSubStatus, homeLocalArea, onSaved, locationOptional = false, allowed, onParkPreloaded,
 }: {
   open: boolean;
   onClose: () => void;
@@ -65,6 +65,10 @@ export default function EquipmentStatusModal({
   onSaved: (newStatus: FleetStatus) => void;
   /** Drop trailer / Park truck: a status is all that's needed, location is optional. */
   locationOptional?: boolean;
+  /** Limit the offered statuses (day cab at End shift has no In Use). */
+  allowed?: FleetStatus[];
+  /** Loaded truck at End shift: shows Park preloaded in place of Readyline. */
+  onParkPreloaded?: () => void;
 }) {
   const [status, setStatus] = useState<FleetStatus>("in_use");
   const [region, setRegion] = useState("");
@@ -76,7 +80,9 @@ export default function EquipmentStatusModal({
 
   useEffect(() => {
     if (!open) return;
-    setStatus((currentStatus as FleetStatus) || "in_use");
+    const first = (allowed?.[0] ?? "in_use") as FleetStatus;
+    const cur = currentStatus as FleetStatus;
+    setStatus(cur && (!allowed || allowed.includes(cur)) ? cur : first);
     setRegion("");
     setLocalArea("");
     setSubStatus(currentSubStatus ?? "");
@@ -126,7 +132,7 @@ export default function EquipmentStatusModal({
         <div>
           <label style={fieldLabel}>Status</label>
           <div style={{ display: "grid", gap: 8 }}>
-            {STATUS_OPTIONS.map((o) => {
+            {STATUS_OPTIONS.filter((o) => (!allowed || allowed.includes(o.value)) && !(onParkPreloaded && o.value === "readyline")).map((o) => {
               const sel = status === o.value;
               return (
                 <button
@@ -153,6 +159,13 @@ export default function EquipmentStatusModal({
                 </button>
               );
             })}
+            {onParkPreloaded && (
+              <button type="button" onClick={() => { onClose(); onParkPreloaded(); }}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#60a5fa", flexShrink: 0 }} />
+                <span style={{ fontSize: 15, fontWeight: 800, color: "rgba(255,255,255,0.85)" }}>Park preloaded</span>
+              </button>
+            )}
           </div>
         </div>
 
