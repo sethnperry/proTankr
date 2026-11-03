@@ -175,8 +175,9 @@ export type LoadingModalProps = {
   onUpdateCardOnly: () => void;
   // Rack Delay: why the truck is held up at the rack (starts a delay, warns other drivers).
   onRackDelay?: () => void;
-  // A delay at the rack is running: the Rack Delay button becomes Begin Loading, which stops the delay and starts loading.
-  rackDelayRunning?: boolean;
+  // When a delay at the rack began (ISO), while one is running: the Rack Delay button shows its clock and the Finish Loading
+  // button reads Begin Loading, which ends the delay.
+  rackDelayStartedAt?: string | null;
   onBeginLoading?: () => void;
   // Cancel the load altogether (asks first): undoes the load and the card, and ends any running delay.
   onCancelLoad?: () => void;

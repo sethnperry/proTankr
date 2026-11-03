@@ -63,10 +63,10 @@ export default function PlanReviewFlow() {
       .filter((r) => r?.productId && Number(r.planned_gallons ?? 0) > 0)
       .map((r) => [String(r.productId), { productId: String(r.productId), name: productNameById?.get(String(r.productId)) ?? "Product" }]),
   ).values()];
-  // A delay at the rack is running (started here or on the dashboard): the Rack Delay button reads Begin Loading.
-  const [rackDelayRunning, setRackDelayRunning] = useState(false);
+  // A delay at the rack is running (started here or on the dashboard): Rack Delay shows its clock and Finish Loading reads Begin Loading.
+  const [rackDelayStartedAt, setRackDelayStartedAt] = useState<string | null>(null);
   useEffect(() => {
-    const read = () => setRackDelayRunning(!!effectiveUserId && readRunningDelay(effectiveUserId)?.leg === "at_rack");
+    const read = () => { const d = effectiveUserId ? readRunningDelay(effectiveUserId) : null; setRackDelayStartedAt(d && d.leg === "at_rack" ? d.startedAt : null); };
     read();
     window.addEventListener("protankr:delay", read);
     return () => window.removeEventListener("protankr:delay", read);
@@ -79,12 +79,12 @@ export default function PlanReviewFlow() {
     endRunningDelay(store, effectiveUserId, at);
     const pickup = tripPickup ?? tripWaitingPickup ?? null;
     if (pickup) store.put("trip_pickups", { pickup_id: pickup.pickup_id, begin_at: at });
-    setRackDelayRunning(false);
+    setRackDelayStartedAt(null);
   };
   // Cancel the load altogether: the delay ends, then the load and card are undone.
   const cancelLoadAltogether = () => {
     if (effectiveUserId && tripStoreHook.store) endRunningDelay(tripStoreHook.store, effectiveUserId);
-    setRackDelayRunning(false);
+    setRackDelayStartedAt(null);
     handleBackToPlannerNoUpdate();
   };
   const startRackDelay = async (code: any, productIds: string[]): Promise<string | null> => {
@@ -158,7 +158,7 @@ export default function PlanReviewFlow() {
       onFinishLoadingStart={loadGeoShips}
       onUpdateCardOnly={handleCouldntLoad}
       onRackDelay={() => setRackDelayOpen(true)}
-      rackDelayRunning={rackDelayRunning}
+      rackDelayStartedAt={rackDelayStartedAt}
       onBeginLoading={beginLoadingAfterDelay}
       onCancelLoad={cancelLoadAltogether}
       // Back to Planner leaves the load, the arrival time and the card exactly as they are.

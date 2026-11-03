@@ -3,7 +3,7 @@
 //
 // Plan Review: Finish Loading, Rack Delay, Couldn't Load, Back to Planner.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../../cards/cardTheme";
 import type { LoadingModel } from "./useLoadingModel";
 
@@ -15,7 +15,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     logLoadButtonRef,
     onBackToPlanner,
     onRackDelay,
-    rackDelayRunning,
+    rackDelayStartedAt,
     onBeginLoading,
     onCancelLoad,
     onUpdateCardOnly,
@@ -23,6 +23,21 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     styles,
   } = m;
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // The running delay's clock, ticking once a second.
+  const delayRunning = !!rackDelayStartedAt;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!rackDelayStartedAt) return;
+    setNow(Date.now());
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [rackDelayStartedAt]);
+  const clock = (() => {
+    if (!rackDelayStartedAt) return "";
+    const s = Math.max(0, Math.floor((now - Date.parse(rackDelayStartedAt)) / 1000));
+    const two = (n: number) => String(n).padStart(2, "0");
+    return s >= 3600 ? `${Math.floor(s / 3600)}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
+  })();
   return (
     /* Action buttons -- the "next steps" that used to live in a separate
              sheet, now directly in the modal. */
@@ -30,18 +45,18 @@ export function PlanActions({ m }: { m: LoadingModel }) {
       <button
         ref={logLoadButtonRef}
         type="button"
-        onClick={startLogSequence}
+        onClick={delayRunning && onBeginLoading ? onBeginLoading : startLogSequence}
         disabled={busy}
         aria-busy={busy}
         style={{ ...(styles as any).doneBtn, opacity: busy ? 0.55 : 1, width: "100%" }}
       >
-        {loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}
+        {delayRunning ? "Begin Loading" : loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}
       </button>
 
       <button
         type="button"
-        onClick={rackDelayRunning ? onBeginLoading : onRackDelay}
-        disabled={busy || !(rackDelayRunning ? onBeginLoading : onRackDelay)}
+        onClick={onRackDelay}
+        disabled={busy || delayRunning || !onRackDelay}
         style={{
           width: "100%",
           padding: "12px 16px",
@@ -52,11 +67,11 @@ export function PlanActions({ m }: { m: LoadingModel }) {
           color: "rgba(255,255,255,0.90)",
           fontSize: 15,
           fontWeight: 700,
-          cursor: "pointer",
+          cursor: delayRunning ? "default" : "pointer",
           opacity: busy ? 0.55 : 1,
         }}
       >
-        {rackDelayRunning ? "Begin Loading" : "Rack Delay"}
+        {delayRunning ? <span style={{ color: "#fbbf24" }}>Rack Delay · <span style={{ fontVariantNumeric: "tabular-nums" }}>{clock}</span></span> : "Rack Delay"}
       </button>
 
       <button
