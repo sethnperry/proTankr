@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { moveMiles, moveMinutes, newMove, openMove, suggestKind, summarizeMoves } from "./emptyMoves.ts";
+import { autoEndReason, autoStartCandidate, odometerMissing, placeAt, moveMiles, moveMinutes, newMove, openMove, suggestKind, summarizeMoves } from "./emptyMoves.ts";
 import { nearbyPlaces } from "../trips/deliveryLocations.ts";
 
 const base = newMove({ id: "m1", companyId: "c", driverId: "d", truckId: "t", trailerId: null, kind: "bobtail", from: { id: "p1", text: null }, to: { id: null, text: " Yard 2 " }, beginMiles: 100, nowIso: "2026-11-03T10:00:00Z" });
@@ -33,4 +33,33 @@ test("nearby places: within range, nearest first, no coords or retired left out"
   const r = nearbyPlaces([mk("far", 28.5, -82.46), mk("near", 27.951, -82.46), mk("nocoord", null, null), mk("gone", 27.95, -82.46, { is_active: false }), mk("mid", 27.98, -82.46)], o);
   assert.deepEqual(r.map((x) => x.name), ["near", "mid"]);
   assert.deepEqual(nearbyPlaces([mk("a", 27.95, -82.46)], null), []);
+});
+
+const trip = (o: any) => ({ trip_id: "t1", driver_id: "d", status: "cancelled", cancelled_at: "2026-11-03T14:00:00Z", completed_at: null, ...o });
+const NOW = Date.parse("2026-11-03T14:30:00Z");
+test("a trip that just ended opens a move once", () => {
+  const c = autoStartCandidate({ trips: [trip({})] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW });
+  assert.equal(c?.tripId, "t1");
+  assert.equal(autoStartCandidate({ trips: [trip({})] as any, moves: [{ ...base, started_at: "2026-11-03T14:01:00Z" } as any], driverId: "d", hasOpenTrip: false, nowMs: NOW }), null);
+  assert.equal(autoStartCandidate({ trips: [trip({})] as any, moves: [], driverId: "d", hasOpenTrip: true, nowMs: NOW }), null);
+  assert.equal(autoStartCandidate({ trips: [trip({ cancelled_at: "2026-11-03T02:00:00Z" })] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW }), null);
+  assert.equal(autoStartCandidate({ trips: [trip({ status: "complete", completed_at: "2026-11-03T14:10:00Z" })] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW })?.tripId, "t1");
+  assert.equal(autoStartCandidate({ trips: [trip({ status: "in_transit" })] as any, moves: [], driverId: "d", hasOpenTrip: false, nowMs: NOW }), null);
+});
+const yard = { location_id: "y", name: "Yard", lat: 26.64, lon: -81.87, starred: false, is_active: true } as any;
+const mv = (o: any = {}) => ({ ...base, started_at: "2026-11-03T14:00:00Z", from_place_id: "other", ...o }) as any;
+test("move ends on a new trip, on a shift end, or when stopped at a saved place", () => {
+  const still = { lat: 26.6401, lon: -81.87, speedMph: 0 };
+  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: true, shiftActive: true, pos: null, locations: [], nowMs: NOW })?.reason, "trip_begun");
+  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: false, shiftActive: false, pos: null, locations: [], nowMs: NOW })?.reason, "shift_ended");
+  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: false, shiftActive: true, pos: still, locations: [yard], nowMs: NOW })?.place?.location_id, "y");
+  assert.equal(autoEndReason({ move: mv(), hasOpenTrip: false, shiftActive: true, pos: { ...still, speedMph: 40 }, locations: [yard], nowMs: NOW }), null);
+  assert.equal(autoEndReason({ move: mv({ from_place_id: "y" }), hasOpenTrip: false, shiftActive: true, pos: still, locations: [yard], nowMs: NOW }), null);
+  assert.equal(autoEndReason({ move: mv({ started_at: "2026-11-03T14:28:00Z" }), hasOpenTrip: false, shiftActive: true, pos: still, locations: [yard], nowMs: NOW }), null);
+  assert.equal(placeAt([yard], { lat: 27, lon: -82 }), null);
+});
+test("the driver is asked for an odometer only when telematics left it blank", () => {
+  assert.equal(odometerMissing({ begin_miles: 5, end_miles: null, ended_at: null }), null);
+  assert.equal(odometerMissing({ begin_miles: null, end_miles: null, ended_at: null }), "begin");
+  assert.equal(odometerMissing({ begin_miles: 5, end_miles: null, ended_at: "x" }), "end");
 });

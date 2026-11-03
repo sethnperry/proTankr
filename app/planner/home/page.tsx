@@ -155,6 +155,8 @@ import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } 
 import { FreightSheet } from "../components/freight/FreightSheet";
 import { useFreight } from "../hooks/useFreight";
 import { useEmptyMoves } from "../hooks/useEmptyMoves";
+import { useAutoEmptyMoves } from "../hooks/useAutoEmptyMoves";
+import ValueEntryOverlay from "../components/ValueEntryOverlay";
 import { EmptyMoveSheet } from "../components/moves/EmptyMoveSheet";
 import { TankCheckSheet } from "../components/trip/TankCheckSheet";
 import { useTankChecks } from "../hooks/useTankChecks";
@@ -1218,6 +1220,8 @@ export default function HomePage() {
     });
     return () => { alive = false; };
   }, [tripTrailerId]);
+  const autoMoves = useAutoEmptyMoves({ moves: emptyMoves, trips, userId: userId || null, truckId, hasTrailer: !!trailerId, hasOpenTrip: !!openTrip, shiftActive: !!shift.current, locations, ready: !!store && !!userId && !!companyId });
+  const [moveOdo, setMoveOdo] = useState("");
   // A terminal becomes one of the company's places the first time a driver arrives there (best effort; once per terminal per visit).
   const placedTerminals = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -2623,6 +2627,11 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
+      <ValueEntryOverlay open={!!autoMoves.ask} title={autoMoves.ask?.field === "end" ? "Odometer where you stopped" : "Odometer where the empty run began"}
+        hint="The truck's tracker didn't report it. Skip if you don't know."
+        fields={[{ key: "o", label: "Odometer", value: moveOdo, onChange: setMoveOdo, decimal: true }]}
+        onCancel={() => { setMoveOdo(""); autoMoves.skip(); }} cancelLabel="Skip" submitLabel="Save"
+        onSubmit={() => { const n = Number(moveOdo.replace(/,/g, "")); autoMoves.answer(moveOdo.trim() && Number.isFinite(n) ? n : null); setMoveOdo(""); }} />
       <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
         locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}

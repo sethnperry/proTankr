@@ -26,10 +26,11 @@ export function useEmptyMoves(o: { store: TripStore | null; state: TripStoreStat
   const moves = useMemo(() => (store && userId ? store.list("empty_moves", (m) => m.driver_id === userId).sort((a, b) => b.started_at.localeCompare(a.started_at)) : []), [store, userId, state]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = useMemo(() => (userId ? openMove(moves, userId) : null), [moves, userId]);
 
-  const begin = useCallback((a: { truckId: string | null; trailerId: string | null; kind: MoveKind; from: MovePlace; to: MovePlace; beginMiles: number | null }): string | null => {
+  const begin = useCallback((a: { truckId: string | null; trailerId: string | null; kind: MoveKind; from: MovePlace; to: MovePlace; beginMiles: number | null; source?: "app" | "geotab" }): string | null => {
     if (!store || !userId || !companyId || current) return null;
     const id = crypto.randomUUID();
     store.put("empty_moves", newMove({ id, companyId, driverId: userId, truckId: a.truckId, trailerId: a.trailerId, kind: a.kind, from: a.from, to: a.to, beginMiles: a.beginMiles, nowIso: new Date().toISOString() }) as any);
+    if (a.source && a.source !== "app") store.put("empty_moves", { move_id: id, source: a.source } as any);
     void syncNow();
     return id;
   }, [store, userId, companyId, current, syncNow]);
@@ -47,5 +48,11 @@ export function useEmptyMoves(o: { store: TripStore | null; state: TripStoreStat
     void syncNow();
   }, [store, syncNow]);
 
-  return { moves, current, begin, end, discard };
+  const patch = useCallback((moveId: string, fields: Partial<Pick<EmptyMoveRow, "begin_miles" | "end_miles" | "to_place_id" | "to_text" | "from_place_id" | "from_text">>) => {
+    if (!store) return;
+    store.put("empty_moves", { move_id: moveId, ...fields } as any);
+    void syncNow();
+  }, [store, syncNow]);
+
+  return { moves, current, begin, end, discard, patch };
 }
