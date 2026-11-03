@@ -14,6 +14,8 @@ import {
   defaultLocationCity,
   filterLocations,
   locationTitle,
+  nearbyPlaces,
+  placeKindLabel,
   type DeliveryLocation,
   type LatLon,
   type LocationTank,
@@ -148,7 +150,7 @@ export function LocationBrowser({
   const storeRow = (l: DeliveryLocation, withCity: boolean) =>
     row(l.location_id, l.starred, () => void onToggleStar?.(l.location_id, !l.starred), () => (onPick ? pick(l) : setEditing(l)),
       l.location_id === selectedLocationId, locationTitle(l),
-      [withCity ? [l.city, l.state].filter(Boolean).join(", ") : null, l.address, l.delivery_type === "pump_off" ? "Pump off" : null].filter(Boolean).join(" · ") || undefined,
+      [withCity ? [l.city, l.state].filter(Boolean).join(", ") : null, l.place_kind && l.place_kind !== "store" ? placeKindLabel(l.place_kind) : null, l.address, l.delivery_type === "pump_off" ? "Pump off" : null].filter(Boolean).join(" · ") || undefined,
       () => setEditing(l));
 
   const newBtn = companyId && userId ? (
@@ -157,6 +159,9 @@ export function LocationBrowser({
       + New location{query.trim() ? ` “${query.trim()}”` : ""}
     </button>
   ) : null;
+
+  // Places within a few miles of where the driver is, nearest first: the usual answer to "where am I going".
+  const nearby = useMemo(() => (searching ? [] : nearbyPlaces(locations, origin)), [locations, origin, searching]);
 
   const cityObj = area?.city ? { state: area.state, city: area.city } : null;
   const storesHere = cityObj ? list : [];
@@ -172,6 +177,10 @@ export function LocationBrowser({
       ) : (
         <div className="space-y-4">
           <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Search number, name or city" style={FIELD} />
+
+          {nearby.length > 0 && (
+            <div>{heading("Nearby")}<div className="grid grid-cols-1 gap-2">{nearby.map((l) => storeRow(l, true))}</div></div>
+          )}
 
           {searching ? (
             <div className="grid grid-cols-1 gap-2">

@@ -154,6 +154,8 @@ import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 import { FreightSheet } from "../components/freight/FreightSheet";
 import { useFreight } from "../hooks/useFreight";
+import { useEmptyMoves } from "../hooks/useEmptyMoves";
+import { EmptyMoveSheet } from "../components/moves/EmptyMoveSheet";
 import { TankCheckSheet } from "../components/trip/TankCheckSheet";
 import { useTankChecks } from "../hooks/useTankChecks";
 import { LanternflySheet } from "../components/slf/LanternflySheet";
@@ -266,6 +268,7 @@ export default function HomePage() {
   const [slfOpen, setSlfOpen] = useState(false);
   const [tankCheckOpen, setTankCheckOpen] = useState(false);
   const [freightOpen, setFreightOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -378,6 +381,7 @@ export default function HomePage() {
   const trips = useMemo(() => Object.values(state.rows.trips ?? {}) as TripRow[], [state]);
   const openTrip = userId ? openTripForDriver(trips, userId) : null;
   const freight = useFreight({ store, state, syncNow, userId: userId || null, companyId: companyId || null });
+  const emptyMoves = useEmptyMoves({ store, state, syncNow, userId: userId || null, companyId: companyId || null });
   const tankChecks = useTankChecks({ store, syncNow, userId: userId || null, companyId: companyId || null });
   const lanternfly = useLanternfly({ store, state, syncNow, userId: userId || null, companyId: companyId || null, tripId: openTrip?.trip_id ?? null });
   const children = useMemo(
@@ -939,7 +943,7 @@ export default function HomePage() {
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
   const [truckSheetWatch, setTruckSheetWatch] = useState(false);
-  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || freightOpen || truckSheetWatch, finishOpen ? 60_000 : undefined);
+  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || freightOpen || moveOpen || truckSheetWatch, finishOpen ? 60_000 : undefined);
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   const [hookupSnoozed, setHookupSnoozed] = useState(false);
@@ -1214,6 +1218,17 @@ export default function HomePage() {
     });
     return () => { alive = false; };
   }, [tripTrailerId]);
+  // A terminal becomes one of the company's places the first time a driver arrives there (best effort; once per terminal per visit).
+  const placedTerminals = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!snap || !companyId) return;
+    for (const p of snap.pickups) {
+      const tid = p.terminal_id ? String(p.terminal_id) : "";
+      if (!p.arrived_at || !tid || placedTerminals.current.has(tid)) continue;
+      placedTerminals.current.add(tid);
+      void supabase.rpc("ensure_terminal_place", { p_company_id: companyId, p_terminal_id: tid }).then(({ error }) => { if (error) placedTerminals.current.delete(tid); else void locList.reload(); });
+    }
+  }, [snap, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const aboardRows = useMemo(() => (snap ? onBoard(snap.compLoads) : []), [snap]);
   const aboard = useMemo(() => {
     const m: Record<number, { product_id: string | null; gallons: number | null }> = {};
@@ -2608,6 +2623,10 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
+      <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
+        hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
+        locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}
+        onBegin={(a) => emptyMoves.begin({ truckId, trailerId, ...a })} onEnd={emptyMoves.end} onDiscard={emptyMoves.discard} onLocationAdded={() => void locList.reload()} />
       <FreightSheet open={freightOpen} onClose={() => setFreightOpen(false)} companyId={companyId} userId={userId}
         truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         coupledTrailer={equipment.currentTrailerId ? { id: equipment.currentTrailerId, name: equipment.currentTrailerName ?? "Trailer" } : null}
@@ -2678,6 +2697,7 @@ export default function HomePage() {
           { icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) },
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           { icon: "locate", label: "Lanternfly", sub: lanternfly.missing.length ? `${lanternfly.missing.length} to attest` : lanternfly.attested.length ? "Attested" : null, subColor: lanternfly.missing.length ? "#fbbf24" : undefined, onClick: () => setSlfOpen(true) },
+          { icon: "locate" as const, label: "Empty move", sub: emptyMoves.current ? "In progress" : "Bobtail, repo", subColor: emptyMoves.current ? "#fbbf24" : undefined, onClick: () => setMoveOpen(true) },
           { icon: "truck" as const, label: "Freight", sub: freight.loads.some((l) => l.status === "open") ? "Load open" : "Van, flatbed, LTS", subColor: freight.loads.some((l) => l.status === "open") ? "#4ade80" : undefined, onClick: () => setFreightOpen(true) },
           ...(shell.isSolo === false ? [{ icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) }] : []),
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },

@@ -312,6 +312,14 @@ export type FreightLoadRow = Synced & {
 };
 export type FreightStopRow = Synced & { stop_id: string; freight_id: string; seq: number; name: string; casings: number; totes: number; note: string | null };
 
+export type EmptyMoveRow = Synced & {
+  move_id: string; company_id: string; driver_id: string; truck_id: string | null; trailer_id: string | null;
+  kind: "bobtail" | "empty_return" | "reposition";
+  from_place_id: string | null; from_text: string | null; to_place_id: string | null; to_text: string | null;
+  started_at: string; ended_at: string | null; begin_miles: number | null; end_miles: number | null;
+  billable: boolean | null; notes: string | null; source: "app" | "geotab" | "manual";
+};
+
 export type SlfAttestationRow = Synced & {
   trip_id: string;
   state: string;
@@ -354,6 +362,7 @@ export type TripTableRows = {
   tank_checks: TankCheckRow;
   freight_loads: FreightLoadRow;
   freight_stops: FreightStopRow;
+  empty_moves: EmptyMoveRow;
   tank_check_readings: TankCheckReadingRow;
   compartment_readiness: CompartmentReadinessRow;
 };
@@ -380,6 +389,7 @@ export const TABLE_KEYS: { [T in TripTable]: readonly (keyof TripTableRows[T] & 
   tank_checks: ["check_id"],
   freight_loads: ["freight_id"],
   freight_stops: ["stop_id"],
+  empty_moves: ["move_id"],
   tank_check_readings: ["check_id", "tank_number"],
   compartment_readiness: ["trailer_id", "comp_number"],
 };
@@ -405,6 +415,7 @@ export const SYNC_ORDER: readonly TripTable[] = [
   "tank_checks",
   "freight_loads",
   "freight_stops",
+  "empty_moves",
   "tank_check_readings",
   "compartment_readiness",
 ];

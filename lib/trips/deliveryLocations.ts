@@ -9,12 +9,14 @@ import type { DeliveryType } from "./types.ts";
 export const NEAR_ME_MILES = 150;
 
 // What kind of place this is (20261102010000). Freight and terminal work can pick a yard or a shop; deliveries pick stores.
-export type PlaceKind = "store" | "yard" | "maintenance" | "terminal";
+export type PlaceKind = "store" | "yard" | "maintenance" | "terminal" | "fuel" | "shipper";
 export const PLACE_KINDS: { id: PlaceKind; label: string }[] = [
   { id: "store", label: "Store" },
   { id: "yard", label: "Yard" },
   { id: "maintenance", label: "Maintenance" },
   { id: "terminal", label: "Terminal" },
+  { id: "fuel", label: "Fuel" },
+  { id: "shipper", label: "Shipper" },
 ];
 export const placeKindLabel = (k: string | null | undefined) => PLACE_KINDS.find((p) => p.id === k)?.label ?? "Store";
 
@@ -223,4 +225,20 @@ export function browseOptions(locations: DeliveryLocation[], f: Pick<BrowseFilte
   const inRegion = live.filter((l) => !f.region || norm(l.region) === norm(f.region));
   const inArea = inRegion.filter((l) => !f.area || norm(l.local_area) === norm(f.area));
   return { regions: uniq(live.map((l) => l.region)), areas: uniq(inRegion.map((l) => l.local_area)), cities: locationCities(inArea) };
+}
+
+/** Places within `miles` of a point, nearest first (starred win ties). Places without coordinates are left out. */
+export const NEARBY_MILES = 5;
+export function nearbyPlaces<T extends Pick<DeliveryLocation, "lat" | "lon" | "is_active" | "starred" | "name">>(
+  locations: T[], origin: LatLon | null, miles = NEARBY_MILES, limit = 6,
+): (T & { miles: number })[] {
+  if (!origin) return [];
+  const out: (T & { miles: number })[] = [];
+  for (const l of locations) {
+    if (l.is_active === false || !hasCoords(l)) continue;
+    const d = airMiles(origin, l);
+    if (d <= miles) out.push({ ...l, miles: d });
+  }
+  out.sort((a, b) => a.miles - b.miles || Number(b.starred) - Number(a.starred) || a.name.localeCompare(b.name));
+  return out.slice(0, limit);
 }
