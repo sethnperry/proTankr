@@ -4,6 +4,7 @@
 // Part of the Binder (equipment file) dialog.
 
 import TruckFuelTankField from "@/lib/ui/driver/TruckFuelTankField";
+import TruckSleeperField from "@/lib/ui/driver/TruckSleeperField";
 import { useMemo, useState } from "react";
 import { ServiceTypeListModal } from "../ServiceTypeManager";
 import { AddDocumentSheet, CameraButton } from "../../components/equipment/AddDocumentSheet";
@@ -118,6 +119,7 @@ export function UnitSection({
             myRole={myRole}
           />
           {unitKind === "truck" && <TruckFuelTankField truckId={unitId} />}
+          {unitKind === "truck" && <TruckSleeperField truckId={unitId} canEdit={myRole === "admin" || myRole === "dispatch" || myRole === "lead" || !myRole} />}
           <div style={{ marginTop: 16 }}>
             <button type="button" onClick={() => setServiceOpen(true)} style={navBtnStyle}>
               Service Schedule

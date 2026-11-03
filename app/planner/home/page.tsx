@@ -142,6 +142,8 @@ import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/da
 import { ShiftBar } from "../components/shift/ShiftBar";
 import { ShiftSheet } from "../components/shift/ShiftSheet";
 import { ShiftStartConfirm } from "../components/shift/ShiftStartConfirm";
+import { ShiftEndStatusSheet } from "../components/shift/ShiftEndStatusSheet";
+import { endStatusOptions, statusSetThisShift, type EndStatusChoice } from "@/lib/shifts/endStatus";
 import { snoozed, telematicsStart } from "@/lib/shifts/autoStart";
 import { useShiftRecap } from "../hooks/useShiftRecap";
 import { useDashIdentity } from "@/lib/ui/driver/useDashIdentity";
@@ -342,7 +344,28 @@ export default function HomePage() {
     } catch { /* storage blocked */ }
     a?.then?.();
   };
-  const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else shift.end(); };
+  // End shift, then ask what status the truck gets, unless it was set during the shift (a stud in the equipment modal
+  // stays exactly as set). Sleepers can stay In use; a loaded truck offers Park preloaded instead of Readyline.
+  const [endAsk, setEndAsk] = useState<{ name: string; sleeper: boolean; loaded: boolean } | null>(null);
+  const askTruckStatus = async (shiftStartedAt: string | null) => {
+    if (!truckId) return;
+    try {
+      const { data } = await supabase.from("trucks").select("truck_name, status_updated_at, has_sleeper").eq("truck_id", truckId).maybeSingle();
+      const t = data as { truck_name?: string; status_updated_at?: string | null; has_sleeper?: boolean } | null;
+      if (!t || statusSetThisShift(t.status_updated_at, shiftStartedAt)) return;
+      setEndAsk({ name: t.truck_name ?? "", sleeper: !!t.has_sleeper, loaded: !!openTrip && !!snap && onBoard(snap.compLoads).length > 0 });
+    } catch { /* no question: the status stays as it is */ }
+  };
+  const finishShift = () => { const startedAt = shift.current?.startedAt ?? null; shift.end(); void askTruckStatus(startedAt); };
+  const applyEndStatus = async (choice: EndStatusChoice): Promise<string | null> => {
+    if (choice === "park_preloaded") { setEndAsk(null); setParkOpen(true); return null; }
+    const { error } = await supabase.rpc("set_equipment_status", { p_unit_kind: "truck", p_unit_id: truckId, p_status: choice, p_region: null, p_local_area: null, p_notes: null, p_sub_status: null });
+    if (error) return error.message;
+    await equipment.fetchCombos?.();
+    setEndAsk(null);
+    return null;
+  };
+  const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else finishShift(); };
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
   const locList = useDeliveryLocationList(companyId, userId);
@@ -2591,8 +2614,8 @@ export default function HomePage() {
       />
 
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
-        onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); shift.end(); setExplainOpen(false); }}
-        onSkip={() => { shift.end(); setExplainOpen(false); }} />
+        onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
+        onSkip={() => { finishShift(); setExplainOpen(false); }} />
       <FreightSheet open={freightOpen} onClose={() => setFreightOpen(false)} companyId={companyId} userId={userId}
         truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         coupledTrailer={equipment.currentTrailerId ? { id: equipment.currentTrailerId, name: equipment.currentTrailerName ?? "Trailer" } : null}
@@ -2613,6 +2636,7 @@ export default function HomePage() {
         products={products.map((x: any) => ({ value: String(x.product_id), label: String(x.display_name || x.product_name || "Product") }))}
         onStart={termWork.start} onStop={termWork.stop} />
       <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Continue without a shift" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
+      <ShiftEndStatusSheet open={!!endAsk} truckName={endAsk?.name ?? ""} options={endStatusOptions({ sleeper: !!endAsk?.sleeper, loaded: !!endAsk?.loaded })} onChoose={applyEndStatus} onKeep={() => setEndAsk(null)} />
       <ShiftSheet open={shiftOpen} onClose={() => setShiftOpen(false)} scheduled={shiftRecapData.scheduled} running={!!shift.current} recap={shiftRecapData.recap} periodLabel={shiftRecapData.periodLabel}
         onStart={() => shift.start()} onEnd={() => { setShiftOpen(false); requestEnd(); }}
         onCallout={() => { setShiftOpen(false); setCalloutOpen(true); }} onSignOut={() => void dashIdentity.signOut()} />

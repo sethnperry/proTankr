@@ -1,6 +1,7 @@
 "use client";
 
 import TruckFuelTankField from "./TruckFuelTankField";
+import TruckSleeperField from "./TruckSleeperField";
 import React, { useEffect, useMemo, useState } from "react";
 import { InviteNameField } from "./InviteNameField";
 import { supabase } from "@/lib/supabase/client";
@@ -1015,6 +1016,7 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
             <div><label style={{ ...css.label, fontSize: 10 }}>Plate</label>{ti(plate, setPlate, "e.g. ABC1234", "text", !canEditRestricted)}</div>
           </div>
           {!isNew && truck?.truck_id && <TruckFuelTankField truckId={truck.truck_id} />}
+          {!isNew && truck?.truck_id && <TruckSleeperField truckId={truck.truck_id} canEdit={canEditRestricted} />}
 
           <hr style={css.divider} />
 
