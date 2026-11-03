@@ -11,6 +11,7 @@ import { periodOptions } from "@/lib/reports/periodOptions";
 import { localDateOf, localMidnightMs, addDays } from "@/lib/worklog/time";
 import { deriveShifts } from "@/lib/shifts/shiftLogic";
 import { scheduledStart, shiftRecap, type Schedule } from "@/lib/shifts/recap";
+import { meetingWindow, type Window } from "@/lib/safety/onDuty";
 import type { ShiftEventRow } from "@/lib/trips/types";
 
 export function useShiftRecap(o: { companyId: string | null; userId: string | null; enabled: boolean; localEvents: ShiftEventRow[]; nowMs: number }) {
@@ -24,6 +25,7 @@ export function useShiftRecap(o: { companyId: string | null; userId: string | nu
 
   const [server, setServer] = useState<ShiftEventRow[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [meetings, setMeetings] = useState<Window[]>([]);
   useEffect(() => {
     if (!enabled || !userId) return;
     let off = false;
@@ -37,6 +39,14 @@ export function useShiftRecap(o: { companyId: string | null; userId: string | nu
         if (off) return;
         if (!ev.error) setServer((ev.data ?? []) as ShiftEventRow[]);
         setSchedule((sc.data as Schedule | null) ?? null);
+        // Safety meetings signed this period count as on duty.
+        const sg = await supabase.from("safety_meeting_signatures").select("meeting_id, signed_at").eq("user_id", userId).gte("signed_at", from).limit(200);
+        const sigs = (sg.data ?? []) as { meeting_id: string; signed_at: string }[];
+        if (sigs.length) {
+          const ms = await supabase.from("safety_meetings").select("meeting_id, started_at, ended_at").in("meeting_id", sigs.map((x) => x.meeting_id));
+          const by = new Map(((ms.data ?? []) as { meeting_id: string; started_at: string | null; ended_at: string | null }[]).map((m) => [m.meeting_id, m]));
+          if (!off) setMeetings(sigs.flatMap((x) => { const m = by.get(x.meeting_id); const w = m ? meetingWindow(m, x.signed_at) : null; return w ? [w] : []; }));
+        } else if (!off) setMeetings([]);
       } catch { /* the phone's own copy stands */ }
     })();
     return () => { off = true; };
@@ -47,8 +57,8 @@ export function useShiftRecap(o: { companyId: string | null; userId: string | nu
     const byId = new Map<string, ShiftEventRow>();
     for (const e of [...server, ...localEvents]) byId.set(e.event_id, e);
     const shifts = deriveShifts([...byId.values()].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)), userId, new Date(nowMs).toISOString());
-    return shiftRecap(shifts, { start: period.start, end: period.end }, tz, nowMs);
-  }, [server, localEvents, userId, nowMs, period.start, period.end, tz]);
+    return shiftRecap(shifts, { start: period.start, end: period.end }, tz, nowMs, meetings);
+  }, [server, localEvents, userId, nowMs, period.start, period.end, tz, meetings]);
 
   return { recap, periodLabel: period.label, scheduled: scheduledStart(schedule, nowMs, tz) };
 }

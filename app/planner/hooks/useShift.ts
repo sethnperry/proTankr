@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { TripStore, TripStoreState } from "@/lib/trips/tripStore";
-import type { ShiftEventRow } from "@/lib/trips/types";
+import type { ShiftEventRow, ShiftSource } from "@/lib/trips/types";
 import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
 import { SHIFT_EXPLANATION, SHIFT_END, SHIFT_IDLE_RESPONSE, SHIFT_LONG_ACK, SHIFT_START, deriveShifts, openShift, shiftPrompt, type Shift, type ShiftPrompt } from "@/lib/shifts/shiftLogic";
 
@@ -65,9 +65,9 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
 
   const prompt: ShiftPrompt = shiftPrompt(current, nowIso, { maxHours, lastActivityAt });
 
-  const write = useCallback((type: string, payload?: Record<string, unknown>) => {
+  const write = useCallback((type: string, payload?: Record<string, unknown>, o?: { at?: string; source?: ShiftSource }) => {
     if (!store || !userId || !companyId) return;
-    recordShiftEvent(store, { companyId, userId, actorId: userId, type, payload });
+    recordShiftEvent(store, { companyId, userId, actorId: userId, type, payload, at: o?.at, source: o?.source });
     void syncNow();
   }, [store, userId, companyId, syncNow]);
 
@@ -75,7 +75,8 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
     current,
     shifts,
     prompt,
-    start: useCallback(() => write(SHIFT_START), [write]),
+    /** Start the shift now, or at a time the driver confirmed (telematics: when they went on duty). */
+    start: useCallback((at?: string, source?: ShiftSource) => write(SHIFT_START, undefined, { at, source }), [write]),
     end: useCallback(() => write(SHIFT_END), [write]),
     /** The Shift Explanation, written just before the shift ends. */
     explain: useCallback((payload: Record<string, unknown>) => write(SHIFT_EXPLANATION, payload), [write]),

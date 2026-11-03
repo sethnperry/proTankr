@@ -38,3 +38,14 @@ test("a shift that just started already has a today line", () => {
   const r = shiftRecap([S("2026-11-03T14:59:00Z", null)], { start: "2026-11-01", end: "2026-11-14" }, TZ, NOW);
   assert.deepEqual(r.rows.map((x) => [x.date, x.hours, x.today]), [["2026-11-03", 0, true]]);
 });
+
+test("safety meeting time is added, minus any part already inside a shift", () => {
+  const meet = (from: string, to: string) => ({ from: Date.parse(from), to: Date.parse(to) });
+  const shifts = [S("2026-11-02T12:00:00Z", "2026-11-02T20:00:00Z")]; // 8 h
+  const r = shiftRecap(shifts, { start: "2026-11-01", end: "2026-11-14" }, TZ, NOW, [
+    meet("2026-11-02T19:00:00Z", "2026-11-02T21:00:00Z"), // 1 h inside the shift, 1 h after it
+    meet("2026-11-01T15:00:00Z", "2026-11-01T16:00:00Z"), // a day with only a meeting
+  ]);
+  assert.deepEqual(r.rows.map((x) => [x.date, x.hours, x.meeting]), [["2026-11-02", 9, 1], ["2026-11-01", 1, 1]]);
+  assert.equal(r.total, 10);
+});

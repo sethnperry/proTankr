@@ -5,7 +5,7 @@
 // and hours worked this pay period (today's line appears once a shift has started), Call out and Sign out.
 // Presentational: the caller owns the data and what each button does.
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "@/app/planner/home/dashLook";
 import { recapDate, type Recap } from "@/lib/shifts/recap";
@@ -16,6 +16,8 @@ export function ShiftSheet({ open, onClose, scheduled, running, recap, periodLab
   onStart: () => void; onEnd: () => void; onCallout: () => void; onSignOut: () => void;
 }) {
   const L = useDashLook();
+  const [confirmOut, setConfirmOut] = useState(false);
+  useEffect(() => { if (!open) setConfirmOut(false); }, [open]);
   const big: React.CSSProperties = { width: "100%", padding: "16px 0", fontSize: 15, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", borderRadius: 2 };
   const small: React.CSSProperties = { ...L.secondary, flex: 1, color: "#fff", padding: "13px 0", fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", textAlign: "center" };
   return (
@@ -33,7 +35,7 @@ export function ShiftSheet({ open, onClose, scheduled, running, recap, periodLab
       {recap.rows.length === 0 && <div style={{ color: L.muted, fontSize: 14, padding: "6px 0" }}>No shifts yet this period.</div>}
       {recap.rows.map((r) => (
         <div key={r.date} className="dash-num" style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${L.hairline}`, fontSize: 15 }}>
-          <span>{recapDate(r.date)}</span><b>{r.hours.toFixed(1)} h</b>
+          <span>{recapDate(r.date)}{r.meeting >= 0.05 && <span style={{ color: L.muted, fontSize: 12 }}> · incl. safety meeting {r.meeting.toFixed(1)}</span>}</span><b>{r.hours.toFixed(1)} h</b>
         </div>
       ))}
       {recap.rows.length > 0 && (
@@ -42,10 +44,21 @@ export function ShiftSheet({ open, onClose, scheduled, running, recap, periodLab
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
-        <button type="button" onClick={onCallout} className="dash-press" style={small}>Call out</button>
-        <button type="button" onClick={onSignOut} className="dash-press" style={{ ...small, color: "#f87171" }}>Sign out</button>
-      </div>
+      {!confirmOut ? (
+        <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
+          <button type="button" onClick={onCallout} className="dash-press" style={small}>Call out</button>
+          <button type="button" onClick={() => setConfirmOut(true)} className="dash-press" style={{ ...small, color: "#f87171" }}>Sign out</button>
+        </div>
+      ) : (
+        <div style={{ ...L.secondary, marginTop: 24, padding: 14, borderColor: "rgba(248,113,113,0.55)" }}>
+          <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Sign out?</div>
+          <div style={{ fontSize: 13, color: L.muted, marginBottom: 12 }}>You will have to send a new magic link email to log back in.</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => setConfirmOut(false)} className="dash-press" style={small}>Stay signed in</button>
+            <button type="button" onClick={onSignOut} className="dash-press" style={{ ...small, background: "#fff", color: "#000" }}>Sign out</button>
+          </div>
+        </div>
+      )}
     </FullscreenModal>
   );
 }

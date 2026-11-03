@@ -140,6 +140,8 @@ import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
 import { ShiftBar } from "../components/shift/ShiftBar";
 import { ShiftSheet } from "../components/shift/ShiftSheet";
+import { ShiftStartConfirm } from "../components/shift/ShiftStartConfirm";
+import { snoozed, telematicsStart } from "@/lib/shifts/autoStart";
 import { useShiftRecap } from "../hooks/useShiftRecap";
 import { useDashIdentity } from "@/lib/ui/driver/useDashIdentity";
 import { ExplanationSheet } from "../components/shift/ExplanationSheet";
@@ -318,6 +320,28 @@ export default function HomePage() {
   useEffect(() => { if (!shiftOpen) return; setShiftNow(Date.now()); const t = window.setInterval(() => setShiftNow(Date.now()), 60_000); return () => window.clearInterval(t); }, [shiftOpen]);
   const shiftLocalEvents = useMemo(() => (store && userId ? store.list("shift_events", (e) => e.user_id === userId) : []), [store, userId, state]); // eslint-disable-line react-hooks/exhaustive-deps
   const shiftRecapData = useShiftRecap({ companyId: companyId || null, userId: userId || null, enabled: shiftOpen, localEvents: shiftLocalEvents, nowMs: shiftNow });
+  // Starting the shift automatically: a Begin Trip tap always asks; a fuel stop or inspection asks unless the driver
+  // said "not now" in the last four hours; Geotab showing them on duty or driving asks once per status. The driver
+  // always confirms the start time. The rules are in lib/shifts/autoStart.ts.
+  const [shiftAsk, setShiftAsk] = useState<{ reason: string; atMs: number; source: "app" | "geotab"; then?: () => void; always: boolean; since?: string } | null>(null);
+  const shiftKey = (k: string) => `proTankr:u:${userId}:${k}`;
+  const askShiftStart = (reason: string, then: () => void, o?: { always?: boolean }) => {
+    if (shift.current) { then(); return; }
+    let at: number | null = null;
+    try { at = Number(localStorage.getItem(shiftKey("shiftSnooze"))) || null; } catch { /* storage blocked */ }
+    if (!o?.always && snoozed(at, Date.now())) { then(); return; }
+    setShiftAsk({ reason, atMs: Date.now(), source: "app", then, always: !!o?.always });
+  };
+  const lastShiftEndedMs = useMemo(() => { const e = [...shift.shifts].reverse().find((x) => x.endedAt); return e?.endedAt ? Date.parse(e.endedAt) : null; }, [shift.shifts]);
+  const confirmShiftStart = (atMs: number) => { const a = shiftAsk; setShiftAsk(null); shift.start(new Date(atMs).toISOString(), a?.source ?? "app"); a?.then?.(); };
+  const skipShiftStart = () => {
+    const a = shiftAsk; setShiftAsk(null);
+    try {
+      if (a?.source === "geotab" && a.since) localStorage.setItem(shiftKey("shiftDeclined"), a.since);
+      else if (a && !a.always) localStorage.setItem(shiftKey("shiftSnooze"), String(Date.now()));
+    } catch { /* storage blocked */ }
+    a?.then?.();
+  };
   const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else shift.end(); };
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
@@ -916,6 +940,16 @@ export default function HomePage() {
   const [notifyPerm, setNotifyPerm] = useState<NotifyPermission>("default");
   useEffect(() => { setNotifyPerm(notifyPermission()); }, []);
   const myHos = useMyHos(companyId || null, !!companyId && !!userId);
+  useEffect(() => {
+    if (!userId || shiftAsk) return;
+    let declined: string | null = null;
+    try { declined = localStorage.getItem(shiftKey("shiftDeclined")); } catch { /* storage blocked */ }
+    const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: !!shift.current, lastEndedMs: lastShiftEndedMs, declinedSince: declined });
+    if (!t) return;
+    const hm = new Date(t.atMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    setShiftAsk({ reason: `Your truck's telematics shows you on duty since ${hm}.`, atMs: t.atMs, source: "geotab", always: false, since: t.since });
+  }, [myHos, shift.current, lastShiftEndedMs, userId, shiftAsk]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Where the truck is now (every two minutes while a trip is open), against the stops still ahead.
   const livePos = useTruckReading(truckId, !!openTrip && !!truckId, 120_000);
   const hosVsTrip = useMemo(() => {
@@ -973,7 +1007,7 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
-  const tapFuel = async () => {
+  const tapFuelNow = async () => {
     // Fuel, scale or any other stop waits until the delivery you're at is finished.
     const openDrop = snap?.deliveries.find((d) => d.arrived_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled");
     if (openDrop && !fuel.active) {
@@ -990,6 +1024,8 @@ export default function HomePage() {
     if (!fuel.active) await fuel.start({ truckId: truckId ?? null, trailerId: trailerId ?? null, tripId: openTrip?.trip_id ?? null });
     setFuelOpen(true);
   };
+  // A new fuel stop is a sign the day has started: offer to start the shift first.
+  const tapFuel = () => { if (!fuel.active) askShiftStart("You're starting a fuel stop.", () => void tapFuelNow()); else void tapFuelNow(); };
   // A back-dated arrival (the geofence saw the truck come to rest earlier) sets this for one call.
   const arriveAtRef = useRef<Date | null>(null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
@@ -1527,11 +1563,11 @@ export default function HomePage() {
           doResume();
           break;
         }
-        askFuelFirst(() => {
+        askShiftStart("You tapped Begin Trip. Starting your shift keeps your hours right.", () => askFuelFirst(() => {
           if (dispatchedList.length) { beginDispatchedLoad(); return; }
           setError(null);
           setSheetOpen(true);
-        });
+        }), { always: true });
         break;
       case "planner":
         endDelay();
@@ -2548,6 +2584,7 @@ export default function HomePage() {
         terminals={(terminals.terminals ?? []).map((t: any) => ({ value: String(t.terminal_id), label: [t.terminal_name, t.city].filter(Boolean).join(", ") }))}
         products={products.map((x: any) => ({ value: String(x.product_id), label: String(x.display_name || x.product_name || "Product") }))}
         onStart={termWork.start} onStop={termWork.stop} />
+      <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Continue without a shift" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
       <ShiftSheet open={shiftOpen} onClose={() => setShiftOpen(false)} scheduled={shiftRecapData.scheduled} running={!!shift.current} recap={shiftRecapData.recap} periodLabel={shiftRecapData.periodLabel}
         onStart={() => shift.start()} onEnd={() => { setShiftOpen(false); requestEnd(); }}
         onCallout={() => { setShiftOpen(false); setCalloutOpen(true); }} onSignOut={() => void dashIdentity.signOut()} />
@@ -2596,7 +2633,7 @@ export default function HomePage() {
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
           { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
-          { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
+          { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => askShiftStart("You're starting an inspection.", () => setInspectOpen(true)) },
           { icon: "truck", label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
           { icon: "plan", label: "Document", sub: "Submit a document", onClick: () => setDocOpen(true) },
           { icon: "locate", label: "Down time", sub: "Photo, no timer", onClick: () => setDownTimeOpen(true) },

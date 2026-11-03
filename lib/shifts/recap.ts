@@ -3,11 +3,11 @@
 // The Shift pop-out's numbers: hours worked per day over the pay period (from the driver's shifts, split at local
 // midnight), and when the next scheduled shift starts. Pure: no Supabase, no React, no clock.
 
-import { hoursByDay } from "../safety/onDuty.ts";
+import { hoursByDay, uncovered, type Window } from "../safety/onDuty.ts";
 import { localDateOf } from "../worklog/time.ts";
 import type { Shift } from "./shiftLogic.ts";
 
-export type RecapRow = { date: string; hours: number; today: boolean };
+export type RecapRow = { date: string; hours: number; /** Safety meeting hours inside `hours`. */ meeting: number; today: boolean };
 export type Recap = { rows: RecapRow[]; total: number };
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -16,16 +16,19 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
  * Days worked in [start, end] (local dates), newest first. An open shift counts up to `nowMs`. Today shows up only
  * once a shift has run today (so the line appears when the driver starts).
  */
-export function shiftRecap(shifts: Shift[], range: { start: string; end: string }, tz: string, nowMs: number): Recap {
+export function shiftRecap(shifts: Shift[], range: { start: string; end: string }, tz: string, nowMs: number, meetingWindows: Window[] = []): Recap {
   const windows = shifts.map((s) => ({ from: Date.parse(s.startedAt), to: s.endedAt ? Date.parse(s.endedAt) : nowMs })).filter((w) => Number.isFinite(w.from) && Number.isFinite(w.to) && w.to > w.from);
   const byDay = hoursByDay(windows, tz);
+  // Safety meetings count as on duty: only the part outside the shifts, so nothing counts twice.
+  const meetingByDay = hoursByDay(meetingWindows.flatMap((m) => uncovered(m, windows)), tz);
   const today = localDateOf(nowMs, tz);
-  const rows: RecapRow[] = Object.entries(byDay)
-    .filter(([d, h]) => d >= range.start && d <= range.end && h >= 0.05)
-    .map(([date, h]) => ({ date, hours: r1(h), today: date === today }))
+  const days = [...new Set([...Object.keys(byDay), ...Object.keys(meetingByDay)])];
+  const rows: RecapRow[] = days
+    .map((date) => ({ date, hours: r1((byDay[date] ?? 0) + (meetingByDay[date] ?? 0)), meeting: r1(meetingByDay[date] ?? 0), today: date === today }))
+    .filter((r) => r.date >= range.start && r.date <= range.end && r.hours >= 0.05)
     .sort((a, b) => b.date.localeCompare(a.date));
   // A shift just started has no hours yet, but today's line should already be there.
-  if (shifts.some((x) => !x.endedAt) && !rows.some((r) => r.today) && today >= range.start && today <= range.end) rows.unshift({ date: today, hours: 0, today: true });
+  if (shifts.some((x) => !x.endedAt) && !rows.some((r) => r.today) && today >= range.start && today <= range.end) rows.unshift({ date: today, hours: 0, meeting: 0, today: true });
   return { rows, total: r1(rows.reduce((t, r) => t + r.hours, 0)) };
 }
 
