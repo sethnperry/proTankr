@@ -96,8 +96,9 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
   // Geotab answers only ~10 calls a minute. An odometer that isn't there costs up to four calls, so a
   // result (found or not) is remembered for a while instead of being searched for on every reading.
   // The odometer changes slowly, so it is shared for a few minutes (a "not found" for less, to look again soon).
-  const odometer = (id: string): Promise<number | null> =>
-    cached(cache, `odo:${id}`, (v: number | null) => (v == null ? 2 : 5) * 60_000, () => odometerLookup(id));
+  // `fresh` (the driver is stopped and about to type or confirm it) accepts only the last minute's answer.
+  const odometer = (id: string, fresh = false): Promise<number | null> =>
+    cached(cache, `odo:${id}`, (v: number | null) => (fresh ? 60_000 : (v == null ? 2 : 5) * 60_000), () => odometerLookup(id));
   const odometerLookup = async (id: string): Promise<number | null> => {
     // The adjusted odometer is what MyGeotab shows; fall back to the engine's raw value. The odometer is only
     // logged now and then, so look back a week when the last day has nothing.
@@ -602,11 +603,11 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
       return out;
     },
 
-    async reading(id: string, o?: { slim?: boolean }): Promise<VehicleReading> {
+    async reading(id: string, o?: { slim?: boolean; fresh?: boolean }): Promise<VehicleReading> {
       // slim: just the position and odometer (the stamp pop-out), skipping fuel and engine hours.
       const [info, odo, fuel, hours] = await Promise.all([
         cached(cache, `status:${id}`, 30_000, () => call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id } } }) as Promise<any[]>),
-        odometer(id).catch(() => null),
+        odometer(id, !!o?.fresh).catch(() => null),
         o?.slim ? Promise.resolve(null) : fuelLevel(id).catch(() => null),
         o?.slim ? Promise.resolve(null) : engineHours(id).catch(() => null),
       ]);

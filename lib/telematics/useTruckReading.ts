@@ -16,13 +16,13 @@ export type TruckReading = { odometerMi: number | null; fuelLevelPct?: number | 
   hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; cycleLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null };
 
 /** The truck's reading, and whether asking failed (provider down, server hiccup) as opposed to "no connection". */
-export async function fetchTruckReadingResult(truckId: string | null, o?: { slim?: boolean }): Promise<{ reading: TruckReading | null; failed: boolean }> {
+export async function fetchTruckReadingResult(truckId: string | null, o?: { slim?: boolean; fresh?: boolean }): Promise<{ reading: TruckReading | null; failed: boolean }> {
   if (!truckId) return { reading: null, failed: false };
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return { reading: null, failed: false };
-    const r = await fetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}${o?.slim ? "&slim=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const r = await fetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}${o?.slim ? "&slim=1" : ""}${o?.fresh ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
     if (!r.ok) return { reading: null, failed: true };
     const j = await r.json();
     return { reading: j?.connected ? (j as TruckReading) : null, failed: false };
@@ -62,7 +62,7 @@ export async function fetchVehicleReading(companyId: string, vehicleId: string):
   }
 }
 
-export function useTruckReading(truckId: string | null, active: boolean, pollMs?: number): TruckReading | null {
+export function useTruckReading(truckId: string | null, active: boolean, pollMs?: number, fresh = false): TruckReading | null {
   const [reading, setReading] = useState<TruckReading | null>(null);
   useEffect(() => {
     if (!active || !truckId) { setReading(null); return; }
@@ -71,7 +71,7 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
     let failures = 0;
     const run = () => {
       if (pollMs && document.visibilityState === "hidden") { timer = window.setTimeout(run, pollMs); return; }
-      void fetchTruckReadingResult(truckId).then(({ reading: r, failed }) => {
+      void fetchTruckReadingResult(truckId, { fresh }).then(({ reading: r, failed }) => {
         if (cancelled) return;
         if (failed) {
           // Keep the last reading and ask again soon, a few times, instead of going quiet for good.
@@ -86,7 +86,7 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
     };
     run();
     return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
-  }, [truckId, active, pollMs]);
+  }, [truckId, active, pollMs, fresh]);
   return reading;
 }
 

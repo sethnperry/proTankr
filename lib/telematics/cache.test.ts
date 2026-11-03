@@ -95,3 +95,28 @@ test("geotab: a quota error names the call that tripped it", async () => {
   const p = geotabProvider({ database: "quota-db", userName: "u", password: "p" }, f);
   await assert.rejects(p.listDrivers(), /quota exceeded.*\[Get:User\]/);
 });
+
+test("geotab: a fresh odometer accepts only the last minute's answer", async () => {
+  let odoCalls = 0;
+  const f = (async (_u: string, init: any) => {
+    const body = JSON.parse(init.body);
+    const ok = (result: unknown) => ({ ok: true, json: async () => ({ result }) });
+    if (body.method === "Authenticate") return ok({ path: "my5.geotab.com", credentials: { database: "d", sessionId: "s", userName: "u" } });
+    if (body.params.typeName === "DeviceStatusInfo") return ok([{ latitude: 27.9, longitude: -82.4, speed: 0, dateTime: "2026-10-23T10:00:00Z" }]);
+    if (body.params.search?.diagnosticSearch?.id === "DiagnosticOdometerAdjustmentId") { odoCalls++; return ok([{ data: 160934.4, dateTime: "2026-10-23T09:00:00Z" }]); }
+    return ok([]);
+  }) as any;
+  // A store whose stored answers can be aged by hand.
+  const m = new Map<string, { at: number; v: unknown }>();
+  const store: CacheStore = { async get(k) { return m.get(k) ?? null; }, async set(k, v) { m.set(k, { at: Date.now(), v: v ?? null }); } };
+  const p = geotabProvider({ database: "fresh-db", userName: "u", password: "p" }, f, store);
+  await p.reading("b1", { slim: true });
+  assert.equal(odoCalls, 1);
+  m.get("odo:b1")!.at = Date.now() - 2 * 60_000; // two minutes old
+  await p.reading("b1", { slim: true });
+  assert.equal(odoCalls, 1, "a normal read still reuses a two-minute-old odometer");
+  await p.reading("b1", { slim: true, fresh: true });
+  assert.equal(odoCalls, 2, "a fresh read asks again");
+  await p.reading("b1", { slim: true, fresh: true });
+  assert.equal(odoCalls, 2, "but only once a minute");
+});

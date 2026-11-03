@@ -11990,3 +11990,4 @@ last-driver 2 min, shipments 5 min, hours of service 2 min, fleet positions 30 s
 served for up to 6 hours (a bad login is never hidden). The stamp pop-out asks for `?slim=1`, which skips fuel,
 hours, trailers, drivers, HOS and shipments. A quota error now names the call: `[Get:StatusData]`. Limits are per
 login: the company login is shared by everything; a driver who connects their own login (hours) gets their own.
+The odometer is asked fresh (no older than a minute, `fresh=1`, at most one Geotab lookup a minute) only where it is recorded at a possibly moving moment: the fuel sheet and the cancel/End-shift pop-out. Begin Trip, Finish Delivery and the rest use the 5-minute cache (the truck has been stopped for minutes).
