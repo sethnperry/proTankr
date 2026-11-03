@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useDashLook } from "@/app/planner/home/dashLook";
 import { ROLE_LABELS, type Role } from "@/lib/ui/driver/role";
 
-export function DashFooter({ name, role, isSuperAdmin, onSignOut }: { name: string; role: Role | null; isSuperAdmin: boolean; onSignOut: () => void }) {
+export function DashFooter({ name, role, isSuperAdmin, onSignOut, onShift }: { name: string; role: Role | null; isSuperAdmin: boolean; onSignOut: () => void; /** Driver Dashboard: opens the Shift pop-out. */ onShift?: () => void }) {
   const L = useDashLook();
   const btn: React.CSSProperties = { ...L.secondary, flex: 1, textAlign: "center", color: "#fff", padding: "13px 0", fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", textDecoration: "none" };
   const roleText = isSuperAdmin ? "ProTankr admin" : role ? ROLE_LABELS[role] : "";
@@ -19,6 +19,7 @@ export function DashFooter({ name, role, isSuperAdmin, onSignOut }: { name: stri
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <Link href="/profile" className="dash-press" style={btn}>Profile</Link>
+        {onShift && <button type="button" className="dash-press" onClick={onShift} style={btn}>Shift</button>}
         <button type="button" className="dash-press" onClick={onSignOut} style={{ ...btn, color: "#f87171" }}>Sign out</button>
       </div>
     </div>

@@ -138,7 +138,10 @@ import { productColorFor } from "../utils/productColor";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
-import { ShiftBar, ShiftControls } from "../components/shift/ShiftBar";
+import { ShiftBar } from "../components/shift/ShiftBar";
+import { ShiftSheet } from "../components/shift/ShiftSheet";
+import { useShiftRecap } from "../hooks/useShiftRecap";
+import { useDashIdentity } from "@/lib/ui/driver/useDashIdentity";
 import { ExplanationSheet } from "../components/shift/ExplanationSheet";
 import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanation";
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
@@ -252,6 +255,7 @@ export default function HomePage() {
   const [inspectOpen, setInspectOpen] = useState(false);
   const [perDiemOpen, setPerDiemOpen] = useState(false);
   const [calloutOpen, setCalloutOpen] = useState(false);
+  const [shiftOpen, setShiftOpen] = useState(false);
   const [termWorkOpen, setTermWorkOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [slfOpen, setSlfOpen] = useState(false);
@@ -308,6 +312,12 @@ export default function HomePage() {
     return inspection.overall === "good" ? `${what} is good. The inspection is saved.`
       : workOrder ? `Saved. ${what} has an item that needs replacing soon, so a work order was planned for it.` : `Saved. ${what} has items to watch.`;
   };
+  // The Shift pop-out: scheduled start, Start or End, this pay period's recap, Call out and Sign out.
+  const dashIdentity = useDashIdentity();
+  const [shiftNow, setShiftNow] = useState(() => Date.now());
+  useEffect(() => { if (!shiftOpen) return; setShiftNow(Date.now()); const t = window.setInterval(() => setShiftNow(Date.now()), 60_000); return () => window.clearInterval(t); }, [shiftOpen]);
+  const shiftLocalEvents = useMemo(() => (store && userId ? store.list("shift_events", (e) => e.user_id === userId) : []), [store, userId, state]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shiftRecapData = useShiftRecap({ companyId: companyId || null, userId: userId || null, enabled: shiftOpen, localEvents: shiftLocalEvents, nowMs: shiftNow });
   const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else shift.end(); };
   const signature = useDriverSignature(userId);
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
@@ -1868,7 +1878,7 @@ export default function HomePage() {
       }}
     >
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
-      <ConnectedDashHeader current="driver" line={equipmentLabel} right={<ShiftControls shift={shift.current} onStart={shift.start} onEnd={requestEnd} />} />
+      <ConnectedDashHeader current="driver" line={equipmentLabel} />
 
       <ShiftBar shift={shift.current} prompt={shift.prompt} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
@@ -2538,6 +2548,9 @@ export default function HomePage() {
         terminals={(terminals.terminals ?? []).map((t: any) => ({ value: String(t.terminal_id), label: [t.terminal_name, t.city].filter(Boolean).join(", ") }))}
         products={products.map((x: any) => ({ value: String(x.product_id), label: String(x.display_name || x.product_name || "Product") }))}
         onStart={termWork.start} onStop={termWork.stop} />
+      <ShiftSheet open={shiftOpen} onClose={() => setShiftOpen(false)} scheduled={shiftRecapData.scheduled} running={!!shift.current} recap={shiftRecapData.recap} periodLabel={shiftRecapData.periodLabel}
+        onStart={() => shift.start()} onEnd={() => { setShiftOpen(false); requestEnd(); }}
+        onCallout={() => { setShiftOpen(false); setCalloutOpen(true); }} onSignOut={() => void dashIdentity.signOut()} />
       <CalloutSheet open={calloutOpen} onClose={() => setCalloutOpen(false)} reasons={reasonsOrDefault(reasons as any, "callout")} divisions={callouts.divisions} defaultDivision={callouts.profile.division} tz={callouts.tz} mine={callouts.mine}
         onWithdraw={callouts.withdraw}
         onCreate={async (v) => {
@@ -2582,7 +2595,6 @@ export default function HomePage() {
           ...(shell.isSolo === false ? [{ icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) }] : []),
           { icon: "people", label: "Safety meeting", sub: openSafety ? "Sign in needed" : safety.meetings.length ? "Upcoming" : null, subColor: openSafety ? "#fbbf24" : undefined, onClick: () => setSafetyOpen(true) },
           { icon: "terminal", label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
-          { icon: "people", label: "Call out", sub: "Can't make a shift", onClick: () => setCalloutOpen(true) },
           { icon: "locate", label: "Per diem", sub: "Days away from home", onClick: () => setPerDiemOpen(true) },
           { icon: "plan", label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
           { icon: "truck", label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
@@ -2593,7 +2605,7 @@ export default function HomePage() {
         ];
         return <SharedToolsPanel extra={tools} />;
       })()}
-      <ConnectedDashFooter />
+      <ConnectedDashFooter onShift={() => setShiftOpen(true)} />
       </div>
       </div>
 

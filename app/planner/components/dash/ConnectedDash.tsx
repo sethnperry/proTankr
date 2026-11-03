@@ -22,9 +22,9 @@ export function ConnectedDashHeader({ current, line, right }: { current: Dashboa
   );
 }
 
-export function ConnectedDashFooter() {
+export function ConnectedDashFooter({ onShift }: { onShift?: () => void } = {}) {
   const id = useDashIdentity();
-  return <DashFooter name={id.name} role={id.role} isSuperAdmin={id.isSuperAdmin} onSignOut={() => void id.signOut()} />;
+  return <DashFooter name={id.name} role={id.role} isSuperAdmin={id.isSuperAdmin} onSignOut={() => void id.signOut()} onShift={onShift} />;
 }
 
 /** Vault and Reports as tool items, for dashboards that build their own tool list. */
