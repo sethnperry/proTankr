@@ -175,6 +175,11 @@ export type LoadingModalProps = {
   onUpdateCardOnly: () => void;
   // Rack Delay: why the truck is held up at the rack (starts a delay, warns other drivers).
   onRackDelay?: () => void;
+  // A delay at the rack is running: the Rack Delay button becomes Begin Loading, which stops the delay and starts loading.
+  rackDelayRunning?: boolean;
+  onBeginLoading?: () => void;
+  // Cancel the load altogether (asks first): undoes the load and the card, and ends any running delay.
+  onCancelLoad?: () => void;
   // Report Terminal Issue (no longer a button here; the Couldn't Load flow carries the reasons).
   onReportTerminalIssue?: () => void;
   // Back to Planner: leaves Plan Review open-ended. The load, arrival and card stay as they are.

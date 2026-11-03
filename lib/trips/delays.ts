@@ -10,6 +10,7 @@
 // one is written to the trip.
 
 import { terminalIssueLabel } from "./terminalIssues.ts";
+import { newId } from "./tripStore.ts";
 import type { TripEventRow } from "./types.ts";
 
 export type DelayLeg = "to_rack" | "at_rack" | "to_drop" | "at_drop";
@@ -172,4 +173,21 @@ export function delayIssueCode(code: string | null | undefined): "long_line" | "
   if (code === "rack_down") return "rack_down";
   if (code === "terminal_issue") return "terminal_issue";
   return null;
+}
+
+/**
+ * Ends the running delay: logs it to its trip as a "delay_logged" event, clears it from the phone and tells any open
+ * screen (the dashboard's Delay button, Plan Review's Rack Delay button) to look again. False when none was running.
+ */
+export function endRunningDelay(store: { put: (table: "trip_events", row: TripEventRow) => unknown }, userId: string, atIso?: string): boolean {
+  const d = readRunningDelay(userId);
+  if (!d) return false;
+  const at = atIso ?? new Date().toISOString();
+  store.put("trip_events", {
+    event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: at, actor_id: userId,
+    pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, at),
+  });
+  writeRunningDelay(userId, null);
+  try { window.dispatchEvent(new Event("protankr:delay")); } catch { /* not a browser */ }
+  return true;
 }

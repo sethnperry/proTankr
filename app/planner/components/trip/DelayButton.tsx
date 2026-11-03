@@ -3,7 +3,7 @@
 //
 // The Delay button under the big step button. Tap it when something is
 // holding the truck up: pick why (the list depends on the leg), and a small
-// timer runs until the driver taps it again or taps Arrive. See lib/trips/delays.ts.
+// timer runs until the driver taps it again or taps Arrive (at the rack: until loading begins). See lib/trips/delays.ts.
 
 import React, { useEffect, useState } from "react";
 import { DELAY_REASONS, LEG_LABEL, OTHER_CODE, delayReasonLabel, type DelayLeg, type RunningDelay } from "@/lib/trips/delays";
@@ -17,12 +17,18 @@ const mmss = (ms: number) => {
   return h > 0 ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
 };
 
-export function DelayButton({ leg, running, onStart, onEnd }: {
+export type RackActions = { onBeginLoading: () => void; onAnotherRack: () => void; onCancelLoad: () => void };
+
+export function DelayButton({ leg, running, onStart, onEnd, rackActions }: {
   leg: DelayLeg;
   running: RunningDelay | null;
   onStart: (code: string, note: string | null) => void;
   onEnd: () => void;
+  /** At the rack before loading: the delay can't be tapped away, it ends when loading begins, the driver leaves for
+   *  another rack, or the load is cancelled. These three are right here. */
+  rackActions?: RackActions;
 }) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [open, setOpen] = useState(false);
   const [other, setOther] = useState(false);
   const [note, setNote] = useState("");
@@ -41,6 +47,34 @@ export function DelayButton({ leg, running, onStart, onEnd }: {
     onStart(code, null);
     close();
   };
+
+  if (running && running.leg === "at_rack" && rackActions) {
+    const sb: React.CSSProperties = { flex: 1, padding: "11px 0", borderRadius: 2, fontSize: 13, fontWeight: 800, cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff" };
+    return (
+      <div style={{ marginTop: 8 }}>
+        <div style={{ padding: "10px 12px", borderRadius: 2, background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.55)", color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="dash-num" style={{ fontSize: 18, fontWeight: 800, color: "#fbbf24", fontVariantNumeric: "tabular-nums" }}>{mmss(now - Date.parse(running.startedAt))}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Delay · {delayReasonLabel(running.code, running.note)}</span>
+        </div>
+        {!confirmCancel ? (
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <button type="button" onClick={rackActions.onBeginLoading} style={{ ...sb, background: "#fff", color: "#000", border: "none" }}>Begin Loading</button>
+            <button type="button" onClick={rackActions.onAnotherRack} style={sb}>Another rack</button>
+            <button type="button" onClick={() => setConfirmCancel(true)} style={{ ...sb, color: "#f87171" }}>Cancel load</button>
+          </div>
+        ) : (
+          <div style={{ marginTop: 6, padding: 12, border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, background: "rgba(248,113,113,0.06)" }}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Cancel this load?</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>You'll be asked why. The delay timer stops.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setConfirmCancel(false)} style={sb}>Keep it</button>
+              <button type="button" onClick={() => { setConfirmCancel(false); rackActions.onCancelLoad(); }} style={{ ...sb, background: "#f87171", color: "#000", border: "none" }}>Cancel load</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (running) {
     return (

@@ -33,6 +33,7 @@ import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stop
 import {
   DELAY_EVENT, delayEventPayload, delayIssueCode, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
   dropDelayMinutes, type RunningDelay,
+  endRunningDelay,
 } from "@/lib/trips/delays";
 import { newId } from "@/lib/trips/tripStore";
 import { useTripHydration } from "@/lib/trips/useTripHydration";
@@ -390,16 +391,7 @@ export default function HomePage() {
   const delayLeg = openTrip ? legForStep(step.kind) : null;
   const endDelay = (atIso?: string) => {
     if (!store || !userId) return;
-    const d = runningDelay ?? readRunningDelay(userId);
-    if (!d) return;
-    const at = atIso ?? new Date().toISOString();
-    store.put("trip_events", {
-      event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: at, actor_id: userId,
-      pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, at),
-    });
-    writeRunningDelay(userId, null);
-    setRunningDelay(null);
-    void syncNow();
+    if (endRunningDelay(store, userId, atIso)) { setRunningDelay(null); void syncNow(); }
   };
   // First time a terminal is reported down for gauging, ask when it normally gauges.
   const [gaugingAsk, setGaugingAsk] = useState<{ id: string; name: string } | null>(null);
@@ -1027,16 +1019,17 @@ export default function HomePage() {
   const arriveAtRef = useRef<Date | null>(null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
 
-  // A delay at the rack ends when loading begins (the pickup's Begin time stamped after the delay started) or, for a
-  // Rack Delay started inside Plan Review, when the driver leaves the rack. Never before the delay started.
+  // A delay at the rack ends only when loading begins (the Begin Loading button in Plan Review or here), when the driver
+  // leaves for another rack or terminal (the pickup is closed with no load or left), or when the trip is cancelled.
   useEffect(() => {
     if (!runningDelay || runningDelay.leg !== "at_rack" || !snap) return;
+    if (!openTrip || openTrip.trip_id !== runningDelay.tripId) { endDelay(); return; }
     const p = snap.pickups.find((x) => x.pickup_id === runningDelay.pickupId);
     if (!p) return;
     const started = Date.parse(runningDelay.startedAt);
-    const endAt = p.begin_at && Date.parse(p.begin_at) >= started ? p.begin_at : p.left_at && Date.parse(p.left_at) >= started ? p.left_at : null;
-    if (endAt) endDelay(endAt);
-  }, [runningDelay, snap]); // eslint-disable-line react-hooks/exhaustive-deps
+    const left = p.left_at && Date.parse(p.left_at) >= started ? p.left_at : null;
+    if (left || p.outcome === "no_load") endDelay(left ?? undefined);
+  }, [runningDelay, snap, openTrip?.trip_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadedPickup = step.kind === "loaded" ? step.pickup : null;
 
@@ -2306,7 +2299,19 @@ export default function HomePage() {
         </button>
       )}
       {delayLeg && !openingPlanner && (
-        <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />
+        <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
+          rackActions={step.kind === "planner" ? {
+            // Begin Loading stops the delay, stamps now as the real begin time and opens Plan Review.
+            onBeginLoading: () => {
+              const at = new Date().toISOString();
+              endDelay(at);
+              const wp = snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome);
+              if (store && wp) store.put("trip_pickups", { pickup_id: wp.pickup_id, begin_at: at });
+              onBigButton();
+            },
+            onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); },
+            onCancelLoad: () => { setCancelErr(null); setCancelOpen(true); },
+          } : undefined} />
       )}
       {gaugingAsk && <GaugingAskSheet terminalId={gaugingAsk.id} terminalName={gaugingAsk.name} onClose={() => setGaugingAsk(null)} />}
       {undoable && !openingPlanner && (

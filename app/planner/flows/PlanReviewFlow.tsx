@@ -6,10 +6,10 @@
 // usePlanner() and hands LoadingModal what it shows. Mount it anywhere under
 // PlannerProvider.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ConnectedSupplierPanel from "../components/ConnectedSupplierPanel";
 import RackDelaySheet from "../components/RackDelaySheet";
-import { readRunningDelay, writeRunningDelay, type RunningDelay } from "@/lib/trips/delays";
+import { endRunningDelay, readRunningDelay, writeRunningDelay, type RunningDelay } from "@/lib/trips/delays";
 import { reportRows } from "../utils/reportRows";
 import LoadingModal from "../modals/LoadingModal";
 import { styles } from "../ui/styles";
@@ -52,6 +52,7 @@ export default function PlanReviewFlow() {
     tripWaitingPickup,
     compPlan,
     terminalProducts,
+    tripStoreHook,
   } = usePlanner();
 
   // ── Rack Delay: a reason starts the running delay (same one the dashboard's Delay button shows) and warns
@@ -62,6 +63,30 @@ export default function PlanReviewFlow() {
       .filter((r) => r?.productId && Number(r.planned_gallons ?? 0) > 0)
       .map((r) => [String(r.productId), { productId: String(r.productId), name: productNameById?.get(String(r.productId)) ?? "Product" }]),
   ).values()];
+  // A delay at the rack is running (started here or on the dashboard): the Rack Delay button reads Begin Loading.
+  const [rackDelayRunning, setRackDelayRunning] = useState(false);
+  useEffect(() => {
+    const read = () => setRackDelayRunning(!!effectiveUserId && readRunningDelay(effectiveUserId)?.leg === "at_rack");
+    read();
+    window.addEventListener("protankr:delay", read);
+    return () => window.removeEventListener("protankr:delay", read);
+  }, [effectiveUserId, loadWorkflow.loadingOpen]);
+  // Begin Loading: stops the delay and stamps now as the time loading really began.
+  const beginLoadingAfterDelay = () => {
+    const store = tripStoreHook.store;
+    if (!effectiveUserId || !store) return;
+    const at = new Date().toISOString();
+    endRunningDelay(store, effectiveUserId, at);
+    const pickup = tripPickup ?? tripWaitingPickup ?? null;
+    if (pickup) store.put("trip_pickups", { pickup_id: pickup.pickup_id, begin_at: at });
+    setRackDelayRunning(false);
+  };
+  // Cancel the load altogether: the delay ends, then the load and card are undone.
+  const cancelLoadAltogether = () => {
+    if (effectiveUserId && tripStoreHook.store) endRunningDelay(tripStoreHook.store, effectiveUserId);
+    setRackDelayRunning(false);
+    handleBackToPlannerNoUpdate();
+  };
   const startRackDelay = async (code: any, productIds: string[]): Promise<string | null> => {
     const pickup = tripPickup ?? tripWaitingPickup ?? null;
     if (effectiveUserId && pickup && !readRunningDelay(effectiveUserId)) {
@@ -133,6 +158,9 @@ export default function PlanReviewFlow() {
       onFinishLoadingStart={loadGeoShips}
       onUpdateCardOnly={handleCouldntLoad}
       onRackDelay={() => setRackDelayOpen(true)}
+      rackDelayRunning={rackDelayRunning}
+      onBeginLoading={beginLoadingAfterDelay}
+      onCancelLoad={cancelLoadAltogether}
       // Back to Planner leaves the load, the arrival time and the card exactly as they are.
       onBackToPlanner={() => loadWorkflow.setLoadingOpen(false)}
       onAdjustPlan={handleBackToPlannerNoUpdate}
