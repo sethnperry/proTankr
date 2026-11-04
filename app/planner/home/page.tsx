@@ -2226,9 +2226,15 @@ export default function HomePage() {
           </div>
         );
       })()}
-      {/* One order per load, just above the trip card, on the right. Opens the PTD. */}
+      {/* Just above the trip card: Edit trip on the left, the order and PTD on the right. */}
       {openTrip && (
-        <div style={{ display: "flex", justifyContent: "flex-end", margin: "6px 0 12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "6px 0 12px" }}>
+          {/* Always available (the supplier, order numbers and planned stops can change mid-trip). Stops already
+              arrived at, loaded or finished are kept as they are when the trip is saved. */}
+          <button type="button" onClick={() => { setError(null); setSheetOpen(true); }}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: LOOK.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+            Edit trip
+          </button>
           <button type="button" onClick={() => nav.go("ptd", `/planner/trips/${openTrip.trip_id}`)} {...busyProps(nav.is("ptd"))} aria-label="Open the PTD"
             className="dash-num"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 18, fontWeight: 700, color: LOOK.muted, display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
@@ -2400,9 +2406,6 @@ export default function HomePage() {
           })()}
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-            {/* Always available (the supplier, order numbers and planned stops can change mid-trip). Stops already
-                arrived at, loaded or finished are kept as they are when the trip is saved. */}
-            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit trip</button>
             {lastLoadId && (
               <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", lastLoadId); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
             )}
