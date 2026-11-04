@@ -155,7 +155,8 @@ async function runCompany(companyId: string): Promise<{ sent: number; drivers: n
   if (stopNotices.length) {
     const { data: ss } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth, user_id").eq("company_id", companyId).in("user_id", stopNotices.map((x) => x.userId));
     for (const r of (ss ?? []) as (StoredSub & { user_id: string })[]) stopSubs.set(r.user_id, [...(stopSubs.get(r.user_id) ?? []), r]);
-    for (const n of stopNotices) {
+    // "Did you load at the rack?" is a card in the app, not a push: it can wait until the driver next looks.
+    for (const n of stopNotices.filter((x) => x.kind === "arrive")) {
       // One answer row per stop; the notification's Yes / No (Arrived / Delay) buttons fill it in.
       const { data: ans } = await admin.from("stop_answers")
         .upsert({ company_id: companyId, user_id: n.userId, trip_id: n.tripId, stop_at: n.at, kind: n.kind, place_name: n.place }, { onConflict: "user_id,stop_at", ignoreDuplicates: true })

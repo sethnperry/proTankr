@@ -967,7 +967,13 @@ export default function HomePage() {
   const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || freightOpen || moveOpen || truckSheetWatch, finishOpen ? 60_000 : undefined, fuelOpen); // fuel wants a fresh odometer; a stop that lasted minutes is fine from the cache
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
-  const [hookupSnoozed, setHookupSnoozed] = useState(false);
+  // "It's right" is remembered for that truck and trailer, so the card doesn't come back every time the app opens.
+  const hookupKey = userId && truckId ? `proTankr:u:${userId}:hookupOk:${truckId}` : null;
+  const [hookupOkId, setHookupOkId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hookupKey) { setHookupOkId(null); return; }
+    try { setHookupOkId(localStorage.getItem(hookupKey)); } catch { setHookupOkId(null); }
+  }, [hookupKey]);
   const [notifyPerm, setNotifyPerm] = useState<NotifyPermission>("default");
   useEffect(() => { setNotifyPerm(notifyPermission()); }, []);
   const myHos = useMyHos(companyId || null, !!companyId && !!userId);
@@ -2200,10 +2206,8 @@ export default function HomePage() {
                 Turn on alerts for low hours ›
               </button>
             )}
-            {!hosVsTrip && least < 120 && (
-              <div style={{ fontSize: 12, marginTop: 8, color: clockColor(least) }}>
-                {least < 60 ? "Under an hour left on a clock. Plan where you'll park." : "Under two hours left on a clock. Plan your stops."}
-              </div>
+            {!hosVsTrip && least < 60 && (
+              <div style={{ fontSize: 12, marginTop: 8, color: clockColor(least) }}>Under an hour left on a clock. Plan where you'll park.</div>
             )}
           </div>
         );
@@ -2413,7 +2417,7 @@ export default function HomePage() {
       )}
 
 
-      {!hookupSnoozed && hookup?.trailerId && hookup.trailerId !== (trailerId ?? null) && (
+      {hookup?.trailerId && hookup.trailerId !== hookupOkId && hookup.trailerId !== (trailerId ?? null) && (
         <div style={{ ...card, marginBottom: 10, borderColor: "rgba(251,146,60,0.55)" }}>
           <div style={{ fontSize: 14, fontWeight: 800 }}>
             Geotab shows Trailer {hookup.trailerName ?? "?"} hooked to your truck
@@ -2428,7 +2432,7 @@ export default function HomePage() {
             <button type="button" className="dash-press" onClick={() => openEquipment()} style={{ flex: 2, padding: "11px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", ...L.cta }}>
               Open Equipment
             </button>
-            <button type="button" onClick={() => setHookupSnoozed(true)} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
+            <button type="button" onClick={() => { const id = hookup?.trailerId ?? null; setHookupOkId(id); try { if (hookupKey && id) localStorage.setItem(hookupKey, id); } catch { /* private mode: it may ask again */ } }} style={{ flex: 1, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }}>
               It's right
             </button>
           </div>
