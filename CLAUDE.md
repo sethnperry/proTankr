@@ -12044,3 +12044,13 @@ automatically), **Drop pin on map** (reuses `PinMap`, with search and tap/drag),
 joined into a search; `PinMap` opens on the first match with the pin already dropped, adjust, then Use this pin).
 The pin gets the nearest saved place's name (0.3 mi) or the address as its label. `PinMap` gained `dropFirst`
 (auto-drop the pin on the first result of the initial query). Not click-tested.
+
+### STUD location map rebuilt: `EquipmentPinMap` (2026-11-04, later)
+
+Replaces `PinMap` for the status window. The pin is a red label with the unit numbers ("25184 / 3151"); drag it, tap the
+map, or pan and press **Put pin at map center** (the reliable touch fallback). Tap the pin for year / make / model of each
+unit. Saved places (`delivery_locations`) and fuel stops (`fuel_purchases`, e.g. "Love's 495") draw as labeled dots in view
+(max 80); tap one, then **Move pin here**. Street / City / ST fields are on the map screen itself (search via
+`/api/geocode?search=`), Satellite toggle for yards. Status window: one **Fine-tune on map** button under the GPS button;
+the location block shows only for Deadline / Readyline (a hint appears for In Use, since the pin is only saved off duty).
+`PinMap` (delivery locations) is unchanged apart from the earlier `dropFirst`. Not click-tested.

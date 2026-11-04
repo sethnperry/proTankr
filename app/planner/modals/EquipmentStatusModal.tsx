@@ -24,9 +24,9 @@ import { getPhonePosition } from "@/lib/geo/position";
 import { airMiles } from "@/lib/trips/deliveryLocations";
 import { mapsUrl } from "@/lib/equipment/parkedNearby";
 import dynamic from "next/dynamic";
-import type { PinResult } from "@/app/planner/components/trip/PinMap";
+import type { PinPick, UnitInfo } from "@/app/planner/components/EquipmentPinMap";
 
-const PinMap = dynamic(() => import("@/app/planner/components/trip/PinMap"), { ssr: false });
+const PinMap = dynamic(() => import("@/app/planner/components/EquipmentPinMap"), { ssr: false });
 
 type Pin = { lat: number; lon: number; label: string | null; placeId: string | null; region: string | null; localArea: string | null };
 
@@ -44,11 +44,6 @@ export function fleetStatusColor(status: string | null): string {
 export function fleetStatusLabel(status: string | null): string {
   return STATUS_OPTIONS.find((s) => s.value === status)?.label ?? "";
 }
-
-const addrInput: React.CSSProperties = {
-  padding: "10px 12px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)",
-  color: "#fff", fontSize: 14, outline: "none",
-};
 
 const fieldLabel: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)",
@@ -102,11 +97,7 @@ export default function EquipmentStatusModal({
   const [hadPin, setHadPin] = useState<Pin | null>(null);
   const [locBusy, setLocBusy] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [mapQuery, setMapQuery] = useState("");
-  const [addrOpen, setAddrOpen] = useState(false);
-  const [street, setStreet] = useState("");
-  const [cityTxt, setCityTxt] = useState("");
-  const [stateTxt, setStateTxt] = useState("");
+  const [unitInfo, setUnitInfo] = useState<UnitInfo[]>([]);
 
   // Nearest saved place (within 0.3 mi) names the pin and fills region / local area.
   async function nearestPlace(lat: number, lon: number): Promise<Pick<Pin, "label" | "placeId" | "region" | "localArea">> {
@@ -128,27 +119,33 @@ export default function EquipmentStatusModal({
     if (!at) {
       // No GPS: drop the pin by hand instead.
       setErr("Couldn't get your location, so drop the pin on the map.");
-      setLocBusy(false); setMapQuery(""); setMapOpen(true); return;
+      setLocBusy(false); setMapOpen(true); return;
     }
     setPin({ lat: at.lat, lon: at.lon, ...(await nearestPlace(at.lat, at.lon)) });
     setLocBusy(false);
   }
 
-  async function usePinResult(r: PinResult) {
+  async function usePinResult(r: PinPick) {
     setErr(null);
     const near = await nearestPlace(r.lat, r.lon);
     const addr = [r.address, r.city, r.state].filter(Boolean).join(", ");
     setPin({ lat: r.lat, lon: r.lon, ...near, label: near.label ?? (addr || null) });
   }
-  function findAddress() {
-    const q = [street, cityTxt, stateTxt].map((x) => x.trim()).filter(Boolean).join(", ");
-    if (!q) { setErr("Enter a street, city or state."); return; }
-    setErr(null); setMapQuery(q); setMapOpen(true);
+  async function loadUnitInfo() {
+    const list: UnitInfo[] = [];
+    try {
+      const t = pair ? pair.truckId : unitKind === "truck" ? unitId : null;
+      const r = pair ? pair.trailerId : unitKind === "trailer" ? unitId : null;
+      if (t) { const { data } = await supabase.from("trucks").select("make,model,year").eq("truck_id", t).maybeSingle(); list.push({ kind: "truck", name: pair?.truckName ?? unitName, ...(data as any) }); }
+      if (r) { const { data } = await supabase.from("trailers").select("make,model,year").eq("trailer_id", r).maybeSingle(); list.push({ kind: "trailer", name: pair?.trailerName ?? unitName, ...(data as any) }); }
+    } catch { /* label only */ }
+    setUnitInfo(list);
   }
 
   useEffect(() => {
     if (!open) return;
-    setPin(null); setHadPin(null); setMapOpen(false); setAddrOpen(false);
+    setPin(null); setHadPin(null); setMapOpen(false);
+    void loadUnitInfo();
     const ids = pair ? [["truck", pair.truckId], ["trailer", pair.trailerId]] : [[unitKind, unitId]];
     void (async () => {
       if (presetPin) setPin({ ...presetPin, ...(await nearestPlace(presetPin.lat, presetPin.lon)), label: presetPin.label, placeId: presetPin.placeId });
@@ -280,32 +277,15 @@ export default function EquipmentStatusModal({
               style={{ width: "100%", padding: "12px 14px", border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", textAlign: "left" as const }}>
               {locBusy ? "Getting location…" : shownPin ? "📍 Update location (GPS)" : "📍 + Set location (GPS)"}
             </button>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button type="button" onClick={() => { setMapQuery(""); setMapOpen(true); }}
-                style={{ flex: 1, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                🗺 Drop pin on map
-              </button>
-              <button type="button" onClick={() => setAddrOpen((v) => !v)}
-                style={{ flex: 1, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.2)", background: addrOpen ? "rgba(255,255,255,0.1)" : "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                Street, city, state
-              </button>
-            </div>
-            {addrOpen && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                <input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Street" style={addrInput} />
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input value={cityTxt} onChange={(e) => setCityTxt(e.target.value)} placeholder="City" style={{ ...addrInput, flex: 1 }} />
-                  <input value={stateTxt} onChange={(e) => setStateTxt(e.target.value)} placeholder="ST" maxLength={2} style={{ ...addrInput, width: 64, textTransform: "uppercase" as const }} />
-                </div>
-                <button type="button" onClick={findAddress}
-                  style={{ padding: "10px 12px", border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                  Find on map
-                </button>
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>GPS uses your phone's position, so do it where the equipment is. No signal? Drop the pin or type the address.</div>
+            <button type="button" onClick={() => setMapOpen(true)}
+              style={{ width: "100%", marginTop: 8, padding: "12px 14px", border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", textAlign: "left" as const }}>
+              🗺 Fine-tune on map · street, city, state
+            </button>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>GPS uses your phone's position. Not where the equipment is? Fine-tune on the map: move the pin, pick a saved place, or type the address.</div>
           </div>
-        ) : null}
+        ) : (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Pick Deadline or Readyline to set where it is parked.</div>
+        )}
 
         {homeLocalArea && (
           <div style={{ textAlign: "right" as const, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginTop: -8 }}>
@@ -356,7 +336,8 @@ export default function EquipmentStatusModal({
         </button>
       </div>
     </FullscreenModal>
-    <PinMap open={mapOpen} start={shownPin ? { lat: shownPin.lat, lon: shownPin.lon } : null} startQuery={mapQuery}
+    <PinMap open={mapOpen} start={shownPin ? { lat: shownPin.lat, lon: shownPin.lon } : null} initialQuery=""
+      unitLabel={pair ? `${pair.truckName} / ${pair.trailerName}` : unitName} units={unitInfo} companyId={companyId}
       onUse={(r) => void usePinResult(r)} onClose={() => setMapOpen(false)} />
     </>
   );
