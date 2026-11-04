@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { fetchTruckReadingResult } from "@/lib/telematics/useTruckReading";
+import { logHere } from "@/lib/errors/client";
 import { placeFor, type StampSource } from "@/lib/moves/emptyMoves";
 import type { DeliveryLocation } from "@/lib/trips/deliveryLocations";
 
@@ -44,7 +45,21 @@ export function useStampContext(o: { active: boolean; truckId: string | null; lo
     let alive = true;
     setCtx({ ...EMPTY, loading: true });
     void (async () => {
-      const [reading, pos] = await Promise.all([truckId ? fetchTruckReadingResult(truckId, { slim: true, fresh: true }).then((r) => r.reading) : Promise.resolve(null), gps()]);
+      const ask = async () => {
+        if (!truckId) return null;
+        let r = await fetchTruckReadingResult(truckId, { slim: true, fresh: true });
+        // No odometer back: ask again without the "no older than a minute" rule, so the last answer the server holds
+        // (a few minutes old) is used instead of a blank. The truck is parked here; the driver confirms it anyway.
+        if (r.reading?.odometerMi == null) {
+          const first = r;
+          r = await fetchTruckReadingResult(truckId, { slim: true });
+          if (r.reading?.odometerMi == null) {
+            void logHere("telematics_link", `Odometer pop-out got no reading (${first.failed || r.failed ? "request failed" : first.reading || r.reading ? "no odometer in the reading" : "not connected or truck not linked"})`, { truckId });
+          }
+        }
+        return r.reading;
+      };
+      const [reading, pos] = await Promise.all([ask(), gps()]);
       let place: { id: string | null; text: string | null } = { id: null, text: null };
       let source: StampSource = "none";
       let at = pos;

@@ -93,9 +93,16 @@ export function isPastISO_(iso: string | null | undefined) {
 // isoTodayInTimeZone and LoadingModal.tsx's fmtLastApiLine_ already use
 // elsewhere in this codebase.
 
-function tzPartsAt(dateMs: number, timeZone: string) {
+// A terminal with no time zone on file (or a bad one) must not crash the screen that shows its reports.
+const FALLBACK_TZ = "America/New_York";
+function safeTz(tz: string | null | undefined): string {
+  if (!tz) return FALLBACK_TZ;
+  try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; } catch { return FALLBACK_TZ; }
+}
+
+function tzPartsAt(dateMs: number, timeZone: string | null | undefined) {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone, hourCycle: "h23",
+    timeZone: safeTz(timeZone), hourCycle: "h23",
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   }).formatToParts(new Date(dateMs));

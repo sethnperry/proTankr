@@ -35,7 +35,7 @@ export async function cached<T>(
   key: string,
   ttl: number | ((v: T) => number),
   fetcher: () => Promise<T>,
-  o: { staleOkMs?: number } = {},
+  o: { staleOkMs?: number; keepOnNull?: boolean } = {},
 ): Promise<T> {
   if (!store) return fetcher();
   let m = flights.get(store);
@@ -52,6 +52,8 @@ export async function cached<T>(
     }
     try {
       const v = await fetcher();
+      // "Not found" must not wipe out a good answer: keep serving the last real one (and don't overwrite it).
+      if (v == null && o.keepOnNull && entry && entry.v != null && Date.now() - entry.at < (o.staleOkMs ?? STALE_OK_MS)) return entry.v as T;
       try { await store.set(key, v); } catch { /* a failed store write only costs a repeat call */ }
       return v;
     } catch (e) {

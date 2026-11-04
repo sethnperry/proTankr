@@ -120,3 +120,17 @@ test("geotab: a fresh odometer accepts only the last minute's answer", async () 
   await p.reading("b1", { slim: true, fresh: true });
   assert.equal(odoCalls, 2, "but only once a minute");
 });
+
+test("keepOnNull: a 'not found' answer doesn't wipe out a good one", async () => {
+  const store = memoryStore();
+  await store.set("odo", 322277);
+  let t = 0;
+  const v = await cached(store, "odo", () => 0, async () => { t++; return null as number | null; }, { keepOnNull: true });
+  assert.equal(v, 322277);
+  assert.equal((await store.get("odo"))?.v, 322277);
+  assert.equal(t, 1);
+  // without the option, null is stored as before
+  const store2 = memoryStore();
+  await store2.set("odo", 322277);
+  assert.equal(await cached(store2, "odo", () => 0, async () => null as number | null), null);
+});

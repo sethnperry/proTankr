@@ -27,3 +27,11 @@ export async function logCrash(error: { message?: string; stack?: string; digest
     });
   } catch { /* best effort */ }
 }
+
+/** A line in the Desk for the signed-in driver's current company. Never throws. */
+export async function logHere(kind: AppErrorInput["kind"], message: string, payload?: Record<string, unknown>): Promise<void> {
+  try {
+    const { data: company } = await supabase.rpc("get_active_company_id");
+    await logAppError({ companyId: typeof company === "string" ? company : null, kind, message, payload });
+  } catch { /* best effort */ }
+}
