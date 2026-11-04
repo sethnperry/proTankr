@@ -174,6 +174,8 @@ import { PerDiemSheet } from "../components/perdiem/PerDiemSheet";
 import { usePerDiem } from "../hooks/usePerDiem";
 import { useDriverSetup } from "@/lib/setup/useDriverSetup";
 import { breakChip } from "@/lib/telematics/breakChip";
+import { EquipmentConfirmSheet } from "../components/EquipmentConfirmSheet";
+import { equipmentState, lastFromTrips, readLastEquipment, rememberLastEquipment, resolveLast, type ComboLite, type EqState, type LastEq } from "@/lib/equipment/lastEquipment";
 import { counterText } from "@/lib/setup/driverSetup";
 import { InspectionSheet, type InspectUnit } from "../components/maintenance/InspectionSheet";
 import { useOpenCampaigns } from "../hooks/useOpenCampaigns";
@@ -693,6 +695,66 @@ export default function HomePage() {
   // A fuel stop still open when a trip is about to begin: ask, so the fueling time ends before the trip's start
   // instead of straddling it.
   const [fuelAsk, setFuelAsk] = useState<null | (() => void)>(null);
+  // Begin Trip: after the shift starts, confirm the equipment. The last truck with its trailer; parked means Confirm,
+  // in use by someone else means Commandeer; Switch units opens the equipment picker and the sequence carries on when it
+  // closes. Skipped when the driver already holds a pair, has no history, or is being set up by an admin.
+  const [equipAsk, setEquipAsk] = useState<{ last: LastEq; state: EqState; then: () => void } | null>(null);
+  const [equipBusy, setEquipBusy] = useState(false);
+  const [equipErr, setEquipErr] = useState<string | null>(null);
+  const [equipSwitching, setEquipSwitching] = useState(false);
+  const equipSawOpen = useRef(false);
+  useEffect(() => {
+    if (!equipSwitching) { equipSawOpen.current = false; return; }
+    if (shell.equipOpen) { equipSawOpen.current = true; return; }
+    if (!equipSawOpen.current) return;
+    const a = equipAsk;
+    setEquipSwitching(false);
+    setEquipAsk(null);
+    a?.then();
+  }, [equipSwitching, shell.equipOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const askEquipment = async (go: () => void) => {
+    if (!userId || !companyId || shell.setupSession) { go(); return; }
+    if (equipment.selectedComboId && !equipment.isBobtail && !equipment.isTrailerOnly) { go(); return; }
+    const myTrips = store ? store.list("trips", (t) => t.driver_id === userId) : [];
+    const known = readLastEquipment(userId) ?? lastFromTrips(myTrips, userId);
+    if (!known) { go(); return; }
+    try {
+      // Who holds these units right now, read fresh: another driver may have taken them since.
+      const ids = [known.truckId, known.trailerId].filter(Boolean) as string[];
+      const { data } = await supabase.from("equipment_combos").select("truck_id, trailer_id, claimed_by, active").eq("active", true)
+        .or(ids.map((id) => `truck_id.eq.${id},trailer_id.eq.${id}`).join(","));
+      const combos = (data ?? []) as ComboLite[];
+      const last = resolveLast(readLastEquipment(userId), lastFromTrips(myTrips, userId), combos);
+      if (!last) { go(); return; }
+      const state = equipmentState(last, combos, userId);
+      if (state.kind === "mine") { go(); return; }
+      setEquipErr(null);
+      setEquipAsk({ last, state, then: go });
+    } catch { go(); } // never block Begin Trip on this
+  };
+  const confirmEquipment = async () => {
+    const a = equipAsk;
+    if (!a || !userId) return;
+    setEquipBusy(true);
+    setEquipErr(null);
+    try {
+      if (a.last.trailerId) {
+        const { data, error: e } = await supabase.rpc("couple_combo", { p_truck_id: a.last.truckId, p_trailer_id: a.last.trailerId, p_force: a.state.kind === "in_use" });
+        if (e) throw e;
+        await equipment.fetchCombos?.();
+        const comboId = String((data as { combo_id?: string } | null)?.combo_id ?? "");
+        if (comboId) equipment.setSelectedComboId(comboId);
+      } else {
+        await equipment.setCurrentEquipment(a.last.truckId, null);
+      }
+      rememberLastEquipment(userId, { truckId: a.last.truckId, trailerId: a.last.trailerId });
+      setEquipAsk(null);
+      a.then();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? "");
+      setEquipErr(/historical combo|tare/i.test(m) ? "This pair hasn't been used together before. Tap Switch units." : m ? `Couldn't take the equipment: ${m}` : "Couldn't take the equipment. Tap Switch units.");
+    } finally { setEquipBusy(false); }
+  };
   const askFuelFirst = (go: () => void) => {
     if (fuel.active && fuel.active.status !== "complete" && !fuel.active.finished_at) setFuelAsk(() => go);
     else go();
@@ -1275,6 +1337,7 @@ export default function HomePage() {
     }
     // End shift: the shift record carries the same stamp, and an open move ends here.
     const startedAt = shift.current?.startedAt ?? null;
+    if (userId && truckId) rememberLastEquipment(userId, { truckId, trailerId: trailerId ?? null }); // parking lets go of the truck; Begin Trip offers it again
     setStampAsk(null);
     shift.end({ odometer: odo, lat: stampCtx.lat, lon: stampCtx.lon, place_id: stampCtx.placeId, place_text: stampPlaceLabel, location_source: stampCtx.source, odometer_source: stampCtx.guess === odo ? "truck" : "typed" });
     const m = emptyMoves.current;
@@ -1669,11 +1732,11 @@ export default function HomePage() {
           doResume();
           break;
         }
-        askShiftStart("You tapped Begin Trip. Starting your shift keeps your hours right.", () => askFuelFirst(() => {
+        askShiftStart("You tapped Begin Trip. Starting your shift keeps your hours right.", () => void askEquipment(() => askFuelFirst(() => {
           if (dispatchedList.length) { beginDispatchedLoad(); return; }
           setError(null);
           setSheetOpen(true);
-        }), { always: true });
+        })), { always: true });
         break;
       case "planner":
         // A delay at the rack (gauging, a long line) keeps running: it ends when loading really begins (below), not
@@ -2782,6 +2845,15 @@ export default function HomePage() {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
+      <EquipmentConfirmSheet open={!!equipAsk && !equipSwitching}
+        truckName={equipAsk ? equipment.truckNameById?.[equipAsk.last.truckId] ?? null : null}
+        trailerName={equipAsk?.last.trailerId ? equipment.trailerNameById?.[equipAsk.last.trailerId] ?? null : null}
+        inUse={equipAsk?.state.kind === "in_use"}
+        holderName={equipAsk?.state.holderId ? roster.members.find((m) => m.user_id === equipAsk.state.holderId)?.display_name ?? null : null}
+        busy={equipBusy} error={equipErr}
+        onConfirm={() => void confirmEquipment()}
+        onSwitch={() => { setEquipErr(null); setEquipSwitching(true); shell.setEquipOpen(true); }}
+        onClose={() => { if (!equipBusy) setEquipAsk(null); }} />
       <OdometerConfirmSheet open={!!stampAsk && !!truckId}
         title={stampAsk?.kind === "shift" ? "End shift" : "Load cancelled"}
         lead={stampAsk?.kind === "shift" ? "Confirm the truck's odometer to end your shift." : "Confirm the truck's odometer. The empty run starts here."}
