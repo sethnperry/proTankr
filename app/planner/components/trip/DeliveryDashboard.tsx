@@ -310,6 +310,7 @@ export function DeliveryDashboard({
   const [newTankText, setNewTankText] = useState("");
   const [wstep, setWstep] = useState<WStep>("tanks");
   // Times window: stamped when it opens, editable.
+  const [arrivedText, setArrivedText] = useState("");
   const [beginText, setBeginText] = useState("");
   const [finishText, setFinishText] = useState("");
   const [reasonId, setReasonId] = useState<string | null>(null);
@@ -609,12 +610,15 @@ export function DeliveryDashboard({
   // ── Times ──────────────────────────────────────────────────────────────────
   const rules = dropRules(settings);
   const dropGallons = delivered.reduce((t, c) => t + gross(c), 0);
-  const est = dropEstimate(arrivedAt, dropGallons, rules);
+  // The driver can correct the arrival time in the Times step (Arrive tapped late), so every figure in that
+  // step is measured from the corrected time, not the stamped one.
+  const arrivedIso = fromLocalInput(arrivedText) || arrivedAt;
+  const est = dropEstimate(arrivedIso, dropGallons, rules);
   const beginIso = fromLocalInput(beginText) || "";
   const finishIso = fromLocalInput(finishText) || "";
-  const timesNow: StepTimes = { arrivedAt, beginAt: beginIso || arrivedAt, leftAt: finishIso || arrivedAt };
+  const timesNow: StepTimes = { arrivedAt: arrivedIso, beginAt: beginIso || arrivedIso, leftAt: finishIso || arrivedIso };
   const outcome = finishIso ? dropOutcome({ expectedEndAt: est.expectedEndAt, finishAt: finishIso, recordedDelayMin, graceMin: rules.graceMin }) : null;
-  const preDropLate = needsDelayReason(delayMinutes(arrivedAt, beginIso || null), settings.delivery_delay_threshold_minutes);
+  const preDropLate = needsDelayReason(delayMinutes(arrivedIso, beginIso || null), settings.delivery_delay_threshold_minutes);
   const milesProblem = (): string | null => {
     if (miles == null) return isLast ? "Enter ending miles." : null;
     if (beginMiles != null && miles < beginMiles) return `Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`;
@@ -627,6 +631,7 @@ export function DeliveryDashboard({
     const dep = readGeoDeparture(delivery.delivery_id);
     const finish = dep && Date.parse(dep) <= Date.now() && Date.parse(dep) > Date.parse(arrivedAt) ? dep : nowIso;
     const begin = delivery.begin_at ?? (Date.parse(est.beginAt) < Date.parse(finish) ? est.beginAt : finish);
+    setArrivedText(toLocalInput(arrivedAt));
     setFinishText(toLocalInput(finish));
     setBeginText(toLocalInput(begin));
     setReasonId(delivery.delay_reason_id ?? null);
@@ -788,7 +793,7 @@ export function DeliveryDashboard({
   const submit = () => {
     if (finishing) return;
     if (!beginIso || !finishIso) return setErr("Enter both times.");
-    const times: StepTimes = { arrivedAt, beginAt: beginIso, leftAt: finishIso };
+    const times: StepTimes = { arrivedAt: arrivedIso, beginAt: beginIso, leftAt: finishIso };
     const tp = timesProblem(times);
     if (tp) return setErr(tp);
     const over = outcome?.kind === "over";
@@ -1195,7 +1200,9 @@ export function DeliveryDashboard({
         <>
           <div style={{ ...sectionCard }}>
             <div style={{ ...miniLabel, marginBottom: 6 }}>Check your times</div>
-            <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>Arrived {fmtTime(arrivedAt)}</div>
+            <div style={{ ...miniLabel, marginBottom: 4 }}>Arrived</div>
+            <input type="datetime-local" value={arrivedText} onChange={(e) => setArrivedText(e.target.value)} style={{ ...fieldInput, marginBottom: 4 }} />
+            <div style={{ fontSize: 12, color: muted, marginBottom: 12 }}>Forgot to tap Arrive? Set the time you actually got here.</div>
             <div style={{ ...miniLabel, marginBottom: 4 }}>{pumpOff ? "Pump off began" : "Delivery began"}</div>
             <input type="datetime-local" value={beginText} onChange={(e) => setBeginText(e.target.value)} style={{ ...fieldInput, marginBottom: 12 }} />
             <div style={{ ...miniLabel, marginBottom: 4 }}>Finished</div>
@@ -1203,7 +1210,7 @@ export function DeliveryDashboard({
             {preDropLate && (
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 13, color: "#fbbf24" }}>
-                  Arrive to start was {delayMinutes(arrivedAt, beginIso)} min (over {settings.delivery_delay_threshold_minutes}). Reason required.
+                  Arrive to start was {delayMinutes(arrivedIso, beginIso)} min (over {settings.delivery_delay_threshold_minutes}). Reason required.
                 </div>
                 {reasonPicker}
               </div>
