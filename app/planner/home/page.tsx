@@ -698,7 +698,7 @@ export default function HomePage() {
   // Begin Trip: after the shift starts, confirm the equipment. The last truck with its trailer; parked means Confirm,
   // in use by someone else means Commandeer; Switch units opens the equipment picker and the sequence carries on when it
   // closes. Skipped when the driver already holds a pair, has no history, or is being set up by an admin.
-  const [equipAsk, setEquipAsk] = useState<{ last: LastEq; state: EqState; then: () => void } | null>(null);
+  const [equipAsk, setEquipAsk] = useState<{ last: LastEq; state: EqState; comboId: string | null; anyActive: boolean; names: { truck: string | null; trailer: string | null }; then: () => void } | null>(null);
   const [equipBusy, setEquipBusy] = useState(false);
   const [equipErr, setEquipErr] = useState<string | null>(null);
   const [equipSwitching, setEquipSwitching] = useState(false);
@@ -721,15 +721,25 @@ export default function HomePage() {
     try {
       // Who holds these units right now, read fresh: another driver may have taken them since.
       const ids = [known.truckId, known.trailerId].filter(Boolean) as string[];
-      const { data } = await supabase.from("equipment_combos").select("truck_id, trailer_id, claimed_by, active").eq("active", true)
+      const { data } = await supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, claimed_by, active").eq("active", true)
         .or(ids.map((id) => `truck_id.eq.${id},trailer_id.eq.${id}`).join(","));
       const combos = (data ?? []) as ComboLite[];
       const last = resolveLast(readLastEquipment(userId), lastFromTrips(myTrips, userId), combos);
       if (!last) { go(); return; }
       const state = equipmentState(last, combos, userId);
       if (state.kind === "mine") { go(); return; }
+      // Names straight from the tables: the picker's own name lists only cover coupled units, and a parked truck may not be.
+      const [tn, ln] = await Promise.all([
+        supabase.from("trucks").select("truck_name").eq("truck_id", last.truckId).maybeSingle(),
+        last.trailerId ? supabase.from("trailers").select("trailer_name").eq("trailer_id", last.trailerId).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const pair = combos.find((c) => c.truck_id === last.truckId && c.trailer_id === last.trailerId);
       setEquipErr(null);
-      setEquipAsk({ last, state, then: go });
+      setEquipAsk({
+        last, state, comboId: pair?.combo_id ?? null, anyActive: combos.length > 0,
+        names: { truck: (tn.data as { truck_name?: string } | null)?.truck_name ?? null, trailer: (ln.data as { trailer_name?: string } | null)?.trailer_name ?? null },
+        then: go,
+      });
     } catch { go(); } // never block Begin Trip on this
   };
   const confirmEquipment = async () => {
@@ -739,7 +749,11 @@ export default function HomePage() {
     setEquipErr(null);
     try {
       if (a.last.trailerId) {
-        const { data, error: e } = await supabase.rpc("couple_combo", { p_truck_id: a.last.truckId, p_trailer_id: a.last.trailerId, p_force: a.state.kind === "in_use" });
+        // Parked and still coupled (parking only lets go of the unit): claim the pairing. Taking it from another driver, or
+        // putting a decoupled pair back together, goes through couple_combo (force when something active holds a unit).
+        const { data, error: e } = a.state.kind === "parked" && a.comboId
+          ? await supabase.rpc("claim_combo", { p_combo_id: a.comboId })
+          : await supabase.rpc("couple_combo", { p_truck_id: a.last.truckId, p_trailer_id: a.last.trailerId, p_force: a.state.kind === "in_use" || a.anyActive });
         if (e) throw e;
         await equipment.fetchCombos?.();
         const comboId = String((data as { combo_id?: string } | null)?.combo_id ?? "");
@@ -2846,8 +2860,9 @@ export default function HomePage() {
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
       <EquipmentConfirmSheet open={!!equipAsk && !equipSwitching}
-        truckName={equipAsk ? equipment.truckNameById?.[equipAsk.last.truckId] ?? null : null}
-        trailerName={equipAsk?.last.trailerId ? equipment.trailerNameById?.[equipAsk.last.trailerId] ?? null : null}
+        truckName={equipAsk?.names.truck ?? null}
+        trailerName={equipAsk?.names.trailer ?? null}
+        hasTrailer={!!equipAsk?.last.trailerId}
         inUse={equipAsk?.state.kind === "in_use"}
         holderName={equipAsk?.state.holderId ? roster.members.find((m) => m.user_id === equipAsk.state.holderId)?.display_name ?? null : null}
         busy={equipBusy} error={equipErr}

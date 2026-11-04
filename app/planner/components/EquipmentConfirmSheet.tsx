@@ -12,10 +12,12 @@ const MUTE = "rgba(255,255,255,0.55)";
 const primary: React.CSSProperties = { width: "100%", padding: "18px 0", fontSize: 16, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", border: "none", background: "#fff", color: "#000", cursor: "pointer", borderRadius: 2 };
 const secondary: React.CSSProperties = { ...primary, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", marginTop: 8 };
 
-export function EquipmentConfirmSheet({ open, truckName, trailerName, inUse, holderName, busy, error, onConfirm, onSwitch, onClose }: {
+export function EquipmentConfirmSheet({ open, truckName, trailerName, hasTrailer, inUse, holderName, busy, error, onConfirm, onSwitch, onClose }: {
   open: boolean;
   truckName: string | null;
   trailerName: string | null;
+  /** There is a trailer even if its name didn't come back: never call that a bobtail. */
+  hasTrailer: boolean;
   inUse: boolean;
   holderName: string | null;
   busy: boolean;
@@ -28,7 +30,7 @@ export function EquipmentConfirmSheet({ open, truckName, trailerName, inUse, hol
     <FullscreenModal open={open} onClose={onClose} title="Equipment" footer={null}>
       <div style={{ fontSize: 13, color: MUTE }}>{inUse ? "Your last truck is in use." : "Your last truck is parked and free."}</div>
       <div className="dash-num" style={{ margin: "14px 0 4px", fontSize: 36, fontWeight: 900, letterSpacing: "0.02em" }}>Truck {truckName ?? "?"}</div>
-      <div className="dash-num" style={{ fontSize: 24, fontWeight: 800, color: trailerName ? "#fff" : MUTE }}>{trailerName ? `Trailer ${trailerName}` : "No trailer (bobtail)"}</div>
+      <div className="dash-num" style={{ fontSize: 24, fontWeight: 800, color: hasTrailer ? "#fff" : MUTE }}>{hasTrailer ? `Trailer ${trailerName ?? ""}`.trim() : "No trailer (bobtail)"}</div>
       {inUse && (
         <div style={{ marginTop: 14, padding: 12, border: "1px solid rgba(251,191,36,0.55)", background: "rgba(251,191,36,0.08)", fontSize: 14, color: "#fbbf24", fontWeight: 700 }}>
           In use by {holderName ?? "another driver"}. Commandeering takes it from them.

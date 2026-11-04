@@ -11991,3 +11991,20 @@ served for up to 6 hours (a bad login is never hidden). The stamp pop-out asks f
 hours, trailers, drivers, HOS and shipments. A quota error now names the call: `[Get:StatusData]`. Limits are per
 login: the company login is shared by everything; a driver who connects their own login (hours) gets their own.
 The odometer is asked fresh (no older than a minute, `fresh=1`, at most one Geotab lookup a minute) only where it is recorded at a possibly moving moment: the fuel sheet and the cancel/End-shift pop-out. Begin Trip, Finish Delivery and the rest use the 5-minute cache (the truck has been stopped for minutes).
+
+## Parking never splits a pair; Begin Trip confirms equipment (2026-11-04)
+
+- **The bug**: `set_equipment_status('deadline'|'readyline')` (what End shift calls) ran `_evict_combo_to_partial`, which
+  deactivated the pairing and left each driver holding only a trailer. Ending a shift decoupled the driver's truck from
+  their trailer, and a slip-seat partner's pair too (both Seth's 25184/3151 and John's 25169/582 were split this way).
+- **The fix** (`20261122000000_parking_keeps_the_pair.sql`, applied, both overloads): parking only lets go of the unit. It
+  releases the claim (`claimed_by`/`claimed_at` null) and clears the holder's `user_settings.current_*`; the combo stays
+  `active`. A coupled, unclaimed pairing is "parked and free". **Decoupling happens only from the equipment modal.**
+  Rolled-back test as a driver: combo stayed active, claim released, holder cleared, status set.
+- **Repair**: re-activated both split pairs (unclaimed) and cleared both drivers' stale `current_*`.
+- **Begin Trip equipment window** (`EquipmentConfirmSheet`, `lib/equipment/lastEquipment.ts`): after the shift prompt,
+  offers the last truck with the trailer coupled to it. Parked -> Confirm (`claim_combo` for a coupled pair, else
+  `couple_combo`, which reuses the stored tare); held by someone else -> Commandeer (`couple_combo` with force). Names are
+  read from `trucks`/`trailers` directly (the picker's name maps only cover coupled units, which printed "Truck ?").
+  "Bobtail" shows only when there is truly no trailer id. The truck is remembered at End shift (phone) with the driver's
+  last trip as the fallback. **Open**: if an alternate swaps to a different truck, the remembered truck is still offered.

@@ -5,7 +5,7 @@
 // truck it was. This is that memory plus the rules for what the window says. Pure apart from the phone storage.
 
 export type LastEq = { truckId: string; trailerId: string | null };
-export type ComboLite = { truck_id: string | null; trailer_id: string | null; claimed_by?: string | null; active: boolean | null };
+export type ComboLite = { combo_id?: string | null; truck_id: string | null; trailer_id: string | null; claimed_by?: string | null; active: boolean | null };
 export type TripEq = { truck_id: string | null; trailer_id: string | null; started_at: string | null; driver_id?: string | null };
 
 const key = (userId: string) => `proTankr:u:${userId}:lastEquipment`;
