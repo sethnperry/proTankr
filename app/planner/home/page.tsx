@@ -174,8 +174,10 @@ import { PerDiemSheet } from "../components/perdiem/PerDiemSheet";
 import { usePerDiem } from "../hooks/usePerDiem";
 import { useDriverSetup } from "@/lib/setup/useDriverSetup";
 import { breakChip } from "@/lib/telematics/breakChip";
-import { EquipmentConfirmSheet } from "../components/EquipmentConfirmSheet";
-import { equipmentState, lastFromTrips, readLastEquipment, rememberLastEquipment, resolveLast, type ComboLite, type EqState, type LastEq } from "@/lib/equipment/lastEquipment";
+import { EquipmentConfirmSheet, type EquipChoice } from "../components/EquipmentConfirmSheet";
+import { lastFromTrips, readLastEquipment, rememberLastEquipment, resolveLast, type ComboLite } from "@/lib/equipment/lastEquipment";
+import { buildCandidates, type Candidate, type ParkPin } from "@/lib/equipment/parkedNearby";
+import { getPhonePosition } from "@/lib/geo/position";
 import { counterText } from "@/lib/setup/driverSetup";
 import { InspectionSheet, type InspectUnit } from "../components/maintenance/InspectionSheet";
 import { useOpenCampaigns } from "../hooks/useOpenCampaigns";
@@ -695,10 +697,13 @@ export default function HomePage() {
   // A fuel stop still open when a trip is about to begin: ask, so the fueling time ends before the trip's start
   // instead of straddling it.
   const [fuelAsk, setFuelAsk] = useState<null | (() => void)>(null);
-  // Begin Trip: after the shift starts, confirm the equipment. The last truck with its trailer; parked means Confirm,
-  // in use by someone else means Commandeer; Switch units opens the equipment picker and the sequence carries on when it
-  // closes. Skipped when the driver already holds a pair, has no history, or is being set up by an admin.
-  const [equipAsk, setEquipAsk] = useState<{ last: LastEq; state: EqState; comboId: string | null; anyActive: boolean; names: { truck: string | null; trailer: string | null }; then: () => void } | null>(null);
+  // Begin Trip: after the shift starts, confirm the equipment. Free pairs parked where the driver is now (each unit has one
+  // pin, left when a shift ended), then their own last truck. The driver taps one to highlight it and confirms (Commandeer
+  // when someone has it); Find equipment opens the picker and the sequence carries on when it closes. Skipped when the
+  // driver already holds a pair, there is nothing to offer, or an admin is using the app as someone else.
+  type EquipCand = Candidate & { truckName: string | null; trailerName: string | null };
+  const [equipAsk, setEquipAsk] = useState<{ cands: EquipCand[]; then: () => void } | null>(null);
+  const [equipSel, setEquipSel] = useState<string | null>(null);
   const [equipBusy, setEquipBusy] = useState(false);
   const [equipErr, setEquipErr] = useState<string | null>(null);
   const [equipSwitching, setEquipSwitching] = useState(false);
@@ -715,59 +720,82 @@ export default function HomePage() {
   const askEquipment = async (go: () => void) => {
     if (!userId || !companyId || shell.setupSession) { go(); return; }
     if (equipment.selectedComboId && !equipment.isBobtail && !equipment.isTrailerOnly) { go(); return; }
-    const myTrips = store ? store.list("trips", (t) => t.driver_id === userId) : [];
-    const known = readLastEquipment(userId) ?? lastFromTrips(myTrips, userId);
-    if (!known) { go(); return; }
     try {
-      // Who holds these units right now, read fresh: another driver may have taken them since.
-      const ids = [known.truckId, known.trailerId].filter(Boolean) as string[];
-      const { data } = await supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, claimed_by, active").eq("active", true)
-        .or(ids.map((id) => `truck_id.eq.${id},trailer_id.eq.${id}`).join(","));
-      const combos = (data ?? []) as ComboLite[];
-      const last = resolveLast(readLastEquipment(userId), lastFromTrips(myTrips, userId), combos);
-      if (!last) { go(); return; }
-      const state = equipmentState(last, combos, userId);
-      if (state.kind === "mine") { go(); return; }
-      // Names straight from the tables: the picker's own name lists only cover coupled units, and a parked truck may not be.
-      const [tn, ln] = await Promise.all([
-        supabase.from("trucks").select("truck_name").eq("truck_id", last.truckId).maybeSingle(),
-        last.trailerId ? supabase.from("trailers").select("trailer_name").eq("trailer_id", last.trailerId).maybeSingle() : Promise.resolve({ data: null }),
+      const myTrips = store ? store.list("trips", (t) => t.driver_id === userId) : [];
+      // Where I am, the pins, and every active pairing, read fresh: another driver may have taken a unit since.
+      const [myPos, pinsRes, combosRes] = await Promise.all([
+        getPhonePosition(3500),
+        supabase.from("equipment_parks").select("unit_kind, unit_id, lat, lon, place_label, parked_by, parked_at"),
+        supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id, claimed_by, active").eq("active", true),
       ]);
-      const pair = combos.find((c) => c.truck_id === last.truckId && c.trailer_id === last.trailerId);
+      const combos = (combosRes.data ?? []) as ComboLite[];
+      const pins = (pinsRes.data ?? []) as ParkPin[];
+      const last = resolveLast(readLastEquipment(userId), lastFromTrips(myTrips, userId), combos);
+      const cands = buildCandidates({ pins, activeCombos: combos, me: userId, myPos, last });
+      if (!cands.length || cands.some((c) => c.state.kind === "mine")) { go(); return; }
+      const truckIds = cands.map((c) => c.truckId);
+      const trailerIds = cands.map((c) => c.trailerId).filter(Boolean) as string[];
+      const [tn, ln] = await Promise.all([
+        supabase.from("trucks").select("truck_id, truck_name").in("truck_id", truckIds),
+        trailerIds.length ? supabase.from("trailers").select("trailer_id, trailer_name").in("trailer_id", trailerIds) : Promise.resolve({ data: [] }),
+      ]);
+      const tnames = new Map(((tn.data ?? []) as { truck_id: string; truck_name: string }[]).map((r) => [r.truck_id, r.truck_name]));
+      const lnames = new Map(((ln.data ?? []) as { trailer_id: string; trailer_name: string }[]).map((r) => [r.trailer_id, r.trailer_name]));
+      const withNames = cands.map((c) => ({ ...c, truckName: tnames.get(c.truckId) ?? null, trailerName: c.trailerId ? lnames.get(c.trailerId) ?? null : null }));
       setEquipErr(null);
-      setEquipAsk({
-        last, state, comboId: pair?.combo_id ?? null, anyActive: combos.length > 0,
-        names: { truck: (tn.data as { truck_name?: string } | null)?.truck_name ?? null, trailer: (ln.data as { trailer_name?: string } | null)?.trailer_name ?? null },
-        then: go,
-      });
+      setEquipSel(withNames.length === 1 ? withNames[0].key : null); // a single choice is already highlighted; it still takes a tap on Confirm
+      setEquipAsk({ cands: withNames, then: go });
     } catch { go(); } // never block Begin Trip on this
   };
   const confirmEquipment = async () => {
     const a = equipAsk;
-    if (!a || !userId) return;
+    const c = a?.cands.find((x) => x.key === equipSel);
+    if (!a || !c || !userId) return;
     setEquipBusy(true);
     setEquipErr(null);
     try {
-      if (a.last.trailerId) {
-        // Parked and still coupled (parking only lets go of the unit): claim the pairing. Taking it from another driver, or
+      if (c.trailerId) {
+        // Free and still coupled (parking only lets go of the unit): claim the pairing. Taking it from another driver, or
         // putting a decoupled pair back together, goes through couple_combo (force when something active holds a unit).
-        const { data, error: e } = a.state.kind === "parked" && a.comboId
-          ? await supabase.rpc("claim_combo", { p_combo_id: a.comboId })
-          : await supabase.rpc("couple_combo", { p_truck_id: a.last.truckId, p_trailer_id: a.last.trailerId, p_force: a.state.kind === "in_use" || a.anyActive });
+        const { data, error: e } = c.state.kind === "parked" && c.comboId
+          ? await supabase.rpc("claim_combo", { p_combo_id: c.comboId })
+          : await supabase.rpc("couple_combo", { p_truck_id: c.truckId, p_trailer_id: c.trailerId, p_force: c.state.kind === "in_use" || c.touchesActive });
         if (e) throw e;
         await equipment.fetchCombos?.();
         const comboId = String((data as { combo_id?: string } | null)?.combo_id ?? "");
         if (comboId) equipment.setSelectedComboId(comboId);
       } else {
-        await equipment.setCurrentEquipment(a.last.truckId, null);
+        await equipment.setCurrentEquipment(c.truckId, null);
       }
-      rememberLastEquipment(userId, { truckId: a.last.truckId, trailerId: a.last.trailerId });
+      rememberLastEquipment(userId, { truckId: c.truckId, trailerId: c.trailerId });
       setEquipAsk(null);
       a.then();
     } catch (e) {
       const m = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? "");
-      setEquipErr(/historical combo|tare/i.test(m) ? "This pair hasn't been used together before. Tap Switch units." : m ? `Couldn't take the equipment: ${m}` : "Couldn't take the equipment. Tap Switch units.");
+      setEquipErr(/historical combo|tare/i.test(m) ? "This pair hasn't been used together before. Tap Find equipment." : m ? `Couldn't take the equipment: ${m}` : "Couldn't take the equipment. Tap Find equipment.");
     } finally { setEquipBusy(false); }
+  };
+  // Where a truck was left: the stamp from the End shift confirmation, written to the truck and its trailer once a parked
+  // status is saved. One pin per unit; it disappears when anyone takes the unit.
+  const parkStampRef = useRef<{ lat: number | null; lon: number | null; label: string | null; placeId: string | null } | null>(null);
+  const parkPreset = (() => {
+    const st = parkStampRef.current;
+    if (!st || st.lat == null || st.lon == null) return null;
+    let best: { d: number; region: string | null; local_area: string | null } | null = null;
+    for (const l of locations) {
+      if (l.lat == null || l.lon == null || (!l.region && !l.local_area)) continue;
+      const d = airMiles({ lat: st.lat, lon: st.lon }, { lat: Number(l.lat), lon: Number(l.lon) });
+      if (d <= 0.3 && (!best || d < best.d)) best = { d, region: l.region ?? null, local_area: l.local_area ?? null };
+    }
+    return best;
+  })();
+  const savePark = async () => {
+    const st = parkStampRef.current;
+    parkStampRef.current = null;
+    if (!st || st.lat == null || st.lon == null || !truckId) return;
+    try {
+      await supabase.rpc("park_equipment", { p_truck_id: truckId, p_trailer_id: trailerId ?? null, p_lat: st.lat, p_lon: st.lon, p_label: st.label, p_place_id: st.placeId });
+    } catch { /* the pin is a convenience; parking itself already went through */ }
   };
   const askFuelFirst = (go: () => void) => {
     if (fuel.active && fuel.active.status !== "complete" && !fuel.active.finished_at) setFuelAsk(() => go);
@@ -1352,6 +1380,7 @@ export default function HomePage() {
     // End shift: the shift record carries the same stamp, and an open move ends here.
     const startedAt = shift.current?.startedAt ?? null;
     if (userId && truckId) rememberLastEquipment(userId, { truckId, trailerId: trailerId ?? null }); // parking lets go of the truck; Begin Trip offers it again
+    parkStampRef.current = { lat: stampCtx.lat, lon: stampCtx.lon, label: stampPlaceLabel, placeId: stampCtx.placeId };
     setStampAsk(null);
     shift.end({ odometer: odo, lat: stampCtx.lat, lon: stampCtx.lon, place_id: stampCtx.placeId, place_text: stampPlaceLabel, location_source: stampCtx.source, odometer_source: stampCtx.guess === odo ? "truck" : "typed" });
     const m = emptyMoves.current;
@@ -2860,14 +2889,17 @@ export default function HomePage() {
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
       <EquipmentConfirmSheet open={!!equipAsk && !equipSwitching}
-        truckName={equipAsk?.names.truck ?? null}
-        trailerName={equipAsk?.names.trailer ?? null}
-        hasTrailer={!!equipAsk?.last.trailerId}
-        inUse={equipAsk?.state.kind === "in_use"}
-        holderName={equipAsk?.state.holderId ? roster.members.find((m) => m.user_id === equipAsk.state.holderId)?.display_name ?? null : null}
+        choices={(equipAsk?.cands ?? []).map((c): EquipChoice => ({
+          key: c.key, truckName: c.truckName, trailerName: c.trailerName, hasTrailer: !!c.trailerId,
+          lat: c.pin?.lat ?? null, lon: c.pin?.lon ?? null, label: c.pin?.label ?? null,
+          parkedBy: c.pin?.parkedBy ? initialsOf(roster.members.find((m) => m.user_id === c.pin!.parkedBy)?.display_name) || null : null,
+          distanceMi: c.distanceMi, isLast: c.isLast, inUse: c.state.kind === "in_use",
+          holderName: c.state.holderId ? roster.members.find((m) => m.user_id === c.state.holderId)?.display_name ?? null : null,
+        }))}
+        selectedKey={equipSel} onSelect={setEquipSel}
         busy={equipBusy} error={equipErr}
         onConfirm={() => void confirmEquipment()}
-        onSwitch={() => { setEquipErr(null); setEquipSwitching(true); shell.setEquipOpen(true); }}
+        onFind={() => { setEquipErr(null); setEquipSwitching(true); shell.setEquipOpen(true); }}
         onClose={() => { if (!equipBusy) setEquipAsk(null); }} />
       <OdometerConfirmSheet open={!!stampAsk && !!truckId}
         title={stampAsk?.kind === "shift" ? "End shift" : "Load cancelled"}
@@ -2903,7 +2935,13 @@ export default function HomePage() {
           currentStatus={endAsk.status} currentNotes={endAsk.notes} currentSubStatus={endAsk.sub} homeLocalArea={endAsk.area}
           allowed={endAsk.sleeper ? ["in_use", "deadline", "readyline"] : ["deadline", "readyline"]}
           onParkPreloaded={endAsk.loaded ? () => { setEndAsk(null); setParkOpen(true); } : undefined}
-          onSaved={(_s: FleetStatus) => { setEndAsk(null); void equipment.fetchCombos?.(); }} />
+          presetRegion={parkPreset?.region ?? null} presetLocalArea={parkPreset?.local_area ?? null}
+          locationOptional={!!parkStampRef.current?.lat}
+          onSaved={(s: FleetStatus) => {
+            setEndAsk(null);
+            void equipment.fetchCombos?.();
+            if (s === "in_use") parkStampRef.current = null; else void savePark();
+          }} />
       )}
       <ShiftSheet open={shiftOpen} onClose={() => setShiftOpen(false)} scheduled={shiftRecapData.scheduled} running={!!shift.current} recap={shiftRecapData.recap} periodLabel={shiftRecapData.periodLabel}
         onStart={() => shift.start()} onEnd={() => { setShiftOpen(false); requestEnd(); }}

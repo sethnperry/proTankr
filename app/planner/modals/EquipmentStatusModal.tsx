@@ -43,7 +43,7 @@ const fieldLabel: React.CSSProperties = {
 
 export default function EquipmentStatusModal({
   open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes,
-  currentSubStatus, homeLocalArea, onSaved, locationOptional = false, allowed, onParkPreloaded,
+  currentSubStatus, homeLocalArea, onSaved, presetRegion, presetLocalArea, locationOptional = false, allowed, onParkPreloaded,
 }: {
   open: boolean;
   onClose: () => void;
@@ -63,6 +63,9 @@ export default function EquipmentStatusModal({
    *  writes current_local_area instead. Shown for reference only. */
   homeLocalArea?: string | null;
   onSaved: (newStatus: FleetStatus) => void;
+  /** Filled in from the nearest saved place when a pin was captured; still editable. */
+  presetRegion?: string | null;
+  presetLocalArea?: string | null;
   /** Drop trailer / Park truck: a status is all that's needed, location is optional. */
   locationOptional?: boolean;
   /** Limit the offered statuses (day cab at End shift has no In Use). */
@@ -83,8 +86,8 @@ export default function EquipmentStatusModal({
     const first = (allowed?.[0] ?? "in_use") as FleetStatus;
     const cur = currentStatus as FleetStatus;
     setStatus(cur && (!allowed || allowed.includes(cur)) ? cur : first);
-    setRegion("");
-    setLocalArea("");
+    setRegion(presetRegion ?? "");
+    setLocalArea(presetLocalArea ?? "");
     setSubStatus(currentSubStatus ?? "");
     setNotes(currentNotes ?? "");
     setErr(null);

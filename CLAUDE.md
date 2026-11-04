@@ -12008,3 +12008,21 @@ The odometer is asked fresh (no older than a minute, `fresh=1`, at most one Geot
   read from `trucks`/`trailers` directly (the picker's name maps only cover coupled units, which printed "Truck ?").
   "Bobtail" shows only when there is truly no trailer id. The truck is remembered at End shift (phone) with the driver's
   last trip as the fallback. **Open**: if an alternate swaps to a different truck, the remembered truck is still offered.
+
+## Parked-equipment pins; Begin Trip offers what is parked here (2026-11-04)
+
+- **One pin per unit** (`equipment_parks`, PK `(unit_kind, unit_id)`, migration `20261123000000`, applied): written by
+  `park_equipment(truck, trailer, lat, lon, label, place_id)` when End shift's parked status (Deadline/Readyline) is saved,
+  using the odometer-confirm stamp (phone GPS first). The truck and its coupled trailer get the same pin. **Pins don't age
+  out** (spare equipment that sits is still where it was left). They are **removed by triggers the moment anyone takes the
+  unit**: a claimed pairing (`equipment_combos.claimed_by` set) or a bobtail/trailer-only hold (`user_settings.current_*`).
+  So a unit in use has no pin. Live (tracker) positions are a separate, later thing.
+- **Region and local area** are no longer required at End shift when a pin was captured; they are prefilled from the
+  nearest saved place within 0.3 mi (`delivery_locations.region/local_area`) and stay editable.
+- **Begin Trip equipment window** (`EquipmentConfirmSheet`, `lib/equipment/parkedNearby.ts`): choices are free pairings
+  whose pin is within 0.5 mi of the phone, nearest first, then the driver's own last truck. Each row: `truck / trailer`,
+  "parked by PG", the lat/lon as a blue Google Maps link (does not select), distance, the nearby saved place's label.
+  Tapping a row highlights it; Confirm/Commandeer applies. A single choice is preselected. **Find equipment** (was Switch
+  units) opens the picker; the sequence carries on when it closes. Works with no history (nearby units only).
+- **Not built yet**: the fleet map of all pins; pins for a trailer dropped/decoupled from the equipment modal; a pin
+  label from the stamp when GPS is missing (a hand-dropped pin on the map).
