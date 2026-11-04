@@ -27,6 +27,7 @@ export const LEG_LABEL: Record<DelayLeg, string> = {
 export type DelayReasonOption = { code: string; label: string };
 
 const BLOCKED: DelayReasonOption = { code: "blocked_access", label: "Blocked access to the delivery area" };
+const DOWN_DAY: DelayReasonOption = { code: "down_day", label: "Down Day (waiting on price change)" };
 const ROAD: DelayReasonOption[] = [
   { code: "traffic", label: "Traffic" },
   { code: "accident", label: "Accident ahead" },
@@ -35,6 +36,7 @@ const ROAD: DelayReasonOption[] = [
   { code: "breakdown", label: "Truck problem" },
   { code: "dispatch_wait", label: "Waiting on dispatch" },
   { code: "train", label: "Train / bridge" },
+  DOWN_DAY,
 ];
 
 export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
@@ -46,6 +48,7 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
     { code: "gauging", label: "Gauging / terminal closed" },
     { code: "order_problem", label: "Order or paperwork problem" },
     { code: "breakdown", label: "Truck problem" },
+    DOWN_DAY,
   ],
   to_drop: [...ROAD, BLOCKED],
   at_drop: [
@@ -56,6 +59,7 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
     { code: "store_equipment", label: "Equipment problem at the store" },
     { code: "vapor_issue", label: "Vapor recovery or hose problem" },
     { code: "breakdown", label: "Truck problem" },
+    DOWN_DAY,
   ],
 };
 
