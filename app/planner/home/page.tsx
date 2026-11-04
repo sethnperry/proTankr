@@ -142,7 +142,7 @@ import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/da
 import { ShiftBar } from "../components/shift/ShiftBar";
 import { ShiftSheet } from "../components/shift/ShiftSheet";
 import { ShiftStartConfirm } from "../components/shift/ShiftStartConfirm";
-import EquipmentStatusModal, { type FleetStatus } from "../modals/EquipmentStatusModal";
+import EquipmentStatusModal, { type FleetStatus, fleetStatusLabel } from "../modals/EquipmentStatusModal";
 import { statusSetThisShift } from "@/lib/shifts/endStatus";
 import { snoozed, telematicsStart } from "@/lib/shifts/autoStart";
 import { useShiftRecap } from "../hooks/useShiftRecap";
@@ -701,7 +701,7 @@ export default function HomePage() {
   // pin, left when a shift ended), then their own last truck. The driver taps one to highlight it and confirms (Commandeer
   // when someone has it); Find equipment opens the picker and the sequence carries on when it closes. Skipped when the
   // driver already holds a pair, there is nothing to offer, or an admin is using the app as someone else.
-  type EquipCand = Candidate & { truckName: string | null; trailerName: string | null };
+  type EquipCand = Candidate & { truckName: string | null; trailerName: string | null; status: string | null };
   const [equipAsk, setEquipAsk] = useState<{ cands: EquipCand[]; then: () => void } | null>(null);
   const [equipSel, setEquipSel] = useState<string | null>(null);
   const [equipBusy, setEquipBusy] = useState(false);
@@ -714,12 +714,19 @@ export default function HomePage() {
     if (!equipSawOpen.current) return;
     const a = equipAsk;
     setEquipSwitching(false);
+    // Begin Trip needs a truck: coming back from the picker without one keeps the sheet open (no way past it).
+    if (!(equipment.selectedComboId || equipment.isBobtail)) {
+      setEquipErr("Pick a truck to begin the trip.");
+      return;
+    }
     setEquipAsk(null);
     a?.then();
   }, [equipSwitching, shell.equipOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const askEquipment = async (go: () => void) => {
     if (!userId || !companyId || shell.setupSession) { go(); return; }
-    if (equipment.selectedComboId && !equipment.isBobtail && !equipment.isTrailerOnly) { go(); return; }
+    if (equipment.selectedComboId || equipment.isBobtail) { go(); return; }
+    // Nothing offered (or the lookup failed): the full picker, and the trip doesn't begin until a truck is held.
+    const askPicker = () => { setEquipErr(null); setEquipSel(null); setEquipAsk({ cands: [], then: go }); setEquipSwitching(true); shell.setEquipOpen(true); };
     try {
       const myTrips = store ? store.list("trips", (t) => t.driver_id === userId) : [];
       // Where I am, the pins, and every active pairing, read fresh: another driver may have taken a unit since.
@@ -732,20 +739,22 @@ export default function HomePage() {
       const pins = (pinsRes.data ?? []) as ParkPin[];
       const last = resolveLast(readLastEquipment(userId), lastFromTrips(myTrips, userId), combos);
       const cands = buildCandidates({ pins, activeCombos: combos, me: userId, myPos, last });
-      if (!cands.length || cands.some((c) => c.state.kind === "mine")) { go(); return; }
+      if (cands.some((c) => c.state.kind === "mine")) { go(); return; }
+      if (!cands.length) { askPicker(); return; }
       const truckIds = cands.map((c) => c.truckId);
       const trailerIds = cands.map((c) => c.trailerId).filter(Boolean) as string[];
       const [tn, ln] = await Promise.all([
-        supabase.from("trucks").select("truck_id, truck_name").in("truck_id", truckIds),
+        supabase.from("trucks").select("truck_id, truck_name, status_code").in("truck_id", truckIds),
         trailerIds.length ? supabase.from("trailers").select("trailer_id, trailer_name").in("trailer_id", trailerIds) : Promise.resolve({ data: [] }),
       ]);
       const tnames = new Map(((tn.data ?? []) as { truck_id: string; truck_name: string }[]).map((r) => [r.truck_id, r.truck_name]));
+      const tstatus = new Map(((tn.data ?? []) as { truck_id: string; status_code: string | null }[]).map((r) => [r.truck_id, r.status_code]));
       const lnames = new Map(((ln.data ?? []) as { trailer_id: string; trailer_name: string }[]).map((r) => [r.trailer_id, r.trailer_name]));
-      const withNames = cands.map((c) => ({ ...c, truckName: tnames.get(c.truckId) ?? null, trailerName: c.trailerId ? lnames.get(c.trailerId) ?? null : null }));
+      const withNames = cands.map((c) => ({ ...c, truckName: tnames.get(c.truckId) ?? null, trailerName: c.trailerId ? lnames.get(c.trailerId) ?? null : null, status: tstatus.get(c.truckId) ?? null }));
       setEquipErr(null);
       setEquipSel(withNames.length === 1 ? withNames[0].key : null); // a single choice is already highlighted; it still takes a tap on Confirm
       setEquipAsk({ cands: withNames, then: go });
-    } catch { go(); } // never block Begin Trip on this
+    } catch { askPicker(); }
   };
   const confirmEquipment = async () => {
     const a = equipAsk;
@@ -2743,7 +2752,7 @@ export default function HomePage() {
 
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
       <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onClose={() => setLoadsSheetOpen(false)}
-        onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); beginDispatchedLoad(id); }} />
+        onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); void askEquipment(() => beginDispatchedLoad(id)); }} />
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
           const s = unitAlertsOpen === "trailer" ? trailerAlerts : truckAlerts;
@@ -2892,7 +2901,8 @@ export default function HomePage() {
         choices={(equipAsk?.cands ?? []).map((c): EquipChoice => ({
           key: c.key, truckName: c.truckName, trailerName: c.trailerName, hasTrailer: !!c.trailerId,
           lat: c.pin?.lat ?? null, lon: c.pin?.lon ?? null, label: c.pin?.label ?? null,
-          parkedBy: c.pin?.parkedBy ? initialsOf(roster.members.find((m) => m.user_id === c.pin!.parkedBy)?.display_name) || null : null,
+          status: c.status ? (fleetStatusLabel(c.status) || null) : null,
+          parkedBy: c.pin?.parkedBy === userId ? "you" : c.pin?.parkedBy ? initialsOf(roster.members.find((m) => m.user_id === c.pin!.parkedBy)?.display_name) || null : null,
           distanceMi: c.distanceMi, isLast: c.isLast, inUse: c.state.kind === "in_use",
           holderName: c.state.holderId ? roster.members.find((m) => m.user_id === c.state.holderId)?.display_name ?? null : null,
         }))}

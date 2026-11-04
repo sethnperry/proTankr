@@ -46,8 +46,9 @@ export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboar
       />
     );
   }
-  // Equipment is asked for on the dashboard and the Plan page. Cards, Reports, Trips and the rest don't need it.
-  if (pathname !== "/planner" && pathname !== "/planner/home") return null;
+  // Equipment is only required where a plan is edited (the trailer's compartments). The dashboard never blocks entry:
+  // parking a unit releases it, and Begin Trip asks for equipment again before anything can load.
+  if (pathname !== "/planner") return null;
   return (
     <SetupGate
       comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}

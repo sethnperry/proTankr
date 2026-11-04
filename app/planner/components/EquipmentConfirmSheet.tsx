@@ -24,6 +24,7 @@ export type EquipChoice = {
   lon: number | null;
   label: string | null;
   parkedBy: string | null;
+  status?: string | null;
   distanceMi: number | null;
   isLast: boolean;
   inUse: boolean;
@@ -64,7 +65,7 @@ export function EquipmentConfirmSheet({ open, choices, selectedKey, onSelect, bu
                 <span style={{ color: "#fbbf24", fontWeight: 700 }}>In use by {c.holderName ?? "another driver"}</span>
               ) : c.lat != null && c.lon != null ? (
                 <>
-                  <span>{c.parkedBy ? `parked by ${c.parkedBy}` : "parked"}</span>
+                  <span>{c.parkedBy ? `parked by ${c.parkedBy}` : "parked"}{c.status ? ` - ${c.status}` : ""}</span>
                   <a href={mapsUrl(c.lat, c.lon)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
                     style={{ color: "#60a5fa", textDecoration: "underline" }}>{latLonText(c.lat, c.lon)}</a>
                   {c.distanceMi != null && <span>{c.distanceMi < 0.1 ? "right here" : `${c.distanceMi.toFixed(1)} mi away`}</span>}

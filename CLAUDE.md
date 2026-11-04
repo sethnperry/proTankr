@@ -12054,3 +12054,13 @@ unit. Saved places (`delivery_locations`) and fuel stops (`fuel_purchases`, e.g.
 `/api/geocode?search=`), Satellite toggle for yards. Status window: one **Fine-tune on map** button under the GPS button;
 the location block shows only for Deadline / Readyline (a hint appears for In Use, since the pin is only saved off duty).
 `PinMap` (delivery locations) is unchanged apart from the earlier `dropFirst`. Not click-tested.
+
+### Parked equipment no longer blocks the app; Begin Trip requires a truck (2026-11-04)
+
+After a Readyline/Deadline status the unit is released, so the driver holds nothing. The hard "Select Equipment" gate
+(`PlannerGates`) now covers only `/planner` (the plan editor needs a trailer); the Driver Dashboard and every other page
+open normally. Loading is blocked instead: Begin Trip and "Run once" on a dispatched load go through `askEquipment`,
+which now requires a truck (full pair or bobtail). With nothing nearby to offer, or if the lookup fails, it opens the
+full equipment picker, and coming back without a truck keeps the sheet open ("Pick a truck to begin the trip");
+closing the sheet cancels the trip start. Candidate rows read "parked by you - Readyline" (truck status from
+`trucks.status_code`; own pin shows "you" instead of initials). Not click-tested.
