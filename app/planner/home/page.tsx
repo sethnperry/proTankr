@@ -105,7 +105,7 @@ import { BREAK_REST_MIN } from "@/lib/telematics/cycleRecap";
 import { CYCLE_LIMIT_MIN } from "@/lib/telematics/cycleRecap";
 import { clockColor, clockHM, DROP_STOP_MIN, LOAD_STOP_MIN, remainingDriveMin, tripHosCheck } from "@/lib/telematics/progress";
 import { recordArrivalPoint, useArrivalSuggestion, type ArrivalTarget } from "@/lib/telematics/useArrivalSuggestion";
-import { fetchPresets, getTripPlan, setTripPlan, setTripQuick, nextSaveSlot, savePresetPlan, type PresetSummary } from "@/lib/trips/tripPlan";
+import { fetchPresets, getTripPlan, setTripPlan, setTripQuick, nextSaveSlot, savePresetPlan, slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
@@ -1623,6 +1623,7 @@ export default function HomePage() {
   // during an open trip (a long wait at a rack or store is work). Only a quiet, trip-less shift gets asked.
   const drivingNow = !!myHos && myHos.nonDrivingSince == null && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null);
   const shiftPromptShown = drivingNow ? null : shift.prompt === "idle" && openTrip ? null : shift.prompt;
+  const canCancelNow = canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0);
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => {
     if (userId) markStopHandled(userId, at);
@@ -1998,12 +1999,27 @@ export default function HomePage() {
   // Saved plans for the Begin Trip plan picker, read when the sheet opens.
   const [sheetPresets, setSheetPresets] = useState<PresetSummary[]>([]);
   useEffect(() => {
-    if (!sheetOpen) return;
+    if (!sheetOpen && !openTrip?.trip_id) return;
     let alive = true;
     void fetchPresets(userId, equipment.selectedComboId ?? null, Object.keys(compSizes).map(Number)).then((p) => { if (alive) setSheetPresets(p); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetOpen, userId, equipment.selectedComboId]);
+  }, [sheetOpen, openTrip?.trip_id, userId, equipment.selectedComboId]);
+  // The plan for this trip: the preset picked at Begin Trip, else the compartment plan dispatch set on a pickup.
+  // Shown under the shipper line so what to load is never read off the trailer's residue colors.
+  const planLine = (() => {
+    if (!openTrip) return null;
+    const slot = getTripPlan(userId || null, openTrip.trip_id)?.slot ?? null;
+    const preset = slot ? sheetPresets.find((p) => p.slot === slot) : null;
+    if (preset) return { label: `Plan ${slotLetter(preset.slot)}`, comps: preset.comps };
+    const pk = pickups.find((p) => !p.left_at && p.outcome !== "no_load" && p.planned_comps);
+    const meta = pk ? readPlannedMeta(pk.planned_comps) : null;
+    if (!meta || !meta.size) return null;
+    const nums = [...new Set([...Object.keys(compSizes).map(Number), ...meta.keys()])].sort((a, b) => b - a);
+    const comps = nums.map((n) => meta.get(n)?.product_id ?? null);
+    const match = findMatchingPlan(sheetPresets, layoutFromProducts(Object.fromEntries(nums.map((n) => [n, meta.get(n)?.product_id ?? null])), nums));
+    return { label: match ? `Plan ${slotLetter(match.slot)}` : "Plan", comps };
+  })();
 
   // The most recent load on this trip, for the Load Report link.
   const lastLoadId = [...pickups].filter((p) => p.load_id && (p.outcome === "loaded" || p.left_at)).sort((a, b) => b.seq - a.seq)[0]?.load_id ?? null;
@@ -2089,8 +2105,9 @@ export default function HomePage() {
           {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
         </button>
       )}
-      {delayLeg && !openingPlanner && (
-        <DelayButton leg={runningDelay?.leg ?? delayLeg} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
+      {(delayLeg || canCancelNow) && !openingPlanner && (
+        <DelayButton leg={delayLeg ? runningDelay?.leg ?? delayLeg : null} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
+          onCancel={canCancelNow ? () => { setCancelErr(null); setCancelOpen(true); } : undefined}
           rackActions={step.kind === "planner" ? {
             onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); },
             onCancelLoad: () => { setCancelErr(null); setCancelOpen(true); },
@@ -2274,13 +2291,27 @@ export default function HomePage() {
               Current trip · {STATUS_LABEL[openTrip.status]}
             </div>
             {trailerLabel && <span style={{ marginLeft: "auto" }}>{trailerLabel}</span>}
-            {/* Always available (the supplier, order numbers and planned stops can change mid-trip). Stops already
-                arrived at, loaded or finished are kept as they are when the trip is saved. */}
-            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit</button>
           </div>
           {(openTrip.shipper || openTrip.customer) && (
             <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
               {[openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ")}
+            </div>
+          )}
+          {planLine && (
+            <div className="dash-num" style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 800 }}>{planLine.label}</span>
+              <span style={{ color: muted }}>-</span>
+              <span>
+                {planLine.comps.map((id, i) => {
+                  const info = id ? productInfo(id) : null;
+                  return (
+                    <React.Fragment key={i}>
+                      {i > 0 && <span style={{ color: muted }}>/</span>}
+                      <span style={{ fontWeight: 800, color: info ? info.hex ?? productColorFor(info.name) : muted }}>{info ? info.code : "–"}</span>
+                    </React.Fragment>
+                  );
+                })}
+              </span>
             </div>
           )}
 
@@ -2372,6 +2403,9 @@ export default function HomePage() {
           })()}
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+            {/* Always available (the supplier, order numbers and planned stops can change mid-trip). Stops already
+                arrived at, loaded or finished are kept as they are when the trip is saved. */}
+            <button type="button" onClick={() => { setError(null); setSheetOpen(true); }} style={smallLink}>Edit trip</button>
             {lastLoadId && (
               <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", lastLoadId); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
             )}
@@ -2381,11 +2415,6 @@ export default function HomePage() {
             {canNoLoad && (
               <button type="button" onClick={() => { setNoLoadErr(null); setNoLoadOpen(true); }} style={{ ...smallLink, color: "#fbbf24" }}>
                 Couldn&apos;t load here
-              </button>
-            )}
-            {canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0) && (
-              <button type="button" onClick={() => { setCancelErr(null); setCancelOpen(true); }} style={{ ...smallLink, color: "#f87171" }}>
-                Cancel load
               </button>
             )}
             {showPark && (
