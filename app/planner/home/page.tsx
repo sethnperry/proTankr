@@ -1158,6 +1158,10 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
+  const [fuelPending, setFuelPending] = useState(false);
+  useEffect(() => {
+    if (fuelPending && truckId) { setFuelPending(false); void tapFuel(); }
+  }, [fuelPending, truckId]); // eslint-disable-line react-hooks/exhaustive-deps
   const tapFuel = async () => {
     // Fuel, scale or any other stop waits until the delivery you're at is finished.
     const openDrop = snap?.deliveries.find((d) => d.arrived_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled");
@@ -1165,6 +1169,8 @@ export default function HomePage() {
       setBlockNotice({ title: "Finish the delivery first", text: `You're at ${deliveryName(openDrop) ?? "the delivery"}. Finish the delivery (or undo the arrival if you haven't dropped yet) before you fuel.` });
       return;
     }
+    // Fuel is per truck: with none held, pick one first (the stop starts once a truck is held).
+    if (!fuel.active && !truckId) { setFuelPending(true); void askEquipment(() => {}); return; }
     // Starting a fuel stop answers "did you arrive?": that stop was the fuel stop, so it is never asked about again.
     if (!fuel.active && userId) {
       const ats = [...(myHos?.stops ?? []).map((x) => x.at), ...(dutyStop ? [dutyStop.at] : [])];
