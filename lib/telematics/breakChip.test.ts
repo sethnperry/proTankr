@@ -39,3 +39,11 @@ test("without both clocks: a 30-minute stop shows the check while stopped, short
   assert.equal(breakChip({ driveLeftMin: null, breakLeftMin: null, restMin: 30 }), "rested");
   assert.equal(breakChip({ driveLeftMin: null, breakLeftMin: null, restMin: null }), "idle");
 });
+
+test("once a break after three hours is done, later stops are not timed", () => {
+  // Break done at 4 hours driven (clock back to 8 hours, 7 left), then driving: the check stays.
+  assert.equal(breakChip({ driveLeftMin: 6 * H, breakLeftMin: 6 * H, restMin: null }), "done");
+  // A fuel stop or a wait afterwards, of any length, shows the check, not a count-up.
+  assert.equal(breakChip({ driveLeftMin: 6 * H, breakLeftMin: 6 * H, restMin: 4 }), "done");
+  assert.equal(breakChip({ driveLeftMin: 6 * H, breakLeftMin: 6 * H, restMin: 25 }), "done");
+});
