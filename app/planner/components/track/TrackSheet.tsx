@@ -9,6 +9,7 @@
 // anything opens the Track detail.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 import RegionLocalAreaFilterModal, { type EquipmentFilter } from "../../modals/RegionLocalAreaFilterModal";
@@ -20,6 +21,9 @@ import { hosText } from "@/lib/telematics/progress";
 import { TrackDetail } from "./TrackDetail";
 import { EquipmentBoard } from "../equipment/EquipmentBoard";
 import { useEquipmentBoardStatus } from "../../hooks/useEquipmentBoardStatus";
+import { buildPins, type ParkRow } from "@/lib/equipment/parkedPins";
+
+const ParkedMap = dynamic(() => import("./ParkedMap"), { ssr: false });
 
 type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
 type GeoTrailerHit = { providerTrailerId: string; name: string; comment: string | null; trailerId: string | null; ourName: string | null; vin: string | null; plate: string | null; attachedTo: string | null };
@@ -68,6 +72,9 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<EquipmentFilter>({ region: null, localArea: null, awayOnly: false });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [parks, setParks] = useState<ParkRow[]>([]);
+  const [parkNames, setParkNames] = useState<Map<string, string>>(new Map());
   const [drivers, setDrivers] = useState<DriverHit[]>([]);
   const [vehicles, setVehicles] = useState<VehicleHit[]>([]);
   const [geoTrailers, setGeoTrailers] = useState<GeoTrailerHit[]>([]);
@@ -101,6 +108,15 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     setTrailers(((r.data ?? []) as any[]).filter((x) => x.active !== false).map((x) => toUnit(x, "trailer")));
     setCombos(((c.data ?? []) as any[]).filter((x) => x.truck_id && x.trailer_id).map((x) => ({ comboId: x.combo_id, truckId: x.truck_id, trailerId: x.trailer_id })));
     setClaimedByCombo(Object.fromEntries(((c.data ?? []) as any[]).map((x) => [x.combo_id, x.claimed_by ?? null])));
+    // Where parked units are (one pin per unit; the database drops it when anyone takes the unit).
+    const pk = await supabase.from("equipment_parks").select("unit_kind, unit_id, lat, lon, place_label, parked_by, parked_at").eq("company_id", companyId);
+    const rowsPk = ((pk.data ?? []) as ParkRow[]);
+    setParks(rowsPk);
+    const who = Array.from(new Set(rowsPk.map((x) => x.parked_by).filter((x): x is string => !!x)));
+    if (who.length) {
+      const n = await supabase.rpc("get_display_names_full", { p_user_ids: who });
+      setParkNames(new Map(((n.data ?? []) as any[]).map((r) => [`user:${r.user_id}`, r.display_name as string])));
+    }
     setLoading(false);
   }, [companyId]);
 
@@ -137,6 +153,19 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const trailerById = useMemo(() => new Map(trailers.map((t) => [t.id, t])), [trailers]);
   // Geotab vehicles not already listed below as one of our own units.
   const geoVehicles = useMemo(() => vehicles.filter((v) => !v.truckId || !rows.trucks.some((t) => t.id === v.truckId) && !rows.combos.some((c) => c.truck.id === v.truckId)), [vehicles, rows]);
+  const unitNames = useMemo(() => {
+    const m = new Map<string, string>();
+    trucks.forEach((t) => m.set(`truck:${t.id}`, t.name)); trailers.forEach((t) => m.set(`trailer:${t.id}`, t.name));
+    return m;
+  }, [trucks, trailers]);
+  const unitMatches = useCallback((kind: "truck" | "trailer", id: string) => {
+    const u = (kind === "truck" ? truckById : trailerById).get(id);
+    if (!u) return false; // inactive or unknown units don't get a pin
+    if (filter.region && u.region !== filter.region) return false;
+    if (filter.localArea && u.localArea !== filter.localArea) return false;
+    return true;
+  }, [truckById, trailerById, filter.region, filter.localArea]);
+  const pins = useMemo(() => buildPins(parks, unitNames, unitMatches), [parks, unitNames, unitMatches]);
   const filtered = !!(filter.region || filter.localArea || filter.awayOnly);
 
   const openTruck = (truckId: string) => {
@@ -182,6 +211,11 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
       {q.trim().length >= 2 && !loading && rows.combos.length + rows.trucks.length + rows.trailers.length === 0 && q.trim() !== submitted && (
         <div style={{ fontSize: 13, color: muted, margin: "-4px 0 12px" }}>Nothing in ProTankr matches. Tap Search Geotab to look there; you can add a truck or trailer from the results.</div>
       )}
+
+      <button type="button" onClick={() => setMapOpen(true)}
+        style={{ display: "block", width: "100%", margin: "0 0 12px", padding: "11px 12px", border: "1px solid rgba(255,255,255,0.35)", background: "transparent", color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", textAlign: "left" }}>
+        Parked map · {pins.length} spot{pins.length === 1 ? "" : "s"} ›
+      </button>
 
       {myCombo && !q && (
         <button type="button" onClick={() => openTruck(myCombo.truckId)}
@@ -284,6 +318,10 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         onTrailer={(u) => setPick({ truckId: null, trailerId: u.id })}
         emptyNote={`Nothing matches${filtered ? " this filter" : ""}.`}
       />
+
+      <ParkedMap open={mapOpen} onClose={() => setMapOpen(false)} pins={pins}
+        nameOf={(id) => (id ? parkNames.get(`user:${id}`) ?? null : null)}
+        onOpenUnit={(u) => { setMapOpen(false); setPick(u.kind === "truck" ? { truckId: u.id, trailerId: combos.find((c) => c.truckId === u.id)?.trailerId ?? null } : { truckId: null, trailerId: u.id }); }} />
 
       {companyId && (
         <RegionLocalAreaFilterModal open={filterOpen} onClose={() => setFilterOpen(false)} companyId={companyId} canManage={canManage} filter={filter} onChange={setFilter} />

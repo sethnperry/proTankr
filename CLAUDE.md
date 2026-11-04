@@ -12026,3 +12026,7 @@ The odometer is asked fresh (no older than a minute, `fresh=1`, at most one Geot
   units) opens the picker; the sequence carries on when it closes. Works with no history (nearby units only).
 - **Not built yet**: the fleet map of all pins; pins for a trailer dropped/decoupled from the equipment modal; a pin
   label from the stamp when GPS is missing (a hand-dropped pin on the map).
+
+### Parked map (2026-11-04)
+
+Track (admin/dispatch tile) has a **Parked map** row at the top. It reads `equipment_parks` (company members can read), groups a truck and trailer within 15 m into one pin (`lib/equipment/parkedPins.ts`, 4 tests), and opens `ParkedMap.tsx` (Leaflet, dynamic import): pin labels like "25184 / 3151", a list below, and a detail card with who parked it, when, nearest saved place, Open in Maps, and links into each unit's Track detail. The Region / Local Area filter in Track applies to the pins; inactive units get none. Not click-tested on a device. Not built: trailers dropped from the equipment modal still have no pin, no hand-dropped pin when there's no GPS, no live tracker dots on this map.
