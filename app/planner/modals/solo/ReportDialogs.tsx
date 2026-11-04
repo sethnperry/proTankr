@@ -179,25 +179,6 @@ export function ReportDialogs({ m }: { m: SoloModel }) {
         onCancel={() => setEditPickerOpen(false)}
       />
 
-      {/* ── Update Status (STUD): pick which unit (only shown when both are
-          selected -- openStatus() skips straight to EquipmentStatusModal
-          otherwise), then that unit's status modal. ── */}
-      <UnitPickerSheet
-        open={statusPickerOpen}
-        title="Update status for which unit?"
-        subtitle="Flag it In Use, Deadline, or Readyline."
-        truckName={trucks.find((t) => t.truck_id === selectedTruckId)?.truck_name ?? null}
-        trailerName={trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name ?? null}
-        onPickTruck={() => {
-          setStatusPickerOpen(false);
-          openStatusForTruck();
-        }}
-        onPickTrailer={() => {
-          setStatusPickerOpen(false);
-          openStatusForTrailer();
-        }}
-        onCancel={() => setStatusPickerOpen(false)}
-      />
     </>
   );
 }

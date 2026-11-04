@@ -2936,11 +2936,12 @@ export default function HomePage() {
           allowed={endAsk.sleeper ? ["in_use", "deadline", "readyline"] : ["deadline", "readyline"]}
           onParkPreloaded={endAsk.loaded ? () => { setEndAsk(null); setParkOpen(true); } : undefined}
           presetRegion={parkPreset?.region ?? null} presetLocalArea={parkPreset?.local_area ?? null}
+          presetPin={parkStampRef.current?.lat != null && parkStampRef.current?.lon != null ? { lat: parkStampRef.current.lat, lon: parkStampRef.current.lon, label: parkStampRef.current.label, placeId: parkStampRef.current.placeId } : null}
           locationOptional={!!parkStampRef.current?.lat}
           onSaved={(s: FleetStatus) => {
             setEndAsk(null);
             void equipment.fetchCombos?.();
-            if (s === "in_use") parkStampRef.current = null; else void savePark();
+            parkStampRef.current = null; // the status window writes the pin itself
           }} />
       )}
       <ShiftSheet open={shiftOpen} onClose={() => setShiftOpen(false)} scheduled={shiftRecapData.scheduled} running={!!shift.current} recap={shiftRecapData.recap} periodLabel={shiftRecapData.periodLabel}

@@ -4,6 +4,7 @@
 // Update Status (STUD) dialog.
 
 import EquipmentStatusModal from "../EquipmentStatusModal";
+import { supabase } from "@/lib/supabase/client";
 import type { SoloModel } from "./useSoloEquipment";
 
 export function StatusDialog({ m }: { m: SoloModel }) {
@@ -20,9 +21,22 @@ export function StatusDialog({ m }: { m: SoloModel }) {
     setSelectedTruckId,
     setStatusFlow,
     setStatusTarget,
+    setCurrentEquipment,
     statusFlow,
     statusTarget,
   } = m;
+  // Parking no longer splits a pair (that is the point of the End shift fix), so Drop trailer / Park truck
+  // must break the pairing itself, then keep the unit that stays with the driver.
+  async function splitPair(kind: "truck" | "trailer", id: string, keep: "truck" | "trailer") {
+    try {
+      const { data } = await supabase.from("equipment_combos").select("combo_id, truck_id, trailer_id")
+        .eq("active", true).eq(kind === "truck" ? "truck_id" : "trailer_id", id).limit(1);
+      const c = ((data ?? []) as any[])[0];
+      if (!c) return;
+      await supabase.rpc("decouple_combo", { p_combo_id: c.combo_id });
+      if (setCurrentEquipment) await setCurrentEquipment(keep === "truck" ? c.truck_id : null, keep === "trailer" ? c.trailer_id : null);
+    } catch { /* the status already saved; the pair can be split from the picker */ }
+  }
   return (
     <>
       {statusTarget && (
@@ -36,6 +50,7 @@ export function StatusDialog({ m }: { m: SoloModel }) {
           unitKind={statusTarget.kind}
           unitId={statusTarget.id}
           unitName={statusTarget.name}
+          pair={statusTarget.pair ?? null}
           currentStatus={statusFlow ? "readyline" : statusTarget.status}
           locationOptional={!!statusFlow}
           currentNotes={statusTarget.notes}
@@ -69,6 +84,7 @@ export function StatusDialog({ m }: { m: SoloModel }) {
               onSelectComboId("");
               setStatusFlow(null);
               void (async () => {
+                await splitPair("trailer", statusTarget.id, "truck");
                 await onRefreshCurrentEquipment?.();
                 await Promise.all([loadEquipment(), onRefreshCombos()]);
               })();
@@ -84,6 +100,7 @@ export function StatusDialog({ m }: { m: SoloModel }) {
               setAwaitingTruck(true);
               setPickerOpen(true);
               void (async () => {
+                await splitPair("truck", statusTarget.id, "trailer");
                 await onRefreshCurrentEquipment?.();
                 await Promise.all([loadEquipment(), onRefreshCombos()]);
               })();

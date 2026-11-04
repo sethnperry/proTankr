@@ -5,7 +5,6 @@
 
 import React from "react";
 import BinderModal from "../BinderModal";
-import UnitPickerSheet from "../UnitPickerSheet";
 import { ComboDetailSheet } from "../../components/equipment/ComboDetailSheet";
 import { AddDocumentSheet } from "../../components/equipment/AddDocumentSheet";
 import type { SoloModel } from "./useSoloEquipment";
@@ -26,6 +25,7 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
     loadEquipment,
     myRole,
     openStatusFor,
+    openStatusForPair,
     resolvePair,
     setDetailComboId,
     setDetailUnit,
@@ -111,7 +111,7 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
             setDetailComboId(null);
             setPickerOpen(false);
           }}
-          onStud={() => setStudPickOpen(true)}
+          onStud={() => { setDetailComboId(null); openStatusForPair(detailRow.truck.id, detailRow.trailer.id); }}
           onDocCaptured={(kind, files) => {
             setDetailComboId(null);
             setDocDraft({ kind, id: kind === "truck" ? detailRow.truck.id : detailRow.trailer.id, files });
@@ -237,24 +237,6 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
             </button>
           </div>
         </div>
-      )}
-      {detailRow && (
-        <UnitPickerSheet
-          open={studPickOpen}
-          title="Update status for which unit?"
-          subtitle="Flag it In Use, Deadline, or Readyline."
-          truckName={detailRow.truck.name}
-          trailerName={detailRow.trailer.name}
-          onPickTruck={() => {
-            setStudPickOpen(false);
-            openStatusFor("truck", detailRow.truck.id);
-          }}
-          onPickTrailer={() => {
-            setStudPickOpen(false);
-            openStatusFor("trailer", detailRow.trailer.id);
-          }}
-          onCancel={() => setStudPickOpen(false)}
-        />
       )}
       {docDraft && (
         <AddDocumentSheet

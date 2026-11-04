@@ -20,6 +20,11 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { CatalogPicker } from "@/lib/ui/driver/RequiredEquipmentFields";
+import { getPhonePosition } from "@/lib/geo/position";
+import { airMiles } from "@/lib/trips/deliveryLocations";
+import { mapsUrl } from "@/lib/equipment/parkedNearby";
+
+type Pin = { lat: number; lon: number; label: string | null; placeId: string | null; region: string | null; localArea: string | null };
 
 export type FleetStatus = "in_use" | "deadline" | "readyline";
 
@@ -43,7 +48,7 @@ const fieldLabel: React.CSSProperties = {
 
 export default function EquipmentStatusModal({
   open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes,
-  currentSubStatus, homeLocalArea, onSaved, presetRegion, presetLocalArea, locationOptional = false, allowed, onParkPreloaded,
+  currentSubStatus, homeLocalArea, onSaved, presetRegion, presetLocalArea, presetPin, pair, locationOptional = false, allowed, onParkPreloaded,
 }: {
   open: boolean;
   onClose: () => void;
@@ -66,6 +71,10 @@ export default function EquipmentStatusModal({
   /** Filled in from the nearest saved place when a pin was captured; still editable. */
   presetRegion?: string | null;
   presetLocalArea?: string | null;
+  /** Where the unit was just left (End shift stamp). Written with the status; still changeable here. */
+  presetPin?: { lat: number; lon: number; label: string | null; placeId: string | null } | null;
+  /** A coupled pair is one thing: the status (and the pin) apply to both units together. */
+  pair?: { truckId: string; trailerId: string; truckName: string; trailerName: string } | null;
   /** Drop trailer / Park truck: a status is all that's needed, location is optional. */
   locationOptional?: boolean;
   /** Limit the offered statuses (day cab at End shift has no In Use). */
@@ -80,9 +89,44 @@ export default function EquipmentStatusModal({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pin, setPin] = useState<Pin | null>(null);
+  const [hadPin, setHadPin] = useState<Pin | null>(null);
+  const [locBusy, setLocBusy] = useState(false);
+
+  // Nearest saved place (within 0.3 mi) names the pin and fills region / local area.
+  async function nearestPlace(lat: number, lon: number): Promise<Pick<Pin, "label" | "placeId" | "region" | "localArea">> {
+    try {
+      const { data } = await supabase.from("delivery_locations").select("location_id, name, lat, lon, region, local_area").eq("company_id", companyId);
+      let best: { d: number; r: any } | null = null;
+      for (const l of (data ?? []) as any[]) {
+        if (l.lat == null || l.lon == null) continue;
+        const d = airMiles({ lat, lon }, { lat: Number(l.lat), lon: Number(l.lon) });
+        if (d <= 0.3 && (!best || d < best.d)) best = { d, r: l };
+      }
+      return best ? { label: best.r.name ?? null, placeId: best.r.location_id ?? null, region: best.r.region ?? null, localArea: best.r.local_area ?? null } : { label: null, placeId: null, region: null, localArea: null };
+    } catch { return { label: null, placeId: null, region: null, localArea: null }; }
+  }
+
+  async function setHere() {
+    setLocBusy(true); setErr(null);
+    const at = await getPhonePosition(8000);
+    if (!at) { setErr("Couldn't get your location. Allow location for ProTankr and try again."); setLocBusy(false); return; }
+    setPin({ lat: at.lat, lon: at.lon, ...(await nearestPlace(at.lat, at.lon)) });
+    setLocBusy(false);
+  }
 
   useEffect(() => {
     if (!open) return;
+    setPin(null); setHadPin(null);
+    const ids = pair ? [["truck", pair.truckId], ["trailer", pair.trailerId]] : [[unitKind, unitId]];
+    void (async () => {
+      if (presetPin) setPin({ ...presetPin, ...(await nearestPlace(presetPin.lat, presetPin.lon)), label: presetPin.label, placeId: presetPin.placeId });
+      try {
+        const { data } = await supabase.from("equipment_parks").select("unit_kind, unit_id, lat, lon, place_label, place_id").in("unit_id", ids.map((x) => x[1]));
+        const r = ((data ?? []) as any[])[0];
+        if (r) setHadPin({ lat: r.lat, lon: r.lon, label: r.place_label ?? null, placeId: r.place_id ?? null, region: null, localArea: null });
+      } catch { /* no pin on file */ }
+    })();
     const first = (allowed?.[0] ?? "in_use") as FleetStatus;
     const cur = currentStatus as FleetStatus;
     setStatus(cur && (!allowed || allowed.includes(cur)) ? cur : first);
@@ -96,24 +140,39 @@ export default function EquipmentStatusModal({
   const offDuty = status === "deadline" || status === "readyline";
   const needsLocation = offDuty && !locationOptional;
 
+  const shownPin = pin ?? hadPin;
+
   async function save() {
-    if (needsLocation && (!region.trim() || !localArea.trim())) {
-      setErr("Region and Local Area are required for Deadline or Readyline.");
+    if (needsLocation && !shownPin) {
+      setErr("Set the location first: tap + Set location while you're at the equipment.");
       return;
     }
     setBusy(true);
     setErr(null);
     try {
-      const { error } = await supabase.rpc("set_equipment_status", {
-        p_unit_kind: unitKind,
-        p_unit_id: unitId,
-        p_status: status,
-        p_region: region.trim() || null,
-        p_local_area: localArea.trim() || null,
-        p_notes: notes.trim() || null,
-        p_sub_status: subStatus.trim() || null,
-      });
-      if (error) throw error;
+      const units: ["truck" | "trailer", string][] = pair ? [["truck", pair.truckId], ["trailer", pair.trailerId]] : [[unitKind, unitId]];
+      for (const [kind, id] of units) {
+        const { error } = await supabase.rpc("set_equipment_status", {
+          p_unit_kind: kind,
+          p_unit_id: id,
+          p_status: status,
+          p_region: (pin?.region ?? presetRegion ?? "").trim() || null,
+          p_local_area: (pin?.localArea ?? presetLocalArea ?? "").trim() || null,
+          p_notes: notes.trim() || null,
+          p_sub_status: subStatus.trim() || null,
+        });
+        if (error) throw error;
+      }
+      // A new pin is written with the status; the units' old pin stays if none was set. Units in use have none.
+      if (pin && offDuty) {
+        try {
+          await supabase.rpc("park_equipment", {
+            p_truck_id: units.find((u) => u[0] === "truck")?.[1] ?? null,
+            p_trailer_id: units.find((u) => u[0] === "trailer")?.[1] ?? null,
+            p_lat: pin.lat, p_lon: pin.lon, p_label: pin.label, p_place_id: pin.placeId,
+          });
+        } catch { /* the pin is a convenience; the status already saved */ }
+      }
       onSaved(status);
       onClose();
     } catch (e: any) {
@@ -124,7 +183,7 @@ export default function EquipmentStatusModal({
   }
 
   return (
-    <FullscreenModal open={open} onClose={onClose} title={`Status · ${unitName}`} footer={null}>
+    <FullscreenModal open={open} onClose={onClose} title={`Status · ${pair ? `${pair.truckName} / ${pair.trailerName}` : unitName}`} footer={null}>
       <div style={{ display: "grid", gap: 16 }}>
         {err && (
           <div style={{ borderRadius: 2, padding: 12, background: "rgba(180,40,40,0.18)", border: "1px solid rgba(180,40,40,0.32)", color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: 700 }}>
@@ -172,20 +231,26 @@ export default function EquipmentStatusModal({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <CatalogPicker
-            label={`Region${needsLocation ? " *" : ""}`} placeholder="Select region"
-            value={region}
-            onChange={(v) => { setRegion(v); if (v !== region) setLocalArea(""); }}
-            table="equipment_regions" idCol="region_id" companyId={companyId} editable
-          />
-          <CatalogPicker
-            label={`Local Area${needsLocation ? " *" : ""}`} placeholder="Select area"
-            value={localArea} onChange={setLocalArea}
-            table="equipment_local_areas" idCol="local_area_id" companyId={companyId} editable
-            filterByRegionName={region}
-          />
-        </div>
+        {offDuty || shownPin ? (
+          <div>
+            <label style={fieldLabel}>Location{needsLocation ? " *" : ""}</label>
+            {shownPin && (
+              <div style={{ fontSize: 13, marginBottom: 8, lineHeight: 1.5 }}>
+                {shownPin.label ? <b>{shownPin.label}</b> : <span style={{ color: "rgba(255,255,255,0.7)" }}>Pinned on the map</span>}
+                {" · "}
+                <a href={mapsUrl(shownPin.lat, shownPin.lon)} target="_blank" rel="noopener noreferrer" style={{ color: "#93c5fd", fontWeight: 800, textDecoration: "none" }}>
+                  {shownPin.lat.toFixed(5)}, {shownPin.lon.toFixed(5)}
+                </a>
+                {pin && <span style={{ color: "#4ade80", fontWeight: 800 }}> · new</span>}
+              </div>
+            )}
+            <button type="button" onClick={setHere} disabled={locBusy} aria-busy={locBusy}
+              style={{ width: "100%", padding: "12px 14px", border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", textAlign: "left" as const }}>
+              {locBusy ? "Getting location…" : shownPin ? "📍 Update location" : "📍 + Set location"}
+            </button>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Uses your phone's position, so do it where the equipment is.</div>
+          </div>
+        ) : null}
 
         {homeLocalArea && (
           <div style={{ textAlign: "right" as const, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", marginTop: -8 }}>

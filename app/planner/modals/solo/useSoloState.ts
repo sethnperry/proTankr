@@ -87,6 +87,8 @@ export function useSoloState(props: Props) {
     // it in the modal, so "Belongs to - {home}" can never drift as the
     // driver edits where the unit currently is.
     homeLocalArea: string | null;
+    /** A coupled pair is its own thing: set when the status applies to both units together. */
+    pair?: { truckId: string; trailerId: string; truckName: string; trailerName: string } | null;
   } | null>(null);
   // Select Equipment sub-screen -- the two-column truck/trailer grid +
   // connector line + its own Filter button live here now, behind a button

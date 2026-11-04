@@ -137,9 +137,25 @@ export function useSoloActions(
       homeLocalArea: t.local_area,
     });
   }
+  // A coupled pair is one thing: one status, one location, both units.
+  function openStatusForPair(truckId: string, trailerId: string) {
+    const t = trucks.find((x) => x.truck_id === truckId);
+    const r = trailers.find((x) => x.trailer_id === trailerId);
+    if (!t || !r) return;
+    setStatusTarget({
+      kind: "truck",
+      id: t.truck_id,
+      name: `${t.truck_name} / ${r.trailer_name}`,
+      status: t.status_code,
+      notes: t.status_notes,
+      subStatus: t.sub_status,
+      homeLocalArea: t.local_area,
+      pair: { truckId: t.truck_id, trailerId: r.trailer_id, truckName: t.truck_name, trailerName: r.trailer_name },
+    });
+  }
   function openStatus() {
     if (selectedTruckId && selectedTrailerId) {
-      setStatusPickerOpen(true);
+      openStatusForPair(selectedTruckId, selectedTrailerId);
       return;
     }
     if (selectedTruckId) {
@@ -230,6 +246,7 @@ export function useSoloActions(
     openStatusFor,
     openStatusForTruck,
     openStatusForTrailer,
+    openStatusForPair,
     openStatus,
     confirmCommandeer,
     confirmRemove,

@@ -12030,3 +12030,9 @@ The odometer is asked fresh (no older than a minute, `fresh=1`, at most one Geot
 ### Parked map (2026-11-04)
 
 Track (admin/dispatch tile) has a **Parked map** row at the top. It reads `equipment_parks` (company members can read), groups a truck and trailer within 15 m into one pin (`lib/equipment/parkedPins.ts`, 4 tests), and opens `ParkedMap.tsx` (Leaflet, dynamic import): pin labels like "25184 / 3151", a list below, and a detail card with who parked it, when, nearest saved place, Open in Maps, and links into each unit's Track detail. The Region / Local Area filter in Track applies to the pins; inactive units get none. Not click-tested on a device. Not built: trailers dropped from the equipment modal still have no pin, no hand-dropped pin when there's no GPS, no live tracker dots on this map.
+
+### Equipment picker fixes (2026-11-04, later)
+
+- Tapping a coupled pair: the main button reads **Select** (free), **Take over** (in use) or **Drop / Swap** (yours) and acts directly.
+- **Drop trailer / Park truck** now really split the pair (`decouple_combo`, then the kept unit is held via `setCurrentEquipment`), because parking itself no longer decouples (see "Parking never splits a pair").
+- **STUD window** (`EquipmentStatusModal`): Region / Local Area pickers are gone. A **+ Set location / Update location** button reads the phone's position, names it from the nearest saved place within 0.3 mi (which also fills region / local area), shows the existing pin, and writes `park_equipment` with the status. A coupled pair gets one status and one pin for both units (`pair` prop); the "which unit?" sheet is gone for pairs. End shift passes its stamp as `presetPin` and no longer writes the pin separately. Not click-tested.
