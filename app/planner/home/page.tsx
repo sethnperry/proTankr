@@ -2187,9 +2187,9 @@ export default function HomePage() {
         const clock = (label: string, left: number | null | undefined, limit: number) => ({
           label, value: left == null ? "—" : clockHM(Math.max(0, limit - left)), color: clockColor(left ?? null), onClick: () => setRecapOpen(true),
         });
-        // Break: loading and pumping count toward it. The timer runs only when 30 minutes would finish the break rule
-        // for the rest of the shift, and the green check then stays (see lib/telematics/breakChip.ts). Red if a new
-        // trip was begun before it finished.
+        // Break: loading and pumping count toward it. Every stop is timed. A break finished after about three hours of
+        // driving keeps its check for the rest of the shift; an earlier one shows it only while stopped and resets when
+        // driving starts (see lib/telematics/breakChip.ts). Red if a new trip was begun before it finished.
         const restMin = myHos.nonDrivingSince ? Math.max(0, Math.floor((Date.now() - Date.parse(myHos.nonDrivingSince)) / 60000)) : null;
         const breakState = breakChip({ driveLeftMin: myHos.driveLeftMin, breakLeftMin: myHos.breakLeftMin, restMin });
         // Off duty: after about an hour the check mark becomes a count-up toward the 10 hours off that
@@ -2199,8 +2199,8 @@ export default function HomePage() {
           ? { label: "Reset", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) }
           : offMin != null && offMin >= 60
           ? { label: "Off / 10:00", value: `${Math.floor(offMin / 60)}:${String(offMin % 60).padStart(2, "0")}`, color: "#fff", onClick: () => setRecapOpen(true) }
-          : breakState === "done"
-          ? { label: "Break", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) } // stays for the rest of the shift
+          : breakState === "done" || breakState === "rested"
+          ? { label: "Break", value: "✓", color: "#22c55e", onClick: () => setRecapOpen(true) } // "done" stays for the shift; "rested" only while stopped
           : breakState === "timer"
           ? { label: "Break", value: `${restMin}m`, color: breakCountsRed ? "#f87171" : "#fff", onClick: () => setRecapOpen(true) }
           : { label: "Break", value: "0m", color: "#fff", onClick: () => setRecapOpen(true) }; // nothing to time yet
