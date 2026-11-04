@@ -38,7 +38,7 @@ import {
 import { newId } from "@/lib/trips/tripStore";
 import { useTripHydration } from "@/lib/trips/useTripHydration";
 import { rememberTanks, useDeliveryLocationList, useDriverSignature, useTripSettings } from "@/lib/trips/useTripData";
-import { airMiles, locationPlace, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
+import { airMiles, kindsOf, locationPlace, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { useActiveOutageBanner } from "../hooks/useTerminalOutageReports";
@@ -1371,7 +1371,7 @@ export default function HomePage() {
     if (stampAsk?.kind !== "cancel" || !snap) return null;
     const p = snap.pickups.find((x) => x.arrived_at && !x.left_at && x.outcome !== "no_load");
     if (!p) return null;
-    const loc = locations.find((l) => l.place_kind === "terminal" && l.name.trim().toLowerCase() === String(p.name ?? "").trim().toLowerCase());
+    const loc = locations.find((l) => kindsOf(l).includes("terminal") && l.name.trim().toLowerCase() === String(p.name ?? "").trim().toLowerCase());
     return { id: loc?.location_id ?? null, text: [p.name, [p.city, p.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || null };
   }, [stampAsk, snap, locations]);
   const stampCtx = useStampContext({ active: !!stampAsk && !!truckId, truckId, locations, terminalPlaceId: stampRack?.id ?? null, terminalText: stampRack?.text ?? null });

@@ -16,10 +16,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
-import { PLACE_KINDS, locationPlace, locationTitle, type DeliveryLocation, type LocationTank, type PlaceKind } from "@/lib/trips/deliveryLocations";
+import { PLACE_KINDS, kindsOf, placeKindLabel, locationPlace, locationTitle, type DeliveryLocation, type LocationTank, type PlaceKind } from "@/lib/trips/deliveryLocations";
 import { sameStore, similarLocations } from "@/lib/trips/refs";
 import type { DeliveryType } from "@/lib/trips/types";
 import { linkBtn, numOrNull } from "./tripUi";
+import type { PinResult } from "./PinMap";
+
+const PinMap = dynamic(() => import("./PinMap"), { ssr: false });
 import { CAPS, Chip, FIELD, FIELD_SM, Field, HAIR, Label, MUTE, PANEL, Segmented, primary } from "./deliveryUi";
 
 type TankDraft = { tank_id: string | null; tank_number: string; product_id: string; capacity: string; hose: string };
@@ -36,7 +39,7 @@ type Draft = {
   lat: number | null;
   lon: number | null;
   delivery_type: DeliveryType;
-  place_kind: PlaceKind;
+  place_kinds: PlaceKind[];
   notes: string;
   tanks: TankDraft[];
   removedTankIds: string[];
@@ -46,13 +49,13 @@ function toDraft(l: DeliveryLocation | null, tanks: LocationTank[], seedName: st
   if (!l) {
     return {
       location_id: null, name: seedName, location_number: "", address: "", city: "", state: "", zip: "", region: "", local_area: "",
-      lat: null, lon: null, delivery_type: "drop", place_kind: "store", notes: "", tanks: [], removedTankIds: [],
+      lat: null, lon: null, delivery_type: "drop", place_kinds: ["store"], notes: "", tanks: [], removedTankIds: [],
     };
   }
   return {
     location_id: l.location_id, name: l.name, location_number: l.location_number ?? "", address: l.address ?? "",
     city: l.city ?? "", state: l.state ?? "", zip: l.zip ?? "", region: l.region ?? "", local_area: l.local_area ?? "", lat: l.lat, lon: l.lon,
-    delivery_type: l.delivery_type, place_kind: l.place_kind ?? "store", notes: l.notes ?? "",
+    delivery_type: l.delivery_type, place_kinds: kindsOf(l), notes: l.notes ?? "",
     tanks: tanks
       .filter((t) => t.location_id === l.location_id)
       .sort((a, b) => a.tank_number.localeCompare(b.tank_number, undefined, { numeric: true }))
@@ -122,6 +125,8 @@ export function LocationEditor({
   const [err, setErr] = useState<string | null>(null);
   const [confirmRetire, setConfirmRetire] = useState(false);
   const [ackSimilar, setAckSimilar] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [regionOptions, setRegionOptions] = useState<string[]>([]);
   const [areaRows, setAreaRows] = useState<{ name: string; region: string | null }[]>([]);
   useEffect(() => {
@@ -184,10 +189,26 @@ export function LocationEditor({
     if (!navigator.geolocation) return setErr("This device can't share its location.");
     navigator.geolocation.getCurrentPosition(
       (pos) => { setDraft((d) => ({ ...d, lat: pos.coords.latitude, lon: pos.coords.longitude })); setGeoPinned(true); setErr(null); },
-      () => setErr("Couldn't get your location. Check location permission."),
+      () => { setErr("Couldn't get your location. Drop the pin on the map instead."); setMapOpen(true); },
       { enableHighAccuracy: true, timeout: 15000 },
     );
   };
+
+  const onPinned = (r: PinResult) => {
+    setDraft((d) => ({
+      ...d, lat: r.lat, lon: r.lon,
+      address: d.address.trim() ? d.address : r.address ?? "",
+      city: d.city.trim() ? d.city : r.city ?? "",
+      state: d.state.trim() ? d.state : r.state ?? "",
+      zip: d.zip.trim() ? d.zip : r.zip ?? "",
+    }));
+    setGeoPinned(true); setErr(null);
+  };
+  const toggleKind = (k: PlaceKind) => setDraft((d) => {
+    const on = d.place_kinds.includes(k);
+    const next = on ? d.place_kinds.filter((x) => x !== k) : [...d.place_kinds, k];
+    return { ...d, place_kinds: next.length ? next : d.place_kinds };
+  });
 
   const save = async () => {
     if (!draft.name.trim()) return setErr("Enter a name.");
@@ -228,7 +249,8 @@ export function LocationEditor({
         lat, lon,
         ...(county ? { county } : {}),
         delivery_type: draft.delivery_type,
-        place_kind: draft.place_kind,
+        place_kind: draft.place_kinds[0] ?? "store",
+        place_kinds: draft.place_kinds,
         notes: draft.notes.trim() || null,
         client_updated_at: now,
       };
@@ -238,7 +260,7 @@ export function LocationEditor({
       let res = await write(row);
       // Before the 2026-10-11 migration there is no zip column; save without it.
       if (res.error && /zip|region|local_area|county|place_kind/i.test(res.error.message)) {
-        const { zip: _zip, region: _region, local_area: _la, place_kind: _pk, ...older } = row;
+        const { zip: _zip, region: _region, local_area: _la, place_kind: _pk, place_kinds: _pks, ...older } = row;
         res = await write(older);
       }
       if (res.error) throw new Error(res.error.message);
@@ -328,19 +350,42 @@ export function LocationEditor({
       )}
 
       <Label>Position</Label>
-      <div style={{ ...PANEL, padding: 14, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="dash-num" style={{ fontSize: 15, fontWeight: 700 }}>
-            {draft.lat != null && draft.lon != null ? `${draft.lat.toFixed(3)}, ${draft.lon.toFixed(3)}${geoPinned ? " · pinned" : ""}` : "No coordinates yet"}
-          </div>
-          <div style={{ fontSize: 12, color: MUTE, marginTop: 3 }}>At the site? Use your location. Otherwise the city is looked up on save.</div>
+      <div style={{ ...PANEL, padding: 14 }}>
+        <div className="dash-num" style={{ fontSize: 15, fontWeight: 700 }}>
+          {draft.lat != null && draft.lon != null ? `${draft.lat.toFixed(5)}, ${draft.lon.toFixed(5)}${geoPinned ? " · pinned" : ""}` : "No coordinates yet"}
         </div>
-        <button type="button" onClick={useMyLocation} style={{ flexShrink: 0, padding: "9px 12px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>Use mine</button>
+        <div style={{ fontSize: 12, color: MUTE, marginTop: 3 }}>At the site? Use your GPS. Not there? Drop or move the pin on the map, or type the street address above and find it. Without any of these the city is looked up on save.</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          <button type="button" onClick={useMyLocation} style={{ padding: "9px 12px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>Use my GPS</button>
+          <button type="button" onClick={() => setMapOpen(true)} style={{ padding: "9px 12px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>
+            {draft.lat != null ? "Edit pin on map" : "Drop pin on map"}
+          </button>
+          {(draft.address.trim() || draft.city.trim()) && (
+            <button type="button" onClick={() => { setDraft((d) => ({ ...d, lat: null, lon: null })); setGeoPinned(false); setMapOpen(true); }} style={{ padding: "9px 12px", border: `1px solid ${HAIR}`, background: "#050505", color: "#fff", ...CAPS, letterSpacing: "0.1em", cursor: "pointer" }}>Find street address</button>
+          )}
+        </div>
       </div>
 
       <Label>Kind of place</Label>
       <div style={{ ...PANEL, padding: 14 }}>
-        <Segmented value={draft.place_kind} onChange={(v) => patch({ place_kind: v })} options={PLACE_KINDS} />
+        <button type="button" onClick={() => setKindsOpen((o) => !o)} aria-expanded={kindsOpen}
+          style={{ ...FIELD, textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>{draft.place_kinds.map(placeKindLabel).join(", ")}</span><span style={{ color: MUTE }}>{kindsOpen ? "▴" : "▾"}</span>
+        </button>
+        {kindsOpen && (
+          <div style={{ border: `1px solid ${HAIR}`, borderTop: "none", background: "#0a0a0b" }}>
+            {PLACE_KINDS.map((k) => {
+              const on = draft.place_kinds.includes(k.id);
+              return (
+                <button key={k.id} type="button" onClick={() => toggleKind(k.id)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", background: "transparent", border: "none", borderTop: `1px solid ${HAIR}`, color: "#fff", fontSize: 15, cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ width: 18, height: 18, border: `1px solid ${on ? "#fff" : HAIR}`, background: on ? "#fff" : "transparent", color: "#000", fontSize: 13, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
+                  {k.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <Label>Delivery type</Label>
@@ -395,6 +440,10 @@ export function LocationEditor({
         style={{ ...primary, marginTop: 18, opacity: busy || sameStores.length > 0 ? 0.5 : 1 }}>
         {busy ? "Saving…" : similar.length > 0 && ackSimilar ? "Save as a new location anyway" : "Save"}
       </button>
+
+      <PinMap open={mapOpen} start={draft.lat != null && draft.lon != null ? { lat: draft.lat, lon: draft.lon } : null}
+        startQuery={[draft.address, draft.city, draft.state, draft.zip].map((x) => x.trim()).filter(Boolean).join(", ")}
+        onUse={onPinned} onClose={() => setMapOpen(false)} />
 
       {draft.location_id && onRetired && (
         <div style={{ textAlign: "center", marginTop: 18 }}>

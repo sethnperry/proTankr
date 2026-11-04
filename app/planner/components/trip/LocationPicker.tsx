@@ -20,6 +20,8 @@ import {
   type LatLon,
   type LocationTank,
   type PlaceKind,
+  kindsOf,
+  placeKindsLabel,
 } from "@/lib/trips/deliveryLocations";
 import { cityOptions, inArea, type AreaPick } from "@/lib/trips/areaTree";
 import { stateName } from "@/lib/geo/usStates";
@@ -49,7 +51,7 @@ export function LocationBrowser({
   /** Star or unstar a location (kept per driver). */
   onToggleStar?: (locationId: string, star: boolean) => void | Promise<void>;
 }) {
-  const locations = useMemo(() => (kinds ? allLocations.filter((l) => kinds.includes(l.place_kind ?? "store")) : allLocations), [allLocations, kinds]);
+  const locations = useMemo(() => (kinds ? allLocations.filter((l) => kindsOf(l).some((k) => kinds.includes(k))) : allLocations), [allLocations, kinds]);
   const [area, setArea] = useState<AreaPick | null>(null);
   const [areaOpen, setAreaOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -154,7 +156,7 @@ export function LocationBrowser({
   const storeRow = (l: DeliveryLocation, withCity: boolean) =>
     row(l.location_id, l.starred, () => void onToggleStar?.(l.location_id, !l.starred), () => (onPick ? pick(l) : setEditing(l)),
       l.location_id === selectedLocationId, locationTitle(l),
-      [withCity ? [l.city, l.state].filter(Boolean).join(", ") : null, l.place_kind && l.place_kind !== "store" ? placeKindLabel(l.place_kind) : null, l.address, l.delivery_type === "pump_off" ? "Pump off" : null].filter(Boolean).join(" · ") || undefined,
+      [withCity ? [l.city, l.state].filter(Boolean).join(", ") : null, kindsOf(l).some((k) => k !== "store") ? placeKindsLabel(kindsOf(l)) : null, l.address, l.delivery_type === "pump_off" ? "Pump off" : null].filter(Boolean).join(" · ") || undefined,
       () => setEditing(l));
 
   const newBtn = companyId && userId ? (

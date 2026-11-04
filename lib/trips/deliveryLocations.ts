@@ -18,6 +18,10 @@ export const PLACE_KINDS: { id: PlaceKind; label: string }[] = [
   { id: "fuel", label: "Fuel" },
   { id: "shipper", label: "Shipper" },
 ];
+/** Every kind a place is (it can be several); a missing value means a store. */
+export const kindsOf = (l: { place_kind?: PlaceKind | null; place_kinds?: PlaceKind[] | null }): PlaceKind[] =>
+  l.place_kinds && l.place_kinds.length ? l.place_kinds : [l.place_kind ?? "store"];
+export const placeKindsLabel = (ks: PlaceKind[]) => ks.map((k) => placeKindLabel(k)).join(", ");
 export const placeKindLabel = (k: string | null | undefined) => PLACE_KINDS.find((p) => p.id === k)?.label ?? "Store";
 
 export type DeliveryLocation = {
@@ -40,6 +44,7 @@ export type DeliveryLocation = {
   delivery_type: DeliveryType;
   // Optional: missing before the 2026-11-02 migration, and a missing value means a store.
   place_kind?: PlaceKind;
+  place_kinds?: PlaceKind[] | null;
   notes: string | null;
   // Feet (20261019000000). Optional: missing before that migration.
   is_active?: boolean;
