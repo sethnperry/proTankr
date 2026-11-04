@@ -17,7 +17,7 @@ const mmss = (ms: number) => {
   return h > 0 ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
 };
 
-export type RackActions = { onAnotherRack: () => void; onCancelLoad: () => void };
+export type RackActions = { onAnotherRack: () => void };
 
 function DelayCore({ leg, running, onStart, onEnd, rackActions, flush }: {
   leg: DelayLeg;
@@ -30,7 +30,6 @@ function DelayCore({ leg, running, onStart, onEnd, rackActions, flush }: {
    *  leaves for another rack, or when the load is cancelled. The last two are right here. */
   rackActions?: RackActions;
 }) {
-  const [confirmCancel, setConfirmCancel] = useState(false);
   const [open, setOpen] = useState(false);
   const [other, setOther] = useState(false);
   const [note, setNote] = useState("");
@@ -51,28 +50,12 @@ function DelayCore({ leg, running, onStart, onEnd, rackActions, flush }: {
   };
 
   if (running && running.leg === "at_rack" && rackActions) {
-    const sb: React.CSSProperties = { flex: 1, padding: "11px 0", borderRadius: 2, fontSize: 13, fontWeight: 800, cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff" };
+    // The delay can't be tapped away here: it ends at Begin Loading, when the driver goes to another rack, or when the
+    // load is cancelled. Those buttons sit above, in the row the wrapper draws.
     return (
-      <div style={{ marginTop: 8 }}>
-        <div style={{ padding: "10px 12px", borderRadius: 2, background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.55)", color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="dash-num" style={{ fontSize: 18, fontWeight: 800, color: "#fbbf24", fontVariantNumeric: "tabular-nums" }}>{mmss(now - Date.parse(running.startedAt))}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Delay · {delayReasonLabel(running.code, running.note)}</span>
-        </div>
-        {!confirmCancel ? (
-          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-            <button type="button" onClick={rackActions.onAnotherRack} style={sb}>Another rack</button>
-            <button type="button" onClick={() => setConfirmCancel(true)} style={{ ...sb, color: "#f87171" }}>Cancel load</button>
-          </div>
-        ) : (
-          <div style={{ marginTop: 6, padding: 12, border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, background: "rgba(248,113,113,0.06)" }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Cancel this load?</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>You'll be asked why. The delay timer stops.</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setConfirmCancel(false)} style={sb}>Keep it</button>
-              <button type="button" onClick={() => { setConfirmCancel(false); rackActions.onCancelLoad(); }} style={{ ...sb, background: "#f87171", color: "#000", border: "none" }}>Cancel load</button>
-            </div>
-          </div>
-        )}
+      <div style={{ marginTop: flush ? 0 : 8, padding: "10px 12px", borderRadius: 2, background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.55)", color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
+        <span className="dash-num" style={{ fontSize: 18, fontWeight: 800, color: "#fbbf24", fontVariantNumeric: "tabular-nums" }}>{mmss(now - Date.parse(running.startedAt))}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Delay · {delayReasonLabel(running.code, running.note)}</span>
       </div>
     );
   }
@@ -140,36 +123,49 @@ function DelayCore({ leg, running, onStart, onEnd, rackActions, flush }: {
 
 type CoreProps = Parameters<typeof DelayCore>[0];
 
+const CANCEL_STYLE: React.CSSProperties = { flex: 1, padding: "10px 0", borderRadius: 2, cursor: "pointer", fontSize: 14, fontWeight: 700, background: "transparent", border: "1px solid rgba(248,113,113,0.5)", color: "#f87171" };
+
 /**
- * Delay on the left, Cancel load on the right. Either can be missing: some steps have no delay to log but a load can
- * still be cancelled there, and a load with product aboard can't be cancelled (park it or deliver it). Cancel asks
- * first; what follows (the reasons, then the odometer, time and place) is the page's own flow.
+ * The buttons under the big step button. At a rack: Another rack and Cancel load side by side, then Delay full width
+ * under them. Anywhere else: Delay on the left and Cancel load on the right. Either can be missing: some steps have no
+ * delay to log but a load can still be cancelled, and a load with product aboard can't be cancelled (park it or
+ * deliver it). Cancel asks first; what follows (the reasons, then the odometer, time and place) is the page's own flow.
  */
 export function DelayButton({ leg, onCancel, ...rest }: Omit<CoreProps, "leg" | "flush"> & { leg: DelayLeg | null; onCancel?: () => void }) {
   const [confirm, setConfirm] = useState(false);
-  // At the rack with a delay running, the core already carries Another rack and Cancel load.
-  if (leg && rest.running && rest.running.leg === "at_rack" && rest.rackActions) return <DelayCore leg={leg} {...rest} />;
-  if (!onCancel) return leg ? <DelayCore leg={leg} {...rest} /> : null;
   const sb: React.CSSProperties = { flex: 1, padding: "11px 0", borderRadius: 2, fontSize: 13, fontWeight: 800, cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff" };
+  const cancelBtn = onCancel ? <button type="button" onClick={() => setConfirm(true)} style={CANCEL_STYLE}>Cancel load</button> : null;
+  const confirmBlock = confirm && onCancel ? (
+    <div style={{ marginTop: 8, padding: 12, border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, background: "rgba(248,113,113,0.06)" }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Cancel this load?</div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>You'll be asked why, then to confirm the odometer. The empty run starts from here.</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" onClick={() => setConfirm(false)} style={sb}>Keep it</button>
+        <button type="button" onClick={() => { setConfirm(false); onCancel(); }} style={{ ...sb, background: "#f87171", color: "#000", border: "none" }}>Cancel load</button>
+      </div>
+    </div>
+  ) : null;
+
+  if (rest.rackActions) {
+    return (
+      <>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button type="button" onClick={rest.rackActions.onAnotherRack} style={{ ...sb, padding: "10px 0", fontSize: 14, fontWeight: 700 }}>Another rack</button>
+          {cancelBtn}
+        </div>
+        {confirmBlock}
+        {leg ? <DelayCore leg={leg} {...rest} /> : null}
+      </>
+    );
+  }
+  if (!onCancel) return leg ? <DelayCore leg={leg} {...rest} /> : null;
   return (
     <>
       <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "stretch" }}>
         <div style={{ flex: 1, minWidth: 0 }}>{leg ? <DelayCore leg={leg} flush {...rest} /> : null}</div>
-        <button type="button" onClick={() => setConfirm(true)}
-          style={{ flex: 1, padding: "10px 0", borderRadius: 2, cursor: "pointer", fontSize: 14, fontWeight: 700, background: "transparent", border: "1px solid rgba(248,113,113,0.5)", color: "#f87171" }}>
-          Cancel load
-        </button>
+        {cancelBtn}
       </div>
-      {confirm && (
-        <div style={{ marginTop: 8, padding: 12, border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, background: "rgba(248,113,113,0.06)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Cancel this load?</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>You'll be asked why, then to confirm the odometer. The empty run starts from here.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={() => setConfirm(false)} style={sb}>Keep it</button>
-            <button type="button" onClick={() => { setConfirm(false); onCancel(); }} style={{ ...sb, background: "#f87171", color: "#000", border: "none" }}>Cancel load</button>
-          </div>
-        </div>
-      )}
+      {confirmBlock}
     </>
   );
 }

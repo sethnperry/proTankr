@@ -2108,10 +2108,7 @@ export default function HomePage() {
       {(delayLeg || canCancelNow) && !openingPlanner && (
         <DelayButton leg={delayLeg ? runningDelay?.leg ?? delayLeg : null} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
           onCancel={canCancelNow ? () => { setCancelErr(null); setCancelOpen(true); } : undefined}
-          rackActions={step.kind === "planner" ? {
-            onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); },
-            onCancelLoad: () => { setCancelErr(null); setCancelOpen(true); },
-          } : undefined} />
+          rackActions={canNoLoad ? { onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); } } : undefined} />
       )}
       {gaugingAsk && <GaugingAskSheet terminalId={gaugingAsk.id} terminalName={gaugingAsk.name} onClose={() => setGaugingAsk(null)} />}
       {undoable && !openingPlanner && (
@@ -2411,11 +2408,6 @@ export default function HomePage() {
             )}
             {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
               <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
-            )}
-            {canNoLoad && (
-              <button type="button" onClick={() => { setNoLoadErr(null); setNoLoadOpen(true); }} style={{ ...smallLink, color: "#fbbf24" }}>
-                Couldn&apos;t load here
-              </button>
             )}
             {showPark && (
               <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
