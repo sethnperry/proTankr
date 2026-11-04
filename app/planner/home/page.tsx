@@ -2072,9 +2072,9 @@ export default function HomePage() {
           { label: "Expiration", value: String(expTotal), color: expWorst ? EXPIRY_COLOR[expWorst] : LOOK.muted, onClick: () => setExpSheetOpen(true) },
           { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
             onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
-          { label: "To Rack", value: String(rackCount), unit: rackCount === 1 ? "trk" : "trks",
+          { label: "To Rack", value: String(rackCount),
             color: countColor(rackCount), onClick: () => setRackSheetOpen(true) },
-          { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount), unit: dropCount === 1 ? "trk" : "trks",
+          { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount),
             color: countColor(dropCount), onClick: () => setDropNowOpen(true) },
         ]} />
       </div>
@@ -2203,7 +2203,7 @@ export default function HomePage() {
           : { label: "Break", value: "0m", color: "#fff", onClick: () => setRecapOpen(true) }; // driving: zero until stopped
         return (
           <div style={{ marginBottom: 14 }}>
-            <GaugePanel top={0} labelBelow cells={[
+            <GaugePanel square top={0} labelBelow cells={[
               breakCell,
               clock("Driving", myHos.driveLeftMin, 11 * 60),
               clock("Working", myHos.dutyLeftMin, 14 * 60),

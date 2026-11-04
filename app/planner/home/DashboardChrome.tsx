@@ -243,6 +243,10 @@ export function ToolPanel({ items }: { items: ToolItem[] }) {
 
 // A row of big readouts under the main button.
 export type GaugeCell = { label: string; value: string; unit?: string; color?: string; onClick?: () => void; busy?: boolean; wide?: boolean };
+// Width to height of a chip. Not square: a little wider than tall, and the same for every chip row so the hours card
+// and the status chips line up. Everything inside scales with the panel (container units), so the shape never stretches.
+export const CHIP_ASPECT = "5 / 4";
+
 export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number; small?: boolean; square?: boolean }) {
   const L = useDashLook();
   // equal: every cell the same width, the whole set scaling with its width
@@ -250,7 +254,7 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square }
   // and labels truncating once they no longer fit.
   const labelSize = square ? "clamp(8px, 2.6cqw, 12px)" : equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
   const labelSpacing = equal ? "0.14em" : "0.06em"; // four labels have to fit a phone-width row
-  const valueSize = square ? "clamp(20px, 9cqw, 40px)" : equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
+  const valueSize = square ? "clamp(18px, 7.6cqw, 36px)" : equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
   return (
     <div style={{
       display: "grid",
@@ -262,7 +266,7 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square }
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
           style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: square ? "center" : "left", padding: small ? "7px 8px 6px" : "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0,
-            ...(square ? { aspectRatio: "1 / 1", display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "4cqw" } : {}) }}>
+            ...(square ? { aspectRatio: CHIP_ASPECT, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "1.6cqw", textAlign: "center" as const } : {}) }}>
           {(() => {
             const label = (
               <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
