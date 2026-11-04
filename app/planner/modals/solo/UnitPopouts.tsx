@@ -33,6 +33,7 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
     setDocUnit,
     setDropSwapOpen,
     setSelectedTrailerId,
+    setPickerOpen,
     setSelectedTruckId,
     setStatusFlow,
     setStudPickOpen,
@@ -92,7 +93,24 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
                 : null
           }
           onOpenFile={(kind) => setDocUnit({ kind, id: kind === "truck" ? detailRow.truck.id : detailRow.trailer.id })}
-          onDropSwap={() => setDropSwapOpen(true)}
+          primaryLabel={detailMine ? "Drop / Swap" : detailCombo?.claimed_by ? "Take over" : "Select"}
+          onDropSwap={() => {
+            if (detailMine) { setDropSwapOpen(true); return; }
+            // Not yours yet: this button selects the pair (a parked pair is free; one in use asks first).
+            const owner =
+              detailCombo?.claimed_by && detailCombo.claimed_by !== authUserId
+                ? (claimedByNames[detailCombo.claimed_by] ?? "another driver")
+                : null;
+            if (owner) {
+              setTakeCombo({ truckId: detailRow.truck.id, trailerId: detailRow.trailer.id, ownerName: owner });
+              return;
+            }
+            setSelectedTruckId(detailRow.truck.id);
+            setSelectedTrailerId(detailRow.trailer.id);
+            void resolvePair(detailRow.truck.id, detailRow.trailer.id, undefined, true);
+            setDetailComboId(null);
+            setPickerOpen(false);
+          }}
           onStud={() => setStudPickOpen(true)}
           onDocCaptured={(kind, files) => {
             setDetailComboId(null);
