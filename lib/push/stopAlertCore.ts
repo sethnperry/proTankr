@@ -55,12 +55,12 @@ export function planStopNotice(trip: StopTrip, stops: StopIn[], lastAnnouncedMs:
   }
   const nextPickup = live.find((p) => !p.arrived_at);
   if (nextPickup) {
-    if (farFromNext) return null;
+    if (farFromNext || stop.resumedAt) return null; // only a stop the truck is still at; one it has driven on from is old news
     return { at: stop.at, kind: "arrive", place: nextPickup.name ?? "the terminal", title: `Did you arrive at ${nextPickup.name ?? "the terminal"}?`, body: "" };
   }
   const nextDrop = trip.deliveries.filter((d) => d.status !== "complete" && d.status !== "cancelled").sort((a, b) => a.seq - b.seq).find((d) => !d.arrived_at);
   if (nextDrop) {
-    if (farFromNext) return null;
+    if (farFromNext || stop.resumedAt) return null; // only a stop the truck is still at; one it has driven on from is old news
     return { at: stop.at, kind: "arrive", place: nextDrop.name ?? "the store", title: `Did you arrive at ${nextDrop.name ?? "the store"}?`, body: "" };
   }
   return null;

@@ -14,3 +14,9 @@ test("answered or earlier stops are skipped", () => {
   assert.equal(pendingStop(stops, { afterMs: Date.parse("2026-10-26T13:00:00Z"), handled: new Set() }), null);
   assert.equal(pendingStop(undefined, { afterMs: 0, handled: new Set() }), null);
 });
+
+test("stillStopped: a stop the driver has already driven on from is not asked about", () => {
+  const stops = [{ at: "2026-11-03T23:39:00Z", code: "ON", resumedAt: "2026-11-03T23:50:00Z" }];
+  assert.equal(pendingStop(stops, { afterMs: 0, handled: new Set(), stillStopped: true }), null);
+  assert.equal(pendingStop(stops, { afterMs: 0, handled: new Set() })?.at, "2026-11-03T23:39:00Z");
+});

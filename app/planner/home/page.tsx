@@ -1561,7 +1561,7 @@ export default function HomePage() {
       return { at: real?.at ?? new Date(queued.stop_at).toISOString(), code: real?.code ?? "ON", resumedAt: real?.resumedAt ?? null, answerId: queued.id, answer: queued.answer, reason: queued.reason, reported: !!queued.report_posted_at };
     }
     const aged = (myHos?.stops ?? []).filter((x) => stopClock - Date.parse(x.at) >= STOP_GRACE_MS);
-    const p = pendingStop(aged, { afterMs, handled: handledStops });
+    const p = pendingStop(aged, { afterMs, handled: handledStops, stillStopped: !hopPickup });
     return p ? { ...p, answerId: undefined as string | undefined, answer: undefined as "arrived" | "delay" | "yes" | "no" | undefined, reason: undefined as string | null | undefined, reported: false } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myHos?.stops, openTrip?.trip_id, snap, arrivalTarget, step.kind, handledStops, hopPickup?.pickup_id, fuelOn, runningDelay, stopClock, stopAnswers]);
@@ -1613,6 +1613,10 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, equipment.selectedComboId]);
   const sigDelivery = step.kind === "finish_delivery" && step.delivery.arrived_at ? step.delivery : null;
+  // The "still working?" questions never come up while the truck is moving, and the idle one never comes up
+  // during an open trip (a long wait at a rack or store is work). Only a quiet, trip-less shift gets asked.
+  const drivingNow = !!myHos && myHos.nonDrivingSince == null && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null);
+  const shiftPromptShown = drivingNow ? null : shift.prompt === "idle" && openTrip ? null : shift.prompt;
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => {
     if (userId) markStopHandled(userId, at);
@@ -2035,7 +2039,7 @@ export default function HomePage() {
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
       <ConnectedDashHeader current="driver" line={equipmentLabel} />
 
-      <ShiftBar shift={shift.current} prompt={shift.prompt} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
+      <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
       <div className="d2-cols">
       <div className="d2-left">

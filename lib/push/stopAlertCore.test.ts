@@ -56,3 +56,11 @@ test("no 'Did you arrive?' while the truck is nowhere near the next stop", () =>
   assert.equal(planStopNotice(trip, [stop], 0, undefined, now, null, 0.4)?.title, "Did you arrive at Loves?");
   assert.equal(planStopNotice(trip, [stop], 0, undefined, now, null, null)?.kind, "arrive");   // distance unknown: still asks
 });
+
+test("a stop the truck has already driven on from is not asked about (the 6:39 PM stop asked at 8:45 PM)", () => {
+  const gone = { ...stop, resumedAt: "2026-10-26T14:50:00.000Z" };
+  assert.equal(planStopNotice(base, [gone], 0, undefined, Date.parse(stop.at) + 3 * 3600_000, null, 0.5), null);
+  // ...but the same stop still asks about a rack hop, which needs the driver to have left.
+  const t: StopTrip = { ...base, pickups: [{ seq: 1, arrived_at: "2026-10-26T12:30:00Z", left_at: null, outcome: null, name: "Marathon" }] };
+  assert.equal(planStopNotice(t, [gone], 0, undefined, Date.parse(stop.at) + 16 * 60_000, 9)?.kind, "hop");
+});
