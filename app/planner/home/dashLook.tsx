@@ -76,7 +76,7 @@ export function DashStyles() {
 .dash-desk{display:none}
 /* Driver dashboard: one column on a phone held upright (left/right wrappers vanish, order puts the
    pieces back in reading order); two columns once the screen is wider than it is tall. */
-.d2-cols{display:flex;flex-direction:column}
+.d2-cols{display:flex;flex-direction:column;margin-top:12px}
 .d2-left,.d2-right{display:contents}
 .d2-o0{order:0}.d2-o1{order:1}.d2-o2{order:2}.d2-o3{order:3}.d2-o4{order:4}
 @media (min-aspect-ratio: 1/1) and (min-width: 720px){

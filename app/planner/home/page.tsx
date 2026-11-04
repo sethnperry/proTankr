@@ -2132,7 +2132,7 @@ export default function HomePage() {
       <div className="d2-o0">
       {/* Status squares: equipment due, and company trucks headed where I'm going (me included). */}
       <div style={{ marginBottom: 14 }}>
-      <GaugePanel square cells={[
+      <GaugePanel square top={0} cells={[
           { label: "Expiration", value: String(expTotal), color: expWorst ? EXPIRY_COLOR[expWorst] : LOOK.muted, onClick: () => setExpSheetOpen(true) },
           { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
             onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
