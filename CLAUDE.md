@@ -12036,3 +12036,11 @@ Track (admin/dispatch tile) has a **Parked map** row at the top. It reads `equip
 - Tapping a coupled pair: the main button reads **Select** (free), **Take over** (in use) or **Drop / Swap** (yours) and acts directly.
 - **Drop trailer / Park truck** now really split the pair (`decouple_combo`, then the kept unit is held via `setCurrentEquipment`), because parking itself no longer decouples (see "Parking never splits a pair").
 - **STUD window** (`EquipmentStatusModal`): Region / Local Area pickers are gone. A **+ Set location / Update location** button reads the phone's position, names it from the nearest saved place within 0.3 mi (which also fills region / local area), shows the existing pin, and writes `park_equipment` with the status. A coupled pair gets one status and one pin for both units (`pair` prop); the "which unit?" sheet is gone for pairs. End shift passes its stamp as `presetPin` and no longer writes the pin separately. Not click-tested.
+
+### STUD location: GPS, map pin, or street/city/state (2026-11-04)
+
+`EquipmentStatusModal` location block has three ways to set the pin: GPS (as before; if it fails the map opens
+automatically), **Drop pin on map** (reuses `PinMap`, with search and tap/drag), and **Street, city, state** (fields
+joined into a search; `PinMap` opens on the first match with the pin already dropped, adjust, then Use this pin).
+The pin gets the nearest saved place's name (0.3 mi) or the address as its label. `PinMap` gained `dropFirst`
+(auto-drop the pin on the first result of the initial query). Not click-tested.

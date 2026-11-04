@@ -66,7 +66,7 @@ export default function PinMap({ open, start, startQuery, onUse, onClose }: {
       m.on("click", (e: L.LeafletMouseEvent) => place(e.latlng.lat, e.latlng.lng));
       map.current = m;
       if (start) place(start.lat, start.lon);
-      else if (startQuery.trim()) void search(startQuery);
+      else if (startQuery.trim()) void search(startQuery, true);
     }, 60);
     return () => {
       window.clearTimeout(t);
@@ -75,7 +75,7 @@ export default function PinMap({ open, start, startQuery, onUse, onClose }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const search = async (text: string) => {
+  const search = async (text: string, dropFirst = false) => {
     if (!text.trim()) return;
     setBusy(true); setErr(null);
     const r = await api<{ results: { lat: number; lon: number; label: string }[] }>(`search=${encodeURIComponent(text.trim())}`);
@@ -83,7 +83,8 @@ export default function PinMap({ open, start, startQuery, onUse, onClose }: {
     const list = r?.results ?? [];
     setResults(list);
     if (!list.length) return setErr("Nothing found. Try a street address, or pan the map and tap to drop the pin.");
-    map.current?.setView([list[0].lat, list[0].lon], 17);
+    if (dropFirst) place(list[0].lat, list[0].lon, 17);
+    else map.current?.setView([list[0].lat, list[0].lon], 17);
   };
 
   const use = async () => {
