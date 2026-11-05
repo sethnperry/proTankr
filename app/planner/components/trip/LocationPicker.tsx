@@ -57,6 +57,8 @@ export function LocationBrowser({
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
   const [showAll, setShowAll] = useState(false);
+  // Picking a delivery opens on the starred locations only; Filter opens the full search and the city lists.
+  const [filterOpen, setFilterOpen] = useState(false);
   const [citiesOpen, setCitiesOpen] = useState(false);
   // Starred cities are kept on this phone, per driver; starred stores are kept in the database.
   const starsKey = `proTankr:deliveryCityStars:${userId || "anon"}`;
@@ -180,6 +182,21 @@ export function LocationBrowser({
         <div style={{ ...PANEL, fontSize: 14, color: MUTE, padding: 14 }}>No saved locations yet.</div>
       ) : (
         <div className="space-y-4">
+          {onPick && (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setFilterOpen((o) => !o)} aria-expanded={filterOpen || favorites.length === 0}
+                style={{ padding: "8px 14px", border: `1px solid ${filterOpen || favorites.length === 0 ? "#fff" : HAIR}`, background: filterOpen || favorites.length === 0 ? "#fff" : "#050505", ...CAPS, color: filterOpen || favorites.length === 0 ? "#000" : "#fff", letterSpacing: "0.1em", cursor: "pointer" }}>
+                Filter
+              </button>
+            </div>
+          )}
+          {onPick && !filterOpen && favorites.length > 0 ? (
+            <div>
+              {heading("Favorites")}
+              <div className="grid grid-cols-1 gap-2">{favorites.map((l) => storeRow(l, true))}</div>
+              {newBtn}
+            </div>
+          ) : (<>
           <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Search number, name or city" style={FIELD} />
 
           {nearby.length > 0 && (
@@ -230,6 +247,7 @@ export function LocationBrowser({
               {newBtn}
             </>
           )}
+          </>)}
         </div>
       )}
     </>
@@ -237,8 +255,9 @@ export function LocationBrowser({
 }
 
 export function LocationPicker({
-  open, title, origin = null, locations, tanks = [], companyId, userId, onPick, onClose, onLocationAdded, selectedLocationId = null, onToggleStar,
+  open, title, origin = null, locations, tanks = [], companyId, userId, onPick, onClose, onLocationAdded, selectedLocationId = null, onToggleStar, kinds,
 }: {
+  kinds?: PlaceKind[];
   open: boolean;
   title: string;
   origin?: LatLon | null;
@@ -257,7 +276,7 @@ export function LocationPicker({
     <FullscreenModal open={open} title={title} onClose={onClose} footer={null}>
       {open && (
         <LocationBrowser origin={origin} locations={locations} tanks={tanks} companyId={companyId} userId={userId}
-          onPick={onPick} onChanged={onLocationAdded} selectedLocationId={selectedLocationId} onToggleStar={onToggleStar} />
+          onPick={onPick} onChanged={onLocationAdded} selectedLocationId={selectedLocationId} onToggleStar={onToggleStar} kinds={kinds} />
       )}
     </FullscreenModal>
   );

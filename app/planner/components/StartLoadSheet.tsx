@@ -424,7 +424,7 @@ export function StartLoadSheet({
       onClose={() => setSupplierOpen(false)}
       onSkip={v.supplier ? () => { setV((st) => ({ ...st, supplier: null })); setSupplierOpen(false); } : undefined}
     />
-    <LocationPicker
+    <LocationPicker kinds={["store"]}
       open={open && picking != null}
       title={picking != null && v.deliveries.length > 1 ? `Delivery ${picking + 1}` : "Delivery"}
       origin={origin}

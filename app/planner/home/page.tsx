@@ -3124,7 +3124,7 @@ export default function HomePage() {
 
       <LocationsHub open={manageLocsOpen} onClose={() => setManageLocsOpen(false)} companyId={companyId} userId={userId} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} origin={origin} />
 
-      <LocationPicker
+      <LocationPicker kinds={["store"]}
         open={!!picker}
         title={picker?.mode === "reroute" ? "Change delivery" : picker?.mode === "split" ? "Send to another delivery" : picker?.mode === "select" ? "Delivery location" : "Add delivery"}
         selectedLocationId={picker?.mode === "reroute" ? picker.delivery.location_id : picker?.mode === "select" ? selectedLocId : null}

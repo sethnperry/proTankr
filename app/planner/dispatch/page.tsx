@@ -1081,7 +1081,7 @@ export default function DispatchPage() {
           </button>
         ))}
       </FullscreenModal>
-      <LocationPicker open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
+      <LocationPicker kinds={["store"]} open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
         onLocationAdded={locList.reload}
         onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />

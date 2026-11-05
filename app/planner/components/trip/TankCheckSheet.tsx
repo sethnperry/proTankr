@@ -101,7 +101,7 @@ export function TankCheckSheet({ open, onClose, locations, tanks, productName, o
       <CaptureSheet open={open && photoOpen} purpose="tank_ticket" title="Meter ticket" companyId={companyId} userId={userId} refType="tank_check"
         onDone={(r) => { setPaths(r.paths); setPhotoOpen(false); }} onClose={() => setPhotoOpen(false)} />
 
-      <LocationPicker open={open && pickStore} title="Which store?" origin={origin} locations={locations} tanks={tanks} companyId={companyId} userId={userId}
+      <LocationPicker kinds={["store"]} open={open && pickStore} title="Which store?" origin={origin} locations={locations} tanks={tanks} companyId={companyId} userId={userId}
         selectedLocationId={loc?.location_id ?? null} onLocationAdded={onLocationAdded}
         onPick={(to) => { const l = locations.find((x) => x.location_id === to.locationId) ?? null; if (l) { setLoc(l); setEntries([]); setExtra([]); } setPickStore(false); }}
         onClose={() => { setPickStore(false); if (!loc) onClose(); }} />
