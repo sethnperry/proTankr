@@ -29,7 +29,7 @@ async function cityAt(pos: { lat: number; lon: number }): Promise<string | null>
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return null;
-    const r = await fetch(`/api/geocode?lat=${pos.lat}&lon=${pos.lon}`, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`/api/geocode?lat=${pos.lat}&lon=${pos.lon}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(6000) });
     if (!r.ok) return null;
     const j = (await r.json()) as { city?: string; state?: string | null };
     return j.city ? [j.city, j.state].filter(Boolean).join(", ") : null;
@@ -59,7 +59,9 @@ export function useStampContext(o: { active: boolean; truckId: string | null; lo
         }
         return r.reading;
       };
-      const [reading, pos] = await Promise.all([ask(), gps()]);
+      // The odometer shows the moment the tracker answers; the place (GPS, a city lookup) fills in after and can never hold it up.
+      const readingP = ask().then((r) => { if (alive && r?.odometerMi != null) setCtx((c) => ({ ...c, guess: Math.round(r.odometerMi!), loading: false })); return r; });
+      const [reading, pos] = await Promise.all([readingP, gps()]);
       let place: { id: string | null; text: string | null } = { id: null, text: null };
       let source: StampSource = "none";
       let at = pos;
