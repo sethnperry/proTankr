@@ -87,17 +87,31 @@ export function setTripPlan(userId: string, tripId: string, slot: number | null)
   } catch {}
 }
 
-export function getTripPlan(userId: string | null, tripId: string | null): { slot: number; applied: boolean } | null {
+/** The plan as it stood when the trip began: kept on the trip so the trip card doesn't depend on finding the preset again
+ *  (presets are keyed per truck+trailer pairing, so a re-pair or swap would lose them). */
+export type TripPlanSnapshot = { comps: (string | null)[] };
+
+export function getTripPlan(userId: string | null, tripId: string | null): { slot: number; applied: boolean; snapshot: TripPlanSnapshot | null } | null {
   if (!userId || !tripId) return null;
   const v = read(planKey(userId, tripId));
-  return v && typeof v.slot === "number" ? { slot: v.slot, applied: !!v.applied } : null;
+  if (!v || typeof v.slot !== "number") return null;
+  const snapshot = v.snapshot && Array.isArray(v.snapshot.comps) ? { comps: v.snapshot.comps.map((c: unknown) => (typeof c === "string" && c ? c : null)) } : null;
+  return { slot: v.slot, applied: !!v.applied, snapshot };
+}
+
+export function setTripPlanSnapshot(userId: string, tripId: string, snapshot: TripPlanSnapshot | null) {
+  const v = read(planKey(userId, tripId));
+  if (!v || typeof v.slot !== "number") return;
+  try {
+    window.localStorage.setItem(planKey(userId, tripId), JSON.stringify({ ...v, snapshot }));
+  } catch {}
 }
 
 export function markTripPlanApplied(userId: string, tripId: string) {
   const v = getTripPlan(userId, tripId);
   if (!v) return;
   try {
-    window.localStorage.setItem(planKey(userId, tripId), JSON.stringify({ slot: v.slot, applied: true }));
+    window.localStorage.setItem(planKey(userId, tripId), JSON.stringify({ slot: v.slot, applied: true, ...(v.snapshot ? { snapshot: v.snapshot } : {}) }));
   } catch {}
 }
 
