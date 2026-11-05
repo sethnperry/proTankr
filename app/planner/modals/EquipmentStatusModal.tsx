@@ -102,14 +102,14 @@ export default function EquipmentStatusModal({
   // Nearest saved place (within 0.3 mi) names the pin and fills region / local area.
   async function nearestPlace(lat: number, lon: number): Promise<Pick<Pin, "label" | "placeId" | "region" | "localArea">> {
     try {
-      const { data } = await supabase.from("delivery_locations").select("location_id, name, lat, lon, region, local_area").eq("company_id", companyId);
+      const { data } = await supabase.from("delivery_locations").select("location_id, name, location_number, lat, lon, region, local_area").eq("company_id", companyId);
       let best: { d: number; r: any } | null = null;
       for (const l of (data ?? []) as any[]) {
         if (l.lat == null || l.lon == null) continue;
         const d = airMiles({ lat, lon }, { lat: Number(l.lat), lon: Number(l.lon) });
         if (d <= 0.3 && (!best || d < best.d)) best = { d, r: l };
       }
-      return best ? { label: best.r.name ?? null, placeId: best.r.location_id ?? null, region: best.r.region ?? null, localArea: best.r.local_area ?? null } : { label: null, placeId: null, region: null, localArea: null };
+      return best ? { label: best.r.name ? `${best.r.name}${best.r.location_number ? ` ${best.r.location_number}` : ""}` : null, placeId: best.r.location_id ?? null, region: best.r.region ?? null, localArea: best.r.local_area ?? null } : { label: null, placeId: null, region: null, localArea: null };
     } catch { return { label: null, placeId: null, region: null, localArea: null }; }
   }
 
@@ -148,7 +148,7 @@ export default function EquipmentStatusModal({
     void loadUnitInfo();
     const ids = pair ? [["truck", pair.truckId], ["trailer", pair.trailerId]] : [[unitKind, unitId]];
     void (async () => {
-      if (presetPin) setPin({ ...presetPin, ...(await nearestPlace(presetPin.lat, presetPin.lon)), label: presetPin.label, placeId: presetPin.placeId });
+      if (presetPin) { const near = await nearestPlace(presetPin.lat, presetPin.lon); setPin({ ...presetPin, ...near, label: presetPin.placeId ? near.label ?? presetPin.label : presetPin.label, placeId: presetPin.placeId }); }
       try {
         const { data } = await supabase.from("equipment_parks").select("unit_kind, unit_id, lat, lon, place_label, place_id").in("unit_id", ids.map((x) => x[1]));
         const r = ((data ?? []) as any[])[0];
