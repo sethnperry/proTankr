@@ -5,7 +5,7 @@
 // the driver taps Confirm. If it can't, the big number pad opens and the driver types the dash reading. There is no
 // skip: the move and the shift record both need it. "Back" goes back to the screen before (not a skip).
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import ValueEntryOverlay from "../ValueEntryOverlay";
 import { odometerProblem, parseOdometer } from "@/lib/moves/emptyMoves";
@@ -23,11 +23,17 @@ export function OdometerConfirmSheet({ open, title, lead, placeLabel, loading, g
   const [err, setErr] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
 
-  useEffect(() => { if (!open) { setValue(""); setTyping(false); setTouched(false); setErr(null); } }, [open]);
+  // The lookup only starts after the sheet opens, so for one render "not loading, no reading" means "not asked yet", not
+  // "tracker has nothing". Only a lookup that was seen running and then finished counts as an answer.
+  const sawLoading = useRef(false);
+  useEffect(() => { if (!open) { setValue(""); setTyping(false); setTouched(false); setErr(null); sawLoading.current = false; } }, [open]);
+  useEffect(() => { if (open && loading) sawLoading.current = true; }, [open, loading]);
   // The tracker answered: use it, unless the driver already typed something.
   useEffect(() => { if (open && !loading && !touched && guess != null) setValue(String(guess)); }, [open, loading, guess, touched]);
   // No reading from the tracker: go straight to the big number pad.
-  useEffect(() => { if (open && !loading && guess == null && !touched) { setDraft(""); setTyping(true); } }, [open, loading, guess, touched]);
+  useEffect(() => { if (open && !loading && sawLoading.current && guess == null && !touched) { setDraft(""); setTyping(true); } }, [open, loading, guess, touched]);
+  // A reading that lands while an untouched, empty pad is up replaces the pad with the number to confirm.
+  useEffect(() => { if (open && typing && !touched && !draft && guess != null) setTyping(false); }, [open, typing, touched, draft, guess]);
 
   const problem = value ? odometerProblem(value, floor) : null;
   const confirm = () => {
