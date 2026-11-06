@@ -21,8 +21,10 @@ export const removeBtn: React.CSSProperties = {
 };
 
 // One line of the report: label on the left, the value (tap to change) on the right.
-export function Line({ label, value, onTap, missing, sub, last }: {
+export function Line({ label, value, onTap, missing, sub, last, verified }: {
   label: string; value: string | null; onTap: () => void; missing?: boolean; sub?: string | null; last?: boolean;
+  // Green check: the value came straight from telematics, nothing was typed.
+  verified?: boolean;
 }) {
   return (
     <button type="button" onClick={onTap}
@@ -30,6 +32,7 @@ export function Line({ label, value, onTap, missing, sub, last }: {
       <span style={lineLabel}>{label}</span>
       <span style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
         <span style={{ display: "block", fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: value ? "#fff" : missing ? "#fbbf24" : "rgba(255,255,255,0.4)" }}>
+          {verified && value && <span aria-label="From telematics" style={{ color: "#4ade80", marginRight: 8 }}>✓</span>}
           {value || (missing ? "Add" : "None")}
         </span>
         {sub && <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}

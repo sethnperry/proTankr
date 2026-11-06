@@ -279,7 +279,7 @@ export function StartLoadSheet({
         )}
 
         <div style={{ borderTop: hair }}>
-          <Line label="Begin miles" value={v.beginMiles || null} missing onTap={() => openEdit("miles")} />
+          <Line label="Begin miles" value={v.beginMiles || null} missing verified={liveMiles != null && v.beginMiles === String(liveMiles)} sub={liveMiles != null && v.beginMiles === String(liveMiles) ? "From telematics" : null} onTap={() => openEdit("miles")} />
           <Line label="Order #" value={v.orderNumber || null} missing onTap={() => openEdit("order")} />
           {v.extraOrderNumbers.map((n, i) => (
             <Line key={`order-${i}`} label={`Order # ${i + 2}`} value={n || null} missing onTap={() => openEdit(`order:${i}`)} />
