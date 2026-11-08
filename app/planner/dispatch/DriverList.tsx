@@ -1,9 +1,8 @@
 "use client";
 // app/planner/dispatch/PlanLoadCard.tsx
 //
-// PLAN mode: pick a drop location and the drivers who deliver there are listed
-// by how often they have; pick a terminal and the list narrows to drivers with
-// access there. Presentational: the page owns the picks and the ranking.
+// LIVE mode driver list: ranked cards for the roster, with equipment and hours.
+// (Plan mode finds drivers with DriverFinder.) Presentational.
 
 import React, { useMemo, useState } from "react";
 import { useDashLook } from "../home/dashLook";
@@ -57,9 +56,6 @@ function EquipLine({ e, terminal }: { e: DriverEquip; terminal: string | null })
 
 export type TerminalOption = { id: string; name: string; place: string | null; used: boolean; city?: string | null; state?: string | null };
 
-const cityOf = (t: TerminalOption) => `${(t.city ?? "").trim()}|${(t.state ?? "").trim().toUpperCase()}`;
-const cityLabel = (key: string) => { const [c, s] = key.split("|"); return c ? [c, s].filter(Boolean).join(", ") : "No city"; };
-
 function accessText(d: PlanDriver): { text: string; color: string } | null {
   if (!d.access) return null;
   const { state, days } = d.access;
@@ -99,87 +95,6 @@ function DriverRow({ d, onOpen, onSelect, selected, equip, terminal, hos, canPla
     </div>
   );
 }
-
-function PickRow({ label, value, sub, onPick, onClear }: { label: string; value: string | null; sub?: string | null; onPick: () => void; onClear?: () => void }) {
-  const L = useDashLook();
-  return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-      <button type="button" onClick={onPick} className="dash-press"
-        style={{ ...L.secondary, boxSizing: "border-box", flex: 1, minWidth: 0, textAlign: "left", color: "#fff", padding: "10px 12px", cursor: "pointer" }}>
-        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted }}>{label}</div>
-        <div style={{ fontSize: 15, fontWeight: 800, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: value ? "#fff" : L.muted }}>
-          {value ?? "Tap to pick"} {sub && <span style={{ fontWeight: 600, color: L.muted }}>· {sub}</span>} <span style={{ color: L.faint }}>›</span>
-        </div>
-      </button>
-      {onClear && value && (
-        <button type="button" onClick={onClear} aria-label={`Clear ${label}`} className="dash-press"
-          style={{ ...L.secondary, width: 40, color: L.muted, cursor: "pointer", fontSize: 16 }}>×</button>
-      )}
-    </div>
-  );
-}
-
-export function PlanLoadCard(props: {
-  location: DeliveryLocation | null;
-  terminal: TerminalOption | null;
-  result: PlanLoadResult;
-  historyLoading?: boolean;
-  historyError?: string | null;
-  showNotCarded: boolean;
-  onOpenDriver: (userId: string) => void;
-  // Pickup, drop, shipper, customer and supplier are set in the Plan Trip window.
-  onEditPlan: () => void;
-  parties?: { shipper: string; customer: string };
-  supplier?: { name: string; account: string | null; warning: string | null } | null;
-  // Equipment each driver holds and the terminal's trailer-certification check.
-  equipFor?: (userId: string) => DriverEquip | null;
-  hosFor?: (userId: string) => { text: string; color: string } | null;
-  certNames?: string[]; // certificate(s) the chosen terminal requires on the trailer
-  certProblems?: number; // listed drivers whose trailer can't load there
-  selectedDriverId?: string | null;
-  onSelectDriver?: (userId: string) => void;
-  timeline?: React.ReactNode; // the selected driver's timeline
-}) {
-  const L = useDashLook();
-  const p = props;
-  const set = !!p.location && !!p.terminal;
-  const line = (label: string, v: string | null) => (
-    <div style={{ display: "flex", gap: 8, fontSize: 13, padding: "2px 0" }}>
-      <span style={{ color: L.muted, width: 70, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v || "—"}</span>
-    </div>
-  );
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <button type="button" onClick={p.onEditPlan} className="dash-press"
-        style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer" }}>
-        {set ? (
-          <>
-            {line("Pickup", [p.terminal!.name, p.terminal!.place].filter(Boolean).join(" · "))}
-            {line("Drop", [locationTitle(p.location!), locationPlace(p.location!)].filter(Boolean).join(" · "))}
-            {line("Shipper", p.parties?.shipper ?? null)}
-            {line("Customer", p.parties?.customer ?? null)}
-            {p.supplier && line("Supplier", p.supplier.name + (p.supplier.account ? ` · Acct ${p.supplier.account}` : ""))}
-            <div style={{ fontSize: 11, color: L.faint, marginTop: 4 }}>Tap to change in the Plan Trip window ›</div>
-          </>
-        ) : (
-          <div style={{ fontSize: 14, fontWeight: 800 }}>Plan Trip: set pickup, drop, shipper and customer <span style={{ color: L.faint }}>›</span></div>
-        )}
-      </button>
-      {p.supplier?.warning && <div style={{ fontSize: 12, color: "#fb923c", margin: "-2px 0 6px" }}>⚠ {p.supplier.warning}</div>}
-
-      {p.terminal && p.certNames && p.certNames.length > 0 && (
-        <div style={{ fontSize: 12, color: (p.certProblems ?? 0) > 0 ? "#fb923c" : L.muted, margin: "2px 0 4px" }}>
-          Trailer certification required here: {p.certNames.join(", ")}.
-          {(p.certProblems ?? 0) > 0 && ` ${p.certProblems} listed driver${p.certProblems === 1 ? "'s" : "s'"} trailer can't load as it stands.`}
-        </div>
-      )}
-
-      {p.timeline}
-    </div>
-  );
-}
-
 
 /** The one driver list: ranked cards for the whole roster. Tap a card to select the driver (builds the
  *  timeline once a drop location and terminal are picked); the open card has the driver-file button. */

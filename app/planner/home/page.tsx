@@ -197,6 +197,7 @@ import { SuppliersModal } from "../dispatch/SuppliersModal";
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
+import { DispatchNotices } from "./DispatchNotices";
 import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./DashboardChrome";
 import { QualificationCard, type QualTerminal } from "./QualificationStrip";
 import { openAccessSteps, useAccessQualifications } from "../components/access/useAccessSteps";
@@ -2146,6 +2147,7 @@ export default function HomePage() {
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
       <ConnectedDashHeader current="driver" line={equipmentLabel} />
 
+      <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
 
       <div className="d2-cols">

@@ -244,6 +244,7 @@ export function DispatchDashboardView(props: {
   planLoading?: boolean;
   // Planning a load: the picker card, how many drivers the expirations are narrowed to, and the not-carded chip.
   planner?: React.ReactNode;
+  report?: React.ReactNode; // PLAN: the validation report, first in the right column
   focusCount?: number | null;
   notCarded?: { count: number; shown: boolean; onToggle: () => void } | null;
   // Supplier contracts at or near their limit (count, worst level color) and how to open the list.
@@ -359,12 +360,13 @@ export function DispatchDashboardView(props: {
           <>
             {live ? <>{p.liveBoard}</> : (
               <>
-                {p.dispatchedBoard && <SectionLabel first>Dispatched · not begun</SectionLabel>}
+                {p.report && (<><SectionLabel first>Plan report</SectionLabel>{p.report}</>)}
+                {p.dispatchedBoard && <SectionLabel first={!p.report}>Dispatched · not begun</SectionLabel>}
                 {p.dispatchedBoard}
                 {p.cancelledBoard}
               </>
             )}
-            {p.drivers && (<><SectionLabel first={live ? false : !p.dispatchedBoard}>Drivers</SectionLabel>{p.drivers}</>)}
+            {p.drivers && (<><SectionLabel first={live ? false : !p.dispatchedBoard && !p.report}>Drivers</SectionLabel>{p.drivers}</>)}
           </>
         } />
       <FullscreenModal open={hosOpen} title={`Low on hours (${p.hosAlerts.length})`} onClose={() => setHosOpen(false)}>

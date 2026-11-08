@@ -61,48 +61,48 @@ import { useGeofenceWatch } from "@/lib/dispatch/useGeofenceWatch";
 import { useHosNotifier } from "@/lib/dispatch/useHosNotifier";
 import { enablePush } from "@/lib/push/subscribe";
 import { hosText, resetInfo } from "@/lib/telematics/progress";
-import { restWindow } from "@/lib/dispatch/dutyGraph";
 import { TrackSheet } from "../components/track/TrackSheet";
 import { CANCELLED_DAYS, useCancelledTrips, type CancelledTrip } from "@/lib/trips/useCancelledTrips";
 import { FleetBoard, type BoardProduct } from "./FleetBoard";
 import { DispatchDashboardView, type DispatchMode } from "./DispatchDashboardView";
 import { findConflicts, liveCounts } from "@/lib/dispatch/conflicts";
 import { applyAcks } from "@/lib/dispatch/acks";
-import { watchList, companyTerminalSet } from "@/lib/dispatch/watch";
+import { watchList } from "@/lib/dispatch/watch";
 import { useConflictNotifier } from "@/lib/dispatch/useConflictNotifier";
 import { reportText } from "./DispatchDashboardView";
 import FleetCardsModal from "@/app/admin/FleetCardsModal";
 import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
 import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
-import { SiteBoard } from "./SiteBoard";
 import { DriverFinder } from "./DriverFinder";
+import { PlanDayCard } from "./PlanDayCard";
+import { PlanReport } from "./PlanReport";
+import { MeetDriverSheet, type MeetCandidate } from "./MeetDriverSheet";
+import { meetNotices, sendDriverNotices } from "@/lib/dispatch/driverNotices";
+import { accessAt } from "@/lib/dispatch/planLoad";
+import { TerminalPickModal } from "./TerminalPickModal";
+import { usePlanDay } from "./usePlanDay";
+import { useTerminalCertMap, certBad } from "@/lib/dispatch/useTerminalCertMap";
 import { PlanTripSheet } from "./PlanTripSheet";
 import { useDriverDirectory } from "./useDriverDirectory";
 import type { FinderPerson } from "@/lib/dispatch/driverFinder";
-import { PlanLoadCard, DriverList, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
-import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
+import type { DayTrip, Others } from "@/lib/dispatch/validateDay";
+import { DriverList, type TerminalOption, type DriverEquip } from "./DriverList";
 import { SuppliersModal } from "./SuppliersModal";
-import { TimelineCard, type DayLeg } from "./TimelineCard";
 import { DispatchedBoard } from "./DispatchedBoard";
 import { AllocationModal, LEVEL_COLOR, type AllocRow } from "./AllocationModal";
 import { contractUsage, typicalGallons, wouldExceed, type Level } from "@/lib/dispatch/allocation";
 import { buildDispatchedTrip } from "@/lib/dispatch/dispatchTrip";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
-import { forecastLoad, typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
-import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
-import { useCompanySuppliers, useSupplierContracts } from "@/lib/suppliers/useSupplierAdmin";
-import { LocationPicker } from "../components/trip/LocationPicker";
+import { typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
+import { useCompanySuppliers } from "@/lib/suppliers/useSupplierAdmin";
 import { TripsBrowser } from "../components/trip/TripsBrowser";
 import { LocationsHub, locationsTool } from "../components/locations/LocationsHub";
 import { useDeliveryLocationList, useTripSettings } from "@/lib/trips/useTripData";
 import { classifyLive } from "@/lib/dispatch/liveGroups";
 import { locationTitle } from "@/lib/trips/deliveryLocations";
-import { settingsForTerminal, driveMinutesByDistance } from "@/lib/dispatch/forecast";
-import { groupsFromPlan, distinctOrders, slotPayloadFromPlan, type CompPlan, type GroupOverride } from "@/lib/dispatch/compPlan";
-import { useTrailerPlan } from "@/lib/dispatch/useTrailerPlan";
-import { CompartmentPlanCard } from "./CompartmentPlanCard";
-import { useFleetReports, usePlanData, useConflictAcks, useLocationDeliveries, useDriverEquipment, useTerminalCerts, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, swapDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
+import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
+import { useFleetReports, usePlanData, useConflictAcks, useDriverEquipment, useTripHistory, useTimelineSettings, useDispatchedTrips, writeDispatched, cancelDispatched, swapDispatched, useSupplierUsage, useCompanyContracts } from "@/lib/dispatch/useDispatchData";
 import { onBoard, activePickup, plannedDeliveries } from "@/lib/trips/tripFlow";
 
 import { usePending } from "@/lib/ui/pending";
@@ -119,6 +119,7 @@ function expStateFor(iso: string | null | undefined, access = false): ExpState {
 }
 const DARK_EXP_COLOR = EXPIRY_COLOR;
 
+type PriorLeg = { startMs: number; endMs: number; driveMin: number; locationLL: { lat: number; lon: number } | null };
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun..Sat, matches the mockup's day-icon row
 
 type DriverIdentity = {
@@ -242,9 +243,7 @@ export default function DispatchPage() {
   // ── Dispatch Dashboard (no driver picked) ─────────────────────────────────
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
-  const [planLocationId, setPlanLocationId] = useState<string | null>(null);
-  const [planTerminalId, setPlanTerminalId] = useState<string | null>(null);
-  const livePositions = useFleetPositions(companyId || null, mode === "live" || !!planTerminalId || !!planLocationId);
+  const livePositions = useFleetPositions(companyId || null, mode === "live");
   const [hosNonce, setHosNonce] = useState(0);
   const fleetHos = useFleetHos(companyId || null, true, hosNonce);
   // Picking a driver for the timeline: link them to Geotab now (if they match), then reload clocks.
@@ -373,15 +372,6 @@ export default function DispatchPage() {
     if (!dest || !pos || Date.now() - Date.parse(pos.at ?? "") > 30 * 60000) return null;
     return Date.now() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, dest) * 60000;
   };
-  // The same for a truck headed to its next delivery.
-  const storeEta = (tripId: string): number | null => {
-    const ft = fleetTrips.find((f) => f.trip.trip_id === tripId);
-    const d = ft ? plannedDeliveries(ft.deliveries)[0] : null;
-    const dest = d?.location_id ? locationLLOf(d.location_id) : null;
-    const pos = ft?.trip.truck_id ? livePositions.get(ft.trip.truck_id) : undefined;
-    if (!dest || !pos || Date.now() - Date.parse(pos.at ?? "") > 30 * 60000) return null;
-    return Date.now() + driveMinutesByDistance({ lat: pos.lat, lon: pos.lon }, dest) * 60000;
-  };
   const rawConflicts = useMemo(
     () => findConflicts(fleetTrips, fleetReports.reports, fleetReports.plannedByLoad, arrivalEta),
     [fleetTrips, fleetReports.reports, fleetReports.plannedByLoad, livePositions, terminalsCatalog], // eslint-disable-line react-hooks/exhaustive-deps
@@ -398,9 +388,6 @@ export default function DispatchPage() {
     () => liveCounts(fleetTrips.map((f) => ({ ...f, loadedComps: onBoard(f.compLoads).length }))),
     [fleetTrips],
   );
-  // ── Planning a load: drop location -> terminal -> drivers ───────────────
-  const [showNotCarded, setShowNotCarded] = useState(false);
-  const [locPickerOpen, setLocPickerOpen] = useState(false);
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
   const [locsOpen, setLocsOpen] = useState(false); // the Locations tool
   const [tripsOpen, setTripsOpen] = useState(false); // the Trips tool
@@ -419,12 +406,6 @@ export default function DispatchPage() {
       }),
     [fleetTrips, fleet.locations, tripSettings.loading_delay_threshold_minutes, tripSettings.delivery_delay_threshold_minutes, liveTick, livePositions, terminalsCatalog, locList.locations]); // eslint-disable-line react-hooks/exhaustive-deps
   const geo = useGeofenceWatch({ userId: authUserId || null, companyId: companyId || null, trips: fleetTrips, locations: fleet.locations, positions: livePositions, terminalLL: terminalLLOf, locationLL: locationLLOf });
-  const history = useLocationDeliveries(companyId || null, planLocationId);
-  const planLocation = locList.locations.find((l) => l.location_id === planLocationId) ?? null;
-  const planTerminal = useMemo<TerminalOption | null>(() => {
-    const t = planTerminalId ? terminalsCatalog.find((x) => String(x.terminal_id) === planTerminalId) : null;
-    return t ? { id: String(t.terminal_id), name: t.terminal_name ?? "Terminal", place: t.city ? `${t.city}${t.state ? `, ${t.state}` : ""}` : null, used: false } : null;
-  }, [planTerminalId, terminalsCatalog]);
   const terminalOptions = useMemo<TerminalOption[]>(() => {
     const used = new Set(plan.usedTerminalIds);
     return terminalsCatalog.map((t) => ({
@@ -433,32 +414,15 @@ export default function DispatchPage() {
       city: t.city ?? null, state: t.state ?? null,
     }));
   }, [terminalsCatalog, plan.usedTerminalIds]);
-  // Supplier at the chosen terminal (warn-only: a paused contract never blocks).
-  const [planSupplierId, setPlanSupplierId] = useState<string | null>(null);
   const [suppliersOpen, setSuppliersOpen] = useState<null | "pick" | "manage">(null);
   const canManageSuppliers = shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin;
-  const termSuppliers = useTerminalSuppliers(companyId || null, planTerminalId);
   const companySuppliers = useCompanySuppliers(companyId || null);
-  const termContracts = useSupplierContracts(companyId || null, planTerminalId);
-  const planSupplier = useMemo(() => {
-    const s = planSupplierId ? companySuppliers.all.find((x) => x.supplier_id === planSupplierId) : null;
-    if (!s) return null;
-    const row = termSuppliers.bySupplier.get(s.supplier_id);
-    const con = termContracts.contracts.get(s.supplier_id);
-    const warning = con?.paused ? `Contract paused${con.paused_note ? `: ${con.paused_note}` : ""}` : row?.issue_at ? "Reported not working" : null;
-    return { name: s.name, account: row?.account_number ?? null, warning };
-  }, [planSupplierId, companySuppliers.all, termSuppliers.bySupplier, termContracts.contracts]);
   const busyByDriver = useMemo(() => {
     const m = new Map<string, string>();
     for (const f of fleetTrips) m.set(f.trip.driver_id, f.trip.status === "parked" ? "Parked" : "On a load");
     return m;
   }, [fleetTrips]);
-  const planning = !!planLocationId || !!planTerminalId;
-  const ranked = useMemo(() => rankDrivers({
-    roster: regionRoster, deliveries: history.rows, access: plan.input?.access,
-    terminalId: planTerminalId, renewalDays: planTerminalId ? plan.input?.terminals.get(planTerminalId)?.renewal_days ?? null : null,
-    busy: busyByDriver,
-  }), [regionRoster, history.rows, plan.input, planTerminalId, busyByDriver]);
+  const ranked = useMemo(() => rankDrivers({ roster: regionRoster, deliveries: [], access: plan.input?.access, busy: busyByDriver }), [regionRoster, plan.input, busyByDriver]);
 
   // Equipment each driver holds, and the terminal's trailer-certification check.
   const heldEquipment = useDriverEquipment(companyId || null);
@@ -477,37 +441,23 @@ export default function DispatchPage() {
   const finderTruckUsers = useMemo(
     () => directory.truckUse.map((u) => ({ truckName: plan.input?.trucks.get(u.truckId) ?? "", driverId: u.driverId })).filter((u) => u.truckName),
     [directory.truckUse, plan.input]);
-  const certs = useTerminalCerts(companyId || null, planTerminalId);
   const equipFor = useMemo(() => {
     const trucks = plan.input?.trucks, trailers = plan.input?.trailers;
     return (userId: string): DriverEquip | null => {
       const h = heldEquipment.get(userId);
       if (!h) return null;
-      return {
-        truck: trucks?.get(h.truckId) ?? "—", trailer: trailers?.get(h.trailerId) ?? "—", since: h.since,
-        cert: planTerminalId ? trailerCert(certs.types, certs.records, h.trailerId) : null,
-        thumb: certs.thumbs.get(h.trailerId) ?? null,
-      };
+      return { truck: trucks?.get(h.truckId) ?? "—", trailer: trailers?.get(h.trailerId) ?? "—", since: h.since, cert: null, thumb: null };
     };
-  }, [heldEquipment, plan.input, certs.types, certs.records, certs.thumbs, planTerminalId]);
-  const certProblems = useMemo(() => {
-    if (!planTerminalId || certs.types.length === 0) return 0;
-    const list = showNotCarded ? ranked.notCarded : ranked.ready;
-    return list.filter((d) => { const h = heldEquipment.get(d.userId); return !!h && certBlocks(trailerCert(certs.types, certs.records, h.trailerId)); }).length;
-  }, [planTerminalId, certs.types, certs.records, showNotCarded, ranked, heldEquipment]);
+  }, [heldEquipment, plan.input]);
 
-  // ── Timeline for the driver being considered ──────────────────────────────
+  // ── The driver being planned for ──────────────────────────────
   const [tlDriverId, setTlDriverId] = useState<string | null>(null);
   const [findTruckOpen, setFindTruckOpen] = useState(false);
   const dispatched = useDispatchedTrips(companyId || null);
-  const [tlStart, setTlStart] = useState<number | null>(null);          // dispatcher's own start time
-  const [dayPlan, setDayPlan] = useState<Record<string, DayLeg[]>>({});  // planning only, this screen
   const tripHistory = useTripHistory(companyId || null);
   const tlSettings = useTimelineSettings(companyId || null);
-  const tlTz = (terminalsCatalog.find((t) => String(t.terminal_id) === planTerminalId) as any)?.timezone ?? null;
-  const dayLegs = (tlDriverId && dayPlan[tlDriverId]) || [];
   // Loads already dispatched to this driver and not begun: the new load is added after them.
-  const priorLegs = useMemo<DayLeg[]>(() => {
+  const priorLegs = useMemo<PriorLeg[]>(() => {
     if (!tlDriverId) return [];
     const ll = (id: string | null) => { const l = id ? locList.locations.find((x) => x.location_id === id) : null; return l && l.lat != null && l.lon != null ? { lat: l.lat, lon: l.lon } : null; };
     return dispatched.trips
@@ -518,14 +468,10 @@ export default function DispatchPage() {
         // Loads dispatched before the end time was recorded are assumed to take 4 hours.
         const end = t.planned_end_at ? Date.parse(t.planned_end_at) : start + 4 * 3600000;
         const loc = t.locationId ? locList.locations.find((x) => x.location_id === t.locationId) : null;
-        return {
-          startMs: start, endMs: end, driveMin: t.planned_drive_min ?? 0, terminal: t.terminal ?? "Terminal", location: loc ? locationTitle(loc) : "Delivery", locationLL: ll(t.locationId),
-          terminalId: "", city: null, state: null, locationId: t.locationId ?? "", deliveryType: "drop" as const,
-          supplierId: t.supplier_id, orderNumber: t.order ?? "", truckId: null, trailerId: null, warnings: [],
-        };
+        return { startMs: start, endMs: end, driveMin: t.planned_drive_min ?? 0, locationLL: ll(t.locationId) };
       });
   }, [tlDriverId, dispatched.trips, locList.locations]);
-  const allLegs = useMemo(() => [...priorLegs, ...dayLegs], [priorLegs, dayLegs]);
+  const allLegs = priorLegs;
   const typicalMin = useMemo(() => (tlDriverId ? typicalStartMinutes(tripHistory.trips, tlDriverId) : null), [tripHistory.trips, tlDriverId]);
   const defaultStartMs = useMemo(() => {
     const now = Date.now();
@@ -536,37 +482,12 @@ export default function DispatchPage() {
     return typical > now ? typical : next;
   }, [typicalMin, tlDriverId]); // eslint-disable-line react-hooks/exhaustive-deps
   const chainedStart = allLegs.length ? allLegs[allLegs.length - 1].endMs : null;
-  const startMs = tlStart ?? chainedStart ?? defaultStartMs;
-  const termRow = planTerminalId ? terminalsCatalog.find((t) => String(t.terminal_id) === planTerminalId) : null;
-  const forecast = useMemo(() => {
-    if (!tlDriverId || !planLocation || !termRow) return null;
-    const ll = (o: { lat?: number | null; lon?: number | null }) => (o.lat != null && o.lon != null ? { lat: Number(o.lat), lon: Number(o.lon) } : null);
-    return forecastLoad({
-      startMs, startFrom: allLegs.length ? allLegs[allLegs.length - 1].locationLL : null,
-      terminal: { id: String(termRow.terminal_id), name: termRow.terminal_name ?? "Terminal", tz: tlTz, ll: ll(termRow as any) },
-      location: { id: planLocation.location_id, name: locationTitle(planLocation), ll: ll(planLocation) },
-      history: tripHistory.trips, settings: settingsForTerminal(tlSettings, termRow as any),
-      dutyStartMs: allLegs[0]?.startMs ?? startMs, drivingMinSoFar: allLegs.reduce((a, l) => a + l.driveMin, 0),
-      hos: (() => { const h = fleetHos.get(tlDriverId); return h ? { driveLeftMin: h.driveLeftMin, dutyLeftMin: h.dutyLeftMin, asOfMs: Date.parse(h.at) } : null; })(),
-    });
-  }, [tlDriverId, planLocation, termRow, startMs, allLegs, tripHistory.trips, tlSettings, tlTz, fleetHos]);
+  const startMs = chainedStart ?? defaultStartMs; // only for the call-out check; the day's own start lives in usePlanDay
   // Loads can't overlap: each one starts when the one before it ends, or later.
   // A driver who called out for the day can't be planned for it until the call-out is corrected.
   const activeCallouts = useActiveCallouts(companyId || null);
   const [calloutsOpen, setCalloutsOpen] = useState(false);
-  const calloutHit = useMemo(() => (tlDriverId ? calloutBlock(activeCallouts.rows, tlDriverId, startMs, tlTz) : null), [activeCallouts.rows, tlDriverId, startMs, tlTz]);
-  const blockMsg = useMemo(() => {
-    if (calloutHit) return blockText(calloutHit, plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "The driver") + " Open Call-outs below.";
-    const last = allLegs[allLegs.length - 1];
-    if (!last || startMs >= last.endMs) return null;
-    return `Load ${allLegs.length} ends about ${clock(last.endMs)}. Start this one then or later.`;
-  }, [allLegs, startMs, calloutHit]);
-  // The load as planned right now, ready to stack or dispatch.
-  const [orderNumber, setOrderNumber] = useState("");
-  const [shipper, setShipper] = useState("");
-  const [customer, setCustomer] = useState("");
-  const [dispatching, setDispatching] = useState(false);
-  const [dispatchMsg, setDispatchMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const calloutHit = useMemo(() => (tlDriverId ? calloutBlock(activeCallouts.rows, tlDriverId, startMs, Intl.DateTimeFormat().resolvedOptions().timeZone) : null), [activeCallouts.rows, tlDriverId, startMs]);
   const dispatchedShown = useMemo(() => dispatched.trips.filter((t) => driverInRegion(t.driver_id)), [dispatched.trips, regionOn, regionDriverIds]); // eslint-disable-line react-hooks/exhaustive-deps
   // ── Supplier allocation (contract limits vs loaded + booked) ──────────────
   const usageItems = useSupplierUsage(companyId || null);
@@ -587,168 +508,70 @@ export default function DispatchPage() {
     const worstLevel = (["over", "full", "near"] as Level[]).find((l) => live.some((r) => r.usage.level === l)) ?? "none";
     return { count: live.length, color: LEVEL_COLOR[worstLevel as Level] };
   }, [allocRows]);
-  // The load being planned, against the chosen supplier's limits at its start time.
-  const allocWarning = useMemo(() => {
-    if (!planSupplierId || !planTerminalId) return null;
-    const c = allContracts.find((x) => x.supplier_id === planSupplierId && x.terminal_id === planTerminalId);
-    if (!c || c.paused) return null;
-    const u = contractUsage(c, usageItems, startMs, tzOfTerminal(planTerminalId));
-    const add = c.limit_basis === "loads" ? 1 : typicalGallons(usageItems, planSupplierId, planTerminalId);
-    return wouldExceed(u, planSupplier?.name ?? "This supplier", add);
-  }, [planSupplierId, planTerminalId, allContracts, usageItems, startMs, planSupplier]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Compartment plan (optional): products per compartment, order and supplier per product ──
-  const [planTrailerOverride, setPlanTrailerOverride] = useState<string | null>(null);
-  const [compPlan, setCompPlan] = useState<CompPlan>({});
-  const [groupOverrides, setGroupOverrides] = useState<Record<string, GroupOverride>>({});
-  const [activeTrailerSlot, setActiveTrailerSlot] = useState<number | null>(null);
-  const [supPickFor, setSupPickFor] = useState<string | null>(null);
-  const driverTrailerId = tlDriverId ? heldEquipment.get(tlDriverId)?.trailerId ?? null : null;
-  const effectiveTrailerId = planTrailerOverride ?? driverTrailerId;
-  const trailerPlan = useTrailerPlan(companyId || null, effectiveTrailerId, planTerminalId);
-  useEffect(() => { setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null); }, [effectiveTrailerId]);
-  useEffect(() => { setPlanTrailerOverride(null); }, [tlDriverId]);
-  const planCatalog = useMemo(() => (catalog ?? []).filter((x) => x.active !== false).map((x) => ({
-    product_id: x.product_id, name: x.display_name || x.product_name, code: x.button_code || (x.display_name || x.product_name).split(" ")[0], hex: x.hex_code,
-  })), [catalog]);
-  const planGroups = useMemo(
-    () => groupsFromPlan(compPlan, groupOverrides, { orderNumber, supplierId: planSupplierId }),
-    [compPlan, groupOverrides, orderNumber, planSupplierId]);
-  const supplierNameOf = (id: string | null) => (id ? companySuppliers.all.find((x) => x.supplier_id === id)?.name ?? null : null);
-  // Each group that has its own supplier is checked against that supplier's limits too.
-  const groupAllocWarnings = useMemo(() => {
-    if (!planTerminalId) return [] as string[];
-    const out: string[] = [];
-    for (const g of planGroups) {
-      if (!g.supplierId || g.supplierId === planSupplierId) continue;
-      const c = allContracts.find((x) => x.supplier_id === g.supplierId && x.terminal_id === planTerminalId);
-      if (!c || c.paused) continue;
-      const u = contractUsage(c, usageItems, startMs, tzOfTerminal(planTerminalId));
-      const add = c.limit_basis === "loads" ? 1 : typicalGallons(usageItems, g.supplierId, planTerminalId);
-      const w = wouldExceed(u, supplierNameOf(g.supplierId) ?? "This supplier", add);
-      if (w) out.push(w);
-    }
-    return out;
-  }, [planGroups, planTerminalId, planSupplierId, allContracts, usageItems, startMs]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const warnings = useMemo(() => {
-    const w: string[] = [];
-    for (const f of forecast?.flags ?? []) if (f.severity !== "info") w.push(f.text);
-    // First load: a start before the driver's 10 hour reset completes.
-    const rs = !allLegs.length && tlDriverId ? resetInfo(fleetHos.get(tlDriverId) ?? { status: null }, Date.now()) : null;
-    if (rs && startMs < rs.resetAtMs) w.push(`Starts before the driver is rested: their 10 hour reset completes ${clock(rs.resetAtMs)}.`);
-    if (tlDriverId && planTerminalId && certs.types.length) {
-      const h = heldEquipment.get(tlDriverId);
-      if (h && certBlocks(trailerCert(certs.types, certs.records, h.trailerId))) w.push("The driver's trailer has no current certification for this terminal.");
-    }
-    if (planSupplier?.warning) w.push(planSupplier.warning);
-    if (allocWarning) w.push(allocWarning);
-    for (const x of groupAllocWarnings) w.push(x);
-    return w;
-  }, [forecast, tlDriverId, planTerminalId, certs, heldEquipment, planSupplier, allocWarning, groupAllocWarnings, allLegs, startMs, fleetHos]);
-  const buildLeg = (): DayLeg | null => {
-    if (!tlDriverId || !forecast || !planLocation || !termRow) return null;
-    const h = heldEquipment.get(tlDriverId);
+  // ── Plan validation for the picked driver: trips copied from the TMS, checked together ──
+  const [newTerminalFor, setNewTerminalFor] = useState<string | null>(null);
+  const [meetIssue, setMeetIssue] = useState<import("@/lib/dispatch/validateDay").Issue | null>(null);
+  const [meetBusy, setMeetBusy] = useState(false);
+  const [meetErr, setMeetErr] = useState<string | null>(null);
+  const certMap = useTerminalCertMap(companyId || null);
+  const planContext = useMemo(() => {
+    if (!tlDriverId) return null;
+    const ll = (o: { lat?: number | null; lon?: number | null }) => (o.lat != null && o.lon != null ? { lat: Number(o.lat), lon: Number(o.lon) } : null);
+    const terminals = new Map(terminalsCatalog.map((t: any) => [String(t.terminal_id), {
+      name: t.terminal_name ?? "Terminal", tz: t.timezone ?? null, ll: ll(t), renewalDays: t.renewal_days ?? null,
+      gauging_cutoff: t.gauging_cutoff ?? null, gauging_minutes: t.gauging_minutes ?? null,
+    }]));
+    const locations = new Map(locList.locations.map((l) => [l.location_id, { name: locationTitle(l), ll: ll(l) }]));
+    const nameOf = (id: string) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver";
+    const others = (match: (t: (typeof dispatched.trips)[number]) => boolean, at: (t: (typeof dispatched.trips)[number]) => number): Others =>
+      dispatched.trips.filter((t) => t.driver_id !== tlDriverId && match(t) && t.planned_start_at).map((t) => ({ name: nameOf(t.driver_id), etaMs: at(t) }));
+    const trailerId = heldEquipment.get(tlDriverId)?.trailerId ?? null;
+    const h = fleetHos.get(tlDriverId);
+    const rs = resetInfo(h ?? { status: null }, Date.now());
     return {
-      startMs, endMs: forecast.endMs, driveMin: forecast.driveMinutes, terminal: termRow.terminal_name ?? "Terminal", location: locationTitle(planLocation),
-      locationLL: planLocation.lat != null && planLocation.lon != null ? { lat: planLocation.lat, lon: planLocation.lon } : null,
-      terminalId: String(termRow.terminal_id), city: termRow.city ?? null, state: termRow.state ?? null,
-      locationId: planLocation.location_id, deliveryType: planLocation.delivery_type,
-      supplierId: planSupplierId, orderNumber: orderNumber.trim(), truckId: h?.truckId ?? null, trailerId: effectiveTrailerId ?? h?.trailerId ?? null, warnings,
-      groups: planGroups.length ? planGroups : undefined,
-      shipper: shipper.trim(), customer: customer.trim(),
+      startFrom: null, terminals, locations, history: tripHistory.trips, driverId: tlDriverId, settings: tlSettings,
+      hos: h ? { driveLeftMin: h.driveLeftMin, dutyLeftMin: h.dutyLeftMin, asOfMs: Date.parse(h.at) } : null,
+      access: (plan.input?.access ?? []).filter((a) => a.user_id === tlDriverId).map((a) => ({ terminal_id: String(a.terminal_id), carded_on: a.carded_on })),
+      todayIso: new Date().toISOString().slice(0, 10),
+      trailerCertBad: (tid: string) => certBad(certMap, tid, trailerId),
+      allocWarning: (t: DayTrip, atMs: number) => {
+        if (!t.supplierId) return null;
+        const c = allContracts.find((x) => x.supplier_id === t.supplierId && x.terminal_id === t.terminalId);
+        if (!c || c.paused) return null;
+        const u = contractUsage(c, usageItems, atMs, tzOfTerminal(t.terminalId));
+        const add = c.limit_basis === "loads" ? 1 : typicalGallons(usageItems, t.supplierId, t.terminalId);
+        return wouldExceed(u, companySuppliers.all.find((x) => x.supplier_id === t.supplierId)?.name ?? "This supplier", add);
+      },
+      supplierWarning: (t: DayTrip) => {
+        const c = t.supplierId ? allContracts.find((x) => x.supplier_id === t.supplierId && x.terminal_id === t.terminalId) : null;
+        return c?.paused ? `${companySuppliers.all.find((x) => x.supplier_id === t.supplierId)?.name ?? "The supplier"}'s contract here is paused.` : null;
+      },
+      othersAtDrop: (lid: string) => others((t) => t.locationId === lid, (t) => Date.parse(t.planned_end_at ?? t.planned_start_at!)),
+      othersAtTerminal: (tid: string) => { const nm = terminals.get(tid)?.name; return others((t) => !!nm && t.terminal === nm, (t) => Date.parse(t.planned_start_at!)); },
+      credentials: (plan.input ? planAlerts(plan.input, 30) : [])
+        .filter((a) => a.subjectId === tlDriverId && ["license", "medical", "twic", "badge"].includes(a.kind)).map((a) => ({ label: a.label, days: a.days })),
+      calloutText: calloutHit ? blockText(calloutHit, nameOf(tlDriverId)) : null,
+      restText: rs && defaultStartMs < rs.resetAtMs ? `Starts before the driver is rested: their 10 hour reset completes ${clock(rs.resetAtMs)}.` : null,
     };
-  };
-  // Shipper and customer: prefilled from this driver's last trip to the same drop (customer) or any last trip.
-  const prefilledFor = useRef<string>("");
-  const customerTouched = useRef(false);
-  const readParties = (): { shipper: string; customerByLoc: Record<string, string> } => {
-    try { const j = JSON.parse(localStorage.getItem("proTankr:dispatchParties") || "{}"); return { shipper: j.shipper || "", customerByLoc: j.customerByLoc || {} }; } catch { return { shipper: "", customerByLoc: {} }; }
-  };
-  const rememberParties = (loc: string | null | undefined) => {
-    try {
-      const cur = readParties();
-      if (shipper.trim()) cur.shipper = shipper.trim();
-      if (loc && customer.trim()) cur.customerByLoc[loc] = customer.trim();
-      localStorage.setItem("proTankr:dispatchParties", JSON.stringify(cur));
-    } catch { /* ignore */ }
-  };
-  useEffect(() => {
-    if (!tlDriverId || !planLocation) return;
-    const key = `${tlDriverId}|${planLocation.location_id}`;
-    if (prefilledFor.current === key) return;
-    prefilledFor.current = key;
-    // Keep what's already typed; fill blanks from what was used last (this device), then from trip history.
-    const saved = readParties();
-    setShipper((s) => s || saved.shipper || "");
-    setCustomer((c) => (customerTouched.current ? c : saved.customerByLoc[planLocation.location_id] || c || ""));
-    let off = false;
-    void supabase.from("trips").select("shipper, customer, trip_deliveries(location_id)")
-      .eq("driver_id", tlDriverId).or("shipper.not.is.null,customer.not.is.null").neq("status", "cancelled")
-      .order("created_at", { ascending: false }).limit(30)
-      .then(({ data }) => {
-        if (off) return;
-        const rows = (data ?? []) as { shipper: string | null; customer: string | null; trip_deliveries: { location_id: string | null }[] }[];
-        const same = rows.find((r) => r.customer && r.trip_deliveries?.some((d) => d.location_id === planLocation.location_id));
-        setShipper((s) => s || rows.find((r) => r.shipper)?.shipper || "");
-        setCustomer((c) => c || (customerTouched.current ? "" : same?.customer || rows.find((r) => r.customer)?.customer || ""));
-      });
-    return () => { off = true; };
-  }, [tlDriverId, planLocation]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const addLeg = () => {
-    const leg = buildLeg();
-    if (!leg || !tlDriverId || blockMsg || planGroups.length === 0) return;
-    rememberParties(leg.locationId);
-    setDayPlan((m) => ({ ...m, [tlDriverId]: [...(m[tlDriverId] ?? []), leg] }));
-    // Next load: shipper stays, customer re-fills for the next drop.
-    customerTouched.current = false; setCustomer(""); prefilledFor.current = "";
-    setPlanLocationId(null); setPlanTerminalId(null); setPlanSupplierId(null); setShowNotCarded(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTlStart(null); // the next load starts when this one ends
-    setOrderNumber(""); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
-  };
-  const dispatchNow = async () => {
-    const leg = buildLeg();
-    if (!leg || !tlDriverId || !companyId || !authUserId) return;
-    if (blockMsg) { setDispatchMsg({ ok: false, text: blockMsg }); return; }
-    if (planGroups.length === 0) { setDispatchMsg({ ok: false, text: "Pick a product for at least one compartment first." }); return; }
-    const legs = [...dayLegs, leg];
-    rememberParties(leg.locationId);
-    setDispatching(true); setDispatchMsg(null);
-    try {
-      const nums = legs.flatMap((l) => (l.groups?.length ? distinctOrders(l.groups) : [l.orderNumber])).filter(Boolean);
-      const dup = nums.find((n, i) => nums.findIndex((m) => m.toLowerCase() === n.toLowerCase()) !== i);
-      if (dup) { setDispatchMsg({ ok: false, text: `Order ${dup} is on two of these loads.` }); return; }
-      const taken = nums.length ? await serverOrderConflicts(companyId, nums, null) : [];
-      if (taken.length) { setDispatchMsg({ ok: false, text: `Order ${taken[0]} is already on another trip.` }); return; }
-      let seq = priorLegs.length;
-      for (const l of legs) {
-        seq++;
-        const rows = buildDispatchedTrip({ companyId, dispatcherId: authUserId, driverId: tlDriverId, leg: { ...l, terminalName: l.terminal }, seq }, { now: new Date(), newId: () => crypto.randomUUID() });
-        const err = await writeDispatched(rows as any);
-        if (err) { setDispatchMsg({ ok: false, text: seq > 1 ? `Sent ${seq - 1} of ${legs.length}. Then: ${err}` : err }); dispatched.reload(); return; }
-      }
-      const name = plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "the driver";
-      setDispatchMsg({ ok: true, text: `Dispatched ${legs.length} load${legs.length === 1 ? "" : "s"} to ${name}.` });
-      setDayPlan((m) => ({ ...m, [tlDriverId]: [] }));
-      setTlStart(null); setOrderNumber(""); setPlanSupplierId(null); setCompPlan({}); setGroupOverrides({}); setActiveTrailerSlot(null);
-      // Start the next load from a blank route; the one just sent now shows as "Sent" above it.
-      setPlanLocationId(null); setPlanTerminalId(null); setShowNotCarded(false);
-      dispatched.reload();
-    } finally {
-      setDispatching(false);
-    }
-  };
+  }, [tlDriverId, terminalsCatalog, locList.locations, plan.roster, plan.input, dispatched.trips, heldEquipment, fleetHos, tripHistory.trips, tlSettings, certMap, allContracts, usageItems, companySuppliers.all, calloutHit, defaultStartMs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const held = tlDriverId ? heldEquipment.get(tlDriverId) : null;
+  const day = usePlanDay({
+    companyId: companyId || null, dispatcherId: authUserId || null, driverId: tlDriverId, context: planContext, defaultStartMs,
+    prior: priorLegs.map((l) => ({ startMs: l.startMs, endMs: l.endMs, driveMin: l.driveMin, locationLL: l.locationLL })),
+    truckId: held?.truckId ?? null, trailerId: held?.trailerId ?? null,
+    terminalName: (id) => (terminalsCatalog.find((t) => String(t.terminal_id) === id) as any)?.terminal_name ?? "Terminal",
+    terminalPlace: (id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === id) as any; return { city: t?.city ?? null, state: t?.state ?? null }; },
+    onDispatched: () => dispatched.reload(),
+  });
 
   const alerts = useMemo(
-    () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], planning ? ranked.focusIds : null)
+    () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], null)
       .filter((a) => {
         if (!regionOn) return true;
         if (!a.isEquipment) return regionDriverIds.has(a.subjectId);
         return regionSel.has(plan.unitRegions.get(a.subjectId)?.trim() || NO_REGION);
       }),
-    [plan.input, planning, ranked.focusIds, regionOn, regionDriverIds, regionSel, plan.unitRegions]);
+    [plan.input, regionOn, regionDriverIds, regionSel, plan.unitRegions]);
   const pCounts = useMemo(() => planCounts(alerts), [alerts]);
   const terminalInfo = (id: string) => {
     const t = terminalsCatalog.find((x) => String(x.terminal_id) === id);
@@ -967,10 +790,10 @@ export default function DispatchPage() {
       ...sharedTools,
     ];
     const driverListEl = (
-      <div id="dispatch-drivers"><DriverList result={ranked} showNotCarded={showNotCarded && !!planTerminalId}
-          location={planLocation} terminal={planTerminal} historyLoading={history.loading} historyError={history.error}
+      <div id="dispatch-drivers"><DriverList result={ranked} showNotCarded={false}
+          location={null} terminal={null}
           selectedDriverId={tlDriverId}
-          onSelectDriver={(id) => { setTlDriverId((cur) => (cur === id ? null : id)); setTlStart(null); if (planLocationId && planTerminalId) window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onSelectDriver={(id) => setSelectedDriverId(id)}
           onOpenDriver={(id) => setSelectedDriverId(id)} equipFor={equipFor} hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)} /></div>
     );
     return (
@@ -986,13 +809,13 @@ export default function DispatchPage() {
         regionNote={regionOn ? `Filtered to region: ${[...regionSel].join(", ")}` : null}
         alerts={alerts} planCounts={pCounts} planLoading={plan.loading}
         allocation={allContracts.some((c) => c.per_day != null || c.per_week != null) ? { ...allocChip, onOpen: () => setAllocOpen(true) } : null}
-        focusCount={planning ? ranked.focusIds.size : null}
-        notCarded={planTerminalId && planLocationId ? { count: ranked.notCarded.length, shown: showNotCarded, onToggle: () => setShowNotCarded((v) => !v) } : null}
+        focusCount={null}
+        notCarded={null}
         planner={(
           <div>
-            {!tlDriverId && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", margin: "0 0 8px" }}>Step 1 · Find the driver for this load.</div>}
+            {!tlDriverId && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", margin: "0 0 8px" }}>Find the driver to build the plan around.</div>}
             <div id="dispatch-drivers"><DriverFinder people={finderPeople} heldTruck={finderHeld} truckUsers={finderTruckUsers}
-              selectedId={tlDriverId} onSelect={(id) => { setTlDriverId(id); setTlStart(null); }}
+              selectedId={tlDriverId} onSelect={(id) => setTlDriverId(id)}
               statusFor={(id) => ({ busy: busyByDriver.get(id) ?? null, hos: fleetHos.get(id) ? hosText(fleetHos.get(id)!).text : null })}
               shiftFor={(id) => directory.shifts.get(id)}
               accessFor={(id) => (plan.input?.access ?? []).filter((a) => a.user_id === id)}
@@ -1000,47 +823,16 @@ export default function DispatchPage() {
               equipLine={(id) => { const e = equipFor(id); return e ? `Truck ${e.truck} · Trailer ${e.trailer}` : null; }}
               onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
             {tlDriverId && (
-          <PlanLoadCard location={planLocation} terminal={planTerminal} result={ranked}
-            historyLoading={history.loading} historyError={history.error} showNotCarded={showNotCarded && !!planTerminalId}
-            onEditPlan={() => setPlanTripFor(tlDriverId)} parties={{ shipper, customer }}
-            timeline={tlDriverId && planLocation && planTerminalId ? (
-              <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
-                chained={allLegs.length > 0 && tlStart == null} lockedCount={priorLegs.length} blockMsg={blockMsg} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
-                terminalPlace={planTerminal?.place ?? null} locationPlace={[planLocation?.city, planLocation?.state].filter(Boolean).join(", ") || null}
-                hosLine={fleetHos.get(tlDriverId) ? hosText(fleetHos.get(tlDriverId)!) : null}
-                rest={restWindow(fleetHos.get(tlDriverId), typicalMin)}
-                dayLegs={allLegs} historyLoading={tripHistory.loading} onStart={setTlStart} onAdd={addLeg}
-                onRemoveLeg={(i) => setDayPlan((m) => ({ ...m, [tlDriverId]: (m[tlDriverId] ?? []).filter((_, j) => j !== i - priorLegs.length) }))}
-                onClearDay={() => setDayPlan((m) => ({ ...m, [tlDriverId]: [] }))}
-                compartments={(
-                  <CompartmentPlanCard
-                    trailerName={plan.input?.trailers.get(effectiveTrailerId ?? "") ?? ""}
-                    trailerOptions={[...(plan.input?.trailers ?? new Map<string, string>()).entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))}
-                    onTrailer={setPlanTrailerOverride} usingDriversTrailer={planTrailerOverride == null}
-                    comps={trailerPlan.comps} catalog={planCatalog} terminalProductIds={trailerPlan.terminalProductIds}
-                    plan={compPlan} onPlan={setCompPlan} slots={trailerPlan.slots}
-                    activeSlot={activeTrailerSlot} onActiveSlot={setActiveTrailerSlot}
-                    onSaveSlot={(slot, name) => trailerPlan.saveSlot(slot, name, slotPayloadFromPlan(compPlan, trailerPlan.comps.map((c) => c.n)), authUserId || "")}
-                    onClearSlot={trailerPlan.clearSlot}
-                    groups={planGroups} supplierName={supplierNameOf} defaultOrder={orderNumber} slotError={trailerPlan.error}
-                    onGroupOrder={(pid, v) => {
-                      // The first product's order is the default for the rest.
-                      if (pid === planGroups[0]?.productId) { setOrderNumber(v); setGroupOverrides((m) => ({ ...m, [pid]: { ...m[pid], orderNumber: undefined } })); }
-                      else setGroupOverrides((m) => ({ ...m, [pid]: { ...m[pid], orderNumber: v } }));
-                    }}
-                    onPickSupplier={(pid) => { setSupPickFor(pid); setSuppliersOpen("pick"); }} />
-                )}
-                orderNumber={orderNumber} onOrder={setOrderNumber} hideOrder={false} needProduct={planGroups.length === 0} warnings={warnings} dispatching={dispatching} dispatchMsg={dispatchMsg} onDispatch={dispatchNow} />
-            ) : null}
-            hosFor={(id) => (fleetHos.get(id) ? hosText(fleetHos.get(id)!) : null)}
-            equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
-            supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}
-            onOpenDriver={(id) => setSelectedDriverId(id)} />
+              <PlanDayCard trips={day.trips} report={day.report} startMs={day.startMs} onStart={day.setStart} onMove={day.move} onRemove={day.remove}
+                onAdd={() => setPlanTripFor(tlDriverId)} onDispatch={() => void day.dispatchAll()} busy={day.busy} msg={day.msg}
+                unresolved={(day.report?.issues ?? []).filter((i) => !day.ignored.has(i.id)).length} />
             )}
-            {planTerminalId && <SiteBoard kind="terminal" id={planTerminalId} name={planTerminal?.name ?? "Terminal"} trips={fleetTrips} product={boardProduct} now={new Date()} etaFor={arrivalEta} onOpenTrip={openTrip} />}
-            {planLocationId && <SiteBoard kind="location" id={planLocationId} name={planLocation ? locationTitle(planLocation) : "Delivery"} trips={fleetTrips} product={boardProduct} now={new Date()} etaFor={storeEta} onOpenTrip={openTrip} />}
           </div>
         )}
+        report={tlDriverId && day.report ? (
+          <PlanReport driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} report={day.report} ignored={day.ignored} handled={day.handled}
+            onFix={(issue, fix) => { if (fix === "ignore") day.ignore(issue.id); else if (fix === "terminal") setNewTerminalFor(issue.tripId); else if (fix === "meet") setMeetIssue(issue); }} />
+        ) : null}
         onOpenDriver={(id) => setSelectedDriverId(id)}
         hosAlerts={lowHours}
         liveBoard={<FleetBoard sections={["live"]} trips={fleetTrips} locations={fleet.locations} product={boardProduct} now={new Date()}
@@ -1099,35 +891,54 @@ export default function DispatchPage() {
       </FullscreenModal>
       {planTripFor && (() => {
         const e = equipFor(planTripFor);
-        const sup = planSupplierId ? companySuppliers.all.find((x) => x.supplier_id === planSupplierId) : null;
-        const initial = planLocationId || planTerminalId || shipper || customer || orderNumber ? {
-          orderNumber, extraOrderNumbers: [], shipper, customer, beginMiles: "", startCity: "", startState: "", planSlot: null, savePlan: null,
-          deliveries: [{ locationId: planLocationId, oneOffName: "", deliveryType: "drop" as const }],
-          supplier: sup ? { supplier_id: sup.supplier_id, name: sup.name } : null,
-        } : undefined;
         return (
           <PlanTripSheet driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
-            equipmentLabel={e ? `Truck ${e.truck} · Trailer ${e.trailer}` : "No equipment yet"} initial={initial} initialPickupId={planTerminalId}
+            equipmentLabel={e ? `Truck ${e.truck} · Trailer ${e.trailer}` : "No equipment yet"}
             terminals={terminalsCatalog as any} locations={locList.locations} tanks={locList.tanks} companyId={companyId || null} userId={authUserId || null}
             onLocationAdded={locList.reload}
             onApply={(x) => {
-              setTlDriverId(planTripFor); setTlStart(null);
-              setPlanTerminalId(x.terminalId); setPlanLocationId(x.locationId); setPlanSupplierId(x.supplierId);
-              setShipper(x.shipper); customerTouched.current = true; setCustomer(x.customer); setOrderNumber(x.orderNumber);
+              setTlDriverId(planTripFor);
+              day.add({ id: crypto.randomUUID(), terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer });
             }}
             onClose={() => setPlanTripFor(null)} />
         );
       })()}
-      <LocationPicker kinds={["store"]} open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
-        companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
-        onLocationAdded={locList.reload}
-        onPick={(to) => { setPlanLocationId(to.locationId ?? null); setLocPickerOpen(false); }} onClose={() => setLocPickerOpen(false)} />
+      {meetIssue && day.report && tlDriverId && (() => {
+        const r = day.report.trips.find((t) => t.trip.id === meetIssue.tripId);
+        if (!r) return null;
+        const nameOf = (id: string) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver";
+        const usable = (uid: string) => { const row = (plan.input?.access ?? []).find((a) => a.user_id === uid && String(a.terminal_id) === r.trip.terminalId); const st = accessAt(row?.carded_on ?? null, plan.input?.terminals.get(r.trip.terminalId)?.renewal_days ?? 90, new Date().toISOString().slice(0, 10)).state; return st === "valid" || st === "soon" || st === "expiring"; };
+        const cardedIds = plan.roster.map((m) => m.user_id).filter((uid) => uid !== tlDriverId && usable(uid));
+        const planned: MeetCandidate[] = dispatched.trips.filter((t) => t.driver_id !== tlDriverId && t.terminal === r.terminalName && t.planned_start_at && usable(t.driver_id)).map((t) => {
+          const st = Date.parse(t.planned_start_at!);
+          return { id: t.driver_id, name: nameOf(t.driver_id), startMs: st, etaMs: st + 30 * 60000, endMs: t.planned_end_at ? Date.parse(t.planned_end_at) : st + 4 * 3600000, planned: true };
+        });
+        const base = Math.max(Date.now(), defaultStartMs);
+        const others: MeetCandidate[] = cardedIds.map((uid) => ({ id: uid, name: nameOf(uid), startMs: base, etaMs: base + 30 * 60000, endMs: base + 4 * 3600000, planned: false }));
+        const mine = { id: tlDriverId, name: nameOf(tlDriverId), arriveMs: r.arriveTerminalMs, startMs: day.startMs, endMs: r.forecast.endMs };
+        return (
+          <MeetDriverSheet open terminal={r.terminalName} tz={r.tz} maxShiftHours={tlSettings.maxShiftHours} mine={mine} planned={planned} others={others}
+            busy={meetBusy} error={meetErr} onClose={() => { setMeetIssue(null); setMeetErr(null); }}
+            onSend={async (c) => {
+              if (!companyId || !authUserId) return;
+              setMeetBusy(true); setMeetErr(null);
+              const err = await sendDriverNotices(meetNotices({
+                companyId, fromUserId: authUserId, terminal: r.terminalName,
+                mine: { id: mine.id, name: mine.name, etaText: clock(mine.arriveMs, r.tz) }, carded: { id: c.id, name: c.name, etaText: clock(c.etaMs, r.tz) },
+              }));
+              setMeetBusy(false);
+              if (err) { setMeetErr(err); return; }
+              day.markHandled(meetIssue.id, `Notice sent: ${mine.name} meets ${c.name} at ${r.terminalName} (${c.name} ETA ${clock(c.etaMs, r.tz)}).`);
+              setMeetIssue(null);
+            }} />
+        );
+      })()}
+      <TerminalPickModal open={newTerminalFor != null} terminals={terminalsCatalog as any} onClose={() => setNewTerminalFor(null)}
+        onPick={(tid) => { const i = day.trips.findIndex((t) => t.id === newTerminalFor); if (i >= 0) day.update(i, { terminalId: tid }); setNewTerminalFor(null); }} />
       <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} rows={allocRows} />
       {companyId && authUserId && (
-        <SuppliersModal open={suppliersOpen !== null} onClose={() => { setSuppliersOpen(null); setSupPickFor(null); }} companyId={companyId} userId={authUserId}
-          canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={planTerminalId}
-          onSelect={suppliersOpen === "pick" ? (sid) => { if (supPickFor && supPickFor !== planGroups[0]?.productId) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: sid } })); else { setPlanSupplierId(sid); if (supPickFor) setGroupOverrides((m) => ({ ...m, [supPickFor]: { ...m[supPickFor], supplierId: undefined } })); } setSupPickFor(null); } : undefined}
-          selectedSupplierId={supPickFor ? groupOverrides[supPickFor]?.supplierId ?? planSupplierId : planSupplierId} />
+        <SuppliersModal open={suppliersOpen !== null} onClose={() => setSuppliersOpen(null)} companyId={companyId} userId={authUserId}
+          canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={null} />
       )}
       <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId || null} role={shell.role ?? null} myTruckId={null} myTrailerId={null} />
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}

@@ -20,7 +20,7 @@ import {
   unlinkSupplier, useCompanySuppliers, useSupplierContracts, type SupplierContract,
 } from "@/lib/suppliers/useSupplierAdmin";
 import { touchesLocked } from "@/lib/suppliers/locks";
-import type { TerminalOption } from "./PlanLoadCard";
+import type { TerminalOption } from "./DriverList";
 
 const ORANGE = "#fb923c";
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
