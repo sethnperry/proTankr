@@ -140,6 +140,10 @@ type ShellValue = {
   plannerIntent: PlannerIntent | null;
   postPlannerIntent: (kind: PlannerIntent["kind"], loadId?: string) => void;
   consumePlannerIntent: (id: number) => void;
+  // A message the Planner host leaves for the dashboard (Begin Loading couldn't start): shown there, then cleared.
+  dashboardNotice: { title: string; text: string } | null;
+  postDashboardNotice: (title: string, text: string) => void;
+  clearDashboardNotice: () => void;
   // True while Plan Review or a load report is up, so the screen underneath
   // can drop its "Opening…" spinner.
   loadOverlayOpen: boolean;
@@ -507,6 +511,9 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
   const consumePlannerIntent = useCallback((id: number) => {
     setPlannerIntent((cur) => (cur && cur.id === id ? null : cur));
   }, []);
+  const [dashboardNotice, setDashboardNotice] = useState<{ title: string; text: string } | null>(null);
+  const postDashboardNotice = useCallback((title: string, text: string) => setDashboardNotice({ title, text }), []);
+  const clearDashboardNotice = useCallback(() => setDashboardNotice(null), []);
   const [loadOverlayOpen, setLoadOverlayOpen] = useState(false);
 
   const deferRackRef = useRef(false);
@@ -605,7 +612,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
-    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
+    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, dashboardNotice, postDashboardNotice, clearDashboardNotice, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
   }), [
     authEmail, authUserId, setupSession, effectiveUserId,
     equipment, location, terminals, expirations,

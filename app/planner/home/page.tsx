@@ -1030,6 +1030,12 @@ export default function HomePage() {
   const fuelOn = !!fuel.active && !fuel.active.finished_at;
   // A notice that stops an action (themed, not an alert).
   const [blockNotice, setBlockNotice] = useState<{ title: string; text: string } | null>(null);
+  // Begin Loading couldn't start (the terminal has no products matching the plan): the Planner host leaves the message here.
+  useEffect(() => {
+    if (!shell.dashboardNotice) return;
+    setBlockNotice(shell.dashboardNotice);
+    shell.clearDashboardNotice();
+  }, [shell.dashboardNotice]); // eslint-disable-line react-hooks/exhaustive-deps
   const [fuelOpen, setFuelOpen] = useState(false);
   // Live odometer and position from the company's telematics, fetched whenever one of these windows opens.
   const [truckSheetWatch, setTruckSheetWatch] = useState(false);

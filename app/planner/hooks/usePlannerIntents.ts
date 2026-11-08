@@ -36,10 +36,11 @@ type Inputs = {
   tripNeedsArrive: boolean;
   tripStoreHook: ReturnType<typeof useTripStore>;
   unavailableComps: unknown[];
+  terminalProductCount: number;
 };
 
 export function usePlannerIntents(i: Inputs) {
-  const { startSupplierPick, effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps } = i;
+  const { startSupplierPick, effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps, terminalProductCount } = i;
   const router = useRouter();
   // Begin Loading / Continue Trip from the dashboard: when a plan is already in
   // place, open Plan Review right over the dashboard (what BEGIN LOADING would
@@ -48,15 +49,17 @@ export function usePlannerIntents(i: Inputs) {
   const beginReadyRef = useRef({ go: false, plan: false, empty: false });
   // When Begin Loading gives up and sends the driver to the Planner, leave a line in the Desk with why, so a driver who
   // keeps bouncing back can be diagnosed instead of guessed at.
+  const productsBlockedRef = useRef(false);
+  productsBlockedRef.current = terminalProductCount === 0 || unavailableComps.length > 0;
   const whyRef = useRef<() => Record<string, unknown>>(() => ({}));
   whyRef.current = () => ({
     loadDisabled, tripNeedsArrive, activeLoad: !!loadWorkflow.activeLoadId, unavailableComps: unavailableComps.length,
-    presetsReady: planSlots.presetsReady, plannedProducts: plannedProductIds.size,
+    presetsReady: planSlots.presetsReady, plannedProducts: plannedProductIds.size, terminalProducts: terminalProductCount,
     combo: !!shell.equipment.selectedComboId, terminal: !!shell.location.selectedTerminalId, state: !!shell.location.selectedState,
     city: !!shell.location.selectedCity, cityId: !!shell.location.selectedCityId, rack: !!shell.location.selectedRackId,
   });
   beginReadyRef.current = {
-    go: !loadDisabled && !tripNeedsArrive && !loadWorkflow.activeLoadId && unavailableComps.length === 0 && planSlots.presetsReady,
+    go: !loadDisabled && !tripNeedsArrive && !loadWorkflow.activeLoadId && unavailableComps.length === 0 && terminalProductCount > 0 && planSlots.presetsReady,
     plan: plannedProductIds.size > 0,
     // presets are in, nothing is planned, and nothing else is pending: no
     // plan to review, so don't wait for "go" (which can never become true)
@@ -71,8 +74,13 @@ export function usePlannerIntents(i: Inputs) {
       beginTickRef.current = null;
       if (open) requestBegin({});
       else {
+        const r = beginReadyRef.current;
         void logHere("other", "Begin Loading sent the driver to the Planner", whyRef.current());
-        if (window.location.pathname !== "/planner") router.push("/planner?plan=1");
+        // A plan exists but the terminal has no products (or none that match it): say so on the dashboard instead of
+        // sending the driver to the Planner, where nothing they pick can fix it.
+        if (r.plan && productsBlockedRef.current && window.location.pathname !== "/planner") {
+          shell.postDashboardNotice("No products match the plan", "No products match the selected plan. Please verify the terminal products.");
+        } else if (window.location.pathname !== "/planner") router.push("/planner?plan=1");
       }
     };
     beginTickRef.current = window.setInterval(() => {
@@ -88,7 +96,7 @@ export function usePlannerIntents(i: Inputs) {
       }
     }, 250);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, shell.setLoadOverlayOpen]);
+  }, [router, shell.setLoadOverlayOpen, shell.postDashboardNotice]);
   useEffect(() => () => { if (beginTickRef.current != null) window.clearInterval(beginTickRef.current); }, []);
 
   // Requests from other screens (shell.postPlannerIntent) and, for a hard

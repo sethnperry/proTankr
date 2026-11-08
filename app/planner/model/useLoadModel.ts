@@ -162,7 +162,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
   const tripEquip = useTripEquipment(tripStoreHook, effectiveUserId || null);
   const openEquipment = tripEquip.openEquipment;
 
-  usePlannerIntents({ startSupplierPick, effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps });
+  usePlannerIntents({ startSupplierPick, effectiveUserId, loadDisabled, loadWorkflow, openLoadReportAtTerminal, planSlots, plannedProductIds, requestBegin, shell, tripNeedsArrive, tripStoreHook, unavailableComps, terminalProductCount: terminalProducts.length });
 
   return {
     supplierPicks,
