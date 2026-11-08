@@ -31,7 +31,7 @@ export function uncovered(w: Window, onDuty: Window[]): Window[] {
   return left;
 }
 
-const dayKey = (ms: number, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+const dayKey = (ms: number, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz || undefined, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 
 /** Hours per local date for a set of windows, split at local midnight. */
 export function hoursByDay(ws: Window[], tz: string): Record<string, number> {

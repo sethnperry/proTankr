@@ -34,7 +34,7 @@ const ONDUTY = new Set<DutyCode>(["D", "ON", "YM"]);
 
 function dayKey(ms: number, tz: string): string {
   // en-CA formats as YYYY-MM-DD
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz || undefined, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 }
 
 export const RESTART_OFF_MIN = 34 * 60;

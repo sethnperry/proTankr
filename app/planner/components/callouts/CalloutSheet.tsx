@@ -11,7 +11,7 @@ import { canWithdraw } from "@/lib/callouts/callout";
 import type { CalloutRow } from "@/lib/trips/types";
 
 const MUTE = "rgba(255,255,255,0.5)";
-const when = (c: CalloutRow, tz: string) => `${new Date(c.shift_start_at).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: tz })} ${new Date(c.shift_start_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })}`;
+const when = (c: CalloutRow, tz: string) => `${new Date(c.shift_start_at).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: tz || undefined })} ${new Date(c.shift_start_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined })}`;
 
 export function CalloutSheet({ open, onClose, reasons, divisions, defaultDivision, tz, mine, onCreate, onWithdraw }: {
   open: boolean;

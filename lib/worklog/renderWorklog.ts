@@ -86,7 +86,7 @@ export function renderWorklogBody(w: Worklog, o: { mode?: "full" | "condensed" }
   }
 
   const buys = w.purchases.length
-    ? `<h2>Purchases you paid for</h2><table><tr><th>When</th><th>Where</th><th>Paid with</th><th class="r">Gallons</th><th class="r">Amount</th></tr>${w.purchases.map((p) => `<tr><td>${esc(new Date(p.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: w.tz }))}</td><td>${esc(p.store)}${p.place ? ` · ${esc(p.place)}` : ""}</td><td>${p.kind === "cash" ? "Cash" : "My card"}</td><td class="r">${p.gallons != null ? num(p.gallons) : "–"}</td><td class="r">${p.amount != null ? money(p.amount) : "–"}</td></tr>`).join("")}<tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>${money(s.spend)}</b></td></tr></table>`
+    ? `<h2>Purchases you paid for</h2><table><tr><th>When</th><th>Where</th><th>Paid with</th><th class="r">Gallons</th><th class="r">Amount</th></tr>${w.purchases.map((p) => `<tr><td>${esc(new Date(p.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: w.tz || undefined }))}</td><td>${esc(p.store)}${p.place ? ` · ${esc(p.place)}` : ""}</td><td>${p.kind === "cash" ? "Cash" : "My card"}</td><td class="r">${p.gallons != null ? num(p.gallons) : "–"}</td><td class="r">${p.amount != null ? money(p.amount) : "–"}</td></tr>`).join("")}<tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>${money(s.spend)}</b></td></tr></table>`
     : "";
 
   return `<style>${CSS}</style><div class="wl">

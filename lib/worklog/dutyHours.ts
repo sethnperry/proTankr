@@ -8,7 +8,7 @@ import { segments } from "../telematics/cycleRecap.ts";
 export type DayHours = { date: string; driveMin: number; onDutyMin: number };
 
 function dayKey(ms: number, tz: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz || undefined, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 }
 
 /** Per-day minutes for every day from `fromDate` to `toDate` (YYYY-MM-DD, inclusive), even with no activity. */

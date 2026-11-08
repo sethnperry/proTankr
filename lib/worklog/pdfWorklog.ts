@@ -157,7 +157,7 @@ export async function renderWorklogPdf(w: Worklog, o: { mode?: "full" | "condens
   if (w.purchases.length) {
     h2("Purchases you paid for");
     table(["When", "Where", "Paid with", "Gal", "Amount"], [
-      ...w.purchases.map((p) => [new Date(p.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: w.tz }), `${p.store}${p.place ? ` - ${p.place}` : ""}`, p.kind === "cash" ? "Cash" : "My card", p.gallons != null ? num(p.gallons) : "-", p.amount != null ? money(p.amount) : "-"]),
+      ...w.purchases.map((p) => [new Date(p.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: w.tz || undefined }), `${p.store}${p.place ? ` - ${p.place}` : ""}`, p.kind === "cash" ? "Cash" : "My card", p.gallons != null ? num(p.gallons) : "-", p.amount != null ? money(p.amount) : "-"]),
       ["", "", "", "Total", money(s.spend)],
     ], [M + 3, M + 50, M + 330, right - 70, right], 3);
   }

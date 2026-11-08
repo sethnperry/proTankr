@@ -100,7 +100,7 @@ export default function CalloutsModal({ open, onClose, companyId, userId, canEdi
       <FullscreenModal open={!!form} title={form?.mode === "edit" ? `Correct call-out · ${nameOf(form.row!.user_id)}` : `New call-out · ${nameOf(driverId)}`} onClose={() => setForm(null)} footer={null}>
         {form && (
           <CalloutForm key={form.row?.callout_id ?? "new"} reasons={reasonsOrDefault(reasons as any, "callout")} divisions={divisions} tz={tz}
-            initial={form.row ? { pick: { reasonId: form.row.reason_id, label: form.row.reason, category: form.row.category, note: form.row.note }, date: form.row.shift_date, time: new Date(form.row.shift_start_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }), division: form.row.division } : { date: focusDate ?? undefined }}
+            initial={form.row ? { pick: { reasonId: form.row.reason_id, label: form.row.reason, category: form.row.category, note: form.row.note }, date: form.row.shift_date, time: new Date(form.row.shift_start_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz || undefined }), division: form.row.division } : { date: focusDate ?? undefined }}
             submitLabel={form.mode === "edit" ? "Save correction" : "Create call-out"} busy={busy} onSubmit={(v) => void save(v)} />
         )}
         {error && form && <div style={{ color: "#f87171", fontSize: 13, marginTop: 10 }}>{error}</div>}

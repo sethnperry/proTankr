@@ -47,7 +47,7 @@ export async function runWorklogs(nowMs = Date.now()): Promise<number> {
     const type: PayPeriodType = ps?.pay_period_type && ps?.pay_period_anchor_date ? ps.pay_period_type : c.period_type;
     const anchor: string = ps?.pay_period_type && ps?.pay_period_anchor_date ? ps.pay_period_anchor_date : c.anchor_date;
     const today = localDateOf(nowMs, c.tz);
-    const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: c.tz, hour: "numeric", hourCycle: "h23" }).format(nowMs));
+    const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: c.tz || undefined, hour: "numeric", hourCycle: "h23" }).format(nowMs));
     const period = lastFinishedPeriod({ type, anchor }, today);
     if (!period || today < addDays(period.end, c.send_after_days) || hour < SEND_HOUR) continue;
     if (state.get(m.user_id)?.last_period_end >= period.end) continue;

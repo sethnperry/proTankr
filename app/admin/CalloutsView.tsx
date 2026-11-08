@@ -24,7 +24,7 @@ export function CalloutsView(p: {
   onEdit: (c: CalloutRow) => void;
   onWithdraw: (c: CalloutRow) => void;
 }) {
-  const when = (c: CalloutRow) => `${new Date(c.shift_start_at).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: p.tz })} ${new Date(c.shift_start_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: p.tz })}`;
+  const when = (c: CalloutRow) => `${new Date(c.shift_start_at).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: p.tz || undefined })} ${new Date(c.shift_start_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: p.tz || undefined })}`;
   const row = (c: CalloutRow, active: boolean) => (
     <div key={c.callout_id} style={{ border: `1px solid ${p.highlightId === c.callout_id ? "#fff" : HAIR}`, background: "#0f0f10", padding: 12, marginBottom: 8, opacity: c.status === "withdrawn" ? 0.55 : 1 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
