@@ -3,37 +3,37 @@
 //
 // "Plan Trip" on a driver's card: the same Begin Trip card the driver uses
 // (StartLoadSheet), minus the miles and start city the driver gives at Begin.
-// Sending writes a dispatched trip for that driver, like Dispatch does.
+// Applying fills the board's plan (pickup, drop, shipper, customer, order, supplier); the timeline builds from it.
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "../home/dashLook";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
-import { buildDispatchedTrip } from "@/lib/dispatch/dispatchTrip";
-import { writeDispatched } from "@/lib/dispatch/useDispatchData";
 import { repeatedRefs } from "@/lib/trips/refs";
-import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import type { DeliveryLocation, LocationTank } from "@/lib/trips/deliveryLocations";
 import type { SupplierRow } from "@/lib/trips/types";
 
 type TermRow = { terminal_id: string | number; terminal_name: string | null; city: string | null; state: string | null };
+export type PlanTripPick = { terminalId: string; locationId: string; shipper: string; customer: string; orderNumber: string; supplierId: string | null };
 const BLANK: StartLoadValues = {
   orderNumber: "", extraOrderNumbers: [], shipper: "", customer: "",
   deliveries: [{ locationId: null, oneOffName: "", deliveryType: "drop" }],
   beginMiles: "", startCity: "", startState: "", planSlot: null, supplier: null, savePlan: null,
 };
 
-export function PlanTripSheet({ driverId, driverName, equipmentLabel, truckId, trailerId, terminals, locations, tanks, companyId, userId, onLocationAdded, onSent, onClose }: {
-  driverId: string; driverName: string; equipmentLabel: string; truckId: string | null; trailerId: string | null;
+export function PlanTripSheet({ driverName, equipmentLabel, initial, initialPickupId, terminals, locations, tanks, companyId, userId, onLocationAdded, onApply, onClose }: {
+  driverName: string; equipmentLabel: string; initial?: StartLoadValues; initialPickupId?: string | null;
   terminals: TermRow[]; locations: DeliveryLocation[]; tanks: LocationTank[]; companyId: string | null; userId: string | null;
-  onLocationAdded: () => void; onSent: () => void; onClose: () => void;
+  onLocationAdded: () => void; onApply: (p: PlanTripPick) => void; onClose: () => void;
 }) {
   const L = useDashLook();
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
-  const [pickup, setPickup] = useState<{ terminalId: string; name: string; city: string | null; state: string | null } | null>(null);
+  const [pickup, setPickup] = useState<{ terminalId: string; name: string; city: string | null; state: string | null } | null>(() => {
+    const t = initialPickupId ? terminals.find((x) => String(x.terminal_id) === initialPickupId) : null;
+    return t ? { terminalId: String(t.terminal_id), name: t.terminal_name ?? "Terminal", city: t.city, state: t.state } : null;
+  });
   const [termOpen, setTermOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,36 +52,14 @@ export function PlanTripSheet({ driverId, driverName, equipmentLabel, truckId, t
     return row;
   };
 
-  const submit = async (v: StartLoadValues) => {
-    if (!companyId || !userId || !pickup) return;
+  const submit = (v: StartLoadValues) => {
     const numbers = [v.orderNumber, ...v.extraOrderNumbers].filter((x) => x.trim());
     const rep = repeatedRefs(numbers);
     if (rep.length) { setError(`Order ${rep[0]} is entered twice.`); return; }
     const first = v.deliveries.find((d) => d.locationId);
-    if (!first?.locationId) { setError("Pick a saved delivery location."); return; }
-    setBusy(true); setError(null);
-    try {
-      const taken = numbers.length ? await serverOrderConflicts(companyId, numbers, null) : [];
-      if (taken.length) { setError(`Order ${taken[0]} is already on another trip.`); return; }
-      const now = Date.now();
-      const rows = buildDispatchedTrip({
-        companyId, dispatcherId: userId, driverId, seq: 1,
-        leg: {
-          terminalId: pickup.terminalId, terminalName: pickup.name, city: pickup.city, state: pickup.state,
-          locationId: first.locationId, deliveryType: first.deliveryType === "pump_off" ? "pump_off" : "drop",
-          supplierId: v.supplier?.supplier_id ?? null, orderNumber: numbers[0] ?? "", startMs: now, endMs: now + 4 * 3600000,
-          truckId, trailerId, warnings: [], shipper: v.shipper, customer: v.customer,
-        },
-      }, { now: new Date(), newId: () => crypto.randomUUID() });
-      // Further drops on the same load.
-      const nowIso = new Date().toISOString();
-      v.deliveries.filter((d) => d.locationId && d !== first).forEach((d, i) => {
-        rows.deliveries.push({ delivery_id: crypto.randomUUID(), trip_id: (rows.trip as any).trip_id, seq: i + 2, location_id: d.locationId, delivery_type: d.deliveryType, status: "planned", client_updated_at: nowIso });
-      });
-      const err = await writeDispatched(rows as any);
-      if (err) { setError(err); return; }
-      onSent(); onClose();
-    } finally { setBusy(false); }
+    if (!first?.locationId || !pickup) { setError("Pick a pickup terminal and a saved delivery location."); return; }
+    onApply({ terminalId: pickup.terminalId, locationId: first.locationId, shipper: v.shipper, customer: v.customer, orderNumber: v.orderNumber, supplierId: v.supplier?.supplier_id ?? null });
+    onClose();
   };
 
   const hits = useMemo(() => {
@@ -91,12 +69,12 @@ export function PlanTripSheet({ driverId, driverName, equipmentLabel, truckId, t
 
   return (
     <>
-      <StartLoadSheet open={!termOpen} editing={false} forDriver={driverName} planRequired={false} initial={BLANK}
+      <StartLoadSheet open={!termOpen} editing={false} forDriver={driverName} planRequired={false} initial={initial ?? BLANK}
         pickupLabel={pickup ? `${pickup.name}${pickup.city ? `, ${pickup.city}` : ""}` : null} pickupTerminalId={pickup?.terminalId ?? null}
         onChangePickup={() => { setQ(""); setTermOpen(true); }}
         suppliers={suppliers} onAddSupplier={addSupplier} presets={[]} productColor={() => "#fff"} equipmentLabel={equipmentLabel}
         locations={locations} tanks={tanks} origin={null} companyId={companyId} userId={userId} onLocationAdded={onLocationAdded}
-        busy={busy} error={error} onClose={onClose} onSubmit={(v) => void submit(v)} />
+        error={error} onClose={onClose} onSubmit={submit} />
       <FullscreenModal open={termOpen} title="Pickup terminal" onClose={() => setTermOpen(false)}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search terminal or city" autoFocus
           style={{ width: "100%", boxSizing: "border-box", background: "#0f0f10", border: `1px solid ${L.hairline}`, color: "#fff", fontSize: 15, padding: "11px 12px", borderRadius: 2, marginBottom: 10 }} />

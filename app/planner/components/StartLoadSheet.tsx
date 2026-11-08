@@ -264,7 +264,7 @@ export function StartLoadSheet({
               opacity: busy || missing.length > 0 ? 0.5 : 1, cursor: busy ? "default" : "pointer",
             }}
           >
-            {forDriver ? `Send to ${forDriver}` : editing ? "Save" : "Begin Trip"}
+            {forDriver ? "Plan this load" : editing ? "Save" : "Begin Trip"}
           </button>
         </div>
       }

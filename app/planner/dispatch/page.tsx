@@ -1000,12 +1000,9 @@ export default function DispatchPage() {
               equipLine={(id) => { const e = equipFor(id); return e ? `Truck ${e.truck} · Trailer ${e.trailer}` : null; }}
               onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
             {tlDriverId && (
-          <PlanLoadCard location={planLocation} terminal={planTerminal} terminals={terminalOptions} result={ranked}
+          <PlanLoadCard location={planLocation} terminal={planTerminal} result={ranked}
             historyLoading={history.loading} historyError={history.error} showNotCarded={showNotCarded && !!planTerminalId}
-            onPickLocation={() => setLocPickerOpen(true)}
-            onClearLocation={() => { setPlanLocationId(null); setShowNotCarded(false); }}
-            onPickTerminal={(id) => { setPlanTerminalId(id); setPlanSupplierId(null); if (!id) setShowNotCarded(false); }}
-            parties={{ shipper, customer, onShipper: setShipper, onCustomer: (v: string) => { customerTouched.current = true; setCustomer(v); } }}
+            onEditPlan={() => setPlanTripFor(tlDriverId)} parties={{ shipper, customer }}
             timeline={tlDriverId && planLocation && planTerminalId ? (
               <TimelineCard driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} forecast={forecast} startMs={startMs}
                 chained={allLegs.length > 0 && tlStart == null} lockedCount={priorLegs.length} blockMsg={blockMsg} typicalStart={typicalMin != null ? clock(new Date(new Date().setHours(0, 0, 0, 0)).getTime() + typicalMin * 60000) : null}
@@ -1101,13 +1098,24 @@ export default function DispatchPage() {
         ))}
       </FullscreenModal>
       {planTripFor && (() => {
-        const h = heldEquipment.get(planTripFor);
         const e = equipFor(planTripFor);
+        const sup = planSupplierId ? companySuppliers.all.find((x) => x.supplier_id === planSupplierId) : null;
+        const initial = planLocationId || planTerminalId || shipper || customer || orderNumber ? {
+          orderNumber, extraOrderNumbers: [], shipper, customer, beginMiles: "", startCity: "", startState: "", planSlot: null, savePlan: null,
+          deliveries: [{ locationId: planLocationId, oneOffName: "", deliveryType: "drop" as const }],
+          supplier: sup ? { supplier_id: sup.supplier_id, name: sup.name } : null,
+        } : undefined;
         return (
-          <PlanTripSheet driverId={planTripFor} driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
-            equipmentLabel={e ? `Truck ${e.truck} · Trailer ${e.trailer}` : "No equipment yet"} truckId={h?.truckId ?? null} trailerId={h?.trailerId ?? null}
+          <PlanTripSheet driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
+            equipmentLabel={e ? `Truck ${e.truck} · Trailer ${e.trailer}` : "No equipment yet"} initial={initial} initialPickupId={planTerminalId}
             terminals={terminalsCatalog as any} locations={locList.locations} tanks={locList.tanks} companyId={companyId || null} userId={authUserId || null}
-            onLocationAdded={locList.reload} onSent={() => dispatched.reload()} onClose={() => setPlanTripFor(null)} />
+            onLocationAdded={locList.reload}
+            onApply={(x) => {
+              setTlDriverId(planTripFor); setTlStart(null);
+              setPlanTerminalId(x.terminalId); setPlanLocationId(x.locationId); setPlanSupplierId(x.supplierId);
+              setShipper(x.shipper); customerTouched.current = true; setCustomer(x.customer); setOrderNumber(x.orderNumber);
+            }}
+            onClose={() => setPlanTripFor(null)} />
         );
       })()}
       <LocationPicker kinds={["store"]} open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}

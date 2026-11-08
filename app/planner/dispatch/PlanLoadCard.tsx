@@ -6,13 +6,11 @@
 // access there. Presentational: the page owns the picks and the ranking.
 
 import React, { useMemo, useState } from "react";
-import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "../home/dashLook";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import type { PlanDriver, PlanLoadResult } from "@/lib/dispatch/planLoad";
 import { locationPlace, locationTitle, type DeliveryLocation } from "@/lib/trips/deliveryLocations";
 import { fieldInput } from "../components/trip/tripUi";
-import ValueEntryOverlay from "../components/ValueEntryOverlay";
 import type { TrailerCert } from "@/lib/dispatch/certs";
 import { certBlocks } from "@/lib/dispatch/certs";
 
@@ -124,19 +122,15 @@ function PickRow({ label, value, sub, onPick, onClear }: { label: string; value:
 export function PlanLoadCard(props: {
   location: DeliveryLocation | null;
   terminal: TerminalOption | null;
-  terminals: TerminalOption[];
   result: PlanLoadResult;
   historyLoading?: boolean;
   historyError?: string | null;
   showNotCarded: boolean;
-  onPickLocation: () => void;
-  onClearLocation: () => void;
-  onPickTerminal: (id: string | null) => void;
   onOpenDriver: (userId: string) => void;
-  // Picked from the terminal's supplier list. A paused contract only warns.
+  // Pickup, drop, shipper, customer and supplier are set in the Plan Trip window.
+  onEditPlan: () => void;
+  parties?: { shipper: string; customer: string };
   supplier?: { name: string; account: string | null; warning: string | null } | null;
-  onPickSupplier?: () => void;
-  onClearSupplier?: () => void;
   // Equipment each driver holds and the terminal's trailer-certification check.
   equipFor?: (userId: string) => DriverEquip | null;
   hosFor?: (userId: string) => { text: string; color: string } | null;
@@ -145,71 +139,34 @@ export function PlanLoadCard(props: {
   selectedDriverId?: string | null;
   onSelectDriver?: (userId: string) => void;
   timeline?: React.ReactNode; // the selected driver's timeline
-  parties?: { shipper: string; customer: string; onShipper: (v: string) => void; onCustomer: (v: string) => void };
 }) {
   const L = useDashLook();
   const p = props;
-  const [termOpen, setTermOpen] = useState(false);
-  const [partyEdit, setPartyEdit] = useState<"shipper" | "customer" | null>(null);
-  const [partyDraft, setPartyDraft] = useState("");
-  const [q, setQ] = useState("");
-  // Same shape as the driver's terminal picker: terminals in one city, Change to pick another city.
-  const [cityKey, setCityKey] = useState<string | null>(null);
-  const [choosing, setChoosing] = useState(false);
-  const cities = useMemo(() => {
-    const m = new Map<string, { key: string; count: number; used: number }>();
-    for (const t of p.terminals) { const k = cityOf(t); const c = m.get(k) ?? { key: k, count: 0, used: 0 }; c.count++; if (t.used) c.used++; m.set(k, c); }
-    const arr = [...m.values()];
-    const st = (k: string) => k.split("|")[1];
-    return arr.sort((a, b) => st(a.key).localeCompare(st(b.key)) || a.key.localeCompare(b.key));
-  }, [p.terminals]);
-  const activeCity = cityKey
-    ?? (p.terminal ? cityOf(p.terminals.find((t) => t.id === p.terminal!.id) ?? p.terminal) : null)
-    ?? cities.filter((c) => c.used).sort((a, b) => b.used - a.used)[0]?.key
-    ?? cities[0]?.key ?? null;
-  const options = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    const byUsed = (a: TerminalOption, b: TerminalOption) => Number(b.used) - Number(a.used) || a.name.localeCompare(b.name);
-    if (s) return [...p.terminals.filter((t) => `${t.name} ${t.place ?? ""}`.toLowerCase().includes(s))].sort(byUsed).slice(0, 80);
-    return p.terminals.filter((t) => activeCity != null && cityOf(t) === activeCity).sort(byUsed);
-  }, [p.terminals, q, activeCity]);
-
-
+  const set = !!p.location && !!p.terminal;
+  const line = (label: string, v: string | null) => (
+    <div style={{ display: "flex", gap: 8, fontSize: 13, padding: "2px 0" }}>
+      <span style={{ color: L.muted, width: 70, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v || "—"}</span>
+    </div>
+  );
   return (
     <div style={{ marginBottom: 6 }}>
-      {p.parties && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 13 }}>
-          {(["shipper", "customer"] as const).map((k, i) => {
-            const val = p.parties![k];
-            return (
-              <button key={k} type="button" className="dash-press" onClick={() => { setPartyDraft(val); setPartyEdit(k); }}
-                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: i ? "right" : "left", color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                <span style={{ color: L.muted }}>{k === "shipper" ? "Shipper" : "Customer"}: </span>
-                <span style={{ fontWeight: 700, textDecoration: "underline", textDecorationColor: L.faint }}>{val || "Add"}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {p.parties && (
-        <ValueEntryOverlay open={partyEdit != null} title={partyEdit === "customer" ? "Customer" : "Shipper"}
-          fields={[{ key: "v", label: partyEdit === "customer" ? "Customer" : "Shipper", value: partyDraft, onChange: setPartyDraft, plain: true }]}
-          hint={partyEdit === "customer" ? "Who it's for" : "From the BOL"}
-          onCancel={() => setPartyEdit(null)}
-          onSubmit={() => { if (partyEdit === "shipper") p.parties!.onShipper(partyDraft.trim()); else p.parties!.onCustomer(partyDraft.trim()); setPartyEdit(null); }} />
-      )}
-      <PickRow label="Drop location" value={p.location ? locationTitle(p.location) : null} sub={p.location ? locationPlace(p.location) : null}
-        onPick={p.onPickLocation} onClear={p.onClearLocation} />
-      <PickRow label="Terminal" value={p.terminal?.name ?? null} sub={p.terminal?.place ?? null}
-        onPick={() => { setQ(""); setTermOpen(true); }} onClear={() => p.onPickTerminal(null)} />
-
-      {p.terminal && p.onPickSupplier && (
-        <>
-          <PickRow label="Supplier" value={p.supplier?.name ?? null} sub={p.supplier?.account ? `Acct ${p.supplier.account}` : null}
-            onPick={p.onPickSupplier} onClear={p.onClearSupplier} />
-          {p.supplier?.warning && <div style={{ fontSize: 12, color: "#fb923c", margin: "-2px 0 6px" }}>⚠ {p.supplier.warning}</div>}
-        </>
-      )}
+      <button type="button" onClick={p.onEditPlan} className="dash-press"
+        style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer" }}>
+        {set ? (
+          <>
+            {line("Pickup", [p.terminal!.name, p.terminal!.place].filter(Boolean).join(" · "))}
+            {line("Drop", [locationTitle(p.location!), locationPlace(p.location!)].filter(Boolean).join(" · "))}
+            {line("Shipper", p.parties?.shipper ?? null)}
+            {line("Customer", p.parties?.customer ?? null)}
+            {p.supplier && line("Supplier", p.supplier.name + (p.supplier.account ? ` · Acct ${p.supplier.account}` : ""))}
+            <div style={{ fontSize: 11, color: L.faint, marginTop: 4 }}>Tap to change in the Plan Trip window ›</div>
+          </>
+        ) : (
+          <div style={{ fontSize: 14, fontWeight: 800 }}>Plan Trip: set pickup, drop, shipper and customer <span style={{ color: L.faint }}>›</span></div>
+        )}
+      </button>
+      {p.supplier?.warning && <div style={{ fontSize: 12, color: "#fb923c", margin: "-2px 0 6px" }}>⚠ {p.supplier.warning}</div>}
 
       {p.terminal && p.certNames && p.certNames.length > 0 && (
         <div style={{ fontSize: 12, color: (p.certProblems ?? 0) > 0 ? "#fb923c" : L.muted, margin: "2px 0 4px" }}>
@@ -219,47 +176,6 @@ export function PlanLoadCard(props: {
       )}
 
       {p.timeline}
-      {!p.timeline && p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the terminal to see the timeline.</div>}
-      {!p.timeline && !p.location && p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick the drop location to see the timeline.</div>}
-      {!p.timeline && !p.location && !p.terminal && <div style={{ fontSize: 12, color: L.faint, margin: "6px 0" }}>Pick a drop location and a terminal.</div>}
-
-      <FullscreenModal open={termOpen} title="Pick the terminal" onClose={() => { setTermOpen(false); setChoosing(false); }}
-        headerRight={!choosing ? <button type="button" onClick={() => { setChoosing(true); setQ(""); }}
-          style={{ border: "none", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Change city</button> : undefined}>
-        {choosing ? (
-          <>
-            <button type="button" onClick={() => setChoosing(false)} style={{ border: "none", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 10 }}>
-              ‹ Back{activeCity ? ` to ${cityLabel(activeCity)}` : ""}
-            </button>
-            {cities.map((c, i) => {
-              const state = c.key.split("|")[1];
-              const newState = i === 0 || cities[i - 1].key.split("|")[1] !== state;
-              return (
-                <React.Fragment key={c.key}>
-                  {newState && <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: L.muted, margin: "12px 0 6px" }}>{state || "No state"}</div>}
-                  <button type="button" onClick={() => { setCityKey(c.key); setChoosing(false); setQ(""); }} className="dash-press"
-                    style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8,
-                      borderColor: c.key === activeCity ? "rgba(255,255,255,0.4)" : undefined }}>
-                    <span style={{ fontSize: 14, fontWeight: 800 }}>{cityLabel(c.key)}</span>
-                    <span style={{ fontSize: 12, color: L.muted }}>{c.count} terminal{c.count === 1 ? "" : "s"}{c.used ? ` · ${c.used} yours` : ""}</span>
-                  </button>
-                </React.Fragment>
-              );
-            })}
-          </>
-        ) : (<>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search terminals in any city" style={{ ...fieldInput, marginBottom: 10 }} />
-        {!q.trim() && activeCity && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>Showing terminals in <span style={{ color: "#fff" }}>{cityLabel(activeCity)}</span></div>}
-        {options.length === 0 && <div style={{ fontSize: 14, color: L.muted }}>No terminals found.</div>}
-        {options.map((t) => (
-          <button key={t.id} type="button" onClick={() => { p.onPickTerminal(t.id); setTermOpen(false); }} className="dash-press"
-            style={{ ...L.secondary, boxSizing: "border-box", width: "100%", textAlign: "left", color: "#fff", padding: "10px 12px", marginBottom: 6, cursor: "pointer" }}>
-            <div style={{ fontSize: 14, fontWeight: 800 }}>{t.name}</div>
-            <div style={{ fontSize: 12, color: L.muted }}>{t.place ?? ""}{t.used ? " · your company loads here" : ""}</div>
-          </button>
-        ))}
-        </>)}
-      </FullscreenModal>
     </div>
   );
 }
