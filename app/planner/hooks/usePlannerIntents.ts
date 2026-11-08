@@ -16,6 +16,7 @@ import type { TripPickupRow, TripRow } from "@/lib/trips/types";
 import { openTripForDriver, unlinkCancelledLoad } from "@/lib/trips/tripLogic";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
 import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
+import { logHere } from "@/lib/errors/client";
 
 import type { useCalculatorShell } from "../CalculatorShellContext";
 import type { useLoadWorkflow } from "./useLoadWorkflow";
@@ -45,6 +46,15 @@ export function usePlannerIntents(i: Inputs) {
   // do). With no plan, or if it can't start, go to the Planner so the driver
   // can see why. Waits for presets/equipment and gives up after 8 s.
   const beginReadyRef = useRef({ go: false, plan: false, empty: false });
+  // When Begin Loading gives up and sends the driver to the Planner, leave a line in the Desk with why, so a driver who
+  // keeps bouncing back can be diagnosed instead of guessed at.
+  const whyRef = useRef<() => Record<string, unknown>>(() => ({}));
+  whyRef.current = () => ({
+    loadDisabled, tripNeedsArrive, activeLoad: !!loadWorkflow.activeLoadId, unavailableComps: unavailableComps.length,
+    presetsReady: planSlots.presetsReady, plannedProducts: plannedProductIds.size,
+    combo: !!shell.equipment.selectedComboId, terminal: !!shell.location.selectedTerminalId, state: !!shell.location.selectedState,
+    city: !!shell.location.selectedCity, cityId: !!shell.location.selectedCityId, rack: !!shell.location.selectedRackId,
+  });
   beginReadyRef.current = {
     go: !loadDisabled && !tripNeedsArrive && !loadWorkflow.activeLoadId && unavailableComps.length === 0 && planSlots.presetsReady,
     plan: plannedProductIds.size > 0,
@@ -60,7 +70,10 @@ export function usePlannerIntents(i: Inputs) {
       if (beginTickRef.current != null) window.clearInterval(beginTickRef.current);
       beginTickRef.current = null;
       if (open) requestBegin({});
-      else if (window.location.pathname !== "/planner") router.push("/planner?plan=1");
+      else {
+        void logHere("other", "Begin Loading sent the driver to the Planner", whyRef.current());
+        if (window.location.pathname !== "/planner") router.push("/planner?plan=1");
+      }
     };
     beginTickRef.current = window.setInterval(() => {
       const r = beginReadyRef.current;
