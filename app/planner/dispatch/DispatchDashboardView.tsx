@@ -18,7 +18,8 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { DashStyles, SectionLabel, useDashLook } from "../home/dashLook";
 import { ModeSwitch, RegionButton, type RegionFilter } from "../components/dash/DashChrome";
 export type { RegionFilter };
-import { GaugePanel, ToolPanel, type GaugeCell, type ToolItem } from "../home/DashboardChrome";
+import { ToolPanel, type GaugeCell, type ToolItem } from "../home/DashboardChrome";
+import { DashColumns } from "../components/dash/DashColumns";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import type { LiveCounts, ActiveReport } from "@/lib/dispatch/conflicts";
 import type { ConflictWithAck } from "@/lib/dispatch/acks";
@@ -320,10 +321,11 @@ export function DispatchDashboardView(props: {
     { label: "Cancelled", value: String(p.cancelledCount), color: p.cancelledCount ? "#fff" : GREY, onClick: () => setSheet("cancelled") },
     { label: "Parked", value: String(parkedCount), color: parkedCount ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
     { label: "Dispatched", value: String(p.dispatchedCount), color: p.dispatchedCount ? "#93c5fd" : GREY, onClick: () => setSheet("dispatched") },
+    { label: "Low hours", value: String(p.hosAlerts.length), color: p.hosAlerts.some((a) => a.level === "red") ? RED : p.hosAlerts.length ? ORANGE : GREY, onClick: () => setHosOpen(true) },
   ];
 
   return (
-    <div className="dash-wrap dp" style={{ paddingTop: 4, paddingBottom: 24 }}>
+    <div className="dash-wrap d2" style={{ paddingTop: 4, paddingBottom: 24 }}>
       <DashStyles />
       {(() => {
         const controls = (
@@ -343,33 +345,28 @@ export function DispatchDashboardView(props: {
 
       {p.error && <div style={{ fontSize: 13, color: "#f87171", marginTop: 10 }}>{p.error}</div>}
 
-      <div className="dp-cols">
-        <div className="dp-left">
-          <div className="dp-chips dp-o0"><GaugePanel fluid of={4} top={0} cells={cells} /></div>
-          <div className="dp-o2">
-            {live ? (
-              <>{p.liveBoard}</>
-            ) : (
+      <div style={{ height: 12 }} />
+      <DashColumns a={cells} b={cells2}
+        left={
+          <>
+            {!live && (<><SectionLabel first>Plan a load</SectionLabel>{p.planner}</>)}
+            <SectionLabel first={live}>Tools</SectionLabel>
+            <ToolPanel items={p.tools} />
+            {p.footer}
+          </>
+        }
+        right={
+          <>
+            {live ? <>{p.liveBoard}</> : (
               <>
-                <SectionLabel first>Plan a load</SectionLabel>
-                {p.planner}
-                {p.dispatchedBoard && <SectionLabel>Dispatched · not begun</SectionLabel>}
+                {p.dispatchedBoard && <SectionLabel first>Dispatched · not begun</SectionLabel>}
                 {p.dispatchedBoard}
                 {p.cancelledBoard}
               </>
             )}
-          </div>
-        </div>
-        <div className="dp-right">
-          <div className="dp-chips dp-o1"><GaugePanel fluid of={4} top={0} cells={cells2} /></div>
-          <div className="dash-side dp-o3">
-            {p.drivers && (<><SectionLabel first>Drivers</SectionLabel>{p.drivers}</>)}
-          </div>
-        </div>
-      </div>
-      <SectionLabel>Tools</SectionLabel>
-      <ToolPanel items={p.tools} />
-      {p.footer}
+            {p.drivers && (<><SectionLabel first={live ? false : !p.dispatchedBoard}>Drivers</SectionLabel>{p.drivers}</>)}
+          </>
+        } />
       <FullscreenModal open={hosOpen} title={`Low on hours (${p.hosAlerts.length})`} onClose={() => setHosOpen(false)}>
         {p.hosAlerts.length === 0 ? (
           <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 14, color: L.muted }}>No driver on a load has under 2 hours left on a clock.</div>

@@ -9,7 +9,8 @@
 import React, { useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { SectionLabel, useDashLook } from "@/app/planner/home/dashLook";
-import { GaugePanel, ToolPanel, type GaugeCell, type ToolItem } from "@/app/planner/home/DashboardChrome";
+import { ToolPanel, type GaugeCell, type ToolItem } from "@/app/planner/home/DashboardChrome";
+import { DashColumns } from "@/app/planner/components/dash/DashColumns";
 import { EXPIRY_COLOR } from "@/lib/expiry";
 import { ACTIVITY_COLOR, ACTIVITY_LABEL, FLEET_COLOR, FLEET_LABEL, type Activity, type CampaignBar, type FleetBox, type FleetState, type Gauge, type GaugeKey, type HeatCell, type Heatmap, type NeedsItem, type RibbonLane } from "@/lib/company/company";
 import type { HosAlert } from "@/lib/dispatch/hosAlerts";
@@ -158,39 +159,29 @@ export function CompanyDashboardView(p: CompanyDashboardProps) {
 
   return (
     <div>
-      {p.mode !== "desk" && (
+      {p.mode === "desk" ? (
+        <div>{p.deskSlot ?? <div style={{ color: L.muted, fontSize: 14, padding: "20px 0" }}>The Desk is next: errors, stuck syncs and a driver's timeline in one place.</div>}</div>
+      ) : (
         <>
-          {p.mode === "period" && p.periodSlot && <div style={{ marginBottom: 6 }}>{p.periodSlot}</div>}
-          <GaugePanel cells={cells(first)} equal />
-          <GaugePanel cells={cells(second)} equal top={4} />
-        </>
-      )}
-
-      {p.mode === "now" && (
-        <>
-          <SectionLabel>Fleet · {p.fleet.boxes.length} units</SectionLabel>
-          <Fleet fleet={p.fleet} onBox={() => setSheet("down")} />
-          <SectionLabel>Today · drivers by hour</SectionLabel>
-          <Ribbon ribbon={p.ribbon} />
-        </>
-      )}
-
-      {p.mode === "period" && (
-        <>
-          <SectionLabel>Compliance by region</SectionLabel>
-          <Heat heat={p.heat} onCell={(title, c) => setCell({ title, c })} />
-          <SectionLabel>Inspection campaigns</SectionLabel>
-          <Bars bars={p.campaigns} />
-          {p.statsSlot && <><SectionLabel>Company</SectionLabel>{p.statsSlot}</>}
-        </>
-      )}
-
-      {p.mode === "desk" && <div>{p.deskSlot ?? <div style={{ color: L.muted, fontSize: 14, padding: "20px 0" }}>The Desk is next: errors, stuck syncs and a driver's timeline in one place.</div>}</div>}
-
-      {p.mode !== "desk" && (
-        <>
-          <SectionLabel>Tools</SectionLabel>
-          <ToolPanel items={p.tools} />
+          {p.mode === "period" && p.periodSlot && <div style={{ marginBottom: 10 }}>{p.periodSlot}</div>}
+          <DashColumns a={cells(first)} b={cells(second)}
+            left={<><SectionLabel first>Tools</SectionLabel><ToolPanel items={p.tools} /></>}
+            right={p.mode === "now" ? (
+              <>
+                <SectionLabel first>Fleet · {p.fleet.boxes.length} units</SectionLabel>
+                <Fleet fleet={p.fleet} onBox={() => setSheet("down")} />
+                <SectionLabel>Today · drivers by hour</SectionLabel>
+                <Ribbon ribbon={p.ribbon} />
+              </>
+            ) : (
+              <>
+                <SectionLabel first>Compliance by region</SectionLabel>
+                <Heat heat={p.heat} onCell={(title, c) => setCell({ title, c })} />
+                <SectionLabel>Inspection campaigns</SectionLabel>
+                <Bars bars={p.campaigns} />
+                {p.statsSlot && <><SectionLabel>Company</SectionLabel>{p.statsSlot}</>}
+              </>
+            )} />
         </>
       )}
 

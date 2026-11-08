@@ -2066,7 +2066,7 @@ export default function AdminPage() {
   ].filter(Boolean) as ToolItem[];
 
   return (
-    <div style={css.page} className="admin-page-root">
+    <div style={{ ...css.page, maxWidth: undefined }} className="admin-page-root dash-wrap d2">
       <DashStyles />
       <div className="admin-header-row" style={{ marginBottom: 20 }}>
         <ConnectedDashHeader current="company" line={companyName} right={dashEnabled ? (
