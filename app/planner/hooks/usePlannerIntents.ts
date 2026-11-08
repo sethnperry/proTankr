@@ -17,6 +17,7 @@ import { openTripForDriver, unlinkCancelledLoad } from "@/lib/trips/tripLogic";
 import { cancelPlannedLoad } from "@/lib/supabase/load";
 import { clearActivePlannedLoad } from "../utils/activePlannedLoad";
 import { logHere } from "@/lib/errors/client";
+import { beginBlockMessage } from "@/lib/trips/beginBlock";
 
 import type { useCalculatorShell } from "../CalculatorShellContext";
 import type { useLoadWorkflow } from "./useLoadWorkflow";
@@ -49,8 +50,6 @@ export function usePlannerIntents(i: Inputs) {
   const beginReadyRef = useRef({ go: false, plan: false, empty: false });
   // When Begin Loading gives up and sends the driver to the Planner, leave a line in the Desk with why, so a driver who
   // keeps bouncing back can be diagnosed instead of guessed at.
-  const productsBlockedRef = useRef(false);
-  productsBlockedRef.current = terminalProductCount === 0 || unavailableComps.length > 0;
   const whyRef = useRef<() => Record<string, unknown>>(() => ({}));
   whyRef.current = () => ({
     loadDisabled, tripNeedsArrive, activeLoad: !!loadWorkflow.activeLoadId, unavailableComps: unavailableComps.length,
@@ -74,13 +73,17 @@ export function usePlannerIntents(i: Inputs) {
       beginTickRef.current = null;
       if (open) requestBegin({});
       else {
-        const r = beginReadyRef.current;
-        void logHere("other", "Begin Loading sent the driver to the Planner", whyRef.current());
-        // A plan exists but the terminal has no products (or none that match it): say so on the dashboard instead of
-        // sending the driver to the Planner, where nothing they pick can fix it.
-        if (r.plan && productsBlockedRef.current && window.location.pathname !== "/planner") {
-          shell.postDashboardNotice("No products match the plan", "No products match the selected plan. Please verify the terminal products.");
-        } else if (window.location.pathname !== "/planner") router.push("/planner?plan=1");
+        void logHere("other", "Begin Loading could not start", whyRef.current());
+        // Say why on the dashboard instead of sending the driver to the Planner, where nothing they pick can fix it.
+        if (window.location.pathname !== "/planner") {
+          const w = whyRef.current();
+          const msg = beginBlockMessage({
+            tripNeedsArrive: !!w.tripNeedsArrive, presetsReady: !!w.presetsReady, hasCombo: !!w.combo,
+            hasTerminal: !!w.terminal && !!w.state && !!w.city && !!w.cityId,
+            plannedProducts: Number(w.plannedProducts) || 0, terminalProducts: Number(w.terminalProducts) || 0, unavailableComps: Number(w.unavailableComps) || 0,
+          });
+          shell.postDashboardNotice(msg.title, msg.text);
+        }
       }
     };
     beginTickRef.current = window.setInterval(() => {
