@@ -76,6 +76,10 @@ import type { ToolItem } from "../home/DashboardChrome";
 import { planAlerts, planCounts } from "@/lib/dispatch/planAlerts";
 import { rankDrivers, focusAlerts } from "@/lib/dispatch/planLoad";
 import { SiteBoard } from "./SiteBoard";
+import { DriverFinder } from "./DriverFinder";
+import { PlanTripSheet } from "./PlanTripSheet";
+import { useDriverDirectory } from "./useDriverDirectory";
+import type { FinderPerson } from "@/lib/dispatch/driverFinder";
 import { PlanLoadCard, DriverList, type TerminalOption, type DriverEquip } from "./PlanLoadCard";
 import { trailerCert, certBlocks } from "@/lib/dispatch/certs";
 import { SuppliersModal } from "./SuppliersModal";
@@ -458,6 +462,21 @@ export default function DispatchPage() {
 
   // Equipment each driver holds, and the terminal's trailer-certification check.
   const heldEquipment = useDriverEquipment(companyId || null);
+  // Plan a Load search: who matches, what they hold, who was in each truck before.
+  const directory = useDriverDirectory(companyId || null, useMemo(() => plan.roster.map((m) => m.user_id), [plan.roster]));
+  const [planTripFor, setPlanTripFor] = useState<string | null>(null);
+  const finderPeople = useMemo<FinderPerson[]>(() => plan.roster.map((m) => {
+    const x = directory.extra.get(m.user_id);
+    return { userId: m.user_id, name: m.display_name, employeeNumber: x?.employeeNumber ?? null, localArea: x?.localArea ?? null, region: x?.region ?? m.region };
+  }), [plan.roster, directory.extra]);
+  const finderHeld = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const [uid, h] of heldEquipment) { const n = plan.input?.trucks.get(h.truckId); if (n) m.set(uid, n); }
+    return m;
+  }, [heldEquipment, plan.input]);
+  const finderTruckUsers = useMemo(
+    () => directory.truckUse.map((u) => ({ truckName: plan.input?.trucks.get(u.truckId) ?? "", driverId: u.driverId })).filter((u) => u.truckName),
+    [directory.truckUse, plan.input]);
   const certs = useTerminalCerts(companyId || null, planTerminalId);
   const equipFor = useMemo(() => {
     const trucks = plan.input?.trucks, trailers = plan.input?.trailers;
@@ -969,19 +988,18 @@ export default function DispatchPage() {
         allocation={allContracts.some((c) => c.per_day != null || c.per_week != null) ? { ...allocChip, onOpen: () => setAllocOpen(true) } : null}
         focusCount={planning ? ranked.focusIds.size : null}
         notCarded={planTerminalId && planLocationId ? { count: ranked.notCarded.length, shown: showNotCarded, onToggle: () => setShowNotCarded((v) => !v) } : null}
-        planner={!tlDriverId ? (
+        planner={(
           <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", margin: "0 0 8px" }}>Step 1 · Pick the driver for this load.</div>
-            {driverListEl}
-          </div>
-        ) : (
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"}
-              </div>
-              <button type="button" onClick={() => { setTlDriverId(null); setTlStart(null); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>Change driver</button>
-            </div>
+            {!tlDriverId && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", margin: "0 0 8px" }}>Step 1 · Find the driver for this load.</div>}
+            <div id="dispatch-drivers"><DriverFinder people={finderPeople} heldTruck={finderHeld} truckUsers={finderTruckUsers}
+              selectedId={tlDriverId} onSelect={(id) => { setTlDriverId(id); setTlStart(null); }}
+              statusFor={(id) => ({ busy: busyByDriver.get(id) ?? null, hos: fleetHos.get(id) ? hosText(fleetHos.get(id)!).text : null })}
+              shiftFor={(id) => directory.shifts.get(id)}
+              accessFor={(id) => (plan.input?.access ?? []).filter((a) => a.user_id === id)}
+              catalog={terminalsCatalog as any}
+              equipLine={(id) => { const e = equipFor(id); return e ? `Truck ${e.truck} · Trailer ${e.trailer}` : null; }}
+              onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
+            {tlDriverId && (
           <PlanLoadCard location={planLocation} terminal={planTerminal} terminals={terminalOptions} result={ranked}
             historyLoading={history.loading} historyError={history.error} showNotCarded={showNotCarded && !!planTerminalId}
             onPickLocation={() => setLocPickerOpen(true)}
@@ -1021,6 +1039,7 @@ export default function DispatchPage() {
             equipFor={equipFor} certNames={certs.types.map((t) => t.name)} certProblems={certProblems}
             supplier={planSupplier ? { ...planSupplier, warning: [planSupplier.warning, allocWarning].filter(Boolean).join(" ") || null } : null}
             onOpenDriver={(id) => setSelectedDriverId(id)} />
+            )}
             {planTerminalId && <SiteBoard kind="terminal" id={planTerminalId} name={planTerminal?.name ?? "Terminal"} trips={fleetTrips} product={boardProduct} now={new Date()} etaFor={arrivalEta} onOpenTrip={openTrip} />}
             {planLocationId && <SiteBoard kind="location" id={planLocationId} name={planLocation ? locationTitle(planLocation) : "Delivery"} trips={fleetTrips} product={boardProduct} now={new Date()} etaFor={storeEta} onOpenTrip={openTrip} />}
           </div>
@@ -1081,6 +1100,16 @@ export default function DispatchPage() {
           </button>
         ))}
       </FullscreenModal>
+      {planTripFor && (() => {
+        const h = heldEquipment.get(planTripFor);
+        const e = equipFor(planTripFor);
+        return (
+          <PlanTripSheet driverId={planTripFor} driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
+            equipmentLabel={e ? `Truck ${e.truck} · Trailer ${e.trailer}` : "No equipment yet"} truckId={h?.truckId ?? null} trailerId={h?.trailerId ?? null}
+            terminals={terminalsCatalog as any} locations={locList.locations} tanks={locList.tanks} companyId={companyId || null} userId={authUserId || null}
+            onLocationAdded={locList.reload} onSent={() => dispatched.reload()} onClose={() => setPlanTripFor(null)} />
+        );
+      })()}
       <LocationPicker kinds={["store"]} open={locPickerOpen} title="Drop location" origin={null} locations={locList.locations} tanks={locList.tanks}
         companyId={companyId || null} userId={authUserId || null} selectedLocationId={planLocationId}
         onLocationAdded={locList.reload}

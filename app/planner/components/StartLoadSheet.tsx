@@ -60,11 +60,14 @@ export function StartLoadSheet({
   liveMiles,
   breakNote,
   planRequired = true,
+  forDriver = null,
   requireShipperCustomer = false,
   onPlanDetour,
 }: {
   // A plan must be chosen unless the pickup is already loaded or dispatch sent one.
   planRequired?: boolean;
+  // Dispatch planning this trip for a driver: no begin miles or start city (the driver gives those at Begin).
+  forDriver?: string | null;
   // Company setting: every load has a shipper and a customer (account rules email by them).
   requireShipperCustomer?: boolean;
   // Make or change a plan in the Planner, then come back here ("new" or an existing slot).
@@ -133,7 +136,7 @@ export function StartLoadSheet({
     if (!open) { setEdit(null); setQueue([]); return; }
     setV(initial);
     if (!editing) {
-      const missing = AUTO_KEYS.filter((k) => (k === "miles" ? !initial.beginMiles.trim() : !initial.orderNumber.trim()));
+      const missing = AUTO_KEYS.filter((k) => (k === "miles" ? !forDriver && !initial.beginMiles.trim() : !initial.orderNumber.trim()));
       if (missing.length) { setQueue(missing.slice(1)); openEdit(missing[0], initial); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,7 +158,7 @@ export function StartLoadSheet({
     if (p) setV((s) => (s.startCity.trim() ? s : { ...s, startCity: p.city, startState: p.state ?? s.startState }));
   };
   useEffect(() => {
-    if (!open || initial.startCity.trim()) return;
+    if (!open || forDriver || initial.startCity.trim()) return;
     let cancelled = false;
     (async () => {
       let p = suggestStart ? await suggestStart() : null;
@@ -200,9 +203,9 @@ export function StartLoadSheet({
   const milesOk = v.beginMiles.trim() === "" || Number.isFinite(Number(v.beginMiles));
   // Everything on the card has to be filled in before the trip is saved.
   const missing: string[] = [];
-  if (!v.beginMiles.trim() || !Number.isFinite(Number(v.beginMiles))) missing.push("begin miles");
+  if (!forDriver && (!v.beginMiles.trim() || !Number.isFinite(Number(v.beginMiles)))) missing.push("begin miles");
   if (!v.orderNumber.trim() || v.extraOrderNumbers.some((n) => !n.trim())) missing.push("order number");
-  if (!v.startCity.trim()) missing.push("starting from");
+  if (!forDriver && !v.startCity.trim()) missing.push("starting from");
   if (requireShipperCustomer) missing.push(...namesProblem(v.shipper, v.customer));
   if (!pickupLabel) missing.push("pickup");
   if (v.deliveries.some((d) => !d.locationId && !d.oneOffName?.trim())) missing.push("delivery");
@@ -245,7 +248,7 @@ export function StartLoadSheet({
     <>
     <FullscreenModal
       open={open}
-      title={editing ? "Edit Trip" : "Begin Trip"}
+      title={forDriver ? "Plan Trip" : editing ? "Edit Trip" : "Begin Trip"}
       onClose={onClose}
       footer={
         <div style={{ padding: "12px 16px" }}>
@@ -261,7 +264,7 @@ export function StartLoadSheet({
               opacity: busy || missing.length > 0 ? 0.5 : 1, cursor: busy ? "default" : "pointer",
             }}
           >
-            {editing ? "Save" : "Begin Trip"}
+            {forDriver ? `Send to ${forDriver}` : editing ? "Save" : "Begin Trip"}
           </button>
         </div>
       }
@@ -279,14 +282,14 @@ export function StartLoadSheet({
         )}
 
         <div style={{ borderTop: hair }}>
-          <Line label="Begin miles" value={v.beginMiles || null} missing verified={liveMiles != null && v.beginMiles === String(liveMiles)} sub={liveMiles != null && v.beginMiles === String(liveMiles) ? "From telematics" : null} onTap={() => openEdit("miles")} />
+          {!forDriver && <Line label="Begin miles" value={v.beginMiles || null} missing verified={liveMiles != null && v.beginMiles === String(liveMiles)} sub={liveMiles != null && v.beginMiles === String(liveMiles) ? "From telematics" : null} onTap={() => openEdit("miles")} />}
           <Line label="Order #" value={v.orderNumber || null} missing onTap={() => openEdit("order")} />
           {v.extraOrderNumbers.map((n, i) => (
             <Line key={`order-${i}`} label={`Order # ${i + 2}`} value={n || null} missing onTap={() => openEdit(`order:${i}`)} />
           ))}
           <Line label="Shipper" value={v.shipper || null} onTap={() => openEdit("shipper")} />
           <Line label="Customer" value={v.customer || null} onTap={() => openEdit("customer")} />
-          <Line label="Starting from" value={[v.startCity, v.startState].filter((x) => x.trim()).join(", ") || null} missing onTap={() => openEdit("start")} />
+          {!forDriver && <Line label="Starting from" value={[v.startCity, v.startState].filter((x) => x.trim()).join(", ") || null} missing onTap={() => openEdit("start")} />}
           <Line label="Pickup" value={pickupLabel} missing onTap={onChangePickup} />
           <Line label="Supplier" value={v.supplier?.name ?? null} onTap={() => setSupplierOpen(true)} />
           {v.deliveries.map((d, i) => {
