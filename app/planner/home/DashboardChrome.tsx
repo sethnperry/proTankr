@@ -247,26 +247,30 @@ export type GaugeCell = { label: string; value: string; unit?: string; color?: s
 // and the status chips line up. Everything inside scales with the panel (container units), so the shape never stretches.
 export const CHIP_ASPECT = "5 / 4";
 
-export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number; small?: boolean; square?: boolean }) {
+// fluid: the chips are measured against `of` columns, so a row of three is the same size as a row of four, and the
+// whole row grows with its container (no 480px cap) up to a larger type size. Used by the Dispatch dashboard.
+export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square, fluid, of = 4 }: { cells: GaugeCell[]; equal?: boolean; labelBelow?: boolean; top?: number; small?: boolean; square?: boolean; fluid?: boolean; of?: number }) {
   const L = useDashLook();
   // equal: every cell the same width, the whole set scaling with its width
   // (text sized from the panel via container units) up to the screen height,
   // and labels truncating once they no longer fit.
-  const labelSize = square ? "clamp(8px, 2.6cqw, 12px)" : equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
-  const labelSpacing = equal ? "0.14em" : "0.06em"; // four labels have to fit a phone-width row
-  const valueSize = square ? "clamp(18px, 7.6cqw, 36px)" : equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
-  return (
+  const labelSize = fluid ? "clamp(8px, 2.6cqw, 15px)" : square ? "clamp(8px, 2.6cqw, 12px)" : equal ? "clamp(8px, 2.6cqw, 11px)" : small ? 8 : 9;
+  const labelSpacing = equal || fluid ? "0.14em" : "0.06em"; // four labels have to fit a phone-width row
+  const valueSize = fluid ? "clamp(18px, 7.6cqw, 56px)" : square ? "clamp(18px, 7.6cqw, 36px)" : equal ? "clamp(16px, 7cqw, 30px)" : small ? 17 : 24;
+  const chips = fluid ? { square: true as const } : { square };
+  const grid = (
     <div style={{
       display: "grid",
-      gridTemplateColumns: equal ? `repeat(${cells.length}, minmax(0, 1fr))` : cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "),
-      gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: top,
-      ...(square ? { maxWidth: 480, marginLeft: "auto", marginRight: "auto", containerType: "inline-size" as const, boxSizing: "border-box" as const, minWidth: 0 } : {}),
+      gridTemplateColumns: equal || fluid ? `repeat(${cells.length}, minmax(0, 1fr))` : cells.map((c) => (c.wide ? "1.35fr" : "1fr")).join(" "),
+      gap: 1, background: L.hairline, border: `1px solid ${L.hairline}`, marginTop: fluid ? 0 : top,
+      ...(fluid ? { width: `${(cells.length / of) * 100}%`, boxSizing: "border-box" as const, minWidth: 0 } : {}),
+      ...(square && !fluid ? { maxWidth: 480, marginLeft: "auto", marginRight: "auto", containerType: "inline-size" as const, boxSizing: "border-box" as const, minWidth: 0 } : {}),
       ...(equal ? { containerType: "inline-size" as const, maxWidth: "100vh", width: "100%", boxSizing: "border-box" as const, minWidth: 0, overflow: "hidden" } : {}),
     }}>
       {cells.map((c) => (
         <button key={c.label} type="button" onClick={c.onClick} disabled={!c.onClick || !!c.busy} aria-busy={!!c.busy} className={c.onClick ? "dash-press" : undefined}
-          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: square ? "center" : "left", padding: small ? "7px 8px 6px" : "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0,
-            ...(square ? { aspectRatio: CHIP_ASPECT, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "1.6cqw", textAlign: "center" as const } : {}) }}>
+          style={{ background: "#0f0f10", border: "none", color: "#fff", textAlign: chips.square ? "center" : "left", padding: small ? "7px 8px 6px" : "10px 10px 9px", cursor: c.onClick ? "pointer" : "default", minWidth: 0,
+            ...(chips.square ? { aspectRatio: CHIP_ASPECT, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "1.6cqw", textAlign: "center" as const } : {}) }}>
           {(() => {
             const label = (
               <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
@@ -284,4 +288,5 @@ export function GaugePanel({ cells, equal, labelBelow, top = 12, small, square }
       ))}
     </div>
   );
+  return fluid ? <div style={{ containerType: "inline-size" as const, width: "100%", minWidth: 0, marginTop: top }}>{grid}</div> : grid;
 }

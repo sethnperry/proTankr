@@ -85,6 +85,19 @@ export function DashStyles() {
   .d2-left,.d2-right{display:block;min-width:0}
   .d2-right .dash-desk{display:flex}
 }
+/* Dispatch dashboard: the chip rows sit above the two columns. One column on a phone (row 1, row 2, the lists); on a wide screen
+   the first row heads the left column and the second row the right one, side by side at the same size, scaling together. */
+.dp-cols{display:flex;flex-direction:column;margin-top:12px}
+.dp-left,.dp-right{display:contents}
+.dp-o0{order:0}.dp-o1{order:1;margin-top:6px}.dp-o2{order:2}.dp-o3{order:3}
+.dp-chips{width:100%;max-width:480px;margin-left:auto;margin-right:auto}
+@media (min-width: 960px){
+  .dash-wrap.dp{max-width:1480px}
+  .dp-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+  .dp-left,.dp-right{display:block;min-width:0}
+  .dp-chips{max-width:none;margin-left:0;margin-right:0}
+  .dp-o1{margin-top:0}
+}
 @media (min-width: 960px){
   .dash-wrap{max-width:1080px}
   .dash-cols{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,0.92fr);gap:28px;align-items:start}

@@ -305,18 +305,17 @@ export function DispatchDashboardView(props: {
       ]
     : [
         { label: expTile.label, value: String(expTile.count), color: expTile.color, onClick: () => setExpOpen(true) },
-        { label: "Parked", value: String(parkedCount), color: parkedCount ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
         p.allocation
           ? { label: "Allocation", value: String(p.allocation.count), color: p.allocation.color, onClick: p.allocation.onOpen }
           : { label: "Allocation", value: "0", color: GREY },
-        // While planning a load this is the not-carded count; otherwise loads sent and not begun.
-        p.notCarded
-          ? { label: p.notCarded.shown ? "Not carded ✓" : "Not carded", value: String(p.notCarded.count), color: p.notCarded.count ? ORANGE : GREY, onClick: p.notCarded.onToggle }
-          : { label: "Dispatched", value: String(p.dispatchedCount), color: p.dispatchedCount ? "#93c5fd" : GREY },
+        // Only while planning a load: how many drivers aren't carded at the terminal.
+        ...(p.notCarded
+          ? [{ label: p.notCarded.shown ? "Not carded ✓" : "Not carded", value: String(p.notCarded.count), color: p.notCarded.count ? ORANGE : GREY, onClick: p.notCarded.onToggle }]
+          : []),
       ];
 
   const groups = groupBySubject(p.alerts);
-  // Second row (Live): the rest of the load states and the hours watch.
+  // Second row (Plan and Live): the load states.
   const cells2: GaugeCell[] = [
     { label: "Cancelled", value: String(p.cancelledCount), color: p.cancelledCount ? "#fff" : GREY, onClick: () => setSheet("cancelled") },
     { label: "Parked", value: String(parkedCount), color: parkedCount ? "#93c5fd" : GREY, onClick: () => setParkedOpen(true) },
@@ -324,7 +323,7 @@ export function DispatchDashboardView(props: {
   ];
 
   return (
-    <div className="dash-wrap" style={{ paddingTop: 4, paddingBottom: 24 }}>
+    <div className="dash-wrap dp" style={{ paddingTop: 4, paddingBottom: 24 }}>
       <DashStyles />
       {(() => {
         const controls = (
@@ -342,27 +341,30 @@ export function DispatchDashboardView(props: {
         );
       })()}
 
-      <GaugePanel cells={cells} equal />
-      {live && <GaugePanel cells={cells2} equal top={6} />}
       {p.error && <div style={{ fontSize: 13, color: "#f87171", marginTop: 10 }}>{p.error}</div>}
 
-      <div className="dash-cols" style={{ marginTop: 4 }}>
-        <div>
-          {live ? (
-            <>{p.liveBoard}</>
-          ) : (
-            <>
-              <SectionLabel first>Plan a load</SectionLabel>
-              {p.planner}
-              {p.dispatchedBoard && <SectionLabel>Dispatched · not begun</SectionLabel>}
-              {p.dispatchedBoard}
-              {p.cancelledBoard}
-            </>
-          )}
+      <div className="dp-cols">
+        <div className="dp-left">
+          <div className="dp-chips dp-o0"><GaugePanel fluid of={4} top={0} cells={cells} /></div>
+          <div className="dp-o2">
+            {live ? (
+              <>{p.liveBoard}</>
+            ) : (
+              <>
+                <SectionLabel first>Plan a load</SectionLabel>
+                {p.planner}
+                {p.dispatchedBoard && <SectionLabel>Dispatched · not begun</SectionLabel>}
+                {p.dispatchedBoard}
+                {p.cancelledBoard}
+              </>
+            )}
+          </div>
         </div>
-        <div className="dash-side">
-          
-          {p.drivers && (<><SectionLabel first>Drivers</SectionLabel>{p.drivers}</>)}
+        <div className="dp-right">
+          <div className="dp-chips dp-o1"><GaugePanel fluid of={4} top={0} cells={cells2} /></div>
+          <div className="dash-side dp-o3">
+            {p.drivers && (<><SectionLabel first>Drivers</SectionLabel>{p.drivers}</>)}
+          </div>
         </div>
       </div>
       <SectionLabel>Tools</SectionLabel>
