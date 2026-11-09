@@ -21,8 +21,8 @@ const BLANK: StartLoadValues = {
   beginMiles: "", startCity: "", startState: "", planSlot: null, supplier: null, savePlan: null,
 };
 
-export function PlanTripSheet({ driverName, equipmentLabel, initial, initialPickupId, terminals, locations, tanks, companyId, userId, onLocationAdded, onApply, onClose }: {
-  driverName: string; equipmentLabel: string; initial?: StartLoadValues; initialPickupId?: string | null;
+export function PlanTripSheet({ driverName, equipmentLabel, onChangeEquipment, initial, initialPickupId, terminals, locations, tanks, companyId, userId, onLocationAdded, onApply, onClose }: {
+  driverName: string; equipmentLabel: string; onChangeEquipment?: () => void; initial?: StartLoadValues; initialPickupId?: string | null;
   terminals: TermRow[]; locations: DeliveryLocation[]; tanks: LocationTank[]; companyId: string | null; userId: string | null;
   onLocationAdded: () => void; onApply: (p: PlanTripPick) => void; onClose: () => void;
 }) {
@@ -72,7 +72,7 @@ export function PlanTripSheet({ driverName, equipmentLabel, initial, initialPick
       <StartLoadSheet open={!termOpen} editing={false} forDriver={driverName} planRequired={false} initial={initial ?? BLANK}
         pickupLabel={pickup ? `${pickup.name}${pickup.city ? `, ${pickup.city}` : ""}` : null} pickupTerminalId={pickup?.terminalId ?? null}
         onChangePickup={() => { setQ(""); setTermOpen(true); }}
-        suppliers={suppliers} onAddSupplier={addSupplier} presets={[]} productColor={() => "#fff"} equipmentLabel={equipmentLabel}
+        suppliers={suppliers} onAddSupplier={addSupplier} presets={[]} productColor={() => "#fff"} equipmentLabel={equipmentLabel} onChangeEquipment={onChangeEquipment}
         locations={locations} tanks={tanks} origin={null} companyId={companyId} userId={userId} onLocationAdded={onLocationAdded}
         error={error} onClose={onClose} onSubmit={submit} />
       <FullscreenModal open={termOpen} title="Pickup terminal" onClose={() => setTermOpen(false)}>

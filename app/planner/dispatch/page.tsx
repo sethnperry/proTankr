@@ -87,6 +87,7 @@ import { useDriverTrips } from "./useDriverTrips";
 import { driverDays } from "@/lib/dispatch/driverDay";
 import { useTerminalCertMap, certBad } from "@/lib/dispatch/useTerminalCertMap";
 import { PlanTripSheet } from "./PlanTripSheet";
+import { EquipmentPickSheet, type EquipUnit } from "./EquipmentPickSheet";
 import { useDriverDirectory } from "./useDriverDirectory";
 import type { FinderPerson } from "@/lib/dispatch/driverFinder";
 import type { DayTrip, Others } from "@/lib/dispatch/validateDay";
@@ -516,6 +517,19 @@ export default function DispatchPage() {
   const [meetIssue, setMeetIssue] = useState<import("@/lib/dispatch/validateDay").Issue | null>(null);
   const [meetBusy, setMeetBusy] = useState(false);
   const [meetErr, setMeetErr] = useState<string | null>(null);
+  // The equipment a plan goes onto: what the dispatcher picked, else what the driver holds, else what he drove last.
+  const [equipPick, setEquipPick] = useState<Record<string, { truckId: string | null; trailerId: string | null }>>({});
+  const [equipOpen, setEquipOpen] = useState(false);
+  const planEquip = useMemo(() => (id: string | null): { truckId: string | null; trailerId: string | null; source: "picked" | "holding" | "last" | "none" } => {
+    if (!id) return { truckId: null, trailerId: null, source: "none" };
+    const pk = equipPick[id];
+    if (pk) return { ...pk, source: "picked" };
+    const h = heldEquipment.get(id);
+    if (h) return { truckId: h.truckId, trailerId: h.trailerId, source: "holding" };
+    const l = directory.truckUse.find((u) => u.driverId === id);
+    return l ? { truckId: l.truckId, trailerId: l.trailerId, source: "last" } : { truckId: null, trailerId: null, source: "none" };
+  }, [equipPick, heldEquipment, directory.truckUse]);
+  const held = tlDriverId ? planEquip(tlDriverId) : null;
   const certMap = useTerminalCertMap(companyId || null);
   const planContext = useMemo(() => {
     if (!tlDriverId) return null;
@@ -528,7 +542,7 @@ export default function DispatchPage() {
     const nameOf = (id: string) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver";
     const others = (match: (t: (typeof dispatched.trips)[number]) => boolean, at: (t: (typeof dispatched.trips)[number]) => number): Others =>
       dispatched.trips.filter((t) => t.driver_id !== tlDriverId && match(t) && t.planned_start_at).map((t) => ({ name: nameOf(t.driver_id), etaMs: at(t) }));
-    const trailerId = heldEquipment.get(tlDriverId)?.trailerId ?? null;
+    const trailerId = planEquip(tlDriverId).trailerId;
     const h = fleetHos.get(tlDriverId);
     const rs = resetInfo(h ?? { status: null }, Date.now());
     return {
@@ -556,8 +570,7 @@ export default function DispatchPage() {
       calloutText: calloutHit ? blockText(calloutHit, nameOf(tlDriverId)) : null,
       restText: rs && defaultStartMs < rs.resetAtMs ? `Starts before the driver is rested: their 10 hour reset completes ${clock(rs.resetAtMs)}.` : null,
     };
-  }, [tlDriverId, terminalsCatalog, locList.locations, plan.roster, plan.input, dispatched.trips, heldEquipment, fleetHos, tripHistory.trips, tlSettings, certMap, allContracts, usageItems, companySuppliers.all, calloutHit, defaultStartMs]); // eslint-disable-line react-hooks/exhaustive-deps
-  const held = tlDriverId ? heldEquipment.get(tlDriverId) : null;
+  }, [tlDriverId, terminalsCatalog, locList.locations, plan.roster, plan.input, dispatched.trips, heldEquipment, planEquip, fleetHos, tripHistory.trips, tlSettings, certMap, allContracts, usageItems, companySuppliers.all, calloutHit, defaultStartMs]); // eslint-disable-line react-hooks/exhaustive-deps
   // The driver's whole day (finished, live, not begun) and the trip being checked, if any.
   const driverTrips = useDriverTrips(tlDriverId);
   const [checkId, setCheckId] = useState<string | null>(null);
@@ -842,7 +855,7 @@ export default function DispatchPage() {
               shiftFor={(id) => directory.shifts.get(id)}
               accessFor={(id) => (plan.input?.access ?? []).filter((a) => a.user_id === id)}
               catalog={terminalsCatalog as any}
-              equipLine={(id) => { const e = equipFor(id); return e ? `Truck ${e.truck} · Trailer ${e.trailer}` : null; }}
+              equipLine={(id) => { const e = planEquip(id); const t = e.truckId ? plan.input?.trucks.get(e.truckId) : null; const tr = e.trailerId ? plan.input?.trailers.get(e.trailerId) : null; return t || tr ? `Truck ${t ?? "—"} · Trailer ${tr ?? "—"}${e.source === "last" ? " (last used)" : ""}` : null; }}
               onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
             {tlDriverId && !checkId && day.trips.length > 0 && (
               <PlanDayCard trips={day.trips} report={day.report} startMs={day.startMs} onStart={day.setStart} onMove={day.move} onRemove={day.remove}
@@ -927,10 +940,12 @@ export default function DispatchPage() {
         ))}
       </FullscreenModal>
       {planTripFor && (() => {
-        const e = equipFor(planTripFor);
+        const e = planEquip(planTripFor);
+        const tName = e.truckId ? plan.input?.trucks.get(e.truckId) : null, trName = e.trailerId ? plan.input?.trailers.get(e.trailerId) : null;
+        const label = tName || trName ? `Truck ${tName ?? "—"} · Trailer ${trName ?? "—"}${e.source === "last" ? " (last used)" : e.source === "picked" ? " (picked)" : ""}` : "No equipment yet";
         return (
           <PlanTripSheet driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
-            equipmentLabel={e ? `Truck ${e.truck} · Trailer ${e.trailer}` : "No equipment yet"}
+            equipmentLabel={label} onChangeEquipment={() => setEquipOpen(true)}
             terminals={terminalsCatalog as any} locations={locList.locations} tanks={locList.tanks} companyId={companyId || null} userId={authUserId || null}
             onLocationAdded={locList.reload}
             onApply={(x) => {
@@ -938,6 +953,23 @@ export default function DispatchPage() {
               day.add({ id: crypto.randomUUID(), terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer });
             }}
             onClose={() => setPlanTripFor(null)} />
+        );
+      })()}
+      {planTripFor && (() => {
+        const nameOf = (id: string) => plan.roster.find((m) => m.user_id === id)?.display_name ?? "Driver";
+        const e = planEquip(planTripFor);
+        const holder = (kind: "truckId" | "trailerId", id: string): string | null => {
+          for (const [uid, h] of heldEquipment) if (uid !== planTripFor && h[kind] === id) return `In use by ${nameOf(uid)}`;
+          const last = directory.truckUse.find((u) => u[kind] === id && u.driverId !== planTripFor);
+          return last ? `Last: ${nameOf(last.driverId)}` : null;
+        };
+        const units = (m: Map<string, string> | undefined, kind: "truckId" | "trailerId"): EquipUnit[] =>
+          [...(m ?? new Map<string, string>())].map(([id, name]) => ({ id, name, note: holder(kind, id) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        return (
+          <EquipmentPickSheet open={equipOpen} driverName={nameOf(planTripFor)} trucks={units(plan.input?.trucks, "truckId")} trailers={units(plan.input?.trailers, "trailerId")}
+            truckId={e.truckId} trailerId={e.trailerId}
+            onChange={(truckId, trailerId) => setEquipPick((m) => ({ ...m, [planTripFor]: { truckId, trailerId } }))}
+            onClose={() => setEquipOpen(false)} />
         );
       })()}
       {meetIssue && day.report && tlDriverId && (() => {
