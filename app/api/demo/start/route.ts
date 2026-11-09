@@ -57,7 +57,8 @@ export const runtime = "nodejs";
 // its cookies) land on that isolated host and never touch protankr.com's
 // own session at all. This route's own `origin` below deliberately uses
 // the REQUEST's actual host for this reason -- see that comment.
-const PUBLIC_DEMO_PERSONAS = new Set(["beta"]);
+// TEMPORARY (2026-11-09): "alpha" opened only to capture fleet screens for the marketing site. Revert immediately after.
+const PUBLIC_DEMO_PERSONAS = new Set(["beta", "alpha"]);
 
 function demoStartBlockedInProd(persona: string): boolean {
   if (PUBLIC_DEMO_PERSONAS.has(persona)) return false;
