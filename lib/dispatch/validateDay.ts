@@ -15,6 +15,8 @@ import type { LatLon } from "../trips/deliveryLocations.ts";
 
 export type DayTrip = {
   id: string;
+  /** Product plan, one entry per compartment, highest compartment first. */
+  comps?: (string | null)[] | null;
   terminalId: string;
   locationId: string;
   supplierId: string | null;

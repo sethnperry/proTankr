@@ -8,6 +8,7 @@
 import { useMemo, useState } from "react";
 import { validateDay, type DayContext, type DayReport, type DayTrip, type Others } from "@/lib/dispatch/validateDay";
 import { buildDispatchedTrip } from "@/lib/dispatch/dispatchTrip";
+import { groupsFromPlan } from "@/lib/dispatch/compPlan";
 import { writeDispatched } from "@/lib/dispatch/useDispatchData";
 
 export type PlanDayDeps = {
@@ -76,6 +77,8 @@ export function usePlanDay(d: PlanDayDeps) {
             startMs: r.startMs, endMs: r.forecast.endMs, driveMin: r.forecast.driveMinutes, truckId: d.truckId, trailerId: d.trailerId,
             warnings: report.issues.filter((x) => x.tripId === r.trip.id || x.tripId === null).map((x) => x.text),
             shipper: r.trip.shipper, customer: r.trip.customer,
+            // comps run highest compartment first: the last entry is compartment 1.
+            groups: r.trip.comps?.some(Boolean) ? groupsFromPlan(Object.fromEntries(r.trip.comps.map((pid, i) => [r.trip.comps!.length - i, pid ?? ""])), {}, { orderNumber: r.trip.orderNumber, supplierId: r.trip.supplierId }) : undefined,
           },
         }, { now: new Date(), newId: () => crypto.randomUUID() });
         const err = await writeDispatched(rows as any);

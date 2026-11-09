@@ -45,8 +45,7 @@ export function StartLoadSheet({
   dispatchMatch,
   saveSlot,
   productColor,
-  equipmentLabel,
-  lineExtra,
+  equipmentLabel, lineExtra, onPlanTap,
   locations,
   tanks,
   origin,
@@ -96,6 +95,7 @@ export function StartLoadSheet({
   saveSlot?: { slot: number; replacing: boolean } | null;
   productColor: (productId: string) => string;
   equipmentLabel: string;
+  onPlanTap?: () => void; // dispatch: build the plan itself (the driver's presets do not apply)
   lineExtra?: React.ReactNode; // dispatch: replaces the "tap any value" hint (change equipment, delivery range)
   locations: DeliveryLocation[];
   tanks: LocationTank[];
@@ -314,7 +314,7 @@ export function StartLoadSheet({
             <Line label="Plan" value="Sent by dispatch" last onTap={() => undefined} sub={null} />
           ) : (
             <Line label="Plan" value={chosenPreset ? `${slotLetter(chosenPreset.slot)}${chosenPreset.name ? ` · ${chosenPreset.name}` : ""}` : null}
-              missing onTap={() => setPlanOpen(true)} last />
+              missing onTap={onPlanTap ?? (() => setPlanOpen(true))} last />
           )}
         </div>
 

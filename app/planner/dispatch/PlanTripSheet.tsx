@@ -12,12 +12,16 @@ import { useDashLook } from "../home/dashLook";
 import { StartLoadSheet, type StartLoadValues } from "../components/StartLoadSheet";
 import { AccessStripsSheet, UncardedSheet, type CityStrip } from "./AccessStripsSheet";
 import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
+import { ProductPlanSheet, type PlanComps } from "./ProductPlanSheet";
+import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { repeatedRefs } from "@/lib/trips/refs";
 import type { DeliveryLocation, LocationTank } from "@/lib/trips/deliveryLocations";
 import type { SupplierRow } from "@/lib/trips/types";
 
 type TermRow = { terminal_id: string | number; terminal_name: string | null; city: string | null; state: string | null; lat?: number | null; lon?: number | null };
 export type PlanTripPick = { terminalId: string; locationId: string; shipper: string; customer: string; orderNumber: string; supplierId: string | null;
+  /** Product plan per compartment, highest first. */
+  comps?: PlanComps | null;
   /** The pickup is a terminal the driver is not carded at, and the dispatcher chose to meet another driver there. */
   meet?: boolean };
 const BLANK: StartLoadValues = {
@@ -26,8 +30,8 @@ const BLANK: StartLoadValues = {
   beginMiles: "", startCity: "", startState: "", planSlot: null, supplier: null, savePlan: null,
 };
 
-export function PlanTripSheet({ driverName, equipmentLabel, onChangeEquipment, strips, usable, locationFreq, rangeMin, initial, initialPickupId, terminals, locations, tanks, companyId, userId, onLocationAdded, onApply, onClose }: {
-  driverName: string; equipmentLabel: string; onChangeEquipment?: () => void;
+export function PlanTripSheet({ driverName, equipmentLabel, onChangeEquipment, trailerId, strips, usable, locationFreq, rangeMin, initial, initialPickupId, terminals, locations, tanks, companyId, userId, onLocationAdded, onApply, onClose }: {
+  driverName: string; equipmentLabel: string; onChangeEquipment?: () => void; trailerId: string | null;
   /** The driver's access strips (most urgent first), and whether a terminal is one he can load at now. */
   strips: CityStrip[]; usable: (terminalId: string) => boolean;
   /** Times each delivery location has been used, and how many drive minutes a one-way delivery may take. */
@@ -45,6 +49,10 @@ export function PlanTripSheet({ driverName, equipmentLabel, onChangeEquipment, s
   const [stripsOpen, setStripsOpen] = useState(false);
   const [uncarded, setUncarded] = useState<TermRow | null>(null);
   const [meet, setMeet] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [comps, setComps] = useState<PlanComps | null>(null);
+  const catalog = useProductsCatalog().data;
+  const planName = comps ? comps.map((id) => { const x = id ? catalog.find((y) => y.product_id === id) : null; return x ? String(x.button_code ?? x.display_name ?? "").toUpperCase() : "–"; }).join("/") : null;
   const [wide, setWide] = useState(false); // show every delivery location, not only those in range
   // Shipper and customer start as the last ones entered here.
   const memKey = `proTankr:dispatchLastShipCust:${userId || "anon"}`;
@@ -77,7 +85,7 @@ export function PlanTripSheet({ driverName, equipmentLabel, onChangeEquipment, s
     const first = v.deliveries.find((d) => d.locationId);
     if (!first?.locationId || !pickup) { setError("Pick a pickup terminal and a saved delivery location."); return; }
     try { localStorage.setItem(memKey, JSON.stringify({ shipper: v.shipper, customer: v.customer })); } catch { /* private mode: it just will not be remembered */ }
-    onApply({ terminalId: pickup.terminalId, locationId: first.locationId, shipper: v.shipper, customer: v.customer, orderNumber: v.orderNumber, supplierId: v.supplier?.supplier_id ?? null, meet });
+    onApply({ terminalId: pickup.terminalId, locationId: first.locationId, shipper: v.shipper, customer: v.customer, orderNumber: v.orderNumber, supplierId: v.supplier?.supplier_id ?? null, comps, meet });
     onClose();
   };
 
@@ -120,12 +128,14 @@ export function PlanTripSheet({ driverName, equipmentLabel, onChangeEquipment, s
 
   return (
     <>
-      <StartLoadSheet open editing={false} forDriver={driverName} planRequired={false} initial={initial ?? { ...BLANK, shipper: last.shipper, customer: last.customer }}
+      <StartLoadSheet open editing={false} forDriver={driverName} planRequired={false} initial={initial ?? { ...BLANK, shipper: last.shipper, customer: last.customer, planSlot: 1 }}
+        presets={comps ? [{ slot: 1, name: planName, comps }] : []} onPlanTap={() => setPlanOpen(true)}
         pickupLabel={pickup ? `${pickup.name}${pickup.city ? `, ${pickup.city}` : ""}` : null} pickupTerminalId={pickup?.terminalId ?? null}
         onChangePickup={() => { setQ(""); if (strips.length) setStripsOpen(true); else setTermOpen(true); }}
-        suppliers={suppliers} onAddSupplier={addSupplier} presets={[]} productColor={() => "#fff"} equipmentLabel={equipmentLabel} lineExtra={lineExtra}
+        suppliers={suppliers} onAddSupplier={addSupplier} productColor={() => "#fff"} equipmentLabel={equipmentLabel} lineExtra={lineExtra}
         locations={shownLocations} tanks={tanks} origin={null} companyId={companyId} userId={userId} onLocationAdded={onLocationAdded}
         error={error} onClose={onClose} onSubmit={submit} />
+      <ProductPlanSheet open={planOpen} trailerId={trailerId} value={comps} onApply={setComps} onClose={() => setPlanOpen(false)} />
       <AccessStripsSheet open={stripsOpen} driverName={driverName} strips={strips}
         onPick={(id) => { const t = byId(id); if (t) choose(t); }} onUncarded={(id) => { const t = byId(id); if (t) setUncarded(t); }}
         onSearch={() => { setQ(""); setTermOpen(true); }} onClose={() => setStripsOpen(false)} />

@@ -968,7 +968,7 @@ export default function DispatchPage() {
         const label = tName || trName ? `Truck ${tName ?? "—"} · Trailer ${trName ?? "—"}${e.source === "last" ? " (last used)" : e.source === "picked" ? " (picked)" : ""}` : "No equipment yet";
         return (
           <PlanTripSheet driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
-            equipmentLabel={label} onChangeEquipment={() => setEquipOpen(true)}
+            equipmentLabel={label} onChangeEquipment={() => setEquipOpen(true)} trailerId={e.trailerId}
             strips={stripsFor(planTripFor)} usable={(tid) => usableFor(planTripFor, tid)} locationFreq={locationFreq} rangeMin={Math.max(60, tlSettings.maxShiftHours * 60 - 120)}
             terminals={terminalsCatalog as any} locations={locList.locations} tanks={locList.tanks} companyId={companyId || null} userId={authUserId || null}
             onLocationAdded={locList.reload}
@@ -976,7 +976,7 @@ export default function DispatchPage() {
               setTlDriverId(planTripFor);
               const newId = crypto.randomUUID();
               if (x.meet) setPendingMeet(newId);
-              day.add({ id: newId, terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer });
+              day.add({ id: newId, terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer, comps: x.comps ?? null });
             }}
             onClose={() => setPlanTripFor(null)} />
         );
