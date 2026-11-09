@@ -41,8 +41,20 @@ function whyText(t: any): string {
 async function weeklyFor(companyId: string, nowMs: number): Promise<{ reported: number; deleted: number } | null> {
   const admin = getServiceSupabase();
   const wk = weekKey(nowMs, TZ);
-  const { data: ran } = await admin.from("trip_cleanup_runs").select("week_start").eq("company_id", companyId).eq("week_start", wk).maybeSingle();
-  if (ran) return null;
+  // Claim the week first, so a repeated tick (or a failure after sending) can never send it twice.
+  // No log table yet, or already claimed: do nothing.
+  const claim = await admin.from("trip_cleanup_runs").insert({ company_id: companyId, week_start: wk });
+  if (claim.error) return null;
+  try {
+    return await weeklyBody(companyId, nowMs, wk);
+  } catch (e) {
+    await admin.from("trip_cleanup_runs").delete().eq("company_id", companyId).eq("week_start", wk); // a failed send retries next tick
+    throw e;
+  }
+}
+
+async function weeklyBody(companyId: string, nowMs: number, wk: string): Promise<{ reported: number; deleted: number }> {
+  const admin = getServiceSupabase();
 
   const since = reportSince(nowMs);
   const { data: cx } = await admin.from("trips")
@@ -96,7 +108,7 @@ async function weeklyFor(companyId: string, nowMs: number): Promise<{ reported: 
 
   // Delete only after the report went out (a failed send throws above, so the next tick retries).
   const { data: gone } = await admin.from("trips").delete().eq("company_id", companyId).eq("status", "cancelled").lt("cancelled_at", deleteBefore(nowMs)).select("trip_id");
-  await admin.from("trip_cleanup_runs").insert({ company_id: companyId, week_start: wk, reported: rows.length, deleted: (gone ?? []).length });
+  await admin.from("trip_cleanup_runs").update({ reported: rows.length, deleted: (gone ?? []).length }).eq("company_id", companyId).eq("week_start", wk);
   return { reported: rows.length, deleted: (gone ?? []).length };
 }
 
