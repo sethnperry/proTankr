@@ -95,6 +95,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenStep
                   type="button"
                   className="dash-press"
                   aria-label={`${s.name}: ${label}`}
+                  title={`${s.name}${place ? ` · ${place}` : ""} · ${label}`}
                   onClick={() => (isSel ? openSeg(s) : setSel(s.terminalId))}
                   style={{ flex: "1 1 0", minWidth: 30, maxWidth: 72, background: "none", border: "none", padding: 0, cursor: "pointer", color: "#fff" }}
                 >

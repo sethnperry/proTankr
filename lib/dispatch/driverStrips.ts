@@ -26,3 +26,29 @@ export function driverCityStrips(
     .sort((a, b) => a.state.localeCompare(b.state) || a.city.localeCompare(b.city))
     .map((c) => ({ place: [c.city, c.state].filter(Boolean).join(", "), summary: terminalReadiness(rows, { city: c.city, state: c.state, todayIso }) }));
 }
+
+/** How urgent a strip's carded terminals are: fewest days left (expired is negative), or null when none are carded. */
+export function stripUrgency(summary: ReadinessSummary): { days: number; name: string } | null {
+  let worst: { days: number; name: string } | null = null;
+  for (const g of summary.segments) {
+    if (g.daysLeft == null || g.state === "none" || g.state === "training") continue;
+    if (!worst || g.daysLeft < worst.days) worst = { days: g.daysLeft, name: g.name };
+  }
+  return worst;
+}
+
+/** Most critical city first: the strip whose soonest expiry is nearest (or already past). */
+export function byUrgency<T extends { summary: ReadinessSummary }>(strips: T[]): T[] {
+  const d = (x: T) => stripUrgency(x.summary)?.days ?? Infinity;
+  return [...strips].sort((a, b) => d(a) - d(b));
+}
+
+/** Terminals a driver needs to renew now: expired or 7 days or fewer left. */
+export function renewalCount(strips: { summary: ReadinessSummary }[]): { count: number; worstDays: number | null } {
+  let count = 0, worstDays: number | null = null;
+  for (const s of strips) for (const g of s.summary.segments) {
+    if (g.daysLeft == null || g.state === "none" || g.state === "training") continue;
+    if (g.daysLeft <= 7) { count++; worstDays = worstDays == null ? g.daysLeft : Math.min(worstDays, g.daysLeft); }
+  }
+  return { count, worstDays };
+}

@@ -8,10 +8,9 @@
 // strip for every city they are carded in, as they see it on their dashboard.
 import { useMemo, useState } from "react";
 import { useDashLook } from "../home/dashLook";
-import { TerminalAccessStrip } from "../home/DashboardChrome";
 import { fieldInput } from "../components/trip/tripUi";
 import { findDrivers, type FinderPerson } from "@/lib/dispatch/driverFinder";
-import { driverCityStrips, type StripTerminal } from "@/lib/dispatch/driverStrips";
+import { driverCityStrips, renewalCount, type StripTerminal } from "@/lib/dispatch/driverStrips";
 import type { DriverShift } from "./useDriverDirectory";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -38,6 +37,7 @@ export function DriverFinder(p: {
   equipLine: (id: string) => string | null;
   onPlanTrip: (id: string) => void;
   onOpenDriverFile: (id: string) => void;
+  onOpenAccess: (id: string) => void;
 }) {
   const L = useDashLook();
   const [q, setQ] = useState("");
@@ -69,12 +69,19 @@ export function DriverFinder(p: {
             <button type="button" className="dash-press" onClick={() => p.onOpenDriverFile(sel.userId)} style={btn}>Driver file ›</button>
           </div>
         </div>
-        <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-          {strips.length === 0 && <div style={{ ...L.secondary, padding: "12px 14px", fontSize: 13, color: L.muted }}>Not carded at any terminal yet.</div>}
-          {strips.map((s) => (
-            <TerminalAccessStrip key={s.place} place={s.place} summary={s.summary} onOpenTerminal={() => {}} onOpenSteps={() => {}} onChangeCity={() => {}} otherCities={null} />
-          ))}
-        </div>
+        {(() => {
+          const rn = renewalCount(strips);
+          const color = rn.count > 0 ? (rn.worstDays! < 0 ? "#f87171" : "#fbbf24") : L.muted;
+          return (
+            <button type="button" className="dash-press" onClick={() => p.onOpenAccess(sel.userId)}
+              style={{ ...L.secondary, display: "flex", width: "100%", textAlign: "left", color: "#fff", padding: "11px 14px", marginTop: 8, cursor: "pointer", fontSize: 13, fontWeight: 800, justifyContent: "space-between", gap: 8 }}>
+              <span>Terminal access</span>
+              <span style={{ color, fontWeight: 700 }}>
+                {strips.length === 0 ? "Not carded yet" : rn.count > 0 ? `${rn.count} to renew · ${rn.worstDays! < 0 ? "expired" : `${rn.worstDays}d`}` : "All current"} ›
+              </span>
+            </button>
+          );
+        })()}
       </div>
     );
   }

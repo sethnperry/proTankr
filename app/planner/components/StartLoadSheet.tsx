@@ -46,7 +46,7 @@ export function StartLoadSheet({
   saveSlot,
   productColor,
   equipmentLabel,
-  onChangeEquipment,
+  lineExtra,
   locations,
   tanks,
   origin,
@@ -96,7 +96,7 @@ export function StartLoadSheet({
   saveSlot?: { slot: number; replacing: boolean } | null;
   productColor: (productId: string) => string;
   equipmentLabel: string;
-  onChangeEquipment?: () => void; // dispatch: pick the truck and trailer for the driver
+  lineExtra?: React.ReactNode; // dispatch: replaces the "tap any value" hint (change equipment, delivery range)
   locations: DeliveryLocation[];
   tanks: LocationTank[];
   origin: LatLon | null;
@@ -272,7 +272,7 @@ export function StartLoadSheet({
       }
     >
       <div style={{ padding: "0 16px 16px" }}>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>{equipmentLabel}{onChangeEquipment ? <button type="button" onClick={onChangeEquipment} style={{ background: "none", border: "none", padding: 0, marginLeft: 8, color: "#93c5fd", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Change ›</button> : " · tap any value to change it"}</div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>{equipmentLabel}{lineExtra ?? " · tap any value to change it"}</div>
         {breakNote && !breakAck && !editing && (
           <div style={{ border: "1px solid rgba(251,191,36,0.55)", background: "rgba(251,191,36,0.08)", padding: "10px 12px", marginBottom: 8, borderRadius: 2 }}>
             <div style={{ fontSize: 14, color: "#fff", lineHeight: 1.4 }}>{breakNote}</div>

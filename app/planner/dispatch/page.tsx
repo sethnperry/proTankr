@@ -88,6 +88,8 @@ import { driverDays } from "@/lib/dispatch/driverDay";
 import { useTerminalCertMap, certBad } from "@/lib/dispatch/useTerminalCertMap";
 import { PlanTripSheet } from "./PlanTripSheet";
 import { EquipmentPickSheet, type EquipUnit } from "./EquipmentPickSheet";
+import { AccessStripsSheet } from "./AccessStripsSheet";
+import { byUrgency, driverCityStrips } from "@/lib/dispatch/driverStrips";
 import { useDriverDirectory } from "./useDriverDirectory";
 import type { FinderPerson } from "@/lib/dispatch/driverFinder";
 import type { DayTrip, Others } from "@/lib/dispatch/validateDay";
@@ -530,6 +532,22 @@ export default function DispatchPage() {
     return l ? { truckId: l.truckId, trailerId: l.trailerId, source: "last" } : { truckId: null, trailerId: null, source: "none" };
   }, [equipPick, heldEquipment, directory.truckUse]);
   const held = tlDriverId ? planEquip(tlDriverId) : null;
+  // Terminal access, as the driver's own strips show it: most urgent city first.
+  const [accessViewFor, setAccessViewFor] = useState<string | null>(null);
+  const stripsFor = (id: string) => byUrgency(driverCityStrips((plan.input?.access ?? []).filter((a) => a.user_id === id) as any, terminalsCatalog as any, new Date().toISOString().slice(0, 10)));
+  const usableFor = (uid: string, tid: string) => {
+    const row = (plan.input?.access ?? []).find((a) => a.user_id === uid && String(a.terminal_id) === tid);
+    const st = accessAt(row?.carded_on ?? null, plan.input?.terminals.get(tid)?.renewal_days ?? 90, new Date().toISOString().slice(0, 10)).state;
+    return st === "valid" || st === "soon" || st === "expiring";
+  };
+  // How often each delivery location has been used, for the Plan Trip list.
+  const locationFreq = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of tripHistory.trips) for (const d of t.deliveries as any[]) if (d.location_id) m.set(d.location_id, (m.get(d.location_id) ?? 0) + 1);
+    return m;
+  }, [tripHistory.trips]);
+  // After "meet another driver" at the pickup, open that choice on the new trip's access flag.
+  const [pendingMeet, setPendingMeet] = useState<string | null>(null);
   const certMap = useTerminalCertMap(companyId || null);
   const planContext = useMemo(() => {
     if (!tlDriverId) return null;
@@ -599,6 +617,11 @@ export default function DispatchPage() {
     onDispatched: () => dispatched.reload(),
   });
 
+  useEffect(() => {
+    if (!pendingMeet || !day.report) return;
+    const issue = day.report.issues.find((i) => i.tripId === pendingMeet && i.fixes.includes("meet"));
+    if (issue) { setMeetIssue(issue); setPendingMeet(null); }
+  }, [pendingMeet, day.report]);
   const alerts = useMemo(
     () => focusAlerts(plan.input ? planAlerts(plan.input, 30) : [], null)
       .filter((a) => {
@@ -856,7 +879,7 @@ export default function DispatchPage() {
               accessFor={(id) => (plan.input?.access ?? []).filter((a) => a.user_id === id)}
               catalog={terminalsCatalog as any}
               equipLine={(id) => { const e = planEquip(id); const t = e.truckId ? plan.input?.trucks.get(e.truckId) : null; const tr = e.trailerId ? plan.input?.trailers.get(e.trailerId) : null; return t || tr ? `Truck ${t ?? "—"} · Trailer ${tr ?? "—"}${e.source === "last" ? " (last used)" : ""}` : null; }}
-              onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
+              onPlanTrip={setPlanTripFor} onOpenAccess={setAccessViewFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
             {tlDriverId && !checkId && day.trips.length > 0 && (
               <PlanDayCard trips={day.trips} report={day.report} startMs={day.startMs} onStart={day.setStart} onMove={day.move} onRemove={day.remove}
                 onDispatch={() => void day.dispatchAll()} busy={day.busy} msg={day.msg}
@@ -946,11 +969,14 @@ export default function DispatchPage() {
         return (
           <PlanTripSheet driverName={plan.roster.find((m) => m.user_id === planTripFor)?.display_name ?? "driver"}
             equipmentLabel={label} onChangeEquipment={() => setEquipOpen(true)}
+            strips={stripsFor(planTripFor)} usable={(tid) => usableFor(planTripFor, tid)} locationFreq={locationFreq} rangeMin={Math.max(60, tlSettings.maxShiftHours * 60 - 120)}
             terminals={terminalsCatalog as any} locations={locList.locations} tanks={locList.tanks} companyId={companyId || null} userId={authUserId || null}
             onLocationAdded={locList.reload}
             onApply={(x) => {
               setTlDriverId(planTripFor);
-              day.add({ id: crypto.randomUUID(), terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer });
+              const newId = crypto.randomUUID();
+              if (x.meet) setPendingMeet(newId);
+              day.add({ id: newId, terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer });
             }}
             onClose={() => setPlanTripFor(null)} />
         );
@@ -972,6 +998,7 @@ export default function DispatchPage() {
             onClose={() => setEquipOpen(false)} />
         );
       })()}
+      {accessViewFor && <AccessStripsSheet open driverName={plan.roster.find((m) => m.user_id === accessViewFor)?.display_name ?? "Driver"} strips={stripsFor(accessViewFor)} onClose={() => setAccessViewFor(null)} />}
       {meetIssue && day.report && tlDriverId && (() => {
         const r = day.report.trips.find((t) => t.trip.id === meetIssue.tripId);
         if (!r) return null;
