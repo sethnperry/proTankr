@@ -36,7 +36,7 @@ const OUTCOMES = [
   {
     tag: "Records",
     title: "Paperwork that builds itself.",
-    body: "Every trip produces its own Product Transfer Document: BOL numbers by compartment, times, delay reasons, tank readings, miles and signatures. Nothing to scan, upload or re-key.",
+    body: "Every trip produces its own Product Transfer Document: BOL numbers by compartment, times, delay reasons, tank readings, miles and signatures. Receipts, scale tickets and meter tickets are photographed in the app and filed with the record, so there is no separate scanning step and nothing to re-key.",
     stat: "See the paperwork →",
     href: "#paperwork",
   },
@@ -295,7 +295,7 @@ export default function ForFleetsPage() {
           </p>
           <p className="fleet-sub">
             It sits beside your TMS and your ELD instead of replacing them,
-            and it takes over the clipboards, scan apps and stand-alone
+            and it takes over the clipboards, separate scan apps and stand-alone
             forms that grew up around them.
           </p>
           <a href="#paperwork" className="fleet-cta">
@@ -333,9 +333,13 @@ export default function ForFleetsPage() {
               Every trip builds its own Product Transfer Document as the
               driver works: order and BOL numbers by compartment, arrival,
               begin and depart times, delay reasons, tank readings before
-              and after, miles, and signatures. There is no photo to
-              upload, no form link to remind drivers about, and nothing to
-              re-key into another system.
+              and after, miles, and signatures. Fuel receipts, scale tickets
+              and meter tickets are photographed with the driver&apos;s phone
+              camera in the same app and filed with the stop they belong
+              to, so the backup is captured as the work happens and tells
+              the story with the record. There is no second app to
+              upload from, no form link to remind drivers about, and
+              nothing to re-key into another system.
             </p>
             <p className="feature-body feature-body-muted">
               The terminal still issues the BOL; ProTankr captures its
@@ -350,13 +354,13 @@ export default function ForFleetsPage() {
           </div>
           <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
             <PhoneScreen
-              src="/app-screens/ptd.jpg?v=20261109b"
+              src="/app-screens/ptd.jpg?v=20261110"
               alt="A completed Product Transfer Document"
               width={250}
               maxHeight={500}
             />
             <PhoneScreen
-              src="/app-screens/drop-report.jpg?v=20261109b"
+              src="/app-screens/drop-report.jpg?v=20261110"
               alt="A DROP report summarizing hours, loads, gallons and miles"
               width={250}
               maxHeight={500}
@@ -388,13 +392,13 @@ export default function ForFleetsPage() {
           </div>
           <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
             <PhoneScreen
-              src="/app-screens/fleet-dispatch-live.jpg?v=20261109"
+              src="/app-screens/fleet-dispatch-live.jpg?v=20261110"
               alt="The Dispatch Dashboard in Live mode: friction, en route, on site and delayed counts, tools and loads in progress"
               width={260}
               maxHeight={600}
             />
             <PhoneScreen
-              src="/app-screens/fleet-track.jpg?v=20261109"
+              src="/app-screens/fleet-track.jpg?v=20261110"
               alt="Track: every truck and trailer combination with driver and status"
               width={260}
               maxHeight={440}
@@ -425,7 +429,7 @@ export default function ForFleetsPage() {
           </div>
           <div className="feature-visual">
             <PhoneScreen
-              src="/app-screens/fleet-plan-board.jpg?v=20261109"
+              src="/app-screens/fleet-plan-board.jpg?v=20261110"
               alt="The Plan board: a driver's day as three trip cards, one complete, one in transit and one dispatched"
               width={300}
               maxHeight={620}

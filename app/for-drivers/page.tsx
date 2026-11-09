@@ -225,7 +225,8 @@ export default function ForDriversPage() {
             Whether you run company equipment or your own, ProTankr takes you
             from the load plan to the rack to the drop on one screen, and
             builds the Product Transfer Document, times and records from
-            what you already tapped. No scan app. No forms to chase.
+            what you already tapped. Snap receipts and tickets right in the
+            trip, so there is no separate scan app. No forms to chase.
           </p>
           <ul className="driver-checklist">
             {CHECKLIST.map(({ Icon, label }) => (
@@ -268,7 +269,7 @@ export default function ForDriversPage() {
           </div>
           <div className="feature-visual">
             <PhoneScreen
-              src="/app-screens/dashboard.jpg?v=20261109b"
+              src="/app-screens/dashboard.jpg?v=20261110"
               alt="The Driver Dashboard: hours, current trip and the next-step button"
               width={300}
               maxHeight={440}
@@ -293,12 +294,15 @@ export default function ForDriversPage() {
             <p className="feature-body feature-body-muted">
               Fuel stops, delays and delivery details ride along in the same
               record, so your DROP report and mileage are never a
-              reconstruction at the end of the week.
+              reconstruction at the end of the week. Snap fuel receipts,
+              scale tickets and meter tickets with your phone&apos;s camera as
+              you go. Each photo files with the stop or record it belongs
+              to, so the backup is already attached.
             </p>
           </div>
           <div className="feature-visual">
             <PhoneScreen
-              src="/app-screens/ptd.jpg?v=20261109b"
+              src="/app-screens/ptd.jpg?v=20261110"
               alt="A completed Product Transfer Document with barcode, compartments and deliveries"
               width={300}
               maxHeight={520}
@@ -329,13 +333,13 @@ export default function ForDriversPage() {
           </div>
           <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
             <PhoneScreen
-              src="/app-screens/delivery-tanks.jpg?v=20261109"
+              src="/app-screens/delivery-tanks.jpg?v=20261110"
               alt="The delivery screen: compartments linked to store tanks by product, with gallons per tank"
               width={260}
               maxHeight={540}
             />
             <PhoneScreen
-              src="/app-screens/delivery-details.jpg?v=20261109"
+              src="/app-screens/delivery-details.jpg?v=20261110"
               alt="Delivery details: optional tank readings, bio blend, additives, issues and ending miles"
               width={260}
               maxHeight={540}
@@ -360,17 +364,17 @@ export default function ForDriversPage() {
           </p>
           <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", alignItems: "flex-start", marginTop: 28 }}>
             <PhoneScreen
-              src="/app-screens/delivery-consignee.jpg?v=20261109"
+              src="/app-screens/delivery-consignee.jpg?v=20261110"
               alt="Consignee step: the store's signature recorded with a green check"
               width={250}
             />
             <PhoneScreen
-              src="/app-screens/delivery-driver.jpg?v=20261109"
+              src="/app-screens/delivery-driver.jpg?v=20261110"
               alt="Driver step: the driver signs once on the signature pad"
               width={250}
             />
             <PhoneScreen
-              src="/app-screens/delivery-times.jpg?v=20261109"
+              src="/app-screens/delivery-times.jpg?v=20261110"
               alt="Times step: arrived, began and finished times with an on schedule check"
               width={250}
             />

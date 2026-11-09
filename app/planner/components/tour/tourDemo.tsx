@@ -15,7 +15,7 @@ const card: React.CSSProperties = { ...LOOK.primary, padding: 14 };
 const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 };
 
 const SLOTS: StripSlot[] = [
-  { comp: 1, size: 3000, color: "#facc15" }, { comp: 2, size: 3000, color: "#ffffff" }, { comp: 3, size: 3000, color: "#facc15" },
+  { comp: 1, size: 4300, color: "#facc15" }, { comp: 2, size: 1250, color: "#ffffff" }, { comp: 3, size: 3800, color: "#facc15" },
 ];
 
 type Hot = "expiration" | "loads" | "rack" | "drop" | null;

@@ -8,7 +8,7 @@
 // load-plan calculator: an optimization layer that replaced nothing. That is
 // no longer the product. ProTankr now runs the whole trip (plan, load,
 // deliver, document) and sits between the TMS and the physical work. It
-// replaces the clipboard, the scan-and-upload app and the stand-alone forms,
+// replaces the clipboard, the separate scan app and the stand-alone forms,
 // while still working alongside the TMS and the ELD. The load planner is
 // now the first step of that story, not the whole story.
 //
@@ -26,6 +26,11 @@
 //  - The terminal still issues the BOL. ProTankr captures its numbers; it
 //    does not replace the terminal's document.
 //  - Don't name competitor products on the site; name the category.
+//  - Some paper still has to be captured from the camera (the marked-up BOL,
+//    receipts, scale tickets, meter tickets). The claim is that ProTankr
+//    replaces the SEPARATE or third-party scan app and scanning step: the
+//    phone camera captures it inside the trip and files it with the record.
+//    Never say "no scanning" or "nothing to photograph".
 
 import Link from "next/link";
 import SiteHeader from "./marketing/SiteHeader";
@@ -93,8 +98,8 @@ const REPLACES = [
     now: "The terminal still issues the BOL. ProTankr captures its numbers per product at the rack, then builds the Product Transfer Document with times, tank readings and signatures.",
   },
   {
-    was: "Scan-and-upload apps",
-    now: "No photographing paper at the end of the day. The record is built while the trip happens, so there is nothing left to scan, crop and send.",
+    was: "Third-party scan apps and a separate scanning step",
+    now: "Snap the marked-up BOL, a receipt or a scale ticket with your phone's own camera, inside the trip. Each photo files with the stop, delivery or record it belongs to, so the backup is captured as you go and the story is already assembled.",
   },
   {
     was: "Stand-alone electronic forms",
@@ -156,7 +161,7 @@ export default function Home() {
           </p>
           <p className="hero-sub">
             Works alongside your TMS and your ELD. It replaces the
-            clipboard, the scan app and the forms in between.
+            clipboard, the separate scan app and the forms in between.
           </p>
           <div className="hero-actions">
             <Link href="/get-the-app" className="btn-primary">
@@ -169,7 +174,7 @@ export default function Home() {
         </div>
         <div className="hero-visual">
           <PhoneScreen
-            src="/app-screens/dashboard.jpg?v=20261109b"
+            src="/app-screens/dashboard.jpg?v=20261110"
             alt="ProTankr Driver Dashboard: hours, current trip, compartments and the next-step button"
             width={340}
             maxHeight={440}
@@ -226,7 +231,7 @@ export default function Home() {
           <div className="screens-row">
             <figure className="screen-fig">
               <PhoneScreen
-                src="/app-screens/plan.jpg?v=20261109b"
+                src="/app-screens/plan.jpg?v=20261110"
                 alt="The load plan: three compartments with products, gallons and a target weight"
                 width={300}
                 maxHeight={470}
@@ -238,7 +243,7 @@ export default function Home() {
             </figure>
             <figure className="screen-fig">
               <PhoneScreen
-                src="/app-screens/trips.jpg?v=20261109b"
+                src="/app-screens/trips.jpg?v=20261110"
                 alt="Trips and PTDs: completed orders with terminal, store, truck and compartment strip"
                 width={300}
                 maxHeight={470}
@@ -250,7 +255,7 @@ export default function Home() {
             </figure>
             <figure className="screen-fig">
               <PhoneScreen
-                src="/app-screens/ptd.jpg?v=20261109b"
+                src="/app-screens/ptd.jpg?v=20261110"
                 alt="A completed Product Transfer Document with barcode, compartments, BOL numbers and deliveries"
                 width={300}
                 maxHeight={470}
@@ -358,13 +363,13 @@ export default function Home() {
           </div>
           <div className="product-visual reports-visual">
             <PhoneScreen
-              src="/app-screens/reports.jpg?v=20261109b"
+              src="/app-screens/reports.jpg?v=20261110"
               alt="The Reports hub: loads, DROP report, payload utilization, terminal cards and equipment history"
               width={270}
               maxHeight={540}
             />
             <PhoneScreen
-              src="/app-screens/drop-report.jpg?v=20261109b"
+              src="/app-screens/drop-report.jpg?v=20261110"
               alt="A DROP report: days worked, hours, loads, utilization score, gallons and miles"
               width={270}
               maxHeight={540}
@@ -388,8 +393,8 @@ export default function Home() {
             </p>
             <p className="tms-line tms-line-sub">
               It sits beside the systems you already run and does not ask
-              you to replace them. Where it can replace a clipboard, a scan
-              app or a form, it does.
+              you to replace them. Where it can replace a clipboard, a
+              separate scan app or a form, it does.
             </p>
           </div>
         </div>
