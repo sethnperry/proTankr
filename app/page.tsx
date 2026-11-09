@@ -4,20 +4,28 @@
 // /get-the-app (the site's one real lead-capture path today), /pricing,
 // or one of the two audience-specific pages (/for-drivers, /for-fleets).
 //
-// Restructured 2026-09 (v4): reordered to match the site-wide narrative —
-// hero, the cost of the problem, a hands-on calculator that proves it,
-// how the product actually works, then a fork into the two audiences
-// before closing with the "not a TMS" distinction, the shared-knowledge
-// network effect, and the founder trust signal. Nothing content-wise was
-// deleted from the v3 pass; sections were re-sequenced and two new
-// sections (Audience picker, Shared Knowledge) were added.
+// Reframed 2026-11 (v5). The site used to describe ProTankr as a driver-only
+// load-plan calculator: an optimization layer that replaced nothing. That is
+// no longer the product. ProTankr now runs the whole trip (plan, load,
+// deliver, document) and sits between the TMS and the physical work. It
+// replaces the clipboard, the scan-and-upload app and the stand-alone forms,
+// while still working alongside the TMS and the ELD. The load planner is
+// now the first step of that story, not the whole story.
 //
-// Copy rule, deliberate: nothing on this page may claim ProTankr
-// prevents overweight loads outright. A sudden shift in terminal or
-// product conditions can still catch a driver out before the network
-// has data on it. What the product prevents is the PERMANENT downward
-// ratchet afterward. Avoid "never", "guaranteed", "always safe",
-// "eliminates" and similar absolutes anywhere in this file.
+// Screens are real captures from the public demo account
+// (public/app-screens/*.jpg), not mockups. The dashboard capture is the
+// guided tour's sample trip, which uses the real dashboard components.
+//
+// Copy rules, deliberate:
+//  - Nothing here may claim ProTankr prevents overweight loads outright.
+//    A sudden shift in terminal or product conditions can still catch a
+//    driver out before the network has data on it. Avoid "never",
+//    "guaranteed", "always safe", "eliminates" and similar absolutes.
+//  - ProTankr is not a TMS and not an ELD. Say so plainly. Hours shown in
+//    the app come from the carrier's existing ELD.
+//  - The terminal still issues the BOL. ProTankr captures its numbers; it
+//    does not replace the terminal's document.
+//  - Don't name competitor products on the site; name the category.
 
 import Link from "next/link";
 import SiteHeader from "./marketing/SiteHeader";
@@ -28,10 +36,8 @@ import PhoneScreen from "./marketing/PhoneScreen";
 // "Load Report" screens (Buckey North, Tampa, FL) -- not invented example
 // data. Deliberately kept as the exact figures shown on those reports
 // (including the terminal's own on-file spelling) rather than rounded or
-// "cleaned up". The point of the section: three different product
-// combinations, calculated against the same legal limit, landed within
-// 76 lbs of each other -- that's the real precision story, not a
-// hypothetical one.
+// "cleaned up". Three different product combinations, calculated against
+// the same legal limit, landed within 76 lbs of each other.
 const LOAD_EXAMPLES = [
   {
     product: "Diesel, Premium & Regular (mixed)",
@@ -53,49 +59,77 @@ const LOAD_EXAMPLES = [
   },
 ];
 
-const PRODUCT_FEATURES = [
-  {
-    label: "Equipment aware",
-    body: "Tare weight, compartment count, and how much each compartment can legally hold, keyed to the exact truck and trailer you're pulling today.",
-  },
-  {
-    label: "Temperature aware",
-    body: "Live API and temperature drive the density math, so the payload number reflects today's conditions, not a guess from last summer.",
-  },
-  {
-    label: "Payload focused",
-    body: "Every variable resolves to a single number you can act on at the rack, not a report to interpret later.",
-  },
-];
-
-// Matches the real workflow, not a simplified stand-in -- same 4 steps
-// established on /for-fleets' own "How It Works" section, condensed to
-// this page's shorter body-copy length. Keeping the two in sync matters:
-// this used to be a generic "Calculate. Load. Capture." 3-step gloss that
-// undersold how few taps the real workflow actually needs and what it
-// captures as a byproduct (terminal card renewal, terminal issue
-// flagging, utilization scoring) -- exactly the kind of drift worth
-// fixing once it's been corrected elsewhere on the site.
-const WORKFLOW_STEPS = [
+// The four stages of a trip, in the order a driver lives them. Same four
+// words the in-app dashboard walks through.
+const TRIP_STAGES = [
   {
     n: "01",
-    label: "Already set up",
-    body: "Equipment and your last terminal are already picked when you open the app. Change them only when something's actually different.",
+    label: "Plan",
+    body: "Dispatch builds the day, or the driver does. Compartments, products, supplier and order numbers are set before the truck moves, and the weight math is done for today's equipment and temperature.",
   },
   {
     n: "02",
-    label: "Pick a plan",
-    body: "Choose a saved product and compartment layout in one tap, or skip it entirely if it's the same plan as last time.",
+    label: "Load",
+    body: "Arrive, begin, finish. Times stamp themselves, API and temperature are checked against what other drivers saw at that rack, and BOL numbers are captured per product.",
   },
   {
     n: "03",
-    label: "Load, then complete",
-    body: "See exactly what to load, then load it. Only update what's actually different from the plan, gallons, API, or temp.",
+    label: "Deliver",
+    body: "Match each compartment to a store tank, record before and after readings, collect the signatures. Delays get a reason as they happen, not a guess made later.",
   },
   {
     n: "04",
-    label: "Everything else updates itself",
-    body: "Temperature data, terminal card status, terminal issues, and your utilization score. All captured as a byproduct, not entered separately.",
+    label: "Document",
+    body: "The Product Transfer Document, trip times, miles and the hours report are built from what was already captured. Nothing is typed twice.",
+  },
+];
+
+// What the product takes the place of. Written as "what you do today" ->
+// "what happens instead", and careful about the BOL: the terminal still
+// issues it.
+const REPLACES = [
+  {
+    was: "Paper PTDs and BOL transcription",
+    now: "The terminal still issues the BOL. ProTankr captures its numbers per product at the rack, then builds the Product Transfer Document with times, tank readings and signatures.",
+  },
+  {
+    was: "Scan-and-upload apps",
+    now: "No photographing paper at the end of the day. The record is built while the trip happens, so there is nothing left to scan, crop and send.",
+  },
+  {
+    was: "Stand-alone electronic forms",
+    now: "Fuel stops, delivery details, additives, issues and delay reasons are taps inside the trip, not separate form links to find and fill out.",
+  },
+  {
+    was: "Texts and calls to dispatch",
+    now: "Terminal conditions, hours, truck position and who is headed where are visible on the dashboard, instead of asked for by message.",
+  },
+  {
+    was: "Spreadsheets for cards, permits and service",
+    now: "Terminal access, credentials, equipment permits and service due roll up into one expiration view with one set of color rules.",
+  },
+  {
+    was: "Receipts and mileage logs",
+    now: "Fuel stops, MPG and miles by state come from the same trip record. With a connected tracker, that is the raw material for your fuel tax return.",
+  },
+];
+
+const REPORT_POINTS = [
+  {
+    label: "Trips & PTDs",
+    body: "Every completed trip, one tap to its Product Transfer Document. Print it or save a PDF.",
+  },
+  {
+    label: "DROP report",
+    body: "Days worked, hours, loads, gallons and miles for any period, ready to download.",
+  },
+  {
+    label: "Payload utilization",
+    body: "How much of the available capacity each load used, measured the same way every time.",
+  },
+  {
+    label: "Equipment and compliance",
+    body: "Scale, service and fuel history by truck, plus terminal cards and credentials in one place.",
   },
 ];
 
@@ -104,75 +138,165 @@ export default function Home() {
     <div className="page">
       <SiteHeader />
 
-      {/* 1. HERO — per explicit direction, replaced the joke headline with
-          a straighter statement + a 3-tier copy descent (.hero-lead ->
-          .hero-body -> .hero-sub), same pattern as /for-fleets' own hero
-          rework: each tier a step quieter than the last, carrying the
-          idea from WHY (built around the people doing the work) to WHAT
-          (a fast, organized way to load/adapt/reload) to the risk
-          reassurance (works alongside what a hauler already runs). */}
-      <section className="hero">
-        <p className="hero-eyebrow">Driver-driven efficiency</p>
-        <h1 className="hero-h1">A smarter way to load.</h1>
-        <p className="hero-lead">
-          Built around the people doing the work. Designed to make every
-          load more efficient.
-        </p>
-        <p className="hero-body">
-          ProTankr gives fuel haulers a fast, organized way to load,
-          adapt, and reload with accuracy.
-        </p>
-        <p className="hero-sub">
-          Built to work alongside the operation you already have, where
-          one driver&apos;s experience becomes fleet-wide efficiency.
-        </p>
+      {/* 1. HERO — the new frame: ProTankr is the layer between the TMS and
+          the physical work. Same 3-tier copy descent as before (lead ->
+          body -> sub), each tier a step quieter. */}
+      <section className="hero hero-split">
+        <div className="hero-copy">
+          <p className="hero-eyebrow">The work layer for fuel haulers</p>
+          <h1 className="hero-h1">Between the TMS and the truck.</h1>
+          <p className="hero-lead">
+            Dispatch plans the trip. ProTankr runs it, and the paperwork
+            writes itself.
+          </p>
+          <p className="hero-body">
+            One app takes a driver from plan to rack to drop: the load plan,
+            the arrival times, the BOL details, the tank readings, the
+            signatures. Each one entered once, at the moment it happens.
+          </p>
+          <p className="hero-sub">
+            Works alongside your TMS and your ELD. It replaces the
+            clipboard, the scan app and the forms in between.
+          </p>
+          <div className="hero-actions">
+            <Link href="/get-the-app" className="btn-primary">
+              Get Early Access &rarr;
+            </Link>
+            <a href="#trip" className="btn-secondary">
+              See a trip, start to finish
+            </a>
+          </div>
+        </div>
+        <div className="hero-visual">
+          <PhoneScreen
+            src="/app-screens/dashboard.jpg?v=20261109b"
+            alt="ProTankr Driver Dashboard: hours, current trip, compartments and the next-step button"
+            width={340}
+            maxHeight={440}
+          />
+        </div>
       </section>
 
-      {/* 2. PROBLEM / MANIFESTO — the cost of the problem, before the pitch. */}
+      {/* 2. PROBLEM — the cost of scattered records, before the pitch. */}
       <section className="manifesto-section">
         <div className="manifesto-inner">
-          {/* Per explicit direction: "Every load could have carried more"
-              was a real overclaim -- not every load could, and this
-              section's own rewrite deliberately says so (sometimes the
-              right correction is LESS fuel, to avoid a ticket, not more)
-              -- matching this file's own stated copy rule against
-              absolutes at the top of the file even more honestly than
-              the line it replaces. */}
           <h2 className="manifesto-h2">
-            The right load changes with the conditions.
+            Your TMS knows the order. Nobody is recording the work.
           </h2>
           <div className="manifesto-body">
             <p>
-              Drivers learn what works. They find a safe number and stick
-              with it — because being a little light is better than being
-              overweight.
+              A fuel haul is dozens of small facts: when the truck arrived,
+              which rack, what the BOL says, what the tanks read before and
+              after, who signed. Today they are scattered across paper,
+              photos, scan apps, form links and text messages.
             </p>
             <p>
-              But conditions change. Temperature, product, equipment, and
-              terminal conditions can all move that number. Sometimes the
-              opportunity is more fuel. Sometimes it&apos;s avoiding a
-              ticket.
+              Somebody re-keys them. Somebody chases the missing ones. And
+              the number that decides the load, how much the trailer can
+              legally carry today, gets guessed at the rack.
             </p>
             <p>
-              ProTankr learns from the driver who&apos;s there and carries
-              that experience forward. One real-world report can keep the
-              next driver from having to learn the same lesson.
+              ProTankr captures each fact once, in the cab, as the work
+              happens. The records your office used to assemble afterward
+              are simply there.
             </p>
           </div>
         </div>
       </section>
 
-      {/* 3. REAL LOADS — three completed loads from the app itself,
-          replacing the old interactive BOL calculator (retired: an
-          estimate built on standard published density tables couldn't
-          match the app's own per-product tuning closely enough to be
-          trustworthy as a public-facing number). Real data instead of a
-          tool that might be wrong. */}
+      {/* 3. THE TRIP — four stages, then the real screens that go with them. */}
+      <section id="trip" className="workflow-section">
+        <div className="workflow-inner">
+          <h2 className="workflow-h2">One trip, start to finish.</h2>
+          <p className="workflow-sub">
+            The same few taps a driver already makes to run a load are the
+            whole system. There is no separate admin tool to remember and no
+            end-of-day paperwork.
+          </p>
+          <div className="workflow-steps">
+            {TRIP_STAGES.map((s) => (
+              <div key={s.n} className="workflow-step">
+                <span className="workflow-n">{s.n}</span>
+                <span className="workflow-label">{s.label}.</span>
+                <p className="workflow-body">{s.body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="screens-row">
+            <figure className="screen-fig">
+              <PhoneScreen
+                src="/app-screens/plan.jpg?v=20261109b"
+                alt="The load plan: three compartments with products, gallons and a target weight"
+                width={300}
+                maxHeight={470}
+              />
+              <figcaption>
+                <strong>Plan the load.</strong> Compartments, products and
+                weight for today&apos;s equipment.
+              </figcaption>
+            </figure>
+            <figure className="screen-fig">
+              <PhoneScreen
+                src="/app-screens/trips.jpg?v=20261109b"
+                alt="Trips and PTDs: completed orders with terminal, store, truck and compartment strip"
+                width={300}
+                maxHeight={470}
+              />
+              <figcaption>
+                <strong>Run the trip.</strong> Every order, terminal and
+                store in one list.
+              </figcaption>
+            </figure>
+            <figure className="screen-fig">
+              <PhoneScreen
+                src="/app-screens/ptd.jpg?v=20261109b"
+                alt="A completed Product Transfer Document with barcode, compartments, BOL numbers and deliveries"
+                width={300}
+                maxHeight={470}
+              />
+              <figcaption>
+                <strong>Get the paperwork.</strong> The Product Transfer
+                Document, built from the trip.
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. WHAT IT REPLACES */}
+      <section className="replace-section">
+        <div className="replace-inner">
+          <p className="audience-eyebrow">What it replaces</p>
+          <h2 className="replace-h2">
+            Fewer apps. Fewer forms. No re-keying.
+          </h2>
+          <p className="replace-sub">
+            ProTankr does not ask you to give up your TMS. It takes over the
+            small, manual jobs that grew up around it.
+          </p>
+          <div className="replace-grid">
+            {REPLACES.map((r) => (
+              <div key={r.was} className="replace-card">
+                <span className="replace-was">{r.was}</span>
+                <p className="replace-now">{r.now}</p>
+              </div>
+            ))}
+          </div>
+          <p className="replace-foot">
+            ProTankr is not an ELD. Hours shown in the app come from your
+            existing ELD.
+          </p>
+        </div>
+      </section>
+
+      {/* 5. PRECISION — the load planner, now one step of the story. Same
+          real completed loads as before. */}
       <section id="calculator" className="calc-section">
         <div className="calc-inner">
           <div className="calc-header">
             <h2 className="calc-h2">
-              Different products. Nearly identical weight.
+              And the load plan is still the sharpest tool in the cab.
             </h2>
             <p className="calc-intro">
               Three completed loads at the same terminal, three different
@@ -203,28 +327,25 @@ export default function Home() {
           </div>
 
           <p className="calc-footnote">
-            Real completed loads from the ProTankr Planner. Actual weight
-            is calculated from live API and temperature at the time of
-            loading, not looked up after the fact.
+            Real completed loads from ProTankr. Actual weight is calculated
+            from live API and temperature at the time of loading, not looked
+            up after the fact.
           </p>
         </div>
       </section>
 
-      {/* 4. PRODUCT — how it actually works. */}
+      {/* 6. REPORTS — what the office gets for free. */}
       <section id="product" className="product-section">
-        <div className="product-inner">
+        <div className="product-inner reports-inner">
           <div className="product-copy">
-            <h2 className="product-h2">
-              Know your real weight before you pull away.
-            </h2>
+            <h2 className="product-h2">Reports that write themselves.</h2>
             <p className="product-sub">
-              Tare weight. Product density. Temperature. Compartment
-              constraints. Legal weight. ProTankr turns all of it into one
-              practical answer: how much can I legally and reasonably put
-              on this trailer, right now.
+              Because every fact was captured as it happened, the reports
+              your office assembles by hand are already there when the
+              driver finishes the last drop.
             </p>
             <ul className="product-features">
-              {PRODUCT_FEATURES.map((f) => (
+              {REPORT_POINTS.map((f) => (
                 <li key={f.label}>
                   <span className="product-feature-label">
                     <span className="bullet">&bull;</span>
@@ -235,35 +356,46 @@ export default function Home() {
               ))}
             </ul>
           </div>
-          <div className="product-visual">
-            <PhoneScreen />
+          <div className="product-visual reports-visual">
+            <PhoneScreen
+              src="/app-screens/reports.jpg?v=20261109b"
+              alt="The Reports hub: loads, DROP report, payload utilization, terminal cards and equipment history"
+              width={270}
+              maxHeight={540}
+            />
+            <PhoneScreen
+              src="/app-screens/drop-report.jpg?v=20261109b"
+              alt="A DROP report: days worked, hours, loads, utilization score, gallons and miles"
+              width={270}
+              maxHeight={540}
+            />
           </div>
         </div>
       </section>
 
-      {/* 5. WORKFLOW — headline reused verbatim from /for-fleets' own "How
-          It Works" section for site-wide consistency. */}
-      <section className="workflow-section">
-        <div className="workflow-inner">
-          <h2 className="workflow-h2">The workflow is the whole system.</h2>
-          <p className="workflow-sub">
-            There&apos;s no separate admin tool to remember. The same few
-            taps a driver already makes to plan and run a load are the
-            whole system.
-          </p>
-          <div className="workflow-steps">
-            {WORKFLOW_STEPS.map((s) => (
-              <div key={s.n} className="workflow-step">
-                <span className="workflow-n">{s.n}</span>
-                <span className="workflow-label">{s.label}.</span>
-                <p className="workflow-body">{s.body}</p>
-              </div>
-            ))}
+      {/* 7. THE BRIDGE — where ProTankr sits among the systems a hauler
+          already runs. */}
+      <section className="tms-section">
+        <div className="tms-inner">
+          <h2 className="tms-h2">The bridge, not another TMS.</h2>
+          <div className="tms-flow">
+            <p className="tms-line">
+              Your TMS holds the order, the customer and the invoice. Your
+              ELD holds the hours. Your dispatcher decides what to haul.
+            </p>
+            <p className="tms-line tms-line-emphasis">
+              ProTankr is where the physical work gets done and recorded.
+            </p>
+            <p className="tms-line tms-line-sub">
+              It sits beside the systems you already run and does not ask
+              you to replace them. Where it can replace a clipboard, a scan
+              app or a form, it does.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* 6. AUDIENCE PICKER — fork into the two ways to use ProTankr. */}
+      {/* 8. AUDIENCE PICKER — fork into the two ways to use ProTankr. */}
       <section id="audience" className="audience-section">
         <div className="audience-inner">
           <p className="audience-eyebrow">One system, two views</p>
@@ -279,8 +411,8 @@ export default function Home() {
             <Link href="/for-drivers" className="audience-card">
               <span className="audience-card-label">For Drivers</span>
               <p className="audience-card-body">
-                Plan the load, track your terminal cards, and keep your
-                equipment&apos;s history where you can actually use it.
+                Plan the load, run the trip, and have the paperwork done
+                before you pull out of the last drop.
               </p>
               <span className="audience-card-cta">
                 See the driver tools &rarr;
@@ -289,9 +421,8 @@ export default function Home() {
             <Link href="/for-fleets" className="audience-card audience-card-dark">
               <span className="audience-card-label">For Fleets</span>
               <p className="audience-card-body">
-                Recover more payload, see equipment and card status
-                without asking, and hand off knowledge between drivers
-                automatically.
+                See every trip, card and truck without asking, and get
+                the records your office used to chase.
               </p>
               <span className="audience-card-cta">
                 See the fleet tools &rarr;
@@ -301,28 +432,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 7. NOT ANOTHER TMS */}
-      <section className="tms-section">
-        <div className="tms-inner">
-          <h2 className="tms-h2">Not another TMS.</h2>
-          <div className="tms-flow">
-            <p className="tms-line">
-              Your TMS tells you where the truck is going. Your dispatch
-              system tells you what to haul.
-            </p>
-            <p className="tms-line tms-line-emphasis">
-              ProTankr tells you how much you can legally put on the
-              trailer.
-            </p>
-            <p className="tms-line tms-line-sub">
-              It works as an optimization layer alongside the systems you
-              already have, not a replacement for any of them.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. SHARED KNOWLEDGE — the network effect, made concrete. */}
+      {/* 9. SHARED KNOWLEDGE — the network effect, made concrete. */}
       <section className="network-section">
         <div className="network-inner">
           <p className="network-eyebrow">Shared knowledge</p>
@@ -379,7 +489,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 9. FOUNDER STORY */}
+      {/* 10. FOUNDER STORY */}
       <section className="founder-section">
         <div className="founder-inner">
           <blockquote className="founder-quote">
@@ -404,22 +514,22 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 10. FINAL CTA */}
+      {/* 11. FINAL CTA */}
       <section className="closing">
         <div className="closing-inner">
           <div className="closing-header">
-            <p className="closing-eyebrow">The Opportunity</p>
+            <p className="closing-eyebrow">Early access</p>
             <h2 className="closing-h2">
-              How many gallons are your trucks leaving behind?
+              See a whole trip run on one screen.
             </h2>
           </div>
 
           <div className="closing-footer">
             <p className="closing-sub">
               ProTankr rolls out gradually, with no long implementation, no
-              TMS replacement, and no commitment up front. Start by
-              measuring the opportunity at one terminal, one truck, one
-              load.
+              TMS replacement, and no commitment up front. Start with one
+              driver, one truck, one trip, and see what stops needing to be
+              typed twice.
             </p>
             <div className="closing-actions">
               <Link href="/get-the-app" className="closing-cta">
@@ -952,6 +1062,94 @@ export default function Home() {
         }
         .closing-secondary:hover { color: #fff; }
 
+        /* ---------- v5 reframe additions ---------- */
+        .hero-split {
+          max-width: 1200px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 360px;
+          gap: 56px;
+          align-items: center;
+        }
+        .hero-split .hero-h1 { font-size: 64px; }
+        .hero-visual { display: flex; justify-content: center; }
+        .hero-actions { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .btn-primary {
+          display: inline-block;
+          padding: 15px 26px;
+          background: #111;
+          color: #fff;
+          border-radius: 999px;
+          font: 800 15px var(--font);
+          text-decoration: none;
+        }
+        .btn-secondary {
+          display: inline-block;
+          padding: 14px 24px;
+          border: 1.5px solid rgba(0,0,0,0.2);
+          color: #111;
+          border-radius: 999px;
+          font: 700 15px var(--font);
+          text-decoration: none;
+        }
+        .screens-row {
+          margin-top: 64px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 32px;
+          justify-items: center;
+        }
+        .screen-fig { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+        .screen-fig figcaption {
+          max-width: 280px;
+          text-align: center;
+          font: 400 14px var(--font);
+          line-height: 1.5;
+          color: rgba(0,0,0,0.55);
+        }
+        .screen-fig figcaption strong { color: #111; font-weight: 800; }
+        .replace-section { background: #f6f6f5; padding: 96px 48px; }
+        .replace-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+        .replace-h2 {
+          margin: 12px 0 0;
+          font: 900 42px var(--font);
+          letter-spacing: -0.02em;
+          line-height: 1.1;
+          color: #111;
+        }
+        .replace-sub {
+          margin: 16px auto 0;
+          max-width: 600px;
+          font: 400 16px var(--font);
+          line-height: 1.6;
+          color: rgba(0,0,0,0.6);
+        }
+        .replace-grid {
+          margin-top: 44px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+          text-align: left;
+        }
+        .replace-card {
+          background: #fff;
+          border: 1px solid rgba(0,0,0,0.08);
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .replace-was {
+          font: 800 16px var(--font);
+          color: #111;
+          text-decoration: line-through;
+          text-decoration-color: rgba(0,0,0,0.3);
+        }
+        .replace-now { margin: 0; font: 400 14px var(--font); line-height: 1.55; color: rgba(0,0,0,0.6); }
+        .replace-foot { margin: 28px 0 0; font: 600 13px var(--font); color: rgba(0,0,0,0.45); }
+        .reports-inner { grid-template-columns: minmax(0, 1fr) 600px; }
+        .reports-visual { gap: 24px; align-items: flex-start; }
+
         /* ---------- Mobile ---------- */
         @media (max-width: 980px) {
           .hero { padding: 24px 24px 44px; }
@@ -959,6 +1157,16 @@ export default function Home() {
           .hero-lead { font-size: 19px; }
           .hero-body { font-size: 15.5px; }
           .hero-sub { font-size: 13.5px; }
+
+          .hero-split { grid-template-columns: 1fr; gap: 36px; }
+          .hero-split .hero-h1 { font-size: 44px; }
+          .hero-visual { order: 2; }
+          .screens-row { grid-template-columns: 1fr; gap: 44px; margin-top: 40px; }
+          .replace-section { padding: 56px 24px; }
+          .replace-h2 { font-size: 30px; }
+          .replace-grid { grid-template-columns: 1fr; }
+          .reports-inner { grid-template-columns: 1fr; }
+          .reports-visual { flex-direction: column; align-items: center; }
 
           .calc-section { padding: 48px 24px; }
           .calc-h2 { font-size: 30px; }
