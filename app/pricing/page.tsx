@@ -13,14 +13,18 @@ import SiteHeader from "../marketing/SiteHeader";
 
 const FLEET_FEATURES = [
   "Everything in Solo, for every driver",
+  "Dispatch dashboard: plan loads, see trips in progress",
+  "Reports for the office: PTDs, DROP report, fuel history",
   "Multi-driver equipment sharing & history",
   "Fleet-wide card & credential visibility",
-  "Dispatch board",
   "Role-based permissions (Driver / Lead / Dispatch / Admin)",
   "Payload utilization scoring for your bonus program",
 ];
 
 const SOLO_FEATURES = [
+  "Run the whole trip: plan, load, deliver, document",
+  "Product Transfer Documents built as you go",
+  "Fuel stops, delays & DROP report",
   "Load planning, presets & recap",
   "Personal equipment & spares tracking",
   "Terminal cards & credential tracking",

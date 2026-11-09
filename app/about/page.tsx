@@ -22,7 +22,16 @@ export default function AboutPage() {
           <FitHeading className="hero-h1" maxSize={52} minSize={22}>How ProTankr Works</FitHeading>
           <div className="hero-sub">
             <p>
-              Every truck-and-trailer combination has its own tare weight.
+              ProTankr is the work layer between your TMS and the truck.
+              It carries a trip from the load plan to the rack to the drop,
+              and builds the paperwork, the Product Transfer Document, times,
+              miles and tank readings, from what the driver already did. It
+              works alongside your TMS and your ELD and replaces the
+              clipboards, scan apps and stand-alone forms in between.
+            </p>
+            <p>
+              It started with the hardest number in the cab, so that is
+              where this page begins. Every truck-and-trailer combination has its own tare weight.
               Every trailer has its own compartment count and capacities.
               Every product has its own API range and density behavior,
               shaped by the terminal, the additives, the blend. Every driver
@@ -50,7 +59,7 @@ export default function AboutPage() {
             </p>
             <p>
               So while what the driver sees is simple, here's exactly what
-              ProTankr is doing underneath.
+              ProTankr is doing underneath when it plans a load.
             </p>
           </div>
         </div>
