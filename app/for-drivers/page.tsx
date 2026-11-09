@@ -307,8 +307,38 @@ export default function ForDriversPage() {
         </div>
       </section>
 
-      {/* FEATURE 1 — driver-driven planner, the real interactive tool */}
+      {/* DELIVERY — the tank map, the real component with sample data */}
       <section className="feature-section">
+        <div className="feature-row">
+          <div className="feature-copy">
+            <p className="feature-eyebrow">The drop</p>
+            <h2 className="feature-h2">Swipe each compartment to its tank.</h2>
+            <p className="feature-body">
+              At the store, the trailer is on the left and the store&apos;s
+              tanks are on the right. Swipe from a compartment to a tank, or
+              tap one and then the other. Tanks holding a different product
+              are dimmed so you cannot link the wrong one, and a compartment
+              can be split across two tanks with gallons for each.
+            </p>
+            <p className="feature-body feature-body-muted">
+              Before and after tank readings, the signature and your finish
+              time follow, and the whole drop lands on the Product Transfer
+              Document. Sample delivery shown.
+            </p>
+          </div>
+          <div className="feature-visual">
+            <PhoneScreen
+              src="/app-screens/delivery-tankmap.jpg?v=20261109"
+              alt="The delivery tank map: three compartments linked to store tanks with product and gallons"
+              width={300}
+              maxHeight={560}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURE 1 — driver-driven planner, the real interactive tool */}
+      <section className="feature-section feature-alt">
         <div className="feature-row feature-row-planner">
           <div className="feature-copy">
             <p className="feature-eyebrow">Step one: the load plan</p>
@@ -336,7 +366,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 2 — terminal access */}
-      <section className="feature-section feature-alt">
+      <section className="feature-section">
         <div className="feature-row feature-row-reverse">
           <div className="feature-copy">
             <p className="feature-eyebrow">Terminal access</p>
@@ -355,7 +385,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 3 — equipment & tare */}
-      <section className="feature-section">
+      <section className="feature-section feature-alt">
         <div className="feature-row">
           <div className="feature-copy">
             <p className="feature-eyebrow">Equipment records</p>
@@ -375,7 +405,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 4 — shared knowledge */}
-      <section className="feature-section feature-alt">
+      <section className="feature-section">
         <div className="feature-row-stack">
           <p className="feature-eyebrow feature-eyebrow-center">Shared knowledge</p>
           <h2 className="feature-h2 feature-h2-center">
