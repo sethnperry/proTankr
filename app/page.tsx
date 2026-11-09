@@ -169,7 +169,7 @@ export default function Home() {
         </div>
         <div className="hero-visual">
           <PhoneScreen
-            src="/app-screens/dashboard.jpg?v=20261109b"
+            src="/app-screens/dashboard.jpg?v=20261110"
             alt="ProTankr Driver Dashboard: hours, current trip, compartments and the next-step button"
             width={340}
             maxHeight={440}
@@ -226,7 +226,7 @@ export default function Home() {
           <div className="screens-row">
             <figure className="screen-fig">
               <PhoneScreen
-                src="/app-screens/plan.jpg?v=20261109b"
+                src="/app-screens/plan.jpg?v=20261110"
                 alt="The load plan: three compartments with products, gallons and a target weight"
                 width={300}
                 maxHeight={470}
@@ -238,7 +238,7 @@ export default function Home() {
             </figure>
             <figure className="screen-fig">
               <PhoneScreen
-                src="/app-screens/trips.jpg?v=20261109b"
+                src="/app-screens/trips.jpg?v=20261110"
                 alt="Trips and PTDs: completed orders with terminal, store, truck and compartment strip"
                 width={300}
                 maxHeight={470}
@@ -250,7 +250,7 @@ export default function Home() {
             </figure>
             <figure className="screen-fig">
               <PhoneScreen
-                src="/app-screens/ptd.jpg?v=20261109b"
+                src="/app-screens/ptd.jpg?v=20261110"
                 alt="A completed Product Transfer Document with barcode, compartments, BOL numbers and deliveries"
                 width={300}
                 maxHeight={470}
@@ -358,13 +358,13 @@ export default function Home() {
           </div>
           <div className="product-visual reports-visual">
             <PhoneScreen
-              src="/app-screens/reports.jpg?v=20261109b"
+              src="/app-screens/reports.jpg?v=20261110"
               alt="The Reports hub: loads, DROP report, payload utilization, terminal cards and equipment history"
               width={270}
               maxHeight={540}
             />
             <PhoneScreen
-              src="/app-screens/drop-report.jpg?v=20261109b"
+              src="/app-screens/drop-report.jpg?v=20261110"
               alt="A DROP report: days worked, hours, loads, utilization score, gallons and miles"
               width={270}
               maxHeight={540}

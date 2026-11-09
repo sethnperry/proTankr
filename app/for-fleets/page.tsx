@@ -350,13 +350,13 @@ export default function ForFleetsPage() {
           </div>
           <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
             <PhoneScreen
-              src="/app-screens/ptd.jpg?v=20261109b"
+              src="/app-screens/ptd.jpg?v=20261110"
               alt="A completed Product Transfer Document"
               width={250}
               maxHeight={500}
             />
             <PhoneScreen
-              src="/app-screens/drop-report.jpg?v=20261109b"
+              src="/app-screens/drop-report.jpg?v=20261110"
               alt="A DROP report summarizing hours, loads, gallons and miles"
               width={250}
               maxHeight={500}
@@ -388,13 +388,13 @@ export default function ForFleetsPage() {
           </div>
           <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
             <PhoneScreen
-              src="/app-screens/fleet-dispatch-live.jpg?v=20261109"
+              src="/app-screens/fleet-dispatch-live.jpg?v=20261110"
               alt="The Dispatch Dashboard in Live mode: friction, en route, on site and delayed counts, tools and loads in progress"
               width={260}
               maxHeight={600}
             />
             <PhoneScreen
-              src="/app-screens/fleet-track.jpg?v=20261109"
+              src="/app-screens/fleet-track.jpg?v=20261110"
               alt="Track: every truck and trailer combination with driver and status"
               width={260}
               maxHeight={440}
@@ -425,7 +425,7 @@ export default function ForFleetsPage() {
           </div>
           <div className="feature-visual">
             <PhoneScreen
-              src="/app-screens/fleet-plan-board.jpg?v=20261109"
+              src="/app-screens/fleet-plan-board.jpg?v=20261110"
               alt="The Plan board: a driver's day as three trip cards, one complete, one in transit and one dispatched"
               width={300}
               maxHeight={620}
