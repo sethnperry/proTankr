@@ -403,6 +403,37 @@ export default function ForFleetsPage() {
         </div>
       </section>
 
+      {/* PLAN BOARD -- DriverDay rendered locally with a sample driver day
+          (one finished, one in transit, one dispatched). */}
+      <section id="plan-board" className="feature-section feature-alt">
+        <div className="feature-row">
+          <div className="feature-copy">
+            <p className="feature-eyebrow">Plan board</p>
+            <h2 className="feature-h2">A driver&apos;s whole day, on one page.</h2>
+            <p className="feature-body">
+              Pick a driver and see their day as the same trip cards they
+              see: what is finished, what is in transit, and what you have
+              dispatched but they have not begun. Each card shows the
+              route, the compartment plan, truck and trailer, and the start
+              and drop times.
+            </p>
+            <p className="feature-body feature-body-muted">
+              Tap Check this trip on anything unfinished to run it through
+              the plan report before the driver gets there. Sample day
+              shown.
+            </p>
+          </div>
+          <div className="feature-visual">
+            <PhoneScreen
+              src="/app-screens/fleet-plan-board.jpg?v=20261109"
+              alt="The Plan board: a driver's day as three trip cards, one complete, one in transit and one dispatched"
+              width={300}
+              maxHeight={620}
+            />
+          </div>
+        </div>
+      </section>
+
       {/* HOW IT WORKS -- the shared destination for the Sourcing Accuracy,
           Dispatch Operations, and Driver Alignment outcome buttons. All
           three are really the same story (the workflow captures this
