@@ -23,60 +23,57 @@ import SiteHeader from "../marketing/SiteHeader";
 import SiteFooter from "../marketing/SiteFooter";
 import PhoneScreen from "../marketing/PhoneScreen";
 
+// Reworked 2026-11 for the work-layer reframe. Six tiles, in the order the
+// office feels them: paperwork first (the new headline), then dispatch,
+// readiness, equipment, and last the two payload tiles the product started
+// with. Copy rules as at the top of this file: no absolutes, no claim to
+// replace the TMS or the ELD, and the terminal still issues the BOL.
+// The utilization tile describes the real, shipped scoring: gallon-weighted,
+// staff-visible, loads over the legal limit excluded, and the app has no
+// payout calculator by design (a company plugs the number into whatever
+// bonus program it already runs).
 const OUTCOMES = [
   {
-    // The main feature of the app -- its button gets its own concrete,
-    // real example (#load-example, inside the Fleet Economics section)
-    // rather than sharing the generic explainer the other three link to.
-    tag: "Asset optimization",
-    title: "Recover more payload.",
-    body: "Every load that's planned a little short is a little bit of capacity left at the rack. Small, per-load recovery adds up fast across a fleet.",
-    stat: "See the math below ↓",
-    href: "#load-example",
+    tag: "Records",
+    title: "Paperwork that builds itself.",
+    body: "Every trip produces its own Product Transfer Document: BOL numbers by compartment, times, delay reasons, tank readings, miles and signatures. Nothing to scan, upload or re-key.",
+    stat: "See the paperwork →",
+    href: "#paperwork",
   },
   {
-    // Deliberately NOT framed as "fewer wasted trips" -- that's the
-    // terminal-issue flagging feature's job (Out of Product/Out of
-    // Allocation reports), not this one. This is about dispatch having
-    // an accurate, per-terminal card picture BEFORE the first dispatch,
-    // so the driver never has to radio in mid-route for new sourcing or
-    // a card that's about to lapse.
-    tag: "Sourcing accuracy",
-    title: "Dispatch smarter with readiness visibility.",
-    body: "Card status updates itself through the normal workflow, down to which terminal a no load happened at. Check it before the first dispatch, not after, so drivers stop asking for new sourcing and dispatchers stop reworking routes mid trip.",
-    stat: "See how it works →",
-    href: "#how-it-works",
-  },
-  {
-    // Reframed per explicit direction around the real pain point: a
-    // reactive dispatcher spends the day answering messages instead of
-    // planning, and a driver left waiting on a reply becomes the next
-    // customer call. Links to its own section (#dispatch-planning), not
-    // the shared #how-it-works explainer -- deliberately not a third
-    // card pointing at the same generic destination.
-    tag: "Dispatch operations",
-    title: "Keep drivers rolling, not waiting.",
-    body: "Terminal and card readiness are visible up front, so the plan is right from the start instead of built load by load. Fewer driver messages means fewer idle trucks waiting on a reply, and a lighter workload for dispatch.",
+    tag: "Dispatch",
+    title: "See the day, not just the dispatch.",
+    body: "Loads in progress, who is headed to which terminal, and conflicts when a terminal reports an issue. Plan a driver's whole day against their hours and access, and send it as dispatched loads.",
     stat: "See how dispatch changes →",
     href: "#dispatch-planning",
   },
   {
-    // The point of this metric, stated plainly for whoever edits this
-    // copy next: reward loading closer to capacity without ever rewarding
-    // overloading, cutting corners, or speeding. Loads over the legal
-    // weight limit are excluded from scoring entirely (never counted, not
-    // just capped), so there is no path to a better number through unsafe
-    // loading. The app computes the number only -- it has no payout
-    // calculator, by design; a company plugs this into whatever bonus or
-    // incentive program it already runs.
-    // Links to the manifesto section (#less-management) rather than the
-    // shared #how-it-works explainer -- that section now carries a real
-    // explanation of how/why the utilization score works, per explicit
-    // direction, rather than sending this card to a generic destination
-    // that never actually mentions it.
-    tag: "Driver alignment",
-    title: "Properly aligned incentives.",
-    body: "A gallon weighted score measures how close each load landed to capacity. Loads over the legal weight limit are excluded, so overloading can never score higher. Feed it into your own bonus program to reward careful loading, not speed.",
+    tag: "Readiness",
+    title: "Know who is ready before you send them.",
+    body: "Terminal cards, credentials, permits and service due roll into one expiration view with one set of color rules, so a lapsed card is found at the desk, not at the gate.",
+    stat: "See how it works →",
+    href: "#how-it-works",
+  },
+  {
+    tag: "Equipment",
+    title: "Every truck and trailer keeps its own record.",
+    body: "Tare, compartments, service history, fuel stops and MPG stay with the equipment, and parked units show on a map. With a connected tracker, odometer and position fill themselves in.",
+    stat: "See the records →",
+    href: "#paperwork",
+  },
+  {
+    // Its button gets its own concrete, real example (#load-example, inside
+    // the Fleet Economics section).
+    tag: "Payload",
+    title: "Recover capacity that was left at the rack.",
+    body: "Every load planned a little short is capacity left behind. ProTankr plans each load against today's equipment, product and temperature, and measures how close it landed.",
+    stat: "See the math below ↓",
+    href: "#load-example",
+  },
+  {
+    tag: "Alignment",
+    title: "Measure careful loading, fairly.",
+    body: "A gallon weighted score shows how close each load landed to capacity. Loads over the legal limit are excluded, so overloading can never score higher. Feed it into your own bonus program.",
     stat: "See how it's calculated →",
     href: "#less-management",
   },
@@ -311,7 +308,7 @@ export default function ForFleetsPage() {
       <section className="outcomes-section">
         <div className="outcomes-inner">
           <p className="outcomes-eyebrow">What changes for the business</p>
-          <h2 className="outcomes-h2">Outcomes that pay for the platform.</h2>
+          <h2 className="outcomes-h2">What changes across the business.</h2>
           <div className="outcomes-grid">
             {OUTCOMES.map((o) => (
               <div key={o.tag} className="outcome-tile">
