@@ -17,6 +17,7 @@ import { sendPush, type StoredSub } from "@/lib/push/send";
 import { pushTerminalReports } from "@/lib/push/terminalReportPush";
 import { runWorklogs } from "@/lib/worklog/sendWorklogs";
 import { runNotifications } from "@/lib/notify/server";
+import { runAbandonedTrips } from "@/lib/trips/abandonedServer";
 import { runAccountRules } from "@/lib/accounts/server";
 import type { Level } from "@/lib/telematics/hosTripNotify";
 
@@ -188,10 +189,12 @@ async function handle(req: NextRequest) {
   let notifications: unknown = null;
   try { await runAccountRules(); } catch (e) { console.warn("[cron] account rules failed:", (e as Error).message); }
   try { notifications = await runNotifications(); } catch (e) { console.warn("[cron] notifications failed:", (e as Error).message); }
+  let abandoned: unknown = null;
+  try { abandoned = await runAbandonedTrips(); } catch (e) { console.warn("[cron] abandoned trips failed:", (e as Error).message); }
   const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active");
   const out: Record<string, { sent: number; drivers: number } | string> = {};
   for (const c of (data ?? []) as { company_id: string }[]) {
     try { out[c.company_id] = await runCompany(c.company_id); } catch (e) { out[c.company_id] = (e as Error).message; }
   }
-  return NextResponse.json({ ok: true, reportPushes, worklogs, notifications, companies: out });
+  return NextResponse.json({ ok: true, reportPushes, worklogs, notifications, abandoned, companies: out });
 }

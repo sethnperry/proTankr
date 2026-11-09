@@ -9,7 +9,7 @@ import { runDueSchedules, type RunDeps, type RunSummary } from "./runDue";
 import type { DueSchedule, Person } from "./schedule";
 import { freightRows, recapLines, type Load, type Stop } from "../freight/freight";
 
-async function sendEmail(to: string[], subject: string, text: string): Promise<void> {
+export async function sendEmail(to: string[], subject: string, text: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("RESEND_API_KEY not set.");
   const from = process.env.INVITE_FROM_EMAIL ?? "noreply@protankr.com";
