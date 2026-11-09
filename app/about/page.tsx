@@ -27,7 +27,7 @@ export default function AboutPage() {
               and builds the paperwork, the Product Transfer Document, times,
               miles and tank readings, from what the driver already did. It
               works alongside your TMS and your ELD and replaces the
-              clipboards, scan apps and stand-alone forms in between.
+              clipboards, separate scan apps and stand-alone forms in between.
             </p>
             <p>
               It started with the hardest number in the cab, so that is

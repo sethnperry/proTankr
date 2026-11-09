@@ -225,7 +225,8 @@ export default function ForDriversPage() {
             Whether you run company equipment or your own, ProTankr takes you
             from the load plan to the rack to the drop on one screen, and
             builds the Product Transfer Document, times and records from
-            what you already tapped. No scan app. No forms to chase.
+            what you already tapped. Snap receipts and tickets right in the
+            trip, so there is no separate scan app. No forms to chase.
           </p>
           <ul className="driver-checklist">
             {CHECKLIST.map(({ Icon, label }) => (
@@ -293,7 +294,10 @@ export default function ForDriversPage() {
             <p className="feature-body feature-body-muted">
               Fuel stops, delays and delivery details ride along in the same
               record, so your DROP report and mileage are never a
-              reconstruction at the end of the week.
+              reconstruction at the end of the week. Snap fuel receipts,
+              scale tickets and meter tickets with your phone&apos;s camera as
+              you go. Each photo files with the stop or record it belongs
+              to, so the backup is already attached.
             </p>
           </div>
           <div className="feature-visual">

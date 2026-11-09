@@ -8,7 +8,7 @@
 // load-plan calculator: an optimization layer that replaced nothing. That is
 // no longer the product. ProTankr now runs the whole trip (plan, load,
 // deliver, document) and sits between the TMS and the physical work. It
-// replaces the clipboard, the scan-and-upload app and the stand-alone forms,
+// replaces the clipboard, the separate scan app and the stand-alone forms,
 // while still working alongside the TMS and the ELD. The load planner is
 // now the first step of that story, not the whole story.
 //
@@ -26,6 +26,11 @@
 //  - The terminal still issues the BOL. ProTankr captures its numbers; it
 //    does not replace the terminal's document.
 //  - Don't name competitor products on the site; name the category.
+//  - Some paper still has to be captured from the camera (the marked-up BOL,
+//    receipts, scale tickets, meter tickets). The claim is that ProTankr
+//    replaces the SEPARATE or third-party scan app and scanning step: the
+//    phone camera captures it inside the trip and files it with the record.
+//    Never say "no scanning" or "nothing to photograph".
 
 import Link from "next/link";
 import SiteHeader from "./marketing/SiteHeader";
@@ -93,8 +98,8 @@ const REPLACES = [
     now: "The terminal still issues the BOL. ProTankr captures its numbers per product at the rack, then builds the Product Transfer Document with times, tank readings and signatures.",
   },
   {
-    was: "Scan-and-upload apps",
-    now: "No photographing paper at the end of the day. The record is built while the trip happens, so there is nothing left to scan, crop and send.",
+    was: "Third-party scan apps and a separate scanning step",
+    now: "Snap the marked-up BOL, a receipt or a scale ticket with your phone's own camera, inside the trip. Each photo files with the stop, delivery or record it belongs to, so the backup is captured as you go and the story is already assembled.",
   },
   {
     was: "Stand-alone electronic forms",
@@ -156,7 +161,7 @@ export default function Home() {
           </p>
           <p className="hero-sub">
             Works alongside your TMS and your ELD. It replaces the
-            clipboard, the scan app and the forms in between.
+            clipboard, the separate scan app and the forms in between.
           </p>
           <div className="hero-actions">
             <Link href="/get-the-app" className="btn-primary">
@@ -388,8 +393,8 @@ export default function Home() {
             </p>
             <p className="tms-line tms-line-sub">
               It sits beside the systems you already run and does not ask
-              you to replace them. Where it can replace a clipboard, a scan
-              app or a form, it does.
+              you to replace them. Where it can replace a clipboard, a
+              separate scan app or a form, it does.
             </p>
           </div>
         </div>
