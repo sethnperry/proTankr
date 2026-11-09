@@ -321,17 +321,24 @@ export default function ForDriversPage() {
               can be split across two tanks with gallons for each.
             </p>
             <p className="feature-body feature-body-muted">
-              Before and after tank readings, the signature and your finish
-              time follow, and the whole drop lands on the Product Transfer
+              After the tanks, the details are optional taps: tank readings,
+              bio blend, additives and issues. Then the signature and your
+              finish time, and the whole drop lands on the Product Transfer
               Document. Sample delivery shown.
             </p>
           </div>
-          <div className="feature-visual">
+          <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
             <PhoneScreen
-              src="/app-screens/delivery-tankmap.jpg?v=20261109"
-              alt="The delivery tank map: three compartments linked to store tanks with product and gallons"
-              width={300}
-              maxHeight={560}
+              src="/app-screens/delivery-tanks.jpg?v=20261109"
+              alt="The delivery screen: compartments linked to store tanks by product, with gallons per tank"
+              width={260}
+              maxHeight={540}
+            />
+            <PhoneScreen
+              src="/app-screens/delivery-details.jpg?v=20261109"
+              alt="Delivery details: optional tank readings, bio blend, additives, issues and ending miles"
+              width={260}
+              maxHeight={540}
             />
           </div>
         </div>
