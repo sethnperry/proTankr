@@ -149,6 +149,8 @@ export type ForecastInput = {
   startFrom: LatLon | null;            // a chained load starts where the last one dropped
   terminal: { id: string; name: string; tz: string | null; ll: LatLon | null };
   location: { id: string; name: string; ll: LatLon | null };
+  /** Later drops on the same load, in order. */
+  extraDrops?: { id: string; name: string; ll: LatLon | null }[];
   history: HistTrip[];
   settings?: TimelineSettings;
   dutyStartMs?: number;                // start of the driver's day (default: this load's start)
@@ -209,7 +211,18 @@ export function forecastLoad(i: ForecastInput): Forecast {
   const dr = pickMinutes(dropSamples(i.history, i.location.id), t, null);
   t = push("drop", `Deliver at ${i.location.name}`, t, dr?.minutes ?? DEFAULTS.drop, basisFor(dr));
 
-  const driveMinutes = toTerm.minutes + toDel.minutes;
+  // Later drops: drive on from the previous one, then unload.
+  let extraDrive = 0, prev = i.location;
+  for (const x of i.extraDrops ?? []) {
+    const m = prev.ll && x.ll ? driveMinutesByDistance(prev.ll, x.ll) : DEFAULTS.to_delivery;
+    extraDrive += m;
+    t = push("to_delivery", `Drive to ${x.name}`, t, m, prev.ll && x.ll ? { kind: "distance", n: 0, note: "estimated from distance" } : basisFor(null));
+    const xd = pickMinutes(dropSamples(i.history, x.id), t, null);
+    t = push("drop", `Deliver at ${x.name}`, t, xd?.minutes ?? DEFAULTS.drop, basisFor(xd));
+    prev = x;
+  }
+
+  const driveMinutes = toTerm.minutes + toDel.minutes + extraDrive;
   const duty = i.dutyStartMs ?? i.startMs;
   const shiftH = (t - duty) / 3600000;
   const nowMs = i.nowMs ?? Date.now();

@@ -976,7 +976,7 @@ export default function DispatchPage() {
               setTlDriverId(planTripFor);
               const newId = crypto.randomUUID();
               if (x.meet) setPendingMeet(newId);
-              day.add({ id: newId, terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer, comps: x.comps ?? null });
+              day.add({ id: newId, terminalId: x.terminalId, locationId: x.locationId, supplierId: x.supplierId, orderNumber: x.orderNumber, shipper: x.shipper, customer: x.customer, comps: x.comps ?? null, extra: x.extra ?? null });
             }}
             onClose={() => setPlanTripFor(null)} />
         );

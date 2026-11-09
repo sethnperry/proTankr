@@ -5,7 +5,7 @@
 // the start time, the validation report (re-run on every change) and "dispatch
 // the day". The page supplies the lookups; the checks live in
 // lib/dispatch/validateDay.ts.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { validateDay, type DayContext, type DayReport, type DayTrip, type Others } from "@/lib/dispatch/validateDay";
 import { buildDispatchedTrip } from "@/lib/dispatch/dispatchTrip";
 import { groupsFromPlan } from "@/lib/dispatch/compPlan";
@@ -36,6 +36,21 @@ export function usePlanDay(d: PlanDayDeps) {
   const [handledBy, setHandledBy] = useState<Record<string, Record<string, string>>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Trips being planned survive a refresh (kept in this browser for 18 hours).
+  const draftKey = d.companyId ? `proTankr:planDraft:${d.companyId}` : null;
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!draftKey || hydrated.current) return;
+    hydrated.current = true;
+    try {
+      const r = JSON.parse(localStorage.getItem(draftKey) || "null");
+      if (r && Date.now() - Number(r.savedAt) < 18 * 3600000) { setByDriver(r.byDriver ?? {}); setStartByDriver(r.startByDriver ?? {}); }
+    } catch { /* unreadable draft: start fresh */ }
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey || !hydrated.current) return;
+    try { localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), byDriver, startByDriver })); } catch { /* private mode: not kept */ }
+  }, [draftKey, byDriver, startByDriver]);
   const id = d.driverId ?? "";
   const trips = byDriver[id] ?? [];
   const last = d.prior[d.prior.length - 1];
@@ -77,6 +92,8 @@ export function usePlanDay(d: PlanDayDeps) {
             startMs: r.startMs, endMs: r.forecast.endMs, driveMin: r.forecast.driveMinutes, truckId: d.truckId, trailerId: d.trailerId,
             warnings: report.issues.filter((x) => x.tripId === r.trip.id || x.tripId === null).map((x) => x.text),
             shipper: r.trip.shipper, customer: r.trip.customer,
+            extraDrops: r.trip.extra ?? undefined,
+            filledComps: r.trip.comps ? r.trip.comps.flatMap((pid, i) => (pid ? [r.trip.comps!.length - i] : [])) : undefined,
             // comps run highest compartment first: the last entry is compartment 1.
             groups: r.trip.comps?.some(Boolean) ? groupsFromPlan(Object.fromEntries(r.trip.comps.map((pid, i) => [r.trip.comps!.length - i, pid ?? ""])), {}, { orderNumber: r.trip.orderNumber, supplierId: r.trip.supplierId }) : undefined,
           },

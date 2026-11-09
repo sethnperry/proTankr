@@ -14,6 +14,8 @@ import { AccessStripsSheet, UncardedSheet, type CityStrip } from "./AccessStrips
 import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
 import { DriverPlanBuilder } from "./DriverPlanBuilder";
 import { useDriverPlans } from "./useDriverPlans";
+import { DropSplitSheet } from "./DropSplitSheet";
+import type { ExtraDrop } from "@/lib/dispatch/drops";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { productColorFor } from "../utils/productColor";
 import { repeatedRefs } from "@/lib/trips/refs";
@@ -25,6 +27,8 @@ export type PlanComps = (string | null)[];
 export type PlanTripPick = { terminalId: string; locationId: string; shipper: string; customer: string; orderNumber: string; supplierId: string | null;
   /** Product plan per compartment, highest first. */
   comps?: PlanComps | null;
+  /** Later drops, with the compartments delivered at each. */
+  extra?: ExtraDrop[];
   /** The pickup is a terminal the driver is not carded at, and the dispatcher chose to meet another driver there. */
   meet?: boolean };
 const BLANK: StartLoadValues = {
@@ -85,16 +89,31 @@ export function PlanTripSheet({ driverId, driverName, equipmentLabel, onChangeEq
     return row;
   };
 
+  const [split, setSplit] = useState<{ v: StartLoadValues; drops: { locationId: string; name: string }[]; comps: { n: number; code: string; color: string }[] } | null>(null);
+  const finish = (v: StartLoadValues, comps: PlanComps | null, extra: ExtraDrop[]) => {
+    const first = v.deliveries.find((d) => d.locationId);
+    if (!first?.locationId || !pickup) return;
+    try { localStorage.setItem(memKey, JSON.stringify({ shipper: v.shipper, customer: v.customer })); } catch { /* private mode: it just will not be remembered */ }
+    onApply({ terminalId: pickup.terminalId, locationId: first.locationId, shipper: v.shipper, customer: v.customer, orderNumber: v.orderNumber, supplierId: v.supplier?.supplier_id ?? null, comps, meet, ...(extra.length ? { extra } : {}) });
+    setSplit(null); onClose();
+  };
   const submit = (v: StartLoadValues) => {
     const numbers = [v.orderNumber, ...v.extraOrderNumbers].filter((x) => x.trim());
     const rep = repeatedRefs(numbers);
     if (rep.length) { setError(`Order ${rep[0]} is entered twice.`); return; }
-    const first = v.deliveries.find((d) => d.locationId);
-    if (!first?.locationId || !pickup) { setError("Pick a pickup terminal and a saved delivery location."); return; }
-    try { localStorage.setItem(memKey, JSON.stringify({ shipper: v.shipper, customer: v.customer })); } catch { /* private mode: it just will not be remembered */ }
+    const stops = v.deliveries.filter((d) => d.locationId);
+    if (!stops.length || !pickup) { setError("Pick a pickup terminal and a saved delivery location."); return; }
+    if (stops.length < v.deliveries.length) { setError("Every delivery needs a saved location (or remove the empty one)."); return; }
     const comps = dp.presets.find((p) => p.slot === v.planSlot)?.comps ?? null;
-    onApply({ terminalId: pickup.terminalId, locationId: first.locationId, shipper: v.shipper, customer: v.customer, orderNumber: v.orderNumber, supplierId: v.supplier?.supplier_id ?? null, comps, meet });
-    onClose();
+    if (stops.length === 1) { finish(v, comps, []); return; }
+    const filled = comps ? comps.map((pid, i) => ({ pid, n: comps.length - i })).filter((c) => c.pid) : [];
+    if (filled.length < 2) { setError("Pick a plan with product in at least two compartments to split the load between drops."); return; }
+    setError(null);
+    setSplit({
+      v,
+      drops: stops.map((d) => ({ locationId: d.locationId as string, name: locations.find((l) => l.location_id === d.locationId)?.name ?? "Delivery" })),
+      comps: filled.sort((a, b) => a.n - b.n).map((c) => { const p: any = catalog.find((x) => x.product_id === c.pid); return { n: c.n, code: String(p?.button_code ?? p?.display_name ?? "").toUpperCase(), color: colorOf(c.pid as string) }; }),
+    });
   };
 
   const choose = (t: TermRow) => {
@@ -143,6 +162,8 @@ export function PlanTripSheet({ driverId, driverName, equipmentLabel, onChangeEq
         suppliers={suppliers} onAddSupplier={addSupplier} productColor={colorOf} equipmentLabel={equipmentLabel} lineExtra={lineExtra}
         locations={shownLocations} tanks={tanks} origin={null} companyId={companyId} userId={userId} onLocationAdded={onLocationAdded}
         error={error} onClose={onClose} onSubmit={submit} />
+      <DropSplitSheet open={!!split} comps={split?.comps ?? []} drops={split?.drops ?? []}
+        onApply={(extra) => split && finish(split.v, dp.presets.find((p) => p.slot === split.v.planSlot)?.comps ?? null, extra)} onClose={() => setSplit(null)} />
       {driverId && <DriverPlanBuilder open={!!builder} slot={builder?.slot ?? null} driverId={driverId} driverName={driverName} comboId={dp.comboId} trailerId={trailerId}
         comps={dp.comps} presets={dp.presets} raw={dp.raw}
         onSaved={(slot) => { dp.reload(); setSel({ slot, n: Date.now() }); setBuilder(null); }} onClose={() => setBuilder(null)} />}

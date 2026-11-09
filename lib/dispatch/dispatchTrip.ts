@@ -8,6 +8,7 @@
 // With a compartment plan (`groups`), each product group carries its own order
 // and supplier: one trip order per distinct number (the first is primary) and
 // the pickup's planned_comps records order and supplier per compartment.
+import { firstDropComps, type ExtraDrop } from "./drops.ts";
 import { distinctOrders, plannedCompsFor, type PlanGroup } from "./compPlan.ts";
 
 export type DispatchLeg = {
@@ -26,6 +27,8 @@ export type DispatchLeg = {
   trailerId: string | null;
   warnings: string[];       // what the dispatcher saw and went ahead with
   groups?: PlanGroup[];     // compartment plan, one entry per product
+  extraDrops?: ExtraDrop[]; // later drops and the compartments delivered at each
+  filledComps?: number[];   // the compartments that carry product, for the first drop's share
   shipper?: string;         // for the BOL; the driver verifies both at Begin
   customer?: string;
 };
@@ -52,6 +55,7 @@ export function buildDispatchedTrip(
     order_id: opts.newId(), trip_id: tripId, order_number: n || null, is_primary: i === 0, client_updated_at: nowIso,
   }));
   const idFor = (n: string) => orderRows.find((o) => (o.order_number ?? "").toLowerCase() === n.toLowerCase())?.order_id ?? null;
+  const extra = l.extraDrops ?? [];
   const planned = groups ? plannedCompsFor(groups, idFor) : null;
   const pickupSupplier = groups ? (groups.find((g) => g.supplierId)?.supplierId ?? l.supplierId) : l.supplierId;
   return {
@@ -74,7 +78,11 @@ export function buildDispatchedTrip(
     deliveries: [{
       delivery_id: opts.newId(), trip_id: tripId, seq: 1, location_id: l.locationId, delivery_type: l.deliveryType,
       status: "planned", client_updated_at: nowIso,
-    }],
+      ...(extra.length ? { planned_comps: firstDropComps(l.filledComps ?? [], extra).map((n) => ({ comp_number: n })) } : {}),
+    }, ...extra.map((x, k) => ({
+      delivery_id: opts.newId(), trip_id: tripId, seq: k + 2, location_id: x.locationId, delivery_type: l.deliveryType,
+      status: "planned", client_updated_at: nowIso, planned_comps: x.comps.map((n) => ({ comp_number: n })),
+    }))],
     events: [{
       event_id: opts.newId(), trip_id: tripId, event_type: "dispatched", occurred_at: nowIso, actor_id: i.dispatcherId,
       pickup_id: pickupId, delivery_id: null,

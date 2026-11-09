@@ -19,6 +19,8 @@ export type DayTrip = {
   comps?: (string | null)[] | null;
   terminalId: string;
   locationId: string;
+  /** Later drops on this load, each with the compartments delivered there. */
+  extra?: { locationId: string; comps: number[] }[] | null;
   supplierId: string | null;
   orderNumber: string;
   shipper: string;
@@ -89,6 +91,7 @@ export function validateDay(trips: DayTrip[], c: DayContext): DayReport {
       startMs: t, startFrom: from,
       terminal: { id: trip.terminalId, name: term.name, tz: term.tz, ll: term.ll },
       location: { id: trip.locationId, name: loc.name, ll: loc.ll },
+      extraDrops: (trip.extra ?? []).flatMap((x) => { const l = c.locations.get(x.locationId); return l ? [{ id: x.locationId, name: l.name, ll: l.ll }] : []; }),
       history: c.history, settings: settingsForTerminal(c.settings, term),
       dutyStartMs: c.dutyStartMs ?? c.startMs, drivingMinSoFar: drive, hos: c.hos, nowMs: c.nowMs,
     });
@@ -129,7 +132,8 @@ export function validateDay(trips: DayTrip[], c: DayContext): DayReport {
 
     drive += f.driveMinutes;
     t = f.endMs;
-    from = loc.ll;
+    const lastX = (trip.extra ?? []).map((x) => c.locations.get(x.locationId)).filter(Boolean).pop();
+    from = lastX ? lastX.ll : loc.ll;
   });
 
   for (const cr of c.credentials) {
