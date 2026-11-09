@@ -344,8 +344,42 @@ export default function ForDriversPage() {
         </div>
       </section>
 
-      {/* FEATURE 1 — driver-driven planner, the real interactive tool */}
+      {/* SIGN-OFF — consignee, driver and times steps of the real delivery
+          dashboard, rendered locally with sample data. */}
       <section className="feature-section feature-alt">
+        <div className="feature-row-stack">
+          <p className="feature-eyebrow feature-eyebrow-center">Sign-off</p>
+          <h2 className="feature-h2 feature-h2-center">
+            Signatures and times, checked for you.
+          </h2>
+          <p className="feature-body feature-body-center">
+            The store signs on your phone, you sign once and accept with a
+            tap after that, and ProTankr checks your times against how long
+            the drop should take. On schedule is one tap. If it ran long, it
+            asks for the reason while it is fresh. Sample delivery shown.
+          </p>
+          <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", alignItems: "flex-start", marginTop: 28 }}>
+            <PhoneScreen
+              src="/app-screens/delivery-consignee.jpg?v=20261109"
+              alt="Consignee step: the store's signature recorded with a green check"
+              width={250}
+            />
+            <PhoneScreen
+              src="/app-screens/delivery-driver.jpg?v=20261109"
+              alt="Driver step: the driver signs once on the signature pad"
+              width={250}
+            />
+            <PhoneScreen
+              src="/app-screens/delivery-times.jpg?v=20261109"
+              alt="Times step: arrived, began and finished times with an on schedule check"
+              width={250}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURE 1 — driver-driven planner, the real interactive tool */}
+      <section className="feature-section">
         <div className="feature-row feature-row-planner">
           <div className="feature-copy">
             <p className="feature-eyebrow">Step one: the load plan</p>
@@ -373,7 +407,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 2 — terminal access */}
-      <section className="feature-section">
+      <section className="feature-section feature-alt">
         <div className="feature-row feature-row-reverse">
           <div className="feature-copy">
             <p className="feature-eyebrow">Terminal access</p>
@@ -392,7 +426,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 3 — equipment & tare */}
-      <section className="feature-section feature-alt">
+      <section className="feature-section">
         <div className="feature-row">
           <div className="feature-copy">
             <p className="feature-eyebrow">Equipment records</p>
@@ -412,7 +446,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 4 — shared knowledge */}
-      <section className="feature-section">
+      <section className="feature-section feature-alt">
         <div className="feature-row-stack">
           <p className="feature-eyebrow feature-eyebrow-center">Shared knowledge</p>
           <h2 className="feature-h2 feature-h2-center">
