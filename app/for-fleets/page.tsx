@@ -365,6 +365,44 @@ export default function ForFleetsPage() {
         </div>
       </section>
 
+      {/* FLEET SCREENS -- real captures of the Dispatch Dashboard and Track
+          from the fleet demo account (public/app-screens/fleet-*.jpg). */}
+      <section id="fleet-live" className="feature-section">
+        <div className="feature-row feature-row-reverse">
+          <div className="feature-copy">
+            <p className="feature-eyebrow">Dispatch dashboard</p>
+            <h2 className="feature-h2">The whole fleet, live.</h2>
+            <p className="feature-body">
+              Loads in progress, who is en route, on site or delayed, and
+              where each trip is between the rack and the drop. Switch to
+              Plan to find the right driver for a load, check hours and
+              terminal access, and see equipment and expirations before you
+              send anyone.
+            </p>
+            <p className="feature-body feature-body-muted">
+              Track shows every truck and trailer with its driver and
+              status, and Trips lists every order with its terminal,
+              supplier and state. All of it comes from the trip the driver
+              is already running, not from a status call.
+            </p>
+          </div>
+          <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
+            <PhoneScreen
+              src="/app-screens/fleet-dispatch-live.jpg?v=20261109"
+              alt="The Dispatch Dashboard in Live mode: friction, en route, on site and delayed counts, tools and loads in progress"
+              width={260}
+              maxHeight={600}
+            />
+            <PhoneScreen
+              src="/app-screens/fleet-track.jpg?v=20261109"
+              alt="Track: every truck and trailer combination with driver and status"
+              width={260}
+              maxHeight={440}
+            />
+          </div>
+        </div>
+      </section>
+
       {/* HOW IT WORKS -- the shared destination for the Sourcing Accuracy,
           Dispatch Operations, and Driver Alignment outcome buttons. All
           three are really the same story (the workflow captures this
