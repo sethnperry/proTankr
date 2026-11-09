@@ -45,7 +45,7 @@ export function StartLoadSheet({
   dispatchMatch,
   saveSlot,
   productColor,
-  equipmentLabel, lineExtra, onPlanTap,
+  equipmentLabel, lineExtra, selectPlan,
   locations,
   tanks,
   origin,
@@ -95,7 +95,7 @@ export function StartLoadSheet({
   saveSlot?: { slot: number; replacing: boolean } | null;
   productColor: (productId: string) => string;
   equipmentLabel: string;
-  onPlanTap?: () => void; // dispatch: build the plan itself (the driver's presets do not apply)
+  selectPlan?: { slot: number; n: number }; // dispatch: a plan was just saved; choose it (n changes per request)
   lineExtra?: React.ReactNode; // dispatch: replaces the "tap any value" hint (change equipment, delivery range)
   locations: DeliveryLocation[];
   tanks: LocationTank[];
@@ -133,6 +133,7 @@ export function StartLoadSheet({
     else if (k.startsWith("order:")) setDraft(vals.extraOrderNumbers[Number(k.slice(6))] ?? "");
   };
 
+  useEffect(() => { if (selectPlan) setV((s) => ({ ...s, planSlot: selectPlan.slot })); }, [selectPlan]);
   // Re-seed each time the card opens, so a reopen reflects the current trip.
   useEffect(() => {
     if (!open) { setEdit(null); setQueue([]); return; }
@@ -314,7 +315,7 @@ export function StartLoadSheet({
             <Line label="Plan" value="Sent by dispatch" last onTap={() => undefined} sub={null} />
           ) : (
             <Line label="Plan" value={chosenPreset ? `${slotLetter(chosenPreset.slot)}${chosenPreset.name ? ` · ${chosenPreset.name}` : ""}` : null}
-              missing onTap={onPlanTap ?? (() => setPlanOpen(true))} last />
+              missing onTap={() => setPlanOpen(true)} last />
           )}
         </div>
 
