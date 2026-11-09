@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { driverDay, type DayItem } from "./driverDay.ts";
+import { driverDay, driverDays, type DayItem } from "./driverDay.ts";
 
 const H = 3600000;
 const T0 = Date.UTC(2026, 10, 8, 22, 0); // 10 pm
@@ -24,3 +24,17 @@ test("a live trip with no end time still anchors its day", () => {
   assert.equal(d.items.length, 2);
 });
 test("no trips, no day", () => assert.equal(driverDay([], T0), null));
+
+test("days are labeled; a finished day inside its rest is still Today with a reset time", () => {
+  const days = driverDays([it("y", "done", -20), it("t", "done", -4, 3)], T0)!;
+  assert.deepEqual(days.map((d) => d.label), ["Yesterday", "Today"]);
+  assert.equal(days[1].resetAtMs, T0 - 1 * H + 10 * H);
+});
+test("after the reset the finished day is Yesterday and tomorrow's trips come next", () => {
+  const days = driverDays([it("a", "done", -20), it("b", "planned", 30)], T0);
+  assert.deepEqual(days.map((d) => d.label), ["Yesterday", "Tomorrow"]);
+});
+test("a live day gets Yesterday before and Tomorrow after", () => {
+  const days = driverDays([it("a", "done", -30), it("b", "live", 0), it("c", "planned", 40)], T0 + H);
+  assert.deepEqual(days.map((d) => d.label), ["Yesterday", "Today", "Tomorrow"]);
+});

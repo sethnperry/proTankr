@@ -6,13 +6,12 @@
 // trip card the driver sees, plus the dispatcher's details (truck, trailer,
 // start and ETA). A trip that is not finished can be sent through the same
 // validation report as a trip built on this page.
-import React from "react";
-import { TrailerHeader, useTrailerHeaderData } from "@/app/planner/components/TrailerViews";
+import React, { useState } from "react";
 import { TripCardView } from "@/app/planner/components/trip/TripCardView";
 import { deliveryRows, pickupRows } from "@/lib/trips/cardRows";
 import { activePickup, onBoard, plannedDeliveries } from "@/lib/trips/tripFlow";
 import { readPlannedMeta } from "@/lib/dispatch/compPlan";
-import { driverDay, type DayItem } from "@/lib/dispatch/driverDay";
+import { driverDays, type DayItem } from "@/lib/dispatch/driverDay";
 import { noLoadReasonLabel } from "@/lib/trips/terminalIssues";
 import type { DriverTrip } from "./useDriverTrips";
 import type { BoardProduct } from "./FleetBoard";
@@ -25,6 +24,15 @@ const STATUS: Record<string, string> = {
 
 type Item = DayItem & { t: DriverTrip };
 
+const WK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** Sun 11/08 3:02pm */
+export function stamp(ms: number): string {
+  const d = new Date(ms);
+  const h = d.getHours() % 12 || 12;
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${WK[d.getDay()]} ${p2(d.getMonth() + 1)}/${p2(d.getDate())} ${h}:${p2(d.getMinutes())}${d.getHours() < 12 ? "am" : "pm"}`;
+}
+
 export function toItems(trips: DriverTrip[]): Item[] {
   return trips.flatMap((t) => {
     const s = t.trip.status;
@@ -36,12 +44,7 @@ export function toItems(trips: DriverTrip[]): Item[] {
   });
 }
 
-/** "6:10 PM", with the weekday when it is not the same calendar day as `ref`. */
-function stamp(ms: number, ref: number): string {
-  const d = new Date(ms);
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  return d.toDateString() === new Date(ref).toDateString() ? time : `${d.toLocaleDateString("en-US", { weekday: "short" })} ${time}`;
-}
+const COUNT = (n: number) => `${n} Trip${n === 1 ? "" : "s"}`;
 
 export function DriverDay(p: {
   trips: DriverTrip[];
@@ -56,63 +59,92 @@ export function DriverDay(p: {
   onCheck: (tripId: string | null) => void;
   onOpenTrip: (tripId: string) => void;
 }) {
-  const day = driverDay(toItems(p.trips), p.nowMs);
-  const hdr = useTrailerHeaderData((day?.items ?? []).map((i) => i.t.trip.trailer_id));
-  if (!day) return <div style={{ fontSize: 13, color: muted, margin: "8px 0" }}>No trips in this driver&rsquo;s current day.</div>;
-  const n = day.items.length;
+  const days = driverDays(toItems(p.trips), p.nowMs);
+  const [open, setOpen] = useState<Record<string, boolean>>({ Today: true });
+  if (days.length === 0) return <div style={{ fontSize: 13, color: muted, margin: "4px 0" }}>No trips yesterday, today or tomorrow.</div>;
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: muted, textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 8px" }}>
-        Day · {stamp(day.startMs, day.startMs)} to {stamp(day.endMs, day.startMs)} · {n} trip{n === 1 ? "" : "s"}
-      </div>
-      {day.items.map((it, idx) => {
-        const { trip, pickups, deliveries, compLoads } = it.t;
-        const aboard = onBoard(compLoads).sort((a, b) => b.comp_number - a.comp_number);
-        const loaded: Record<number, string | null> = Object.fromEntries(aboard.map((c) => [c.comp_number, c.product_id]));
-        // The plan: what the dispatcher planned into the compartments, if anything.
-        const pk = pickups.find((x) => !x.left_at && x.outcome !== "no_load" && x.planned_comps);
-        const meta = pk ? readPlannedMeta(pk.planned_comps) : null;
-        const planComps = meta && meta.size ? [...meta.entries()].sort((a, b) => b[0] - a[0]).map(([, m]) => { const pr = p.product(m.product_id); return { code: pr.code, color: pr.hex }; }) : null;
-        const current = trip.status === "complete" ? null : activePickup(pickups);
-        const headed = !current && aboard.length > 0 ? plannedDeliveries(deliveries)[0]?.delivery_id ?? null : null;
-        const truck = p.truckName(trip.truck_id ?? trip.planned_truck_id ?? null);
-        const trailer = p.trailerName(trip.trailer_id ?? trip.planned_trailer_id ?? null);
-        const checking = p.checkingId === trip.trip_id;
-        const dropEta = it.kind === "planned" && it.endMs ? it.endMs : null;
+    <div>
+      {days.map((day) => {
+        const isOpen = open[day.label] ?? false;
+        const n = day.items.length;
+        // The day's end: the last finish known, actual or estimated. A live trip with no estimate has none yet.
+        const ends = day.items.map((i) => finishOf(i)).filter((x): x is number => x != null);
+        const end = ends.length ? Math.max(...ends) : null;
         return (
-          <TripCardView key={trip.trip_id}
-            style={{ marginBottom: 10, opacity: it.kind === "done" ? 0.65 : 1, borderColor: checking ? "rgba(147,197,253,0.6)" : undefined }}
-            bar={Object.keys(loaded).length || trip.trailer_id ? <TrailerHeader variant="side" trailerId={trip.trailer_id} loaded={loaded} data={hdr} height={14} /> : null}
-            heading={`Trip ${idx + 1} of ${n} · ${STATUS[trip.status] ?? trip.status}`}
-            right={<span className="dash-num" style={{ fontSize: 12, color: muted }}>{stamp(it.startMs, day.startMs)}</span>}
-            route={[trip.shipper, trip.customer].filter(Boolean).join(" → ") || null}
-            plan={planComps ? { label: "Plan", comps: planComps } : null}
-            pickups={pickupRows(pickups, { currentId: current?.pickup_id ?? null, noLoadReason: (c) => noLoadReasonLabel(c) ?? "", place: (x) => (x.terminal_id ? p.terminalPlace(x.terminal_id) : [x.city, x.state].filter(Boolean).join(", ")) })}
-            deliveries={deliveryRows(deliveries, { headedId: headed, place: (d) => p.locationPlace(d.location_id), name: (d) => p.locationName(d.location_id) ?? d.one_off_name ?? "Delivery" })}
-            extras={(
-              <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", fontSize: 12, color: muted, display: "flex", flexWrap: "wrap", gap: "2px 14px" }}>
-                <span>Truck {truck ?? "—"}</span>
-                <span>Trailer {trailer ?? "—"}</span>
-                {it.t.orderNumber && <span>Order {it.t.orderNumber}</span>}
-                {it.kind === "planned" && <span>Starts {stamp(it.startMs, day.startMs)}</span>}
-                {dropEta && <span>Drop ETA {stamp(dropEta, day.startMs)}</span>}
-                {it.kind === "done" && it.endMs && <span>Finished {stamp(it.endMs, day.startMs)}</span>}
+          <div key={day.label} style={{ marginBottom: 12 }}>
+            <button type="button" onClick={() => setOpen((o) => ({ ...o, [day.label]: !isOpen }))}
+              style={{ display: "flex", gap: 8, width: "100%", background: "none", border: "none", padding: "2px 0 8px", cursor: "pointer", textAlign: "left", color: muted, fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <span style={{ width: 10 }}>{isOpen ? "▾" : "▸"}</span>
+              <span>{day.label} - {COUNT(n)} - {stamp(day.startMs)}{end != null ? ` to ${stamp(end)}` : " · in progress"}</span>
+            </button>
+            {isOpen && day.items.map((it, idx) => <TripRow key={it.id} it={it} idx={idx} n={n} p={p} />)}
+            {isOpen && day.resetAtMs != null && (
+              <div className="dash-num" style={{ fontSize: 12, color: muted, textAlign: "center", padding: "2px 0" }}>
+                Reset - {stamp(day.resetAtMs)} - In {((day.resetAtMs - p.nowMs) / 3600000).toFixed(2)}hr
               </div>
             )}
-            footer={(
-              <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
-                <button type="button" onClick={() => p.onOpenTrip(trip.trip_id)} style={link}>Open trip ›</button>
-                {it.kind !== "done" && (
-                  <button type="button" onClick={() => p.onCheck(checking ? null : trip.trip_id)} style={{ ...link, color: "#93c5fd", marginLeft: "auto" }}>
-                    {checking ? "Close report" : "Check this trip ›"}
-                  </button>
-                )}
-              </div>
-            )}
-          />
+          </div>
         );
       })}
     </div>
+  );
+}
+
+/** When the trip finished or is estimated to: actual once complete, else the planned end. */
+function finishOf(it: Item): number | null {
+  const t = it.t.trip;
+  const iso = it.kind === "done" ? t.completed_at : t.planned_end_at;
+  return iso ? Date.parse(iso) : null;
+}
+
+function TripRow({ it, idx, n, p }: { it: Item; idx: number; n: number; p: Parameters<typeof DriverDay>[0] }) {
+  const { trip, pickups, deliveries, compLoads } = it.t;
+  const aboard = onBoard(compLoads);
+  // The product plan, highest compartment first like the driver's card: what dispatch planned, else what is on board.
+  const pk = pickups.find((x) => !x.left_at && x.outcome !== "no_load" && x.planned_comps);
+  const meta = pk ? readPlannedMeta(pk.planned_comps) : null;
+  const ids: (string | null)[] = meta && meta.size
+    ? [...meta.entries()].sort((a, b) => b[0] - a[0]).map(([, m]) => m.product_id)
+    : [...aboard].sort((a, b) => b.comp_number - a.comp_number).map((c) => c.product_id);
+  const planComps = ids.length ? ids.map((id) => { const pr = p.product(id); return { code: pr.code, color: pr.hex }; }) : null;
+  const current = trip.status === "complete" ? null : activePickup(pickups);
+  const headed = !current && aboard.length > 0 ? plannedDeliveries(deliveries)[0]?.delivery_id ?? null : null;
+  const truck = p.truckName(trip.truck_id ?? trip.planned_truck_id ?? null);
+  const trailer = p.trailerName(trip.trailer_id ?? trip.planned_trailer_id ?? null);
+  const checking = p.checkingId === trip.trip_id;
+  const begun = it.kind !== "planned";
+  const fin = finishOf(it);
+  return (
+    <TripCardView
+      style={{ marginBottom: 10, opacity: it.kind === "done" ? 0.65 : 1, borderColor: checking ? "rgba(147,197,253,0.6)" : undefined }}
+      bar={(
+        <div className="dash-num" style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, fontWeight: 700 }}>
+          <span>Truck {truck ?? "—"} · Trailer {trailer ?? "—"}</span>
+          {it.t.orderNumber && <span style={{ color: muted }}>Order {it.t.orderNumber}</span>}
+        </div>
+      )}
+      heading={`Trip ${idx + 1} of ${n} · ${STATUS[trip.status] ?? trip.status}`}
+      right={<span className="dash-num" style={{ fontSize: 12, color: muted, whiteSpace: "nowrap" }}>{begun ? "Start" : "Est. Start"} {stamp(it.startMs)}</span>}
+      route={[trip.shipper, trip.customer].filter(Boolean).join(" → ") || null}
+      plan={planComps ? { label: "", comps: planComps } : null}
+      pickups={pickupRows(pickups, { currentId: current?.pickup_id ?? null, noLoadReason: (c) => noLoadReasonLabel(c) ?? "", place: (x) => (x.terminal_id ? p.terminalPlace(x.terminal_id) : [x.city, x.state].filter(Boolean).join(", ")) })}
+      deliveries={deliveryRows(deliveries, { headedId: headed, place: (d) => p.locationPlace(d.location_id), name: (d) => p.locationName(d.location_id) ?? d.one_off_name ?? "Delivery" })}
+      extras={fin != null ? (
+        <div className="dash-num" style={{ marginTop: 6, fontSize: 12, color: muted, textAlign: "right", whiteSpace: "nowrap" }}>
+          {it.kind === "done" ? "Finish" : "Est. Finish"} {stamp(fin)}
+        </div>
+      ) : null}
+      footer={(
+        <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+          <button type="button" onClick={() => p.onOpenTrip(trip.trip_id)} style={link}>Open trip ›</button>
+          {it.kind !== "done" && (
+            <button type="button" onClick={() => p.onCheck(checking ? null : trip.trip_id)} style={{ ...link, color: "#93c5fd", marginLeft: "auto" }}>
+              {checking ? "Close report" : "Check this trip ›"}
+            </button>
+          )}
+        </div>
+      )}
+    />
   );
 }
 

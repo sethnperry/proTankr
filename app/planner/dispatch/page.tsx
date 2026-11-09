@@ -84,7 +84,7 @@ import { TerminalPickModal } from "./TerminalPickModal";
 import { usePlanDay } from "./usePlanDay";
 import { DriverDay, toItems } from "./DriverDay";
 import { useDriverTrips } from "./useDriverTrips";
-import { driverDay } from "@/lib/dispatch/driverDay";
+import { driverDays } from "@/lib/dispatch/driverDay";
 import { useTerminalCertMap, certBad } from "@/lib/dispatch/useTerminalCertMap";
 import { PlanTripSheet } from "./PlanTripSheet";
 import { useDriverDirectory } from "./useDriverDirectory";
@@ -562,7 +562,7 @@ export default function DispatchPage() {
   const driverTrips = useDriverTrips(tlDriverId);
   const [checkId, setCheckId] = useState<string | null>(null);
   useEffect(() => { setCheckId(null); }, [tlDriverId]);
-  const dayItems = useMemo(() => driverDay(toItems(driverTrips.trips), Date.now())?.items ?? [], [driverTrips.trips]);
+  const dayItems = useMemo(() => driverDays(toItems(driverTrips.trips), Date.now()).find((d) => d.items.some((i) => i.id === checkId))?.items ?? [], [driverTrips.trips, checkId]);
   const inspect = useMemo(() => {
     const it = checkId ? dayItems.find((i) => i.id === checkId) : null;
     const pk = it?.t.pickups.find((x) => x.outcome !== "no_load" && x.terminal_id) ?? null;
@@ -844,22 +844,22 @@ export default function DispatchPage() {
               catalog={terminalsCatalog as any}
               equipLine={(id) => { const e = equipFor(id); return e ? `Truck ${e.truck} · Trailer ${e.trailer}` : null; }}
               onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
-            {tlDriverId && (
-              <DriverDay trips={driverTrips.trips} nowMs={Date.now()} checkingId={checkId} onCheck={setCheckId}
+            {tlDriverId && !checkId && day.trips.length > 0 && (
+              <PlanDayCard trips={day.trips} report={day.report} startMs={day.startMs} onStart={day.setStart} onMove={day.move} onRemove={day.remove}
+                onDispatch={() => void day.dispatchAll()} busy={day.busy} msg={day.msg}
+                unresolved={(day.report?.issues ?? []).filter((i) => !day.ignored.has(i.id)).length} />
+            )}
+          </div>
+        )}
+        tripPanel={tlDriverId ? (
+          <DriverDay trips={driverTrips.trips} nowMs={Date.now()} checkingId={checkId} onCheck={setCheckId}
                 onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)}
                 truckName={(id) => (id ? plan.input?.trucks?.get(id) ?? null : null)} trailerName={(id) => (id ? plan.input?.trailers?.get(id) ?? null : null)}
                 terminalPlace={(id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === String(id)) as any; return t ? [t.city, t.state].filter(Boolean).join(", ") : ""; }}
                 locationPlace={(id) => { const l = id ? locList.locations.find((x) => x.location_id === id) : null; return l ? [l.city, l.state].filter(Boolean).join(", ") : ""; }}
                 locationName={(id) => { const l = id ? locList.locations.find((x) => x.location_id === id) : null; return l ? locationTitle(l) : null; }}
                 product={boardProduct} />
-            )}
-            {tlDriverId && !checkId && (
-              <PlanDayCard trips={day.trips} report={day.report} startMs={day.startMs} onStart={day.setStart} onMove={day.move} onRemove={day.remove}
-                onAdd={() => setPlanTripFor(tlDriverId)} onDispatch={() => void day.dispatchAll()} busy={day.busy} msg={day.msg}
-                unresolved={(day.report?.issues ?? []).filter((i) => !day.ignored.has(i.id)).length} />
-            )}
-          </div>
-        )}
+        ) : null}
         report={tlDriverId && day.report ? (
           <div>
             {checkId && <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, display: "flex", gap: 10 }}>

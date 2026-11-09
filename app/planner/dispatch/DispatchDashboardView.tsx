@@ -244,6 +244,7 @@ export function DispatchDashboardView(props: {
   planLoading?: boolean;
   // Planning a load: the picker card, how many drivers the expirations are narrowed to, and the not-carded chip.
   planner?: React.ReactNode;
+  tripPanel?: React.ReactNode; // PLAN: the selected driver's days, top of the right column
   report?: React.ReactNode; // PLAN: the validation report, first in the right column
   focusCount?: number | null;
   notCarded?: { count: number; shown: boolean; onToggle: () => void } | null;
@@ -360,13 +361,14 @@ export function DispatchDashboardView(props: {
           <>
             {live ? <>{p.liveBoard}</> : (
               <>
-                {p.report && (<><SectionLabel first>Plan report</SectionLabel>{p.report}</>)}
-                {p.dispatchedBoard && <SectionLabel first={!p.report}>Dispatched · not begun</SectionLabel>}
+                {p.tripPanel && (<><SectionLabel first>Trip Panel</SectionLabel>{p.tripPanel}</>)}
+                {p.report && (<><SectionLabel first={!p.tripPanel}>Plan report</SectionLabel>{p.report}</>)}
+                {p.dispatchedBoard && <SectionLabel first={!p.report && !p.tripPanel}>Dispatched · not begun</SectionLabel>}
                 {p.dispatchedBoard}
                 {p.cancelledBoard}
               </>
             )}
-            {p.drivers && (<><SectionLabel first={live ? false : !p.dispatchedBoard && !p.report}>Drivers</SectionLabel>{p.drivers}</>)}
+            {p.drivers && (<><SectionLabel first={live ? false : !p.dispatchedBoard && !p.report && !p.tripPanel}>Drivers</SectionLabel>{p.drivers}</>)}
           </>
         } />
       <FullscreenModal open={hosOpen} title={`Low on hours (${p.hosAlerts.length})`} onClose={() => setHosOpen(false)}>

@@ -43,8 +43,7 @@ export function TripCardView(p: {
       {p.route && <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>{p.route}</div>}
       {p.plan && (
         <div className="dash-num" style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 800 }}>{p.plan.label}</span>
-          <span style={{ color: muted }}>-</span>
+          {p.plan.label && <><span style={{ fontWeight: 800 }}>{p.plan.label}</span><span style={{ color: muted }}>-</span></>}
           <span>
             {p.plan.comps.map((c, i) => (
               <React.Fragment key={i}>

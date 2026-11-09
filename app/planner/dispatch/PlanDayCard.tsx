@@ -13,7 +13,7 @@ const clock = (ms: number) => new Intl.DateTimeFormat("en-US", { hour: "numeric"
 
 export function PlanDayCard(p: {
   trips: DayTrip[]; report: DayReport | null; startMs: number; onStart: (ms: number) => void;
-  onMove: (i: number, dir: -1 | 1) => void; onRemove: (i: number) => void; onAdd: () => void;
+  onMove: (i: number, dir: -1 | 1) => void; onRemove: (i: number) => void;
   onDispatch: () => void; busy: boolean; msg: { ok: boolean; text: string } | null; unresolved: number;
 }) {
   const L = useDashLook();
@@ -46,10 +46,6 @@ export function PlanDayCard(p: {
         );
       })}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button type="button" className="dash-press" onClick={p.onAdd}
-          style={{ ...L.secondary, color: "#fff", padding: "10px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer", flex: p.trips.length ? "0 0 auto" : 1 }}>
-          {p.trips.length ? "+ Add trip" : "Plan Trip"}
-        </button>
         {p.trips.length > 0 && (
           <button type="button" className="dash-press" onClick={p.onDispatch} disabled={p.busy}
             style={{ border: "none", background: "#fff", color: "#000", padding: "10px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer", flex: 1, opacity: p.busy ? 0.5 : 1 }}>
