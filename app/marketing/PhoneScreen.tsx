@@ -12,16 +12,22 @@ const DEFAULT_SRC_VERSION = "20260927-current-ui";
 export default function PhoneScreen({
   src = `/app-screens/planner.jpg?v=${DEFAULT_SRC_VERSION}`,
   alt = "ProTankr planner screen, showing a real compartment load plan",
+  width,
+  maxHeight,
 }: {
   src?: string;
   alt?: string;
+  /** Frame width in px (default 320). Never wider than 84vw on small screens. */
+  width?: number;
+  /** Crop the screenshot to this height (px) so tall screens don't make tall phones. */
+  maxHeight?: number;
 }) {
   return (
-    <div className="phone">
+    <div className="phone" style={width ? { width: `min(${width}px, 84vw)` } : undefined}>
       <div className="phone-btn phone-btn-power" />
       <div className="phone-btn phone-btn-vol-up" />
       <div className="phone-btn phone-btn-vol-down" />
-      <div className="screen">
+      <div className="screen" style={maxHeight ? { maxHeight } : undefined}>
         {/* eslint-disable-next-line @next/next/no-img-element -- a real
             app screenshot, not a Next/Image candidate: static marketing
             asset, not content that benefits from remote optimization. */}

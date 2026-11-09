@@ -21,6 +21,7 @@ import { useState } from "react";
 import Link from "next/link";
 import SiteHeader from "../marketing/SiteHeader";
 import SiteFooter from "../marketing/SiteFooter";
+import PhoneScreen from "../marketing/PhoneScreen";
 
 const OUTCOMES = [
   {
@@ -288,20 +289,20 @@ export default function ForFleetsPage() {
       {/* HERO */}
       <section className="fleet-hero">
         <div className="fleet-hero-inner">
-          <p className="fleet-eyebrow">Driver-driven efficiency</p>
-          <h1 className="fleet-h1">Efficiency from the bottom up.</h1>
+          <p className="fleet-eyebrow">The work layer for fuel haulers</p>
+          <h1 className="fleet-h1">Between your TMS and the truck.</h1>
           <p className="fleet-lead">
-            The best loading decisions are made where the work happens.
-            ProTankr gives drivers a smarter way to plan, adapt to
-            changing conditions, and repeat what works.
+            Dispatch plans the trip. Your drivers run it in ProTankr, and
+            the records your office used to assemble afterward, the PTD,
+            times, miles, tank readings and signatures, are simply there.
           </p>
           <p className="fleet-sub">
-            No new system to manage. No existing workflow to replace.
-            Just a smarter way to turn driver experience into repeatable
-            efficiency.
+            It sits beside your TMS and your ELD instead of replacing them,
+            and it takes over the clipboards, scan apps and stand-alone
+            forms that grew up around them.
           </p>
-          <a href="#roi" className="fleet-cta">
-            Calculate Fleet Carrier ROI &rarr;
+          <a href="#paperwork" className="fleet-cta">
+            See what your office stops doing &rarr;
           </a>
         </div>
       </section>
@@ -309,7 +310,7 @@ export default function ForFleetsPage() {
       {/* OUTCOMES */}
       <section className="outcomes-section">
         <div className="outcomes-inner">
-          <p className="outcomes-eyebrow">Measurable business impact</p>
+          <p className="outcomes-eyebrow">What changes for the business</p>
           <h2 className="outcomes-h2">Outcomes that pay for the platform.</h2>
           <div className="outcomes-grid">
             {OUTCOMES.map((o) => (
@@ -320,6 +321,49 @@ export default function ForFleetsPage() {
                 <a href={o.href} className="outcome-stat">{o.stat}</a>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PAPERWORK -- the reframe's headline benefit for the office. Real
+          screens from the demo account (public/app-screens). */}
+      <section id="paperwork" className="feature-section feature-alt">
+        <div className="feature-row">
+          <div className="feature-copy">
+            <p className="feature-eyebrow">Your office</p>
+            <h2 className="feature-h2">Stop chasing paperwork.</h2>
+            <p className="feature-body">
+              Every trip builds its own Product Transfer Document as the
+              driver works: order and BOL numbers by compartment, arrival,
+              begin and depart times, delay reasons, tank readings before
+              and after, miles, and signatures. There is no photo to
+              upload, no form link to remind drivers about, and nothing to
+              re-key into another system.
+            </p>
+            <p className="feature-body feature-body-muted">
+              The terminal still issues the BOL; ProTankr captures its
+              numbers. Hours shown come from your ELD, and ProTankr does
+              not replace it.
+            </p>
+            <p className="feature-body feature-body-muted">
+              Reports follow from the same record: trips and PTDs, a DROP
+              report of hours, loads, gallons and miles for any period,
+              payload utilization, fuel history and equipment service.
+            </p>
+          </div>
+          <div className="feature-visual" style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
+            <PhoneScreen
+              src="/app-screens/ptd.jpg?v=20261109b"
+              alt="A completed Product Transfer Document"
+              width={250}
+              maxHeight={500}
+            />
+            <PhoneScreen
+              src="/app-screens/drop-report.jpg?v=20261109b"
+              alt="A DROP report summarizing hours, loads, gallons and miles"
+              width={250}
+              maxHeight={500}
+            />
           </div>
         </div>
       </section>
@@ -504,14 +548,14 @@ export default function ForFleetsPage() {
       {/* CLOSING CTA */}
       <section className="closing">
         <div className="closing-inner">
-          <p className="closing-eyebrow">The Opportunity</p>
+          <p className="closing-eyebrow">Early access</p>
           <h2 className="closing-h2">
-            What is your fleet leaving on the table?
+            What would your office do with the time?
           </h2>
           <p className="closing-sub">
             No long implementation, no TMS replacement, no commitment up
-            front. Start by measuring the opportunity at one terminal, one
-            truck, one load.
+            front. Start with one driver, one truck, one trip, and see
+            what stops needing to be typed twice.
           </p>
           <div className="closing-actions">
             <Link href="/get-the-app" className="closing-cta">

@@ -77,7 +77,7 @@ export default function OpengraphImage() {
             display: "flex",
           }}
         >
-          Verify your load before you cross the scale.
+          Between the TMS and the truck.
         </div>
         <div
           style={{

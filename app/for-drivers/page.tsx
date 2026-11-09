@@ -25,13 +25,14 @@ import Link from "next/link";
 import SiteHeader from "../marketing/SiteHeader";
 import SiteFooter from "../marketing/SiteFooter";
 import DemoPlannerFrame from "./DemoPlannerFrame";
+import PhoneScreen from "../marketing/PhoneScreen";
 import { CardIcon, CompartmentsIcon, WrenchIcon, ShareIcon } from "./icons";
 
 const CHECKLIST = [
-  { Icon: CardIcon, label: "Terminal cards & renewal alerts" },
-  { Icon: CompartmentsIcon, label: "Custom compartment sequences" },
-  { Icon: WrenchIcon, label: "Equipment, tare & service history" },
-  { Icon: ShareIcon, label: "Shared, verified terminal data" },
+  { Icon: CompartmentsIcon, label: "Load plan that fits today's conditions" },
+  { Icon: ShareIcon, label: "One screen for the whole trip" },
+  { Icon: CardIcon, label: "Paperwork built as you go" },
+  { Icon: WrenchIcon, label: "Cards, equipment & fuel in one place" },
 ];
 
 function WarnIcon() {
@@ -216,14 +217,15 @@ export default function ForDriversPage() {
         <div className="driver-hero-inner">
           <p className="driver-eyebrow">Built for the person behind the wheel</p>
           <h1 className="driver-h1">
-            Your load. Your way.
+            Run the trip. Skip the paperwork.
             <br />
-            No guesswork. No scale surprises.
+            Everything gets entered once.
           </h1>
           <p className="driver-sub">
-            Whether you run company equipment or your own, ProTankr
-            organizes your loading workflow and tare weight intelligence
-            right where you need it.
+            Whether you run company equipment or your own, ProTankr takes you
+            from the load plan to the rack to the drop on one screen, and
+            builds the Product Transfer Document, times and records from
+            what you already tapped. No scan app. No forms to chase.
           </p>
           <ul className="driver-checklist">
             {CHECKLIST.map(({ Icon, label }) => (
@@ -246,11 +248,70 @@ export default function ForDriversPage() {
         </div>
       </section>
 
-      {/* FEATURE 1 — driver-driven planner, the real interactive tool */}
+      {/* TRIP — the whole-trip dashboard, real screen */}
+      <section className="feature-section">
+        <div className="feature-row">
+          <div className="feature-copy">
+            <p className="feature-eyebrow">The whole trip</p>
+            <h2 className="feature-h2">One screen. One big button.</h2>
+            <p className="feature-body">
+              Your hours, the trip, and the next step are all on the
+              dashboard. Arrive, begin, finish. Times stamp themselves, BOL
+              numbers and tank readings go in once, and the button always
+              says what comes next, so you are not hunting through menus
+              with a hose in your hand.
+            </p>
+            <p className="feature-body feature-body-muted">
+              Hours shown come from your company&apos;s existing ELD.
+              ProTankr is not an ELD.
+            </p>
+          </div>
+          <div className="feature-visual">
+            <PhoneScreen
+              src="/app-screens/dashboard.jpg?v=20261109b"
+              alt="The Driver Dashboard: hours, current trip and the next-step button"
+              width={300}
+              maxHeight={440}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* PAPERWORK — real PTD */}
       <section className="feature-section feature-alt">
+        <div className="feature-row feature-row-reverse">
+          <div className="feature-copy">
+            <p className="feature-eyebrow">Paperwork</p>
+            <h2 className="feature-h2">The PTD writes itself.</h2>
+            <p className="feature-body">
+              When the drop is done, the Product Transfer Document is
+              already there: order, BOL numbers by compartment, times,
+              miles, tank readings and signatures. Print it or save a PDF.
+              The terminal still issues the BOL; ProTankr just captures its
+              numbers so nobody has to copy them again.
+            </p>
+            <p className="feature-body feature-body-muted">
+              Fuel stops, delays and delivery details ride along in the same
+              record, so your DROP report and mileage are never a
+              reconstruction at the end of the week.
+            </p>
+          </div>
+          <div className="feature-visual">
+            <PhoneScreen
+              src="/app-screens/ptd.jpg?v=20261109b"
+              alt="A completed Product Transfer Document with barcode, compartments and deliveries"
+              width={300}
+              maxHeight={520}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURE 1 — driver-driven planner, the real interactive tool */}
+      <section className="feature-section">
         <div className="feature-row feature-row-planner">
           <div className="feature-copy">
-            <p className="feature-eyebrow">Load planning</p>
+            <p className="feature-eyebrow">Step one: the load plan</p>
             <h2 className="feature-h2">Configure your preferred layout. Tap load.</h2>
             <p className="feature-body">
               Set up your compartment sequence once, and ProTankr handles
@@ -275,7 +336,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 2 — terminal access */}
-      <section className="feature-section">
+      <section className="feature-section feature-alt">
         <div className="feature-row feature-row-reverse">
           <div className="feature-copy">
             <p className="feature-eyebrow">Terminal access</p>
@@ -294,7 +355,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 3 — equipment & tare */}
-      <section className="feature-section feature-alt">
+      <section className="feature-section">
         <div className="feature-row">
           <div className="feature-copy">
             <p className="feature-eyebrow">Equipment records</p>
@@ -314,7 +375,7 @@ export default function ForDriversPage() {
       </section>
 
       {/* FEATURE 4 — shared knowledge */}
-      <section className="feature-section">
+      <section className="feature-section feature-alt">
         <div className="feature-row-stack">
           <p className="feature-eyebrow feature-eyebrow-center">Shared knowledge</p>
           <h2 className="feature-h2 feature-h2-center">
@@ -335,7 +396,7 @@ export default function ForDriversPage() {
       <section className="closing">
         <div className="closing-inner">
           <p className="closing-eyebrow">Ready when you are</p>
-          <h2 className="closing-h2">Stop guessing at the rack.</h2>
+          <h2 className="closing-h2">Enter it once. Be done.</h2>
           <p className="closing-sub">
             Free to try, no long setup. Bring your own truck and trailer, or
             join a fleet already running ProTankr.

@@ -42,7 +42,7 @@ const SITE_URL = "https://www.protankr.com";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "ProTankr",
-  description: "Verify your load before you cross the scale.",
+  description: "The work layer for fuel haulers: plan, load, deliver and document every trip in one app.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   // app/opengraph-image.tsx's own header comment for why this was added.
   openGraph: {
     title: "ProTankr",
-    description: "Verify your load before you cross the scale.",
+    description: "The work layer for fuel haulers: plan, load, deliver and document every trip in one app.",
     url: SITE_URL,
     siteName: "ProTankr",
     type: "website",
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "ProTankr",
-    description: "Verify your load before you cross the scale.",
+    description: "The work layer for fuel haulers: plan, load, deliver and document every trip in one app.",
   },
 };
 
