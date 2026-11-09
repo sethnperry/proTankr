@@ -56,8 +56,10 @@ export default function GetTheAppPage() {
       <section className="hero">
         <h1 className="hero-h1">Get Early Access</h1>
         <p className="hero-sub">
-          ProTankr is rolling out access gradually. Tell us a bit about you
-          and your operation, and we'll reach out when a spot opens up.
+          ProTankr runs the whole trip, from load plan to rack to drop, and
+          builds the paperwork as the work happens. It works alongside your
+          TMS and ELD. Access is rolling out gradually: tell us about your
+          operation and we&apos;ll reach out when a spot opens up.
         </p>
         <p className="hero-login-note">
           Already have an account? <Link href="/login">Log in</Link>
@@ -69,8 +71,9 @@ export default function GetTheAppPage() {
           <div className="confirm-card">
             <div className="confirm-title">Request received.</div>
             <p className="confirm-body">
-              Thanks, {name.split(" ")[0] || "there"} — we'll be in touch at{" "}
-              <strong>{email}</strong> soon.
+              Thanks, {name.split(" ")[0] || "there"} — we&apos;ll be in touch at{" "}
+              <strong>{email}</strong> soon. We usually start with one driver,
+              one truck and one trip.
             </p>
           </div>
         ) : (
@@ -126,7 +129,7 @@ export default function GetTheAppPage() {
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Tell us about your operation, timeline, or questions."
+                placeholder="What do you run today (TMS, ELD, paperwork), and what would you most like to stop doing by hand?"
                 rows={4}
               />
             </label>
