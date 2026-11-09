@@ -136,6 +136,8 @@ import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews"
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
 import { productColorFor } from "../utils/productColor";
+import { TripCardView } from "../components/trip/TripCardView";
+import { deliveryRows, pickupRows } from "@/lib/trips/cardRows";
 import { PickupOrderSheet, type OrderChoice } from "../components/trip/OrderChooser";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
@@ -2376,84 +2378,24 @@ export default function HomePage() {
 
       {/* Trip */}
       {openTrip ? (
-        <div style={{ ...card, marginBottom: 14 }}>
-          {trailerBar && <div style={{ marginBottom: 8 }}>{trailerBar}</div>}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-              Current trip · {STATUS_LABEL[openTrip.status]}
-            </div>
-            {trailerLabel && <span style={{ marginLeft: "auto" }}>{trailerLabel}</span>}
-          </div>
-          {(openTrip.shipper || openTrip.customer) && (
-            <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>
-              {[openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ")}
-            </div>
-          )}
-          {planLine && (
-            <div className="dash-num" style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 800 }}>{planLine.label}</span>
-              <span style={{ color: muted }}>-</span>
-              <span>
-                {planLine.comps.map((id, i) => {
-                  const info = id ? productInfo(id) : null;
-                  return (
-                    <React.Fragment key={i}>
-                      {i > 0 && <span style={{ color: muted }}>/</span>}
-                      <span style={{ fontWeight: 800, color: info ? info.hex ?? productColorFor(info.name) : muted }}>{info ? info.code : "–"}</span>
-                    </React.Fragment>
-                  );
-                })}
-              </span>
-            </div>
-          )}
-
-          {(() => {
-            // A rack the driver left without loading is a rack hop, not a
-            // second pickup: show it as "Tried", and number only real pickups.
-            const real = pickups.filter((p) => p.outcome !== "no_load");
-            const current = snap ? activePickup(snap.pickups) : null;
-            return pickups.map((p, i) => {
-              const noLoad = p.outcome === "no_load";
-              const n = real.indexOf(p);
-              const loaded = p.outcome === "loaded" || (!!p.left_at && !!p.load_id);
-              // The label is the stage: Pickup → Arrived → Loaded.
-              const label = noLoad ? "Tried" : loaded ? "Loaded" : p.arrived_at ? "Arrived" : "Pickup";
-              const t = p.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(p.terminal_id)) : null;
-              const place = t ? [t.city, t.state].filter(Boolean).join(", ") : [p.city, p.state].filter(Boolean).join(", ");
-              const reason = noLoad ? (noLoadReasonLabel(p.no_load_reason) || "Other") : "";
-              if (noLoad) {
-                // Tried rack: terminal struck through, then the reason in red.
-                // One line; a long name scrolls sideways instead of wrapping.
-                return (
-                  <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-                    <span style={{ color: muted, width: 66, flexShrink: 0 }}>{label}</span>
-                    <div className="pt-tabscroll" style={{ flex: 1, minWidth: 0, overflowX: "auto", whiteSpace: "nowrap" }}>
-                      <span style={{ color: muted, textDecoration: "line-through" }}>{p.name ?? "Not set"}</span>
-                      <span style={{ color: "#f87171", marginLeft: 8, fontSize: 13 }}>{reason}</span>
-                    </div>
-                  </div>
-                );
-              }
-              // Leg tracking: heading to this rack -> city white; at the
-              // rack -> rack white; otherwise both gray.
-              const isCurrent = !loaded && current?.pickup_id === p.pickup_id;
-              const placeColor = isCurrent && !p.arrived_at ? "#fff" : muted;
-              const nameColor = isCurrent && p.arrived_at ? "#fff" : muted;
-              return (
-                <div key={p.pickup_id} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4 }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-                    <span style={{ color: loaded ? "#4ade80" : p.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: p.arrived_at && !loaded ? 700 : undefined }}>{label}</span>
-                    <span style={{ flex: 1, minWidth: 0, color: placeColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{place || "—"}</span>
-                    <span style={{ color: nameColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "55%" }}>{p.name ?? "Not set"}</span>
-                  </div>
-                </div>
-              );
-            });
-          })()}
-          {/* The trailer on one line, between pickup and delivery: product
-              colors when loaded (C1 on the right, like the Planner), residue
-              dots for what it last carried when empty. */}
-          {liveDeliveries.length === 0 && (
+        <TripCardView
+          style={{ ...card, marginBottom: 14 }}
+          bar={trailerBar}
+          heading={`Current trip · ${STATUS_LABEL[openTrip.status]}`}
+          right={trailerLabel}
+          route={(openTrip.shipper || openTrip.customer) ? [openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ") : null}
+          plan={planLine ? { label: planLine.label, comps: planLine.comps.map((id) => { const info = id ? productInfo(id) : null; return info ? { code: info.code, color: info.hex ?? productColorFor(info.name) } : null; }) } : null}
+          pickups={pickupRows(pickups, {
+            currentId: snap ? activePickup(snap.pickups)?.pickup_id ?? null : null,
+            noLoadReason: (c) => noLoadReasonLabel(c) ?? "",
+            place: (p) => { const t = p.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(p.terminal_id)) : null; return t ? [t.city, t.state].filter(Boolean).join(", ") : [p.city, p.state].filter(Boolean).join(", "); },
+          })}
+          deliveries={deliveryRows(liveDeliveries, {
+            headedId: snap && !activePickup(snap.pickups) && aboardRows.length > 0 ? plannedDeliveries(snap.deliveries)[0]?.delivery_id ?? null : null,
+            place: (d) => { const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null; return loc ? locationPlace(loc) : ""; },
+            name: deliveryName,
+          })}
+          noDelivery={(
             <div style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
               <span style={{ color: muted, width: 66, flexShrink: 0 }}>Delivery</span>
               <button type="button" onClick={() => setPicker({ mode: "select" })}
@@ -2462,52 +2404,23 @@ export default function HomePage() {
               </button>
             </div>
           )}
-          {(() => {
-            // The stop the truck is headed to: the next planned delivery,
-            // once nothing is left to load and product is aboard.
-            const headed = snap && !activePickup(snap.pickups) && aboardRows.length > 0 ? plannedDeliveries(snap.deliveries)[0] ?? null : null;
-            return liveDeliveries.map((d) => {
-              // The label is the stage: Delivery → Arrived → Delivered.
-              const done = d.status === "complete";
-              const label = done ? "Delivered" : d.arrived_at ? "Arrived" : "Delivery";
-              const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null;
-              const place = loc ? locationPlace(loc) : "";
-              // Leg tracking: on the way -> city white; at the store -> store white.
-              const isCurrent = !done && (headed?.delivery_id === d.delivery_id || !!d.arrived_at);
-              const placeColor = isCurrent && !d.arrived_at ? "#fff" : muted;
-              const nameColor = isCurrent && d.arrived_at ? "#fff" : muted;
-              const nameStyle: React.CSSProperties = { color: nameColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "55%", fontSize: 14 };
-              return (
-                <div key={d.delivery_id} style={{ fontSize: 14, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-                  <span style={{ color: done ? "#4ade80" : d.arrived_at ? "#fff" : muted, width: 66, flexShrink: 0, fontWeight: d.arrived_at && !done ? 700 : undefined }}>{label}</span>
-                  <span style={{ flex: 1, minWidth: 0, color: placeColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{place || "—"}</span>
-                  {done ? (
-                    <span style={nameStyle}>{deliveryName(d)}</span>
-                  ) : (
-                    <button type="button" onClick={() => setPicker({ mode: "reroute", delivery: d })} aria-label={`Change ${deliveryName(d)}`}
-                      style={{ ...nameStyle, background: "none", border: "none", padding: 0, textAlign: "right", cursor: "pointer" }}>
-                      {deliveryName(d)} ›
-                    </button>
-                  )}
-                </div>
-              );
-            });
-          })()}
-
+          onDelivery={(key) => { const d = liveDeliveries.find((x) => x.delivery_id === key); if (d) setPicker({ mode: "reroute", delivery: d }); }}
+          footer={(
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-            {lastLoadId && (
-              <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", lastLoadId); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
-            )}
-            {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
-              <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
-            )}
-            {showPark && (
-              <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
-                Park preloaded
-              </button>
-            )}
-          </div>
-        </div>
+              {lastLoadId && (
+                <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", lastLoadId); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
+              )}
+              {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
+                <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
+              )}
+              {showPark && (
+                <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
+                  Park preloaded
+                </button>
+              )}
+            </div>
+          )}
+        />
       ) : (
         <div style={{ ...card, marginBottom: 14 }}>
           {trailerBar && <div style={{ marginBottom: 8 }}>{trailerBar}</div>}

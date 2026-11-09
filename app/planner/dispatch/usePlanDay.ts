@@ -24,6 +24,8 @@ export type PlanDayDeps = {
   terminalName: (id: string) => string;
   terminalPlace: (id: string) => { city: string | null; state: string | null };
   onDispatched: () => void;
+  /** An existing trip being checked on its own: the report is about it, not the day being built. */
+  inspect?: { trip: DayTrip; startMs: number; dutyStartMs: number; driveSoFarMin: number } | null;
 };
 
 export function usePlanDay(d: PlanDayDeps) {
@@ -39,12 +41,17 @@ export function usePlanDay(d: PlanDayDeps) {
   const startMs = startByDriver[id] ?? last?.endMs ?? d.defaultStartMs;
 
   const report = useMemo<DayReport | null>(() => {
+    if (d.inspect && d.context) {
+      const r = validateDay([d.inspect.trip], { ...d.context, startMs: d.inspect.startMs, dutyStartMs: d.inspect.dutyStartMs, driveSoFarMin: d.inspect.driveSoFarMin });
+      // Only this trip's own report: the terminal swap edits a trip being built, which this is not.
+      return { ...r, issues: r.issues.map((i) => ({ ...i, fixes: i.fixes.filter((x) => x !== "terminal") })) };
+    }
     if (!d.context || trips.length === 0) return null;
     return validateDay(trips, {
       ...d.context, startMs, startFrom: last?.locationLL ?? d.context.startFrom,
       dutyStartMs: d.prior[0]?.startMs ?? startMs, driveSoFarMin: d.prior.reduce((a, l) => a + l.driveMin, 0),
     });
-  }, [d.context, trips, startMs, d.prior]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [d.context, trips, startMs, d.prior, d.inspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (fn: (t: DayTrip[]) => DayTrip[]) => { setByDriver((m) => ({ ...m, [id]: fn(m[id] ?? []) })); setMsg(null); };
   const move = (i: number, dir: -1 | 1) => set((t) => {

@@ -82,6 +82,9 @@ import { meetNotices, sendDriverNotices } from "@/lib/dispatch/driverNotices";
 import { accessAt } from "@/lib/dispatch/planLoad";
 import { TerminalPickModal } from "./TerminalPickModal";
 import { usePlanDay } from "./usePlanDay";
+import { DriverDay, toItems } from "./DriverDay";
+import { useDriverTrips } from "./useDriverTrips";
+import { driverDay } from "@/lib/dispatch/driverDay";
 import { useTerminalCertMap, certBad } from "@/lib/dispatch/useTerminalCertMap";
 import { PlanTripSheet } from "./PlanTripSheet";
 import { useDriverDirectory } from "./useDriverDirectory";
@@ -555,7 +558,26 @@ export default function DispatchPage() {
     };
   }, [tlDriverId, terminalsCatalog, locList.locations, plan.roster, plan.input, dispatched.trips, heldEquipment, fleetHos, tripHistory.trips, tlSettings, certMap, allContracts, usageItems, companySuppliers.all, calloutHit, defaultStartMs]); // eslint-disable-line react-hooks/exhaustive-deps
   const held = tlDriverId ? heldEquipment.get(tlDriverId) : null;
+  // The driver's whole day (finished, live, not begun) and the trip being checked, if any.
+  const driverTrips = useDriverTrips(tlDriverId);
+  const [checkId, setCheckId] = useState<string | null>(null);
+  useEffect(() => { setCheckId(null); }, [tlDriverId]);
+  const dayItems = useMemo(() => driverDay(toItems(driverTrips.trips), Date.now())?.items ?? [], [driverTrips.trips]);
+  const inspect = useMemo(() => {
+    const it = checkId ? dayItems.find((i) => i.id === checkId) : null;
+    const pk = it?.t.pickups.find((x) => x.outcome !== "no_load" && x.terminal_id) ?? null;
+    if (!it || !pk?.terminal_id) return null;
+    const before = dayItems.filter((i) => i.startMs < it.startMs);
+    const dl = it.t.deliveries.find((x) => x.status !== "cancelled");
+    return {
+      trip: { id: it.id, terminalId: String(pk.terminal_id), locationId: dl?.location_id ?? null, supplierId: pk.supplier_id ?? null, orderNumber: it.t.orderNumber, shipper: it.t.trip.shipper, customer: it.t.trip.customer } as DayTrip,
+      startMs: Math.max(it.startMs, it.kind === "live" ? Date.now() : 0),
+      dutyStartMs: dayItems[0]?.startMs ?? it.startMs,
+      driveSoFarMin: before.reduce((a, b) => a + (b.t.trip.planned_drive_min ?? 0), 0),
+    };
+  }, [checkId, dayItems]);
   const day = usePlanDay({
+    inspect,
     companyId: companyId || null, dispatcherId: authUserId || null, driverId: tlDriverId, context: planContext, defaultStartMs,
     prior: priorLegs.map((l) => ({ startMs: l.startMs, endMs: l.endMs, driveMin: l.driveMin, locationLL: l.locationLL })),
     truckId: held?.truckId ?? null, trailerId: held?.trailerId ?? null,
@@ -823,6 +845,15 @@ export default function DispatchPage() {
               equipLine={(id) => { const e = equipFor(id); return e ? `Truck ${e.truck} · Trailer ${e.trailer}` : null; }}
               onPlanTrip={setPlanTripFor} onOpenDriverFile={(id) => setSelectedDriverId(id)} /></div>
             {tlDriverId && (
+              <DriverDay trips={driverTrips.trips} nowMs={Date.now()} checkingId={checkId} onCheck={setCheckId}
+                onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)}
+                truckName={(id) => (id ? plan.input?.trucks?.get(id) ?? null : null)} trailerName={(id) => (id ? plan.input?.trailers?.get(id) ?? null : null)}
+                terminalPlace={(id) => { const t = terminalsCatalog.find((x) => String(x.terminal_id) === String(id)) as any; return t ? [t.city, t.state].filter(Boolean).join(", ") : ""; }}
+                locationPlace={(id) => { const l = id ? locList.locations.find((x) => x.location_id === id) : null; return l ? [l.city, l.state].filter(Boolean).join(", ") : ""; }}
+                locationName={(id) => { const l = id ? locList.locations.find((x) => x.location_id === id) : null; return l ? locationTitle(l) : null; }}
+                product={boardProduct} />
+            )}
+            {tlDriverId && !checkId && (
               <PlanDayCard trips={day.trips} report={day.report} startMs={day.startMs} onStart={day.setStart} onMove={day.move} onRemove={day.remove}
                 onAdd={() => setPlanTripFor(tlDriverId)} onDispatch={() => void day.dispatchAll()} busy={day.busy} msg={day.msg}
                 unresolved={(day.report?.issues ?? []).filter((i) => !day.ignored.has(i.id)).length} />
@@ -830,8 +861,14 @@ export default function DispatchPage() {
           </div>
         )}
         report={tlDriverId && day.report ? (
+          <div>
+            {checkId && <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, display: "flex", gap: 10 }}>
+              <span>Checking a trip already in the driver&rsquo;s day.</span>
+              <button type="button" onClick={() => setCheckId(null)} style={{ background: "none", border: "none", padding: 0, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>Back to planning</button>
+            </div>}
           <PlanReport driverName={plan.roster.find((m) => m.user_id === tlDriverId)?.display_name ?? "Driver"} report={day.report} ignored={day.ignored} handled={day.handled}
             onFix={(issue, fix) => { if (fix === "ignore") day.ignore(issue.id); else if (fix === "terminal") setNewTerminalFor(issue.tripId); else if (fix === "meet") setMeetIssue(issue); }} />
+          </div>
         ) : null}
         onOpenDriver={(id) => setSelectedDriverId(id)}
         hosAlerts={lowHours}
@@ -915,7 +952,7 @@ export default function DispatchPage() {
         });
         const base = Math.max(Date.now(), defaultStartMs);
         const others: MeetCandidate[] = cardedIds.map((uid) => ({ id: uid, name: nameOf(uid), startMs: base, etaMs: base + 30 * 60000, endMs: base + 4 * 3600000, planned: false }));
-        const mine = { id: tlDriverId, name: nameOf(tlDriverId), arriveMs: r.arriveTerminalMs, startMs: day.startMs, endMs: r.forecast.endMs };
+        const mine = { id: tlDriverId, name: nameOf(tlDriverId), arriveMs: r.arriveTerminalMs, startMs: r.startMs, endMs: r.forecast.endMs };
         return (
           <MeetDriverSheet open terminal={r.terminalName} tz={r.tz} maxShiftHours={tlSettings.maxShiftHours} mine={mine} planned={planned} others={others}
             busy={meetBusy} error={meetErr} onClose={() => { setMeetIssue(null); setMeetErr(null); }}
