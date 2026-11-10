@@ -10,7 +10,6 @@ import Link from "next/link";
 import SiteHeader from "../marketing/SiteHeader";
 import FitHeading from "../marketing/FitHeading";
 import { LEARN_TOPICS, Icon } from "@/lib/content/learnTopics";
-import { TUTORIAL_VIDEOS } from "@/lib/content/tutorialVideos";
 
 export default function AboutPage() {
   return (
@@ -85,16 +84,15 @@ export default function AboutPage() {
               part of the same set, not a bolted-on afterthought. */}
           <Link href="/about/videos" className="topic-card">
             <div className="topic-emoji">🎬</div>
-            <div className="topic-name">Video Walkthroughs</div>
+            <div className="topic-name">Walkthroughs</div>
             <div className="topic-tagline">See it in your hands</div>
             <div className="topic-marketing">
-              Short, recorded clips of ProTankr in real use -- planning a
-              load, picking equipment, working a terminal. No narration
-              needed, just watch what actually happens on screen.
+              Decks that follow ProTankr through real work -- a day in the
+              cab, from start of shift to the drop, and the issues it
+              addresses for managers.
             </div>
             <div className="topic-more">
-              {TUTORIAL_VIDEOS.length === 0 ? "Coming soon" : "Watch now"}{" "}
-              <span>&rarr;</span>
+              View the decks <span>&rarr;</span>
             </div>
           </Link>
         </div>

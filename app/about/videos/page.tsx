@@ -10,6 +10,7 @@ import Link from "next/link";
 import SiteHeader from "../../marketing/SiteHeader";
 import FitHeading from "../../marketing/FitHeading";
 import { TUTORIAL_VIDEOS } from "@/lib/content/tutorialVideos";
+import { WALKTHROUGH_DECKS } from "@/lib/content/walkthroughDecks";
 
 export default function AboutVideosPage() {
   return (
@@ -19,35 +20,37 @@ export default function AboutVideosPage() {
       <section className="hero">
         <div className="hero-inner">
           <Link href="/about" className="back-link">&larr; How ProTankr Works</Link>
-          <FitHeading className="hero-h1" maxSize={40} minSize={16}>Video Walkthroughs</FitHeading>
+          <FitHeading className="hero-h1" maxSize={40} minSize={16}>Walkthroughs</FitHeading>
           <div className="hero-marketing">
-            Short, recorded clips of ProTankr in real use -- no narration
-            needed, just watch what actually happens on screen.
+            Decks and short clips that show ProTankr in real use -- one load
+            from start of shift to the drop, and the issues it addresses.
           </div>
         </div>
       </section>
 
       <section className="detail-section">
         <div className="detail-inner">
-          {TUTORIAL_VIDEOS.length === 0 ? (
-            <p className="empty-note">
-              New walkthroughs are on the way — check back soon.
-            </p>
-          ) : (
-            TUTORIAL_VIDEOS.map((v) => (
-              <div key={v.id} className="video-card">
-                <div className="video-title">{v.title}</div>
-                {v.description && <div className="video-desc">{v.description}</div>}
-                <video
-                  src={v.src}
-                  controls
-                  preload="metadata"
-                  playsInline
-                  className="video-el"
-                />
-              </div>
-            ))
-          )}
+          {WALKTHROUGH_DECKS.map((d) => (
+            <a key={d.id} href={d.href} target="_blank" rel="noopener noreferrer" className="deck-card">
+              <div className="video-title">{d.title}</div>
+              <div className="video-desc">{d.description}</div>
+              <div className="deck-meta">PDF &middot; {d.pages} slides <span>&rarr;</span></div>
+            </a>
+          ))}
+
+          {TUTORIAL_VIDEOS.map((v) => (
+            <div key={v.id} className="video-card">
+              <div className="video-title">{v.title}</div>
+              {v.description && <div className="video-desc">{v.description}</div>}
+              <video
+                src={v.src}
+                controls
+                preload="metadata"
+                playsInline
+                className="video-el"
+              />
+            </div>
+          ))}
 
           <Link href="/get-the-app" className="cta-link">
             Request Early Access <span>&rarr;</span>
@@ -108,6 +111,19 @@ export default function AboutVideosPage() {
           display: block;
           margin-top: 4px;
         }
+
+        .deck-card {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 22px 24px;
+          border-radius: 14px;
+          background: #f6f6f5;
+          border: 1px solid rgba(0,0,0,0.08);
+          text-decoration: none;
+        }
+        .deck-card:hover { border-color: rgba(0,0,0,0.25); }
+        .deck-meta { font: 700 13px var(--font); color: rgba(0,0,0,0.5); }
 
         .empty-note {
           margin: 0;
