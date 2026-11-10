@@ -879,7 +879,7 @@ export function DeliveryDashboard({
     // Tanks for this drop's products (or with no product saved), plus any already linked. The rest open on a tap.
     const neededHere = (pid: string | null) => !pid || productIdsHere.includes(pid);
     for (const t of locationTanks) if (t.is_active !== false && (showAllTanks ? !t.product_id || hauledIds.has(t.product_id) : neededHere(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
-    for (const t of extraTanks) add(t.tank_number, t.product_id, null);
+    for (const t of extraTanks) if (showAllTanks || neededHere(t.product_id)) add(t.tank_number, t.product_id, null);
     for (const c of rows) for (const x of targetsFor(c)) add(x.tank, c.product_id, null);
     const byName = new Map([...seen.values()].map((m) => [m.tank, m]));
     return sortTankNames([...byName.keys()], tankOrder).map((n) => byName.get(n)!);

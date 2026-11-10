@@ -48,7 +48,9 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, tanks
   const waited = Math.max(0, Math.round((Date.now() - Date.parse(arrivedAt)) / 60000));
   const finish = () => {
     const out: Record<string, number> = {};
-    for (const t of tanks) { const v = num(t.number); if (v != null) out[t.number] = v; }
+    // The prefill is the last driver's ending reading, not this driver's. It goes in for the tanks taking this
+    // load; a tank for another product is saved only if the driver changed it.
+    for (const t of tanks) { const v = num(t.number); if (v != null && (t.needed || v !== t.last)) out[t.number] = v; }
     onFinish(out);
   };
   const tankRow = (t: DropTank) => (
