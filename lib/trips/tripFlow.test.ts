@@ -73,6 +73,9 @@ test("next step walks the whole trip", () => {
   assert.equal(nextStep(getTrip(), snap()).kind, "planner");
 
   linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  // A previewed plan is not a started load: the driver is still asked to begin.
+  assert.equal(nextStep(getTrip(), snap()).label, "Begin Loading");
+  s.put("trip_pickups", { pickup_id: snap().pickups[0].pickup_id, begin_at: NOW.toISOString() });
   assert.equal(nextStep(getTrip(), snap()).label, "Continue Trip");
 
   assert.ok(recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000), reading(2, 3800)], now: NOW, newId }));

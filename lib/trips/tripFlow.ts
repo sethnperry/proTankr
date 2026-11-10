@@ -99,8 +99,9 @@ export function nextStep(
     }
     return {
       kind: "planner",
-      label: p.load_id ? "Continue Trip" : "Begin Loading",
-      detail: p.load_id ? `Loading${where}` : `Review the plan and start${where}`,
+      // Loading counts as started only when the driver taps Start Loading (begin_at), not when a plan was previewed.
+      label: p.begin_at ? "Continue Trip" : "Begin Loading",
+      detail: p.begin_at ? `Loading${where}` : `Check the rack, then start loading${where}`,
     };
   }
   // Every rack so far ended without a load (rack hop): pick the next one.

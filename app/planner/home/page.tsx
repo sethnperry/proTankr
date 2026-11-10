@@ -570,6 +570,18 @@ export default function HomePage() {
     return t?.terminal_name ? String(t.terminal_name) : "Terminal";
   }, [rackTerminalId, terminalCatalog]);
   const [rackSheetOpen, setRackSheetOpen] = useState(false);
+  // At the rack but loading hasn't started: the rack window shows the arrival and the Start Loading button.
+  const arrivalPickup = snap?.pickups.find((p) => p.arrived_at && !p.begin_at && !p.left_at && !p.outcome) ?? null;
+  const startLoading = () => {
+    if (!store || !arrivalPickup) return;
+    const at = new Date().toISOString();
+    endDelay(at); // a delay at the rack ends when loading really starts
+    store.put("trip_pickups", { pickup_id: arrivalPickup.pickup_id, begin_at: at });
+    void syncNow();
+    setOpeningPlanner(true);
+    setRackSheetOpen(false);
+    shell.postPlannerIntent("begin");
+  };
   const rackCity = useMemo(() => {
     const t = rackTerminalId ? terminalCatalog.find((x) => String(x.terminal_id) === rackTerminalId) : null;
     return t?.city ? String(t.city) : "";
@@ -1788,9 +1800,11 @@ export default function HomePage() {
               }
             } finally {
               void syncNow();
-              // Plan Review opens right over this screen (the Planner host stays mounted in the layout). If there is
-              // no plan, or it can't start, the host sends the driver to the Planner instead.
-              shell.postPlannerIntent("begin");
+              // Loading not started yet: the rack window comes first (arrival time, products, Start Loading). Once it has
+              // started, Plan Review opens right over this screen (the Planner host stays mounted in the layout). If there
+              // is no plan, or it can't start, the host sends the driver to the Planner instead.
+              if (arrivalPickup) { setOpeningPlanner(false); setRackSheetOpen(true); }
+              else shell.postPlannerIntent("begin");
             }
           })();
         }
@@ -1817,7 +1831,9 @@ export default function HomePage() {
             }
           } finally {
             void syncNow();
-            shell.postPlannerIntent("begin");
+            // The rack window opens first, not Plan Review: Start Loading there stamps the real start time.
+            setOpeningPlanner(false);
+            setRackSheetOpen(true);
           }
         })();
         break;
@@ -2675,7 +2691,13 @@ export default function HomePage() {
           );
         })()}
       </FullscreenModal>
-      <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)} footer={null}>
+      <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)}
+        footer={arrivalPickup ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Start Loading</button>
+            <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); shell.postPlannerIntent("begin"); }} style={{ width: "100%", padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>Review plan first</button>
+          </div>
+        ) : null}>
         {(() => {
           const hair = "rgba(255,255,255,0.12)";
           const cap: React.CSSProperties = { fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: muted };
@@ -2685,6 +2707,16 @@ export default function HomePage() {
           );
           return (
             <>
+              {arrivalPickup?.arrived_at && (
+                <div style={{ padding: "12px 14px", background: "#0f0f10", border: `1px solid ${hair}`, marginBottom: 4 }}>
+                  <div style={{ ...cap }}>Arrived</div>
+                  <div className="dash-num" style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>
+                    {new Date(arrivalPickup.arrived_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                    <span style={{ fontSize: 14, fontWeight: 600, color: muted }}> · waiting {Math.max(0, Math.round((Date.now() - Date.parse(arrivalPickup.arrived_at)) / 60000))} min</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Tap Start Loading when you begin. That sets your loading start time.</div>
+                </div>
+              )}
               <SiteBoard kind="terminal" id={rackTerminalId ?? ""} name={rackName} hideName trips={fleet.trips} product={productInfo} now={new Date()}
                 etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
                 onOpenTrip={(tid) => { setRackSheetOpen(false); nav.go(`trip:${tid}`, `/planner/trips/${tid}`); }} />
