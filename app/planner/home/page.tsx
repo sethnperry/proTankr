@@ -24,6 +24,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { DropSiteSheet, type DropTank } from "../components/trip/DropSiteSheet";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
@@ -1190,6 +1191,40 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedOpen, loadedPickup?.pickup_id]);
   const finishDeliveryRow = step.kind === "finish_delivery" ? step.delivery : null;
+  // Drop site window: opens at Arrive; Begin Delivery stamps begin_at and shows the tank volume calculator.
+  const [dropSiteOpen, setDropSiteOpen] = useState(false);
+  const siteDrops = useStoreDeliveries(finishDeliveryRow?.location_id ?? null, completedDeliveries);
+  const dropTanks: DropTank[] = useMemo(() => {
+    if (!finishDeliveryRow?.location_id) return [];
+    const mine = locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id && t.is_active);
+    const lastFor = (n: string) => {
+      for (const x of siteDrops.items) {
+        const t = x.tanks.find((y) => y.tankNumber === n);
+        if (t) return t.unit === "gallons" ? t.after : null;
+      }
+      return null;
+    };
+    return mine.map((t) => ({ number: t.tank_number.trim(), capacity: t.capacity_gallons ?? null, last: lastFor(t.tank_number.trim()) }));
+  }, [finishDeliveryRow?.location_id, locList.tanks, siteDrops.items]);
+  const openDelivery = () => (finishDeliveryRow && !finishDeliveryRow.begin_at ? setDropSiteOpen(true) : setFinishOpen(true));
+  const beginDelivery = () => {
+    if (!store || !finishDeliveryRow) return;
+    const at = new Date().toISOString();
+    endDelay(at);
+    saveDeliveryProgress(store, { delivery: finishDeliveryRow, beginAt: at, newId });
+    void syncNow();
+  };
+  const finishFromDropSite = (volumes: Record<string, number>) => {
+    if (!store || !finishDeliveryRow) return;
+    const old = new Map(store.list("trip_delivery_tanks", (t) => t.delivery_id === finishDeliveryRow.delivery_id).map((t) => [t.tank_number, t]));
+    const tanks = Object.entries(volumes).map(([n, v]) => ({
+      tank_number: n, product_id: old.get(n)?.product_id ?? locList.tanks.find((t) => t.tank_number.trim() === n)?.product_id ?? null,
+      before_reading: v, after_reading: old.get(n)?.after_reading ?? null, water_reading: old.get(n)?.water_reading ?? null, reading_unit: "gallons" as const,
+    }));
+    if (tanks.length) saveDeliveryProgress(store, { delivery: finishDeliveryRow, tanks, newId });
+    setDropSiteOpen(false);
+    setFinishOpen(true);
+  };
 
   const onLoadedSubmit = (v: LoadedSubmit) => {
     if (!store || !userId || !companyId || !loadedPickup) return;
@@ -1857,9 +1892,10 @@ export default function HomePage() {
         // Finish Delivery, and the sequence starts when the driver taps it.
         arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
         void syncNow();
+        setDropSiteOpen(true);
         break;
       case "finish_delivery":
-        setFinishOpen(true);
+        openDelivery();
         break;
     }
   };
@@ -1882,9 +1918,10 @@ export default function HomePage() {
     if (step.kind === "arrive_delivery") {
       arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
       void syncNow();
+      setDropSiteOpen(true);
       setAutoArrive(false);
     } else if (step.kind === "finish_delivery") {
-      setFinishOpen(true);
+      openDelivery();
       setAutoArrive(false);
     } else if (step.kind === "add_delivery") {
       setPicker({ mode: "add" });
@@ -2986,6 +3023,22 @@ export default function HomePage() {
           geotabBols={loadedGeoBols}
           onSubmit={onLoadedSubmit}
           onClose={() => { setLoadedOpen(false); }}
+        />
+      )}
+
+      {finishDeliveryRow?.arrived_at && snap && (
+        <DropSiteSheet
+          open={dropSiteOpen} onClose={() => setDropSiteOpen(false)}
+          siteName={deliveryName(finishDeliveryRow)} arrivedAt={finishDeliveryRow.arrived_at} beganAt={finishDeliveryRow.begin_at ?? null}
+          tanks={dropTanks}
+          loadGallons={compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id).reduce((n, c) => n + (c.gross_gallons ?? 0), 0)}
+          board={finishDeliveryRow.location_id ? (
+            <SiteBoard kind="location" id={finishDeliveryRow.location_id} name={deliveryName(finishDeliveryRow)} hideName trips={fleet.trips} product={productInfo} now={new Date()}
+              etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
+              onOpenTrip={(tid) => { setDropSiteOpen(false); nav.go(`trip:${tid}`, `/planner/trips/${tid}`); }} />
+          ) : null}
+          delay={<DelayButton leg="at_drop" running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />}
+          onBegin={beginDelivery} onFinish={finishFromDropSite}
         />
       )}
 

@@ -53,8 +53,9 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
   to_drop: [...ROAD, BLOCKED],
   at_drop: [
     BLOCKED,
+    { code: "tanks_not_ready", label: "Load won't fit / tanks full" },
+    { code: "other_delivery", label: "Another truck delivering" },
     { code: "store_closed", label: "Store closed / no one to receive" },
-    { code: "tanks_not_ready", label: "Tanks full or not ready" },
     { code: "customer_wait", label: "Customer asked me to wait" },
     { code: "store_equipment", label: "Equipment problem at the store" },
     { code: "vapor_issue", label: "Vapor recovery or hose problem" },

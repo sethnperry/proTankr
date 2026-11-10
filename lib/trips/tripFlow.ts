@@ -116,7 +116,8 @@ export function nextStep(
   if (!next.arrived_at) {
     return { kind: "arrive_delivery", label: "Arrive", detail: `Tap when arrived at ${name}`, delivery: next };
   }
-  return { kind: "finish_delivery", label: "Finish Delivery", detail: name, delivery: next };
+  // Arrived but not begun: the drop site window comes first, and Begin Delivery there stamps the real start time.
+  return { kind: "finish_delivery", label: next.begin_at ? "Finish Delivery" : "Begin Delivery", detail: next.begin_at ? name : `Check the drop site, then begin at ${name}`, delivery: next };
 }
 
 // ── Times and delays (§5) ────────────────────────────────────────────────────
