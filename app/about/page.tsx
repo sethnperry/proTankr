@@ -89,7 +89,7 @@ export default function AboutPage() {
             <div className="topic-marketing">
               Decks that follow ProTankr through real work -- a day in the
               cab, from start of shift to the drop, and the issues it
-              addresses for managers.
+              addresses.
             </div>
             <div className="topic-more">
               View the decks <span>&rarr;</span>
