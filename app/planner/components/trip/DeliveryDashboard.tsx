@@ -306,6 +306,7 @@ export function DeliveryDashboard({
   // Pop-outs and sections
   const [section, setSection] = useState<string | null>(null);
   const [pickFor, setPickFor] = useState<string | null>(null); // compartment_load_id
+  const [allReadings, setAllReadings] = useState(false); // the After window also lists every other tank at the store
   const [showAllTanks, setShowAllTanks] = useState(false); // tanks for products not on this drop stay folded away
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
   const [newTankText, setNewTankText] = useState("");
@@ -501,6 +502,13 @@ export function DeliveryDashboard({
         out.push({ tank_number: n, product_id: p.productId, before_reading: before, after_reading: after, water_reading: w, reading_unit: unit });
       }
     }
+    // Tanks outside this drop's products, entered through "Enter all tanks".
+    for (const [n, r] of Object.entries(readings)) {
+      if (out.some((t) => t.tank_number === n)) continue;
+      const before = numOrNull(r.before), after = numOrNull(r.after);
+      if (before == null && after == null) continue;
+      out.push({ tank_number: n, product_id: locationTanks.find((t) => t.tank_number.trim() === n)?.product_id ?? null, before_reading: before, after_reading: after, water_reading: null, reading_unit: unit });
+    }
     return out;
   };
   const compTanks = () => rows.map((c) => {
@@ -647,6 +655,7 @@ export function DeliveryDashboard({
   const curName = cur ? productInfo(cur.productId).name : "";
   const closeReadings = () => {
     setStep(null);
+    setAllReadings(false);
     onSaveProgress({ tanks: buildTanks() });
   };
   const fillAfters = (p: (typeof products)[number]) => {
@@ -679,8 +688,13 @@ export function DeliveryDashboard({
     if (step.productIdx < products.length - 1) return setStep({ productIdx: step.productIdx + 1, phase: "before" });
     closeReadings();
   };
+  // Every store tank outside the product being entered (After window, behind a tap).
+  const otherTanks = cur ? sortTankNames(
+    locationTanks.filter((t) => t.location_id === delivery.location_id && t.is_active !== false).map((t) => t.tank_number.trim()).filter((n) => !cur.tanks.includes(n)),
+    tankOrder,
+  ) : [];
   const stepFields = cur && step
-    ? cur.tanks.map((n) => ({
+    ? [...cur.tanks, ...(step.phase === "after" && allReadings ? otherTanks : [])].map((n) => ({
         key: `${step.phase}:${n}`,
         label: `Tank ${n}`,
         value: readings[n]?.[step.phase] ?? "",
@@ -710,6 +724,12 @@ export function DeliveryDashboard({
         </div>
       )}
       {soldLines.map((l) => <div key={l} style={{ fontSize: 12, color: muted }}>{l}</div>)}
+      {step.phase === "after" && otherTanks.length > 0 && (
+        <button type="button" onClick={() => setAllReadings((v) => !v)}
+          style={{ background: "none", border: "none", padding: 0, textAlign: "left", color: muted, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          {allReadings ? "Hide other tanks" : `Enter all tanks (${otherTanks.length} more) ›`}
+        </button>
+      )}
       {step.phase === "after" && (curDisc
         ? <DiscrepancyLine d={curDisc} big />
         : unit === "inches"

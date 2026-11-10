@@ -24,7 +24,7 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
-import { DropSiteSheet, type DropTank } from "../components/trip/DropSiteSheet";
+import { DropSiteSheet, type DropProduct } from "../components/trip/DropSiteSheet";
 import { sortTankNames } from "@/lib/trips/tankReadings";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
@@ -1283,10 +1283,9 @@ export default function HomePage() {
     const code = String(p?.button_code ?? (name.split(" ")[0] || "PRD")).trim().toUpperCase();
     return { name, code, hex };
   };
-  // The drop site's tanks: those taking a product on this delivery (or with no product saved) come first;
-  // the rest sit behind a tap on the sheet. Each carries its product code and color.
-  const dropHereProducts = new Set((snap && finishDeliveryRow ? compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id) : []).map((c) => c.product_id));
-  const dropTanks: DropTank[] = !finishDeliveryRow?.location_id ? [] : (() => {
+  // The drop site's products: each with every store tank that holds it, its code color, and the gallons aboard for this stop.
+  const dropProducts: DropProduct[] = !finishDeliveryRow?.location_id || !snap ? [] : (() => {
+    const here = compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id);
     const lastFor = (n: string) => {
       for (const x of siteDrops.items) {
         const t = x.tanks.find((y) => y.tankNumber === n);
@@ -1294,10 +1293,16 @@ export default function HomePage() {
       }
       return null;
     };
-    return sortTankNames(locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id && t.is_active).map((t) => t.tank_number.trim()), null).map((n) => {
-      const t = locList.tanks.find((x) => x.location_id === finishDeliveryRow.location_id && x.tank_number.trim() === n)!;
-      const info = t.product_id ? productInfo(t.product_id) : null;
-      return { number: n, capacity: t.capacity_gallons ?? null, last: lastFor(n), code: info?.code ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, needed: !t.product_id || dropHereProducts.has(t.product_id) };
+    const ids: (string | null)[] = [];
+    for (const c of here) if (!ids.includes(c.product_id)) ids.push(c.product_id);
+    return ids.map((pid) => {
+      const info = productInfo(pid);
+      const names = sortTankNames(locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id && t.is_active && pid && t.product_id === pid).map((t) => t.tank_number.trim()), null);
+      return {
+        id: pid, name: info.name, color: info.hex ?? productColorFor(info.name),
+        gallons: here.filter((c) => c.product_id === pid).reduce((n, c) => n + (c.gross_gallons ?? 0), 0),
+        tanks: names.map((n) => ({ number: n, capacity: locList.tanks.find((t) => t.location_id === finishDeliveryRow.location_id && t.tank_number.trim() === n)?.capacity_gallons ?? null, last: lastFor(n) })),
+      };
     });
   })();
 
@@ -3036,8 +3041,7 @@ export default function HomePage() {
         <DropSiteSheet
           open={dropSiteOpen} onClose={() => setDropSiteOpen(false)}
           siteName={deliveryName(finishDeliveryRow)} arrivedAt={finishDeliveryRow.arrived_at} beganAt={finishDeliveryRow.begin_at ?? null}
-          tanks={dropTanks}
-          loadGallons={compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id).reduce((n, c) => n + (c.gross_gallons ?? 0), 0)}
+          products={dropProducts}
           board={finishDeliveryRow.location_id ? (
             <SiteBoard kind="location" id={finishDeliveryRow.location_id} name={deliveryName(finishDeliveryRow)} hideName trips={fleet.trips} product={productInfo} now={new Date()}
               etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
