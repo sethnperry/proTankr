@@ -306,6 +306,7 @@ export function DeliveryDashboard({
   // Pop-outs and sections
   const [section, setSection] = useState<string | null>(null);
   const [pickFor, setPickFor] = useState<string | null>(null); // compartment_load_id
+  const [showAllTanks, setShowAllTanks] = useState(false); // tanks for products not on this drop stay folded away
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
   const [newTankText, setNewTankText] = useState("");
   const [wstep, setWstep] = useState<WStep>("tanks");
@@ -875,12 +876,16 @@ export function DeliveryDashboard({
       const info = pid ? productInfo(pid) : null;
       seen.set(n, { tank: n, productId: pid, code: info?.code ?? null, name: info?.name ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, capacity: cap });
     };
-    for (const t of locationTanks) if (t.is_active !== false && (!t.product_id || hauledIds.has(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
+    // Tanks for this drop's products (or with no product saved), plus any already linked. The rest open on a tap.
+    const neededHere = (pid: string | null) => !pid || productIdsHere.includes(pid);
+    for (const t of locationTanks) if (t.is_active !== false && (showAllTanks ? !t.product_id || hauledIds.has(t.product_id) : neededHere(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
     for (const t of extraTanks) add(t.tank_number, t.product_id, null);
     for (const c of rows) for (const x of targetsFor(c)) add(x.tank, c.product_id, null);
     const byName = new Map([...seen.values()].map((m) => [m.tank, m]));
     return sortTankNames([...byName.keys()], tankOrder).map((n) => byName.get(n)!);
   })();
+
+  const hiddenTankCount = locationTanks.filter((t) => t.location_id === delivery.location_id && t.is_active !== false && t.product_id && !productIdsHere.includes(t.product_id) && hauledIds.has(t.product_id)).length;
 
   // ── Before getting out ─────────────────────────────────────────────────────
   // Hose length is per tank (fills sit at different distances). Tanks for
@@ -1056,6 +1061,12 @@ export function DeliveryDashboard({
                   onPick={(id) => setPickFor(id)} onSplitStart={(id) => setSplitId((s) => (s === id ? null : id))}
                   onSplitGallons={setSplitGallons} onUnlink={unlinkComp} />
               )}
+            {hiddenTankCount > 0 && (
+              <button type="button" onClick={() => setShowAllTanks((v) => !v)}
+                style={{ display: "block", width: "100%", background: "none", border: "none", color: muted, fontSize: 13, fontWeight: 700, padding: "10px 0 0", cursor: "pointer" }}>
+                {showAllTanks ? "Hide other tanks" : `Show other tanks (${hiddenTankCount}) ›`}
+              </button>
+            )}
           </div>
           {retained.length > 0 && (
             <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, textAlign: "center" }}>

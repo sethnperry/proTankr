@@ -10,7 +10,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { ullage } from "@/lib/trips/ullage";
 
-export type DropTank = { number: string; capacity: number | null; last: number | null };
+/** A store tank. `needed`: it takes a product on this delivery (or has none saved); the others sit behind a tap. */
+export type DropTank = { number: string; capacity: number | null; last: number | null; code: string | null; color: string | null; needed: boolean };
 
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.12)";
@@ -32,6 +33,7 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, tanks
   onClose: () => void;
 }) {
   const [vol, setVol] = useState<Record<string, string>>({});
+  const [showOthers, setShowOthers] = useState(false);
   // Seed from the last ending readings each time the calculator opens.
   useEffect(() => {
     if (!open || !beganAt) return;
@@ -39,13 +41,28 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, tanks
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, beganAt]);
   const num = (n: string) => { const v = parseFloat((vol[n] ?? "").replace(/,/g, "")); return Number.isFinite(v) ? v : null; };
-  const u = useMemo(() => ullage(tanks.map((t) => ({ capacity: t.capacity, volume: num(t.number) })), loadGallons), [tanks, vol, loadGallons]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Room is counted over the tanks that take this load's products; readings in the others are saved, not counted.
+  const needed = tanks.filter((t) => t.needed);
+  const others = tanks.filter((t) => !t.needed);
+  const u = useMemo(() => ullage(needed.map((t) => ({ capacity: t.capacity, volume: num(t.number) })), loadGallons), [tanks, vol, loadGallons]); // eslint-disable-line react-hooks/exhaustive-deps
   const waited = Math.max(0, Math.round((Date.now() - Date.parse(arrivedAt)) / 60000));
   const finish = () => {
     const out: Record<string, number> = {};
     for (const t of tanks) { const v = num(t.number); if (v != null) out[t.number] = v; }
     onFinish(out);
   };
+  const tankRow = (t: DropTank) => (
+    <div key={t.number} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${hair}` }}>
+      <span aria-hidden style={{ width: 4, alignSelf: "stretch", background: t.color ?? "rgba(255,255,255,0.25)", flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>Tank {t.number}{t.code && <span style={{ color: t.color ?? muted, marginLeft: 8, fontSize: 13, fontWeight: 800 }}>{t.code}</span>}</div>
+        <div style={{ fontSize: 12, color: muted }}>{t.capacity ? `${gal(t.capacity)} capacity` : "capacity unknown"}</div>
+      </div>
+      <input inputMode="numeric" value={vol[t.number] ?? ""} placeholder="gal" onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setVol((m) => ({ ...m, [t.number]: e.target.value }))}
+        style={{ width: 110, textAlign: "right", background: "#0f0f10", border: `1px solid ${hair}`, color: "#fff", fontSize: 18, fontWeight: 700, padding: "9px 10px", borderRadius: 2 }} />
+    </div>
+  );
   const verdict = u.fit === "fits" ? { text: "Fits within 90%", color: "#4ade80" }
     : u.fit === "tight" ? { text: "Fits, but past 90% of capacity", color: "#fbbf24" }
     : u.fit === "no" ? { text: `Won't fit: ${gal(u.shortBy)} too much`, color: "#f87171" } : null;
@@ -76,17 +93,14 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, tanks
         <>
           <div style={{ ...cap, margin: "6px 0 8px", paddingBottom: 6, borderBottom: `1px solid ${hair}` }}>Tank volumes (optional)</div>
           {tanks.length === 0 && <div style={{ color: muted, fontSize: 14, padding: "8px 0" }}>No tanks on file for this store. Finish when you're done.</div>}
-          {tanks.map((t) => (
-            <div key={t.number} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${hair}` }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>Tank {t.number}</div>
-                <div style={{ fontSize: 12, color: muted }}>{t.capacity ? `${gal(t.capacity)} capacity` : "capacity unknown"}</div>
-              </div>
-              <input inputMode="numeric" value={vol[t.number] ?? ""} placeholder="gal" onFocus={(e) => e.currentTarget.select()}
-                onChange={(e) => setVol((m) => ({ ...m, [t.number]: e.target.value }))}
-                style={{ width: 110, textAlign: "right", background: "#0f0f10", border: `1px solid ${hair}`, color: "#fff", fontSize: 18, fontWeight: 700, padding: "9px 10px", borderRadius: 2 }} />
-            </div>
-          ))}
+          {needed.map(tankRow)}
+          {others.length > 0 && (
+            <button type="button" onClick={() => setShowOthers((v) => !v)}
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${hair}`, color: muted, fontSize: 13, fontWeight: 700, padding: "12px 0", cursor: "pointer" }}>
+              {showOthers ? "Hide other tanks" : `Other tanks (${others.length}) ›`}
+            </button>
+          )}
+          {showOthers && others.map(tankRow)}
           <div style={{ marginTop: 14, padding: "12px 14px", background: "#0f0f10", border: `1px solid ${hair}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "3px 0" }}><span style={{ color: muted }}>Load to deliver</span><b className="dash-num">{gal(loadGallons)}</b></div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "3px 0" }}><span style={{ color: muted }}>Room at 100%</span><b className="dash-num">{u.fit ? gal(u.room100) : "—"}</b></div>

@@ -25,6 +25,7 @@ import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
 import { DropSiteSheet, type DropTank } from "../components/trip/DropSiteSheet";
+import { sortTankNames } from "@/lib/trips/tankReadings";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
 import { ConsigneeSignSheet } from "../components/trip/ConsigneeSignSheet";
 import { DutyStopCard } from "./DutyStopCard";
@@ -1194,18 +1195,6 @@ export default function HomePage() {
   // Drop site window: opens at Arrive; Begin Delivery stamps begin_at and shows the tank volume calculator.
   const [dropSiteOpen, setDropSiteOpen] = useState(false);
   const siteDrops = useStoreDeliveries(finishDeliveryRow?.location_id ?? null, completedDeliveries);
-  const dropTanks: DropTank[] = useMemo(() => {
-    if (!finishDeliveryRow?.location_id) return [];
-    const mine = locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id && t.is_active);
-    const lastFor = (n: string) => {
-      for (const x of siteDrops.items) {
-        const t = x.tanks.find((y) => y.tankNumber === n);
-        if (t) return t.unit === "gallons" ? t.after : null;
-      }
-      return null;
-    };
-    return mine.map((t) => ({ number: t.tank_number.trim(), capacity: t.capacity_gallons ?? null, last: lastFor(t.tank_number.trim()) }));
-  }, [finishDeliveryRow?.location_id, locList.tanks, siteDrops.items]);
   const openDelivery = () => (finishDeliveryRow && !finishDeliveryRow.begin_at ? setDropSiteOpen(true) : setFinishOpen(true));
   const beginDelivery = () => {
     if (!store || !finishDeliveryRow) return;
@@ -1294,6 +1283,23 @@ export default function HomePage() {
     const code = String(p?.button_code ?? (name.split(" ")[0] || "PRD")).trim().toUpperCase();
     return { name, code, hex };
   };
+  // The drop site's tanks: those taking a product on this delivery (or with no product saved) come first;
+  // the rest sit behind a tap on the sheet. Each carries its product code and color.
+  const dropHereProducts = new Set((snap && finishDeliveryRow ? compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id) : []).map((c) => c.product_id));
+  const dropTanks: DropTank[] = !finishDeliveryRow?.location_id ? [] : (() => {
+    const lastFor = (n: string) => {
+      for (const x of siteDrops.items) {
+        const t = x.tanks.find((y) => y.tankNumber === n);
+        if (t) return t.unit === "gallons" ? t.after : null;
+      }
+      return null;
+    };
+    return sortTankNames(locList.tanks.filter((t) => t.location_id === finishDeliveryRow.location_id && t.is_active).map((t) => t.tank_number.trim()), null).map((n) => {
+      const t = locList.tanks.find((x) => x.location_id === finishDeliveryRow.location_id && x.tank_number.trim() === n)!;
+      const info = t.product_id ? productInfo(t.product_id) : null;
+      return { number: n, capacity: t.capacity_gallons ?? null, last: lastFor(n), code: info?.code ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, needed: !t.product_id || dropHereProducts.has(t.product_id) };
+    });
+  })();
 
   const onPick = (to: DeliveryDestination) => {
     if (picker?.mode === "select") {
