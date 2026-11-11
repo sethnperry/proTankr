@@ -1579,6 +1579,10 @@ export default function HomePage() {
   // Splash blend set up for this trip (per compartment), and the plan's base product per compartment.
   const [tripSplash, setTripSplashState] = useState<TripSplash>({});
   const [splashOpen, setSplashOpen] = useState(false);
+  const openSplash = () => {
+    if (!Object.keys(baseByComp).length) { setBlockNotice({ title: "Pick a plan first", text: "Splash blend works from the plan: begin the trip with a plan (A to E) so the app knows each compartment's base product, then set the splash." }); return; }
+    setSplashOpen(true);
+  };
   useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);
   const splashNums = Object.keys(compSizes).map(Number).sort((a, b) => b - a);
   const splashRoomLbs = currentGross != null ? Math.max(0, LEGAL_GROSS_LBS - currentGross) : null;
@@ -2603,8 +2607,8 @@ export default function HomePage() {
               {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
                 <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
               )}
-              {!!openTrip && openTrip.status !== "draft" && !anyDelivered && !!planLine && !pickups.some((p) => p.load_id) && (
-                <button type="button" onClick={() => setSplashOpen(true)} style={smallLink}>{Object.keys(tripSplash).length ? "Splash blend ✓" : "Splash blend"}</button>
+              {!!openTrip && openTrip.status !== "draft" && !anyDelivered && !pickups.some((p) => p.load_id) && (
+                <button type="button" onClick={openSplash} style={smallLink}>{Object.keys(tripSplash).length ? "Splash blend ✓" : "Splash blend"}</button>
               )}
               {topOffComps.length > 0 && canAddPickup && (
                 <button type="button" onClick={() => {
@@ -2947,6 +2951,12 @@ export default function HomePage() {
               </div>
               {rackTerminalId && <button type="button" className="dash-press" onClick={() => setRackStudOpen(true)} style={{ width: "100%", marginTop: 12, padding: "15px 0", fontSize: 15, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer" }}>STUD</button>}
               {arrivalPickup && <RackDelayButton running={runningDelay} onClick={() => setRackDelayOpen(true)} />}
+              {arrivalPickup && !pickups.some((p) => p.load_id) && (
+                <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); openSplash(); }}
+                  style={{ width: "100%", marginTop: 8, padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: Object.keys(tripSplash).length ? "#fbbf24" : "#fff", cursor: "pointer" }}>
+                  {Object.keys(tripSplash).length ? "Splash blend ✓" : "Splash blend"}
+                </button>
+              )}
             </>
           );
         })()}
