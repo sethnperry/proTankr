@@ -34,6 +34,12 @@ export function buildTimeline(ptd: Ptd): TimelineEntry[] {
     add(d.startedAt, "delay", `Delay · ${d.label}`, `${mins(d.minutes)}${d.note ? ` · ${d.note}` : ""} (ended ${new Date(d.endedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })})`);
   }
 
+  // The ELD showed off duty while the driver was still working (told in line, with why).
+  const OFF_LABEL: Record<string, string> = { OFF: "off duty", SB: "sleeper", PC: "personal" };
+  for (const o of ptd.offDuty) {
+    add(o.at, "note", `ELD ${OFF_LABEL[o.status] ?? "off duty"}, still working`, [o.reason, o.note].filter(Boolean).join(" · ") || null);
+  }
+
   for (const p of ptd.parks) {
     add(p.parkedAt, "trip", "Trailer parked preloaded", [p.where ? `At ${p.where}` : null, p.note].filter(Boolean).join(" · ") || null);
     add(p.resumedAt, "trip", "Trip resumed");

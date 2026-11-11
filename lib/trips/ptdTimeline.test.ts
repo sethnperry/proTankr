@@ -30,3 +30,15 @@ test("every timestamp lands on the timeline, in order", () => {
     assert.ok(text.includes(want), want);
   }
 });
+
+test("timeline tells the ELD-off-duty-but-working answers in line", async () => {
+  const { offDutyWork } = await import("./ptd.ts");
+  const w = offDutyWork([
+    { event_type: "shift_idle_response", occurred_at: "2026-11-11T14:10:00Z", payload: { off_duty: true, eld_status: "OFF", eld_since: "2026-11-11T14:00:00Z", reason: "Waiting on dispatch" } },
+    { event_type: "shift_idle_response", occurred_at: "2026-11-11T14:20:00Z", payload: { answer: "still_working" } },
+    { event_type: "shift_idle_response", occurred_at: "2026-11-10T14:10:00Z", payload: { off_duty: true, reason: "old" } },
+  ], "2026-11-11T12:00:00Z", null);
+  assert.equal(w.length, 1);
+  assert.equal(w[0].at, "2026-11-11T14:00:00Z");
+  assert.equal(w[0].reason, "Waiting on dispatch");
+});

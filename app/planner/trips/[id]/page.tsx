@@ -53,6 +53,7 @@ export default function TripPtdPage() {
   const [flagBusy, setFlagBusy] = useState<string | null>(null);
   const [locPlaces, setLocPlaces] = useState<Record<string, { city: string | null; state: string | null }>>({});
   const isAdmin = shell.role === "admin" || shell.isSuperAdmin;
+  const [shiftEvents, setShiftEvents] = useState<{ event_type: string; occurred_at: string; payload: Record<string, unknown> }[]>([]);
   const [equip, setEquip] = useState<{ truck: string | null; trailer: string | null }>({ truck: null, trailer: null });
 
   // Pull the trip and everything under it into the store.
@@ -172,6 +173,17 @@ export default function TripPtdPage() {
     };
   }, [truckId, trailerId]);
 
+  // The driver's "still working while the ELD is off duty" answers, told in the timeline.
+  const tripDriverId = data?.trip.driver_id ?? null;
+  const tripStart = data?.trip.started_at ?? null;
+  useEffect(() => {
+    if (!tripDriverId || !tripStart) return;
+    let off = false;
+    void supabase.from("shift_events").select("event_type,occurred_at,payload").eq("user_id", tripDriverId).eq("event_type", "shift_idle_response").gte("occurred_at", tripStart)
+      .then(({ data: rows, error }) => { if (!off && !error) setShiftEvents((rows ?? []) as typeof shiftEvents); });
+    return () => { off = true; };
+  }, [tripDriverId, tripStart]);
+
   const ptd = useMemo(() => {
     if (!data) return null;
     const productName = (id: string | null) => {
@@ -179,13 +191,13 @@ export default function TripPtdPage() {
       const p = products.find((x) => x.product_id === id);
       return p ? String(p.display_name || p.product_name || "Product") : "Product";
     };
-    return buildPtd(data, {
+    return buildPtd({ ...data, shiftEvents }, {
       product: productName,
       delivery: (d) => (d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery",
       driver: (id) => (id && names[id]) || "Driver",
       delayReason: (id) => (id ? reasons.find((r) => r.reason_id === id)?.label ?? null : null),
     });
-  }, [data, products, locNames, names, reasons]);
+  }, [data, products, locNames, names, reasons, shiftEvents]);
 
   // The admin layer: empty segments and their billable flags (company admins only; never printed).
   const segments = useMemo(() => (data && isAdmin ? tripSegments(data.trip, data.pickups, data.deliveries, (d) => ({ name: (d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery", city: (d.location_id && locPlaces[d.location_id]?.city) || null, state: (d.location_id && locPlaces[d.location_id]?.state) || null })) : []), [data, isAdmin, locNames, locPlaces]);

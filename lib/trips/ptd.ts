@@ -46,6 +46,8 @@ export type PtdInput = {
   compLoads: TripCompartmentLoadRow[];
   tanks: TripDeliveryTankRow[];
   events: TripEventRow[];
+  /** Shift answers "still working" while the ELD showed off duty, from the driver's shift events. */
+  shiftEvents?: { event_type: string; occurred_at: string; payload: Record<string, unknown> }[];
 };
 
 export type PtdStop = {
@@ -230,6 +232,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     date: trip.started_at ?? input.pickups[0]?.arrived_at ?? null,
     startedAt: trip.started_at,
     delays: loggedDelays(input.events),
+    offDuty: offDutyWork(input.shiftEvents ?? [], trip.started_at, trip.completed_at ?? null),
     completedAt: trip.completed_at,
     status: trip.status,
     enteredLate: trip.entered_late,
@@ -257,6 +260,22 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     loadingSigs,
     time,
   };
+}
+
+export type OffDutyWork = { at: string; answeredAt: string; status: string; reason: string; note: string | null };
+
+/** Times the driver said "still working" with the ELD off duty during this trip, oldest first. */
+export function offDutyWork(events: NonNullable<PtdInput["shiftEvents"]>, startedAt: string | null, completedAt: string | null): OffDutyWork[] {
+  const from = startedAt ? Date.parse(startedAt) : -Infinity;
+  const to = completedAt ? Date.parse(completedAt) : Infinity;
+  return events
+    .filter((e) => e.event_type === "shift_idle_response" && e.payload?.off_duty === true)
+    .map((e) => {
+      const p = e.payload as { eld_status?: string; eld_since?: string; reason?: string; note?: string | null };
+      return { at: p.eld_since && Number.isFinite(Date.parse(p.eld_since)) ? p.eld_since : e.occurred_at, answeredAt: e.occurred_at, status: p.eld_status ?? "OFF", reason: p.reason ?? "", note: p.note ?? null };
+    })
+    .filter((x) => Date.parse(x.answeredAt) >= from && Date.parse(x.answeredAt) <= to)
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
 export type Ptd = ReturnType<typeof buildPtd>;
