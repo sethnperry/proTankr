@@ -15,17 +15,38 @@ export function isSplashable(productName: string | null | undefined): boolean {
   return /\bE0\b|\bRBOB\b/i.test(productName ?? "");
 }
 
+/** Share of the splash compartments' volume the weight allows (1 = all of it). Other compartments load full. */
+function weightScale(args: { comps: PlanComp[]; splash: Record<number, SplashSpec>; roomLbs?: number | null; lbsPerGal?: (productId: string | null) => number }): number {
+  const d = args.lbsPerGal;
+  if (args.roomLbs == null || !d) return 1;
+  let fixed = 0, wanted = 0;
+  for (const c of args.comps) {
+    const sp = args.splash[c.n];
+    if (!sp || !validPct(sp.pct)) { fixed += c.size * d(c.base); continue; }
+    const total = stageGallons({ volume: c.size, pct: sp.pct }).total;
+    wanted += total * ((1 - sp.pct / 100) * d(c.base) + (sp.pct / 100) * d(sp.additiveProductId));
+  }
+  if (wanted <= 0) return 1;
+  return Math.max(0, Math.min(1, (args.roomLbs - fixed) / wanted));
+}
+
 /**
  * Both pickups' planned_comps. `baseFirst`: the base terminal loads first (its splash compartments take the base
  * share of the planned volume, the ethanol stop adjusts); otherwise the ethanol stop goes first and the base stop adjusts.
  */
-export function splashPickupPlans(args: { comps: PlanComp[]; splash: Record<number, SplashSpec> }): { base: StagedPlanned[]; splash: StagedPlanned[] } {
+export function splashPickupPlans(args: {
+  comps: PlanComp[]; splash: Record<number, SplashSpec>;
+  /** Weight the whole load may add (legal gross less the empty rig), with a density per product. When the planned volumes
+   *  would go over it, the splash compartments are staged smaller so the blend still fits; omitted, volume rules. */
+  roomLbs?: number | null; lbsPerGal?: (productId: string | null) => number;
+}): { base: StagedPlanned[]; splash: StagedPlanned[] } {
   const base: StagedPlanned[] = [];
   const splash: StagedPlanned[] = [];
+  const scale = weightScale(args);
   for (const c of [...args.comps].sort((a, b) => a.n - b.n)) {
     const sp = args.splash[c.n];
     if (!sp || !validPct(sp.pct)) { base.push({ comp_number: c.n, product_id: c.base }); continue; }
-    const st = stageGallons({ volume: c.size, pct: sp.pct });
+    const st = stageGallons({ volume: Math.floor(c.size * scale), pct: sp.pct });
     base.push({ comp_number: c.n, product_id: c.base, splash: { pct: sp.pct, aboard: 0, add: Math.max(1, st.base) } });
     splash.push({ comp_number: c.n, product_id: sp.additiveProductId, splash: { pct: sp.pct, aboard: 0, add: Math.max(1, st.additive) } });
   }

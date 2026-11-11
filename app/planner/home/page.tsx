@@ -2295,6 +2295,12 @@ export default function HomePage() {
   const splashPickup = pickups.find((p) => isSplashPickup(p) && p.outcome !== "no_load") ?? null;
   const baseStop = splashPickup ? [...pickups].filter((p) => p.pickup_id !== splashPickup.pickup_id && p.outcome !== "no_load").sort((x, y) => x.seq - y.seq)[0] ?? null : null;
   const splashComps = splashNums.filter((n) => baseByComp[n] && isSplashable(productInfo(baseByComp[n]).name));
+  // Nothing aboard yet: the weight a splash load may add is the legal gross less the empty rig, so staging stays under it.
+  const splashPlanWeight = () => {
+    const tare = equipment.selectedCombo?.tare_lbs != null ? Number(equipment.selectedCombo.tare_lbs) : null;
+    if (aboardRows.length > 0 || tare == null || !Number.isFinite(tare)) return {};
+    return { roomLbs: Math.max(0, LEGAL_GROSS_LBS - tare), lbsPerGal: (id: string | null) => roughLbsPerGal(id ? productInfo(id).name : "") };
+  };
   const splashSpecs = () => splashComps.map((n) => ({ n, size: compSizes[n] || 0, base: baseByComp[n] }));
   const [splashTermPending, setSplashTermPending] = useState(false);
   const splashSawPicker = useRef(false);
@@ -2313,7 +2319,7 @@ export default function HomePage() {
     setTripSplash(userId, openTrip.trip_id, sp);
     setTripSplashState(sp);
     if (hadStop && splashPickup && baseStop) {
-      const plans = splashPickupPlans({ comps: splashSpecs(), splash: sp });
+      const plans = splashPickupPlans({ comps: splashSpecs(), splash: sp, ...splashPlanWeight() });
       store.put("trip_pickups", { pickup_id: splashPickup.pickup_id, planned_comps: plans.splash as any });
       store.put("trip_pickups", { pickup_id: baseStop.pickup_id, planned_comps: plans.base as any });
       void syncNow();
@@ -2334,7 +2340,7 @@ export default function HomePage() {
     setSplashTermPending(false);
     releaseAddingPickup();
     if (!store || !userId || !openTrip || !location.selectedTerminalId) return;
-    const plans = splashPickupPlans({ comps: splashSpecs(), splash: tripSplash });
+    const plans = splashPickupPlans({ comps: splashSpecs(), splash: tripSplash, ...splashPlanWeight() });
     const base = [...pickups].filter((p) => !p.load_id && !p.left_at && p.outcome !== "no_load").sort((x, y) => x.seq - y.seq)[0];
     if (base) store.put("trip_pickups", { pickup_id: base.pickup_id, planned_comps: plans.base as any });
     addPickup(store, {

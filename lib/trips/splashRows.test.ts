@@ -33,3 +33,15 @@ test("the second stop is re-worked from what is really aboard", () => {
   assert.equal(next![0].splash!.aboard, 1700);
   assert.equal(refineSecondStop({ planned: next!, aboard: { 1: { product_id: "e0", gallons: 1700 } }, splash: { 1: { additiveProductId: "eth", pct: 10 } }, sizes: { 1: 2000 }, roomLbs: 5000, lbsPerGal: () => 6.7 }), null);
 });
+
+test("a splash load that would go over legal weight is staged smaller so the blend still fits", () => {
+  const d = (id: string | null) => (id === "eth" ? 6.6 : 6.2);
+  const comps = [{ n: 1, size: 4000, base: "e0" }, { n: 2, size: 4000, base: "e0" }];
+  const spec = { 1: { additiveProductId: "eth", pct: 10 }, 2: { additiveProductId: "eth", pct: 10 } };
+  const free = splashPickupPlans({ comps, splash: spec });
+  const capped = splashPickupPlans({ comps, splash: spec, roomLbs: 45000, lbsPerGal: d });
+  const lbs = (p: ReturnType<typeof splashPickupPlans>) => [...p.base, ...p.splash].reduce((a, c) => a + c.splash!.add * d(c.product_id), 0);
+  assert.ok(lbs(free) > 45000);
+  assert.ok(lbs(capped) <= 45000);
+  assert.ok(capped.splash[0].splash!.add / (capped.base[0].splash!.add + capped.splash[0].splash!.add) > 0.099);
+});
