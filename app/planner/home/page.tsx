@@ -3135,11 +3135,6 @@ export default function HomePage() {
         <button type="button" style={{ width: "100%", padding: "14px 0", marginTop: 10, fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", cursor: "pointer" }}
           onClick={() => { const go = bobtailAsk; setBobtailAsk(null); if (go) openEquipPicker(go, true); }}>Pick a trailer now</button>
       </FullscreenModal>
-      <OdometerConfirmSheet open={!!stampAsk && !!truckId}
-        title={stampAsk?.kind === "shift" ? "End shift" : "Load cancelled"}
-        lead={stampAsk?.kind === "shift" ? "Confirm the truck's odometer to end your shift." : "Confirm the truck's odometer. The empty run starts here."}
-        placeLabel={stampPlaceLabel} loading={stampCtx.loading} guess={stampCtx.guess} floor={stampFloor}
-        onConfirm={(n) => void confirmStamp(n)} onBack={() => setStampAsk(null)} />
       <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
         locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}
@@ -3267,6 +3262,12 @@ export default function HomePage() {
         onSubmit={(v) => { if (truckId && companyId) setStampAsk({ kind: "cancel", v }); else void onCancelSubmit(v); }}
         onClose={() => setCancelOpen(false)}
       />
+      {/* After the cancel window and the end-shift flow so it opens over them, not behind. */}
+      <OdometerConfirmSheet open={!!stampAsk && !!truckId}
+        title={stampAsk?.kind === "shift" ? "End shift" : "Load cancelled"}
+        lead={stampAsk?.kind === "shift" ? "Confirm the truck's odometer to end your shift." : "Confirm the truck's odometer. The empty run starts here."}
+        placeLabel={stampPlaceLabel} loading={stampCtx.loading} guess={stampCtx.guess} floor={stampFloor}
+        onConfirm={(n) => void confirmStamp(n)} onBack={() => setStampAsk(null)} />
       <NoLoadSheet
           open={noLoadOpen && !!workingPickup}
           rackName={workingPickup?.name ?? terminalName ?? "this rack"}
