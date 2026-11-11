@@ -2407,11 +2407,16 @@ export default function HomePage() {
       }}
     >
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
-      <ConnectedDashHeader current="driver" line={equipmentLabel} right={(() => {
+      <ConnectedDashHeader current="driver" line={(() => {
         const chip = dutyChip(myHos, Date.now());
-        if (!chip) return null;
-        return <span className="dash-num" title={chip.since ? `Since ${new Date(chip.since).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : undefined}
-          style={{ padding: "7px 12px", border: `1px solid ${chip.on ? "#4ade80" : "rgba(255,255,255,0.25)"}`, color: chip.on ? "#4ade80" : "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{chip.text}</span>;
+        if (!chip) return equipmentLabel;
+        return (
+          <span style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{equipmentLabel}</span>
+            <span style={{ flexShrink: 0, color: chip.on ? "#4ade80" : "rgba(255,255,255,0.7)" }}
+              title={chip.since ? `Since ${new Date(chip.since).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : undefined}>{chip.text}</span>
+          </span>
+        );
       })()} />
 
       <DispatchNotices userId={userId || null} />
