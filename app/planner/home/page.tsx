@@ -2667,7 +2667,7 @@ export default function HomePage() {
           heading={`Current trip · ${STATUS_LABEL[openTrip.status]}`}
           right={trailerLabel}
           route={(openTrip.shipper || openTrip.customer) ? [openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ") : null}
-          plan={planLine ? { label: planLine.label, comps: planLine.comps.map(chipFor), splash: splashComps.length > 0 && openTrip.status !== "draft" && !anyDelivered && !pickups.some((p) => p.load_id) ? { text: Object.keys(tripSplash).length ? "Splash ✓" : "Splash", on: Object.keys(tripSplash).length > 0, onTap: openSplash } : null } : null}
+          plan={planLine ? { label: planLine.label, comps: planLine.comps.map(chipFor), splash: splashComps.length > 0 && ["draft", "loading", "in_transit"].includes(openTrip.status) && !anyDelivered && !pickups.some((p) => p.load_id) ? { text: Object.keys(tripSplash).length ? "Splash ✓" : "Splash", on: Object.keys(tripSplash).length > 0, onTap: openSplash } : null } : null}
           swapKeys={splashPickup && baseStop && !splashPickup.arrived_at && !baseStop.arrived_at ? [splashPickup.pickup_id, baseStop.pickup_id] : []}
           onSwap={swapSplashOrder}
           pickups={pickupRows(pickups, {
