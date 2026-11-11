@@ -157,6 +157,8 @@ import { useDashIdentity } from "@/lib/ui/driver/useDashIdentity";
 import { ExplanationSheet } from "../components/shift/ExplanationSheet";
 import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanation";
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
+import RackDelaySheet from "../components/RackDelaySheet";
+import { RackDelayButton } from "../components/trip/RackDelayButton";
 import { readShopDown, writeShopDown, SHOP_BLOCK, type ShopDown } from "@/lib/trips/shopDown";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
@@ -631,6 +633,7 @@ export default function HomePage() {
     return t?.city ? String(t.city) : "";
   }, [rackTerminalId, terminalCatalog]);
   const [rackStudOpen, setRackStudOpen] = useState(false);
+  const [rackDelayOpen, setRackDelayOpen] = useState(false);
   const otherToRack = useOtherCarriers("terminal", rackTerminalId);
   const rackCount = toMyTerminal.length + otherToRack.length + (meToRack ? 1 : 0);
   const nearbyParked = useMemo(() => parkedPreloads(fleet.trips, trailerId), [fleet.trips, trailerId]);
@@ -2882,6 +2885,25 @@ export default function HomePage() {
           );
         })()}
       </FullscreenModal>
+      <RackDelaySheet
+        open={rackDelayOpen}
+        products={rackStatus.products.map((r: any) => ({ productId: String(r.product_id), name: productInfo(String(r.product_id)).name }))}
+        onClose={() => setRackDelayOpen(false)}
+        onSubmit={async (code, productIds) => {
+          const pk = arrivalPickup;
+          if (!userId || !pk) return "No rack arrival to delay.";
+          if (!readRunningDelay(userId)) {
+            const d: RunningDelay = { tripId: pk.trip_id, leg: "at_rack", code, note: null, startedAt: new Date().toISOString(), pickupId: pk.pickup_id, deliveryId: null };
+            writeRunningDelay(userId, d);
+            setRunningDelay(d);
+          }
+          if (pk.terminal_id && companyId) {
+            const r = await submitOutageReport({ terminalId: String(pk.terminal_id), selectedRackId: pk.rack_id ?? null, productIds, reportType: code as OutageReportType, companyId, userId, truckLabel: equipment.currentTruckName ?? "" });
+            if (r.error) return "The delay started, but the warning to other drivers didn't go out. Try again from the Terminal sheet.";
+          }
+          return null;
+        }}
+      />
       <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)}
         footer={arrivalPickup ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2924,6 +2946,7 @@ export default function HomePage() {
                 ))}
               </div>
               {rackTerminalId && <button type="button" className="dash-press" onClick={() => setRackStudOpen(true)} style={{ width: "100%", marginTop: 12, padding: "15px 0", fontSize: 15, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer" }}>STUD</button>}
+              {arrivalPickup && <RackDelayButton running={runningDelay} onClick={() => setRackDelayOpen(true)} />}
             </>
           );
         })()}
