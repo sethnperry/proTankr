@@ -1,9 +1,9 @@
 "use client";
 // app/planner/components/trip/SplashPlanSheet.tsx
 //
-// Set up a splash blend on the trip's plan: which compartments, which additive (ethanol), and its share of the
-// finished compartment. Asks only for what the plan doesn't already say; the base product of each compartment is
-// the plan's. Which product loads first is decided at the first rack, from what that rack sells.
+// Set up a splash blend on the trip's plan: which E0 compartments, the additive (ethanol) and its share of each
+// finished compartment. The base product of each compartment is the plan's. Saving then asks for the terminal that
+// sells the ethanol; the trip card shows it as a second pickup (with arrows to swap which one loads first).
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { productColorFor } from "@/app/planner/utils/productColor";
@@ -19,39 +19,43 @@ const chip = (on: boolean): React.CSSProperties => ({
 });
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
-export function SplashPlanSheet({ open, comps, catalog, initial, onSave, onClose }: {
+export function SplashPlanSheet({ open, comps, catalog, initial, hasPickup, onSave, onClose }: {
   open: boolean;
-  /** The compartments the plan fills: number, gallons, planned (base) product. */
+  /** The plan's splashable compartments: number, gallons, planned (base) product. */
   comps: { n: number; size: number; baseProductId: string }[];
   catalog: AddPickupProduct[];
   initial: TripSplash;
+  /** The ethanol terminal is already on the trip. */
+  hasPickup: boolean;
   onSave: (s: TripSplash) => void;
   onClose: () => void;
 }) {
-  const [picked, setPicked] = useState<number[]>([]);
+  const [pcts, setPcts] = useState<Record<number, number>>({});
   const [additive, setAdditive] = useState<string | null>(null);
-  const [pct, setPct] = useState(10);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     if (!open) return;
     const first = Object.values(initial)[0];
-    setPicked(Object.keys(initial).map(Number).sort((a, b) => a - b));
+    setPcts(Object.fromEntries(Object.entries(initial).map(([n, v]) => [Number(n), v.pct])));
     setAdditive(first?.additiveProductId ?? null);
-    setPct(first?.pct ?? 10);
     setShowAll(false);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byId = useMemo(() => new Map(catalog.map((p) => [p.product_id, p])), [catalog]);
   const likely = useMemo(() => catalog.filter((p) => /eth|e85|e-85|alcohol/i.test(`${p.name} ${p.code}`)), [catalog]);
   const choices = (showAll || !likely.length ? catalog : likely).slice().sort((a, b) => a.name.localeCompare(b.name));
-  const toggle = (n: number) => setPicked((c) => (c.includes(n) ? c.filter((x) => x !== n) : [...c, n].sort((a, b) => a - b)));
+  // The only likely product is the obvious pick.
+  useEffect(() => { if (open && !additive && likely.length === 1) setAdditive(likely[0].product_id); }, [open, likely, additive]);
   const sorted = [...comps].sort((a, b) => a.n - b.n);
-  const ready = picked.length > 0 && !!additive && validPct(pct);
+  const picked = sorted.filter((c) => pcts[c.n] != null).map((c) => c.n);
+  const toggle = (n: number) => setPcts((p) => { const q = { ...p }; if (q[n] != null) delete q[n]; else q[n] = Object.values(p)[0] ?? 10; return q; });
+  const setPct = (n: number, v: number) => setPcts((p) => ({ ...p, [n]: v }));
+  const ready = picked.length > 0 && !!additive && picked.every((n) => validPct(pcts[n]));
   const save = () => {
     if (!ready || !additive) return;
-    onSave(Object.fromEntries(picked.map((n) => [n, { additiveProductId: additive, pct }])));
+    onSave(Object.fromEntries(picked.map((n) => [n, { additiveProductId: additive, pct: pcts[n] }])));
   };
-  const addName = additive ? byId.get(additive)?.code ?? "additive" : "additive";
+  const addCode = additive ? byId.get(additive)?.code ?? "additive" : "additive";
 
   return (
     <FullscreenModal open={open} title="Splash Blend" onClose={onClose} footer={null}>
@@ -59,11 +63,11 @@ export function SplashPlanSheet({ open, comps, catalog, initial, onSave, onClose
         <div style={sectionTitle}>Compartments</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {sorted.map((c) => (
-            <button key={c.n} type="button" style={chip(picked.includes(c.n))} onClick={() => toggle(c.n)}>
+            <button key={c.n} type="button" style={chip(pcts[c.n] != null)} onClick={() => toggle(c.n)}>
               C{c.n} · {byId.get(c.baseProductId)?.code ?? "Product"} · {fmt(c.size)}
             </button>
           ))}
-          {sorted.length === 0 && <div style={{ fontSize: 14, color: muted }}>No plan on this trip yet.</div>}
+          {sorted.length === 0 && <div style={{ fontSize: 14, color: muted }}>No E0 or RBOB compartments in this plan.</div>}
         </div>
       </div>
 
@@ -84,32 +88,36 @@ export function SplashPlanSheet({ open, comps, catalog, initial, onSave, onClose
         )}
       </div>
 
-      <div style={sectionCard}>
-        <div style={sectionTitle}>Share of the finished compartment</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          {BLEND_CHOICES.map((c) => <button key={c} type="button" style={chip(pct === c)} onClick={() => setPct(c)}>{c}%</button>)}
-          <input inputMode="decimal" value={BLEND_CHOICES.some((c) => c === pct) ? "" : String(pct || "")} placeholder="Other %"
-            onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => { const v = parseFloat(e.target.value.replace(/[^0-9.]/g, "")); setPct(Number.isFinite(v) ? v : 0); }}
-            style={{ width: 90, padding: "9px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2, color: "#fff", fontSize: 15, fontWeight: 700 }} />
-        </div>
-        {ready && (
-          <div style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
-            <b>{blendLabel(pct)}</b> on {picked.map((n) => `C${n}`).join(", ")}
-            {picked.slice(0, 3).map((n) => {
-              const c = sorted.find((x) => x.n === n);
-              if (!c) return null;
-              const st = stageGallons({ volume: c.size, pct });
-              return <div key={n} style={{ color: muted }}>C{n}: {fmt(st.additive)} gal {addName}, {fmt(st.base)} gal {byId.get(c.baseProductId)?.code ?? "base"}</div>;
-            })}
-            <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>
-              Whichever loads first is worked out at the first rack from what it sells. The second is adjusted to what actually went in, within the weight.
-            </div>
+      {picked.length > 0 && (
+        <div style={sectionCard}>
+          <div style={sectionTitle}>Share of each compartment</div>
+          {picked.map((n) => {
+            const c = sorted.find((x) => x.n === n)!;
+            const pct = pcts[n];
+            const st = validPct(pct) ? stageGallons({ volume: c.size, pct }) : null;
+            return (
+              <div key={n} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <span style={{ width: 34, fontWeight: 800 }}>C{n}</span>
+                  {BLEND_CHOICES.map((p) => <button key={p} type="button" style={chip(pct === p)} onClick={() => setPct(n, p)}>{p}%</button>)}
+                  <input inputMode="decimal" value={BLEND_CHOICES.some((p) => p === pct) ? "" : String(pct || "")} placeholder="Other %"
+                    onFocus={(e) => e.currentTarget.select()}
+                    onChange={(e) => { const v = parseFloat(e.target.value.replace(/[^0-9.]/g, "")); setPct(n, Number.isFinite(v) ? v : 0); }}
+                    style={{ width: 80, padding: "9px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2, color: "#fff", fontSize: 15, fontWeight: 700 }} />
+                </div>
+                {st && <div style={{ fontSize: 13, color: muted, marginTop: 4, paddingLeft: 42 }}>{blendLabel(pct)} · about {fmt(st.additive)} gal {addCode}, {fmt(st.base)} gal {byId.get(c.baseProductId)?.code ?? "base"}</div>}
+              </div>
+            );
+          })}
+          <div style={{ fontSize: 12, color: muted }}>
+            The stop that loads first gets its planned volume. The second is adjusted to what actually went in, within room and weight.
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <button type="button" disabled={!ready} onClick={save} style={{ ...primaryBtn, opacity: ready ? 1 : 0.5 }}>Save Splash Blend</button>
+      <button type="button" disabled={!ready} onClick={save} style={{ ...primaryBtn, opacity: ready ? 1 : 0.5 }}>
+        {hasPickup ? "Save Splash Blend" : "Next: pick the ethanol terminal"}
+      </button>
       {Object.keys(initial).length > 0 && (
         <button type="button" onClick={() => onSave({})} style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", color: "#f87171", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           Remove splash blend

@@ -14,7 +14,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 type PlanComp = { code: string; color: string | null } | null;
-export type CardPlan = { label: string; comps: PlanComp[]; /** Splash blend: the plan split into what each rack loads. */ stops?: { label: string; comps: PlanComp[] }[] };
+export type CardPlan = { label: string; comps: PlanComp[]; /** Splash blend control at the right of the plan line (only on plans with E0 / RBOB). */ splash?: { text: string; on: boolean; onTap: () => void } | null };
 
 const labelColor = (tone: CardRow["tone"]) => (tone === "done" ? "#4ade80" : tone === "here" ? "#fff" : muted);
 
@@ -30,6 +30,9 @@ export function TripCardView(p: {
   noDelivery?: React.ReactNode;
   /** Makes a delivery's name tappable (the driver's reroute). */
   onDelivery?: (key: string) => void;
+  /** Pickup rows that show reorder arrows (the splash pair), and what tapping them does. */
+  swapKeys?: string[];
+  onSwap?: () => void;
   extras?: React.ReactNode;
   footer?: React.ReactNode;
   style?: React.CSSProperties;
@@ -53,21 +56,14 @@ export function TripCardView(p: {
               </React.Fragment>
             ))}
           </span>
+          {p.plan.splash && (
+            <button type="button" onClick={p.plan.splash.onTap}
+              style={{ marginLeft: "auto", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, fontWeight: 700, color: p.plan.splash.on ? "#fbbf24" : "#93c5fd" }}>
+              {p.plan.splash.text} ›
+            </button>
+          )}
         </div>
       )}
-      {p.plan?.stops?.map((st) => (
-        <div key={st.label} className="dash-num" style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 800 }}>{st.label}</span><span style={{ color: muted }}>-</span>
-          <span>
-            {st.comps.map((c, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span style={{ color: muted }}>/</span>}
-                <span style={{ fontWeight: 800, color: c ? c.color ?? "#fff" : muted }}>{c ? c.code : "–"}</span>
-              </React.Fragment>
-            ))}
-          </span>
-        </div>
-      ))}
 
       {p.pickups.map((r, i) => r.tone === "tried" ? (
         <div key={r.key} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>
@@ -83,6 +79,10 @@ export function TripCardView(p: {
             <span style={{ color: labelColor(r.tone), width: 66, flexShrink: 0, fontWeight: r.tone === "here" ? 700 : undefined }}>{r.label}</span>
             <span style={{ flex: 1, minWidth: 0, color: r.placeBright ? "#fff" : muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.place || "—"}</span>
             <span style={{ color: r.nameBright ? "#fff" : muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "55%" }}>{r.name}</span>
+            {p.onSwap && p.swapKeys?.includes(r.key) && (
+              <button type="button" onClick={p.onSwap} aria-label="Swap which terminal loads first"
+                style={{ background: "none", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", padding: "0 6px", fontSize: 14, lineHeight: "20px", cursor: "pointer" }}>⇅</button>
+            )}
           </div>
         </div>
       ))}

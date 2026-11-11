@@ -138,7 +138,8 @@ import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews"
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor, LEGAL_GROSS_LBS } from "@/lib/trips/addPickupCheck";
 import { topOffPlan, roughLbsPerGal, mergeBlendRows, blendPct, blendLabel, offTarget } from "@/lib/trips/splash";
-import { getTripSplash, setTripSplash, stageFirstPickup, pendingTopOffs, type TripSplash } from "@/lib/trips/tripSplash";
+import { getTripSplash, setTripSplash, type TripSplash } from "@/lib/trips/tripSplash";
+import { isSplashable, splashPickupPlans, refineSecondStop, type StagedPlanned } from "@/lib/trips/splashRows";
 import { SplashPlanSheet } from "../components/trip/SplashPlanSheet";
 import { productColorFor } from "../utils/productColor";
 import { TripCardView } from "../components/trip/TripCardView";
@@ -1579,10 +1580,7 @@ export default function HomePage() {
   // Splash blend set up for this trip (per compartment), and the plan's base product per compartment.
   const [tripSplash, setTripSplashState] = useState<TripSplash>({});
   const [splashOpen, setSplashOpen] = useState(false);
-  const openSplash = () => {
-    if (!Object.keys(baseByComp).length) { setBlockNotice({ title: "Pick a plan first", text: "Splash blend works from the plan: begin the trip with a plan so the app knows each compartment's base product, then set the splash." }); return; }
-    setSplashOpen(true);
-  };
+  const openSplash = () => setSplashOpen(true);
   useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);
   const splashNums = Object.keys(compSizes).map(Number).sort((a, b) => b - a);
   const splashRoomLbs = currentGross != null ? Math.max(0, LEGAL_GROSS_LBS - currentGross) : null;
@@ -2258,14 +2256,80 @@ export default function HomePage() {
   const baseByComp: Record<number, string> = {};
   planLine?.comps.forEach((id, i) => { if (id && splashNums[i] != null) baseByComp[splashNums[i]] = id; });
   const splashPlanProp = Object.fromEntries(Object.entries(tripSplash).filter(([n]) => baseByComp[Number(n)]).map(([n, v]) => [n, { additiveProductId: v.additiveProductId, baseProductId: baseByComp[Number(n)], pct: v.pct }]));
-  const topOffComps = pendingTopOffs({ splash: tripSplash, aboard });
-  // A splash plan shows as two stops: what each rack loads (the additive, then the base), so the plan reads at a glance.
-  const splashStops = planLine && Object.keys(splashPlanProp).length
-    ? [
-        { label: "Additive stop", comps: splashNums.map((n) => (splashPlanProp[n] ? chipFor(splashPlanProp[n].additiveProductId) : null)) },
-        { label: "Base stop", comps: splashNums.map((n) => chipFor(baseByComp[n] ?? null)) },
-      ]
-    : undefined;
+  // The splash pair: the ethanol pickup carries only additive entries; the base pickup is the plan's other open stop.
+  const isSplashPickup = (p: TripPickupRow) => !!p.planned_comps?.length && p.planned_comps.every((c) => !!c.splash && tripSplash[c.comp_number]?.additiveProductId === c.product_id);
+  const splashPickup = pickups.find((p) => isSplashPickup(p) && p.outcome !== "no_load") ?? null;
+  const baseStop = splashPickup ? [...pickups].filter((p) => p.pickup_id !== splashPickup.pickup_id && p.outcome !== "no_load").sort((x, y) => x.seq - y.seq)[0] ?? null : null;
+  const splashComps = splashNums.filter((n) => baseByComp[n] && isSplashable(productInfo(baseByComp[n]).name));
+  const splashSpecs = () => splashComps.map((n) => ({ n, size: compSizes[n] || 0, base: baseByComp[n] }));
+  const [splashTermPending, setSplashTermPending] = useState(false);
+  const splashSawPicker = useRef(false);
+  const saveSplash = (sp: TripSplash) => {
+    setSplashOpen(false);
+    if (!store || !userId || !openTrip) return;
+    const hadStop = !!splashPickup;
+    if (!Object.keys(sp).length) {
+      setTripSplash(userId, openTrip.trip_id, {});
+      setTripSplashState({});
+      if (splashPickup && !splashPickup.load_id) closePickupNoLoad(store, { userId, pickup: splashPickup, reason: "other", note: "Splash blend removed", arrivedAt: null, leftAt: new Date().toISOString(), ...clock() });
+      if (baseStop && !baseStop.load_id) store.put("trip_pickups", { pickup_id: baseStop.pickup_id, planned_comps: null as any });
+      void syncNow();
+      return;
+    }
+    setTripSplash(userId, openTrip.trip_id, sp);
+    setTripSplashState(sp);
+    if (hadStop && splashPickup && baseStop) {
+      const plans = splashPickupPlans({ comps: splashSpecs(), splash: sp });
+      store.put("trip_pickups", { pickup_id: splashPickup.pickup_id, planned_comps: plans.splash as any });
+      store.put("trip_pickups", { pickup_id: baseStop.pickup_id, planned_comps: plans.base as any });
+      void syncNow();
+      return;
+    }
+    // Next: the terminal that sells the ethanol, picked the way "+ Another pickup" picks one.
+    splashSawPicker.current = false;
+    setSplashTermPending(true);
+    if (location.selectedCity) shell.setTermOpen(true); else shell.setLocOpen(true);
+  };
+  useEffect(() => {
+    if (!splashTermPending) return;
+    const pickerOpen = shell.termOpen || shell.locOpen || shell.rackPickerOpen || shell.rackResolving;
+    if (pickerOpen) { splashSawPicker.current = true; return; }
+    if (!splashSawPicker.current) return;
+    splashSawPicker.current = false;
+    setSplashTermPending(false);
+    if (!store || !userId || !openTrip || !location.selectedTerminalId) return;
+    const plans = splashPickupPlans({ comps: splashSpecs(), splash: tripSplash });
+    const base = [...pickups].filter((p) => !p.load_id && !p.left_at && p.outcome !== "no_load").sort((x, y) => x.seq - y.seq)[0];
+    if (base) store.put("trip_pickups", { pickup_id: base.pickup_id, planned_comps: plans.base as any });
+    addPickup(store, {
+      userId, tripId: openTrip.trip_id, terminalId: location.selectedTerminalId || null, rackId: location.selectedRackId || null,
+      name: terminalName, city: location.selectedCity || null, state: location.selectedState || null,
+      plannedComps: plans.splash, orderId: null, ...clock(),
+    });
+    setNotice({ text: `Splash pickup added at ${terminalName ?? "the terminal"}. Use the arrows on the card to change which terminal loads first.`, tripId: null });
+    void syncNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splashTermPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving]);
+  const swapSplashOrder = () => {
+    if (!store || !splashPickup || !baseStop) return;
+    if (splashPickup.arrived_at || baseStop.arrived_at || splashPickup.load_id || baseStop.load_id) return;
+    store.put("trip_pickups", { pickup_id: splashPickup.pickup_id, seq: baseStop.seq });
+    store.put("trip_pickups", { pickup_id: baseStop.pickup_id, seq: splashPickup.seq });
+    void syncNow();
+  };
+  // After the first stop loads, re-work the second stop's gallons from what is really aboard.
+  useEffect(() => {
+    if (!store || !splashPickup || !baseStop) return;
+    const [first, second] = splashPickup.seq < baseStop.seq ? [splashPickup, baseStop] : [baseStop, splashPickup];
+    if (!first.load_id || second.load_id || second.left_at || !second.planned_comps?.length) return;
+    const map: Record<number, { product_id: string | null; gallons: number }> = {};
+    for (const [n, a] of Object.entries(aboard)) map[Number(n)] = { product_id: a.product_id, gallons: a.gallons ?? 0 };
+    const next = refineSecondStop({ planned: second.planned_comps as StagedPlanned[], aboard: map, splash: tripSplash, sizes: compSizes, roomLbs: splashRoomLbs, lbsPerGal: (id) => roughLbsPerGal(id ? productInfo(id).name : "") });
+    if (!next) return;
+    store.put("trip_pickups", { pickup_id: second.pickup_id, planned_comps: next as any });
+    void syncNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splashPickup?.pickup_id, baseStop?.pickup_id, baseStop?.load_id, splashPickup?.load_id, aboardRows.length, splashRoomLbs]);
   // Finished blends more than a point off their target.
   const blendWarnings = Object.entries(tripSplash).flatMap(([k, sp]) => {
     const rows = aboardRows.filter((r) => r.comp_number === Number(k));
@@ -2275,17 +2339,6 @@ export default function HomePage() {
     const pct = blendPct(add, base);
     return pct != null && offTarget(pct, sp.pct) ? [`C${k} is ${blendLabel(pct)} (${pct.toFixed(1)}%), target ${sp.pct}%`] : [];
   });
-  // At the first loading pickup, stage what this rack sells: the additive first when it has it, else the base.
-  useEffect(() => {
-    if (!store || !myPickup || !myPickup.arrived_at || myPickup.load_id || myPickup.planned_comps?.length) return;
-    if (!Object.keys(tripSplash).length || !rackStatus.products.length || pickups.some((p) => p.load_id)) return;
-    const staged = stageFirstPickup({ splash: tripSplash, bases: baseByComp, sizes: compSizes, rackProductIds: rackStatus.products.map((r: any) => r.product_id) });
-    if (!staged) return;
-    store.put("trip_pickups", { pickup_id: myPickup.pickup_id, planned_comps: staged });
-    void syncNow();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myPickup?.pickup_id, myPickup?.arrived_at, rackStatus.products.length, tripSplash]);
-
   // The most recent load on this trip, for the Load Report link.
   const lastLoadId = [...pickups].filter((p) => p.load_id && (p.outcome === "loaded" || p.left_at)).sort((a, b) => b.seq - a.seq)[0]?.load_id ?? null;
   const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
@@ -2573,7 +2626,9 @@ export default function HomePage() {
           heading={`Current trip · ${STATUS_LABEL[openTrip.status]}`}
           right={trailerLabel}
           route={(openTrip.shipper || openTrip.customer) ? [openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ") : null}
-          plan={planLine ? { label: planLine.label, comps: planLine.comps.map(chipFor), stops: splashStops } : null}
+          plan={planLine ? { label: planLine.label, comps: planLine.comps.map(chipFor), splash: splashComps.length > 0 && openTrip.status !== "draft" && !anyDelivered && !pickups.some((p) => p.load_id) ? { text: Object.keys(tripSplash).length ? "Splash ✓" : "Splash", on: Object.keys(tripSplash).length > 0, onTap: openSplash } : null } : null}
+          swapKeys={splashPickup && baseStop && !splashPickup.arrived_at && !baseStop.arrived_at ? [splashPickup.pickup_id, baseStop.pickup_id] : []}
+          onSwap={swapSplashOrder}
           pickups={pickupRows(pickups, {
             currentId: snap ? activePickup(snap.pickups)?.pickup_id ?? null : null,
             noLoadReason: (c) => noLoadReasonLabel(c) ?? "",
@@ -2606,15 +2661,6 @@ export default function HomePage() {
               )}
               {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
                 <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
-              )}
-              {!!openTrip && openTrip.status !== "draft" && !anyDelivered && !pickups.some((p) => p.load_id) && (
-                <button type="button" onClick={openSplash} style={smallLink}>{Object.keys(tripSplash).length ? "Splash blend ✓" : "Splash blend"}</button>
-              )}
-              {topOffComps.length > 0 && canAddPickup && (
-                <button type="button" onClick={() => {
-                  openAddPickup();
-                  setAddDraft((d) => ({ ...d, splash: true, comps: topOffComps, pct: tripSplash[topOffComps[0]]?.pct, stage: location.selectedTerminalId ? "products" : "comps" }));
-                }} style={{ ...smallLink, color: "#fbbf24" }}>Top off splash ({topOffComps.length}) ›</button>
               )}
               {showPark && (
                 <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
@@ -2739,10 +2785,11 @@ export default function HomePage() {
 
       <SplashPlanSheet
         open={splashOpen}
-        comps={splashNums.filter((n) => baseByComp[n]).map((n) => ({ n, size: compSizes[n] || 0, baseProductId: baseByComp[n] }))}
+        comps={splashComps.map((n) => ({ n, size: compSizes[n] || 0, baseProductId: baseByComp[n] }))}
+        hasPickup={!!splashPickup}
         catalog={products.map((p) => { const i = productInfo(p.product_id); return { product_id: p.product_id, name: i.name, code: i.code, hex: i.hex }; })}
         initial={tripSplash}
-        onSave={(sp) => { if (userId && openTrip) setTripSplash(userId, openTrip.trip_id, sp); setTripSplashState(sp); setSplashOpen(false); }}
+        onSave={saveSplash}
         onClose={() => setSplashOpen(false)}
       />
 
@@ -2895,9 +2942,6 @@ export default function HomePage() {
             <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Start Loading</button>
             <div style={{ display: "flex", gap: 8 }}>
               <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); shell.postPlannerIntent("begin"); }} style={{ flex: 1, padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>Preview Plan</button>
-              {!pickups.some((p) => p.load_id) && (
-                <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); openSplash(); }} style={{ flex: 1, padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: Object.keys(tripSplash).length ? "#fbbf24" : "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>{Object.keys(tripSplash).length ? "Splash blend ✓" : "Splash blend"}</button>
-              )}
             </div>
           </div>
         ) : null}>
