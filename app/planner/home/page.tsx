@@ -2889,25 +2889,6 @@ export default function HomePage() {
           );
         })()}
       </FullscreenModal>
-      <RackDelaySheet
-        open={rackDelayOpen}
-        products={rackStatus.products.map((r: any) => ({ productId: String(r.product_id), name: productInfo(String(r.product_id)).name }))}
-        onClose={() => setRackDelayOpen(false)}
-        onSubmit={async (code, productIds) => {
-          const pk = arrivalPickup;
-          if (!userId || !pk) return "No rack arrival to delay.";
-          if (!readRunningDelay(userId)) {
-            const d: RunningDelay = { tripId: pk.trip_id, leg: "at_rack", code, note: null, startedAt: new Date().toISOString(), pickupId: pk.pickup_id, deliveryId: null };
-            writeRunningDelay(userId, d);
-            setRunningDelay(d);
-          }
-          if (pk.terminal_id && companyId) {
-            const r = await submitOutageReport({ terminalId: String(pk.terminal_id), selectedRackId: pk.rack_id ?? null, productIds, reportType: code as OutageReportType, companyId, userId, truckLabel: equipment.currentTruckName ?? "" });
-            if (r.error) return "The delay started, but the warning to other drivers didn't go out. Try again from the Terminal sheet.";
-          }
-          return null;
-        }}
-      />
       <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)}
         footer={arrivalPickup ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2970,6 +2951,26 @@ export default function HomePage() {
           onChanged={() => { void rackStatus.reload(); rackAlerts.refresh(); }}
         />
       )}
+      {/* After the rack window in the page, so it stacks above it. */}
+      <RackDelaySheet
+        open={rackDelayOpen}
+        products={rackStatus.products.map((r: any) => ({ productId: String(r.product_id), name: productInfo(String(r.product_id)).name }))}
+        onClose={() => setRackDelayOpen(false)}
+        onSubmit={async (code, productIds) => {
+          const pk = arrivalPickup;
+          if (!userId || !pk) return "No rack arrival to delay.";
+          if (!readRunningDelay(userId)) {
+            const d: RunningDelay = { tripId: pk.trip_id, leg: "at_rack", code, note: null, startedAt: new Date().toISOString(), pickupId: pk.pickup_id, deliveryId: null };
+            writeRunningDelay(userId, d);
+            setRunningDelay(d);
+          }
+          if (pk.terminal_id && companyId) {
+            const r = await submitOutageReport({ terminalId: String(pk.terminal_id), selectedRackId: pk.rack_id ?? null, productIds, reportType: code as OutageReportType, companyId, userId, truckLabel: equipment.currentTruckName ?? "" });
+            if (r.error) return "The delay started, but the warning to other drivers didn't go out. Try again from the Terminal sheet.";
+          }
+          return null;
+        }}
+      />
       <FullscreenModal open={dropNowOpen} title={selectedLoc ? locationTitle(selectedLoc) : "Delivery"} onClose={() => setDropNowOpen(false)} footer={null}>
         {selectedLoc ? (
           <SiteBoard kind="location" id={selectedLoc.location_id} name={locationTitle(selectedLoc)} hideName trips={fleet.trips} product={productInfo} now={new Date()}
