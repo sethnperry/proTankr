@@ -1281,6 +1281,9 @@ export default function HomePage() {
     void syncNow();
   };
 
+  // Splash blend set up for this trip (per compartment). Declared early: the delivery merge below reads it during render.
+  const [tripSplash, setTripSplashState] = useState<TripSplash>({});
+  useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);
   // A splash-blended compartment is one compartment at the drop; its second load is delivered with it.
   const mergedHere = (deliveryId: string) => mergeBlendRows(
     compartmentsForDelivery(snap?.compLoads ?? [], snap?.deliveries ?? [], deliveryId),
@@ -1581,10 +1584,8 @@ export default function HomePage() {
     setAddOpen(true);
   }, [addTermPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
   // Splash blend set up for this trip (per compartment), and the plan's base product per compartment.
-  const [tripSplash, setTripSplashState] = useState<TripSplash>({});
   const [splashOpen, setSplashOpen] = useState(false);
   const openSplash = () => setSplashOpen(true);
-  useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);
   const splashNums = Object.keys(compSizes).map(Number).sort((a, b) => b - a);
   const splashRoomLbs = currentGross != null ? Math.max(0, LEGAL_GROSS_LBS - currentGross) : null;
   const confirmAddPickup = async () => {
