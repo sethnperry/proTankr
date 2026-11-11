@@ -32,3 +32,26 @@ test("a delay still running when the trip starts is ended and attached", () => {
   assert.equal(attachPendingDelays(store, "u", "t2"), 1);
   assert.equal(store.rows[0].trip_id, "t2");
 });
+
+import { INSTANT_CODES, logInstantDelay, delayReasonLabel } from "./delays.ts";
+import { readShopDown, writeShopDown } from "./shopDown.ts";
+
+test("Truck Down is a timestamp with no timer, on the trip or kept for the next one", () => {
+  mem.clear();
+  assert.ok(INSTANT_CODES.has("breakdown"));
+  assert.equal(delayReasonLabel("breakdown"), "Truck Down");
+  const store = mkStore();
+  logInstantDelay(store, "u", { ...running("2026-11-10T21:00:00.000Z"), tripId: "t9", leg: "to_rack", code: "breakdown" });
+  assert.equal(store.rows[0].payload.minutes, 0);
+  logInstantDelay(store, "u", { ...running("2026-11-10T21:05:00.000Z"), code: "breakdown" });
+  assert.equal(store.rows.length, 1);
+  assert.equal(readPendingDelays("u").length, 1);
+});
+
+test("the shop marker round-trips and clears", () => {
+  mem.clear();
+  writeShopDown("u", { unitKind: "truck", unitId: "x", unitName: "25184", at: "2026-11-10T21:00:00.000Z" });
+  assert.equal(readShopDown("u")?.unitName, "25184");
+  writeShopDown("u", null);
+  assert.equal(readShopDown("u"), null);
+});

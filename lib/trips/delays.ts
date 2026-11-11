@@ -28,15 +28,18 @@ export const LEG_LABEL: Record<DelayLeg, string> = {
 export type DelayReasonOption = { code: string; label: string };
 
 const BLOCKED: DelayReasonOption = { code: "blocked_access", label: "Blocked access to the delivery area" };
+export const SHOP_CODE = "shop";
+const SHOP: DelayReasonOption = { code: SHOP_CODE, label: "At the shop (service)" };
 const DOWN_DAY: DelayReasonOption = { code: "down_day", label: "Down Day (waiting on price change)" };
 const ROAD: DelayReasonOption[] = [
   { code: "traffic", label: "Traffic" },
   { code: "accident", label: "Accident ahead" },
   { code: "road_closed", label: "Road closed / detour" },
   { code: "weather", label: "Weather" },
-  { code: "breakdown", label: "Truck problem" },
+  { code: "breakdown", label: "Truck Down" },
   { code: "dispatch_wait", label: "Waiting on dispatch" },
   { code: "train", label: "Train / bridge" },
+  SHOP,
   DOWN_DAY,
 ];
 
@@ -44,8 +47,9 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
   pre_trip: [
     { code: "dispatch_wait", label: "Waiting on dispatch" },
     { code: "order_problem", label: "Waiting on an order or paperwork" },
-    { code: "breakdown", label: "Truck problem" },
+    { code: "breakdown", label: "Truck Down" },
     { code: "equipment_wait", label: "Waiting on equipment" },
+    SHOP,
     DOWN_DAY,
   ],
   to_rack: [...ROAD],
@@ -54,8 +58,9 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
     { code: "rack_down", label: "Rack down" },
     { code: "terminal_issue", label: "Terminal issue" },
     { code: "gauging", label: "Gauging / terminal closed" },
+    SHOP,
     { code: "order_problem", label: "Order or paperwork problem" },
-    { code: "breakdown", label: "Truck problem" },
+    { code: "breakdown", label: "Truck Down" },
     DOWN_DAY,
   ],
   to_drop: [...ROAD, BLOCKED],
@@ -67,12 +72,15 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
     { code: "customer_wait", label: "Customer asked me to wait" },
     { code: "store_equipment", label: "Equipment problem at the store" },
     { code: "vapor_issue", label: "Vapor recovery or hose problem" },
-    { code: "breakdown", label: "Truck problem" },
+    { code: "breakdown", label: "Truck Down" },
     DOWN_DAY,
   ],
 };
 
 export const OTHER_CODE = "other";
+
+/** Reasons that are a moment, not a wait: they are stamped on the timeline with no timer (Truck Down). */
+export const INSTANT_CODES = new Set(["breakdown"]);
 
 export function delayReasonLabel(code: string | null | undefined, note?: string | null): string {
   if (!code) return note?.trim() || "Delay";
@@ -244,4 +252,14 @@ export function attachPendingDelays(store: { put: (table: "trip_events", row: Tr
   }
   writePendingDelays(userId, []);
   return list.length;
+}
+
+/** Stamps a moment on the timeline with no timer: on the trip when there is one, else kept for the next trip. */
+export function logInstantDelay(store: { put: (table: "trip_events", row: TripEventRow) => unknown }, userId: string, d: RunningDelay) {
+  const at = d.startedAt;
+  if (!d.tripId) { writePendingDelays(userId, [...readPendingDelays(userId), { d, at }]); return; }
+  store.put("trip_events", {
+    event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: at, actor_id: userId,
+    pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, at),
+  });
 }

@@ -35,7 +35,7 @@ import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stop
 import {
   DELAY_EVENT, delayEventPayload, delayIssueCode, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
   dropDelayMinutes, type RunningDelay,
-  endRunningDelay, attachPendingDelays,
+  endRunningDelay, attachPendingDelays, INSTANT_CODES, logInstantDelay, SHOP_CODE,
 } from "@/lib/trips/delays";
 import { newId } from "@/lib/trips/tripStore";
 import { useTripHydration } from "@/lib/trips/useTripHydration";
@@ -157,6 +157,7 @@ import { useDashIdentity } from "@/lib/ui/driver/useDashIdentity";
 import { ExplanationSheet } from "../components/shift/ExplanationSheet";
 import { endNeedsExplanation, explanationPayload } from "@/lib/shifts/explanation";
 import { RepairSheet, type RepairUnit } from "../components/repair/RepairSheet";
+import { readShopDown, writeShopDown, SHOP_BLOCK, type ShopDown } from "@/lib/trips/shopDown";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 import { FreightSheet } from "../components/freight/FreightSheet";
@@ -275,6 +276,10 @@ export default function HomePage() {
   const { settings, reasons } = useTripSettings(companyId);
   const [paperLogOpen, setPaperLogOpen] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
+  const [shopDown, setShopDown] = useState<ShopDown | null>(null);
+  useEffect(() => { if (userId) setShopDown(readShopDown(userId)); }, [userId]);
+  const repairFromDelay = useRef(false);
+  const startDelayRef = useRef<((code: string, note: string | null) => void) | null>(null);
   const [inspectOpen, setInspectOpen] = useState(false);
   const [perDiemOpen, setPerDiemOpen] = useState(false);
   const [calloutOpen, setCalloutOpen] = useState(false);
@@ -307,6 +312,11 @@ export default function HomePage() {
     await syncNow();
     const r = await sendRepair(userId, wo.work_order_id);
     const unitText = `${unit.kind === "truck" ? "Truck" : "Trailer"} ${unit.name}`;
+    // The unit is down: mark it, and when this report didn't come from a delay (or none is running), start the shop time.
+    const sd: ShopDown = { unitKind: unit.kind, unitId: unit.id, unitName: unit.name, at: new Date().toISOString() };
+    writeShopDown(userId, sd); setShopDown(sd);
+    if (!repairFromDelay.current && !readRunningDelay(userId)) startDelayRef.current?.(SHOP_CODE, null);
+    repairFromDelay.current = false;
     if (r === "sent") return `${unitText} is now Deadline and the repair request was emailed for approval.`;
     if (r === "waiting") return `Saved. ${unitText} will go to Deadline and the email will send when you have signal.`;
     return `${unitText} is Deadline. No approver email is set for your company, so this is waiting in the work order list.`;
@@ -460,6 +470,14 @@ export default function HomePage() {
       pickupId: "pickup" in step ? step.pickup.pickup_id : (snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome)?.pickup_id ?? null),
       deliveryId: "delivery" in step ? step.delivery.delivery_id : null,
     };
+    // Truck Down is a moment, not a wait: stamp it, then open the report (the shop timer starts with "At the shop").
+    if (INSTANT_CODES.has(code)) {
+      if (store) logInstantDelay(store, userId, d);
+      repairFromDelay.current = true;
+      setRepairOpen(true);
+      void syncNow();
+      return;
+    }
     writeRunningDelay(userId, d);
     setRunningDelay(d);
     // Long line / rack down / terminal issue at the rack also warn other drivers heading there.
@@ -479,6 +497,20 @@ export default function HomePage() {
     if (attachPendingDelays(store, userId, openTrip.trip_id) > 0) { setRunningDelay(readRunningDelay(userId)); void syncNow(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, userId, openTrip?.trip_id, openTrip?.status]);
+  startDelayRef.current = startDelay;
+  // Back in service: end the shop time, clear Deadline, and pick the equipment again (Deadline took the unit off the driver).
+  const [backBusy, setBackBusy] = useState(false);
+  const backInService = async () => {
+    if (!userId || !shopDown) return;
+    setBackBusy(true);
+    const { error } = await supabase.rpc("set_equipment_status", { p_unit_kind: shopDown.unitKind, p_unit_id: shopDown.unitId, p_status: "in_use", p_notes: null, p_sub_status: null });
+    setBackBusy(false);
+    if (error) { setBlockNotice({ title: "Couldn't clear Deadline", text: error.message }); return; }
+    if (runningDelay?.code === SHOP_CODE) endDelay();
+    writeShopDown(userId, null); setShopDown(null);
+    setNotice({ text: `${shopDown.unitKind === "truck" ? "Truck" : "Trailer"} ${shopDown.unitName} is back in service. Pick your equipment again.`, tripId: null });
+    openEquipment();
+  };
   const tripDelays = useMemo(
     () => (store && openTrip ? loggedDelays(store.list("trip_events", (e) => e.trip_id === openTrip.trip_id)) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1859,6 +1891,7 @@ export default function HomePage() {
         })), { always: true });
         break;
       case "planner":
+        if (shopDown) { setBlockNotice(SHOP_BLOCK); break; }
         // A delay at the rack (gauging, a long line) keeps running: it ends when loading really begins (below), not
         // when the driver taps Begin Loading, which may only open the Planner to fix the plan.
         setOpeningPlanner(true);
@@ -1896,6 +1929,7 @@ export default function HomePage() {
         }
         break;
       case "arrive_pickup": {
+        if (shopDown) { setBlockNotice(SHOP_BLOCK); break; }
         if (fuelOn) { setBlockNotice({ title: "Finish fueling first", text: "You can't arrive while a fuel stop is running. Finish fueling, then tap Arrive." }); break; }
         endDelay();
         learnArrival();
@@ -2330,6 +2364,18 @@ export default function HomePage() {
           {sigDelivery.consignee_signature ? `✓ Consignee signed${sigDelivery.consignee_name ? ` · ${sigDelivery.consignee_name}` : ""}` : "Get consignee signature"}
         </button>
       )}
+      {shopDown && (
+        <div style={{ marginTop: 8, padding: "10px 12px", border: "1px solid rgba(248,113,113,0.55)", background: "rgba(248,113,113,0.08)", borderRadius: 2, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700 }}>
+            {shopDown.unitKind === "truck" ? "Truck" : "Trailer"} {shopDown.unitName} is down
+            <div style={{ fontSize: 12, fontWeight: 500, color: muted }}>Plan trips, but no loading until it is back in service.</div>
+          </div>
+          <button type="button" onClick={() => void backInService()} disabled={backBusy}
+            style={{ padding: "9px 12px", fontSize: 13, fontWeight: 800, cursor: "pointer", background: "#fff", color: "#000", border: "none", borderRadius: 2, opacity: backBusy ? 0.6 : 1 }}>
+            {backBusy ? "…" : "Back in service"}
+          </button>
+        </div>
+      )}
       {(delayLeg || canCancelNow) && !openingPlanner && (
         <DelayButton leg={delayLeg ? runningDelay?.leg ?? delayLeg : null} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
           onCancel={canCancelNow ? () => { setCancelErr(null); setCancelOpen(true); } : undefined}
@@ -2359,7 +2405,7 @@ export default function HomePage() {
       {(() => {
         // Six tiles. Tiles with a list open a pop-out of smaller tools; the Reports tile holds every form.
         const A = {
-          truckDown: { icon: "truck" as const, label: "Truck down", sub: "Request a repair", onClick: () => setRepairOpen(true) },
+          truckDown: { icon: "truck" as const, label: "Truck down", sub: "Request a repair", onClick: () => { repairFromDelay.current = false; setRepairOpen(true); } },
           inspect: { icon: "plan" as const, label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
           tankCheck: { icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) },
           termWork: { icon: "terminal" as const, label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
@@ -3019,7 +3065,7 @@ export default function HomePage() {
         }} />
       <PerDiemSheet open={perDiemOpen} onClose={() => setPerDiemOpen(false)} home={perDiem.home} cards={perDiem.cards} loading={perDiem.loading} onSaveHome={perDiem.saveHome} onClaim={perDiem.claim} onWithdraw={perDiem.withdraw} />
       <InspectionSheet open={inspectOpen} onClose={() => setInspectOpen(false)} units={repairUnits} campaignsFor={openCampaigns.campaignsFor} companyId={companyId} userId={userId} onSubmit={submitInspection} />
-      <RepairSheet open={repairOpen} onClose={() => setRepairOpen(false)} units={repairUnits} onSend={sendRepairRequest} />
+      <RepairSheet open={repairOpen} onClose={() => { setRepairOpen(false); repairFromDelay.current = false; }} units={repairUnits} onSend={sendRepairRequest} />
       <PaperLogSheet open={paperLogOpen} onClose={() => setPaperLogOpen(false)} companyId={companyId} userId={userId || null}
         reasons={reasonsOrDefault(reasons as any, "paper_log")}
         onDone={(pick, cap) => {
