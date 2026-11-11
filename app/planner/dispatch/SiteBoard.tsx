@@ -6,7 +6,7 @@
 // row is the same three columns: driver and truck, the trailer drawn sideways (empty compartments too), then
 // the ETA (on the way), the time on site, or the date and time (finished).
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { TrailerHeader, useTrailerHeaderData } from "@/app/planner/components/TrailerViews";
 import { CarrierStrip, initialsOf, runLabel } from "@/app/planner/components/trip/DashboardCards";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, type StoreDelivery } from "@/app/planner/hooks/useDashboardCards";
@@ -119,12 +119,30 @@ export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenT
   }));
   void initialsOf;
 
+  // One line: traffic at this site. Tap it for who is on the way, who is there, and the last five.
+  const [open, setOpen] = useState(false);
+  const summary = [
+    enRoute.length ? `${enRoute.length} on the way` : null,
+    onSite.length ? `${onSite.length} there now` : null,
+    prevRows.length ? `last ${shortWhen(previous[0]?.leftAt ?? null)}` : null,
+  ].filter(Boolean).join(" · ") || "Quiet";
+
   return (
     <div style={{ marginTop: hideName ? 0 : 16 }}>
       {!hideName && <div style={{ fontSize: 16, fontWeight: 800 }}>{name}</div>}
-      <Section title="En route" rows={enRoute} empty="No trucks on the way." />
-      <Section title="On site" rows={onSite} empty="Nobody there right now." />
-      <Section title="Previous 5" rows={prevRows} empty="No history here yet." />
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "baseline", gap: 10, padding: "0 0 6px", background: "none", border: "none", borderBottom: `1px solid ${HAIR}`, color: "#fff", cursor: "pointer", textAlign: "left" }}>
+        <span style={CAP}>Traffic</span>
+        <span className="dash-num" style={{ flex: 1, minWidth: 0, fontSize: 13, color: onSite.length || enRoute.length ? "#fff" : MUTE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+        <span style={{ fontSize: 12, color: MUTE }}>{open ? "▾" : "›"}</span>
+      </button>
+      {open && (
+        <>
+          <Section title="En route" rows={enRoute} empty="No trucks on the way." />
+          <Section title="On site" rows={onSite} empty="Nobody there right now." />
+          <Section title="Previous 5" rows={prevRows} empty="No history here yet." />
+        </>
+      )}
     </div>
   );
 }
