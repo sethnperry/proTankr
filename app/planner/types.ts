@@ -10,6 +10,9 @@ export type CompPlanInput = {
   // the rest of compPlan's existing localStorage + preset persistence for
   // free (usePlanSlots serializes compPlan wholesale).
   capOverride?: number | null;
+  // Splash blend: this compartment is planned as `productId` (the base) plus an additive at a share of the
+  // finished volume. Rides along in compPlan's persistence and presets like capOverride (lib/trips/splash.ts).
+  splash?: { additiveProductId: string; pct: number } | null;
 };
 
 export type PlanRow = {
