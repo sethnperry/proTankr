@@ -2,13 +2,18 @@
 // app/planner/setup/page.tsx
 //
 // Driver Setup: every personal setting in one checklist. A fleet driver mostly confirms what the admin preset;
-// a solo driver fills it in. Required steps (name, region, license, equipment, a plan) can't be skipped.
+// a solo driver fills it in. Required steps (your name, and region where companies use them) can't be skipped.
 // The rows open the real screens, so nothing here is a second copy of a setting.
 
 import React, { useEffect, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useDashLook, DashStyles } from "../home/dashLook";
-import { BackToDashboard } from "../components/dash/BackToDashboard";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { useTripStore } from "@/lib/trips/useTripStore";
+import { usePerDiem } from "../hooks/usePerDiem";
+import { PerDiemSheet } from "../components/perdiem/PerDiemSheet";
+import { useDeliveryLocationList } from "@/lib/trips/useTripData";
+import { LocationBrowser } from "../components/trip/LocationPicker";
 import { useDriverSetup } from "@/lib/setup/useDriverSetup";
 import { counterText, type SetupStep, type StepId } from "@/lib/setup/driverSetup";
 import { SelfProfileView } from "@/lib/ui/driver/SelfProfileView";
@@ -27,6 +32,11 @@ export default function SetupPage() {
   const companyId = shell.companyId || null;
   const { summary, facts, loading, error, reload, confirm } = useDriverSetup(userId, companyId);
   const [openId, setOpenId] = useState<StepId | null>(null);
+  const [pop, setPop] = useState<"plans" | "vault" | "locations" | "per_diem" | null>(null);
+  const { state, store, syncNow } = useTripStore(userId);
+  const perDiem = usePerDiem({ store, state, syncNow, userId, companyId, enabled: pop === "per_diem" });
+  const locList = useDeliveryLocationList(pop === "locations" ? companyId : null, userId);
+  const closePop = () => { setPop(null); void reload(); };
   const [editProfile, setEditProfile] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -44,11 +54,11 @@ export default function SetupPage() {
     switch (id) {
       case "you": case "license": return setEditProfile(true);
       case "equipment": return shell.setEquipOpen(true);
-      case "plans": return nav.go("plans", "/planner?plan=1");
+      case "plans": return setPop("plans");
       case "terminals": return shell.location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true);
-      case "locations": return nav.go("locations", "/planner/locations");
-      case "per_diem": return nav.go("per_diem", "/planner/home?open=perdiem");
-      case "vault": return nav.go("vault", "/planner/vault");
+      case "locations": return setPop("locations");
+      case "per_diem": return setPop("per_diem");
+      case "vault": return setPop("vault");
       case "alerts": {
         if (!companyId) return;
         setBusy("alerts");
@@ -70,7 +80,6 @@ export default function SetupPage() {
   return (
     <div style={{ padding: "12px 16px 40px", maxWidth: 640, margin: "0 auto", color: "#fff" }}>
       <DashStyles />
-      <BackToDashboard />
       <h1 style={{ fontSize: 22, fontWeight: 800, margin: "6px 0 4px" }}>Setup</h1>
       <div style={{ fontSize: 14, color: muted, marginBottom: 14, lineHeight: 1.4 }}>
         {solo ? "Set up your account once and the app does the rest." : "Your company set up a lot of this. Check each one and confirm it's right."}
@@ -121,12 +130,27 @@ export default function SetupPage() {
                   {s.id !== "schedule" && <button type="button" className="dash-press" style={btn} onClick={() => void open(s.id)}>Edit</button>}
                 </div>
               )}
-              {openId === s.id && s.id === "fuel_pin" && companyId && userId && <div style={{ padding: "0 14px 14px" }}><FuelPinsView companyId={companyId} userId={userId} /></div>}
-              {openId === s.id && s.id === "hours" && companyId && <div style={{ padding: "0 14px 14px" }}><TelematicsLoginView companyId={companyId} /></div>}
             </div>
           ))}
         </>
       )}
+
+      <FullscreenModal open={openId === "fuel_pin"} title="Fuel PIN" onClose={() => { setOpenId(null); void reload(); }}>
+        {companyId && userId && <FuelPinsView companyId={companyId} userId={userId} />}
+      </FullscreenModal>
+      <FullscreenModal open={openId === "hours"} title="Hours" onClose={() => { setOpenId(null); void reload(); }}>
+        {companyId && <TelematicsLoginView companyId={companyId} />}
+      </FullscreenModal>
+      <FullscreenModal open={pop === "locations"} title="Delivery locations" onClose={closePop}>
+        <LocationBrowser locations={locList.locations} tanks={locList.tanks} companyId={companyId} userId={userId} onChanged={() => void locList.reload()} />
+      </FullscreenModal>
+      <FullscreenModal open={pop === "plans"} title="Load plans" onClose={closePop} footer={null}>
+        {pop === "plans" && <iframe title="Load plans" src="/planner?plan=1" style={{ width: "100%", height: "75vh", border: 0, background: "#111" }} />}
+      </FullscreenModal>
+      <FullscreenModal open={pop === "vault"} title="Vault" onClose={closePop} footer={null}>
+        {pop === "vault" && <iframe title="Vault" src="/planner/vault" style={{ width: "100%", height: "75vh", border: 0, background: "#111" }} />}
+      </FullscreenModal>
+      <PerDiemSheet open={pop === "per_diem"} onClose={closePop} home={perDiem.home} cards={perDiem.cards} loading={perDiem.loading} onSaveHome={perDiem.saveHome} onClaim={perDiem.claim} onWithdraw={perDiem.withdraw} />
 
       {editProfile && <SelfProfileView direct onExit={() => { setEditProfile(false); void reload(); }} />}
     </div>

@@ -24,7 +24,7 @@ test("John's row: required steps missing are flagged, equipment waits for his co
   assert.equal(st("equipment").status, "confirm");
   assert.equal(st("plans").status, "done");
   assert.equal(st("terminals").status, "done");
-  assert.equal(row.summary.requiredLeft, 2);
+  assert.equal(row.summary.requiredLeft, 1);
 });
 
 test("no members, or a missing payload, gives an empty list", () => {

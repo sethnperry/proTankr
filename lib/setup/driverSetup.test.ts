@@ -16,8 +16,8 @@ const by = (s: ReturnType<typeof computeSetup>, id: string) => s.steps.find((x) 
 
 test("a blank solo driver needs every required step and nothing is skippable", () => {
   const s = computeSetup(blank);
-  assert.deepEqual(s.steps.filter((x) => x.status === "needs").map((x) => x.id), ["you", "equipment"]);
-  assert.equal(s.requiredLeft, 2);
+  assert.deepEqual(s.steps.filter((x) => x.status === "needs").map((x) => x.id), ["you"]);
+  assert.equal(s.requiredLeft, 1);
   assert.equal(s.next, "you");
   assert.equal(s.complete, false);
 });
@@ -41,7 +41,7 @@ test("fleet: preset data waits for the driver to confirm, then is done", () => {
   const f = filled({ tier: "fleet", scheduleDays: 5 });
   const before = computeSetup(f);
   assert.deepEqual(before.steps.filter((x) => x.status === "confirm").map((x) => x.id), ["you", "license", "schedule", "equipment"]);
-  assert.equal(before.requiredLeft, 2);
+  assert.equal(before.requiredLeft, 1);
   const after = computeSetup(f, { you: "2026-11-03T10:00:00Z", license: "2026-11-03T10:00:00Z", schedule: "x", equipment: "x" });
   assert.equal(by(after, "you").status, "done");
   assert.equal(by(after, "you").detail, "Confirmed");
@@ -83,7 +83,7 @@ test("complete once every counted step is done", () => {
 
 test("the admin line says what is blocking", () => {
   assert.equal(adminLine(computeSetup(blank)).tone, "bad");
-  assert.match(adminLine(computeSetup(blank)).text, /2 required left/);
+  assert.match(adminLine(computeSetup(blank)).text, /1 required left/);
   assert.equal(adminLine(computeSetup(filled())).tone, "warn");
 });
 
