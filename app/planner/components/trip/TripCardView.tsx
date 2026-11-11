@@ -13,7 +13,8 @@ const cardStyle: React.CSSProperties = {
   borderRadius: 2, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", padding: "12px 14px",
 };
 
-export type CardPlan = { label: string; comps: ({ code: string; color: string | null } | null)[] };
+type PlanComp = { code: string; color: string | null } | null;
+export type CardPlan = { label: string; comps: PlanComp[]; /** Splash blend: the plan split into what each rack loads. */ stops?: { label: string; comps: PlanComp[] }[] };
 
 const labelColor = (tone: CardRow["tone"]) => (tone === "done" ? "#4ade80" : tone === "here" ? "#fff" : muted);
 
@@ -54,6 +55,19 @@ export function TripCardView(p: {
           </span>
         </div>
       )}
+      {p.plan?.stops?.map((st) => (
+        <div key={st.label} className="dash-num" style={{ fontSize: 13, marginTop: 2, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 800 }}>{st.label}</span><span style={{ color: muted }}>-</span>
+          <span>
+            {st.comps.map((c, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span style={{ color: muted }}>/</span>}
+                <span style={{ fontWeight: 800, color: c ? c.color ?? "#fff" : muted }}>{c ? c.code : "–"}</span>
+              </React.Fragment>
+            ))}
+          </span>
+        </div>
+      ))}
 
       {p.pickups.map((r, i) => r.tone === "tried" ? (
         <div key={r.key} style={{ fontSize: 14, marginTop: i === 0 ? 10 : 4, display: "flex", gap: 6, alignItems: "baseline" }}>

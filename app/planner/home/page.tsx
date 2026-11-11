@@ -137,7 +137,7 @@ import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor, LEGAL_GROSS_LBS } from "@/lib/trips/addPickupCheck";
-import { topOffPlan, roughLbsPerGal, mergeBlendRows } from "@/lib/trips/splash";
+import { topOffPlan, roughLbsPerGal, mergeBlendRows, blendPct, blendLabel, offTarget } from "@/lib/trips/splash";
 import { getTripSplash, setTripSplash, stageFirstPickup, pendingTopOffs, type TripSplash } from "@/lib/trips/tripSplash";
 import { SplashPlanSheet } from "../components/trip/SplashPlanSheet";
 import { productColorFor } from "../utils/productColor";
@@ -2206,10 +2206,27 @@ export default function HomePage() {
     return { label: match ? `Plan ${slotLetter(match.slot)}` : "Plan", comps };
   })();
 
+  const chipFor = (id: string | null) => { const info = id ? productInfo(id) : null; return info ? { code: info.code, color: info.hex ?? productColorFor(info.name) } : null; };
   const baseByComp: Record<number, string> = {};
   planLine?.comps.forEach((id, i) => { if (id && splashNums[i] != null) baseByComp[splashNums[i]] = id; });
   const splashPlanProp = Object.fromEntries(Object.entries(tripSplash).filter(([n]) => baseByComp[Number(n)]).map(([n, v]) => [n, { additiveProductId: v.additiveProductId, baseProductId: baseByComp[Number(n)], pct: v.pct }]));
   const topOffComps = pendingTopOffs({ splash: tripSplash, aboard });
+  // A splash plan shows as two stops: what each rack loads (the additive, then the base), so the plan reads at a glance.
+  const splashStops = planLine && Object.keys(splashPlanProp).length
+    ? [
+        { label: "Additive stop", comps: splashNums.map((n) => (splashPlanProp[n] ? chipFor(splashPlanProp[n].additiveProductId) : null)) },
+        { label: "Base stop", comps: splashNums.map((n) => chipFor(baseByComp[n] ?? null)) },
+      ]
+    : undefined;
+  // Finished blends more than a point off their target.
+  const blendWarnings = Object.entries(tripSplash).flatMap(([k, sp]) => {
+    const rows = aboardRows.filter((r) => r.comp_number === Number(k));
+    if (rows.length < 2) return [];
+    const add = rows.filter((r) => r.product_id === sp.additiveProductId).reduce((t, r) => t + (r.gross_gallons ?? 0), 0);
+    const base = rows.filter((r) => r.product_id !== sp.additiveProductId).reduce((t, r) => t + (r.gross_gallons ?? 0), 0);
+    const pct = blendPct(add, base);
+    return pct != null && offTarget(pct, sp.pct) ? [`C${k} is ${blendLabel(pct)} (${pct.toFixed(1)}%), target ${sp.pct}%`] : [];
+  });
   // At the first loading pickup, stage what this rack sells: the additive first when it has it, else the base.
   useEffect(() => {
     if (!store || !myPickup || !myPickup.arrived_at || myPickup.load_id || myPickup.planned_comps?.length) return;
@@ -2496,7 +2513,7 @@ export default function HomePage() {
           heading={`Current trip · ${STATUS_LABEL[openTrip.status]}`}
           right={trailerLabel}
           route={(openTrip.shipper || openTrip.customer) ? [openTrip.shipper, openTrip.customer].filter(Boolean).join(" → ") : null}
-          plan={planLine ? { label: planLine.label, comps: planLine.comps.map((id) => { const info = id ? productInfo(id) : null; return info ? { code: info.code, color: info.hex ?? productColorFor(info.name) } : null; }) } : null}
+          plan={planLine ? { label: planLine.label, comps: planLine.comps.map(chipFor), stops: splashStops } : null}
           pickups={pickupRows(pickups, {
             currentId: snap ? activePickup(snap.pickups)?.pickup_id ?? null : null,
             noLoadReason: (c) => noLoadReasonLabel(c) ?? "",
@@ -2521,6 +2538,11 @@ export default function HomePage() {
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
               {lastLoadId && (
                 <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", lastLoadId); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
+              )}
+              {blendWarnings.length > 0 && (
+                <div style={{ width: "100%", fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>
+                  {blendWarnings.map((w) => <div key={w}>Blend off target: {w}</div>)}
+                </div>
               )}
               {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
                 <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
