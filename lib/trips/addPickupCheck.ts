@@ -5,7 +5,7 @@
 // already at or over the legal gross. Over (or close to) the company target
 // is a warning, not a block: the Planner still plans the rest against it.
 
-import type { TripCompartmentLoadRow } from "./types";
+import type { Splash, TripCompartmentLoadRow } from "./types";
 
 export const LEGAL_GROSS_LBS = 80000;
 // Within this many lbs under the target counts as "close".
@@ -20,6 +20,8 @@ export type AddPickupCheck = {
   target: number | null;
   level: AddPickupLevel;
   canAdd: boolean;
+  /** A loaded compartment can take a splash blend on top (the trailer is not at the legal gross). */
+  canSplash: boolean;
   message: string;
 };
 
@@ -36,7 +38,8 @@ export function checkAddPickup(args: {
   const emptyComps = all.filter((n) => !loaded.has(n));
   const loadedComps = [...loaded].sort((a, b) => a - b);
   const { gross, target } = args;
-  const base = { emptyComps, loadedComps, gross, target };
+  const canSplash = all.length > 0 && loadedComps.length > 0 && !(gross != null && gross >= LEGAL_GROSS_LBS);
+  const base = { emptyComps, loadedComps, gross, target, canSplash };
 
   if (all.length === 0) {
     return { ...base, level: "no_trailer", canAdd: false, message: "Couldn't read this trailer's compartments." };
@@ -67,7 +70,7 @@ export function grossColor(gross: number | null, target: number | null): string 
   return "#fff";
 }
 
-export type PlannedComp = { comp_number: number; product_id: string };
+export type PlannedComp = { comp_number: number; product_id: string; splash?: Splash };
 
 // planned_comps as stored (jsonb), tolerating junk.
 export function readPlannedComps(v: unknown): PlannedComp[] | null {
@@ -76,7 +79,9 @@ export function readPlannedComps(v: unknown): PlannedComp[] | null {
   for (const x of v) {
     const n = Number((x as any)?.comp_number);
     const p = (x as any)?.product_id;
-    if (Number.isFinite(n) && n > 0 && typeof p === "string" && p) out.push({ comp_number: n, product_id: p });
+    const sp = (x as any)?.splash;
+    const splash = sp && Number(sp.pct) > 0 && Number(sp.add) > 0 ? { pct: Number(sp.pct), aboard: Number(sp.aboard) || 0, add: Number(sp.add) } : undefined;
+    if (Number.isFinite(n) && n > 0 && typeof p === "string" && p) out.push({ comp_number: n, product_id: p, ...(splash ? { splash } : {}) });
   }
   return out.length ? out : null;
 }

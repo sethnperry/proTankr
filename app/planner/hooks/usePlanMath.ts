@@ -210,6 +210,8 @@ export function usePlanMath(i: Inputs) {
   useEffect(() => {
     if (!tripPartial || compartments.length === 0) return;
     const want = new Map(tripPartial.planned.map((p) => [p.comp_number, p.product_id]));
+    // A splash blend loads only what goes on top of the product already in the compartment.
+    const splashAdd = new Map(tripPartial.planned.filter((p) => p.splash).map((p) => [p.comp_number, p.splash!.add]));
     setCompPlan((prev: Record<number, CompPlanInput>) => {
       let changed = false;
       const next: Record<number, CompPlanInput> = { ...prev };
@@ -220,6 +222,8 @@ export function usePlanMath(i: Inputs) {
         const pid = want.get(n);
         if (pid) {
           if (cur.empty || !cur.productId) { next[n] = { ...cur, empty: false, productId: pid }; changed = true; }
+          const add = splashAdd.get(n);
+          if (add != null && next[n].capOverride !== add) { next[n] = { ...next[n], capOverride: add }; changed = true; }
         } else if (!cur.empty || cur.productId) {
           next[n] = { ...cur, empty: true, productId: "" };
           changed = true;

@@ -62,15 +62,17 @@ export function plannedCompsFor(groups: PlanGroup[], orderIdFor: (n: string) => 
 }
 
 /** Per-compartment order/supplier from stored planned_comps (tolerates junk). */
-export function readPlannedMeta(v: unknown): Map<number, { order_id: string | null; supplier_id: string | null; product_id: string }> {
-  const m = new Map<number, { order_id: string | null; supplier_id: string | null; product_id: string }>();
+export function readPlannedMeta(v: unknown): Map<number, { order_id: string | null; supplier_id: string | null; product_id: string; splash?: { pct: number; aboard: number; add: number } }> {
+  const m = new Map<number, { order_id: string | null; supplier_id: string | null; product_id: string; splash?: { pct: number; aboard: number; add: number } }>();
   if (!Array.isArray(v)) return m;
   for (const x of v) {
     const n = Number((x as any)?.comp_number);
     const p = (x as any)?.product_id;
     if (!Number.isFinite(n) || n <= 0 || typeof p !== "string" || !p) continue;
     const o = (x as any)?.order_id, s = (x as any)?.supplier_id;
-    m.set(n, { product_id: p, order_id: typeof o === "string" && o ? o : null, supplier_id: typeof s === "string" && s ? s : null });
+    const sp = (x as any)?.splash;
+    const splash = sp && Number(sp.pct) > 0 && Number(sp.add) > 0 ? { pct: Number(sp.pct), aboard: Number(sp.aboard) || 0, add: Number(sp.add) } : undefined;
+    m.set(n, { product_id: p, order_id: typeof o === "string" && o ? o : null, supplier_id: typeof s === "string" && s ? s : null, ...(splash ? { splash } : {}) });
   }
   return m;
 }

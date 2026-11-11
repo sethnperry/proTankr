@@ -137,6 +137,7 @@ import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
+import { splashPlan } from "@/lib/trips/splash";
 import { productColorFor } from "../utils/productColor";
 import { TripCardView } from "../components/trip/TripCardView";
 import { deliveryRows, pickupRows } from "@/lib/trips/cardRows";
@@ -1444,8 +1445,15 @@ export default function HomePage() {
   }, [snap, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const aboardRows = useMemo(() => (snap ? onBoard(snap.compLoads) : []), [snap]);
   const aboard = useMemo(() => {
-    const m: Record<number, { product_id: string | null; gallons: number | null }> = {};
-    for (const c of aboardRows) m[c.comp_number] = { product_id: c.product_id, gallons: c.gross_gallons != null ? Number(c.gross_gallons) : null };
+    const m: Record<number, { product_id: string | null; gallons: number | null; rows?: number }> = {};
+    // A compartment splash blended has two loads: the first product, the gallons together, and a row count.
+    for (const c of aboardRows) {
+      const g = c.gross_gallons != null ? Number(c.gross_gallons) : null;
+      const old = m[c.comp_number];
+      m[c.comp_number] = old
+        ? { product_id: old.product_id, gallons: g != null || old.gallons != null ? (old.gallons ?? 0) + (g ?? 0) : null, rows: (old.rows ?? 1) + 1 }
+        : { product_id: c.product_id, gallons: g, rows: 1 };
+    }
     return m;
   }, [aboardRows]);
   // What the trailer last carried, for empty compartments (residue).
@@ -1520,7 +1528,12 @@ export default function HomePage() {
     if (!store || !userId || !openTrip) return;
     const plannedComps = addDraft.comps
       .filter((n) => !!addDraft.products[n])
-      .map((n) => ({ comp_number: n, product_id: addDraft.products[n] }));
+      .map((n) => {
+        if (!addDraft.splash) return { comp_number: n, product_id: addDraft.products[n] };
+        const pl = splashPlan({ max: compSizes[n] || 0, aboard: aboard[n]?.gallons ?? 0, pct: addDraft.pct ?? 0 });
+        return { comp_number: n, product_id: addDraft.products[n], splash: { pct: addDraft.pct ?? 0, aboard: pl.aboard, add: pl.add } };
+      })
+      .filter((c) => !addDraft.splash || (c.splash?.add ?? 0) > 0);
     if (!plannedComps.length) return;
     setAddBusy(true);
     setOrderErr(null);
@@ -1539,7 +1552,7 @@ export default function HomePage() {
       ...clock(),
     });
     setAddOpen(false);
-    setNotice({ text: `Pickup added at ${terminalName ?? "the terminal"}. Tap Arrive when you get there.`, tripId: null });
+    setNotice({ text: `${addDraft.splash ? "Splash blend" : "Pickup"} added at ${terminalName ?? "the terminal"}. Tap Arrive when you get there.`, tripId: null });
     void syncNow();
   };
 

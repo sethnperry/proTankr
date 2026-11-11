@@ -16,6 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 import { grossColor, type AddPickupCheck } from "@/lib/trips/addPickupCheck";
+import { BLEND_CHOICES, canSplashInto, splashPlan, validPct } from "@/lib/trips/splash";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { CompartmentStrip } from "./CompartmentStrip";
 import type { OrderChoice } from "./OrderChooser";
@@ -29,6 +30,10 @@ export type AddPickupDraft = {
   comps: number[];
   products: Record<number, string>;
   order: OrderChoice;
+  /** Splash blend: load on top of loaded compartments instead of filling empty ones. */
+  splash?: boolean;
+  /** The first product's share of the blend, in percent. */
+  pct?: number;
 };
 
 const chip = (on: boolean): React.CSSProperties => ({
@@ -48,7 +53,8 @@ export function AddPickupSheet({
   setDraft: (d: AddPickupDraft) => void;
   check: AddPickupCheck;
   compSizes: Record<number, number>;
-  aboard: Record<number, { product_id: string | null; gallons: number | null }>;
+  /** What is in each compartment. `rows` is more than 1 once a compartment has been splash blended. */
+  aboard: Record<number, { product_id: string | null; gallons: number | null; rows?: number }>;
   catalog: AddPickupProduct[];
   terminalLabel: string | null;
   rackId: string | null;
@@ -87,8 +93,12 @@ export function AddPickupSheet({
 
   const allComps = Object.keys(compSizes).map(Number);
   const empty = new Set(check.emptyComps);
+  const splash = !!draft.splash;
+  const pct = draft.pct ?? 10;
+  const splashable = (n: number) => canSplashInto({ max: compSizes[n] || 0, aboard: aboard[n]?.gallons ?? null, rows: aboard[n]?.rows ?? 1 });
+  const splashComps = [...allComps].sort((a, b) => a - b).filter(splashable);
   const toggleComp = (n: number) => {
-    if (!empty.has(n)) return;
+    if (splash ? !splashable(n) : !empty.has(n)) return;
     const on = draft.comps.includes(n);
     setDraft({ ...draft, comps: on ? draft.comps.filter((c) => c !== n) : [...draft.comps, n].sort((a, b) => a - b) });
   };
@@ -104,17 +114,21 @@ export function AddPickupSheet({
       color: loadedColor ?? plannedColor,
       selected: draft.comps.includes(n),
       title: a ? `C${n} · ${byId.get(a.product_id ?? "")?.name ?? "Loaded"}` : `C${n} · empty`,
-      onClick: draft.stage === "comps" && empty.has(n) ? () => toggleComp(n) : undefined,
+      onClick: draft.stage === "comps" && (splash ? splashable(n) : empty.has(n)) ? () => toggleComp(n) : undefined,
     };
   });
 
   const warnColor = !check.canAdd ? "#f87171"
     : check.level === "over_target" || check.level === "near_target" ? "#fbbf24" : muted;
   const orderOk = draft.order.kind === "existing" || !!draft.order.number.trim();
+  const plans = new Map(draft.comps.map((n) => [n, splashPlan({ max: compSizes[n] || 0, aboard: aboard[n]?.gallons ?? 0, pct })]));
+  const splashReady = validPct(pct) && draft.comps.length > 0 && draft.comps.every((n) => (plans.get(n)?.add ?? 0) > 0);
+  const startSplash = () => setDraft({ ...draft, stage: "comps", comps: [], products: {}, splash: true, pct: 10 });
+  const endSplash = () => setDraft({ ...draft, stage: "comps", comps: [], products: {}, splash: false });
   const allPicked = draft.comps.length > 0 && draft.comps.every((n) => !!draft.products[n]) && orderOk && !busy;
 
   return (
-    <FullscreenModal open={open} title="Add Another Pickup" onClose={onClose} footer={null}>
+    <FullscreenModal open={open} title={splash ? "Splash Blend" : "Add Another Pickup"} onClose={onClose} footer={null}>
       <div style={sectionCard}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}><CompartmentStrip slots={slots} height={draft.stage === "comps" ? 34 : 16} gap={5} /></div>
@@ -135,10 +149,10 @@ export function AddPickupSheet({
             );
           })}
         </div>
-        {check.message && <div style={{ fontSize: 14, fontWeight: 700, color: warnColor, marginTop: 10 }}>{check.message}</div>}
+        {check.message && !(splash && check.canSplash) && <div style={{ fontSize: 14, fontWeight: 700, color: warnColor, marginTop: 10 }}>{check.message}</div>}
       </div>
 
-      {check.canAdd && draft.stage === "comps" && (
+      {check.canAdd && !splash && draft.stage === "comps" && (
         <>
           <div style={sectionCard}>
             <div style={sectionTitle}>Compartments to load</div>
@@ -157,7 +171,70 @@ export function AddPickupSheet({
         </>
       )}
 
-      {check.canAdd && draft.stage === "products" && (
+      {!splash && draft.stage === "comps" && check.canSplash && (
+        <button type="button" onClick={startSplash}
+          style={{ ...primaryBtn, marginTop: 10, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
+          Splash Blend · load on top of a loaded compartment
+        </button>
+      )}
+
+      {splash && draft.stage === "comps" && (
+        <>
+          <div style={sectionCard}>
+            <div style={sectionTitle}>Loaded compartments</div>
+            {splashComps.length === 0
+              ? <div style={{ fontSize: 14, color: muted }}>No compartment can take more on top (empty, full, or already blended).</div>
+              : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {splashComps.map((n) => {
+                    const a = aboard[n];
+                    return (
+                      <button key={n} type="button" style={chip(draft.comps.includes(n))} onClick={() => toggleComp(n)}>
+                        C{n} · {byId.get(a?.product_id ?? "")?.code ?? "Loaded"} {fmt(a?.gallons ?? 0)} · room {fmt(Math.max(0, (compSizes[n] || 0) - (a?.gallons ?? 0)))}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+          </div>
+          <div style={sectionCard}>
+            <div style={sectionTitle}>Blend</div>
+            <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>The share of the finished compartment that is what is already aboard.</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              {BLEND_CHOICES.map((c) => (
+                <button key={c} type="button" style={chip(pct === c)} onClick={() => setDraft({ ...draft, pct: c })}>{c}%</button>
+              ))}
+              <input inputMode="decimal" value={BLEND_CHOICES.some((c) => c === pct) ? "" : String(pct)} placeholder="Other %"
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => { const v = parseFloat(e.target.value.replace(/[^0-9.]/g, "")); setDraft({ ...draft, pct: Number.isFinite(v) ? v : 0 }); }}
+                style={{ width: 90, padding: "9px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2, color: "#fff", fontSize: 15, fontWeight: 700 }} />
+            </div>
+            {draft.comps.map((n) => {
+              const pl = plans.get(n)!;
+              return (
+                <div key={n} style={{ marginTop: 10, fontSize: 14 }}>
+                  <b>C{n}</b>{" "}
+                  {pl.add > 0
+                    ? <>load <b>{fmt(pl.add)} gal</b> on top of {fmt(pl.aboard)}: {fmt(pl.total)} gal, <b>{pl.blend!.toFixed(1)}%</b> blend</>
+                    : <span style={{ color: "#f87171" }}>nothing fits on top</span>}
+                  {pl.short && <div style={{ fontSize: 12, fontWeight: 700, color: "#fbbf24", marginTop: 2 }}>Only {fmt(pl.room)} gal of room, so this compartment ends richer than {pct}%.</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="button" onClick={endSplash}
+              style={{ ...primaryBtn, flex: 1, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>
+              Back
+            </button>
+            <button type="button" disabled={!splashReady} onClick={onPickTerminal} style={{ ...primaryBtn, flex: 2, opacity: splashReady ? 1 : 0.5 }}>
+              Next · Pick the Terminal
+            </button>
+          </div>
+        </>
+      )}
+
+      {(splash || check.canAdd) && draft.stage === "products" && (
         <>
           <div style={sectionCard}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -170,7 +247,9 @@ export function AddPickupSheet({
           </div>
           {draft.comps.map((n) => (
             <div key={n} style={sectionCard}>
-              <div style={sectionTitle}>C{n} · product</div>
+              <div style={sectionTitle}>
+                C{n} · {splash ? `product on top of ${byId.get(aboard[n]?.product_id ?? "")?.code ?? "the load"}${plans.get(n)?.add ? ` · ${fmt(plans.get(n)!.add)} gal` : ""}` : "product"}
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {choices.map((p) => {
                   const on = draft.products[n] === p.product_id;
@@ -203,8 +282,8 @@ export function AddPickupSheet({
         </>
       )}
 
-      {!check.canAdd && (
-        <button type="button" onClick={onClose} style={primaryBtn}>Close</button>
+      {!check.canAdd && !splash && (
+        <button type="button" onClick={onClose} style={{ ...primaryBtn, marginTop: 10 }}>Close</button>
       )}
     </FullscreenModal>
   );
