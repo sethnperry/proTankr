@@ -2886,7 +2886,7 @@ export default function HomePage() {
         footer={arrivalPickup ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Start Loading</button>
-            <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); shell.postPlannerIntent("begin"); }} style={{ width: "100%", padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>Review plan first</button>
+            <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); shell.postPlannerIntent("begin"); }} style={{ width: "100%", padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>Preview Plan</button>
           </div>
         ) : null}>
         {(() => {
