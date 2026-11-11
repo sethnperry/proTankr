@@ -201,6 +201,7 @@ import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
 import { SAFETY_MEETING_EVENT } from "@/lib/safety/onDuty";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { useShift } from "../hooks/useShift";
+import { beginTripShift, dutyChip, telematicsLive } from "@/lib/shifts/dutyStatus";
 import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
 import { useCompanyRoster } from "../hooks/useCompanyRoster";
@@ -1115,14 +1116,14 @@ export default function HomePage() {
   const [notifyPerm, setNotifyPerm] = useState<NotifyPermission>("default");
   useEffect(() => { setNotifyPerm(notifyPermission()); }, []);
   const myHos = useMyHos(companyId || null, !!companyId && !!userId);
+  // Connected telematics starts the shift by itself, at the time the driver went on duty. No question.
+  const autoStarted = useRef<string | null>(null);
   useEffect(() => {
-    if (!userId || shiftAsk) return;
-    let declined: string | null = null;
-    try { declined = localStorage.getItem(shiftKey("shiftDeclined")); } catch { /* storage blocked */ }
-    const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: !!shift.current, lastEndedMs: lastShiftEndedMs, declinedSince: declined });
-    if (!t) return;
-    const hm = new Date(t.atMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    setShiftAsk({ reason: `Your truck's telematics shows you on duty since ${hm}.`, atMs: t.atMs, source: "geotab", always: false, since: t.since });
+    if (!userId || shiftAsk || !telematicsLive(myHos, Date.now())) return;
+    const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: !!shift.current, lastEndedMs: lastShiftEndedMs, declinedSince: null });
+    if (!t || autoStarted.current === t.since) return;
+    autoStarted.current = t.since;
+    shift.start(new Date(t.atMs).toISOString(), "geotab");
   }, [myHos, shift.current, lastShiftEndedMs, userId, shiftAsk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Where the truck is now (every two minutes while a trip is open), against the stops still ahead.
@@ -1889,11 +1890,22 @@ export default function HomePage() {
           doResume();
           break;
         }
-        askShiftStart("You tapped Begin Trip. Starting your shift keeps your hours right.", () => void askEquipment(() => askFuelFirst(() => {
-          if (dispatchedList.length) { beginDispatchedLoad(); return; }
-          setError(null);
-          setSheetOpen(true);
-        })), { always: true });
+        {
+          const proceed = () => void askEquipment(() => askFuelFirst(() => {
+            if (dispatchedList.length) { beginDispatchedLoad(); return; }
+            setError(null);
+            setSheetOpen(true);
+          }));
+          // Telematics connected and on duty: the shift is already running (or starts now at that time), no window.
+          const need = beginTripShift(myHos, Date.now());
+          if (!need.ask) {
+            if (!shift.current) {
+              const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: false, lastEndedMs: lastShiftEndedMs, declinedSince: null });
+              shift.start(t ? new Date(t.atMs).toISOString() : undefined, "geotab");
+            }
+            proceed();
+          } else askShiftStart(need.reason, proceed, { always: true });
+        }
         break;
       case "planner":
         if (shopDown) { setBlockNotice(SHOP_BLOCK); break; }
@@ -2377,7 +2389,12 @@ export default function HomePage() {
       }}
     >
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
-      <ConnectedDashHeader current="driver" line={equipmentLabel} />
+      <ConnectedDashHeader current="driver" line={equipmentLabel} right={(() => {
+        const chip = dutyChip(myHos, Date.now());
+        if (!chip) return null;
+        return <span className="dash-num" title={chip.since ? `Since ${new Date(chip.since).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : undefined}
+          style={{ padding: "7px 12px", border: `1px solid ${chip.on ? "#4ade80" : "rgba(255,255,255,0.25)"}`, color: chip.on ? "#4ade80" : "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{chip.text}</span>;
+      })()} />
 
       <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
