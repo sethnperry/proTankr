@@ -14,6 +14,7 @@ import { getTripStore, type useTripStore } from "@/lib/trips/useTripStore";
 import { newId as newTripId } from "@/lib/trips/tripStore";
 import type { TripPickupRow } from "@/lib/trips/types";
 import { retagLoadPickup, retargetWaitingPickup } from "@/lib/trips/tripLogic";
+import { isAddingPickup } from "@/lib/trips/pickerIntent";
 import { addPickup, closePickupNoLoad } from "@/lib/trips/tripFlow";
 import { writePicks } from "@/lib/suppliers/picks";
 import { writeActivePlannedLoad } from "../utils/activePlannedLoad";
@@ -323,6 +324,7 @@ export function useTerminalSwitchDuringLoad(a: Args) {
     plannerPickFromRef.current = null;
     const cur = String(location.selectedTerminalId || "");
     if (!prev || !cur || prev === cur) return;
+    if (isAddingPickup()) return; // the picker was opened to add a stop, not to change where the waiting pickup is
     if (loadWorkflow.activeLoadId || terminalSwitchWatch || terminalSwitchConfirm) return;
     const p = tripWaitingPickup;
     if (!p || !effectiveUserId || (p.terminal_id && p.terminal_id !== prev)) return;

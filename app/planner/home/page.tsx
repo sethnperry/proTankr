@@ -139,6 +139,7 @@ import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPicku
 import { checkAddPickup, grossColor, LEGAL_GROSS_LBS } from "@/lib/trips/addPickupCheck";
 import { topOffPlan, roughLbsPerGal, mergeBlendRows, blendPct, blendLabel, offTarget } from "@/lib/trips/splash";
 import { getTripSplash, setTripSplash, type TripSplash } from "@/lib/trips/tripSplash";
+import { markAddingPickup, releaseAddingPickup } from "@/lib/trips/pickerIntent";
 import { isSplashable, splashPickupPlans, refineSecondStop, type StagedPlanned } from "@/lib/trips/splashRows";
 import { SplashPlanSheet } from "../components/trip/SplashPlanSheet";
 import { productColorFor } from "../utils/productColor";
@@ -1568,6 +1569,7 @@ export default function HomePage() {
     setAddOpen(true);
   };
   const addPickTerminal = () => {
+    markAddingPickup();
     setAddOpen(false);
     setAddTermPending(true);
     if (location.selectedCity) shell.setTermOpen(true);
@@ -1580,6 +1582,7 @@ export default function HomePage() {
     if (!addSawPicker.current) return;
     addSawPicker.current = false;
     setAddTermPending(false);
+    releaseAddingPickup();
     setAddDraft((d) => ({ ...d, stage: location.selectedTerminalId ? "products" : "comps" }));
     setAddOpen(true);
   }, [addTermPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
@@ -2318,6 +2321,7 @@ export default function HomePage() {
     }
     // Next: the terminal that sells the ethanol, picked the way "+ Another pickup" picks one.
     splashSawPicker.current = false;
+    markAddingPickup();
     setSplashTermPending(true);
     if (location.selectedCity) shell.setTermOpen(true); else shell.setLocOpen(true);
   };
@@ -2328,6 +2332,7 @@ export default function HomePage() {
     if (!splashSawPicker.current) return;
     splashSawPicker.current = false;
     setSplashTermPending(false);
+    releaseAddingPickup();
     if (!store || !userId || !openTrip || !location.selectedTerminalId) return;
     const plans = splashPickupPlans({ comps: splashSpecs(), splash: tripSplash });
     const base = [...pickups].filter((p) => !p.load_id && !p.left_at && p.outcome !== "no_load").sort((x, y) => x.seq - y.seq)[0];
