@@ -113,7 +113,7 @@ export function TerminalAccessSheet({
     setInitFor(terminalId);
     setErr(null);
     setDraft(draftFrom(data.req));
-    if (editSetup || !requirementsComplete(data.req)) { setQ(0); setMode("setup"); }
+    if (editSetup) { setQ(0); setMode("setup"); }
     else setMode("steps");
   }, [open, data, terminalId, initFor]);
 
@@ -393,8 +393,8 @@ export function TerminalAccessSheet({
     if (!requirementsComplete(req)) {
       return (
         <div>
-          <div style={qText}>Nobody has set up {terminalName} yet.</div>
-          <button type="button" style={primary} onClick={() => { setDraft(draftFrom(req)); setQ(0); setMode("setup"); }}>Answer a few questions</button>
+          <div style={qText}>No access steps are set up for {terminalName}.</div>
+          <button type="button" style={btn} onClick={() => { setDraft(draftFrom(req)); setQ(0); setMode("setup"); }}>Set them up (optional)</button>
         </div>
       );
     }
