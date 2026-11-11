@@ -19,6 +19,7 @@ import type { useCalculatorShell } from "../CalculatorShellContext";
 import type { useLoadWorkflow } from "./useLoadWorkflow";
 import type { usePlanSlots } from "./usePlanSlots";
 import type { CompPlanInput, CompRow } from "../types";
+import { MAX_PLAN_SLOTS, PLAN_SLOT_NUMBERS } from "@/lib/planSlotLimit";
 
 type Inputs = {
   shell: ReturnType<typeof useCalculatorShell>;
@@ -148,7 +149,7 @@ export function usePlanSlotsView(i: Inputs) {
     const toLayout = (p: Record<number, any> | undefined) => layoutFromProducts(
       Object.fromEntries(Object.entries(p ?? {}).map(([n, v]: [string, any]) => [Number(n), v && !v.empty ? v.productId : null])), nums);
     const mine = toLayout(plan);
-    const others = [1, 2, 3, 4, 5].filter((n) => n !== except).map((n) => ({ slot: n, comps: toLayout(planSlots.peekSlot(n)?.compPlan) }));
+    const others = PLAN_SLOT_NUMBERS.filter((n) => n !== except).map((n) => ({ slot: n, comps: toLayout(planSlots.peekSlot(n)?.compPlan) }));
     return findMatchingPlan(others, mine)?.slot ?? null;
   };
   // PresetActionSheet (long-press on a saved plan): Load, Edit (save over it) or Clear.
@@ -168,8 +169,21 @@ export function usePlanSlotsView(i: Inputs) {
     }
     setPresetSheetSlot(null);
   };
+  // Clearing a plan closes the gap: every later plan moves up one letter, so there is never an empty plan between two plans.
   const handlePresetSheetClear = () => {
-    if (presetSheetSlot != null) planSlots.clearSlot(presetSheetSlot);
+    const n = presetSheetSlot;
+    if (n != null) {
+      const holds = (snap: any) => !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId);
+      let k = n;
+      while (k < MAX_PLAN_SLOTS) {
+        const next: any = planSlots.peekSlot(k + 1);
+        if (!holds(next)) break;
+        planSlots.saveSnapshotToSlot(k, { compPlan: next.compPlan, cgSlider: next.cgSlider, name: next.name });
+        k++;
+      }
+      planSlots.clearSlot(k);
+      if (activeSlotLetter > n && activeSlotLetter <= k) setActiveSlotLetter(activeSlotLetter - 1);
+    }
     setPresetSheetSlot(null);
   };
   const closePresetSheet = () => setPresetSheetSlot(null);
@@ -186,7 +200,7 @@ export function usePlanSlotsView(i: Inputs) {
   const hasAnyPlan = useMemo(() => {
     const holds = (plan: any) => Object.values(plan ?? {}).some((v: any) => v && !v.empty && v.productId);
     if (holds(compPlan)) return true;
-    for (let n = 1; n <= 5; n++) { const snap = planSlots.peekSlot(n); if (snap && holds(snap.compPlan)) return true; }
+    for (const n of PLAN_SLOT_NUMBERS) { const snap = planSlots.peekSlot(n); if (snap && holds(snap.compPlan)) return true; }
     return false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compPlan, planSlots.slotHas, planSlots.presetsReady, equipment.selectedComboId]);
@@ -202,7 +216,7 @@ export function usePlanSlotsView(i: Inputs) {
     seededLiveFor.current = combo;
     const holds = (plan: any) => Object.values(plan ?? {}).some((v: any) => v && !v.empty && v.productId);
     if (holds(compPlan)) return;
-    for (let n = 1; n <= 5; n++) {
+    for (const n of PLAN_SLOT_NUMBERS) {
       const snap = planSlots.peekSlot(n);
       if (snap && holds(snap.compPlan)) { handlePresetLoad(n); return; }
     }
@@ -221,7 +235,7 @@ export function usePlanSlotsView(i: Inputs) {
     const qs = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
     startDetour();
-    if (kind === "edit" && slot >= 1 && slot <= 5) handlePresetLoad(slot);
+    if (kind === "edit" && slot >= 1 && slot <= MAX_PLAN_SLOTS) handlePresetLoad(slot);
     else setWizardNew(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, planSlots.presetsReady, planRestoreAttempted, compLoading, compartments.length]);
@@ -246,7 +260,7 @@ export function usePlanSlotsView(i: Inputs) {
 
   const handleWizardFinish = useCallback((plan: Record<number, any>) => {
     const slotFilled = (n: number) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); };
-    const empty = [1, 2, 3, 4, 5].find((n) => !slotFilled(n));
+    const empty = PLAN_SLOT_NUMBERS.find((n) => !slotFilled(n));
     const dupSlot = planSlotWithLayout(plan);
     const target = dupSlot ?? empty ?? activeSlotLetter;
     const first = !hasAnyPlan;

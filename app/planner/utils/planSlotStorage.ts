@@ -4,7 +4,8 @@
 // Pure helpers for saved plans: parsing a stored payload, comparing save times, and
 // checking whether a snapshot holds a real product selection. No React, no storage access.
 
-export const PLAN_SLOTS = [1, 2, 3, 4, 5] as const;
+import { PLAN_SLOT_NUMBERS } from "../../../lib/planSlotLimit.ts";
+export const PLAN_SLOTS: readonly number[] = PLAN_SLOT_NUMBERS;
 
 // ─── Payload parse (back-compat) ──────────────────────────────────────────────
 

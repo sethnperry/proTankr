@@ -1580,7 +1580,7 @@ export default function HomePage() {
   const [tripSplash, setTripSplashState] = useState<TripSplash>({});
   const [splashOpen, setSplashOpen] = useState(false);
   const openSplash = () => {
-    if (!Object.keys(baseByComp).length) { setBlockNotice({ title: "Pick a plan first", text: "Splash blend works from the plan: begin the trip with a plan (A to E) so the app knows each compartment's base product, then set the splash." }); return; }
+    if (!Object.keys(baseByComp).length) { setBlockNotice({ title: "Pick a plan first", text: "Splash blend works from the plan: begin the trip with a plan so the app knows each compartment's base product, then set the splash." }); return; }
     setSplashOpen(true);
   };
   useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);

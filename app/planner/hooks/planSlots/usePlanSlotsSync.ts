@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase/client";
 import { parsePlanPayload, compareSavedAt, hasRealCompPlan } from "../../utils/planSlotStorage";
 
 import type { Props } from "./types";
+import { MAX_PLAN_SLOTS, PLAN_SLOT_NUMBERS } from "@/lib/planSlotLimit";
 
 import type { usePlanSlotsCore } from "./usePlanSlotsCore";
 
@@ -106,7 +107,7 @@ export function usePlanSlotsSync(props: Props, k: ReturnType<typeof usePlanSlots
         }
 
         pullInto(planStoreKey(0), scoped[0]);
-        for (const s of [1, 2, 3, 4, 5]) {
+        for (const s of PLAN_SLOT_NUMBERS) {
           // Combo-scoped (preferred) and legacy (fallback) are independent
           // local caches -- both get pulled so readSlot's fallback has
           // something to find even on a brand-new device that's never
@@ -129,7 +130,7 @@ export function usePlanSlotsSync(props: Props, k: ReturnType<typeof usePlanSlots
             const { data: trows } = await supabase.from("trailer_plan_slots").select("slot,name,payload,updated_at").eq("trailer_id", tid);
             for (const t of (trows ?? []) as any[]) {
               const slot = Number(t.slot);
-              if (!(slot >= 1 && slot <= 5) || !hasRealCompPlan(t.payload)) continue;
+              if (!(slot >= 1 && slot <= MAX_PLAN_SLOTS) || !hasRealCompPlan(t.payload)) continue;
               const key = planStoreKey(slot);
               const raw = typeof window !== "undefined" ? localStorage.getItem(key) : null;
               let flagged: any = null;

@@ -4,14 +4,15 @@
 // shape the Planner saves (app/planner/hooks/planSlots), so the driver sees what
 // dispatch built. Pure; the database calls are in driverPlansIO.ts.
 import type { PresetSummary } from "../trips/tripPlan.ts";
+import { PLAN_SLOT_NUMBERS } from "../planSlotLimit.ts";
 
 export const UNIVERSAL = "__universal__";
-export const SLOTS = [1, 2, 3, 4, 5];
+export const SLOTS: number[] = [...PLAN_SLOT_NUMBERS];
 export const CG_CENTER = 0.5;
 
 export type CompPlanLite = Record<number, { empty: boolean; productId: string; capOverride?: number | null }>;
 
-/** The first plan slot with nothing in it, or null when all five are used. */
+/** The first plan slot with nothing in it, or null when all 26 are used. */
 export function nextFreeSlot(presets: Pick<PresetSummary, "slot">[]): number | null {
   const used = new Set(presets.map((p) => p.slot));
   return SLOTS.find((s) => !used.has(s)) ?? null;

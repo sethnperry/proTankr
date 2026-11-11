@@ -14,7 +14,8 @@ export type PresetSummary = {
   comps: (string | null)[];
 };
 
-const PLAN_SLOTS = [1, 2, 3, 4, 5];
+import { PLAN_SLOT_NUMBERS } from "../planSlotLimit.ts";
+const PLAN_SLOTS: number[] = [...PLAN_SLOT_NUMBERS];
 
 function read(key: string): any {
   try {

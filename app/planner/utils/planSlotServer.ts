@@ -7,6 +7,7 @@
 
 import { supabase } from "@/lib/supabase/client";
 import { UNIVERSAL_SCOPE } from "./planSlotStorage";
+import { PLAN_SLOT_NUMBERS } from "@/lib/planSlotLimit";
 
 export type ServerCtx = { authUserId: string | null | undefined; comboId: string | null | undefined };
 
@@ -60,7 +61,7 @@ export async function serverFetchSlots(ctx: ServerCtx): Promise<{ scoped: Record
     .eq("user_id", ctx.authUserId)
     .eq("terminal_id", UNIVERSAL_SCOPE)
     .eq("combo_id", UNIVERSAL_SCOPE)
-    .in("slot", [1, 2, 3, 4, 5]);
+    .in("slot", [...PLAN_SLOT_NUMBERS]);
   if (legacyErr) console.warn("serverFetchSlots (presets, legacy) error:", legacyErr.message);
   else
     (legacyRows || []).forEach((r: any) => {

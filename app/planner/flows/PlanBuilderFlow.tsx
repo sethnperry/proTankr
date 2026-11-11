@@ -5,6 +5,7 @@
 // windows what they show. Mount it anywhere under PlannerProvider.
 
 import PlanWizard from "../components/PlanWizard";
+import { PLAN_SLOT_NUMBERS } from "@/lib/planSlotLimit";
 import { usePlanner } from "../PlannerContext";
 
 export default function PlanBuilderFlow() {
@@ -31,7 +32,7 @@ export default function PlanBuilderFlow() {
         canSetCap={canSetCap}
         replacingLetter={
           wizardNew &&
-          [1, 2, 3, 4, 5].every((n) => {
+          PLAN_SLOT_NUMBERS.every((n) => {
             const snap = planSlots.peekSlot(n);
             return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId);
           })

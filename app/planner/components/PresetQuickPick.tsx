@@ -133,7 +133,8 @@ export default function PresetQuickPick({
         )}
 
         <div style={{ display: "grid", gap: 8 }}>
-          {slots.map((slot) => {
+          {/* Plans fill in order: show the saved ones and the next free one, never a run of empties. */}
+          {slots.filter((slot) => slot <= Math.max(0, ...slots.filter((x) => !!slotHas[x])) + 1).map((slot) => {
             const letter = String.fromCharCode(64 + slot);
             const has = !!slotHas[slot];
             const isActive = slot === activeSlot;

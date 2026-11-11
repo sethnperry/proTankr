@@ -135,7 +135,7 @@ export default function PlanWizard({
           <>
             {step === 0 && mode === "first" && (
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
-                A plan is what goes in each compartment. Build the one you load most; it becomes your default, and you can make up to five.
+                A plan is what goes in each compartment. Build the one you load most; it becomes your default, and you can make up to 26.
               </div>
             )}
             <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.35 }}>
