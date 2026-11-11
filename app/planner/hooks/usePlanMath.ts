@@ -221,8 +221,10 @@ export function usePlanMath(i: Inputs) {
         const cur = prev[n] ?? { empty: true, productId: "" };
         const pid = want.get(n);
         if (pid) {
-          if (cur.empty || !cur.productId) { next[n] = { ...cur, empty: false, productId: pid }; changed = true; }
+          // A splash top-off always loads its own product (the ethanol), even when the saved plan already
+          // put the base product in that compartment; otherwise the plan's E0 would stand in for it.
           const add = splashAdd.get(n);
+          if (cur.empty || !cur.productId || (add != null && cur.productId !== pid)) { next[n] = { ...cur, empty: false, productId: pid }; changed = true; }
           if (add != null && next[n].capOverride !== add) { next[n] = { ...next[n], capOverride: add }; changed = true; }
         } else if (!cur.empty || cur.productId) {
           next[n] = { ...cur, empty: true, productId: "" };
