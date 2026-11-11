@@ -131,3 +131,55 @@ export function topOffFor(args: { aboardProductId: string | null; aboardGallons:
   const firstIsAdditive = args.additiveProductId ? args.aboardProductId === args.additiveProductId : true;
   return { firstIsAdditive, ...topOff({ firstIsAdditive, aboard: args.aboardGallons, pct: args.pct, max: args.max, maxByWeight: args.maxByWeight }) };
 }
+
+/** A conservative lbs/gal for a product when its real reading isn't known yet (the second stop's API and temp are
+ *  unknown at the time of planning). Rounded toward the heavy side so the weight check errs safe. */
+export function roughLbsPerGal(name: string): number {
+  const n = name.toLowerCase();
+  if (/eth|e85|alcohol/.test(n)) return 6.7;
+  if (/diesel|d2|ulsd|dyed|b\d+|kero|jet|heating/.test(n)) return 7.2;
+  return 6.4;
+}
+
+export type TopOffInput = { n: number; aboardProductId: string | null; aboardGallons: number; max: number; pct: number; additiveProductId?: string | null; topProductId: string | null };
+
+/** Top-offs for several compartments sharing one weight allowance: `roomLbs` (legal gross less what is aboard) is
+ *  handed out compartment by compartment, so the last one is the adjuster that gives way first. */
+export function topOffPlan(comps: TopOffInput[], roomLbs: number | null, lbsPerGal: (productId: string | null) => number) {
+  let left = roomLbs;
+  const out = new Map<number, ReturnType<typeof topOffFor> & { lbs: number }>();
+  for (const c of [...comps].sort((a, b) => a.n - b.n)) {
+    const d = lbsPerGal(c.topProductId);
+    const r = topOffFor({ aboardProductId: c.aboardProductId, aboardGallons: c.aboardGallons, max: c.max, pct: c.pct, additiveProductId: c.additiveProductId, maxByWeight: left == null ? null : Math.max(0, Math.floor(left / d)) });
+    if (left != null) left = Math.max(0, left - r.add * d);
+    out.set(c.n, { ...r, lbs: r.add * d });
+  }
+  return out;
+}
+
+export type BlendableRow = { compartment_load_id: string; comp_number: number; product_id: string | null; gross_gallons: number | null };
+
+/** A compartment loaded twice (a splash blend) is one blended compartment at the drop: the larger load stands in for
+ *  it with the gallons summed and the blend label ("E10") from the actual additive share. `hidden` maps the stand-in
+ *  to the other rows, which are delivered with it. */
+export function mergeBlendRows<T extends BlendableRow & { bio_blend?: string | null }>(rows: T[], additiveByComp: Record<number, string | undefined> = {}) {
+  const byComp = new Map<number, T[]>();
+  for (const r of rows) byComp.set(r.comp_number, [...(byComp.get(r.comp_number) ?? []), r]);
+  const merged: T[] = [];
+  const hidden: Record<string, string[]> = {};
+  for (const list of byComp.values()) {
+    if (list.length < 2) { merged.push(...list); continue; }
+    const sorted = [...list].sort((a, b) => (b.gross_gallons ?? 0) - (a.gross_gallons ?? 0));
+    const rep = sorted[0];
+    const known = additiveByComp[rep.comp_number];
+    const additive = sorted.find((r) => known && r.product_id === known) ?? sorted[sorted.length - 1];
+    const addGal = additive.gross_gallons ?? 0;
+    const total = sorted.reduce((s, r) => s + (r.gross_gallons ?? 0), 0);
+    const pct = blendPct(addGal, total - addGal);
+    // The stand-in carries the base product so it matches the store's tank; the additive row follows it.
+    const base = sorted.find((r) => r !== additive) ?? rep;
+    merged.push({ ...base, gross_gallons: total, bio_blend: pct != null ? blendLabel(pct) : base.bio_blend ?? null });
+    hidden[base.compartment_load_id] = sorted.filter((r) => r !== base).map((r) => r.compartment_load_id);
+  }
+  return { rows: merged, hidden };
+}

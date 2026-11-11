@@ -136,8 +136,8 @@ import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
-import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
-import { topOffFor } from "@/lib/trips/splash";
+import { checkAddPickup, grossColor, LEGAL_GROSS_LBS } from "@/lib/trips/addPickupCheck";
+import { topOffPlan, roughLbsPerGal, mergeBlendRows } from "@/lib/trips/splash";
 import { getTripSplash, setTripSplash, stageFirstPickup, pendingTopOffs, type TripSplash } from "@/lib/trips/tripSplash";
 import { SplashPlanSheet } from "../components/trip/SplashPlanSheet";
 import { productColorFor } from "../utils/productColor";
@@ -1235,8 +1235,16 @@ export default function HomePage() {
     void syncNow();
   };
 
-  const onFinishSubmit = async (v: FinishDeliverySubmit) => {
+  // A splash-blended compartment is one compartment at the drop; its second load is delivered with it.
+  const mergedHere = (deliveryId: string) => mergeBlendRows(
+    compartmentsForDelivery(snap?.compLoads ?? [], snap?.deliveries ?? [], deliveryId),
+    Object.fromEntries(Object.entries(tripSplash).map(([n, v]) => [Number(n), v.additiveProductId])),
+  );
+  const onFinishSubmit = async (v0: FinishDeliverySubmit) => {
     if (!store || !userId || !companyId || !finishDeliveryRow || !openTrip) return;
+    const hid = mergedHere(finishDeliveryRow.delivery_id).hidden;
+    const more = <T extends { compartment_load_id: string }>(list: T[]): T[] => list.flatMap((c) => [c, ...(hid[c.compartment_load_id] ?? []).map((id) => ({ ...c, compartment_load_id: id }))]);
+    const v: FinishDeliverySubmit = { ...v0, delivered: more(v0.delivered), retained: more(v0.retained), bioBlends: v0.bioBlends ? more(v0.bioBlends) : v0.bioBlends };
     const tripId = openTrip.trip_id;
     const { tripComplete } = finishDelivery(store, {
       userId, companyId, trailerId, delivery: finishDeliveryRow, ...v, ...clock(),
@@ -1288,7 +1296,7 @@ export default function HomePage() {
   };
   // The drop site's products: each with every store tank that holds it, its code color, and the gallons aboard for this stop.
   const dropProducts: DropProduct[] = !finishDeliveryRow?.location_id || !snap ? [] : (() => {
-    const here = compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id);
+    const here = mergedHere(finishDeliveryRow.delivery_id).rows;
     const lastFor = (n: string) => {
       for (const x of siteDrops.items) {
         const t = x.tanks.find((y) => y.tankNumber === n);
@@ -1531,16 +1539,19 @@ export default function HomePage() {
   const [splashOpen, setSplashOpen] = useState(false);
   useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);
   const splashNums = Object.keys(compSizes).map(Number).sort((a, b) => b - a);
+  const splashRoomLbs = currentGross != null ? Math.max(0, LEGAL_GROSS_LBS - currentGross) : null;
   const confirmAddPickup = async () => {
     if (!store || !userId || !openTrip) return;
+    const plans = topOffPlan(addDraft.comps.map((n) => ({
+      n, aboardProductId: aboard[n]?.product_id ?? null, aboardGallons: aboard[n]?.gallons ?? 0, max: compSizes[n] || 0,
+      pct: tripSplash[n]?.pct ?? addDraft.pct ?? 0, additiveProductId: tripSplash[n]?.additiveProductId ?? null, topProductId: addDraft.products[n] ?? null,
+    })), splashRoomLbs, (id) => roughLbsPerGal(productInfo(id).name));
     const plannedComps = addDraft.comps
       .filter((n) => !!addDraft.products[n])
       .map((n) => {
         if (!addDraft.splash) return { comp_number: n, product_id: addDraft.products[n] };
-        const sp = tripSplash[n];
-        const pct = sp?.pct ?? addDraft.pct ?? 0;
-        const pl = topOffFor({ aboardProductId: aboard[n]?.product_id ?? null, aboardGallons: aboard[n]?.gallons ?? 0, max: compSizes[n] || 0, pct, additiveProductId: sp?.additiveProductId ?? null });
-        return { comp_number: n, product_id: addDraft.products[n], splash: { pct, aboard: aboard[n]?.gallons ?? 0, add: pl.add } };
+        const pct = tripSplash[n]?.pct ?? addDraft.pct ?? 0;
+        return { comp_number: n, product_id: addDraft.products[n], splash: { pct, aboard: aboard[n]?.gallons ?? 0, add: plans.get(n)?.add ?? 0 } };
       })
       .filter((c) => !addDraft.splash || (c.splash?.add ?? 0) > 0);
     if (!plannedComps.length) return;
@@ -2635,6 +2646,7 @@ export default function HomePage() {
         terminalLabel={pickupLabel}
         rackId={location.selectedRackId || null}
         splashPlan={splashPlanProp}
+        weightRoomLbs={splashRoomLbs}
         orders={children?.orders ?? []}
         orderError={orderErr}
         busy={addBusy}
@@ -3109,7 +3121,7 @@ export default function HomePage() {
       )}
 
       {finishDeliveryRow && snap && store && (() => {
-        const here = compartmentsForDelivery(snap.compLoads, snap.deliveries, finishDeliveryRow.delivery_id);
+        const here = mergedHere(finishDeliveryRow.delivery_id).rows;
         const hereIds = new Set(here.map((c) => c.compartment_load_id));
         return (
           <DeliveryDashboard

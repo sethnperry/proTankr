@@ -16,7 +16,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 import { grossColor, type AddPickupCheck } from "@/lib/trips/addPickupCheck";
-import { BLEND_CHOICES, canSplashInto, topOffFor, validPct } from "@/lib/trips/splash";
+import { BLEND_CHOICES, canSplashInto, roughLbsPerGal, topOffPlan, validPct } from "@/lib/trips/splash";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { CompartmentStrip } from "./CompartmentStrip";
 import type { OrderChoice } from "./OrderChooser";
@@ -45,7 +45,7 @@ const chip = (on: boolean): React.CSSProperties => ({
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 export function AddPickupSheet({
-  open, draft, setDraft, check, compSizes, aboard, catalog, terminalLabel, rackId, splashPlan,
+  open, draft, setDraft, check, compSizes, aboard, catalog, terminalLabel, rackId, splashPlan, weightRoomLbs,
   orders, orderError, busy, onPickTerminal, onConfirm, onClose,
 }: {
   open: boolean;
@@ -60,6 +60,8 @@ export function AddPickupSheet({
   rackId: string | null;
   /** The trip's splash blend per compartment: its additive, base and share. */
   splashPlan?: Record<number, { additiveProductId: string; baseProductId: string; pct: number }>;
+  /** Pounds left under the legal gross; the top-off never goes past it. */
+  weightRoomLbs?: number | null;
   orders: TripOrderRow[];
   orderError: string | null;
   busy: boolean;
@@ -124,10 +126,11 @@ export function AddPickupSheet({
     : check.level === "over_target" || check.level === "near_target" ? "#fbbf24" : muted;
   const orderOk = draft.order.kind === "existing" || !!draft.order.number.trim();
   const pctFor = (n: number) => splashPlan?.[n]?.pct ?? pct;
-  const plans = new Map(draft.comps.map((n) => [n, topOffFor({
-    aboardProductId: aboard[n]?.product_id ?? null, aboardGallons: aboard[n]?.gallons ?? 0, max: compSizes[n] || 0,
-    pct: pctFor(n), additiveProductId: splashPlan?.[n]?.additiveProductId ?? null,
-  })]));
+  const lbsPerGal = (id: string | null) => roughLbsPerGal(byId.get(id ?? "")?.name ?? "");
+  const plans = topOffPlan(draft.comps.map((n) => ({
+    n, aboardProductId: aboard[n]?.product_id ?? null, aboardGallons: aboard[n]?.gallons ?? 0, max: compSizes[n] || 0,
+    pct: pctFor(n), additiveProductId: splashPlan?.[n]?.additiveProductId ?? null, topProductId: draft.products[n] ?? null,
+  })), weightRoomLbs ?? null, lbsPerGal);
   const splashReady = draft.comps.length > 0 && draft.comps.every((n) => validPct(pctFor(n)) && (plans.get(n)?.add ?? 0) > 0);
   // The product on top defaults to the other one of the plan's blend.
   useEffect(() => {
@@ -235,6 +238,7 @@ export function AddPickupSheet({
                   {pl.add > 0
                     ? <>load <b>{fmt(pl.add)} gal</b> on top of {fmt(aboard[n]?.gallons ?? 0)}: {fmt((aboard[n]?.gallons ?? 0) + pl.add)} gal, <b>{pl.blend!.toFixed(1)}%</b> {pl.firstIsAdditive ? "additive" : "additive (loaded on top)"}</>
                     : <span style={{ color: "#f87171" }}>nothing fits on top</span>}
+                  {pl.limitedBy === "weight" && <div style={{ fontSize: 12, fontWeight: 700, color: "#fbbf24", marginTop: 2 }}>Held to the {fmt(Math.max(0, weightRoomLbs ?? 0))} lbs left under legal, so this ends off the {pctFor(n)}% target.</div>}
                   {pl.limitedBy === "room" && <div style={{ fontSize: 12, fontWeight: 700, color: "#fbbf24", marginTop: 2 }}>Only {fmt(pl.room)} gal of room, so this compartment ends off the {pctFor(n)}% target.</div>}
                 </div>
               );
