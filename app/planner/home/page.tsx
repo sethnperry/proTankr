@@ -150,6 +150,8 @@ import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/da
 import { ShiftBar } from "../components/shift/ShiftBar";
 import { ShiftSheet } from "../components/shift/ShiftSheet";
 import { ShiftStartConfirm } from "../components/shift/ShiftStartConfirm";
+import { OffDutySheet } from "../components/shift/OffDutySheet";
+import type { ReasonPick } from "../components/reasons/ReasonChips";
 import EquipmentStatusModal, { type FleetStatus, fleetStatusLabel } from "../modals/EquipmentStatusModal";
 import { statusSetThisShift } from "@/lib/shifts/endStatus";
 import { snoozed, telematicsStart } from "@/lib/shifts/autoStart";
@@ -201,7 +203,7 @@ import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
 import { SAFETY_MEETING_EVENT } from "@/lib/safety/onDuty";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { useShift } from "../hooks/useShift";
-import { beginTripShift, dutyChip, offDutyAsk, telematicsLive } from "@/lib/shifts/dutyStatus";
+import { beginTripShift, dutyChip, dutyLabel, offDutyAsk, telematicsLive } from "@/lib/shifts/dutyStatus";
 import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
 import { useCompanyRoster } from "../hooks/useCompanyRoster";
@@ -1850,9 +1852,15 @@ export default function HomePage() {
   const [offDutyDismissed, setOffDutyDismissed] = useState<string | null>(null);
   useEffect(() => { if (!userId) return; try { setOffDutyDismissed(localStorage.getItem(shiftKey("offDutyDismissed"))); } catch { /* storage blocked */ } }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
   const offAsk = offDutyAsk({ hos: myHos, nowMs: Date.now(), shiftOpen: !!shift.current, dismissedSince: offDutyDismissed });
-  const stillWorking = () => {
-    if (offAsk) { setOffDutyDismissed(offAsk.since); try { localStorage.setItem(shiftKey("offDutyDismissed"), offAsk.since); } catch { /* storage blocked */ } }
-    shift.keepGoing();
+  // "Still working" while the ELD says off duty asks why (OffDutySheet); the answer is saved on the shift.
+  const [offWhyOpen, setOffWhyOpen] = useState(false);
+  const stillWorking = () => { if (offAsk) setOffWhyOpen(true); else shift.keepGoing(); };
+  const submitOffWhy = (pick: ReasonPick) => {
+    if (!offAsk) { setOffWhyOpen(false); return; }
+    shift.keepGoing({ off_duty: true, eld_status: offAsk.status, eld_since: offAsk.since, reason: pick.label, reason_id: pick.reasonId && !pick.reasonId.startsWith("default-") ? pick.reasonId : null, category: pick.category, note: pick.note?.trim() || null });
+    setOffDutyDismissed(offAsk.since);
+    try { localStorage.setItem(shiftKey("offDutyDismissed"), offAsk.since); } catch { /* storage blocked */ }
+    setOffWhyOpen(false);
   };
   const shiftPromptShown = drivingNow ? null : shift.prompt === "long" ? "long" : offAsk && !runningDelay ? "off_duty" : shift.prompt === "idle" && openTrip ? null : shift.prompt;
   const canCancelNow = canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0);
@@ -3105,6 +3113,7 @@ export default function HomePage() {
         onClose={() => setSyncOpen(false)}
       />
 
+      <OffDutySheet open={offWhyOpen && !!offAsk} statusLabel={dutyLabel(offAsk?.status)} reasons={reasonsOrDefault(reasons as any, "nonproductive")} onSubmit={submitOffWhy} onClose={() => setOffWhyOpen(false)} />
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />

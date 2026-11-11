@@ -97,7 +97,7 @@ export function stuckList(rows: ErrorRow[], nameOf: (userId: string) => string, 
 export type Source = "geotab" | "app" | "manual";
 export type TimelineEntry = { key: string; at: string; kind: "trip" | "shift" | "form"; title: string; detail: string; source: Source };
 const src = (s: unknown): Source => (s === "geotab" || s === "manual" ? s : "app");
-const SHIFT_LABEL: Record<string, string> = { shift_start: "Shift started", shift_end: "Shift ended", shift_explanation: "Shift explained", safety_meeting: "Safety meeting signed", callout: "Call-out", document: "Document dropped", down_time: "Down time", paper_log: "Paper log" };
+const SHIFT_LABEL: Record<string, string> = { shift_start: "Shift started", shift_end: "Shift ended", shift_explanation: "Shift explained", shift_idle_response: "Still working", safety_meeting: "Safety meeting signed", callout: "Call-out", document: "Document dropped", down_time: "Down time", paper_log: "Paper log" };
 const FORM_LABEL: Record<string, string> = { fuel_receipt: "Fuel receipt", scale_ticket: "Scale ticket", tank_ticket: "Tank ticket", document: "Document", down_time: "Down time", paper_log: "Paper log", inspection: "Inspection", manifest: "Manifest" };
 
 export function timeline(i: {

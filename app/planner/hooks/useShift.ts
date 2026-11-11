@@ -82,7 +82,7 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
     explain: useCallback((payload: Record<string, unknown>) => write(SHIFT_EXPLANATION, payload), [write]),
     /** "Still on shift" after the long-shift question. */
     ackLong: useCallback(() => write(SHIFT_LONG_ACK), [write]),
-    /** The idle question answered "still working". */
-    keepGoing: useCallback(() => write(SHIFT_IDLE_RESPONSE, { answer: "still_working" }), [write]),
+    /** The idle question answered "still working" (off duty in the ELD: with why). */
+    keepGoing: useCallback((extra?: Record<string, unknown>) => write(SHIFT_IDLE_RESPONSE, { answer: "still_working", ...extra }), [write]),
   };
 }

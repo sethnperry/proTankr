@@ -17,10 +17,10 @@ test("begin trip asks only when telematics is missing or not on duty", () => {
   assert.equal(beginTripShift(null, now).ask, true);
 });
 
-test("off duty asks only when long enough, live, shift open and not dismissed", () => {
+test("off duty asks at once when live, shift open and not dismissed", () => {
   const off = (since: string) => ({ status: "OFF", statusSince: since, at: "2026-11-11T11:58:00Z" });
   const base = { nowMs: now, shiftOpen: true, dismissedSince: null };
-  assert.equal(offDutyAsk({ ...base, hos: off("2026-11-11T11:40:00Z") }), null);
+  assert.equal(offDutyAsk({ ...base, hos: off("2026-11-11T11:55:00Z") })?.minutes, 5);
   assert.equal(offDutyAsk({ ...base, hos: off("2026-11-11T11:00:00Z") })?.minutes, 60);
   assert.equal(offDutyAsk({ ...base, shiftOpen: false, hos: off("2026-11-11T11:00:00Z") }), null);
   assert.equal(offDutyAsk({ ...base, dismissedSince: "2026-11-11T11:00:00Z", hos: off("2026-11-11T11:00:00Z") }), null);

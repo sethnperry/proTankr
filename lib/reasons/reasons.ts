@@ -28,7 +28,7 @@ export const KIND_TITLE: Record<ReasonKind, string> = {
   delivery: "Delivery delay reasons",
   shift_explanation: "Shift explanation reasons",
   callout: "Call-out reasons",
-  nonproductive: "Non-productive time reasons",
+  nonproductive: "Working while off duty (ELD) reasons",
   paper_log: "Paper log reasons",
 };
 
@@ -42,6 +42,16 @@ export const DEFAULT_SHIFT_REASONS: { label: string; category: ReasonCategory }[
   { label: "Heavy traffic or an accident", category: "traffic_weather" },
   { label: "Weather", category: "traffic_weather" },
   { label: "Long wait at the terminal or the store", category: "terminal_delay" },
+];
+
+/** Why a driver is working while the ELD shows off duty, until the company writes its own. Feeds gray-zone reporting. */
+export const DEFAULT_OFF_DUTY_REASONS: { label: string; category: ReasonCategory }[] = [
+  { label: "Waiting on dispatch", category: "wait_on_dispatch" },
+  { label: "Waiting on a repair", category: "shop_time" },
+  { label: "Truck broke down", category: "breakdown" },
+  { label: "Waiting at the terminal or the store", category: "terminal_delay" },
+  { label: "Heavy traffic or weather", category: "traffic_weather" },
+  { label: "Forgot to change my ELD status", category: "other" },
 ];
 
 /** Why a driver keeps a paper log instead of the ELD, until the company writes its own. */
@@ -77,6 +87,7 @@ export function reasonsOrDefault(list: Reason[], kind: ReasonKind): { reason_id:
   if (own.length) return own.map((r) => ({ reason_id: r.reason_id, label: r.label, category: r.category ?? null }));
   if (kind === "shift_explanation") return DEFAULT_SHIFT_REASONS.map((r, i) => ({ reason_id: `default-${i}`, label: r.label, category: r.category }));
   if (kind === "callout") return DEFAULT_CALLOUT_REASONS.map((r, i) => ({ reason_id: `default-${i}`, label: r.label, category: r.category }));
+  if (kind === "nonproductive") return DEFAULT_OFF_DUTY_REASONS.map((r, i) => ({ reason_id: `default-${i}`, label: r.label, category: r.category }));
   if (kind === "paper_log") return DEFAULT_PAPER_LOG_REASONS.map((label, i) => ({ reason_id: `default-${i}`, label, category: null }));
   return [];
 }
