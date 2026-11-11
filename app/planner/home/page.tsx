@@ -137,7 +137,9 @@ import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor } from "@/lib/trips/addPickupCheck";
-import { splashPlan } from "@/lib/trips/splash";
+import { topOffFor } from "@/lib/trips/splash";
+import { getTripSplash, setTripSplash, stageFirstPickup, pendingTopOffs, type TripSplash } from "@/lib/trips/tripSplash";
+import { SplashPlanSheet } from "../components/trip/SplashPlanSheet";
 import { productColorFor } from "../utils/productColor";
 import { TripCardView } from "../components/trip/TripCardView";
 import { deliveryRows, pickupRows } from "@/lib/trips/cardRows";
@@ -1524,14 +1526,21 @@ export default function HomePage() {
     setAddDraft((d) => ({ ...d, stage: location.selectedTerminalId ? "products" : "comps" }));
     setAddOpen(true);
   }, [addTermPending, shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, location.selectedTerminalId]);
+  // Splash blend set up for this trip (per compartment), and the plan's base product per compartment.
+  const [tripSplash, setTripSplashState] = useState<TripSplash>({});
+  const [splashOpen, setSplashOpen] = useState(false);
+  useEffect(() => { setTripSplashState(getTripSplash(userId || null, openTrip?.trip_id ?? null)); }, [userId, openTrip?.trip_id]);
+  const splashNums = Object.keys(compSizes).map(Number).sort((a, b) => b - a);
   const confirmAddPickup = async () => {
     if (!store || !userId || !openTrip) return;
     const plannedComps = addDraft.comps
       .filter((n) => !!addDraft.products[n])
       .map((n) => {
         if (!addDraft.splash) return { comp_number: n, product_id: addDraft.products[n] };
-        const pl = splashPlan({ max: compSizes[n] || 0, aboard: aboard[n]?.gallons ?? 0, pct: addDraft.pct ?? 0 });
-        return { comp_number: n, product_id: addDraft.products[n], splash: { pct: addDraft.pct ?? 0, aboard: pl.aboard, add: pl.add } };
+        const sp = tripSplash[n];
+        const pct = sp?.pct ?? addDraft.pct ?? 0;
+        const pl = topOffFor({ aboardProductId: aboard[n]?.product_id ?? null, aboardGallons: aboard[n]?.gallons ?? 0, max: compSizes[n] || 0, pct, additiveProductId: sp?.additiveProductId ?? null });
+        return { comp_number: n, product_id: addDraft.products[n], splash: { pct, aboard: aboard[n]?.gallons ?? 0, add: pl.add } };
       })
       .filter((c) => !addDraft.splash || (c.splash?.add ?? 0) > 0);
     if (!plannedComps.length) return;
@@ -2186,6 +2195,21 @@ export default function HomePage() {
     return { label: match ? `Plan ${slotLetter(match.slot)}` : "Plan", comps };
   })();
 
+  const baseByComp: Record<number, string> = {};
+  planLine?.comps.forEach((id, i) => { if (id && splashNums[i] != null) baseByComp[splashNums[i]] = id; });
+  const splashPlanProp = Object.fromEntries(Object.entries(tripSplash).filter(([n]) => baseByComp[Number(n)]).map(([n, v]) => [n, { additiveProductId: v.additiveProductId, baseProductId: baseByComp[Number(n)], pct: v.pct }]));
+  const topOffComps = pendingTopOffs({ splash: tripSplash, aboard });
+  // At the first loading pickup, stage what this rack sells: the additive first when it has it, else the base.
+  useEffect(() => {
+    if (!store || !myPickup || !myPickup.arrived_at || myPickup.load_id || myPickup.planned_comps?.length) return;
+    if (!Object.keys(tripSplash).length || !rackStatus.products.length || pickups.some((p) => p.load_id)) return;
+    const staged = stageFirstPickup({ splash: tripSplash, bases: baseByComp, sizes: compSizes, rackProductIds: rackStatus.products.map((r: any) => r.product_id) });
+    if (!staged) return;
+    store.put("trip_pickups", { pickup_id: myPickup.pickup_id, planned_comps: staged });
+    void syncNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myPickup?.pickup_id, myPickup?.arrived_at, rackStatus.products.length, tripSplash]);
+
   // The most recent load on this trip, for the Load Report link.
   const lastLoadId = [...pickups].filter((p) => p.load_id && (p.outcome === "loaded" || p.left_at)).sort((a, b) => b.seq - a.seq)[0]?.load_id ?? null;
   const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
@@ -2490,6 +2514,15 @@ export default function HomePage() {
               {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
                 <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
               )}
+              {!!openTrip && openTrip.status !== "draft" && !anyDelivered && !!planLine && !pickups.some((p) => p.load_id) && (
+                <button type="button" onClick={() => setSplashOpen(true)} style={smallLink}>{Object.keys(tripSplash).length ? "Splash blend ✓" : "Splash blend"}</button>
+              )}
+              {topOffComps.length > 0 && canAddPickup && (
+                <button type="button" onClick={() => {
+                  openAddPickup();
+                  setAddDraft((d) => ({ ...d, splash: true, comps: topOffComps, pct: tripSplash[topOffComps[0]]?.pct, stage: location.selectedTerminalId ? "products" : "comps" }));
+                }} style={{ ...smallLink, color: "#fbbf24" }}>Top off splash ({topOffComps.length}) ›</button>
+              )}
               {showPark && (
                 <button type="button" onClick={() => setParkOpen(true)} style={{ ...smallLink, color: "#93c5fd", marginLeft: "auto" }}>
                   Park preloaded
@@ -2601,12 +2634,22 @@ export default function HomePage() {
         catalog={products.map((p) => { const i = productInfo(p.product_id); return { product_id: p.product_id, name: i.name, code: i.code, hex: i.hex }; })}
         terminalLabel={pickupLabel}
         rackId={location.selectedRackId || null}
+        splashPlan={splashPlanProp}
         orders={children?.orders ?? []}
         orderError={orderErr}
         busy={addBusy}
         onPickTerminal={addPickTerminal}
         onConfirm={confirmAddPickup}
         onClose={() => setAddOpen(false)}
+      />
+
+      <SplashPlanSheet
+        open={splashOpen}
+        comps={splashNums.filter((n) => baseByComp[n]).map((n) => ({ n, size: compSizes[n] || 0, baseProductId: baseByComp[n] }))}
+        catalog={products.map((p) => { const i = productInfo(p.product_id); return { product_id: p.product_id, name: i.name, code: i.code, hex: i.hex }; })}
+        initial={tripSplash}
+        onSave={(sp) => { if (userId && openTrip) setTripSplash(userId, openTrip.trip_id, sp); setTripSplashState(sp); setSplashOpen(false); }}
+        onClose={() => setSplashOpen(false)}
       />
 
       <PickupOrderSheet

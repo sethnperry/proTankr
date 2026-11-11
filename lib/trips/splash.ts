@@ -124,3 +124,10 @@ export function stopLayouts(plan: Record<number, { empty?: boolean; productId: s
   }
   return { additive, base };
 }
+
+/** The top-off for a compartment from what is aboard. With the plan's additive known, which product went first follows
+ *  from the product aboard; without it, what is aboard is taken to be the product the percent belongs to. */
+export function topOffFor(args: { aboardProductId: string | null; aboardGallons: number; max: number; pct: number; additiveProductId?: string | null; maxByWeight?: number | null }) {
+  const firstIsAdditive = args.additiveProductId ? args.aboardProductId === args.additiveProductId : true;
+  return { firstIsAdditive, ...topOff({ firstIsAdditive, aboard: args.aboardGallons, pct: args.pct, max: args.max, maxByWeight: args.maxByWeight }) };
+}
