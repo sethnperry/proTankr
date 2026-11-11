@@ -6,6 +6,7 @@
 // usePlanner() and hands LoadingModal what it shows. Mount it anywhere under
 // PlannerProvider.
 
+import { stampFinishLoading } from "@/lib/trips/finishStamp";
 import { useEffect, useState } from "react";
 import ConnectedSupplierPanel from "../components/ConnectedSupplierPanel";
 import RackDelaySheet from "../components/RackDelaySheet";
@@ -155,7 +156,7 @@ export default function PlanReviewFlow() {
         loadWorkflow.onLoadedFromLoadingModal(entries, extras ? { afterTripRecord: () => recordTripLoaded(extras, false) } : undefined)
       }
       trip={tripModeForLoading}
-      onFinishLoadingStart={loadGeoShips}
+      onFinishLoadingStart={() => { const pk = tripPickup ?? tripWaitingPickup ?? null; if (pk && !pk.left_at) stampFinishLoading(pk.pickup_id); loadGeoShips(); }}
       onUpdateCardOnly={handleCouldntLoad}
       onRackDelay={() => setRackDelayOpen(true)}
       rackDelayStartedAt={rackDelayStartedAt}

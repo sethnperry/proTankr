@@ -287,12 +287,12 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
         onEditLoad?.(updated, trip ? { byComp: updatedExtras } : undefined);
         setEditingReport(false);
       } else if (trip) {
-        // On to the times window, then the signature. Begin is the Begin
-        // Loading tap; depart is stamped now, when this window opens.
+        // On to the times window, then the signature. Begin is the Start/Begin
+        // Loading tap; the end is the Finish Loading tap.
         setTripTimes(
           trip.existingTimes ??
             defaultStepTimes(
-              new Date(),
+              finishTappedAt.current ?? new Date(), // the end of loading is the Finish Loading tap, not when this window opens
               loadingOffset(trip.settings),
               trip.arrivedAt,
               trip.beganAt,
