@@ -13,11 +13,12 @@ import { terminalIssueLabel } from "./terminalIssues.ts";
 import { newId } from "./tripStore.ts";
 import type { TripEventRow } from "./types.ts";
 
-export type DelayLeg = "to_rack" | "at_rack" | "to_drop" | "at_drop";
+export type DelayLeg = "pre_trip" | "to_rack" | "at_rack" | "to_drop" | "at_drop";
 
 export const DELAY_EVENT = "delay_logged";
 
 export const LEG_LABEL: Record<DelayLeg, string> = {
+  pre_trip: "Before the trip",
   to_rack: "Driving to the rack",
   at_rack: "At the rack",
   to_drop: "Driving to the drop",
@@ -40,6 +41,13 @@ const ROAD: DelayReasonOption[] = [
 ];
 
 export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
+  pre_trip: [
+    { code: "dispatch_wait", label: "Waiting on dispatch" },
+    { code: "order_problem", label: "Waiting on an order or paperwork" },
+    { code: "breakdown", label: "Truck problem" },
+    { code: "equipment_wait", label: "Waiting on equipment" },
+    DOWN_DAY,
+  ],
   to_rack: [...ROAD],
   at_rack: [
     { code: "long_line", label: "Long line" },
@@ -188,6 +196,13 @@ export function endRunningDelay(store: { put: (table: "trip_events", row: TripEv
   const d = readRunningDelay(userId);
   if (!d) return false;
   const at = atIso ?? new Date().toISOString();
+  if (!d.tripId) {
+    // No trip yet: keep it on the phone; the next trip picks it up and it lands on that trip's timeline.
+    writePendingDelays(userId, [...readPendingDelays(userId), { d, at }]);
+    writeRunningDelay(userId, null);
+    try { window.dispatchEvent(new Event("protankr:delay")); } catch { /* not a browser */ }
+    return true;
+  }
   store.put("trip_events", {
     event_id: newId(), trip_id: d.tripId, event_type: DELAY_EVENT, occurred_at: at, actor_id: userId,
     pickup_id: d.pickupId, delivery_id: d.deliveryId, payload: delayEventPayload(d, at),
@@ -195,4 +210,38 @@ export function endRunningDelay(store: { put: (table: "trip_events", row: TripEv
   writeRunningDelay(userId, null);
   try { window.dispatchEvent(new Event("protankr:delay")); } catch { /* not a browser */ }
   return true;
+}
+
+
+// ── Delays before there is a trip (waiting on dispatch) ──────────────────────
+
+type PendingDelay = { d: RunningDelay; at: string };
+const pendingKey = (userId: string) => `proTankr:u:${userId}:pendingDelays`;
+
+export function readPendingDelays(userId: string): PendingDelay[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(pendingKey(userId)) ?? "[]");
+    return Array.isArray(raw) ? raw.filter((x) => x?.d && typeof x.at === "string") : [];
+  } catch { return []; }
+}
+function writePendingDelays(userId: string, list: PendingDelay[]) {
+  try {
+    if (list.length) localStorage.setItem(pendingKey(userId), JSON.stringify(list));
+    else localStorage.removeItem(pendingKey(userId));
+  } catch { /* private mode */ }
+}
+
+/** A trip has started: any delay from before it (finished, or still running) goes onto it. Returns how many. */
+export function attachPendingDelays(store: { put: (table: "trip_events", row: TripEventRow) => unknown }, userId: string, tripId: string): number {
+  const running = readRunningDelay(userId);
+  if (running && !running.tripId) endRunningDelay(store, userId);
+  const list = readPendingDelays(userId);
+  for (const { d, at } of list) {
+    store.put("trip_events", {
+      event_id: newId(), trip_id: tripId, event_type: DELAY_EVENT, occurred_at: at, actor_id: userId,
+      pickup_id: null, delivery_id: null, payload: delayEventPayload({ ...d, tripId }, at),
+    });
+  }
+  writePendingDelays(userId, []);
+  return list.length;
 }

@@ -36,7 +36,7 @@ export type DelayReport = {
   unaccounted: UnaccountedDrop[]; // biggest first
 };
 
-const emptyLegs = (): Record<DelayLeg, number> => ({ to_rack: 0, at_rack: 0, to_drop: 0, at_drop: 0 });
+const emptyLegs = (): Record<DelayLeg, number> => ({ pre_trip: 0, to_rack: 0, at_rack: 0, to_drop: 0, at_drop: 0 });
 
 function addReason(list: ReasonTotal[], label: string, minutes: number) {
   const hit = list.find((r) => r.label === label);

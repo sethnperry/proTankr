@@ -35,7 +35,7 @@ import { markStopHandled, pendingStop, readHandledStops } from "@/lib/trips/stop
 import {
   DELAY_EVENT, delayEventPayload, delayIssueCode, legForStep, loggedDelays, readRunningDelay, writeRunningDelay,
   dropDelayMinutes, type RunningDelay,
-  endRunningDelay,
+  endRunningDelay, attachPendingDelays,
 } from "@/lib/trips/delays";
 import { newId } from "@/lib/trips/tripStore";
 import { useTripHydration } from "@/lib/trips/useTripHydration";
@@ -439,7 +439,8 @@ export default function HomePage() {
     window.addEventListener("protankr:delay", h);
     return () => window.removeEventListener("protankr:delay", h);
   }, [userId]);
-  const delayLeg = openTrip ? legForStep(step.kind) : null;
+  // No trip yet (waiting on dispatch): the delay is kept and goes onto the next trip's timeline.
+  const delayLeg = !openTrip || step.kind === "start" ? "pre_trip" as const : legForStep(step.kind);
   const endDelay = (atIso?: string) => {
     if (!store || !userId) return;
     if (endRunningDelay(store, userId, atIso)) { setRunningDelay(null); void syncNow(); }
@@ -452,9 +453,9 @@ export default function HomePage() {
     if (t && needsGaugingAnswer(t)) setGaugingAsk({ id: String(t.terminal_id), name: t.terminal_name ?? "this terminal" });
   };
   const startDelay = (code: string, note: string | null) => {
-    if (!userId || !openTrip || !delayLeg) return;
+    if (!userId || !delayLeg) return;
     const d: RunningDelay = {
-      tripId: openTrip.trip_id, leg: delayLeg, code, note, startedAt: new Date().toISOString(),
+      tripId: delayLeg === "pre_trip" ? "" : openTrip?.trip_id ?? "", leg: delayLeg, code, note, startedAt: new Date().toISOString(),
       // The "planner" step (Begin Loading) carries no pickup of its own: use the rack the driver is waiting at.
       pickupId: "pickup" in step ? step.pickup.pickup_id : (snap?.pickups.find((p) => p.arrived_at && !p.load_id && !p.left_at && !p.outcome)?.pickup_id ?? null),
       deliveryId: "delivery" in step ? step.delivery.delivery_id : null,
@@ -472,6 +473,12 @@ export default function HomePage() {
       }).then((r) => { if (r.error) console.warn("[trips] rack delay report failed (non-fatal):", r.error); });
     }
   };
+  // The trip has started: delays from before it (waiting on dispatch) go onto its timeline.
+  useEffect(() => {
+    if (!store || !userId || !openTrip || openTrip.status === "draft") return;
+    if (attachPendingDelays(store, userId, openTrip.trip_id) > 0) { setRunningDelay(readRunningDelay(userId)); void syncNow(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, userId, openTrip?.trip_id, openTrip?.status]);
   const tripDelays = useMemo(
     () => (store && openTrip ? loggedDelays(store.list("trip_events", (e) => e.trip_id === openTrip.trip_id)) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
