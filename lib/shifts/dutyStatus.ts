@@ -35,3 +35,18 @@ export function beginTripShift(hos: DutyHos, nowMs: number): { ask: false } | { 
   if (!onDuty(hos!.status)) return { ask: true, reason: `Telematics shows you ${dutyLabel(hos!.status).toLowerCase()}. Start your shift here to keep your hours right.` };
   return { ask: false };
 }
+
+const OFF = new Set(["OFF", "SB", "PC"]);
+/** Off duty this long with the shift still open: ask whether they are still working. */
+export const OFF_DUTY_ASK_MIN = 30;
+
+/** Telematics shows the driver off duty (live, and long enough) while a shift is open, and they haven't said "still working" for this stretch. */
+export function offDutyAsk(o: { hos: DutyHos; nowMs: number; shiftOpen: boolean; dismissedSince: string | null }): { since: string; minutes: number } | null {
+  const { hos } = o;
+  if (!o.shiftOpen || !telematicsLive(hos, o.nowMs) || !hos!.status || !OFF.has(hos!.status) || !hos!.statusSince) return null;
+  if (o.dismissedSince === hos!.statusSince) return null;
+  const at = Date.parse(hos!.statusSince);
+  if (!Number.isFinite(at)) return null;
+  const minutes = Math.floor((o.nowMs - at) / 60_000);
+  return minutes >= OFF_DUTY_ASK_MIN ? { since: hos!.statusSince, minutes } : null;
+}

@@ -201,7 +201,7 @@ import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
 import { SAFETY_MEETING_EVENT } from "@/lib/safety/onDuty";
 import { getTripStore } from "@/lib/trips/useTripStore";
 import { useShift } from "../hooks/useShift";
-import { beginTripShift, dutyChip, telematicsLive } from "@/lib/shifts/dutyStatus";
+import { beginTripShift, dutyChip, offDutyAsk, telematicsLive } from "@/lib/shifts/dutyStatus";
 import { useStuckSyncReporter } from "../hooks/useStuckSyncReporter";
 import { useOtherCarriers, useStoreDeliveries, useTerminalLoads, useTerminalStatus } from "../hooks/useDashboardCards";
 import { useCompanyRoster } from "../hooks/useCompanyRoster";
@@ -1844,7 +1844,17 @@ export default function HomePage() {
   // The "still working?" questions never come up while the truck is moving, and the idle one never comes up
   // during an open trip (a long wait at a rack or store is work). Only a quiet, trip-less shift gets asked.
   const drivingNow = !!myHos && myHos.nonDrivingSince == null && (myHos.driveLeftMin != null || myHos.dutyLeftMin != null);
-  const shiftPromptShown = drivingNow ? null : shift.prompt === "idle" && openTrip ? null : shift.prompt;
+  // Off duty in telematics with the shift still open asks the same question as a long quiet spell. "Still working"
+  // holds it off for that off-duty stretch; End shift runs the usual end (odometer, then the truck's status, with
+  // Park preloaded when it is still loaded).
+  const [offDutyDismissed, setOffDutyDismissed] = useState<string | null>(null);
+  useEffect(() => { if (!userId) return; try { setOffDutyDismissed(localStorage.getItem(shiftKey("offDutyDismissed"))); } catch { /* storage blocked */ } }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offAsk = offDutyAsk({ hos: myHos, nowMs: Date.now(), shiftOpen: !!shift.current, dismissedSince: offDutyDismissed });
+  const stillWorking = () => {
+    if (offAsk) { setOffDutyDismissed(offAsk.since); try { localStorage.setItem(shiftKey("offDutyDismissed"), offAsk.since); } catch { /* storage blocked */ } }
+    shift.keepGoing();
+  };
+  const shiftPromptShown = drivingNow ? null : shift.prompt === "long" ? "long" : offAsk && !runningDelay ? "off_duty" : shift.prompt === "idle" && openTrip ? null : shift.prompt;
   const canCancelNow = canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0);
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;
   const answerStop = (at: string) => {
@@ -2397,7 +2407,7 @@ export default function HomePage() {
       })()} />
 
       <DispatchNotices userId={userId || null} />
-      <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={shift.keepGoing} />
+      <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={stillWorking} />
 
       <div className="d2-cols">
       <div className="d2-left">

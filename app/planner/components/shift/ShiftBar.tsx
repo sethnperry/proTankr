@@ -35,7 +35,8 @@ export function ShiftControls({ shift, onStart, onEnd }: { shift: Shift | null; 
 
 export function ShiftBar({ shift, prompt, onEnd, onAckLong, onKeepGoing }: {
   shift: Shift | null;
-  prompt: ShiftPrompt;
+  /** "off_duty": telematics shows the driver off duty with the shift still open. */
+  prompt: ShiftPrompt | "off_duty";
   onEnd: () => void;
   onAckLong: () => void;
   onKeepGoing: () => void;
@@ -48,6 +49,15 @@ export function ShiftBar({ shift, prompt, onEnd, onAckLong, onKeepGoing }: {
           <div style={{ fontSize: 14, fontWeight: 700 }}>This is a long shift. Still working?</div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button type="button" onClick={onAckLong} style={{ ...btn, flex: 1 }}>Still on shift</button>
+            <button type="button" onClick={onEnd} style={{ ...btn, flex: 1 }}>End shift</button>
+          </div>
+        </div>
+      )}
+      {shift && prompt === "off_duty" && (
+        <div style={{ ...LOOK.secondary, marginTop: 8, padding: "11px 14px" }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Telematics shows you off duty. Still working?</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button type="button" onClick={onKeepGoing} style={{ ...btn, flex: 1 }}>Still working</button>
             <button type="button" onClick={onEnd} style={{ ...btn, flex: 1 }}>End shift</button>
           </div>
         </div>
