@@ -20,11 +20,11 @@ test("John's row: required steps missing are flagged, equipment waits for his co
   const [row] = summarizeFleet({ ...company, members: [john] } as FleetPayload);
   const st = (id: string) => row.summary.steps.find((s) => s.id === id)!;
   assert.equal(st("you").status, "needs");            // no employee number
-  assert.equal(st("license").status, "needs");
+  assert.equal(st("license").status, "open");
   assert.equal(st("equipment").status, "confirm");
   assert.equal(st("plans").status, "done");
   assert.equal(st("terminals").status, "done");
-  assert.equal(row.summary.requiredLeft, 3);
+  assert.equal(row.summary.requiredLeft, 2);
 });
 
 test("no members, or a missing payload, gives an empty list", () => {

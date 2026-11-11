@@ -20,14 +20,15 @@ export type StepStatus = "needs" | "confirm" | "open" | "done" | "na";
 
 export type StepDef = { id: StepId; label: string; sub: string; required: boolean; confirmable: boolean };
 
-// Order is the order the driver walks them. `required` steps can't be skipped. `confirmable` steps are ones
+// Order is the order the driver walks them. Only what the app cannot run without is `required` (who you are, and
+// your truck); license, plans and the rest are optional. `required` steps can't be skipped. `confirmable` steps are ones
 // an admin can preset on a fleet; the driver then only confirms them.
 export const STEPS: StepDef[] = [
   { id: "you", label: "You", sub: "Name, employee number, region and local area", required: true, confirmable: true },
-  { id: "license", label: "License and medical", sub: "Numbers and expiry dates, so the alerts work", required: true, confirmable: true },
+  { id: "license", label: "License and medical", sub: "Numbers and expiry dates, so the alerts work", required: false, confirmable: true },
   { id: "schedule", label: "Work schedule", sub: "The days and shift you usually work", required: false, confirmable: true },
   { id: "equipment", label: "Equipment", sub: "Your truck and trailer", required: true, confirmable: true },
-  { id: "plans", label: "Load plans", sub: "At least one plan in Plan A to E", required: true, confirmable: false },
+  { id: "plans", label: "Load plans", sub: "At least one plan in Plan A to Z", required: false, confirmable: false },
   { id: "terminals", label: "Terminals", sub: "Star the terminals you use and add your cards", required: false, confirmable: false },
   { id: "locations", label: "Delivery locations", sub: "Star the stores you deliver to most", required: false, confirmable: false },
   { id: "fuel_pin", label: "Fuel PIN", sub: "Your PIN for the company fuel program", required: false, confirmable: false },
@@ -89,7 +90,8 @@ function dataState(id: StepId, f: SetupFacts): { present: boolean; missing: stri
     case "you": {
       const miss: string[] = [];
       if (!has(f.profile.displayName)) miss.push("name");
-      if (!has(f.profile.employeeNumber)) miss.push("employee number");
+      // Payroll and dispatch use the employee number; a solo driver has neither.
+      if (f.tier === "fleet" && !has(f.profile.employeeNumber)) miss.push("employee number");
       if (f.regionsDefined || f.tier === "fleet") {
         if (!has(f.profile.region)) miss.push("region");
         if (!has(f.profile.localArea)) miss.push("local area");
