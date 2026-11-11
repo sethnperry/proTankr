@@ -10,7 +10,6 @@
 // dashboard, with "+ New location"), never typed as free text.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SideView, segsFor } from "./TrailerViews";
 import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
 import { namesProblem } from "@/lib/accounts/accountRules";
@@ -18,6 +17,7 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import type { StartLoadDelivery } from "@/lib/trips/tripLogic";
 import { locationPlace, locationTitle, type DeliveryLocation, type LatLon, type LocationTank } from "@/lib/trips/deliveryLocations";
 import { LocationPicker } from "./trip/LocationPicker";
+import { PlanLine, type PlanLineComp } from "./PlanLine";
 import { currentCity, type StartPlace } from "@/lib/trips/startPlace";
 import { SupplierPicker } from "./trip/SupplierPicker";
 import { useTerminalSuppliers } from "@/lib/suppliers/useTerminalSuppliers";
@@ -45,6 +45,7 @@ export function StartLoadSheet({
   dispatchMatch,
   saveSlot,
   productColor,
+  productChip,
   equipmentLabel, lineExtra, selectPlan,
   locations,
   tanks,
@@ -94,6 +95,8 @@ export function StartLoadSheet({
   // Where "save as a plan slot" would go.
   saveSlot?: { slot: number; replacing: boolean } | null;
   productColor: (productId: string) => string;
+  /** Code, full name and color for one product (the plan line shows codes like the trip card). */
+  productChip?: (productId: string) => { code: string; name: string; color: string };
   equipmentLabel: string;
   selectPlan?: { slot: number; n: number }; // dispatch: a plan was just saved; choose it (n changes per request)
   lineExtra?: React.ReactNode; // dispatch: replaces the "tap any value" hint (change equipment, delivery range)
@@ -236,15 +239,12 @@ export function StartLoadSheet({
   const title = (k: EditKey) =>
     k === "miles" ? "Beginning miles" : k === "order" ? "Order number" : k === "shipper" ? "Shipper" : k === "customer" ? "Customer" : k === "start" ? "Starting from" : `Order number ${Number(k.slice(6)) + 2}`;
 
+  // Comps arrive highest number first; the line shows code per compartment, "--" when empty.
+  const planComps = (comps: (string | null)[]): PlanLineComp[] => comps.map((id, i) => {
+    const chip = id ? productChip?.(id) : null;
+    return { num: comps.length - i, code: id ? chip?.code ?? "?" : null, name: chip?.name ?? null, color: chip?.color ?? (id ? productColor(id) : null) };
+  });
   const chosenPreset = presets.find((p) => p.slot === v.planSlot) ?? null;
-  // Comps arrive highest number first (the Planner's right-to-left order).
-  const dots = (comps: (string | null)[]) => {
-    const n = comps.length;
-    const sizes = Array.from({ length: n }, (_, i) => ({ comp: i + 1, size: compSizes?.[i + 1] ?? null }));
-    const loaded: Record<number, string | null> = {};
-    comps.forEach((c, i) => { loaded[n - i] = c ? productColor(c) : null; });
-    return <span style={{ display: "inline-block", width: 112, verticalAlign: "middle" }}><SideView segs={segsFor(sizes, loaded)} height={14} /></span>;
-  };
 
 
   return (
@@ -323,11 +323,11 @@ export function StartLoadSheet({
           <div style={{ marginTop: 8, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Dispatch's plan</span>
-              {dots(dispatchPlan)}
+              <PlanLine letter="" comps={planComps(dispatchPlan)} detail={false} />
             </div>
             {dispatchMatch ? (
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 8, lineHeight: 1.4 }}>
-                You already have this layout as <b>Plan {slotLetter(dispatchMatch.slot)}{dispatchMatch.name ? ` · ${dispatchMatch.name}` : ""}</b>.
+                You already have this layout as <b>Plan {slotLetter(dispatchMatch.slot)}</b>.
                 Your caps and CG apply.
               </div>
             ) : (
@@ -396,7 +396,7 @@ export function StartLoadSheet({
         {onPlanDetour && chosenPreset && (
           <button type="button" onClick={() => { setPlanOpen(false); onPlanDetour(chosenPreset.slot, v); }}
             style={{ padding: "12px", borderRadius: 2, textAlign: "left", cursor: "pointer", border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "#fff", fontSize: 15, fontWeight: 700 }}>
-            Edit Plan {slotLetter(chosenPreset.slot)}{chosenPreset.name ? ` · ${chosenPreset.name}` : ""}
+            Edit Plan {slotLetter(chosenPreset.slot)}
           </button>
         )}
         {presets.map((p) => {
@@ -405,9 +405,7 @@ export function StartLoadSheet({
             <button key={p.slot} type="button" onClick={() => { setV((s) => ({ ...s, planSlot: p.slot })); setPlanOpen(false); }}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 2, cursor: "pointer", textAlign: "left", color: "#fff", fontSize: 15,
                 border: `1px solid ${on ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.14)"}`, background: on ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)" }}>
-              <span style={{ fontWeight: 800, width: 14 }}>{slotLetter(p.slot)}</span>
-              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name ?? `Plan ${slotLetter(p.slot)}`}</span>
-              {dots(p.comps)}
+              <span style={{ flex: 1, minWidth: 0 }}><PlanLine letter={slotLetter(p.slot)} comps={planComps(p.comps)} active={on} /></span>
               {on && <span style={{ fontWeight: 800 }}>✓</span>}
             </button>
           );

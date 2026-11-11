@@ -35,8 +35,8 @@
 // -- "instead of describing the plan just use colored dots for a quick
 // visual representation of the product selection."
 
-import React, { useEffect, useRef, useState } from "react";
-import { SideView, type StripSeg } from "./TrailerViews";
+import React, { useEffect, useRef } from "react";
+import { PlanLine, type PlanLineComp } from "./PlanLine";
 
 type Props = {
   open: boolean;
@@ -47,12 +47,10 @@ type Props = {
   disabled: boolean;
   disabledReason?: string;
   getSummary: (slot: number) => string;
-  getName: (slot: number) => string | undefined;
-  getStrip: (slot: number) => StripSeg[];
+  getComps: (slot: number) => PlanLineComp[];
   onLoad: (slot: number) => void;
   onSaveEmpty: (slot: number) => void;
   onOpenActions: (slot: number) => void;
-  onRename: (slot: number, name: string) => void;
   // Optional -- omitted, this row doesn't render. A deliberate, separate
   // home for the "Recall Last Load" action (per explicit direction) after
   // it was removed from the recap card's own label, which used to double
@@ -74,26 +72,17 @@ const ROW_BORDER_ACTIVE = "1px solid rgba(255,255,255,0.25)";
 
 export default function PresetQuickPick({
   open, onClose, slots, slotHas, activeSlot, disabled, disabledReason,
-  getSummary, getName, getStrip, onLoad, onSaveEmpty, onOpenActions, onRename,
+  getSummary, getComps, onLoad, onSaveEmpty, onOpenActions,
   onRecallLastLoad,
 }: Props) {
-  const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
-  const [draftName, setDraftName] = useState("");
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPressRef = useRef(false);
 
-  // Reset any in-flight rename whenever the sheet closes -- a stale draft
-  // shouldn't survive to the next time it's opened.
   useEffect(() => {
-    if (!open) { setRenamingSlot(null); pressTimerRef.current && clearTimeout(pressTimerRef.current); }
+    if (!open) { pressTimerRef.current && clearTimeout(pressTimerRef.current); }
   }, [open]);
 
   if (!open) return null;
-
-  const commitRename = (slot: number) => {
-    onRename(slot, draftName);
-    setRenamingSlot(null);
-  };
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10300, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -107,26 +96,7 @@ export default function PresetQuickPick({
           <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
             Plan Slots
           </span>
-          {slotHas[activeSlot] && (
-            <button type="button" disabled={disabled}
-              onClick={() => { setDraftName(getName(activeSlot) ?? ""); setRenamingSlot(activeSlot); }}
-              style={{ border: "none", background: "none", padding: 0, cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-              {getName(activeSlot) || "Name this plan"} ›
-            </button>
-          )}
         </div>
-        {renamingSlot != null && (
-          <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-            <input
-              autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") commitRename(renamingSlot); if (e.key === "Escape") setRenamingSlot(null); }}
-              placeholder="Name this plan"
-              style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, padding: "10px 12px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 15, fontWeight: 600 }}
-            />
-            <button type="button" onClick={() => commitRename(renamingSlot)}
-              style={{ padding: "0 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Save</button>
-          </div>
-        )}
 
         {disabled && (
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 12 }}>{disabledReason}</div>
@@ -138,8 +108,7 @@ export default function PresetQuickPick({
             const letter = String.fromCharCode(64 + slot);
             const has = !!slotHas[slot];
             const isActive = slot === activeSlot;
-                        const name = getName(slot);
-            const strip = has ? getStrip(slot) : [];
+                        const comps = has ? getComps(slot) : [];
 
             const onPressStart = () => {
               if (disabled || !has) return;
@@ -174,33 +143,12 @@ export default function PresetQuickPick({
                     cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1,
                   }}
                 >
-                  {/* Plain letter, no boxed badge -- white when this is the
-                      currently-selected/active plan, dim otherwise. */}
-                  <span style={{
-                    flexShrink: 0, minWidth: 18, textAlign: "center" as const,
-                    fontSize: 16, fontWeight: 800, color: isActive ? "#fff" : "rgba(255,255,255,0.55)",
-                  }}>
-                    {letter}
-                  </span>
-                  <span style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-                    {(
-                      // Name and dots share one row now (was name, then a
-                      // second line of dots underneath) -- dots sized up a
-                      // little (9px -> 12px). Gap widened again the same
-                      // day (8px -> 16px) per explicit follow-up ("shift
-                      // them to the right away from the label a bit").
-                      <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: name ? "#fff" : "rgba(255,255,255,0.35)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, flexShrink: 1 }}>
-                          {name || `Preset ${letter}`}
-                        </div>
-                        {has ? (
-                          <div style={{ flex: "0 0 112px" }} title={getSummary(slot)}><SideView segs={strip} height={14} /></div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>
-                            Tap to save current plan
-                          </div>
-                        )}
-                      </div>
+                  <span style={{ minWidth: 0, flex: 1, overflow: "hidden" }} title={has ? getSummary(slot) : undefined}>
+                    {has ? <PlanLine letter={letter} comps={comps} active={isActive} /> : (
+                      <span style={{ fontSize: 14 }}>
+                        <span style={{ fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>Plan {letter}:</span>{" "}
+                        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Tap to save current plan</span>
+                      </span>
                     )}
                   </span>
                 </button>

@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase/client";
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 import { detourActive, finishDetour, RESUME_URL, startDetour } from "@/lib/trips/planDetour";
 import { productColorFor } from "../utils/productColor";
+import type { PlanLineComp } from "../components/PlanLine";
 
 import type { Dispatch, SetStateAction } from "react";
 import type { useCalculatorShell } from "../CalculatorShellContext";
@@ -26,6 +27,7 @@ type Inputs = {
   active: boolean;
   planSlots: ReturnType<typeof usePlanSlots>;
   productNameById: Map<string, string>;
+  terminalProducts: any[];
   compartments: CompRow[];
   setCompartments: Dispatch<SetStateAction<CompRow[]>>;
   compLoading: boolean;
@@ -46,7 +48,7 @@ type Inputs = {
 
 export function usePlanSlotsView(i: Inputs) {
   const {
-    shell, active, planSlots, productNameById, compartments, setCompartments, compLoading, selectedTrailerId, compPlan, cgSlider,
+    shell, active, planSlots, productNameById, terminalProducts, compartments, setCompartments, compLoading, selectedTrailerId, compPlan, cgSlider,
     activeSlotLetter, setActiveSlotLetter, setCaptureBaselineNext, setCheckAvailabilityNext, setBaselineOverrides,
     overridesSnapshot, planRestoreAttempted, onboardingActive, setupSession, loadWorkflow,
   } = i;
@@ -90,47 +92,21 @@ export function usePlanSlotsView(i: Inputs) {
     return summaryForSlot(presetSheetSlot);
   }, [presetSheetSlot, summaryForSlot]);
 
-  // PresetQuickPick's per-row name -- direct peekSlot read, no memoization
-  // needed (cheap localStorage read, same pattern peekSlot's own callers
-  // already use elsewhere on this page).
-  const nameForSlot = useCallback((slot: number) => planSlots.peekSlot(slot)?.name, [planSlots]);
-
-  // PresetQuickPick's per-row colored-dot readout -- per explicit direction
-  // ("instead of describing the plan just use colored dots for a quick
-  // visual representation... the product selection, and each [compartment]")
-  // -- reusing the same productColorFor family-coding the outage banner's
-  // detail cards already use (diesel yellow / premium red / else white).
-  // An empty compartment (or one with no product selected) renders black;
-  // a compartment whose product isn't resolvable at the current terminal
-  // (see summaryForSlot's own "unavailable product" case) still gets a
-  // real dot -- productColorFor("") falls through to white -- rather than
-  // silently disappearing from the readout.
-  //
-  // Iterates over the equipment's own real `compartments` list now, not
-  // just whatever keys happen to exist in the saved plan snapshot -- per
-  // explicit follow-up ("on this trailer, 3 comps, all plans should have
-  // 3 dots"): a preset saved before this pass, or one whose snapshot never
-  // recorded a since-added compartment, previously produced fewer dots
-  // than the trailer actually has. Reading real compartment numbers
-  // instead means the dot count can never drift from the truth, and a
-  // missing plan entry for a real compartment (not just one explicitly
-  // marked empty) also correctly renders black rather than being skipped.
-  //
-  // Order: DESCENDING comp number, not ascending -- matches
-  // PlannerControls.tsx's own physical display order exactly (see that
-  // file's `ordered = [...compartments].sort(asc).reverse()`, "right-to-
-  // left display" comment) -- per explicit correction ("comp 1 is on the
-  // right, looking at the passenger side... the dots are backwards").
-  const stripForSlot = useCallback((slot: number): StripSeg[] => {
+  // PresetQuickPick's per-row readout: one entry per real compartment, highest number first (the trip card's
+  // order), with the product's button code, full name and color. Empty compartments have no code.
+  const compsForSlot = useCallback((slot: number): PlanLineComp[] => {
     const plan = planSlots.peekSlot(slot)?.compPlan;
-    const sizes = compartments.map((c: any) => ({ comp: Number(c.comp_number), size: c.max_gallons != null ? Number(c.max_gallons) : null }));
-    const loaded: Record<number, string | null> = {};
-    for (const c of sizes) {
-      const v = plan?.[c.comp];
-      loaded[c.comp] = !v || v.empty || !v.productId ? null : productColorFor(productNameById.get(v.productId) ?? "");
-    }
-    return segsFor(sizes, loaded);
-  }, [planSlots, productNameById, compartments]);
+    const byId = new Map<string, any>(terminalProducts.map((p: any) => [String(p.product_id), p]));
+    return [...compartments].map((c: any) => Number(c.comp_number)).sort((a, b) => b - a).map((num) => {
+      const v = plan?.[num];
+      if (!v || v.empty || !v.productId) return { num, code: null, name: null, color: null };
+      const p = byId.get(String(v.productId));
+      const name = productNameById.get(v.productId) ?? null;
+      const code = String(p?.button_code ?? p?.product_code ?? (name ?? "").split(/\s+/)[0] ?? "").trim().toUpperCase() || "?";
+      const hex = typeof p?.hex_code === "string" && p.hex_code.trim() ? p.hex_code.trim() : null;
+      return { num, code, name: name ?? "Unavailable product", color: hex ?? productColorFor(name ?? "") };
+    });
+  }, [planSlots, productNameById, terminalProducts, compartments]);
 
   // Same tap-to-load/tap-empty-to-save sequence the old PresetDial's own
   // onLoad/onSave props used -- preserved verbatim, just triggered from
@@ -277,7 +253,7 @@ export function usePlanSlotsView(i: Inputs) {
 
   return {
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
-    summaryForSlot, presetSheetSummary, nameForSlot, stripForSlot,
+    summaryForSlot, presetSheetSummary, compsForSlot, 
     handlePresetLoad, handlePresetSaveEmpty, handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
     planSlotWithLayout, hasAnyPlan, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleWizardFinish,
   };

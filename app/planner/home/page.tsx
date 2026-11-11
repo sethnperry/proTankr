@@ -3238,6 +3238,7 @@ export default function HomePage() {
         })() : null}
         saveSlot={nextSaveSlot(sheetPresets)}
         productColor={(id) => { const p = productInfo(id); return p.hex ?? productColorFor(p.name); }}
+        productChip={(id) => { const p = productInfo(id); return { code: p.code, name: p.name, color: p.hex ?? productColorFor(p.name) }; }}
         equipmentLabel={equipmentLabel}
         locations={locations}
         tanks={locList.tanks}

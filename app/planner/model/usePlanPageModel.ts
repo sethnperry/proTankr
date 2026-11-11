@@ -16,15 +16,15 @@ type UseLoadModelModel = ReturnType<typeof useLoadModel>;
 
 export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l: UseLoadModelModel) {
   const { shell, setupSession, effectiveUserId, equipment, active, onboardingActive } = v;
-  const { setCompModalOpen, setCompModalComp, activeSlotLetter, setActiveSlotLetter, setSelectedComp, planRestoreAttempted, compartments, setCompartments, compLoading, selectedTrailerId, cgSlider, setCgSlider, compPlan, setCompPlan, overridesSnapshot, baselineOverrides, setBaselineOverrides, setCaptureBaselineNext, planSlots, productNameById, setCheckAvailabilityNext } = p;
+  const { setCompModalOpen, setCompModalComp, activeSlotLetter, setActiveSlotLetter, setSelectedComp, planRestoreAttempted, compartments, setCompartments, compLoading, selectedTrailerId, cgSlider, setCgSlider, compPlan, setCompPlan, overridesSnapshot, baselineOverrides, setBaselineOverrides, setCaptureBaselineNext, planSlots, productNameById, terminalProducts, setCheckAvailabilityNext } = p;
   const { loadWorkflow, tripWaitingPickup } = l;
   const {
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
-    summaryForSlot, presetSheetSummary, nameForSlot, stripForSlot,
+    summaryForSlot, presetSheetSummary, compsForSlot,
     handlePresetLoad, handlePresetSaveEmpty, handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
     planSlotWithLayout, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleWizardFinish,
   } = usePlanSlotsView({
-    shell, active, planSlots, productNameById, compartments, setCompartments, compLoading, selectedTrailerId, compPlan, cgSlider,
+    shell, active, planSlots, productNameById, terminalProducts, compartments, setCompartments, compLoading, selectedTrailerId, compPlan, cgSlider,
     activeSlotLetter, setActiveSlotLetter, setCaptureBaselineNext, setCheckAvailabilityNext, setBaselineOverrides,
     overridesSnapshot, planRestoreAttempted, onboardingActive, setupSession, loadWorkflow,
   });
@@ -45,8 +45,7 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     setPresetQuickPickOpen,
     summaryForSlot,
     presetSheetSummary,
-    nameForSlot,
-    stripForSlot,
+    compsForSlot,
     handlePresetLoad,
     handlePresetSaveEmpty,
     handlePresetSheetLoad,

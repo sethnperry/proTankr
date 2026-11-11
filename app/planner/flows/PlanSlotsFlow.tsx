@@ -16,8 +16,7 @@ export default function PlanSlotsFlow() {
     presetQuickPickOpen,
     setPresetQuickPickOpen,
     summaryForSlot,
-    nameForSlot,
-    stripForSlot,
+    compsForSlot,
     handlePresetLoad,
     handlePresetSaveEmpty,
     setPresetSheetSlot,
@@ -47,12 +46,10 @@ export default function PlanSlotsFlow() {
         disabled={!shell.location.selectedTerminalId || !planSlots.presetsReady}
         disabledReason={!shell.location.selectedTerminalId ? "Select a terminal first" : "Syncing presets…"}
         getSummary={summaryForSlot}
-        getName={nameForSlot}
-        getStrip={stripForSlot}
+        getComps={compsForSlot}
         onLoad={handlePresetLoad}
         onSaveEmpty={handlePresetSaveEmpty}
         onOpenActions={(n) => setPresetSheetSlot(n)}
-        onRename={(n, name) => planSlots.renameSlot(n, name)}
         onRecallLastLoad={handleRecallLastLoad}
       />
       <PresetActionSheet
