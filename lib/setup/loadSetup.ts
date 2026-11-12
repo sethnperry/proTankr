@@ -69,7 +69,8 @@ export async function loadSetup(userId: string, companyId: string): Promise<{ fa
     hasFuelPin: pin.length > 0,
     pushSupported: typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator,
     pushOn: push.length > 0,
-    telematicsConnected: !!tele?.companyConnected,
+    // If the connection check itself failed, show the step rather than hide it.
+    telematicsConnected: tele ? !!tele.companyConnected : true,
     hoursLinked: !!tele?.connected,
     hasPerDiemHome: !!home?.city,
     vaultSet: !!vault,

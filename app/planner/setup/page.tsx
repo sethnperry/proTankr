@@ -148,7 +148,7 @@ export default function SetupPage() {
       <FullscreenModal open={openId === "fuel_pin"} title="Fuel PIN" onClose={() => { setOpenId(null); void reload(); }}>
         {companyId && userId && <FuelPinsView companyId={companyId} userId={userId} />}
       </FullscreenModal>
-      <FullscreenModal open={openId === "hours"} title="Hours" onClose={() => { setOpenId(null); void reload(); }}>
+      <FullscreenModal open={openId === "hours"} title="Hours of service (Geotab)" onClose={() => { setOpenId(null); void reload(); }}>
         {companyId && <TelematicsLoginView companyId={companyId} />}
       </FullscreenModal>
       <FullscreenModal open={pop === "locations"} title="Delivery locations" onClose={closePop}>

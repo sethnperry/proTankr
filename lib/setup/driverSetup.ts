@@ -33,7 +33,7 @@ export const STEPS: StepDef[] = [
   { id: "locations", label: "Delivery locations", sub: "Star the stores you deliver to most", required: false, confirmable: false },
   { id: "fuel_pin", label: "Fuel PIN", sub: "Your PIN for the company fuel program", required: false, confirmable: false },
   { id: "alerts", label: "Alerts", sub: "Turn on notifications for hours and call-outs", required: false, confirmable: false },
-  { id: "hours", label: "Hours", sub: "Connect your own login for your hours", required: false, confirmable: false },
+  { id: "hours", label: "Hours of service (Geotab)", sub: "Sign in with your own Geotab login so your hours and duty status are yours", required: false, confirmable: false },
   { id: "per_diem", label: "Per diem", sub: "Your home location", required: false, confirmable: false },
   { id: "vault", label: "Vault", sub: "Set your pattern lock", required: false, confirmable: false },
 ];
