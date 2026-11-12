@@ -29,4 +29,12 @@ export const WALKTHROUGH_DECKS: WalkthroughDeck[] = [
     href: "/walkthroughs/ProTankr_Driver_Walkthrough.pdf",
     pages: 19,
   },
+  {
+    id: "splash",
+    title: "Splash Blending SOP",
+    description:
+      "Load E0, top it off with ethanol and deliver E10: setup, both loads, the drop and the PTD, step by step.",
+    href: "/walkthroughs/ProTankr_Splash_Blending_SOP.pdf",
+    pages: 13,
+  },
 ];
