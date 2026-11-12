@@ -21,6 +21,8 @@ import { PickSheet } from "@/lib/ui/PickSheet";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import { fmtDateTime } from "../../trips/PtdDocument";
 import { usePending } from "@/lib/ui/pending";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { forceCancelTrip } from "@/lib/dispatch/tripEdits";
 
 const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
   dispatched: { label: "Dispatched", color: "#93c5fd" },
@@ -60,7 +62,7 @@ async function fetchChildren(ids: string[], isLive: () => boolean, onPart: (p: P
   }
 }
 
-export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }: {
+export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, canForceCancel = false }: {
   mode: "driver" | "company";
   /** The signed-in (or impersonated) user. Driver mode lists only this user's trips. */
   userId: string | null;
@@ -69,6 +71,8 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
   onOpen?: (tripId: string) => void;
   /** The Dispatch board's Region filter, when one is on: only these drivers and trucks. */
   region?: { label: string; driverIds: Set<string>; truckOk: (truckId: string) => boolean } | null;
+  /** Admins only: show "Cancel trip…" on any open trip, even one marked loaded (for test and mistaken loads). */
+  canForceCancel?: boolean;
 }) {
   const nav = usePending();
   const open = onOpen ?? ((id: string) => nav.go(id, `/planner/trips/${id}`));
@@ -212,6 +216,23 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
   }, [bundle, locs, catalog.data, company, userId]);
   const hdr = useTrailerHeaderData(rows.map((r) => r.trip.trailer_id));
 
+  // Admin clean-up: cancel an open trip with a typed confirmation.
+  const [killing, setKilling] = useState<{ tripId: string; label: string; status: string } | null>(null);
+  const [killWord, setKillWord] = useState("");
+  const [killNote, setKillNote] = useState("");
+  const [killBusy, setKillBusy] = useState(false);
+  const [killErr, setKillErr] = useState<string | null>(null);
+  const closeKill = () => { setKilling(null); setKillWord(""); setKillNote(""); setKillErr(null); };
+  const doKill = async () => {
+    if (!killing || !userId) return;
+    setKillBusy(true); setKillErr(null);
+    const err = await forceCancelTrip(killing.tripId, userId, killNote);
+    setKillBusy(false);
+    if (err) { setKillErr(err); return; }
+    setServer((b) => ({ ...b, trips: b.trips.map((t) => (t.trip_id === killing.tripId ? { ...t, status: "cancelled", cancelled_at: new Date().toISOString() } : t)), comps: b.comps.map((c) => (c.trip_id === killing.tripId && c.disposition !== "delivered" ? { ...c, disposition: "cancelled" } : c)) }));
+    closeKill();
+  };
+
   const hiddenCount = company ? 0 : rows.filter((r) => r.trip.driver_hidden).length;
   const orderNumbers = useMemo(() => [...new Set(bundle.orders.map((o) => o.order_number).filter(Boolean) as string[])].sort(), [bundle.orders]);
   const hasOrder = (tripId: string) => bundle.orders.some((o) => o.trip_id === tripId && o.order_number === orderNo);
@@ -313,6 +334,13 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
                     })}
                   </span>
                 )}
+                {company && canForceCancel && trip.status !== "complete" && trip.status !== "cancelled" && (
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); setKilling({ tripId: trip.trip_id, label: order ? `Order ${order}` : ptdCode(trip.trip_id), status: s.label }); }}
+                    style={{ border: "1px solid rgba(248,113,113,0.5)", background: "transparent", color: "#f87171", fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", padding: "5px 10px" }}>
+                    Cancel trip…
+                  </button>
+                )}
                 {cancelled && !company && (
                   <button type="button"
                     onClick={(e) => { e.stopPropagation(); setHidden(trip.trip_id, !trip.driver_hidden); }}
@@ -325,6 +353,26 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null }:
           </div>
         );
       })}
+      <FullscreenModal open={!!killing} title="Cancel this trip?" onClose={closeKill} footer={null}>
+        {killing && (
+          <>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{killing.label} · {killing.status}</div>
+            <div style={{ fontSize: 14, color: "#fbbf24", marginTop: 10, lineHeight: 1.45 }}>
+              This cancels the trip even if product is marked loaded, and releases the trailer. Use it for test or mistaken loads only. If real product is on the trailer, park or deliver it instead. It cannot be undone, and the driver is notified.
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", margin: "14px 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Note (optional)</div>
+            <input value={killNote} onChange={(e) => setKillNote(e.target.value)} placeholder="Test load" style={{ width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2 }} />
+            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", margin: "14px 0 6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Type CANCEL to confirm</div>
+            <input value={killWord} onChange={(e) => setKillWord(e.target.value)} autoCapitalize="characters" autoComplete="off" style={{ width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2 }} />
+            {killErr && <div style={{ color: "#f87171", fontSize: 13, marginTop: 10 }}>{killErr}</div>}
+            <button type="button" disabled={killBusy || killWord.trim().toUpperCase() !== "CANCEL"} onClick={() => void doKill()}
+              style={{ width: "100%", marginTop: 14, padding: "14px 0", fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", background: killWord.trim().toUpperCase() === "CANCEL" ? "#ef4444" : "rgba(255,255,255,0.1)", color: "#fff", border: "none", borderRadius: 2, cursor: "pointer" }}>
+              {killBusy ? "Cancelling…" : "Cancel trip"}
+            </button>
+            <button type="button" onClick={closeKill} style={{ width: "100%", marginTop: 10, padding: "14px 0", fontSize: 14, fontWeight: 800, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 2, cursor: "pointer" }}>Keep the trip</button>
+          </>
+        )}
+      </FullscreenModal>
       {company && rows.length >= 120 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", textAlign: "center" }}>Showing the newest 120. Narrow the filters to see older ones.</div>}
       {hiddenCount > 0 && (
         <button type="button" onClick={() => setShowHidden((v) => !v)}

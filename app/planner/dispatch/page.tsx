@@ -945,7 +945,7 @@ export default function DispatchPage() {
       <CalloutsModal open={calloutsOpen} onClose={() => { setCalloutsOpen(false); void activeCallouts.reload(); }} companyId={companyId || ""} userId={authUserId || null} canEdit />
       <LocationsHub open={locsOpen} onClose={() => setLocsOpen(false)} companyId={companyId || null} userId={authUserId || null} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} />
       <FullscreenModal open={tripsOpen} title="Trips" onClose={() => setTripsOpen(false)} footer={null}>
-        {tripsOpen && <TripsBrowser mode="company" userId={authUserId || null} companyId={companyId || null} onOpen={openTrip}
+        {tripsOpen && <TripsBrowser mode="company" userId={authUserId || null} companyId={companyId || null} onOpen={openTrip} canForceCancel={shell.role === "admin" || !!shell.isSuperAdmin}
           region={regionOn ? { label: [...regionSel].join(", "), driverIds: regionDriverIds, truckOk: (id) => regionSel.has(plan.unitRegions.get(id)?.trim() || NO_REGION) } : null} />}
       </FullscreenModal>
       <FullscreenModal open={!!reassigning} title="Reassign to which driver?" onClose={() => setReassigning(null)}>

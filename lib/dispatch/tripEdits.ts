@@ -59,6 +59,25 @@ export async function changeOrderNumber(ft: FleetTrip, orderNumber: string, acto
   return null;
 }
 
+/**
+ * Admin clean-up: cancel a trip even when product is marked loaded (test loads, mistaken loads). Anything marked aboard
+ * is released so the trailer reads empty. Meant for admins; the screen asks for a typed confirmation first.
+ */
+export async function forceCancelTrip(tripId: string, actorId: string, note: string): Promise<string | null> {
+  const at = nowIso();
+  const { data, error } = await supabase.from("trips").update({
+    status: "cancelled", cancelled_at: at, cancelled_by: actorId, cancel_reasons: ["dispatch_cancelled"], cancel_note: note.trim() || "Cancelled by an admin", client_updated_at: at,
+  }).eq("trip_id", tripId).not("status", "in", "(complete,cancelled)").select("trip_id");
+  if (error) return error.message;
+  if (!data?.length) return "That trip already ended, or you aren't allowed to change it.";
+  // Release anything marked aboard and any stop not yet done. Best effort: the trip itself is already cancelled.
+  await supabase.from("trip_compartment_loads").update({ disposition: "cancelled", client_updated_at: at }).eq("trip_id", tripId).neq("disposition", "delivered");
+  await supabase.from("trip_deliveries").update({ status: "cancelled", client_updated_at: at }).eq("trip_id", tripId).eq("status", "planned");
+  await logEvent(tripId, actorId, "dispatch_edit", { change: "force_cancelled", note: note.trim() || null });
+  void notifyDriver(tripId, "An admin cancelled this load.");
+  return null;
+}
+
 /** Cancel a load. Refused when product is already aboard (park or deliver it instead). */
 export async function cancelLoadInProgress(ft: FleetTrip, actorId: string, note: string): Promise<string | null> {
   if (ft.compLoads.some((c) => c.disposition === "loaded")) return "Product is already on the trailer. Park or deliver it instead of cancelling.";
