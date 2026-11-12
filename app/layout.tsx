@@ -3,6 +3,7 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import QueryProvider from "@/app/providers/QueryProvider";
+import StyledJsxRegistry from "./providers/StyledJsxRegistry";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -90,7 +91,9 @@ export default function RootLayout({
         style={{ background: "#111111", colorScheme: "dark" }}
       >
         <ServiceWorkerRegistration />
-        <QueryProvider>{children}</QueryProvider>
+        <StyledJsxRegistry>
+          <QueryProvider>{children}</QueryProvider>
+        </StyledJsxRegistry>
       </body>
     </html>
   );
