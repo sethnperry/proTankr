@@ -41,7 +41,7 @@ type Props = {
 };
 
 export default function PlanActionsSection(p: Props) {
-  const gallonsText = p.plannedGallons == null ? "—" : `${Math.round(p.plannedGallons).toLocaleString()} gal`;
+  const gallonsText = p.targetWeight > 0 ? `Target ${Math.round(p.targetWeight).toLocaleString()} lbs` : "No target";
   const grossText = p.grossLbs == null ? "—" : `${Math.round(p.grossLbs).toLocaleString()} lbs`;
   // Gross is colored against this trailer's target and the 80,000 lb legal limit.
   const grossColor =

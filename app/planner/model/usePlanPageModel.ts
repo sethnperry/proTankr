@@ -23,7 +23,7 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
     summaryForSlot, presetSheetSummary, compsForSlot,
     handlePresetLoad, handlePresetSaveEmpty, handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
-    planSlotWithLayout, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleWizardFinish,
+    planSlotWithLayout, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleSaveTrailerComp, handleWizardFinish,
   } = usePlanSlotsView({
     shell, active, planSlots, productNameById, terminalProducts, compartments, setCompartments, compLoading, selectedTrailerId, compPlan, cgSlider,
     activeSlotLetter, setActiveSlotLetter, setCaptureBaselineNext, setCheckAvailabilityNext, setBaselineOverrides,
@@ -75,6 +75,7 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     wizardOpen,
     canSetCap,
     handleWizardSaveCaps,
+    handleSaveTrailerComp,
     handleWizardFinish: handleWizardFinishGuarded,
     closeCompModal,
     currentOverrides,

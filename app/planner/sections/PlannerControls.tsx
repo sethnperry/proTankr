@@ -1,20 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
-import ValueEntryOverlay from "../components/ValueEntryOverlay";
+import React from "react";
 import { HEADSPACE_SCALE } from "../utils/headspace";
 
 /**
  * PlannerControls - compartment strip.
- * Tall thin bars, product color fill from bottom, product code outside/
- * below bar, gallons darker grey, comp number above. Each bar has a drag
- * handle sitting at its configured cap line -- dragging temporarily lowers
- * the effective ceiling for this load only (bounded to the compartment's
- * real cap_gallons, set in Binder's Compartments section; never above it).
- * A small reset control clears the override back to the full cap. Tapping
- * the bar body selects it (highlighted ring) and surfaces an "Edit Comp N
- * Product" button in the action row above -- it does not open the product
- * picker directly, so the tap never conflicts with the drag gesture.
+ * Tall thin bars, product color fill from bottom, product code below, comp
+ * number above. Gallons show under a bar only when the driver set a custom
+ * cap. Tapping anywhere on a compartment opens its detail window, where the
+ * caps are changed.
  */
 export default function PlannerControls(props: any) {
   const {
@@ -36,22 +30,7 @@ export default function PlannerControls(props: any) {
   // handles... to white") -- was themeFill(darkMode, accentColor), which
   // rendered graphite/accent-tinted; this element no longer follows the
   // accent color at all.
-  const handleFill = "#ffffff";
-
-  const [draggingComp, setDraggingComp] = useState<number | null>(null);
-  const [dragGallonsText, setDragGallonsText] = useState<number | null>(null);
-  const [capInput, setCapInput] = useState<{ comp: number; value: string; max: number } | null>(null);
-
-  function commitCapInput() {
-    if (!capInput) return;
-    const parsed = Math.max(0, Math.min(capInput.max, Math.round(Number(capInput.value) || 0)));
-    setCompPlan((prev: any) => ({
-      ...prev,
-      [capInput.comp]: { ...(prev[capInput.comp] ?? { empty: false, productId: "" }), capOverride: parsed },
-    }));
-    setCapInput(null);
-  }
-
+  
   return (
     <section style={{ border: "none", background: "transparent", padding: 0 }}>
       {!selectedTrailerId && <div style={styles.help}>Select equipment to load compartments.</div>}
@@ -151,20 +130,6 @@ export default function PlannerControls(props: any) {
                 const codeColor = isEmpty ? "rgba(255,255,255,0.30)" : notAvailable ? "#ef4444" : (hexColor ?? "rgba(255,255,255,0.85)");
 
                 const capLineTopPct = (1 - capPct) * 100;
-                const isDragging = draggingComp === compNumber;
-
-                function updateFromClientY(clientY: number, barEl: HTMLElement) {
-                  const rect = barEl.getBoundingClientRect();
-                  const relY = (clientY - rect.top) / rect.height;
-                  const frac = Math.max(0, Math.min(1, 1 - relY));
-                  const gallons = Math.max(0, Math.min(persistedCap, Math.round(frac * scaledMax)));
-                  setDragGallonsText(gallons);
-                  setCompPlan((prev: any) => ({
-                    ...prev,
-                    [compNumber]: { ...(prev[compNumber] ?? { empty: false, productId: "" }), capOverride: gallons },
-                  }));
-                }
-
                 return (
                   <div
                     key={String(c.comp_number)}
@@ -189,25 +154,6 @@ export default function PlannerControls(props: any) {
                       }}>
                         {compNumber}
                       </div>
-                      {hasOverride && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCompPlan((prev: any) => ({
-                              ...prev,
-                              [compNumber]: { ...(prev[compNumber] ?? { empty: false, productId: "" }), capOverride: null },
-                            }));
-                          }}
-                          title="Reset to full cap"
-                          style={{
-                            border: "none", background: "none", cursor: "pointer", padding: 0,
-                            fontSize: 11, color: "#ffb020", lineHeight: 1,
-                          }}
-                        >
-                          ↺
-                        </button>
-                      )}
                     </div>
 
                     {/* Bar — no border, square corners, flat bottom. Selection
@@ -242,55 +188,10 @@ export default function PlannerControls(props: any) {
                           position: "absolute", left: 0, right: 0, bottom: 0,
                           height: `${fillPct * 100}%`,
                           background: fillColor,
-                          transition: isDragging ? "none" : "height 300ms ease, background 200ms ease",
+                          transition: "height 300ms ease, background 200ms ease",
                         }} />
                       </div>
 
-                      {/* Cap drag handle -- separate hit target from the bar
-                          body, stopPropagation so a drag never also opens the
-                          product picker */}
-                      <div
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                          setDraggingComp(compNumber);
-                          updateFromClientY(e.clientY, e.currentTarget.parentElement as HTMLElement);
-                        }}
-                        onPointerMove={(e) => {
-                          if (draggingComp !== compNumber) return;
-                          e.stopPropagation();
-                          updateFromClientY(e.clientY, e.currentTarget.parentElement as HTMLElement);
-                        }}
-                        onPointerUp={(e) => {
-                          e.stopPropagation();
-                          setDraggingComp(null);
-                          setDragGallonsText(null);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          position: "absolute", left: "50%", transform: "translate(-50%,-50%)",
-                          // Clamped to at least 7px (half the handle's own height) so a
-                          // cap at/near 100% never pushes the handle above the bar's top
-                          // edge into the comp-number label sitting just above it.
-                          top: `max(7px, ${capLineTopPct}%)`, width: 36, height: 14,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "ns-resize", touchAction: "none", zIndex: 3,
-                        }}
-                      >
-                        <div style={{ width: 30, height: 5, borderRadius: 3, background: handleFill, boxShadow: "0 1px 4px rgba(0,0,0,0.5)" }} />
-                      </div>
-
-                      {isDragging && dragGallonsText != null && (
-                        <div style={{
-                          position: "absolute", left: "50%", transform: "translateX(-50%)",
-                          top: `calc(${capLineTopPct}% - 26px)`,
-                          background: "#1c1c1c", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2,
-                          padding: "2px 7px", fontSize: 10, fontWeight: 700, color: "#fff",
-                          whiteSpace: "nowrap" as const, boxShadow: "0 4px 12px rgba(0,0,0,0.5)", zIndex: 4,
-                        }}>
-                          {dragGallonsText.toLocaleString()} gal
-                        </div>
-                      )}
                     </div>
 
                     {/* Product code — outside bar, below, colored */}
@@ -303,23 +204,12 @@ export default function PlannerControls(props: any) {
                       {code}
                     </div>
 
-                    {/* Gallons — darker grey. Tap to dial in the cap precisely
-                        (same value the drag handle sets) via a numeric keypad,
-                        instead of only being able to drag it. */}
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCapInput({ comp: compNumber, value: String(effMax), max: persistedCap });
-                      }}
-                      style={{
-                        marginTop: 2,
-                        fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 600,
-                        color: planned > 0 ? "rgba(140,140,140,0.9)" : "rgba(255,255,255,0.12)",
-                        letterSpacing: -0.2,
-                      }}
-                    >
-                      {planned > 0 ? Math.round(planned).toLocaleString() : "—"}
-                    </div>
+                    {/* Gallons only when the driver set a custom cap. */}
+                    {hasOverride && (
+                      <div style={{ marginTop: 2, fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 700, color: "#ffb020", letterSpacing: -0.2 }}>
+                        {Math.round(effMax).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 );
               });
@@ -332,23 +222,6 @@ export default function PlannerControls(props: any) {
         <div style={styles.help}>No compartments found for this trailer.</div>
       )}
 
-      {/* Precise cap entry -- device numeric keypad, same value/bounds the
-          drag handle sets. Shared overlay component (ValueEntryOverlay) so
-          the Loading modal's Plan Review / Verify Against BOL phases can
-          reuse the exact same interaction pattern. */}
-      <ValueEntryOverlay
-        open={!!capInput}
-        title={capInput ? `Comp ${capInput.comp} cap` : ""}
-        hint={capInput ? `max ${capInput.max.toLocaleString()} gal` : undefined}
-        fields={capInput ? [{
-          key: "cap",
-          label: "Gallons",
-          value: capInput.value,
-          onChange: (v) => setCapInput((prev) => (prev ? { ...prev, value: v } : prev)),
-        }] : []}
-        onCancel={() => setCapInput(null)}
-        onSubmit={commitCapInput}
-      />
     </section>
   );
 }

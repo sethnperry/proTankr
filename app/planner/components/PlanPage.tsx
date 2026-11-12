@@ -33,6 +33,8 @@ export default function PlanPage() {
     effectivePlannedGallonsTotal,
     equipment,
     equipmentDetails,
+    canSetCap,
+    handleSaveTrailerComp,
     headerIconsSlot,
     isDirty,
     isLandscape,
@@ -110,6 +112,8 @@ export default function PlanPage() {
         compLoading={compLoading}
         compError={compError}
         compartments={compartments}
+        canEditTrailer={canSetCap}
+        onSaveTrailerComp={handleSaveTrailerComp}
         persistedCapForComp={persistedCapForComp}
         effectiveMaxGallonsForComp={effectiveMaxGallonsForComp}
         plannedGallonsByComp={plannedGallonsByComp}

@@ -234,6 +234,16 @@ export function usePlanSlotsView(i: Inputs) {
     setCompartments((prev) => prev.map((c) => (changes[Number(c.comp_number)] != null ? { ...c, cap_gallons: changes[Number(c.comp_number)] } : c)));
   }, [selectedTrailerId]);
 
+  // Trailer-level save from the compartment window: the physical max and/or the safety cap. Keeps safety <= max.
+  const handleSaveTrailerComp = useCallback(async (comp: number, patch: { max_gallons?: number; cap_gallons?: number | null }) => {
+    if (!selectedTrailerId) return;
+    const { data, error } = await supabase.from("trailer_compartments").update(patch)
+      .eq("trailer_id", selectedTrailerId).eq("comp_number", comp).select("comp_number");
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error("not allowed to change this trailer");
+    setCompartments((prev) => prev.map((c) => (Number(c.comp_number) === comp ? { ...c, ...patch } : c)));
+  }, [selectedTrailerId]);
+
   // keepLive: save the new plan to its slot but leave the live plan (what the trip in progress will load) alone.
   const handleWizardFinish = useCallback((plan: Record<number, any>, opts?: { keepLive?: boolean }) => {
     const slotFilled = (n: number) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); };
@@ -258,6 +268,6 @@ export function usePlanSlotsView(i: Inputs) {
     presetSheetSlot, setPresetSheetSlot, presetQuickPickOpen, setPresetQuickPickOpen,
     summaryForSlot, presetSheetSummary, compsForSlot, 
     handlePresetLoad, handlePresetSaveEmpty, handlePresetSheetLoad, handlePresetSheetEdit, handlePresetSheetClear, closePresetSheet,
-    planSlotWithLayout, hasAnyPlan, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleWizardFinish,
+    planSlotWithLayout, hasAnyPlan, wizardNew, setWizardNew, wizardOpen, canSetCap, handleWizardSaveCaps, handleSaveTrailerComp, handleWizardFinish,
   };
 }

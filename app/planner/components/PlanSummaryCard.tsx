@@ -1,8 +1,7 @@
 "use client";
 // app/planner/components/PlanSummaryCard.tsx
 //
-// The live summary of whatever is in the compartments right now: planned
-// gallons and planned gross weight (colored against target and the legal
+// The live summary of whatever is in the compartments right now: the target weight and planned gross weight (colored against target and the legal
 // limit). Plain status text, nothing to tap.
 
 export default function PlanSummaryCard({ gallonsText, grossText, grossColor, showRefApiWarning }: {
@@ -17,7 +16,7 @@ export default function PlanSummaryCard({ gallonsText, grossText, grossColor, sh
         Plan
       </div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{gallonsText}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>{gallonsText}</div>
         <div style={{ fontSize: 20, fontWeight: 700, color: grossColor, textAlign: "right" as const }}>{grossText}</div>
       </div>
       {showRefApiWarning && (

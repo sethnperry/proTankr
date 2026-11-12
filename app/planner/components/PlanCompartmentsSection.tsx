@@ -21,6 +21,8 @@ type Props = {
   compLoading: boolean;
   compError: string | null;
   compartments: CompRow[];
+  canEditTrailer: boolean;
+  onSaveTrailerComp: (comp: number, patch: { max_gallons?: number; cap_gallons?: number | null }) => Promise<void>;
   persistedCapForComp: Math["persistedCapForComp"];
   effectiveMaxGallonsForComp: Math["effectiveMaxGallonsForComp"];
   plannedGallonsByComp: Math["plannedGallonsByComp"];
@@ -42,6 +44,8 @@ export default function PlanCompartmentsSection({
   compLoading,
   compError,
   compartments,
+  canEditTrailer,
+  onSaveTrailerComp,
   persistedCapForComp,
   effectiveMaxGallonsForComp,
   plannedGallonsByComp,
@@ -109,6 +113,8 @@ export default function PlanCompartmentsSection({
             }
             color={(prod?.hex_code && String(prod.hex_code).trim()) || productColorFor(prod?.product_name ?? "")}
             isEmpty={isEmpty}
+            canEditTrailer={canEditTrailer}
+            onSaveTrailer={(patch) => onSaveTrailerComp(n, patch)}
             onCapChange={(g) =>
               setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: g } }))
             }
