@@ -31,6 +31,7 @@ type GSummary = {
   matched?: { truckName: string }[];
   unmatchedVehicles?: GUnit[]; unmatchedTrailers?: GUnit[];
   linkedTrailers?: (GUnit & { linkedTo?: string | null })[];
+  groups?: { path: string }[];
 };
 async function geo(method: "GET" | "POST", companyId: string, body?: unknown): Promise<{ ok: boolean; data: any }> {
   const { data: s } = await supabase.auth.getSession();
@@ -59,6 +60,9 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
   const [nu, setNu] = useState({ kind: "Truck", name: "", make: "", model: "", year: "", vin: "", plate: "", region: "", area: "" });
   const [g, setG] = useState<GSummary | null>(null); const [gOpen, setGOpen] = useState(false); const [gBusy, setGBusy] = useState(false);
   const [pickG, setPickG] = useState<Set<string>>(new Set());
+  const [regionGroup, setRegionGroup] = useState("");
+  // Everything Geotab has: VIN, plate, make/model/year decoded from the VIN, and the region from a chosen group.
+  const syncOpts = () => ({ ...DEFAULT_OPTS, existing: "fill" as const, fields: { ...DEFAULT_OPTS.fields, region: !!regionGroup }, regionGroup, regionName: regionGroup.split("/").pop()?.trim() ?? "" });
 
   const loadGeo = useCallback(async () => {
     setGBusy(true);
@@ -118,7 +122,7 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
   const importPicked = async () => {
     const veh = (g?.unmatchedVehicles ?? []).filter((u) => pickG.has(`v:${u.id}`)).map((u) => u.id);
     const trl = (g?.unmatchedTrailers ?? []).filter((u) => pickG.has(`t:${u.id}`)).map((u) => u.id);
-    const opts = { ...DEFAULT_OPTS, existing: "fill" as const };
+    const opts = syncOpts();
     setGBusy(true); setMsg(null);
     for (const [key, ids] of [["importVehicles", veh], ["importTrailers", trl]] as const) {
       if (!ids.length) continue;
@@ -131,11 +135,11 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
   };
   const fillFromGeo = async () => {
     setGBusy(true); setMsg(null);
-    const r = await geo("POST", companyId, { syncLinked: true, opts: { ...DEFAULT_OPTS, existing: "fill" } });
+    const r = await geo("POST", companyId, { syncLinked: true, opts: syncOpts() });
     setGBusy(false);
     if (!r.ok) { setMsg(r.data?.error ?? "Update failed."); return; }
     const x = r.data?.result as { updated?: number } | undefined;
-    setMsg(`Filled blank VIN, plate, make, model and year on ${x?.updated ?? 0} linked unit${x?.updated === 1 ? "" : "s"}.`);
+    setMsg(`Filled blanks (VIN, plate, make, model, year, region) on ${x?.updated ?? 0} linked unit${x?.updated === 1 ? "" : "s"}.`);
     onChanged(); await loadGeo();
   };
 
@@ -200,6 +204,16 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
                 </label>
               ))}
               {(g.unmatchedVehicles?.length ?? 0) + (g.unmatchedTrailers?.length ?? 0) === 0 && <div style={{ fontSize: 13 }}>Everything in Geotab is already in your list.</div>}
+              {(g.unmatchedVehicles?.length ?? 0) + (g.unmatchedTrailers?.length ?? 0) > 0 && (
+                <button type="button" onClick={() => setPickG(pickG.size ? new Set() : new Set([...(g.unmatchedVehicles ?? []).map((u) => `v:${u.id}`), ...(g.unmatchedTrailers ?? []).map((u) => `t:${u.id}`)]))} style={{ background: "none", border: "none", color: "#93c5fd", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 0 0" }}>{pickG.size ? "Clear selection" : "Select all"}</button>
+              )}
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 10 }}>Brings over: unit name, VIN, plate, and make, model and year decoded from the VIN. Only blank fields on units you already have are filled.</div>
+              {(g.groups?.length ?? 0) > 1 && (
+                <select value={regionGroup} onChange={(e) => setRegionGroup(e.target.value)} style={{ ...sel, marginTop: 8, maxWidth: "100%" }}>
+                  <option value="">Don't set Region from Geotab groups</option>
+                  {g.groups!.map((x) => <option key={x.path} value={x.path}>Region from group: {x.path}</option>)}
+                </select>
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                 <button type="button" disabled={gBusy || pickG.size === 0} onClick={() => void importPicked()} style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, background: "#fff", color: "#000", border: "none", borderRadius: 2, cursor: "pointer", opacity: pickG.size ? 1 : 0.4 }}>{gBusy ? "Working…" : `Add ${pickG.size} selected`}</button>
                 <button type="button" disabled={gBusy} onClick={() => void fillFromGeo()} style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2, cursor: "pointer" }}>Fill blanks on linked units</button>

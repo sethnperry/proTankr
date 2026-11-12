@@ -222,7 +222,7 @@ export async function POST(req: NextRequest) {
         const [trailers, mapRes, oursRes, devices] = await Promise.all([
           p.listTrailers(),
           admin.from("telematics_trailer_map").select("provider_trailer_id, trailer_id").eq("company_id", g.companyId),
-          admin.from("trailers").select("trailer_id, trailer_name, region, vin_number, plate_number").eq("company_id", g.companyId),
+          admin.from("trailers").select("trailer_id, trailer_name, region, vin_number, plate_number, make, model, year").eq("company_id", g.companyId),
           p.listVehicles().catch(() => []),
         ]);
         // Geotab keeps a trailer's VIN and plate on the same-named Device in the "Trailer" group.
@@ -231,6 +231,8 @@ export async function POST(req: NextRequest) {
           if (!groupNames(d.groupIds, groups).some((n) => n.trim().toLowerCase() === "trailer")) continue;
           devByName.set(lower(d.name), { vin: d.vin, plate: d.plate ?? null });
         }
+        // Make, model and year come from the trailer's VIN, same as trucks.
+        const tInfo = o.fields.vehicle ? await decodeVins([...devByName.values()].map((d) => d.vin ?? "")) : new Map<string, { year: number | null; make: string | null; model: string | null }>();
         const want = new Set(Array.isArray(body.importTrailers) ? (body.importTrailers as unknown[]).map(String) : []);
         const mapRows = (mapRes.data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
         const mappedProv = new Set(mapRows.map((r) => r.provider_trailer_id));
@@ -244,14 +246,16 @@ export async function POST(req: NextRequest) {
         const taken = new Set<string>();
         const idPatch = (name: string, cur: { vin_number: string | null; plate_number: string | null } | null) => {
           const dev = devByName.get(lower(name));
-          const want: Record<string, string> = {};
+          const want: Record<string, string | number> = {};
+          const vi = dev?.vin ? tInfo.get(dev.vin) : undefined;
+          if (vi && o.fields.vehicle) { if (vi.make) want.make = vi.make; if (vi.model) want.model = vi.model; if (vi.year) want.year = vi.year; }
           if (dev && o.fields.vin && dev.vin) want.vin_number = dev.vin;
           if (dev && o.fields.plate && dev.plate) want.plate_number = dev.plate;
           if (!cur) return want;
-          const out: Record<string, string> = {};
+          const out: Record<string, string | number> = {};
           for (const [k, v] of Object.entries(want)) {
             const c = (cur as any)[k];
-            if (o.existing === "overwrite" ? String(c ?? "") !== v : c == null || String(c).trim() === "") out[k] = v;
+            if (o.existing === "overwrite" ? String(c ?? "") !== String(v) : c == null || String(c).trim() === "") out[k] = v;
           }
           return out;
         };
