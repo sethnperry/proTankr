@@ -347,12 +347,16 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         toggleCityStar={shell.toggleCityStar}
         isCityStarred={shell.isCityStarred}
         isCityAuto={shell.isCityAuto}
+        setupTip={shell.termCardEntry}
         setLocOpen={shell.setLocOpen}
         onCityPicked={() => shell.setTermOpen(true)}
       />
 
       <MyTerminalsModal
-        open={shell.termOpen} onClose={() => { shell.setTermOpen(false); shell.setHubAfterPick(false); }}
+        open={shell.termOpen} onClose={() => { shell.setTermOpen(false); shell.setHubAfterPick(false); shell.setTermCardEntry(false); }}
+        cardEntry={shell.termCardEntry}
+        setCardData={shell.setCardDataForTerminal_}
+        addMyTerminal={(tid) => void shell.terminals.toggleTerminalStar(tid, false)}
         onPicked={() => { if (shell.hubAfterPick) { shell.setHubAfterPick(false); shell.setTerminalHubOpen(true); } }}
         selectedState={shell.location.selectedState}
         selectedCity={shell.location.selectedCity}

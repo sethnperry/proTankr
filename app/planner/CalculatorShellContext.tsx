@@ -55,6 +55,9 @@ type ShellValue = {
   setEquipOpen: (v: boolean) => void;
   termOpen: boolean;
   setTermOpen: (v: boolean) => void;
+  /** Setup mode: tapping a terminal asks for card number, PIN and last visit instead of selecting it. */
+  termCardEntry: boolean;
+  setTermCardEntry: (v: boolean) => void;
   // The one Terminal screen (status, STUD, suppliers, training, racks, cards) and whether the terminal list
   // being picked from should open it afterwards.
   terminalHubOpen: boolean;
@@ -75,6 +78,8 @@ type ShellValue = {
   setExpandedTerminalId: (id: string | null) => void;
   isCityStarred: (state: string, city: string) => boolean;
   isCityAuto: (state: string, city: string) => boolean;
+  /** Cities the driver starred by hand (terminal-card cities are counted separately). */
+  starredCityCount: number;
   toggleCityStar: (state: string, city: string) => void;
   stateOptions: { code: string; name?: string | null }[];
   selectedStateLabel: string;
@@ -267,6 +272,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
 
   const [equipOpen, setEquipOpen] = useState(false);
   const [termOpen, setTermOpen] = useState(false);
+  const [termCardEntry, setTermCardEntry] = useState(false);
   const [terminalHubOpen, setTerminalHubOpen] = useState(false);
   const [hubAfterPick, setHubAfterPick] = useState(false);
   const [locOpen, setLocOpen] = useState(false);
@@ -613,10 +619,10 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     equipment, location, terminals, expirations,
     myTerminalIdSet, terminalFilters,
     equipOpen, setEquipOpen,
-    termOpen, setTermOpen, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
+    termOpen, setTermOpen, termCardEntry, setTermCardEntry, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
-    isCityStarred, isCityAuto, toggleCityStar,
+    isCityStarred, isCityAuto, toggleCityStar, starredCityCount: starredCitySet.size,
     stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
     cardDataByTerminalId, setCardDataForTerminal_,
     theme,
@@ -629,10 +635,10 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     equipment, location, terminals, expirations,
     myTerminalIdSet, terminalFilters,
     equipOpen, setEquipOpen,
-    termOpen, setTermOpen, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
+    termOpen, setTermOpen, termCardEntry, setTermCardEntry, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
-    isCityStarred, isCityAuto, toggleCityStar,
+    isCityStarred, isCityAuto, toggleCityStar, starredCitySet,
     stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
     cardDataByTerminalId, setCardDataForTerminal_,
     theme,

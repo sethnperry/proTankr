@@ -31,7 +31,7 @@ export default function SetupPage() {
   const nav = usePending();
   const userId = shell.effectiveUserId || null;
   const companyId = shell.companyId || null;
-  const { summary, facts, loading, error, reload, confirm } = useDriverSetup(userId, companyId);
+  const { summary, facts, loading, error, reload, confirm } = useDriverSetup(userId, companyId, shell.starredCityCount);
   const [openId, setOpenId] = useState<StepId | null>(null);
   const [pop, setPop] = useState<"vault" | "locations" | "per_diem" | null>(null);
   const { state, store, syncNow } = useTripStore(userId);
@@ -44,6 +44,7 @@ export default function SetupPage() {
     wantTerms.current = false;
     if (shell.location.selectedCity) shell.setTermOpen(true);
   }, [shell.locOpen, shell.location.selectedCity, shell]);
+  useEffect(() => () => shell.setTermCardEntry(false), []); // eslint-disable-line react-hooks/exhaustive-deps
   const closePop = () => { setPop(null); void reload(); };
   const [editProfile, setEditProfile] = useState(false);
   const [licOpen, setLicOpen] = useState(false);
@@ -65,7 +66,7 @@ export default function SetupPage() {
       case "license": return setLicOpen(true);
       case "equipment": return shell.setEquipOpen(true);
       case "plans": return nav.go("plans", "/planner?plan=1");
-      case "terminals": if (shell.location.selectedCity) return shell.setTermOpen(true); wantTerms.current = true; return shell.setLocOpen(true);
+      case "terminals": shell.setTermCardEntry(true); if (shell.location.selectedCity) return shell.setTermOpen(true); wantTerms.current = true; return shell.setLocOpen(true);
       case "locations": return setPop("locations");
       case "per_diem": return setPop("per_diem");
       case "vault": return setPop("vault");

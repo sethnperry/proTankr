@@ -131,7 +131,7 @@ import { useSuppliers } from "@/lib/trips/useSuppliers";
 import { bolConflicts } from "@/lib/trips/refCheck";
 import { DeliveryDashboard, clearDeliveryDraft, type DeliveryProgress, type FinishDeliverySubmit, type ProductInfo } from "../components/trip/DeliveryDashboard";
 import { LocationPicker } from "../components/trip/LocationPicker";
-import { LocationsHub, locationsTool } from "../components/locations/LocationsHub";
+import { LocationsHub, terminalsTool, deliveriesTool } from "../components/locations/LocationsHub";
 import { conflicts, repeatedRefs, usedOrderNumbers } from "@/lib/trips/refs";
 import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
@@ -2544,7 +2544,8 @@ export default function HomePage() {
             A.truckDown, A.inspect,
           ] },
           { icon: "store", label: "Location", sub: null, group: [
-            locationsTool(() => setManageLocsOpen(true)),
+            terminalsTool(() => shell.setTerminalHubOpen(true)),
+            deliveriesTool(() => setManageLocsOpen(true)),
             ...tankCheckItems, A.termWork,
           ] },
           { icon: "route", label: "Trips", sub: openTrip ? "Trip in progress" : null, subColor: openTrip ? "#4ade80" : undefined, group: [
@@ -3382,7 +3383,7 @@ export default function HomePage() {
         );
       })()}
 
-      <LocationsHub open={manageLocsOpen} onClose={() => setManageLocsOpen(false)} companyId={companyId} userId={userId} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} origin={origin} />
+      <LocationsHub kind="deliveries" open={manageLocsOpen} onClose={() => setManageLocsOpen(false)} companyId={companyId} userId={userId} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} origin={origin} />
 
       <LocationPicker kinds={["store"]}
         open={!!picker}

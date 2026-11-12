@@ -38,6 +38,8 @@ export default function LocationModal(props: {
   toggleCityStar: (state: string, city: string) => void;
   isCityStarred: (state: string, city: string) => boolean;
   isCityAuto?: (state: string, city: string) => boolean;
+  /** Setup: say what this screen is for. */
+  setupTip?: boolean;
 
   // to preserve existing behavior (modal closes on city select)
   setLocOpen: (open: boolean) => void;
@@ -74,6 +76,7 @@ export default function LocationModal(props: {
     toggleCityStar,
     isCityStarred,
     isCityAuto,
+    setupTip,
 
     setLocOpen,
     onCityPicked,
@@ -134,6 +137,12 @@ export default function LocationModal(props: {
   return (
     <FullscreenModal open={open} title="Select Location" onClose={onClose} footer={null}>
       <div className="space-y-4">
+
+        {setupTip && (
+          <div className="rounded-[2px] border border-white/15 bg-white/[0.04] p-3 text-sm text-white/80">
+            <span className="font-semibold text-white">Star the cities you load in.</span> That makes switching one tap. Then tap a city to mark the terminals you have cards at.
+          </div>
+        )}
 
         {/* STATE -- collapsed to a one-line "Showing cities in {state}" once
             set, matching My Terminals' header; only expands to the full

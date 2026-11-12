@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { computeSetup, type Confirmations, type SetupFacts, type SetupSummary, type StepId } from "./driverSetup";
 import { confirmStep, loadSetup } from "./loadSetup";
 
-export function useDriverSetup(userId: string | null | undefined, companyId: string | null | undefined) {
+export function useDriverSetup(userId: string | null | undefined, companyId: string | null | undefined, extraTerminalsStarred = 0) {
   const [data, setData] = useState<{ facts: SetupFacts; confirmations: Confirmations } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export function useDriverSetup(userId: string | null | undefined, companyId: str
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [reload]);
 
-  const summary: SetupSummary | null = useMemo(() => (data ? computeSetup(data.facts, data.confirmations) : null), [data]);
+  const summary: SetupSummary | null = useMemo(() => (data ? computeSetup({ ...data.facts, terminalsStarred: Math.max(data.facts.terminalsStarred, extraTerminalsStarred) }, data.confirmations) : null), [data, extraTerminalsStarred]);
 
   const confirm = useCallback(async (step: StepId): Promise<string | null> => {
     if (!userId || !companyId) return "Not signed in.";

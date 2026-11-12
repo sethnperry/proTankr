@@ -29,7 +29,7 @@ export const STEPS: StepDef[] = [
   { id: "schedule", label: "Work schedule", sub: "The days and shift you usually work", required: false, confirmable: true },
   { id: "equipment", label: "Equipment", sub: "Your truck and trailer, when you have one", required: false, confirmable: true },
   { id: "plans", label: "Load plans", sub: "At least one plan in Plan A to Z", required: false, confirmable: false },
-  { id: "terminals", label: "Terminals", sub: "Add the terminals you have cards for. Their cities are starred for you", required: false, confirmable: false },
+  { id: "terminals", label: "Terminals", sub: "Star the cities you load in, then tap the terminals you have cards at", required: false, confirmable: false },
   { id: "locations", label: "Delivery locations", sub: "Star the stores you deliver to. Anywhere you deliver is added for you", required: false, confirmable: false },
   { id: "fuel_pin", label: "Fuel PIN", sub: "Your PIN for the company fuel program", required: false, confirmable: false },
   { id: "alerts", label: "Alerts", sub: "Turn on notifications for hours and call-outs", required: false, confirmable: false },
@@ -111,7 +111,7 @@ function dataState(id: StepId, f: SetupFacts): { present: boolean; missing: stri
     case "schedule": return { present: f.scheduleDays > 0, missing: "no days set" };
     case "equipment": return { present: f.hasTruck, missing: "no truck selected" };
     case "plans": return { present: f.plansSaved > 0, missing: "no plan saved" };
-    case "terminals": return { present: f.terminalsStarred > 0, missing: "none starred" };
+    case "terminals": return { present: f.terminalsStarred > 0, missing: "no favorite cities yet" };
     case "locations": return { present: f.locationsStarred > 0, missing: "none starred" };
     case "fuel_pin": return { present: f.hasFuelPin, missing: "no PIN saved" };
     case "alerts": return { present: f.pushOn, missing: "notifications off" };

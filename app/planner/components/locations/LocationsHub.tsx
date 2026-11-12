@@ -16,6 +16,9 @@ import type { LatLon } from "@/lib/trips/deliveryLocations";
 
 /** The grid tile. */
 export const locationsTool = (onClick: () => void): ToolItem => ({ icon: "store", label: "Locations", sub: "Terminals & deliveries", onClick });
+/** One-tap rows for a tool list that already groups locations (no "what kind?" step). */
+export const terminalsTool = (onClick: () => void): ToolItem => ({ icon: "terminal", label: "Terminals", sub: "Cards, gauging, racks", onClick });
+export const deliveriesTool = (onClick: () => void): ToolItem => ({ icon: "store", label: "Deliveries", sub: "Stores and customer sites", onClick });
 
 type Kind = "terminals" | "deliveries";
 const KINDS: { kind: Kind; label: string; sub: string }[] = [
@@ -23,10 +26,12 @@ const KINDS: { kind: Kind; label: string; sub: string }[] = [
   { kind: "deliveries", label: "Deliveries", sub: "Stores and customer sites" },
 ];
 
-export function LocationsHub(props: { open: boolean; onClose: () => void; companyId: string | null; userId: string | null; role: string | null; isSuperAdmin: boolean; origin?: LatLon | null }) {
-  const [kind, setKind] = useState<Kind | null>(null);
+export function LocationsHub(props: { kind?: Kind; open: boolean; onClose: () => void; companyId: string | null; userId: string | null; role: string | null; isSuperAdmin: boolean; origin?: LatLon | null }) {
+  const [pickedKind, setKind] = useState<Kind | null>(null);
+  const kind = pickedKind ?? props.kind ?? null; // a caller that already knows the kind skips the chooser
   const shell = useCalculatorShell();
   const close = () => { setKind(null); props.onClose(); };
+  const { kind: _k, ...rest } = props;
   // Terminals is the shared Terminal screen: it opens on the selected terminal (or straight to search).
   const openTerminals = () => { setKind(null); props.onClose(); shell.setTerminalHubOpen(true); };
   const L = useDashLook();
@@ -42,7 +47,7 @@ export function LocationsHub(props: { open: boolean; onClose: () => void; compan
           </button>
         ))}
       </FullscreenModal>
-      {props.open && kind === "deliveries" && <DeliveriesBody {...props} onClose={() => setKind(null)} />}
+      {props.open && kind === "deliveries" && <DeliveriesBody {...rest} onClose={() => { setKind(null); if (props.kind) props.onClose(); }} />}
     </>
   );
 }

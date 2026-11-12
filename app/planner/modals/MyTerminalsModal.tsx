@@ -15,6 +15,7 @@ import { RackProductList } from "./myTerminals/RackProductList";
 // fill; that didn't fit the monochrome theme.
 
 const avatarInitials = terminalCode;
+import { TerminalCardSheet } from "./TerminalCardSheet";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { terminalCode } from "@/lib/equipment/boardStatus";
 
@@ -78,6 +79,10 @@ export default function MyTerminalsModal(props: {
   onLoadMyTerminals?: () => void | Promise<void>;
   // Called after a terminal is picked (the list has closed).
   onPicked?: () => void;
+  /** Setup: a tap opens the card sheet (number, PIN, last visit) instead of selecting the terminal. */
+  cardEntry?: boolean;
+  setCardData?: (terminalId: string, data: CardData) => Promise<void>;
+  addMyTerminal?: (terminalId: string) => void;
 }) {
   const {
     open, onClose,
@@ -116,7 +121,9 @@ export default function MyTerminalsModal(props: {
   const activeRack = expandedRacks.find((r) => r.rack_id === expandedRackId) ?? null;
   const expandedTerminalRow = terminalsFiltered.find((t: any) => String(t.terminal_id) === expandedTerminalId);
 
+  const [cardFor, setCardFor] = useState<string | null>(null);
   const handleSelect = (tid: string) => {
+    if (props.cardEntry) { setCardFor(tid); return; }
     if (!myTerminalIds.has(tid)) setMyTerminalIds(prev => new Set([...prev, tid]));
     // Picking a terminal doesn't mean the driver has access there: access dates come from a real
     // load, a typed card, or finishing the access steps.
@@ -135,7 +142,8 @@ export default function MyTerminalsModal(props: {
   });
 
   return (
-    <FullscreenModal open={open} title="Terminals" onClose={onClose}>
+    <>
+    <FullscreenModal open={open} title={props.cardEntry ? "Your terminal cards" : "Terminals"} onClose={onClose}>
       {!selectedState || !selectedCity ? (
         <div className="text-sm text-white/60">Select a city first.</div>
       ) : (
@@ -156,6 +164,7 @@ export default function MyTerminalsModal(props: {
             )}
           </div>
 
+          {props.cardEntry && <div className="text-sm text-white/60">Tap each terminal you have a card at. Skip the rest.</div>}
           {termError && <div className="text-sm text-red-400">{termError}</div>}
 
           {sorted.length === 0 ? (
@@ -203,6 +212,7 @@ export default function MyTerminalsModal(props: {
                           <div className="text-sm font-semibold text-white truncate">
                             {t.terminal_name ?? "(unnamed terminal)"}
                           </div>
+                          {props.cardEntry && myTerminalIds.has(tid) && <div className="mt-0.5 text-xs text-green-400">✓ Your card</div>}
                           {expiresISO ? (
                             <div className={["mt-1 text-xs tabular-nums", expired ? "text-red-400" : "text-white/50"].join(" ")}>
                               {expired ? "Expired · " : ""}{formatMDYWithCountdown_(expiresISO)}
@@ -223,5 +233,20 @@ export default function MyTerminalsModal(props: {
       )}
 
     </FullscreenModal>
+    {props.cardEntry && cardFor && (() => {
+      const t = terminalsFiltered.find((x: any) => String(x.terminal_id) === cardFor);
+      const c = cardDataByTerminalId[cardFor];
+      return (
+        <TerminalCardSheet open terminalName={t?.terminal_name ?? "Terminal"}
+          initial={{ cardNumber: c?.cardNumber ?? "", pin: c?.pin ?? "", lastVisit: accessDateByTerminalId[cardFor] ?? "" }}
+          onClose={() => setCardFor(null)}
+          onSave={async (v) => {
+            if (!myTerminalIds.has(cardFor)) props.addMyTerminal?.(cardFor);
+            if (v.cardNumber || v.pin) await props.setCardData?.(cardFor, { cardNumber: v.cardNumber, pin: v.pin, privateNote: c?.privateNote ?? "" });
+            if (v.lastVisit) setAccessDateForTerminal_(cardFor, v.lastVisit);
+          }} />
+      );
+    })()}
+    </>
   );
 }
