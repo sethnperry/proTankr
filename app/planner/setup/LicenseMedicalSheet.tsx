@@ -42,16 +42,19 @@ export function LicenseMedicalSheet({ open, userId, companyId, onClose }: { open
     const now = new Date().toISOString();
     const lic = { license_number: num.trim(), license_class: cls, state_code: st.trim().toUpperCase().slice(0, 2), expiration_date: exp || null };
     const l = num.trim() || exp || cls || st
-      ? await (licId ? supabase.from("driver_licenses").update({ ...lic, updated_at: now }).eq("id", licId)
+      ? await (licId ? supabase.from("driver_licenses").update({ ...lic, updated_at: now }).eq("id", licId).select("id")
         : supabase.from("driver_licenses").insert({ user_id: userId, company_id: companyId, endorsements: [], restrictions: [], hazmat_linked_to_license: false, ...lic }))
       : { error: null };
     const m = med
-      ? await (medId ? supabase.from("driver_medical_cards").update({ expiration_date: med, updated_at: now }).eq("id", medId)
+      ? await (medId ? supabase.from("driver_medical_cards").update({ expiration_date: med, updated_at: now }).eq("id", medId).select("id")
         : supabase.from("driver_medical_cards").insert({ user_id: userId, company_id: companyId, expiration_date: med, examiner_name: "", attached_to_license: false }))
       : { error: null };
     setBusy(false);
+    // An update that matches no rows (blocked by permissions) returns no error, so check the rows came back.
+    const gone = (r: { error: unknown; data?: unknown }, wrote: boolean, updating: boolean) => wrote && updating && !r.error && Array.isArray(r.data) && r.data.length === 0;
     const e = l.error ?? m.error;
     if (e) { setErr(e.message); return; }
+    if (gone(l as any, !!(num.trim() || exp || cls || st), !!licId) || gone(m as any, !!med, !!medId)) { setErr("That didn't save. Tell your dispatcher so they can fix your account permissions."); return; }
     onClose();
   };
 
