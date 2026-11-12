@@ -33,7 +33,7 @@ export async function loadSetup(userId: string, companyId: string): Promise<{ fa
       supabase.from("user_settings").select("current_truck_id, current_trailer_id").eq("user_id", userId).maybeSingle()),
     rows<{ truck_id: string | null; trailer_id: string | null }>(
       supabase.from("equipment_combos").select("truck_id, trailer_id").eq("claimed_by", userId).eq("active", true).limit(1)),
-    rows<{ slot: number; payload: unknown }>(supabase.from("user_plan_slots").select("slot, payload").eq("user_id", userId).gte("slot", 1).lte("slot", 5)),
+    rows<{ slot: number; payload: unknown }>(supabase.from("user_plan_slots").select("slot, payload").eq("user_id", userId).gte("slot", 1).lte("slot", 26)),
     rows<{ terminal_id: string }>(supabase.from("my_terminals").select("terminal_id").eq("user_id", userId).eq("is_starred", true)),
     rows<{ location_id: string }>(supabase.from("delivery_location_stars").select("location_id").eq("user_id", userId)),
     rows<{ kind: string }>(supabase.from("fuel_payment_methods").select("kind").eq("company_id", companyId).eq("is_active", true).in("kind", ["rfid", "company_account"])),

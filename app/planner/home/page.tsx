@@ -2878,7 +2878,8 @@ export default function HomePage() {
         const showExp = false;
         const showSync = pendingCount > 0 || failed.length > 0;
         const showFuel = !!fuel.active;
-        const showSetup = !!setup.summary && !setup.summary.complete;
+        // Only while something required is missing; the optional steps stay under Profile > Setup.
+        const showSetup = !!setup.summary && setup.summary.requiredLeft > 0;
         if (!showGross && !showExp && !showSync && !showFuel && !showSetup) return null;
         return (
           <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>

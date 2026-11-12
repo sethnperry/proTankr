@@ -5,9 +5,10 @@
 // a solo driver fills it in. Required steps (your name, and region where companies use them) can't be skipped.
 // The rows open the real screens, so nothing here is a second copy of a setting.
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useCalculatorShell } from "../CalculatorShellContext";
 import { useDashLook, DashStyles } from "../home/dashLook";
+import { LicenseMedicalSheet } from "./LicenseMedicalSheet";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { usePerDiem } from "../hooks/usePerDiem";
@@ -32,12 +33,20 @@ export default function SetupPage() {
   const companyId = shell.companyId || null;
   const { summary, facts, loading, error, reload, confirm } = useDriverSetup(userId, companyId);
   const [openId, setOpenId] = useState<StepId | null>(null);
-  const [pop, setPop] = useState<"plans" | "vault" | "locations" | "per_diem" | null>(null);
+  const [pop, setPop] = useState<"vault" | "locations" | "per_diem" | null>(null);
   const { state, store, syncNow } = useTripStore(userId);
   const perDiem = usePerDiem({ store, state, syncNow, userId, companyId, enabled: pop === "per_diem" });
   const locList = useDeliveryLocationList(pop === "locations" ? companyId : null, userId);
+  // No city picked yet: the city window comes first, then the terminal list opens by itself.
+  const wantTerms = useRef(false);
+  useEffect(() => {
+    if (shell.locOpen || !wantTerms.current) return;
+    wantTerms.current = false;
+    if (shell.location.selectedCity) shell.setTermOpen(true);
+  }, [shell.locOpen, shell.location.selectedCity, shell]);
   const closePop = () => { setPop(null); void reload(); };
   const [editProfile, setEditProfile] = useState(false);
+  const [licOpen, setLicOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -52,10 +61,11 @@ export default function SetupPage() {
   const open = async (id: StepId) => {
     setMsg(null);
     switch (id) {
-      case "you": case "license": return setEditProfile(true);
+      case "you": return setEditProfile(true);
+      case "license": return setLicOpen(true);
       case "equipment": return shell.setEquipOpen(true);
-      case "plans": return setPop("plans");
-      case "terminals": return shell.location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true);
+      case "plans": return nav.go("plans", "/planner?plan=1");
+      case "terminals": if (shell.location.selectedCity) return shell.setTermOpen(true); wantTerms.current = true; return shell.setLocOpen(true);
       case "locations": return setPop("locations");
       case "per_diem": return setPop("per_diem");
       case "vault": return setPop("vault");
@@ -144,14 +154,12 @@ export default function SetupPage() {
       <FullscreenModal open={pop === "locations"} title="Delivery locations" onClose={closePop}>
         <LocationBrowser locations={locList.locations} tanks={locList.tanks} companyId={companyId} userId={userId} onChanged={() => void locList.reload()} />
       </FullscreenModal>
-      <FullscreenModal open={pop === "plans"} title="Load plans" onClose={closePop} footer={null}>
-        {pop === "plans" && <iframe title="Load plans" src="/planner?plan=1" style={{ width: "100%", height: "75vh", border: 0, background: "#111" }} />}
-      </FullscreenModal>
       <FullscreenModal open={pop === "vault"} title="Vault" onClose={closePop} footer={null}>
         {pop === "vault" && <iframe title="Vault" src="/planner/vault" style={{ width: "100%", height: "75vh", border: 0, background: "#111" }} />}
       </FullscreenModal>
       <PerDiemSheet open={pop === "per_diem"} onClose={closePop} home={perDiem.home} cards={perDiem.cards} loading={perDiem.loading} onSaveHome={perDiem.saveHome} onClaim={perDiem.claim} onWithdraw={perDiem.withdraw} />
 
+      <LicenseMedicalSheet open={licOpen} userId={userId} companyId={companyId} onClose={() => { setLicOpen(false); void reload(); }} />
       {editProfile && <SelfProfileView direct onExit={() => { setEditProfile(false); void reload(); }} />}
     </div>
   );
