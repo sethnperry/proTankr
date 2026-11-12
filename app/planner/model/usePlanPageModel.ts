@@ -4,6 +4,7 @@
 // Planner model layer (page). Page: plan-slot view, the plan builder, and the unsaved-changes state.
 // Built from hooks; no JSX. Part of the Planner composition: see docs/planner-architecture.md.
 
+import { useState } from "react";
 import { usePlanSlotsView } from "../hooks/usePlanSlotsView";
 import { useTripPlanApply } from "../hooks/useTripPlanApply";
 
@@ -28,6 +29,21 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     activeSlotLetter, setActiveSlotLetter, setCaptureBaselineNext, setCheckAvailabilityNext, setBaselineOverrides,
     overridesSnapshot, planRestoreAttempted, onboardingActive, setupSession, loadWorkflow,
   });
+  // A trip is set up and waiting to load. Putting a different plan live would change what it loads, so ask first.
+  const [switchPrompt, setSwitchPrompt] = useState<{ from: string; to: string; run: () => void; keep?: () => void } | null>(null);
+  const namesOf = (plan: Record<string, any> | undefined | null) => Array.from(new Set(
+    Object.values(plan ?? {}).filter((x: any) => x && !x.empty && x.productId).map((x: any) => productNameById.get(x.productId) ?? "another product"),
+  )).sort();
+  const guardSwitch = (plan: Record<string, any> | undefined | null, run: () => void, keep?: () => void) => {
+    if (!tripWaitingPickup) return run();
+    const from = namesOf(compPlan), to = namesOf(plan);
+    if (!to.length || from.join("|") === to.join("|")) return run();
+    setSwitchPrompt({ from: from.join(", ") || "its current plan", to: to.join(", "), run, keep });
+  };
+  const handlePresetLoadGuarded = (n: number) => guardSwitch(planSlots.peekSlot(n)?.compPlan, () => handlePresetLoad(n));
+  const handlePresetSheetLoadGuarded = () => guardSwitch(presetSheetSlot != null ? planSlots.peekSlot(presetSheetSlot)?.compPlan : null, handlePresetSheetLoad, () => closePresetSheet());
+  const handleWizardFinishGuarded = (plan: Record<number, any>) => guardSwitch(plan, () => handleWizardFinish(plan), () => handleWizardFinish(plan, { keepLive: true }));
+
   // (closes the compartment window; kept next to its state)
   const closeCompModal = () => { setCompModalOpen(false); setCompModalComp(null); setSelectedComp(null); };
   useTripPlanApply({
@@ -46,9 +62,10 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     summaryForSlot,
     presetSheetSummary,
     compsForSlot,
-    handlePresetLoad,
+    handlePresetLoad: handlePresetLoadGuarded,
+    switchPrompt, setSwitchPrompt,
     handlePresetSaveEmpty,
-    handlePresetSheetLoad,
+    handlePresetSheetLoad: handlePresetSheetLoadGuarded,
     handlePresetSheetEdit,
     handlePresetSheetClear,
     closePresetSheet,
@@ -58,7 +75,7 @@ export function usePlanPageModel(v: UsePlannerViewModel, p: UsePlanModelModel, l
     wizardOpen,
     canSetCap,
     handleWizardSaveCaps,
-    handleWizardFinish,
+    handleWizardFinish: handleWizardFinishGuarded,
     closeCompModal,
     currentOverrides,
     isDirty,

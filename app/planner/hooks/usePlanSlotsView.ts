@@ -234,16 +234,19 @@ export function usePlanSlotsView(i: Inputs) {
     setCompartments((prev) => prev.map((c) => (changes[Number(c.comp_number)] != null ? { ...c, cap_gallons: changes[Number(c.comp_number)] } : c)));
   }, [selectedTrailerId]);
 
-  const handleWizardFinish = useCallback((plan: Record<number, any>) => {
+  // keepLive: save the new plan to its slot but leave the live plan (what the trip in progress will load) alone.
+  const handleWizardFinish = useCallback((plan: Record<number, any>, opts?: { keepLive?: boolean }) => {
     const slotFilled = (n: number) => { const snap = planSlots.peekSlot(n); return !!snap && Object.values(snap.compPlan ?? {}).some((v: any) => v && !v.empty && v.productId); };
     const empty = PLAN_SLOT_NUMBERS.find((n) => !slotFilled(n));
     const dupSlot = planSlotWithLayout(plan);
     const target = dupSlot ?? empty ?? activeSlotLetter;
     const first = !hasAnyPlan;
-    planSlots.saveSnapshotToSlot(target, { compPlan: plan, name: first ? "Default" : undefined }, { makeLive: true });
-    setActiveSlotLetter(target);
-    setCaptureBaselineNext(true);
-    setBaselineOverrides(overridesSnapshot(plan, cgSlider));
+    planSlots.saveSnapshotToSlot(target, { compPlan: plan, name: first ? "Default" : undefined }, { makeLive: !opts?.keepLive });
+    if (!opts?.keepLive) {
+      setActiveSlotLetter(target);
+      setCaptureBaselineNext(true);
+      setBaselineOverrides(overridesSnapshot(plan, cgSlider));
+    }
     setWizardNew(false);
     if (detourActive()) { finishDetour(target); router.push(RESUME_URL); return; }
     if (!wizardNew && !active) router.push("/planner?plan=1");

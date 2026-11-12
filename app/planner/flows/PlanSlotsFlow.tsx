@@ -7,6 +7,7 @@
 import PresetQuickPick from "../components/PresetQuickPick";
 import PresetActionSheet from "../components/PresetActionSheet";
 import { usePlanner } from "../PlannerContext";
+import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 
 export default function PlanSlotsFlow() {
   const {
@@ -27,7 +28,10 @@ export default function PlanSlotsFlow() {
     handlePresetSheetEdit,
     handlePresetSheetClear,
     closePresetSheet,
+    switchPrompt,
+    setSwitchPrompt,
   } = usePlanner();
+  const btn = { width: "100%", padding: "14px 0", fontSize: 14, fontWeight: 800, textTransform: "uppercase" as const, letterSpacing: "0.06em", borderRadius: 2, cursor: "pointer", marginTop: 10 };
 
   return (
     <>
@@ -61,6 +65,17 @@ export default function PlanSlotsFlow() {
         onConfirmClear={handlePresetSheetClear}
         onClose={closePresetSheet}
       />
+      {/* A trip is waiting to load: changing the plan changes what it loads. */}
+      <FullscreenModal open={!!switchPrompt} title="Switch the trip?" onClose={() => setSwitchPrompt(null)} footer={null}>
+        {switchPrompt && (
+          <>
+            <div style={{ fontSize: 16, lineHeight: 1.4 }}>Are you sure you want to switch the trip in progress to <b>{switchPrompt.to}</b>?</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", marginTop: 8 }}>Right now it is set up for {switchPrompt.from}. Switching changes what you load at the rack.</div>
+            <button type="button" style={{ ...btn, background: "#fff", color: "#000", border: "none" }} onClick={() => { const r = switchPrompt.run; setSwitchPrompt(null); r(); }}>Yes, switch to {switchPrompt.to}</button>
+            <button type="button" style={{ ...btn, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }} onClick={() => { const k = switchPrompt.keep; setSwitchPrompt(null); k?.(); }}>No, keep {switchPrompt.from}</button>
+          </>
+        )}
+      </FullscreenModal>
     </>
   );
 }
