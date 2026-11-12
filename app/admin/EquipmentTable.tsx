@@ -145,13 +145,30 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
 
   const remove = async (r: Row) => {
     setBusy(true); setMsg(null);
-    const { error } = r.kind === "Truck"
+    const table = r.kind === "Truck" ? "trucks" : "trailers";
+    const idCol = r.kind === "Truck" ? "truck_id" : "trailer_id";
+    const exists = async () => {
+      const { data } = await supabase.from(table).select(idCol).eq(idCol, r.id).eq("company_id", companyId).maybeSingle();
+      return !!data;
+    };
+    // The delete function first; if it errors or leaves the unit behind, a direct delete (admin only by row security).
+    const first = r.kind === "Truck"
       ? await supabase.rpc("delete_truck", { p_truck_id: r.id, p_company_id: companyId })
       : await supabase.rpc("delete_trailer", { p_trailer_id: r.id, p_company_id: companyId });
+    let err = first.error?.message ?? null;
+    if (await exists()) {
+      const second = await supabase.from(table).delete().eq(idCol, r.id).eq("company_id", companyId);
+      err = second.error?.message ?? err;
+    }
+    const still = await exists();
     setBusy(false); setDeleting(null);
-    if (error) { setMsg(`Couldn't delete ${r.name}: ${error.message}`); return; }
+    if (still) {
+      const combo = /combo|foreign key|violates/i.test(err ?? "") ? " It is probably still in a combo or has records pointing at it; remove the combo first." : "";
+      setMsg(`${r.kind} ${r.name} was not deleted${err ? `: ${err}` : " (nothing was removed, you may not have permission)"}.${combo}`);
+      return;
+    }
     setMsg(`${r.kind} ${r.name} deleted.`);
-    onChanged();
+    onChanged(); void loadGeo();
   };
 
   const th = (c: Col) => (
