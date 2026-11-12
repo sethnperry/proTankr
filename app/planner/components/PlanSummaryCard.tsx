@@ -12,7 +12,7 @@ export default function PlanSummaryCard({ grossText, grossColor, showRefApiWarni
   return (
     <div style={{ borderRadius: 2, background: "transparent", padding: "10px 14px", flex: 1, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.4 }}>Plan</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" as const, letterSpacing: 0.4 }}>Target</div>
         <div style={{ fontSize: 20, fontWeight: 700, color: grossColor, textAlign: "right" as const }}>{grossText}</div>
       </div>
       {showRefApiWarning && (
