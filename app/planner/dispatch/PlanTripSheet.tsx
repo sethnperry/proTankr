@@ -59,6 +59,7 @@ export function PlanTripSheet({ driverId, driverName, equipmentLabel, onChangeEq
   // The driver's own saved plans (A-E) for this truck and trailer; new and edited plans save back to them.
   const dp = useDriverPlans(driverId, truckId, trailerId);
   const catalog = useProductsCatalog().data;
+  const chipOf = (id: string) => { const p: any = catalog.find((x) => x.product_id === id); return { code: String(p?.button_code ?? p?.display_name ?? "?").toUpperCase(), name: String(p?.display_name ?? p?.button_code ?? ""), color: colorOf(id) }; };
   const colorOf = (id: string) => { const p: any = catalog.find((x) => x.product_id === id); return p?.hex_code || productColorFor(String(p?.display_name ?? p?.button_code ?? "")); };
   const [builder, setBuilder] = useState<{ slot: number | null } | null>(null);
   const [sel, setSel] = useState<{ slot: number; n: number }>();
@@ -159,7 +160,7 @@ export function PlanTripSheet({ driverId, driverName, equipmentLabel, onChangeEq
         presets={dp.presets} selectPlan={sel} onPlanDetour={(what) => setBuilder({ slot: what === "new" ? null : what })}
         pickupLabel={pickup ? `${pickup.name}${pickup.city ? `, ${pickup.city}` : ""}` : null} pickupTerminalId={pickup?.terminalId ?? null}
         onChangePickup={() => { setQ(""); if (strips.length) setStripsOpen(true); else setTermOpen(true); }}
-        suppliers={suppliers} onAddSupplier={addSupplier} productColor={colorOf} equipmentLabel={equipmentLabel} lineExtra={lineExtra}
+        suppliers={suppliers} onAddSupplier={addSupplier} productColor={colorOf} productChip={chipOf} equipmentLabel={equipmentLabel} lineExtra={lineExtra}
         locations={shownLocations} tanks={tanks} origin={null} companyId={companyId} userId={userId} onLocationAdded={onLocationAdded}
         error={error} onClose={onClose} onSubmit={submit} />
       <DropSplitSheet open={!!split} comps={split?.comps ?? []} drops={split?.drops ?? []}
