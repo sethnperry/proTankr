@@ -27,13 +27,14 @@ const MUTED = "rgba(255,255,255,0.5)";
 const cell: React.CSSProperties = { padding: "9px 10px", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", borderBottom: "1px solid rgba(255,255,255,0.06)" };
 const sel: React.CSSProperties = { padding: "7px 8px", fontSize: 12, color: "#fff", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 2 };
 
-export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpenTrailer, onChanged }: {
+export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpenTrailer, onChanged, canDelete }: {
+  canDelete?: boolean;
   trucks: Truck[]; trailers: Trailer[]; companyId: string;
   onOpenTruck: (t: Truck) => void; onOpenTrailer: (t: Trailer) => void; onChanged: () => void;
 }) {
   const [q, setQ] = useState(""); const [kind, setKind] = useState(""); const [act, setAct] = useState(""); const [region, setRegion] = useState("");
   const [sort, setSort] = useState<{ k: keyof Row; dir: 1 | -1 }>({ k: "name", dir: 1 });
-  const [fixing, setFixing] = useState<Row | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
+  const [fixing, setFixing] = useState<Row | null>(null); const [deleting, setDeleting] = useState<Row | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
 
   const rows: Row[] = useMemo(() => [
     ...trucks.map((t): Row => ({ kind: "Truck", id: t.truck_id, name: t.truck_name, active: t.active, make: t.make, model: t.model, year: t.year, vin: t.vin_number, plate: t.plate_number, region: t.region, area: t.local_area, status: t.status_code, location: t.status_location, inUse: t.in_use_by_name ?? null, truck: t })),
@@ -65,6 +66,17 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
     onChanged();
   };
 
+  const remove = async (r: Row) => {
+    setBusy(true); setMsg(null);
+    const { error } = r.kind === "Truck"
+      ? await supabase.rpc("delete_truck", { p_truck_id: r.id, p_company_id: companyId })
+      : await supabase.rpc("delete_trailer", { p_trailer_id: r.id, p_company_id: companyId });
+    setBusy(false); setDeleting(null);
+    if (error) { setMsg(`Couldn't delete ${r.name}: ${error.message}`); return; }
+    setMsg(`${r.kind} ${r.name} deleted.`);
+    onChanged();
+  };
+
   const th = (c: Col) => (
     <th key={c.key} onClick={() => setSort((s) => ({ k: c.key, dir: s.k === c.key ? (s.dir === 1 ? -1 : 1) : 1 }))}
       style={{ ...cell, width: c.w, minWidth: c.w, textAlign: "left", cursor: "pointer", fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: MUTED, position: "sticky", top: 0, background: "#161616", zIndex: c.key === "name" ? 3 : 2, ...(c.key === "name" ? { left: 0 } : {}) }}>
@@ -83,8 +95,8 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
       <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>{shown.length} of {rows.length} units. Tap a unit to edit. Scroll sideways for every field.</div>
       {msg && <div style={{ fontSize: 13, color: "#fbbf24", marginBottom: 8 }}>{msg}</div>}
       <div style={{ overflow: "auto", maxHeight: "60vh", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2 }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed", width: COLS.reduce((a, c) => a + c.w, 0) + 110 }}>
-          <thead><tr>{COLS.map(th)}<th style={{ ...cell, width: 110, position: "sticky", top: 0, background: "#161616", zIndex: 2 }} /></tr></thead>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed", width: COLS.reduce((a, c) => a + c.w, 0) + 170 }}>
+          <thead><tr>{COLS.map(th)}<th style={{ ...cell, width: 170, position: "sticky", top: 0, background: "#161616", zIndex: 2 }} /></tr></thead>
           <tbody>
             {shown.map((r) => (
               <tr key={`${r.kind}${r.id}`} style={{ opacity: r.active ? 1 : 0.5, cursor: "pointer" }}
@@ -95,7 +107,8 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
                   </td>
                 ))}
                 <td style={cell} onClick={(e) => e.stopPropagation()}>
-                  <button type="button" onClick={() => setFixing(r)} style={{ background: "none", border: "none", color: "#93c5fd", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>Wrong type?</button>
+                  <button type="button" onClick={() => { setFixing(r); setDeleting(null); }} style={{ background: "none", border: "none", color: "#93c5fd", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>Wrong type?</button>
+                  {canDelete && <button type="button" onClick={() => { setDeleting(r); setFixing(null); }} style={{ background: "none", border: "none", color: "#f87171", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "0 0 0 10px" }}>Delete</button>}
                 </td>
               </tr>
             ))}
@@ -103,6 +116,15 @@ export function EquipmentTable({ trucks, trailers, companyId, onOpenTruck, onOpe
           </tbody>
         </table>
       </div>
+      {deleting && (
+        <div style={{ marginTop: 12, padding: 12, border: "1px solid rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)", borderRadius: 2, fontSize: 14 }}>
+          Permanently delete {deleting.kind.toLowerCase()} <b>{deleting.name}</b>? This cannot be undone. If it is the wrong-type copy, make sure the right one exists first.
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="button" disabled={busy} onClick={() => void remove(deleting)} style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, background: "#ef4444", color: "#fff", border: "none", borderRadius: 2, cursor: "pointer" }}>{busy ? "Deleting…" : "Delete it"}</button>
+            <button type="button" disabled={busy} onClick={() => setDeleting(null)} style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {fixing && (
         <div style={{ marginTop: 12, padding: 12, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.08)", borderRadius: 2, fontSize: 14 }}>
           Move <b>{fixing.name}</b> from {fixing.kind === "Truck" ? "trucks to trailers" : "trailers to trucks"}? Its identity fields are copied to a new {fixing.kind === "Truck" ? "trailer" : "truck"} and the old {fixing.kind.toLowerCase()} is set inactive (not deleted).

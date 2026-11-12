@@ -2361,7 +2361,7 @@ export default function AdminPage() {
           </div>
 
           {equipTab === "table" && (
-            <EquipmentTable trucks={trucks} trailers={trailers} companyId={companyId!} onOpenTruck={(t) => setTruckModal(t)} onOpenTrailer={(t) => setTrailerModal(t)} onChanged={() => void loadAll()} />
+            <EquipmentTable trucks={trucks} trailers={trailers} companyId={companyId!} canDelete={myRole === "admin"} onOpenTruck={(t) => setTruckModal(t)} onOpenTrailer={(t) => setTrailerModal(t)} onChanged={() => void loadAll()} />
           )}
 
           {/* Trucks tab */}
