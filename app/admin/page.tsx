@@ -9,6 +9,7 @@ import { fetchProductsCatalogCached } from "@/lib/queries/useProductsCatalog";
 import { fetchTerminalsCatalogCached, TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
 import ComboEditModal from "@/lib/ui/driver/ComboEditModal";
 import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/driver/EquipmentDetails";
+import { EquipmentTable } from "./EquipmentTable";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
@@ -1258,7 +1259,7 @@ export default function AdminPage() {
   const fleetSetup = useFleetSetup(companyId, usersOpen && !isSolo && (myRole === "admin" || myRole === "dispatch"));
   const [setupRowId, setSetupRowId] = useState<string | null>(null);
   const [equipOpen,      setEquipOpen]      = useState(false);
-  const [equipTab,       setEquipTab]       = useState<"trucks"|"trailers"|"combos">("trucks");
+  const [equipTab,       setEquipTab]       = useState<"trucks"|"trailers"|"combos"|"table">("table");
   const [terminalsOpen,  setTerminalsOpen]  = useState(false);
   // keep for compat
   const trucksOpen   = equipOpen && equipTab === "trucks";
@@ -2350,7 +2351,7 @@ export default function AdminPage() {
           )}
           {/* Tab bar */}
           <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            {([["trucks","Trucks",trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["trailers","Trailers",trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["combos","Combos",scopedActiveComboCount]] as const).map(([tab, label, count]) => (
+            {([["table","Table",trucks.length + trailers.length],["trucks","Trucks",trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["trailers","Trailers",trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["combos","Combos",scopedActiveComboCount]] as const).map(([tab, label, count]) => (
               <button key={tab} type="button"
                 onClick={() => setEquipTab(tab)}
                 style={{ flex: 1, background: "none", border: "none", borderBottom: equipTab === tab ? "2px solid rgba(255,255,255,0.70)" : "2px solid transparent", cursor: "pointer", padding: "8px 4px", fontSize: 13, fontWeight: equipTab === tab ? 800 : 500, color: equipTab === tab ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.35)", transition: "all 150ms" }}>
@@ -2358,6 +2359,10 @@ export default function AdminPage() {
               </button>
             ))}
           </div>
+
+          {equipTab === "table" && (
+            <EquipmentTable trucks={trucks} trailers={trailers} companyId={companyId!} onOpenTruck={(t) => setTruckModal(t)} onOpenTrailer={(t) => setTrailerModal(t)} onChanged={() => void loadAll()} />
+          )}
 
           {/* Trucks tab */}
           {equipTab === "trucks" && (
