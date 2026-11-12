@@ -56,7 +56,7 @@ export function DeskView(p: DeskViewProps) {
         <div key={g.kind} style={{ ...L.secondary, padding: 12, marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <b style={{ fontSize: 14 }}>{g.label} <span style={{ color: EXPIRY_COLOR.expiring }}>{g.count}</span></b>
-            {p.canResolve && g.count > 1 && <button type="button" style={btn} disabled={busy === g.kind} onClick={() => void act(g.kind, () => p.onResolve(g.drivers.flatMap((d) => d.items.map((i) => i.id))))}>Resolve all</button>}
+            {p.canResolve && g.count > 1 && <button type="button" style={btn} disabled={busy === g.kind} onClick={() => void act(g.kind, () => p.onResolve(g.drivers.flatMap((d) => d.items.map((i) => i.id))))}>Dismiss all</button>}
           </div>
           {g.drivers.map((d) => (
             <div key={d.userId ?? "company"} style={{ borderTop: `1px solid ${L.hairline}`, padding: "8px 0" }}>
@@ -72,7 +72,7 @@ export function DeskView(p: DeskViewProps) {
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
                     <span style={{ color: L.muted, fontSize: 12 }}>{i.age} ago{p.companyName && p.companyName(i.companyId) ? ` · ${p.companyName(i.companyId)}` : ""}</span>
                     {p.canResolve && i.retry && <button type="button" style={btn} disabled={busy === i.id} onClick={() => void act(i.id, () => p.onRetry(i))}>{busy === i.id ? "Sending…" : "Retry"}</button>}
-                    {p.canResolve && <button type="button" style={btn} disabled={busy === i.id} onClick={() => void act(i.id, () => p.onResolve([i.id]))}>Resolve</button>}
+                    {p.canResolve && <button type="button" style={btn} disabled={busy === i.id} onClick={() => void act(i.id, () => p.onResolve([i.id]))}>Dismiss</button>}
                   </div>
                 </div>
               ))}
