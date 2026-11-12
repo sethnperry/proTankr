@@ -79,11 +79,15 @@ export function useTripStore(userId: string | null | undefined) {
     const onVisible = () => {
       if (document.visibilityState === "visible") void syncNow();
     };
+    // The Desk can ask this phone to send its saved work (also retries rows the server rejected).
+    const onSw = (e: MessageEvent) => { if (e.data === "sync-now") { store.retryFailed(); void store.drain(sender); } };
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisible);
+    try { navigator.serviceWorker?.addEventListener("message", onSw); } catch { /* no service worker */ }
     return () => {
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
+      try { navigator.serviceWorker?.removeEventListener("message", onSw); } catch { /* no service worker */ }
     };
   }, [store, syncNow, userId]);
 

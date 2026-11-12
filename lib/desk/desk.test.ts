@@ -47,9 +47,11 @@ test("the inbox groups open entries by kind then driver, newest first, and drops
 
 test("only a failed call-out email can be retried from here", () => {
   assert.deepEqual(retryTarget({ kind: "send_failed", payload: { callout_id: "x", event: "withdrawn" } }), { type: "callout", calloutId: "x", event: "withdrawn" });
-  assert.equal(retryTarget({ kind: "send_failed", payload: { callout_id: "x" } })?.event, "created");
+  assert.deepEqual(retryTarget({ kind: "send_failed", payload: { callout_id: "x" } }), { type: "callout", calloutId: "x", event: "created" });
   assert.equal(retryTarget({ kind: "send_failed", payload: { work_order_id: "w" } }), null);
   assert.equal(retryTarget({ kind: "telematics_link", payload: { callout_id: "x" } }), null);
+  assert.deepEqual(retryTarget({ kind: "sync_stuck", payload: {}, user_id: "u1" }), { type: "sync", userId: "u1" });
+  assert.equal(retryTarget({ kind: "sync_stuck", payload: {} }), null);
 });
 
 test("the stuck-sync list keeps each driver's newest open report", () => {

@@ -69,8 +69,18 @@ export function useDesk(o: { companyId: string | null; allCompanies: boolean; en
     return null;
   }, []);
 
+  /** Pushes a "send your saved work" request to the driver's phone. The entry clears itself when the phone has sent it. */
+  const nudgeSync = useCallback(async (userId: string): Promise<string | null> => {
+    const { data: s } = await supabase.auth.getSession();
+    const res = await fetch("/api/desk/nudge-sync", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${s.session?.access_token ?? ""}` }, body: JSON.stringify({ userId }) });
+    const j = (await res.json().catch(() => ({}))) as { sent?: number; error?: string };
+    if (!res.ok) return j.error ?? "Couldn't reach the phone.";
+    return j.sent ? "Asked the phone to sync. This clears here once it has sent everything." : "That phone has notifications off, so it can't be reached. Ask the driver to open the app with signal.";
+  }, []);
+
   /** Sends a call-out email again. Resolves the entry when it went. */
   const retry = useCallback(async (errorId: string, r: Retry): Promise<string | null> => {
+    if (r.type === "sync") return nudgeSync(r.userId);
     const { data: s } = await supabase.auth.getSession();
     const res = await fetch("/api/callouts", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${s.session?.access_token ?? ""}` }, body: JSON.stringify({ calloutId: r.calloutId, event: r.event, tz: deviceTz() }) });
     const j = (await res.json().catch(() => ({}))) as { sent?: boolean; reason?: string; error?: string };
@@ -110,5 +120,5 @@ export function useDesk(o: { companyId: string | null; allCompanies: boolean; en
     });
   }, []);
 
-  return { rows, people, companies, loading, error, resolve, retry, loadTimeline, reload: load };
+  return { rows, people, companies, loading, error, resolve, retry, nudgeSync, loadTimeline, reload: load };
 }

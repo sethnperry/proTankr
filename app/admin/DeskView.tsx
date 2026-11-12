@@ -23,6 +23,7 @@ export type DeskViewProps = {
   error?: string | null;
   onResolve: (ids: string[]) => Promise<string | null>;
   onRetry: (item: InboxItem) => Promise<string | null>;
+  onNudge: (userId: string) => Promise<string | null>;
   onUseAs: (userId: string, name: string) => void;
   loadTimeline: (userId: string) => Promise<TimelineEntry[]>;
 };
@@ -71,7 +72,7 @@ export function DeskView(p: DeskViewProps) {
                   <div>{i.message}</div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
                     <span style={{ color: L.muted, fontSize: 12 }}>{i.age} ago{p.companyName && p.companyName(i.companyId) ? ` · ${p.companyName(i.companyId)}` : ""}</span>
-                    {p.canResolve && i.retry && <button type="button" style={btn} disabled={busy === i.id} onClick={() => void act(i.id, () => p.onRetry(i))}>{busy === i.id ? "Sending…" : "Retry"}</button>}
+                    {p.canResolve && i.retry && <button type="button" style={btn} disabled={busy === i.id} onClick={() => void act(i.id, () => p.onRetry(i))}>{busy === i.id ? "Sending…" : i.retry.type === "sync" ? "Ask phone to sync" : "Retry"}</button>}
                     {p.canResolve && <button type="button" style={btn} disabled={busy === i.id} onClick={() => void act(i.id, () => p.onResolve([i.id]))}>Dismiss</button>}
                   </div>
                 </div>
@@ -84,12 +85,15 @@ export function DeskView(p: DeskViewProps) {
       <SectionLabel>Stuck syncs · {p.stuck.length}</SectionLabel>
       {p.stuck.length === 0 && <div style={{ color: L.muted, fontSize: 14 }}>No phone has unsent work.</div>}
       {p.stuck.map((s) => (
-        <button key={s.errorId} type="button" onClick={() => void openTimeline(s.userId, s.name)} className="dash-press"
-          style={{ ...L.secondary, display: "block", width: "100%", textAlign: "left", padding: "12px 14px", marginBottom: 6, color: "#fff", cursor: "pointer" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 14 }}><span>{s.name}</span><span style={{ color: s.failed ? EXPIRY_COLOR.expired : EXPIRY_COLOR.expiring }}>{s.count} unsent</span></div>
-          <div style={{ color: L.muted, fontSize: 12, marginTop: 2 }}>Oldest {s.oldestAge}{s.tables.length ? ` · ${s.tables.join(", ")}` : ""}{s.failed ? ` · ${s.failed} rejected by the server` : ""}</div>
-          {s.lastError && <div style={{ color: "#f87171", fontSize: 12, marginTop: 2 }}>{s.lastError}</div>}
-        </button>
+        <div key={s.errorId} style={{ ...L.secondary, padding: "12px 14px", marginBottom: 6 }}>
+          <button type="button" onClick={() => void openTimeline(s.userId, s.name)} className="dash-press"
+            style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, color: "#fff", cursor: "pointer" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 14 }}><span>{s.name}</span><span style={{ color: s.failed ? EXPIRY_COLOR.expired : EXPIRY_COLOR.expiring }}>{s.count} unsent</span></div>
+            <div style={{ color: L.muted, fontSize: 12, marginTop: 2 }}>Oldest {s.oldestAge}{s.tables.length ? ` · ${s.tables.join(", ")}` : ""}{s.failed ? ` · ${s.failed} rejected by the server` : ""}</div>
+            {s.lastError && <div style={{ color: "#f87171", fontSize: 12, marginTop: 2 }}>{s.lastError}</div>}
+          </button>
+          {p.canResolve && <div style={{ marginTop: 8 }}><button type="button" style={btn} disabled={busy === s.errorId} onClick={() => void act(s.errorId, () => p.onNudge(s.userId))}>{busy === s.errorId ? "Asking…" : "Ask phone to sync"}</button></div>}
+        </div>
       ))}
 
       <FullscreenModal open={!!timelineFor} title={timelineFor ? `${timelineFor.name} · last 14 days` : ""} onClose={() => setTimelineFor(null)} footer={null}>

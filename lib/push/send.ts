@@ -13,6 +13,8 @@ export type PushPayload = {
   /** Buttons on the notification. With answerId, tapping one records the answer without opening the app. */
   actions?: { action: string; title: string }[];
   answerId?: string;
+  /** Also tells an open app window to send its saved work now. */
+  sync?: boolean;
 };
 
 let configured = false;

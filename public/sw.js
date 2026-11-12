@@ -171,6 +171,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(flushAnswers());
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch { d = { title: "ProTankr", body: event.data ? event.data.text() : "" }; }
+  // The Desk asked this phone to send its saved work: tell any open app window.
+  if (d.sync) event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => list.forEach((c) => c.postMessage("sync-now"))));
   event.waitUntil(
     self.registration.showNotification(d.title || "ProTankr", {
       body: d.body || "",

@@ -22,6 +22,7 @@ export default function SuperDeskModal({ open, onClose }: { open: boolean; onClo
       <DeskView groups={groups} stuck={stuck} canResolve canUseAs loading={desk.loading} error={desk.error}
         companyName={(id) => (id ? desk.companies.get(id) ?? null : null)}
         onResolve={desk.resolve}
+        onNudge={desk.nudgeSync}
         onRetry={async (i) => (i.retry ? desk.retry(i.id, i.retry) : null)}
         onUseAs={async (userId, name) => {
           const { data } = await supabase.auth.getUser();

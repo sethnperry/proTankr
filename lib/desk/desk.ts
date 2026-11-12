@@ -43,9 +43,10 @@ export function visibleErrors(rows: ErrorRow[], scope: DeskScope, myRegion: stri
 }
 
 // ── The inbox ──────────────────────────────────────────────────────────────────────────────────────────────
-export type Retry = { type: "callout"; calloutId: string; event: "created" | "edited" | "withdrawn" };
-/** Only some failures can be sent again from here: a call-out email. */
-export function retryTarget(r: Pick<ErrorRow, "kind" | "payload">): Retry | null {
+export type Retry = { type: "callout"; calloutId: string; event: "created" | "edited" | "withdrawn" } | { type: "sync"; userId: string };
+/** What can be tried again from here: a call-out email, or asking a driver's phone to send its stuck work. */
+export function retryTarget(r: Pick<ErrorRow, "kind" | "payload"> & { user_id?: string | null }): Retry | null {
+  if (r.kind === "sync_stuck") return r.user_id ? { type: "sync", userId: r.user_id } : null;
   const id = r.payload?.callout_id;
   if (r.kind !== "send_failed" || typeof id !== "string") return null;
   const ev = r.payload?.event;

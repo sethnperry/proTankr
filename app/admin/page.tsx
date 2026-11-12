@@ -2169,6 +2169,7 @@ export default function AdminPage() {
           deskSlot={scope ? (
             <DeskView groups={deskGroups} stuck={deskStuck} canResolve={scope.canResolve} canUseAs={scope.canUseAs} loading={desk.loading} error={desk.error}
               onResolve={desk.resolve}
+              onNudge={desk.nudgeSync}
               onRetry={async (i) => (i.retry ? desk.retry(i.id, i.retry) : null)}
               onUseAs={(userId, name) => { startSetupSession({ targetUserId: userId, targetDisplayName: name, adminUserId: currentUserId ?? "", returnTo: "/admin" }); window.location.href = "/planner"; }}
               loadTimeline={desk.loadTimeline} />
