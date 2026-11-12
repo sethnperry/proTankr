@@ -222,6 +222,17 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
   const [killNote, setKillNote] = useState("");
   const [killBusy, setKillBusy] = useState(false);
   const [killErr, setKillErr] = useState<string | null>(null);
+  // Long-press (touch) or right-click opens the trip's options for an admin.
+  const [optionsFor, setOptionsFor] = useState<{ tripId: string; label: string; status: string } | null>(null);
+  const pressTimer = React.useRef<number | null>(null);
+  const pressed = React.useRef(false);
+  const startPress = (e: React.TouchEvent, info: { tripId: string; label: string; status: string }) => {
+    pressed.current = false;
+    if (pressTimer.current != null) window.clearTimeout(pressTimer.current);
+    pressTimer.current = window.setTimeout(() => { pressed.current = true; setOptionsFor(info); }, 550);
+    void e;
+  };
+  const endPress = () => { if (pressTimer.current != null) window.clearTimeout(pressTimer.current); pressTimer.current = null; };
   const closeKill = () => { setKilling(null); setKillWord(""); setKillNote(""); setKillErr(null); };
   const doKill = async () => {
     if (!killing || !userId) return;
@@ -278,6 +289,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
           <PickSheet open={sheet === "truck"} title="Truck" allLabel="All trucks" options={regionTrucks.map((t) => ({ value: t.truck_id, label: `Truck ${t.truck_name}` }))} value={truckId} onPick={(v) => { setTruckId(v); if (v) setArea(""); }} onClose={() => setSheet(null)} />
         </div>
       )}
+      {company && canForceCancel && visible.length > 0 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: "-4px 0 10px" }}>Press and hold a trip (right-click on a computer) for options.</div>}
       {visible.length === 0 && (
         <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 15, textAlign: "center", marginTop: 40 }}>
           {loading ? "Loading…" : rows.length ? "Nothing to show." : company ? "No trips match." : "No trips yet. Start one from the Driver Dashboard."}
@@ -288,11 +300,18 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
         const who = [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", trip.truck_id ? truckName.get(trip.truck_id) : null].filter(Boolean).join(" ");
+        const canOpenOptions = company && canForceCancel && trip.status !== "complete" && trip.status !== "cancelled";
+        const info = { tripId: trip.trip_id, label: order ? `Order ${order}` : ptdCode(trip.trip_id), status: s.label };
         return (
           <div key={trip.trip_id} role="button" tabIndex={0} aria-busy={nav.is(trip.trip_id)}
-            onClick={() => open(trip.trip_id)}
+            {...(canOpenOptions ? {
+              onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); setOptionsFor(info); },
+              onTouchStart: (e: React.TouchEvent) => startPress(e, info),
+              onTouchEnd: endPress, onTouchMove: endPress, onTouchCancel: endPress,
+            } : {})}
+            onClick={() => { if (pressed.current) { pressed.current = false; return; } open(trip.trip_id); }}
             onKeyDown={(e) => { if (e.key === "Enter") open(trip.trip_id); }}
-            style={{ ...card, display: "flex", padding: 0, overflow: "hidden", opacity: trip.driver_hidden && !company ? 0.55 : 1 }}>
+            style={{ ...card, display: "flex", padding: 0, overflow: "hidden", opacity: trip.driver_hidden && !company ? 0.55 : 1, ...(canOpenOptions ? { WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" } : {}) }}>
             <div style={{ flex: 1, minWidth: 0, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <div style={{ display: "flex", gap: 6, minWidth: 0, fontSize: 16, fontWeight: 800 }}>
@@ -334,13 +353,6 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
                     })}
                   </span>
                 )}
-                {company && canForceCancel && trip.status !== "complete" && trip.status !== "cancelled" && (
-                  <button type="button"
-                    onClick={(e) => { e.stopPropagation(); setKilling({ tripId: trip.trip_id, label: order ? `Order ${order}` : ptdCode(trip.trip_id), status: s.label }); }}
-                    style={{ border: "1px solid rgba(248,113,113,0.5)", background: "transparent", color: "#f87171", fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", padding: "5px 10px" }}>
-                    Cancel trip…
-                  </button>
-                )}
                 {cancelled && !company && (
                   <button type="button"
                     onClick={(e) => { e.stopPropagation(); setHidden(trip.trip_id, !trip.driver_hidden); }}
@@ -353,6 +365,17 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
           </div>
         );
       })}
+      <FullscreenModal open={!!optionsFor} title={optionsFor ? optionsFor.label : "Trip"} onClose={() => setOptionsFor(null)} footer={null}>
+        {optionsFor && (
+          <>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 10 }}>{optionsFor.status}</div>
+            <button type="button" onClick={() => { const t = optionsFor; setOptionsFor(null); open(t.tripId); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "14px 14px", fontSize: 15, fontWeight: 700, color: "#fff", background: "#0f0f10", border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer", marginBottom: 8 }}>Open PTD ›</button>
+            <button type="button" onClick={() => { const t = optionsFor; setOptionsFor(null); setKilling(t); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "14px 14px", fontSize: 15, fontWeight: 700, color: "#f87171", background: "#0f0f10", border: "1px solid rgba(248,113,113,0.4)", cursor: "pointer" }}>Cancel trip…</button>
+          </>
+        )}
+      </FullscreenModal>
       <FullscreenModal open={!!killing} title="Cancel this trip?" onClose={closeKill} footer={null}>
         {killing && (
           <>
