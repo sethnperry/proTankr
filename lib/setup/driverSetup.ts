@@ -38,6 +38,9 @@ export const STEPS: StepDef[] = [
   { id: "vault", label: "Vault", sub: "Set your pattern lock", required: false, confirmable: false },
 ];
 
+/** What a driver needs to roll their first load; the rest of the checklist can wait. */
+export const FIRST_LOAD_STEPS: StepId[] = ["you", "equipment", "plans", "terminals"];
+
 export type SetupFacts = {
   /** Solo drivers set everything up themselves; fleet drivers confirm what the admin preset. */
   tier: "solo" | "fleet";
@@ -153,9 +156,11 @@ export function computeSetup(f: SetupFacts, confirmations: Confirmations = {}): 
   const counted = steps.filter((s) => s.status !== "na");
   const done = counted.filter((s) => s.status === "done").length;
   const requiredLeft = counted.filter((s) => s.required && s.status !== "done").length;
-  // Required first, then the rest, each in walking order.
+  // Required first, then what the first load needs, then the rest, each in walking order.
   const open = (s: SetupStep) => s.status !== "done" && s.status !== "na";
-  const next = steps.find((s) => s.required && open(s))?.id ?? steps.find(open)?.id ?? null;
+  const next = steps.find((s) => s.required && open(s))?.id
+    ?? steps.find((s) => FIRST_LOAD_STEPS.includes(s.id) && open(s))?.id
+    ?? steps.find(open)?.id ?? null;
   return { steps, total: counted.length, done, requiredLeft, next, complete: counted.length > 0 && done === counted.length };
 }
 

@@ -16,7 +16,7 @@ import { PerDiemSheet } from "../components/perdiem/PerDiemSheet";
 import { useDeliveryLocationList } from "@/lib/trips/useTripData";
 import { LocationBrowser } from "../components/trip/LocationPicker";
 import { useDriverSetup } from "@/lib/setup/useDriverSetup";
-import { counterText, type SetupStep, type StepId } from "@/lib/setup/driverSetup";
+import { counterText, FIRST_LOAD_STEPS, type SetupStep, type StepId } from "@/lib/setup/driverSetup";
 import { SelfProfileView } from "@/lib/ui/driver/SelfProfileView";
 import FuelPinsView from "../components/FuelPinsView";
 import TelematicsLoginView from "../components/TelematicsLoginView";
@@ -87,12 +87,35 @@ export default function SetupPage() {
   const nextStep = summary?.steps.find((s) => s.id === summary.next) ?? null;
   const solo = facts?.tier === "solo";
 
+  const renderStep = (s: SetupStep) => (
+            <div style={{ ...L.secondary, marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>
+                <span aria-hidden style={{ width: 10, height: 10, background: MARK[s.status], flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{s.label}{s.required && s.status !== "done" ? <span style={{ fontSize: 11, color: "#f87171", marginLeft: 8, letterSpacing: "0.1em" }}>REQUIRED</span> : null}</div>
+                  <div style={{ fontSize: 12, color: s.status === "needs" ? "#f87171" : s.status === "confirm" ? "#fbbf24" : muted, marginTop: 2 }}>{s.detail}</div>
+                </div>
+                {s.status !== "confirm" && s.id !== "schedule" && (
+                  <button type="button" className="dash-press" style={btn} {...(busy === s.id ? { disabled: true, "aria-busy": true } : {})} onClick={() => void open(s.id)}>
+                    {s.status === "done" ? "Edit" : s.status === "needs" ? "Fix" : "Set up"}
+                  </button>
+                )}
+              </div>
+              {s.status === "confirm" && (
+                <div style={{ display: "flex", gap: 8, padding: "0 14px 14px 36px" }}>
+                  <button type="button" className="dash-press" style={{ ...primary, flex: 1 }} {...(busy === s.id ? { disabled: true, "aria-busy": true } : {})} onClick={() => void confirmIt(s.id)}>Looks right</button>
+                  {s.id !== "schedule" && <button type="button" className="dash-press" style={btn} onClick={() => void open(s.id)}>Edit</button>}
+                </div>
+              )}
+            </div>
+  );
+
   return (
     <div style={{ padding: "12px 16px 40px", maxWidth: 640, margin: "0 auto", color: "#fff" }}>
       <DashStyles />
       <h1 style={{ fontSize: 22, fontWeight: 800, margin: "6px 0 4px" }}>Setup</h1>
       <div style={{ fontSize: 14, color: muted, marginBottom: 14, lineHeight: 1.4 }}>
-        {solo ? "Set up your account once and the app does the rest." : "Your company set up a lot of this. Check each one and confirm it's right."}
+        {!facts ? "Setting up your account." : solo ? "Start with the first four. You can do the rest any time." : "Your company set up a lot of this. Check each one and confirm it's right."}
       </div>
 
       {!summary && !error && <div style={{ color: muted, fontSize: 14 }}>Loading…</div>}
@@ -120,28 +143,21 @@ export default function SetupPage() {
           </div>
           {msg && <div style={{ fontSize: 13, color: "#fbbf24", marginBottom: 10 }}>{msg}</div>}
 
-          {summary.steps.filter((s) => s.status !== "na").map((s) => (
-            <div key={s.id} style={{ ...L.secondary, marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>
-                <span aria-hidden style={{ width: 10, height: 10, background: MARK[s.status], flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>{s.label}{s.required && s.status !== "done" ? <span style={{ fontSize: 11, color: "#f87171", marginLeft: 8, letterSpacing: "0.1em" }}>REQUIRED</span> : null}</div>
-                  <div style={{ fontSize: 12, color: s.status === "needs" ? "#f87171" : s.status === "confirm" ? "#fbbf24" : muted, marginTop: 2 }}>{s.detail}</div>
-                </div>
-                {s.status !== "confirm" && s.id !== "schedule" && (
-                  <button type="button" className="dash-press" style={btn} {...(busy === s.id ? { disabled: true, "aria-busy": true } : {})} onClick={() => void open(s.id)}>
-                    {s.status === "done" ? "Edit" : s.status === "needs" ? "Fix" : "Set up"}
-                  </button>
-                )}
-              </div>
-              {s.status === "confirm" && (
-                <div style={{ display: "flex", gap: 8, padding: "0 14px 14px 36px" }}>
-                  <button type="button" className="dash-press" style={{ ...primary, flex: 1 }} {...(busy === s.id ? { disabled: true, "aria-busy": true } : {})} onClick={() => void confirmIt(s.id)}>Looks right</button>
-                  {s.id !== "schedule" && <button type="button" className="dash-press" style={btn} onClick={() => void open(s.id)}>Edit</button>}
+          {summary.steps.filter((s) => s.status !== "na").map((s, i, all) => (
+            <React.Fragment key={s.id}>
+              {(i === 0 || FIRST_LOAD_STEPS.includes(all[i - 1].id) !== FIRST_LOAD_STEPS.includes(s.id)) && (
+                <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", color: muted, margin: i === 0 ? "0 0 8px" : "18px 0 8px" }}>
+                  {FIRST_LOAD_STEPS.includes(s.id) ? "TO START YOUR FIRST LOAD" : "WHENEVER YOU'RE READY"}
                 </div>
               )}
-            </div>
+              {renderStep(s)}
+            </React.Fragment>
           ))}
+          {summary.requiredLeft === 0 && !summary.complete && (
+            <button type="button" className="dash-press" style={{ ...btn, width: "100%", marginTop: 14, padding: "14px 0" }} onClick={() => nav.go("home", "/planner")}>
+              Done for now. Back to the dashboard
+            </button>
+          )}
         </>
       )}
 

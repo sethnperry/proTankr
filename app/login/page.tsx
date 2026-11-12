@@ -97,9 +97,11 @@ export default function LoginPage() {
       const { error: otpError } = await supabase.auth.signInWithOtp({ email: trimmed, options: { shouldCreateUser: false } });
       if (otpError) throw otpError;
       setCodeSent(true);
-      setNotice(`We emailed a sign-in code to ${trimmed}. Enter it above.`);
+      setNotice(`We emailed a sign-in code to ${trimmed}. Enter it below.`);
     } catch (err: any) {
-      setError(err?.message ?? "Couldn't send a code. Check the email and try again.");
+      setError(/signups? not allowed|not found/i.test(err?.message ?? "")
+        ? "We don't have that email yet. New here? Use the magic link below to create your account."
+        : (err?.message ?? "Couldn't send a code. Check the email and try again."));
     } finally { setSendingCode(false); }
   }
 
@@ -147,7 +149,7 @@ export default function LoginPage() {
 
       <h1 style={{ margin: "0 0 6px", fontSize: 26, fontWeight: 900 }}>Sign in</h1>
       <p style={{ margin: "0 0 20px", fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>
-        Enter your email, then the code from your ProTankr email.
+        {codeSent ? "Enter the code we just emailed you." : "Enter your email and we'll send you a sign-in code."}
       </p>
 
       {error && <div style={banner("rgba(255,60,60,0.12)", "#ff8080")}>{error}</div>}
@@ -158,23 +160,29 @@ export default function LoginPage() {
           placeholder="you@email.com" autoComplete="email" inputMode="email" style={input} />
       </label>
 
-      {/* Primary: 6-digit code (reliable everywhere -- no link opening in the wrong app). */}
-      <form onSubmit={verifyCode}>
-        <label style={label}>Sign-in code
-          <input type="text" value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            placeholder="Code from your email" autoComplete="one-time-code" inputMode="numeric"
-            style={{ ...input, letterSpacing: 4, fontWeight: 800, fontSize: 20 }} />
-        </label>
-        <button aria-busy={!!(verifying)} type="submit" disabled={verifying} style={primaryBtn(verifying)}>
-          {verifying ? "Signing in…" : "Sign in"}
+      {/* Step 1: ask for a code. Step 2: the code box appears once one is on its way. */}
+      {!codeSent ? (
+        <button aria-busy={!!(sendingCode)} type="button" onClick={sendCode} disabled={sendingCode} style={primaryBtn(sendingCode)}>
+          {sendingCode ? "Sending…" : "Email me a code"}
         </button>
-      </form>
-
-      <button aria-busy={!!(sendingCode)} type="button" onClick={sendCode} disabled={sendingCode}
-        style={{ ...linkBtn, marginTop: 12 }}>
-        {sendingCode ? "Sending…" : codeSent ? "Resend code" : "Email me a code"}
-      </button>
+      ) : (
+        <>
+          <form onSubmit={verifyCode}>
+            <label style={label}>Sign-in code
+              <input type="text" value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="Code from your email" autoComplete="one-time-code" inputMode="numeric" autoFocus
+                style={{ ...input, letterSpacing: 4, fontWeight: 800, fontSize: 20 }} />
+            </label>
+            <button aria-busy={!!(verifying)} type="submit" disabled={verifying} style={primaryBtn(verifying)}>
+              {verifying ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+          <button aria-busy={!!(sendingCode)} type="button" onClick={sendCode} disabled={sendingCode} style={{ ...linkBtn, marginTop: 12 }}>
+            {sendingCode ? "Sending…" : "Resend code"}
+          </button>
+        </>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 14px" }}>
         <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.12)" }} />
@@ -189,7 +197,7 @@ export default function LoginPage() {
       ) : (
         <form onSubmit={sendMagicLink}>
           <button aria-busy={!!(sendingLink)} type="submit" disabled={sendingLink} style={secondaryBtn(sendingLink)}>
-            {sendingLink ? "Sending…" : "Email me a magic link instead"}
+            {sendingLink ? "Sending…" : "New here? Email me a magic link"}
           </button>
         </form>
       )}
