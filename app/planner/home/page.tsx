@@ -137,7 +137,7 @@ import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { TrailerHeader, useTrailerHeaderData } from "../components/TrailerViews";
 import { AddPickupSheet, type AddPickupDraft } from "../components/trip/AddPickupSheet";
 import { checkAddPickup, grossColor, LEGAL_GROSS_LBS } from "@/lib/trips/addPickupCheck";
-import { topOffPlan, roughLbsPerGal, mergeBlendRows, blendPct, blendLabel, offTarget } from "@/lib/trips/splash";
+import { topOffPlan, roughLbsPerGal, mergeBlendRows, blendPct, blendLabel, offTarget, validPct } from "@/lib/trips/splash";
 import { getTripSplash, setTripSplash, type TripSplash } from "@/lib/trips/tripSplash";
 import { markAddingPickup, releaseAddingPickup } from "@/lib/trips/pickerIntent";
 import { isSplashable, splashPickupPlans, refineSecondStop, type StagedPlanned } from "@/lib/trips/splashRows";
@@ -2379,8 +2379,18 @@ export default function HomePage() {
     const add = rows.filter((r) => r.product_id === sp.additiveProductId).reduce((t, r) => t + (r.gross_gallons ?? 0), 0);
     const base = rows.filter((r) => r.product_id !== sp.additiveProductId).reduce((t, r) => t + (r.gross_gallons ?? 0), 0);
     const pct = blendPct(add, base);
-    return pct != null && offTarget(pct, sp.pct) ? [`C${k} is ${blendLabel(pct)} (${pct.toFixed(1)}%), target ${sp.pct}%`] : [];
+    return pct != null && offTarget(pct, sp.pct) ? [{ comp: Number(k), pct, target: sp.pct, text: `C${k} is ${blendLabel(pct)} (${pct.toFixed(1)}%), target ${sp.pct}%` }] : [];
   });
+  // The driver's way out of an off-target blend: take the blend as loaded (the PTD then records what is really in the
+  // compartment), or, when it came up short and the trailer can still load, add more ethanol.
+  const keepBlendAsLoaded = (comp: number, pct: number) => {
+    const sp = tripSplash[comp];
+    const next = Math.round(pct * 10) / 10;
+    if (!userId || !openTrip || !sp || !validPct(next)) return;
+    const updated = { ...tripSplash, [comp]: { ...sp, pct: next } };
+    setTripSplash(userId, openTrip.trip_id, updated);
+    setTripSplashState(updated);
+  };
   // The most recent load on this trip, for the Load Report link.
   const lastLoadId = [...pickups].filter((p) => p.load_id && (p.outcome === "loaded" || p.left_at)).sort((a, b) => b.seq - a.seq)[0]?.load_id ?? null;
   const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
@@ -2708,7 +2718,15 @@ export default function HomePage() {
               )}
               {blendWarnings.length > 0 && (
                 <div style={{ width: "100%", fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>
-                  {blendWarnings.map((w) => <div key={w}>Blend off target: {w}</div>)}
+                  {blendWarnings.map((w) => (
+                    <div key={w.text} style={{ marginBottom: 8 }}>
+                      <div>Blend off target: {w.text}</div>
+                      <div style={{ display: "flex", gap: 14, marginTop: 4 }}>
+                        <button type="button" onClick={() => keepBlendAsLoaded(w.comp, w.pct)} style={smallLink}>Deliver as {blendLabel(w.pct)}</button>
+                        {w.pct < w.target && canAddPickup && <button type="button" onClick={openAddPickup} style={smallLink}>Add more ethanol</button>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
