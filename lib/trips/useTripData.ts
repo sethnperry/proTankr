@@ -176,6 +176,15 @@ export function useDeliveryLocationList(companyId: string | null, userId: string
       const l = first.error ? await query(cols) : first;
       if (l.error) return;
       const starred = new Set(((s.data ?? []) as { location_id: string }[]).map((r) => r.location_id));
+      // Anywhere this driver has delivered is in their range, so it counts as a favorite too.
+      try {
+        const t = await supabase.from("trips").select("trip_id").eq("driver_id", userId).order("created_at", { ascending: false }).limit(300);
+        const tids = ((t.data ?? []) as { trip_id: string }[]).map((x) => x.trip_id);
+        for (let i = 0; i < tids.length; i += 100) {
+          const d = await supabase.from("trip_deliveries").select("location_id").in("trip_id", tids.slice(i, i + 100)).not("location_id", "is", null);
+          ((d.data ?? []) as { location_id: string }[]).forEach((r) => starred.add(r.location_id));
+        }
+      } catch { /* history is a bonus; explicit stars still load */ }
       const locs = ((l.data ?? []) as unknown as Omit<DeliveryLocation, "starred">[]).map((r) => ({
         ...r, lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon), starred: starred.has(r.location_id),
       }));

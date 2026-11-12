@@ -6,6 +6,7 @@
 // quarter of every card opens the editor. "Showing Tampa, FL · Change" narrows State > County > City,
 // the search box finds a store by number, name or city anywhere, and "+ New location" adds one.
 
+import { loadCityStars, saveCityStars, cityStarKey } from "@/lib/favorites/cityStars";
 import React, { useEffect, useMemo, useState } from "react";
 import { AreaChooser } from "./AreaChooser";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -60,19 +61,26 @@ export function LocationBrowser({
   // Picking a delivery opens on the starred locations only; Filter opens the full search and the city lists.
   const [filterOpen, setFilterOpen] = useState(false);
   const [citiesOpen, setCitiesOpen] = useState(false);
-  // Starred cities are kept on this phone, per driver; starred stores are kept in the database.
-  const starsKey = `proTankr:deliveryCityStars:${userId || "anon"}`;
+  // Starred cities are kept on this phone, per driver; starred stores are kept in the database. Never saved before sign-in.
+  const STAR_PREFIX = "proTankr:deliveryCityStars:";
   const [cityStars, setCityStars] = useState<Set<string>>(new Set());
   useEffect(() => {
-    try { const raw = JSON.parse(localStorage.getItem(starsKey) || "[]"); setCityStars(new Set(Array.isArray(raw) ? raw.filter((x: unknown) => typeof x === "string") : [])); } catch { setCityStars(new Set()); }
-  }, [starsKey]);
-  const cityKey = (st: string, c: string) => `${st.trim().toUpperCase()}||${c.trim().toLowerCase()}`;
-  const toggleCity = (st: string, c: string) => setCityStars((prev) => {
-    const next = new Set(prev); const k = cityKey(st, c);
-    next.has(k) ? next.delete(k) : next.add(k);
-    try { localStorage.setItem(starsKey, JSON.stringify([...next])); } catch { /* storage blocked */ }
-    return next;
-  });
+    if (!userId) return;
+    try { setCityStars(loadCityStars(localStorage, STAR_PREFIX, userId)); } catch { setCityStars(new Set()); }
+  }, [userId]);
+  const cityKey = cityStarKey;
+  // Cities of favorite stores (starred or delivered to) are favorite cities automatically.
+  const autoCities = useMemo(() => new Set(locations.filter((l) => l.starred && l.is_active !== false && l.city && l.state)
+    .map((l) => cityKey(l.state as string, l.city as string))), [locations]);
+  const toggleCity = (st: string, c: string) => {
+    if (!userId || autoCities.has(cityKey(st, c))) return;
+    setCityStars((prev) => {
+      const next = new Set(prev); const k = cityKey(st, c);
+      next.has(k) ? next.delete(k) : next.add(k);
+      saveCityStars(localStorage, STAR_PREFIX, userId, next);
+      return next;
+    });
+  };
   // undefined = the list; null = a new location; a row = editing it.
   const [editing, setEditing] = useState<DeliveryLocation | null | undefined>(undefined);
   const { data: products } = useProductsCatalog();
@@ -96,11 +104,11 @@ export function LocationBrowser({
   const shown = searching ? list : showAll || favorites.length === 0 ? others : [];
 
   const cityList = useMemo(() => cityOptions(locations, area?.state ?? "", area?.county ?? ""), [locations, area?.state, area?.county]);
-  const favCities = cityList.filter((c) => cityStars.has(cityKey(area?.state ?? "", c.value)));
-  const restCities = cityList.filter((c) => !cityStars.has(cityKey(area?.state ?? "", c.value)));
+  const favCities = cityList.filter((c) => (cityStars.has(cityKey(area?.state ?? "", c.value)) || autoCities.has(cityKey(area?.state ?? "", c.value))));
+  const restCities = cityList.filter((c) => !(cityStars.has(cityKey(area?.state ?? "", c.value)) || autoCities.has(cityKey(area?.state ?? "", c.value))));
   // A starred store whose city isn't starred still shows up top.
   const favStoresElsewhere = useMemo(() => locations.filter((l) => l.starred && l.is_active !== false
-    && !cityStars.has(cityKey((l.state ?? "").trim(), (l.city ?? "").trim()))).sort(byNumberThenName), [locations, cityStars]);
+    && !cityStars.has(cityKey((l.state ?? "").trim(), (l.city ?? "").trim())) && !autoCities.has(cityKey((l.state ?? "").trim(), (l.city ?? "").trim()))).sort(byNumberThenName), [locations, cityStars, autoCities]);
 
   // Places within a few miles of where the driver is, nearest first: the usual answer to "where am I going".
   const nearby = useMemo(() => (searching ? [] : nearbyPlaces(locations, origin)), [locations, origin, searching]);
@@ -230,7 +238,7 @@ export function LocationBrowser({
               <div>
                 {heading("Favorites")}
                 {favCities.length === 0 && favStoresElsewhere.length === 0 ? (
-                  <div className="text-sm text-white/40">No favorites yet. Tap the star on a city or a store to pin it here.</div>
+                  <div className="text-sm text-white/40">No favorites yet. Star the stores you deliver to and they stay at the top. Anywhere you deliver is added for you.</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2">
                     {favCities.map((c) => row(`c-${c.value}`, true, () => toggleCity(area?.state ?? "", c.value), () => setArea({ state: area?.state ?? "", county: area?.county ?? "", city: c.value }), false, c.value, `${c.count} location${c.count === 1 ? "" : "s"}`))}

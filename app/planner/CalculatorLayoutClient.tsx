@@ -346,6 +346,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         normState={normState}
         toggleCityStar={shell.toggleCityStar}
         isCityStarred={shell.isCityStarred}
+        isCityAuto={shell.isCityAuto}
         setLocOpen={shell.setLocOpen}
         onCityPicked={() => shell.setTermOpen(true)}
       />

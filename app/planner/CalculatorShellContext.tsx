@@ -33,6 +33,7 @@ import { useDemoWatchdog } from "./hooks/useDemoWatchdog";
 import { useTheme } from "./hooks/useTheme";
 import { addDaysISO_ } from "./utils/dates";
 import { normCity, normState } from "./utils/normalize";
+import { loadCityStars, saveCityStars } from "@/lib/favorites/cityStars";
 import type { TerminalRow, TerminalCatalogRow } from "./types";
 import { isRole, type Role } from "@/lib/ui/driver/role";
 
@@ -73,6 +74,7 @@ type ShellValue = {
   expandedTerminalId: string | null;
   setExpandedTerminalId: (id: string | null) => void;
   isCityStarred: (state: string, city: string) => boolean;
+  isCityAuto: (state: string, city: string) => boolean;
   toggleCityStar: (state: string, city: string) => void;
   stateOptions: { code: string; name?: string | null }[];
   selectedStateLabel: string;
@@ -280,27 +282,36 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
   const [starredCitySet, setStarredCitySet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`${CITY_STARS_KEY_PREFIX}${authUserId || "anon"}`);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setStarredCitySet(new Set(Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : []));
-    } catch { setStarredCitySet(new Set()); }
+    if (!authUserId) return; // wait for sign-in; never read or write under a placeholder key
+    try { setStarredCitySet(loadCityStars(localStorage, CITY_STARS_KEY_PREFIX, authUserId)); } catch { setStarredCitySet(new Set()); }
   }, [authUserId]);
 
-  // Stabilized via useCallback (previously plain functions, a new
-  // reference every render) -- see hooks/useEquipment.ts's identical
-  // comment for why this matters once value below is memoized.
+  // Cities where the driver holds a terminal card are favorites automatically -- no tapping needed.
+  const autoCitySet = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of (terminals.terminals ?? []) as any[]) {
+      if (t?.state && t?.city) s.add(`${normState(t.state)}||${normCity(t.city)}`);
+    }
+    return s;
+  }, [terminals.terminals]);
+
   const cityKey = useCallback((state: string, city: string) => `${normState(state)}||${normCity(city)}`, []);
-  const isCityStarred = useCallback((state: string, city: string) => starredCitySet.has(cityKey(state, city)), [starredCitySet, cityKey]);
+  const isCityAuto = useCallback((state: string, city: string) => autoCitySet.has(cityKey(state, city)), [autoCitySet, cityKey]);
+  const isCityStarred = useCallback((state: string, city: string) => {
+    const k = cityKey(state, city);
+    return autoCitySet.has(k) || starredCitySet.has(k);
+  }, [starredCitySet, autoCitySet, cityKey]);
   const toggleCityStar = useCallback((state: string, city: string) => {
+    if (!authUserId) return;
     const key = cityKey(state, city);
+    if (autoCitySet.has(key)) return; // starred because of a terminal card
     setStarredCitySet((prev) => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
-      try { localStorage.setItem(`${CITY_STARS_KEY_PREFIX}${authUserId || "anon"}`, JSON.stringify(Array.from(next))); } catch {}
+      saveCityStars(localStorage, CITY_STARS_KEY_PREFIX, authUserId, next);
       return next;
     });
-  }, [cityKey, authUserId]);
+  }, [cityKey, authUserId, autoCitySet]);
 
   const stateOptions = useMemo(() => {
     if (location.statesCatalog.length > 0) {
@@ -339,14 +350,14 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
   const topCities = useMemo(() => {
     if (!location.selectedState || cities.length === 0) return [];
     const st = normState(location.selectedState);
-    return cities.filter((c) => starredCitySet.has(cityKey(st, c))).sort();
-  }, [location.selectedState, cities, starredCitySet]);
+    return cities.filter((c) => isCityStarred(st, c)).sort();
+  }, [location.selectedState, cities, isCityStarred]);
 
   const allCities = useMemo(() => {
     if (!location.selectedState) return cities;
     const st = normState(location.selectedState);
-    return cities.filter((c) => !starredCitySet.has(cityKey(st, c)));
-  }, [location.selectedState, cities, starredCitySet]);
+    return cities.filter((c) => !isCityStarred(st, c));
+  }, [location.selectedState, cities, isCityStarred]);
 
   // ── Role (drives the Lead/Dispatch/Admin tab shown left of Planner) ──────
   // Same query shape as NavMenu.tsx's own role fetch, but scoped to
@@ -605,7 +616,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     termOpen, setTermOpen, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
-    isCityStarred, toggleCityStar,
+    isCityStarred, isCityAuto, toggleCityStar,
     stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
     cardDataByTerminalId, setCardDataForTerminal_,
     theme,
@@ -621,7 +632,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     termOpen, setTermOpen, terminalHubOpen, setTerminalHubOpen, hubAfterPick, setHubAfterPick,
     locOpen, setLocOpen, statePickerOpen, setStatePickerOpen,
     expandedTerminalId, setExpandedTerminalId,
-    isCityStarred, toggleCityStar,
+    isCityStarred, isCityAuto, toggleCityStar,
     stateOptions, selectedStateLabel, selectedStateName, cities, topCities, allCities,
     cardDataByTerminalId, setCardDataForTerminal_,
     theme,

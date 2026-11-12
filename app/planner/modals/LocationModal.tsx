@@ -37,6 +37,7 @@ export default function LocationModal(props: {
   normState: (s: string) => string;
   toggleCityStar: (state: string, city: string) => void;
   isCityStarred: (state: string, city: string) => boolean;
+  isCityAuto?: (state: string, city: string) => boolean;
 
   // to preserve existing behavior (modal closes on city select)
   setLocOpen: (open: boolean) => void;
@@ -72,6 +73,7 @@ export default function LocationModal(props: {
 
     toggleCityStar,
     isCityStarred,
+    isCityAuto,
 
     setLocOpen,
     onCityPicked,
@@ -108,7 +110,7 @@ export default function LocationModal(props: {
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); toggleCityStar(selectedState, c); }}
-          aria-label={starred ? "Unstar city" : "Star city"}
+          aria-label={isCityAuto?.(selectedState, c) ? "Starred automatically (you have a terminal card here)" : starred ? "Unstar city" : "Star city"}
           style={{
             flexShrink: 0, width: 26, height: 26, marginLeft: 12,
             borderRadius: "50%",
@@ -123,6 +125,7 @@ export default function LocationModal(props: {
         </button>
         <div className="min-w-0 flex-1 px-3 py-3">
           <div className="text-sm font-semibold text-white truncate">{c}</div>
+          {isCityAuto?.(selectedState, c) && <div className="text-[11px] text-white/40">Terminal card</div>}
         </div>
       </div>
     );
@@ -205,14 +208,15 @@ export default function LocationModal(props: {
             <div className="space-y-3">
               {/* Favorites -- what's normally visible */}
               <div>
-                <div className="mb-2 text-xs uppercase tracking-wide text-white/50">Favorites</div>
+                <div className="mb-1 text-xs uppercase tracking-wide text-white/50">Favorites</div>
+                <div className="mb-2 text-xs text-white/40">Star the cities you load in so switching is one tap. Cities where you have a terminal card are starred for you.</div>
                 {topCities.length ? (
                   <div className="grid grid-cols-1 gap-2">
                     {topCities.map((c) => cityRow(c, true))}
                   </div>
                 ) : (
                   <div className="text-sm text-white/40">
-                    No favorite cities yet — tap the star on any city below to pin it here.
+                    Nothing starred in this state yet. Tap ☆ next to a city below.
                   </div>
                 )}
               </div>
