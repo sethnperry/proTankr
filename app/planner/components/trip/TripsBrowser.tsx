@@ -268,7 +268,9 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
       // Truck: where it is in the trip; Arrived whenever it is sitting at a stop.
       const truckLabel = t.status === "complete" || t.status === "cancelled" || t.status === "parked" || t.status === "dispatched" ? STATUS[t.status].label
         : atDrop || atRack ? "Arrived" : "Enroute";
-      return { trip: t, loadedBy, trailerState, truckLabel, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
+      const aboardBy: Record<number, string | null> = {};
+      for (const c of mine) if (c.disposition === "loaded" && c.product_id) aboardBy[c.comp_number] = c.product_id;
+      return { trip: t, loadedBy: aboardBy, trailerState, truckLabel, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, locs, catalog.data, company, userId]);

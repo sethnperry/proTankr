@@ -1526,6 +1526,33 @@ export default function HomePage() {
     if (m) emptyMoves.end(m.move_id, odo, { id: stampCtx.placeId, text: stampCtx.placeText }, at);
     void askTruckStatus(startedAt);
   };
+  // A move that ends at a maintenance place leaves its equipment there: the trailer if it came with one, else the truck.
+  // Marks it "Out of service / Maintenance" at that place (status and pin), the same record the equipment status window writes.
+  const endMoveAndMark = (moveId: string, endMiles: number | null, to?: { id: string | null; text: string | null }, endedAt?: string) => {
+    emptyMoves.end(moveId, endMiles, to, endedAt);
+    const m = emptyMoves.moves.find((x) => x.move_id === moveId);
+    const place = to?.id ? locations.find((l) => l.location_id === to.id) : null;
+    if (!m || !place || !kindsOf(place).includes("maintenance")) return;
+    const unit: ["truck" | "trailer", string] | null = m.trailer_id && m.kind !== "bobtail" ? ["trailer", m.trailer_id] : m.truck_id ? ["truck", m.truck_id] : null;
+    if (!unit) return;
+    void (async () => {
+      try {
+        const { error } = await supabase.rpc("set_equipment_status", {
+          p_unit_kind: unit[0], p_unit_id: unit[1], p_status: "deadline",
+          p_region: place.region ?? null, p_local_area: place.local_area ?? null,
+          p_notes: `At ${place.name}`, p_sub_status: "Maintenance",
+        });
+        if (error) throw error;
+        if (place.lat != null && place.lon != null) {
+          await supabase.rpc("park_equipment", {
+            p_truck_id: unit[0] === "truck" ? unit[1] : null, p_trailer_id: unit[0] === "trailer" ? unit[1] : null,
+            p_lat: place.lat, p_lon: place.lon, p_label: place.name, p_place_id: place.location_id,
+          });
+        }
+        setNotice({ text: `${unit[0] === "trailer" ? "Trailer" : "Truck"} marked in maintenance at ${place.name}.`, tripId: null });
+      } catch (e) { console.warn("[move] shop status failed:", e); }
+    })();
+  };
   // An empty move ends where the next trip begins: its beginning miles and starting-from.
   useEffect(() => {
     const m = emptyMoves.current;
@@ -3280,7 +3307,7 @@ export default function HomePage() {
       <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
         locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}
-        onBegin={(a) => emptyMoves.begin({ truckId, trailerId, ...a })} onEnd={emptyMoves.end} onDiscard={emptyMoves.discard} onLocationAdded={() => void locList.reload()} />
+        onBegin={(a) => emptyMoves.begin({ truckId, trailerId, ...a })} onEnd={endMoveAndMark} onDiscard={emptyMoves.discard} onLocationAdded={() => void locList.reload()} />
       <FreightSheet open={freightOpen} onClose={() => setFreightOpen(false)} companyId={companyId} userId={userId}
         truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         coupledTrailer={equipment.currentTrailerId ? { id: equipment.currentTrailerId, name: equipment.currentTrailerName ?? "Trailer" } : null}
