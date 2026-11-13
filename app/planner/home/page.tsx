@@ -561,10 +561,18 @@ export default function HomePage() {
     window.addEventListener("protankr:arrive", h);
     return () => window.removeEventListener("protankr:arrive", h);
   }, []);
-  const handoff = !openTrip && userId ? handoffCandidate(trips, trailerId, userId) : null;
   // A load parked on the trailer this driver holds (theirs after a layover, or
   // someone else's for a slip seat).
   const parked = !openTrip ? parkedTripOnTrailer(trips, trailerId) : null;
+  // Another driver's open trip on this trailer. A parked preload always comes first (it is the one to take), and a
+  // trip whose deliveries are all done with nothing aboard is finished, not something to take over.
+  const handoffRaw = !openTrip && !parked && userId ? handoffCandidate(trips, trailerId, userId) : null;
+  const handoff = (() => {
+    if (!handoffRaw || !store) return handoffRaw;
+    const sn = tripSnapshot(store, handoffRaw.trip_id);
+    const live = sn.deliveries.filter((d) => d.status !== "cancelled");
+    return live.length > 0 && live.every((d) => d.status === "complete") && onBoard(sn.compLoads).length === 0 ? null : handoffRaw;
+  })();
   // A note left on the trailer I hold: product still aboard (Retain).
   const [trailerNotes, setTrailerNotes] = useState<TrailerAlert[]>([]);
   const [clearAlertAsk, setClearAlertAsk] = useState(false);
