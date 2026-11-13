@@ -19,6 +19,7 @@
 // the rest is kept on the phone until Finish.
 
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
+import { afterPartial, partialEntry, type PartialDrop } from "@/lib/trips/partialDrops";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
@@ -88,6 +89,8 @@ export type FinishDeliverySubmit = {
   retained: DeliveredCompartment[];
   /** What the next driver must know about the product left aboard. Required with Retain. */
   retainNote: string | null;
+  /** Parts of compartments dropped here (those compartments are also in `retained`). */
+  partials: PartialDrop[];
   tanks: DeliveryTankReading[];
   consigneeName: string | null;
   consigneeSignature: string | null;
@@ -104,6 +107,8 @@ export type DeliveryProgress = {
   tanks?: DeliveryTankReading[];
   compTanks?: { compartment_load_id: string; tank_number: string | null }[];
 };
+
+export type PartialState = { gallons: number; estimated: boolean; meterStart: number | null; meterEnd: number | null };
 
 export type ProductInfo = { name: string; code: string; hex: string | null };
 
@@ -135,6 +140,7 @@ type Draft = {
   issueNote?: string;
   signedMine?: boolean;
   splits?: Record<string, { tank: string; gallons: number }[]>;
+  partials?: Record<string, PartialState>;
 };
 
 const draftKey = (deliveryId: string) => `proTankr:delivery:${deliveryId}`;
@@ -310,6 +316,14 @@ export function DeliveryDashboard({
   // Pop-outs and sections
   const [section, setSection] = useState<string | null>(null);
   const [pickFor, setPickFor] = useState<string | null>(null); // compartment_load_id
+  // Part of a compartment dropped here, the rest kept aboard (wet hose or a partial drop).
+  const [partials, setPartials] = useState<Record<string, PartialState>>({});
+  const [partialMode, setPartialMode] = useState(false);
+  const [partialFor, setPartialFor] = useState<string | null>(null);
+  const [pGal, setPGal] = useState("");
+  const [pMs, setPMs] = useState("");
+  const [pMe, setPMe] = useState("");
+  const [pErr, setPErr] = useState<string | null>(null);
   const [allReadings, setAllReadings] = useState(false); // the After window also lists every other tank at the store
   const [showAllTanks, setShowAllTanks] = useState(false); // tanks for products not on this drop stay folded away
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
@@ -397,6 +411,7 @@ export function DeliveryDashboard({
     const b: Record<string, string> = { ...(d?.bio ?? {}) };
     for (const c of compartments) if (b[c.compartment_load_id] == null && c.bio_blend) b[c.compartment_load_id] = c.bio_blend;
     setBio(b);
+    setPartials(d?.partials ?? {});
     setAdditives(d?.additives ?? []);
     setAdditiveNote(d?.additiveNote ?? "");
     setIssues(d?.issues ?? []);
@@ -444,18 +459,25 @@ export function DeliveryDashboard({
     if (!open || !hydrated) return;
     writeDraft(delivery.delivery_id, {
       choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig,
-      odometer, bio, additives, additiveNote, issues, issueNote, signedMine, splits,
+      odometer, bio, additives, additiveNote, issues, issueNote, signedMine, splits, partials,
     });
   }, [open, hydrated, delivery.delivery_id, choice, unit, extraTanks, water, waterTanks, consigneeName, consigneeSig,
-    odometer, bio, additives, additiveNote, issues, issueNote, signedMine, splits]);
+    odometer, bio, additives, additiveNote, issues, issueNote, signedMine, splits, partials]);
 
   const rows = useMemo(() => [...compartments].sort((a, b) => a.comp_number - b.comp_number), [compartments]);
   const gross = (c: TripCompartmentLoadRow) => Number(c.gross_gallons ?? c.net_gallons ?? 0);
   const delivered = rows.filter((c) => choice[c.compartment_load_id] && choice[c.compartment_load_id] !== RETAIN);
   const retained = rows.filter((c) => choice[c.compartment_load_id] === RETAIN);
+  // A partial counts only while its compartment still goes into a tank and the amount is less than what is aboard.
+  const partialOf = (c: TripCompartmentLoadRow): PartialState | null => {
+    const p = partials[c.compartment_load_id]; const t = choice[c.compartment_load_id];
+    return p && t && t !== RETAIN && p.gallons < gross(c) ? p : null;
+  };
+  const partialRows = delivered.filter((c) => partialOf(c));
+  const retainedAll = [...retained, ...partialRows];
   const unpicked = rows.filter((c) => !choice[c.compartment_load_id]);
   const pumpOff = delivery.delivery_type === "pump_off";
-  const nextLeg = retained.length > 0 || otherPlanned > 0;
+  const nextLeg = retainedAll.length > 0 || otherPlanned > 0;
   const isLast = !nextLeg;
   const unitSuffix = unit === "gallons" ? "gal" : "in";
   const arrivedAt = delivery.arrived_at ?? delivery.begin_at ?? new Date().toISOString();
@@ -466,7 +488,7 @@ export function DeliveryDashboard({
     const sp = splits[c.compartment_load_id];
     if (sp && sp.length > 1) return sp;
     const t = choice[c.compartment_load_id];
-    return t && t !== RETAIN ? [{ tank: t, gallons: gross(c) }] : [];
+    return t && t !== RETAIN ? [{ tank: t, gallons: partialOf(c)?.gallons ?? gross(c) }] : [];
   };
   // Products dropped here, each with every store tank that holds it plus any
   // tank a compartment was sent into.
@@ -568,6 +590,7 @@ export function DeliveryDashboard({
     setSplits((m) => { if (!m[id]) return m; const { [id]: _drop, ...rest } = m; return rest; });
     setSplitId(null);
     setChoice((m) => ({ ...m, [id]: v }));
+    setPartials((m) => { if (!m[id]) return m; const { [id]: _p, ...rest } = m; return rest; });
     setPickFor(null);
     setErr(null);
     onSaveProgress({ compTanks: [{ compartment_load_id: id, tank_number: v === RETAIN ? null : v }] });
@@ -623,7 +646,7 @@ export function DeliveryDashboard({
 
   // ── Times ──────────────────────────────────────────────────────────────────
   const rules = dropRules(settings);
-  const dropGallons = delivered.reduce((t, c) => t + gross(c), 0);
+  const dropGallons = delivered.reduce((t, c) => t + (partialOf(c)?.gallons ?? gross(c)), 0);
   // The driver can correct the arrival time in the Times step (Arrive tapped late), so every figure in that
   // step is measured from the corrected time, not the stamped one.
   const arrivedIso = fromLocalInput(arrivedText) || arrivedAt;
@@ -827,7 +850,7 @@ export function DeliveryDashboard({
     if (over && !lateAnswer) return setErr("Was there a delay? Tap Yes or No.");
     const needReason = preDropLate || (over && lateAnswer === "yes");
     if (needReason && !reasonId && !note.trim()) return setErr("Pick a delay reason.");
-    if (retained.length > 0 && !retainNote.trim()) { setSection("tanks"); return setErr("Leave a note for the next driver about the product left aboard."); }
+    if (retainedAll.length > 0 && !retainNote.trim()) { setSection("tanks"); return setErr("Leave a note for the next driver about the product left aboard."); }
     const toDc = (c: TripCompartmentLoadRow, tank: string | null): DeliveredCompartment => ({
       compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: tank,
     });
@@ -838,9 +861,15 @@ export function DeliveryDashboard({
       delayReasonId: needReason ? reasonId : delivery.delay_reason_id ?? null,
       delayNote: needReason && !reasonId ? note.trim() || null : delivery.delay_note ?? null,
       unaccountedMin: over && lateAnswer === "no" && outcome ? outcome.minutes : null,
-      delivered: delivered.map((c) => toDc(c, choice[c.compartment_load_id])),
-      retained: retained.map((c) => toDc(c, null)),
-      retainNote: retained.length > 0 ? retainNote.trim() : null,
+      delivered: delivered.filter((c) => !partialOf(c)).map((c) => toDc(c, choice[c.compartment_load_id])),
+      retained: retainedAll.map((c) => toDc(c, null)),
+      retainNote: retainedAll.length > 0 ? retainNote.trim() : null,
+      partials: partialRows.map((c): PartialDrop => {
+        const p = partialOf(c)!;
+        const after = afterPartial(gross(c), c.net_gallons != null ? Number(c.net_gallons) : null, p.gallons);
+        return { compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: choice[c.compartment_load_id],
+          gallons: p.gallons, estimated: p.estimated, meter_start: p.meterStart, meter_end: p.meterEnd, remaining: after.remaining, net_equiv: after.netEquiv };
+      }),
       tanks: buildTanks(),
       consigneeName: consigneeName.trim() || null,
       consigneeSignature: consigneeSig,
@@ -1104,16 +1133,16 @@ export function DeliveryDashboard({
               </button>
             )}
           </div>
-          {retained.length > 0 && (
+          {retainedAll.length > 0 && (
             <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, textAlign: "center" }}>
               Retained compartments stay aboard. Finish, then pick the next delivery or Park preloaded.
             </div>
           )}
-          {retained.length > 0 && (
+          {retainedAll.length > 0 && (
             <div style={{ border: "1px solid rgba(251,191,36,0.6)", background: "rgba(251,191,36,0.08)", padding: 12, marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: "#fbbf24", marginBottom: 6 }}>⚠️ Note for the next driver (required)</div>
               <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>Shown as a big alert to anyone who takes this trailer. How much is left, where it goes, anything they must know.</div>
-              <input value={retainNote} onChange={(e) => setRetainNote(e.target.value)} placeholder="e.g. About 2,000 gal ULSD in C1, going to Store 674" style={fieldInput} />
+              <input value={retainNote} onChange={(e) => setRetainNote(e.target.value)} placeholder={partialRows[0] ? `e.g. About ${Math.round(afterPartial(gross(partialRows[0]), null, partialOf(partialRows[0])!.gallons).remaining).toLocaleString("en-US")} gal ${productInfo(partialRows[0].product_id).code} left in C${partialRows[0].comp_number}` : "e.g. About 2,000 gal ULSD in C1, going to Store 674"} style={fieldInput} />
             </div>
           )}
           {navRow(nextLabelFor("tanks"), goNextStep)}
@@ -1306,8 +1335,18 @@ export function DeliveryDashboard({
       {pickRow && pickInfo && (
         <OptionCard title={`C${pickRow.comp_number} · ${pickInfo.code} · drop into`} dotColor={pickInfo.hex ?? productColorFor(pickInfo.name)} onClose={() => setPickFor(null)}>
           {pickTanks.length === 0 && <div style={{ fontSize: 13, color: muted }}>No saved {pickInfo.name} tank here yet.</div>}
+          <button type="button" onClick={() => setPartialMode((v) => !v)}
+            style={{ ...optionBtn, color: partialMode ? "#000" : "#fbbf24", background: partialMode ? "#fbbf24" : optionBtn.background, borderColor: "rgba(251,191,36,0.6)" }}>
+            {partialMode ? "Dropping only part ✓" : "Drop only part of it"}
+            <div style={{ fontSize: 12, fontWeight: 500, color: partialMode ? "#000" : muted, marginTop: 2 }}>{partialMode ? "Pick the tank, then enter what went in" : "Wet hose or a partial drop. The rest stays aboard."}</div>
+          </button>
           <TankPickList names={pickTanks} selected={choice[pickRow.compartment_load_id]} style={optionBtn} selectedBorder={optionBtn.border as string}
-            label={(n) => (/^\d+$/.test(n) ? `Tank ${n}` : n)} onChoose={(n) => choose(pickRow.compartment_load_id, n)} onReorder={reorderTanks} />
+            label={(n) => (/^\d+$/.test(n) ? `Tank ${n}` : n)}
+            onChoose={(n) => {
+              const id = pickRow.compartment_load_id;
+              choose(id, n);
+              if (partialMode) { const old = partials[id]; setPGal(old ? String(old.gallons) : ""); setPMs(old?.meterStart != null ? String(old.meterStart) : ""); setPMe(old?.meterEnd != null ? String(old.meterEnd) : ""); setPErr(null); setPartialFor(id); setPartialMode(false); }
+            }} onReorder={reorderTanks} />
           <button type="button" onClick={() => { setNewTankFor(pickRow.compartment_load_id); setNewTankText(""); setPickFor(null); }}
             style={{ ...optionBtn, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
             + Other tank #
@@ -1319,6 +1358,35 @@ export function DeliveryDashboard({
           </button>
         </OptionCard>
       )}
+
+      <ValueEntryOverlay
+        open={!!partialFor}
+        title="Drop part of it"
+        hint={(() => {
+          const c = partialFor ? rows.find((x) => x.compartment_load_id === partialFor) : null;
+          return c ? `C${c.comp_number} has about ${Math.round(gross(c)).toLocaleString("en-US")} gal. Enter the gallons dropped, or the meter readings (wet hose). Meter readings win.` : "";
+        })()}
+        error={pErr ?? undefined}
+        fields={[
+          { key: "g", label: "Gallons dropped (about is fine)", value: pGal, onChange: setPGal, decimal: false, showLabel: true },
+          { key: "ms", label: "Meter start", value: pMs, onChange: setPMs, decimal: true, showLabel: true },
+          { key: "me", label: "Meter end", value: pMe, onChange: setPMe, decimal: true, showLabel: true },
+        ]}
+        cancelLabel="Cancel"
+        submitLabel="Use"
+        onCancel={() => setPartialFor(null)}
+        onSubmit={() => {
+          const id = partialFor;
+          const c = id ? rows.find((x) => x.compartment_load_id === id) : null;
+          if (!id || !c) return setPartialFor(null);
+          const e = partialEntry({ gallons: pGal, meterStart: pMs, meterEnd: pMe });
+          if ("error" in e) return setPErr(e.error);
+          if (e.gallons >= gross(c)) return setPErr("That is all of it. Pick the tank without \"only part\" to drop it all.");
+          setPartials((m) => ({ ...m, [id]: { gallons: e.gallons, estimated: e.estimated, meterStart: e.meterStart, meterEnd: e.meterEnd } }));
+          setSplits((m) => { if (!m[id]) return m; const { [id]: _d, ...rest } = m; return rest; });
+          setPartialFor(null);
+        }}
+      />
 
       <ValueEntryOverlay
         open={!!newTankFor}

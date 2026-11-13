@@ -3,6 +3,7 @@
 // The Product Transfer Document (docs/trip-workflow-design.md §13), built
 // from a trip's rows. Pure: the page supplies names and renders.
 
+import { partialsOf } from "./partialDrops.ts";
 import { ptdCode } from "./code39.ts";
 import { delayMinutes, parkRecords } from "./tripFlow.ts";
 import { loggedDelays } from "./delays.ts";
@@ -81,14 +82,21 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
   const orderNo = (id: string | null) => (id ? orderById.get(id)?.order_number ?? null : primary?.order_number ?? null);
   const deliveryById = new Map(input.deliveries.map((d) => [d.delivery_id, d]));
 
+  // Parts of a compartment dropped at earlier stops: added back, so the BOL gross and net stay as loaded.
+  const partialDrops = partialsOf(input.events);
+  const droppedGross = new Map<string, number>(), droppedNet = new Map<string, number>();
+  for (const p of partialDrops) {
+    droppedGross.set(p.compartment_load_id, (droppedGross.get(p.compartment_load_id) ?? 0) + p.gallons);
+    if (p.net_equiv != null) droppedNet.set(p.compartment_load_id, (droppedNet.get(p.compartment_load_id) ?? 0) + p.net_equiv);
+  }
   const compartments = loads.map((c) => ({
     comp: c.comp_number,
     product: names.product(c.product_id),
     order: orderNo(c.order_id),
     bol: c.bol_number,
     supplier: c.supplier,
-    gross: num(c.gross_gallons),
-    net: num(c.net_gallons),
+    gross: num(c.gross_gallons) == null ? null : num(c.gross_gallons)! + (droppedGross.get(c.compartment_load_id) ?? 0),
+    net: num(c.net_gallons) == null ? null : num(c.net_gallons)! + (droppedNet.get(c.compartment_load_id) ?? 0),
     temp: num(c.temp_f),
     api: num(c.api),
     tank: c.tank_number,
@@ -169,14 +177,22 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
         return sp.map((x) => {
           const t = tanks.find((y) => y.tank === x.tank) ?? null;
           if (t) used.add(t.tank);
-          return { comp: c.comp, product: c.product, net: c.net, tank: x.tank, gallons: x.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
+          return { comp: c.comp, product: c.product, net: c.net, partial: null as string | null, tank: x.tank, gallons: x.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
         });
       }
       const t = c.tank ? tanks.find((x) => x.tank === c.tank) ?? null : null;
       if (t) used.add(t.tank);
-      return [{ comp: c.comp, product: c.product, net: c.net, tank: c.tank, gallons: null as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" }];
+      return [{ comp: c.comp, product: c.product, net: c.net, partial: null as string | null, tank: c.tank, gallons: null as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" }];
     });
-    return { compartments: here.map((c) => c.comp), drops, tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
+    // Parts of a compartment dropped here while the rest stayed aboard.
+    const partialsHere = partialDrops.filter((p) => p.delivery_id === d.delivery_id);
+    const partialLines = partialsHere.map((p) => {
+      const t = p.tank_number ? tanks.find((x) => x.tank === p.tank_number) ?? null : null;
+      if (t) used.add(t.tank);
+      const how = p.meter_start != null && p.meter_end != null ? `metered ${p.meter_start.toLocaleString("en-US")} to ${p.meter_end.toLocaleString("en-US")}` : "estimated";
+      return { comp: p.comp_number, product: names.product(p.product_id), net: p.net_equiv, partial: `Partial drop, ${how}. ${Math.round(p.remaining).toLocaleString("en-US")} gal left aboard.` as string | null, tank: p.tank_number, gallons: p.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
+    });
+    return { compartments: [...here.map((c) => c.comp), ...partialsHere.map((p) => p.comp_number)], drops: [...drops, ...partialLines], tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
   };
 
   // Noted after the drop: odometer, bio blended, additives, issues.

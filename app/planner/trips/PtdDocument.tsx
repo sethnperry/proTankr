@@ -289,13 +289,16 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
               <table style={{ ...table, marginTop: 4 }}>
                 <thead><tr>{["Comp", "Product", "Tank", "Gallons", "Before", "After", "Water"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {d.drops.map((x) => (
-                    <tr key={`${x.comp}-${x.tank ?? ""}`}>
+                  {d.drops.map((x, i) => (
+                    <tr key={`${i}-${x.comp}-${x.tank ?? ""}`}>
                       <td style={td}>C{x.comp}</td><td style={td}>{x.product}</td><td style={td}>{x.tank ?? "—"}</td>
                       <td style={tdR}>{x.gallons != null ? gal(x.gallons) : gal(x.net)}</td>
                       <td style={tdR}>{reading(x.before, x.unit)}</td><td style={tdR}>{reading(x.after, x.unit)}</td>
                       <td style={tdR}>{x.water == null ? "" : `${dec(x.water)} in`}</td>
                     </tr>
+                  ))}
+                  {d.drops.filter((x) => x.partial).map((x) => (
+                    <tr key={`p${x.comp}-${x.tank ?? ""}`}><td style={td} colSpan={7}><i>C{x.comp}: {x.partial}</i></td></tr>
                   ))}
                   {d.otherTanks.map((t) => (
                     <tr key={`t${t.tank}`}>
@@ -309,13 +312,14 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
             )}
             {(d.drops.length > 0 || d.otherTanks.length > 0) && !print && (
               <div style={{ marginTop: 4 }}>
-                {d.drops.map((x) => (
-                  <div key={`${x.comp}-${x.tank ?? ""}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
+                {d.drops.map((x, i) => (
+                  <div key={`${i}-${x.comp}-${x.tank ?? ""}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
                     <b>C{x.comp} → {x.tank ? `Tank ${x.tank}` : "Tank —"}</b>
                     <span style={{ color: faint }}>{x.product}{x.gallons != null ? ` · ${gal(x.gallons)} gal into this tank` : x.net != null ? ` · ${gal(x.net)} net` : ""}</span>
                     <Item label="Before" value={reading(x.before, x.unit)} />
                     <Item label="After" value={reading(x.after, x.unit)} />
                     <Item label="Water" value={x.water == null ? "" : `${dec(x.water)} in`} />
+                    {x.partial && <div style={{ width: "100%", color: faint, fontStyle: "italic" }}>{x.partial}</div>}
                   </div>
                 ))}
                 {d.otherTanks.map((t) => (

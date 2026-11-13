@@ -470,3 +470,35 @@ test("undo is refused once a load is attached", () => {
   assert.equal(undoableArrival(snap()), null);
 });
 
+
+test("partial drop: part goes at stop one, the rest stays aboard and is dropped at stop two", async () => {
+  const { s, newId, trip, snap, getTrip } = setup({ deliveries: [{ locationId: null, oneOffName: "Store 1", deliveryType: "drop" }, { locationId: null, oneOffName: "Store 2", deliveryType: "drop" }] });
+  linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  recordLoadCompleted(s, { userId: ME, loadId: "L1", readings: [reading(1, 4000)], now: NOW, newId });
+  const c1 = snap().compLoads[0];
+  const net0 = Number(c1.net_gallons);
+  const { afterPartial, partialsOf } = await import("./partialDrops.ts");
+  const ap = afterPartial(4000, net0, 2000);
+  const dc = { compartment_load_id: c1.compartment_load_id, comp_number: 1, product_id: "d2", tank_number: null };
+  const [d1, d2] = snap().deliveries;
+  const r1 = finishDelivery(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", delivery: d1, times: defaultStepTimes(NOW, 0, null), delayReasonId: null, delayNote: null,
+    delivered: [], retained: [dc], tanks: [], consigneeName: null, consigneeSignature: null, signed: false, endMiles: null, now: NOW, newId,
+    partials: [{ ...dc, tank_number: "1", gallons: 2000, estimated: true, meter_start: null, meter_end: null, remaining: ap.remaining, net_equiv: ap.netEquiv }],
+  });
+  assert.equal(r1.tripComplete, false);
+  const mid = snap().compLoads[0];
+  assert.equal(mid.disposition, "loaded");
+  assert.equal(mid.delivery_id, null);
+  assert.equal(Number(mid.gross_gallons), 2000, "the rest is what is aboard now");
+  assert.equal(partialsOf(s.list("trip_events")).length, 1);
+  assert.equal(partialsOf(s.list("trip_events"))[0].delivery_id, d1.delivery_id);
+  // Stop two takes the remainder.
+  const r2 = finishDelivery(s, {
+    userId: ME, companyId: "co", trailerId: "trailer-1", delivery: d2, times: defaultStepTimes(NOW, 0, null), delayReasonId: null, delayNote: null,
+    delivered: [{ ...dc, tank_number: "2" }], tanks: [], consigneeName: null, consigneeSignature: null, signed: false, endMiles: 1300, now: NOW, newId,
+  });
+  assert.equal(r2.tripComplete, true);
+  assert.equal(getTrip().status, "complete");
+  assert.equal(trip.trip_id, getTrip().trip_id);
+});

@@ -21,6 +21,7 @@ import type {
 } from "./types.ts";
 import { readPlannedMeta } from "../dispatch/compPlan.ts";
 import { splitDelayChoice } from "./terminalIssues.ts";
+import { PARTIAL_DROP_EVENT, partialPayload, type PartialDrop } from "./partialDrops.ts";
 import { DELIVERY_DETAILS_EVENT, detailsPayload, hasDetails, type DeliveryDetails } from "./deliveryDetails.ts";
 
 type Clock = { now: Date; newId: () => string };
@@ -603,6 +604,8 @@ export function finishDelivery(
     // the odometer at this stop.
     bioBlends?: { compartment_load_id: string; bio_blend: string | null }[];
     details?: DeliveryDetails;
+    // Part of a compartment dropped here; the rest stays aboard (they are also in `retained`).
+    partials?: PartialDrop[];
   } & Clock,
 ): { tripComplete: boolean } {
   const d = args.delivery;
@@ -664,6 +667,22 @@ export function finishDelivery(
   const retained = args.retained ?? [];
   for (const c of retained) {
     store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, delivery_id: null, tank_number: null });
+  }
+  for (const p of args.partials ?? []) {
+    const row = store.list("trip_compartment_loads", (c) => c.compartment_load_id === p.compartment_load_id)[0];
+    const net = row?.net_gallons != null ? Number(row.net_gallons) : null;
+    store.put("trip_compartment_loads", {
+      compartment_load_id: p.compartment_load_id,
+      gross_gallons: p.remaining,
+      ...(net != null && p.net_equiv != null ? { net_gallons: Math.round((net - p.net_equiv) * 100) / 100 } : {}),
+      // The calculated net shrinks by the same share, so the PTD doesn't call the new net an edit.
+      ...(row?.net_calculated_gallons != null && p.remaining + p.gallons > 0
+        ? { net_calculated_gallons: Math.round(Number(row.net_calculated_gallons) * (p.remaining / (p.remaining + p.gallons)) * 100) / 100 } : {}),
+    });
+    logEvent(store, args.newId, {
+      trip_id: d.trip_id, event_type: PARTIAL_DROP_EVENT, occurred_at: at, actor_id: args.userId,
+      delivery_id: d.delivery_id, payload: partialPayload(p),
+    });
   }
   const tripComplete = remaining.length === 0 && retained.length === 0;
   if (tripComplete) {
