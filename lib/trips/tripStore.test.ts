@@ -1,7 +1,7 @@
 // lib/trips/tripStore.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTripStore, isPermanentError, type Sender, type StorageLike } from "./tripStore.ts";
+import { createTripStore, isPermanentError, repairForSend, type Sender, type StorageLike } from "./tripStore.ts";
 import type { TripTable } from "./types.ts";
 
 function memStorage(): StorageLike & { data: Map<string, string> } {
@@ -238,4 +238,15 @@ test("error classification", () => {
   assert.equal(isPermanentError({ message: "jwt expired", code: "PGRST301", status: 401 }), false);
   assert.equal(isPermanentError({ message: "busy", status: 503 }), false);
   assert.equal(isPermanentError({ message: "rate", status: 429 }), false);
+});
+
+test("repairForSend: a metres odometer becomes miles; nonsense is dropped; good rows are untouched", () => {
+  const good = { trip_id: "t", begin_miles: 412300, end_miles: null };
+  assert.equal(repairForSend("trips", good), good);
+  const meters = repairForSend("trips", { trip_id: "t", begin_miles: 663562000, end_miles: 412300 } as any) as any;
+  assert.equal(meters.begin_miles, 412318);
+  assert.equal(meters.end_miles, 412300);
+  assert.equal((repairForSend("trips", { trip_id: "t", end_miles: 1e15 } as any) as any).end_miles, null);
+  const other = { id: "x", begin_miles: 1e12 };
+  assert.equal(repairForSend("trip_orders" as TripTable, other), other);
 });

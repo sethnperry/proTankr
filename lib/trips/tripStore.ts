@@ -95,6 +95,29 @@ export function newId(): string {
   return globalThis.crypto.randomUUID();
 }
 
+const MAX_MILES = 9_999_999; // the odometer columns hold under 100 million
+const METERS_PER_MILE = 1609.344;
+
+/** Odometer columns that can overflow, by table. */
+const MILE_FIELDS: Partial<Record<TripTable, string[]>> = { trips: ["begin_miles", "end_miles"], empty_moves: ["begin_miles", "end_miles"] };
+
+/** An odometer too big for the database is a typo or a reading in metres: convert it when that gives a real
+ *  mileage, otherwise drop it. Returns the same row when nothing needed repair. */
+export function repairForSend<T extends object>(table: TripTable, row: T): T {
+  const fields = MILE_FIELDS[table];
+  if (!fields) return row;
+  let out: any = row;
+  for (const f of fields) {
+    const v = (row as any)[f];
+    if (v == null) continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0 && n <= MAX_MILES) continue;
+    const mi = Number.isFinite(n) && n > 0 ? Math.round(n / METERS_PER_MILE) : NaN;
+    out = { ...out, [f]: Number.isFinite(mi) && mi <= MAX_MILES ? mi : null };
+  }
+  return out;
+}
+
 // Postgres/PostgREST errors that will fail the same way however often they're
 // retried. Everything else (no signal, 5xx, timeouts, serialization) retries.
 export function isPermanentError(e: SendError): boolean {
@@ -320,7 +343,7 @@ export function createTripStore(opts: TripStoreOptions) {
       const due = state.queue.filter((q) => q.table === table && q.nextAttemptAt <= now());
       if (due.length === 0) continue;
       const snapshot = due.map((q) => ({ key: q.key, version: q.version, row: state.rows[table][q.key] }));
-      const present = snapshot.filter((s) => s.row !== undefined);
+      const present = snapshot.filter((s) => s.row !== undefined).map((s) => ({ ...s, row: repairForSend(table, s.row as object) as typeof s.row }));
 
       const res = present.length
         ? await send(table, present.map((s) => s.row) as never[], { insertOnly: INSERT_ONLY.has(table) })
