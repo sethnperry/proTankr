@@ -105,7 +105,7 @@ test("a partial drop is printed at its stop and the BOL gross/net include what w
       events: [{ event_id: "e1", trip_id: trip.trip_id, event_type: "partial_drop", occurred_at: "2026-10-10T12:00:00Z", actor_id: "u1", pickup_id: null, delivery_id: "d1",
         payload: { compartment_load_id: "c1", comp_number: 1, product_id: "diesel", tank_number: "3", gallons: 2000, estimated: false, meter_start: 100, meter_end: 2100, remaining: 2000, net_equiv: 1980 } }],
     } as any,
-    { product: () => "Diesel", delivery: (d) => d.one_off_name ?? "", driver: () => "Seth", delayReason: () => null, validated: new Set() } as any,
+    { product: () => "Diesel", delivery: (d: any) => d.one_off_name ?? "", driver: () => "Seth", delayReason: () => null, validated: new Set() } as any,
   );
   assert.equal(ptd.compartments[0].gross, 4000);
   assert.equal(ptd.compartments[0].net, 3960);

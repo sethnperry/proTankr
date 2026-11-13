@@ -214,6 +214,8 @@ import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
 import { DispatchNotices } from "./DispatchNotices";
+import { TripPackageSheet } from "../components/trip/TripPackageSheet";
+import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
 import { addTrailerAlert, clearTrailerAlerts, fetchTrailerAlerts, sendPendingTrailerAlerts, type TrailerAlert } from "@/lib/trips/trailerAlerts";
 import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./DashboardChrome";
 import { QualificationCard, type QualTerminal } from "./QualificationStrip";
@@ -552,6 +554,9 @@ export default function HomePage() {
   // A note left on the trailer I hold: product still aboard (Retain).
   const [trailerNotes, setTrailerNotes] = useState<TrailerAlert[]>([]);
   const [clearAlertAsk, setClearAlertAsk] = useState(false);
+  // The last step when a trip closes: email the trip package.
+  const [pkgTrip, setPkgTrip] = useState<{ tripId: string; order: string | null } | null>(null);
+  const emailPkg = useEmailTripPackage(userId || null);
   const reloadTrailerAlerts = () => { if (trailerId) void fetchTrailerAlerts(trailerId).then(setTrailerNotes); else setTrailerNotes([]); };
   useEffect(() => { void sendPendingTrailerAlerts().then(reloadTrailerAlerts); }, [trailerId]); // eslint-disable-line react-hooks/exhaustive-deps
   const parkedSnap = useMemo(
@@ -1316,6 +1321,7 @@ export default function HomePage() {
       void clearTrailerAlerts(trailerId, userId).then(() => reloadTrailerAlerts());
     }
     const orderNo = children?.primaryOrder?.order_number;
+    if (tripComplete) setPkgTrip({ tripId, order: orderNo ?? null });
     setNotice(tripComplete
       ? { text: orderNo ? `Order ${orderNo} · Trip complete.` : "Trip complete.", tripId }
       : v.retained.length
@@ -2480,6 +2486,7 @@ export default function HomePage() {
         </div>
       )}
 
+      <TripPackageSheet open={!!pkgTrip} tripId={pkgTrip?.tripId ?? null} orderNumber={pkgTrip?.order ?? null} myEmail={shell.authEmail || null} autoOn={emailPkg.on} onClose={() => setPkgTrip(null)} />
       <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={stillWorking} />
 

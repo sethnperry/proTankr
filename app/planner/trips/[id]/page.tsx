@@ -29,6 +29,8 @@ import { PrintPortal, PtdDocument } from "../PtdDocument";
 import { DeadheadLayer } from "../DeadheadLayer";
 import { tripSegments, type Flags } from "@/lib/trips/deadhead";
 import { DispatchedPreview } from "./DispatchedPreview";
+import { TripPackageSheet } from "@/app/planner/components/trip/TripPackageSheet";
+import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
 
 const btn: React.CSSProperties = {
   padding: "10px 16px", borderRadius: 2, border: "none", background: "#fff", color: "#000", fontWeight: 800, fontSize: 14, cursor: "pointer",
@@ -47,6 +49,8 @@ export default function TripPtdPage() {
   const { data: products } = useProductsCatalog();
 
   const [loading, setLoading] = useState(true);
+  const [pkgOpen, setPkgOpen] = useState(false);
+  const emailPkg = useEmailTripPackage(userId);
   const [names, setNames] = useState<Record<string, string>>({});
   const [locNames, setLocNames] = useState<Record<string, string>>({});
   const [flags, setFlags] = useState<Flags>({});
@@ -231,7 +235,13 @@ export default function TripPtdPage() {
     <div style={{ padding: 16, paddingBottom: 40 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
         <button type="button" onClick={() => (window.history.length > 1 ? router.back() : router.push("/planner/trips"))} style={back}>‹ Back</button>
-        {ptd && <button type="button" onClick={() => window.print()} style={btn}>Print / Save PDF</button>}
+        {ptd && (
+          <div style={{ display: "flex", gap: 8 }}>
+            {data?.trip.status === "complete" && <button type="button" onClick={() => setPkgOpen(true)} style={{ ...btn, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}>Email package</button>}
+            <button type="button" onClick={() => window.print()} style={btn}>Print / Save PDF</button>
+          </div>
+        )}
+        <TripPackageSheet open={pkgOpen} tripId={pkgOpen ? tripId : null} orderNumber={ptd?.orderNumbers[0] ?? null} myEmail={shell.authEmail || null} autoOn={emailPkg.on} onClose={() => setPkgOpen(false)} />
       </div>
       {!ptd && (
         <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, textAlign: "center", marginTop: 40 }}>
