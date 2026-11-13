@@ -32,3 +32,14 @@ test("a write the server rejected, a worn-out retry and an old edit all count", 
   assert.deepEqual(r.tables, ["trip_events", "trips"]);
   assert.equal(r.oldestAt, "2026-11-02T10:00:00.000Z");
 });
+
+test("stuck summary names the suspect fields: a huge number and a blank id", () => {
+  const rows = { trips: { t1: { begin_miles: 818_000_000, trip_id: "t1" } }, trip_pickups: { p1: { terminal_id: "", name: "x" } } };
+  const state = {
+    rows, queue: [],
+    failed: [{ table: "trips", key: "t1", error: "numeric field overflow", failedAt: 1 }, { table: "trip_pickups", key: "p1", error: 'invalid input syntax for type uuid: ""', failedAt: 2 }],
+  } as unknown as Parameters<typeof stuckWrites>[0];
+  const s = stuckWrites(state, 10);
+  assert.deepEqual(s.items[0].suspect, { begin_miles: 818_000_000 });
+  assert.deepEqual(s.items[1].suspect, { terminal_id: "(empty)" });
+});

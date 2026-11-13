@@ -28,7 +28,20 @@ export function buildError(e: AppErrorInput): AppErrorRow {
   };
 }
 
-export type StuckSummary = { count: number; failed: number; tables: string[]; oldestAt: string | null; lastError: string | null };
+export type StuckItem = { table: string; error: string | null; suspect: Record<string, unknown> };
+export type StuckSummary = { count: number; failed: number; tables: string[]; oldestAt: string | null; lastError: string | null; items: StuckItem[] };
+
+/** The fields of a stuck row that most likely caused the rejection: numbers too big for a column, blank ids. Never ids or names in full. */
+export function suspectFields(row: Record<string, unknown> | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!row) return out;
+  for (const [k, v] of Object.entries(row)) {
+    if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) >= 1e7) out[k] = v;
+    else if (typeof v === "string" && v === "" && /(^|_)id$/.test(k)) out[k] = "(empty)";
+    else if (typeof v === "string" && /^-?\d{8,}(\.\d+)?$/.test(v)) out[k] = v;
+  }
+  return out;
+}
 
 /**
  * Writes the phone could not send. Stuck = the server has rejected it (it sits under "couldn't save"), or it
@@ -41,16 +54,19 @@ export function stuckWrites(state: Pick<TripStoreState, "queue" | "failed" | "ro
   let oldest: number | null = null;
   let lastError: string | null = null;
   let count = 0;
+  const items: StuckItem[] = [];
+  const rowOf = (t: string, k: string) => (state.rows as Record<string, Record<string, Record<string, unknown>>>)[t]?.[k];
   const seen = (t: number | null) => { if (t != null && (oldest == null || t < oldest)) oldest = t; };
-  for (const f of state.failed) { count++; tables.add(f.table); lastError = f.error; seen(f.failedAt); }
+  for (const f of state.failed) { count++; tables.add(f.table); lastError = f.error; seen(f.failedAt); if (items.length < 5) items.push({ table: f.table, error: f.error, suspect: suspectFields(rowOf(f.table, f.key)) }); }
   for (const q of state.queue) {
     const row = (state.rows as Record<string, Record<string, Record<string, unknown>>>)[q.table]?.[q.key];
     const editedAt = typeof row?.client_updated_at === "string" ? Date.parse(row.client_updated_at as string) : typeof row?.occurred_at === "string" ? Date.parse(row.occurred_at as string) : NaN;
     const waited = Number.isFinite(editedAt) ? now - editedAt : 0;
     if (q.attempts >= tries || waited > older) {
       count++; tables.add(q.table); if (q.lastError) lastError = q.lastError; if (Number.isFinite(editedAt)) seen(editedAt);
+      if (items.length < 5) items.push({ table: q.table, error: q.lastError ?? null, suspect: suspectFields(row) });
     }
   }
   const failed = state.failed.length;
-  return { count, failed, tables: [...tables].sort(), oldestAt: oldest == null ? null : new Date(oldest).toISOString(), lastError };
+  return { count, failed, tables: [...tables].sort(), oldestAt: oldest == null ? null : new Date(oldest).toISOString(), lastError, items };
 }

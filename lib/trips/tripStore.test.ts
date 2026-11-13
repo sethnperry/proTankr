@@ -250,3 +250,10 @@ test("repairForSend: a metres odometer becomes miles; nonsense is dropped; good 
   const other = { id: "x", begin_miles: 1e12 };
   assert.equal(repairForSend("trip_orders" as TripTable, other), other);
 });
+
+test("repairForSend turns a blank id into null so the server accepts the row", async () => {
+  const { repairForSend } = await import("./tripStore.ts");
+  const out = repairForSend("trip_pickups", { pickup_id: "p1", rack_id: "", name: "" } as any) as any;
+  assert.equal(out.rack_id, null);
+  assert.equal(out.name, "");
+});

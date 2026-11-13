@@ -104,9 +104,13 @@ const MILE_FIELDS: Partial<Record<TripTable, string[]>> = { trips: ["begin_miles
 /** An odometer too big for the database is a typo or a reading in metres: convert it when that gives a real
  *  mileage, otherwise drop it. Returns the same row when nothing needed repair. */
 export function repairForSend<T extends object>(table: TripTable, row: T): T {
-  const fields = MILE_FIELDS[table];
-  if (!fields) return row;
   let out: any = row;
+  // A blank id is not a uuid: the server rejects the whole row (a terminal with no racks answered "" for the rack).
+  for (const [k, v] of Object.entries(row)) {
+    if (v === "" && /_id$/.test(k)) out = { ...out, [k]: null };
+  }
+  const fields = MILE_FIELDS[table];
+  if (!fields) return out;
   for (const f of fields) {
     const v = (row as any)[f];
     if (v == null) continue;

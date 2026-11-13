@@ -1953,7 +1953,7 @@ export default function HomePage() {
               }
               if (wp?.terminal_id && !rackOk) {
                 const rackId = await shell.askRack(String(wp.terminal_id));
-                store.put("trip_pickups", { pickup_id: wp.pickup_id, rack_id: rackId ?? null });
+                store.put("trip_pickups", { pickup_id: wp.pickup_id, rack_id: rackId || null }); // a terminal with no racks answers "", which is not a uuid
               } else if (wp?.rack_id) {
                 shell.location.setSelectedRackId(wp.rack_id);
               }
