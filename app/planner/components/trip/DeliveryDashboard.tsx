@@ -18,6 +18,7 @@
 // Progress (tank picks, readings) is saved to the trip as the driver goes;
 // the rest is kept on the phone until Finish.
 
+import { MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
 import { TankMap, type MapComp, type MapTank } from "./TankMap";
@@ -630,6 +631,7 @@ export function DeliveryDashboard({
   const preDropLate = needsDelayReason(delayMinutes(arrivedIso, beginIso || null), settings.delivery_delay_threshold_minutes);
   const milesProblem = (): string | null => {
     if (miles == null) return isLast ? "Enter ending miles." : null;
+    if (miles > MAX_ODOMETER) return "That's too many digits for an odometer.";
     if (beginMiles != null && miles < beginMiles) return `Ending miles can't be less than beginning (${beginMiles.toLocaleString("en-US")}).`;
     return null;
   };

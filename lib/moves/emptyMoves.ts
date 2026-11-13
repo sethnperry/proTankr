@@ -65,12 +65,16 @@ export const ARRIVE_MILES = 0.3; // within this of a saved place counts as being
 export type StampSource = "terminal" | "gps" | "geotab" | "none";
 export type Stamp = { at: string; odometer: number; lat: number | null; lon: number | null; placeId: string | null; placeText: string | null; source: StampSource };
 
+/** No truck reads this high; the database column holds less than 100 million, so a longer number is a typo. */
+export const MAX_ODOMETER = 9_999_999;
+
 /** Why an odometer entry can't be accepted, or null. `floor` is the lowest it may be (the move's start). */
 export function odometerProblem(raw: string, floor: number | null): string | null {
   const t = raw.replace(/,/g, "").trim();
   if (!t) return "Enter the odometer.";
   const n = Number(t);
   if (!Number.isFinite(n) || n <= 0) return "That isn't a valid odometer.";
+  if (n > MAX_ODOMETER) return "That's too many digits for an odometer.";
   if (floor != null && n < floor) return `Lower than the last reading (${Math.round(floor).toLocaleString("en-US")}).`;
   return null;
 }

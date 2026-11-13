@@ -9,6 +9,7 @@
 // Deliveries are picked from the saved location list (the same picker as the
 // dashboard, with "+ New location"), never typed as free text.
 
+import { MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
@@ -206,10 +207,10 @@ export function StartLoadSheet({
     }
   }, [open, pickupTerminalId]);
 
-  const milesOk = v.beginMiles.trim() === "" || Number.isFinite(Number(v.beginMiles));
+  const milesOk = v.beginMiles.trim() === "" || (Number.isFinite(Number(v.beginMiles)) && Number(v.beginMiles) <= MAX_ODOMETER);
   // Everything on the card has to be filled in before the trip is saved.
   const missing: string[] = [];
-  if (!forDriver && (!v.beginMiles.trim() || !Number.isFinite(Number(v.beginMiles)))) missing.push("begin miles");
+  if (!forDriver && (!v.beginMiles.trim() || !Number.isFinite(Number(v.beginMiles)) || Number(v.beginMiles) > MAX_ODOMETER)) missing.push("begin miles");
   if (!v.orderNumber.trim() || v.extraOrderNumbers.some((n) => !n.trim())) missing.push("order number");
   if (!forDriver && !v.startCity.trim()) missing.push("starting from");
   if (requireShipperCustomer) missing.push(...namesProblem(v.shipper, v.customer));
