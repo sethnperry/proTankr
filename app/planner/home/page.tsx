@@ -2270,15 +2270,18 @@ export default function HomePage() {
     setNotice({ text: "Load parked. Start another trip when you're ready.", tripId: openTrip.trip_id });
     void syncNow();
   };
+  // The truck chosen in the equipment step arrives after this closure was made, so the latest value is read here.
+  const truckIdLive = useRef<string | null>(truckId ?? null);
+  truckIdLive.current = truckId ?? null;
   const doResume = () => {
     if (!store || !userId || !parked) return;
-    resumeTrip(store, { trip: parked, userId, truckId, ...clock() });
+    resumeTrip(store, { trip: parked, userId, truckId: truckIdLive.current, ...clock() });
     void syncNow();
   };
 
   const doTakeOver = () => {
     if (!store || !userId || !handoff) return;
-    takeOverTrip(store, { userId, trip: handoff, truckId, ...clock() });
+    takeOverTrip(store, { userId, trip: handoff, truckId: truckIdLive.current, ...clock() });
     void syncNow();
   };
 
@@ -2791,7 +2794,7 @@ export default function HomePage() {
           <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>
             Take it over to finish the deliveries.
           </div>
-          <button type="button" onClick={doTakeOver}
+          <button type="button" onClick={() => void askEquipment(() => doTakeOver())}
             style={{ marginTop: 10, borderRadius: 2, border: "none", background: "#fff", color: "#000", padding: "10px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
             Take Over Trip
           </button>
