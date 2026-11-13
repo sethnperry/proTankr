@@ -32,3 +32,15 @@ test("an image that can't be added is listed on the cover instead of failing the
   });
   assert.ok((await PDFDocument.load(bytes)).getPageCount() >= 2);
 });
+
+test("every BOL number is on the cover, scanned or not, and scanned pages come out one to a page", async () => {
+  const bytes = await renderTripPackage({
+    ptd, driverName: "Seth", truckName: "1", trailerName: "2", generatedAt: new Date(),
+    items: [
+      { kind: "BOL 759277", at: "2026-11-12T16:00:00Z", line: "Marathon Contract · Marathon · ULSD (C1, C2)  2 pages", layout: "page", images: [{ name: "a", bytes: PNG }, { name: "b", bytes: PNG }] },
+      { kind: "BOL AB-12", at: null, line: "Atlas · Citgo · Regular (C3)  NOT SCANNED", layout: "page", images: [] },
+    ],
+  });
+  const doc = await PDFDocument.load(bytes);
+  assert.ok(doc.getPageCount() >= 4); // cover, PTD, two BOL pages
+});

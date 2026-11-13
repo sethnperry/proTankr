@@ -19,6 +19,7 @@
 // the rest is kept on the phone until Finish.
 
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
+import { bolRef, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
 import { afterPartial, partialEntry, type PartialDrop } from "@/lib/trips/partialDrops";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
@@ -250,7 +251,7 @@ const fmtDayTime = (iso: string | null) => {
 
 export function DeliveryDashboard({
   open, title, delivery, location, compartments, laterAboard, trailerId, savedTanks, locationTanks, settings, reasons,
-  otherPlanned, beginMiles, liveOdometer, productInfo, signature, recordedDelayMin = 0, recordedDelayLabels = [], companyId = null, userId = null, ticketPhotos = 0, onTicketPhotos, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
+  otherPlanned, beginMiles, liveOdometer, productInfo, signature, recordedDelayMin = 0, recordedDelayLabels = [], companyId = null, userId = null, ticketPhotos = 0, bolGroups = [], onTicketPhotos, onSaveSignature, onSaveProgress, onSubmit, onPark, onClose,
 }: {
   // The loading BOL / supplier / signature were left for later (Finish Later): finishing the delivery waits for them.
   // Park Preloaded, offered until the delivery begins.
@@ -278,6 +279,8 @@ export function DeliveryDashboard({
   companyId?: string | null;
   userId?: string | null;
   ticketPhotos?: number;
+  /** The BOL numbers on the whole trip (a split load can have several), each scanned on its own. */
+  bolGroups?: BolGroup[];
   onTicketPhotos?: (paths: string[]) => void;
   onSaveSignature: (path: string) => Promise<void>;
   onSaveProgress: (p: DeliveryProgress) => void;
@@ -342,13 +345,16 @@ export function DeliveryDashboard({
   const [waterOpen, setWaterOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
   // The BOL scan for this trip (scanned once in the close-out, or earlier from another stop).
-  const [bolOpen, setBolOpen] = useState(false);
-  const [bolPages, setBolPages] = useState(0);
+  const [bolFor, setBolFor] = useState<string | null>(null); // the BOL number being scanned
+  const [bolPages, setBolPages] = useState<Record<string, number>>({});
   const loadBolPages = React.useCallback(async () => {
-    const { data } = await supabase.from("form_captures").select("file_paths").eq("purpose", "bol").eq("ref_type", "trip").eq("ref_id", delivery.trip_id);
-    setBolPages(((data ?? []) as { file_paths: string[] | null }[]).reduce((n, r) => n + (r.file_paths?.length ?? 0), 0));
+    const { data } = await supabase.from("form_captures").select("ref_type, file_paths").eq("purpose", "bol").eq("ref_id", delivery.trip_id).like("ref_type", "bol:%");
+    setBolPages(pagesByBol((data ?? []) as { ref_type: string | null; file_paths: string[] | null }[]));
   }, [delivery.trip_id]);
   useEffect(() => { if (open) void loadBolPages(); }, [open, loadBolPages]);
+  const bolWarned = React.useRef(false);
+  const bolNumbers = bolGroups.filter((g) => g.bol);
+  const bolMissing = unscanned(bolGroups, bolPages);
   const [err, setErr] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [consigneeOpen, setConsigneeOpen] = useState(false);
@@ -858,6 +864,11 @@ export function DeliveryDashboard({
     if (over && !lateAnswer) return setErr("Was there a delay? Tap Yes or No.");
     const needReason = preDropLate || (over && lateAnswer === "yes");
     if (needReason && !reasonId && !note.trim()) return setErr("Pick a delay reason.");
+    // A BOL number with no scan: one reminder, then it's the driver's call.
+    if (bolMissing.length > 0 && !bolWarned.current) {
+      bolWarned.current = true; setSection("bol"); setWstep("details");
+      return setErr(`BOL ${bolMissing.map((g) => g.bol).join(", ")} ${bolMissing.length === 1 ? "isn't" : "aren't"} scanned yet. Scan ${bolMissing.length === 1 ? "it" : "them"}, or tap Finish again to go without.`);
+    }
     if (retainedAll.length > 0 && !retainNote.trim()) { setSection("tanks"); return setErr("Leave a note for the next driver about the product left aboard."); }
     const toDc = (c: TripCompartmentLoadRow, tank: string | null): DeliveredCompartment => ({
       compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: tank,
@@ -1167,11 +1178,28 @@ export function DeliveryDashboard({
         <>
           <div style={{ ...miniLabel, margin: "2px 2px 8px" }}>How it went · all optional</div>
           <div style={{ ...sectionCard, padding: 0 }}>
-            {companyId && userId && (
-              <Section title="BOL" summary={bolPages > 0 ? `${bolPages} page${bolPages === 1 ? "" : "s"} scanned` : "Scan it"} summaryColor={bolPages > 0 ? "#4ade80" : undefined}
+            {companyId && userId && bolGroups.length > 0 && (
+              <Section title="BOL" summary={bolNumbers.length === 0 ? "No BOL number yet" : bolMissing.length === 0 ? `${bolNumbers.length} of ${bolNumbers.length} scanned` : `${bolNumbers.length - bolMissing.length} of ${bolNumbers.length} scanned`}
+                summaryColor={bolNumbers.length === 0 || bolMissing.length > 0 ? "#fbbf24" : "#4ade80"}
                 open={section === "bol"} onToggle={() => toggle("bol")}>
-                <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>Scan the paper BOL. It finds the page, flattens it and evens out shadows, so it goes in the trip package clean.</div>
-                <button type="button" onClick={() => setBolOpen(true)} style={{ ...rowBtn, padding: "12px 0", borderBottom: "none", fontWeight: 800 }}>{bolPages > 0 ? "Scan another page ›" : "Scan the BOL ›"}</button>
+                <div style={{ fontSize: 13, color: muted, marginBottom: 6 }}>Scan every BOL on this load. Each number gets its own pages. It finds the page, flattens it and evens out shadows.</div>
+                {bolGroups.map((g) => {
+                  const n = g.bol ? bolPages[g.bol] ?? 0 : 0;
+                  return (
+                    <button key={g.bol ?? "none"} type="button" disabled={!g.bol} onClick={() => g.bol && setBolFor(g.bol)}
+                      style={{ ...rowBtn, padding: "11px 0", opacity: g.bol ? 1 : 0.7, textAlign: "left" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 800 }}>{g.bol ? `BOL ${g.bol}` : "No BOL number entered"}</div>
+                        <div style={{ fontSize: 12, color: muted, fontWeight: 500, marginTop: 2 }}>
+                          {[g.supplier, g.pickup, g.products.join(", "), `C${g.comps.join(", C")}`].filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: !g.bol ? muted : n > 0 ? "#4ade80" : "#fbbf24", whiteSpace: "nowrap" }}>
+                        {!g.bol ? "Add it at loading" : n > 0 ? `${n} page${n === 1 ? "" : "s"} ✓ · add ›` : "Scan ›"}
+                      </span>
+                    </button>
+                  );
+                })}
               </Section>
             )}
             <Section title="Tank readings" summary={readingsSummary}
@@ -1426,9 +1454,9 @@ export function DeliveryDashboard({
         onSubmit={goNext}
       />
 
-      {companyId && userId && (
-        <CaptureSheet open={bolOpen} purpose="bol" title="BOL" companyId={companyId} userId={userId} refType="trip" refId={delivery.trip_id}
-          onDone={() => { setBolOpen(false); void loadBolPages(); }} onClose={() => setBolOpen(false)} />
+      {companyId && userId && bolFor && (
+        <CaptureSheet open purpose="bol" title={`BOL ${bolFor}`} companyId={companyId} userId={userId} refType={bolRef(bolFor)} refId={delivery.trip_id}
+          onDone={() => { setBolFor(null); void loadBolPages(); }} onClose={() => setBolFor(null)} />
       )}
 
       {onTicketPhotos && (

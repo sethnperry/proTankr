@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "Email isn't set up." }, { status: 500 });
-    const items = await loadPackageItems(admin, trip);
+    const items = await loadPackageItems(admin, trip, bundle.bols);
     const pdf = await renderTripPackage({ ptd: bundle.ptd, driverName: bundle.driverName, truckName: bundle.truckName, trailerName: bundle.trailerName, items, generatedAt: new Date() });
     const size = pdf.byteLength;
     if (size > 30 * 1024 * 1024) return NextResponse.json({ error: "That package is too large to email." }, { status: 413 });

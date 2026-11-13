@@ -9,6 +9,7 @@ import sharp from "sharp";
 import { buildPtd } from "./ptd.ts";
 import { locationTitle } from "./deliveryLocations.ts";
 import { partialsOf } from "./partialDrops.ts";
+import { bolGroups, parseBolRef, type BolGroup } from "./bols.ts";
 import type { PackageItem } from "./tripPackage.ts";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripDeliveryTankRow, TripEventRow, TripOrderRow, TripPickupRow, TripRow } from "./types.ts";
 
@@ -22,6 +23,8 @@ export type PtdBundle = {
   deliveryPlaces: Record<string, { name: string; city: string | null; state: string | null }>;
   pickupPlaces: Record<string, { city: string | null; state: string | null }>;
   /** What the End of Day cover line needs. */
+  /** Every BOL number on the trip (a split load can have several). */
+  bols: BolGroup[];
   eod: { fromCity: string | null; to: string; slots: (string | null)[]; gallons: number; minutes: number | null; products: { name: string; gallons: number }[] };
 };
 
@@ -89,7 +92,7 @@ export async function loadPtdBundle(admin: SupabaseClient, tripId: string): Prom
     products: [...prodGal.entries()].map(([name, gallons]) => ({ name, gallons })),
   };
   return {
-    trip, ptd, deliveryPlaces, pickupPlaces, eod,
+    trip, ptd, deliveryPlaces, pickupPlaces, eod, bols: bolGroups(compLoads, pickups, (id) => (id && pn.get(id)) || "Product"),
     driverName: dn.get(trip.driver_id) || null,
     truckName: ((truck as { data: { truck_name?: string } | null }).data?.truck_name) ?? null,
     trailerName: ((trailer as { data: { trailer_name?: string } | null }).data?.trailer_name) ?? null,
@@ -113,7 +116,7 @@ const DOC_PURPOSES = new Set(["document", "manifest", "bol"]);
 const PURPOSE_LABEL: Record<string, string> = { fuel_receipt: "Fuel receipt", scale_ticket: "Scale ticket", tank_ticket: "Tank ticket", document: "Document", manifest: "Manifest", bol: "BOL", inspection: "Inspection", down_time: "Down time", paper_log: "Paper log" };
 
 /** Everything the driver collected while this trip was open: fuel stops, captured photos, repair requests. */
-export async function loadPackageItems(admin: SupabaseClient, trip: TripRow): Promise<PackageItem[]> {
+export async function loadPackageItems(admin: SupabaseClient, trip: TripRow, bols: BolGroup[] = []): Promise<PackageItem[]> {
   const from = trip.started_at ?? new Date(0).toISOString();
   const to = trip.completed_at ?? trip.cancelled_at ?? new Date().toISOString();
   const driver = trip.driver_id;
@@ -140,6 +143,18 @@ export async function loadPackageItems(admin: SupabaseClient, trip: TripRow): Pr
       images,
     });
   }
+  // One BOL item per BOL number: its scans, and a plain "not scanned" line for a number with none.
+  const bolInfo = (b: string) => { const g = bols.find((x) => x.bol === b); return g ? [g.supplier, g.pickup, `${g.products.join(", ")} (C${g.comps.join(", C")})`].filter(Boolean).join(" · ") : ""; };
+  const scanned = new Set<string>();
+  for (const c of caps.filter((x) => parseBolRef(x.ref_type))) {
+    usedCaptures.add(c.capture_id);
+    const b = parseBolRef(c.ref_type)!; scanned.add(b);
+    const images: PackageItem["images"] = [];
+    for (const path of c.file_paths ?? []) { const p = await photo(admin, "form-captures", path); images.push({ name: `BOL ${b}`, bytes: p.bytes, note: p.note }); }
+    items.push({ kind: `BOL ${b}`, at: c.created_at, layout: "page", line: `${bolInfo(b)}  ${images.length} page${images.length === 1 ? "" : "s"}`.trim(), detail: [], images });
+  }
+  for (const g of bols) if (g.bol && !scanned.has(g.bol)) items.push({ kind: `BOL ${g.bol}`, at: null, layout: "page", line: `${bolInfo(g.bol)}  NOT SCANNED`.trim(), detail: [], images: [] });
+
   for (const c of caps) {
     if (usedCaptures.has(c.capture_id)) continue;
     const images: PackageItem["images"] = [];

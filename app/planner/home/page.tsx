@@ -214,6 +214,7 @@ import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
 import { DispatchNotices } from "./DispatchNotices";
+import { bolGroups } from "@/lib/trips/bols";
 import { TripPackageSheet } from "../components/trip/TripPackageSheet";
 import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
 import { addTrailerAlert, clearTrailerAlerts, fetchTrailerAlerts, sendPendingTrailerAlerts, type TrailerAlert } from "@/lib/trips/trailerAlerts";
@@ -3418,6 +3419,7 @@ export default function HomePage() {
             recordedDelayLabels={tripDelays.filter((d) => d.deliveryId === finishDeliveryRow.delivery_id && d.leg === "at_drop").map((d) => `${d.label} ${d.minutes} min`)}
             companyId={companyId}
             userId={userId}
+            bolGroups={bolGroups(snap.compLoads, snap.pickups, productName)}
             ticketPhotos={store.list("tank_checks", (c) => c.delivery_id === finishDeliveryRow.delivery_id).reduce((n, c) => n + c.photo_paths.length, 0)}
             onTicketPhotos={(paths) => tankChecks.saveTicket({ deliveryId: finishDeliveryRow.delivery_id, locationId: finishDeliveryRow.location_id, locationName: locations.find((l) => l.location_id === finishDeliveryRow.location_id)?.name ?? finishDeliveryRow.one_off_name ?? null, truckId: openTrip?.truck_id ?? null, paths })}
             onSaveSignature={signature.save}
