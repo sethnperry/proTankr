@@ -3,6 +3,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { T, css } from "@/lib/ui/driver/tokens";
+import { permitTypeForSlug, slugForPermit, type PermitTypeLite } from "@/lib/equipment/permitLink";
+
+/** The company's Binder permit types, to connect the old fixed categories to them (see lib/equipment/permitLink.ts). */
+async function fetchPermitTypes(companyId: string): Promise<PermitTypeLite[]> {
+  const { data } = await supabase.from("permit_types").select("permit_type_id, name, applies_to, terminal_id").eq("company_id", companyId);
+  return (data ?? []) as PermitTypeLite[];
+}
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -81,7 +88,7 @@ export function useAttachments(
     setLoading(true);
     const { data } = await supabase
       .from("equipment_attachments")
-      .select("id, category, category_label, file_path, original_name, mime_type, page_order, uploaded_at, uploaded_by")
+      .select("id, category, category_label, file_path, original_name, mime_type, page_order, uploaded_at, uploaded_by, permit_type_id")
       .eq("company_id", companyId)
       .eq("equipment_type", equipmentType)
       .eq("equipment_id", equipmentId)
@@ -90,8 +97,13 @@ export function useAttachments(
     setLoading(false);
     if (!data) return;
 
+    // A document filed in the Binder (by permit type) shows here under the matching old category.
+    const types = await fetchPermitTypes(companyId);
+    const nameOf = new Map(types.map((t) => [t.permit_type_id, t.name]));
     const map = new Map<string, AttachmentGroup>();
-    for (const row of data as AttachmentRecord[]) {
+    for (const raw of data as (AttachmentRecord & { permit_type_id: string | null })[]) {
+      const slug = raw.permit_type_id ? slugForPermit(equipmentType, nameOf.get(raw.permit_type_id) ?? "") : null;
+      const row: AttachmentRecord = slug ? { ...raw, category: slug, category_label: getCategoryLabel(equipmentType, slug) } : raw;
       if (!map.has(row.category)) {
         map.set(row.category, { category: row.category, label: row.category_label, pages: [] });
       }
@@ -133,15 +145,18 @@ export function usePermitAttachments(
       .eq("company_id", companyId)
       .eq("equipment_type", equipmentType)
       .eq("equipment_id", equipmentId)
-      .not("permit_type_id", "is", null)
       .order("page_order");
     setLoading(false);
     if (!data) return;
 
+    // A document filed on the old Equipment Details screen (an old category, no permit type) belongs to the matching permit type.
+    const types = await fetchPermitTypes(companyId);
     const map = new Map<string, AttachmentRecord[]>();
-    for (const row of data as (AttachmentRecord & { permit_type_id: string })[]) {
-      if (!map.has(row.permit_type_id)) map.set(row.permit_type_id, []);
-      map.get(row.permit_type_id)!.push(row);
+    for (const row of data as (AttachmentRecord & { permit_type_id: string | null })[]) {
+      const id = row.permit_type_id ?? permitTypeForSlug(types, equipmentType, row.category)?.permit_type_id ?? null;
+      if (!id) continue;
+      if (!map.has(id)) map.set(id, []);
+      map.get(id)!.push(row);
     }
     setGroups(map);
   }, [equipmentType, equipmentId, companyId]);
@@ -494,6 +509,8 @@ export function DocHubModal({
       if (storageErr) throw storageErr;
 
       const { data: { user } } = await supabase.auth.getUser();
+      // File it under the Binder's permit type too, so both screens (and the Binder's alerts) see it.
+      const permitType = permitTypeForSlug(await fetchPermitTypes(companyId), equipmentType, pendingCat);
 
       // Insert DB row
       const { error: dbErr } = await supabase.from("equipment_attachments").insert({
@@ -503,6 +520,7 @@ export function DocHubModal({
         equipment_id: equipmentId,
         category: pendingCat,
         category_label: pendingLabel,
+        permit_type_id: permitType?.permit_type_id ?? null,
         file_path: filePath,
         original_name: pendingFile.name,
         mime_type: pendingFile.type || "application/octet-stream",

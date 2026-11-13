@@ -5,6 +5,7 @@ import TruckSleeperField from "./TruckSleeperField";
 import React, { useEffect, useMemo, useState } from "react";
 import { InviteNameField } from "./InviteNameField";
 import { supabase } from "@/lib/supabase/client";
+import { syncLegacyPermits } from "@/lib/equipment/syncPermits";
 import { T, css, fmtDate, expiryColor, daysUntil } from "@/lib/ui/driver/tokens";
 import { Modal, Field, FieldRow, Banner, SubSectionTitle } from "@/lib/ui/driver/primitives";
 import {
@@ -931,6 +932,15 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
         validOther.map(p => ({ truck_id: truckId, company_id: companyId, label: p.label.trim(), expiration_date: p.expiration_date || null }))
       );
     }
+    // The Binder, dispatch and the alerts read equipment_permits: copy the dates that were changed here (a date left as it
+    // was isn't copied, so this screen can't overwrite a newer date set in the Binder).
+    const chg = (slug: string, was: string | null | undefined, now: string, enf: string, nt: string) => ({ slug, expiration: (now || "") !== (was ?? "") ? (now || null) : null, enforcement: enf || null, notes: nt || null });
+    await syncLegacyPermits(companyId, "truck", truckId!, [
+      chg("registration", truck?.reg_expiration_date, regExp, regEnf, regNotes), chg("annual_inspection", truck?.inspection_expiration_date, insExp, insEnf, insNotes),
+      chg("ifta", truck?.ifta_expiration_date, iftaExp, iftaEnf, iftaNotes), chg("phmsa_hazmat", truck?.phmsa_expiration_date, phmsaExp, phmsaEnf, phmsaNotes),
+      chg("alliance_hazmat", truck?.alliance_expiration_date, alliExp, alliEnf, alliNotes), chg("fleet_insurance", truck?.fleet_ins_expiration_date, fleetExp, fleetEnf, fleetNotes),
+      chg("hazmat_lic", truck?.hazmat_lic_expiration_date, hazLicExp, hazLicEnf, hazLicNotes), chg("inner_bridge", truck?.inner_bridge_expiration_date, ibExp, ibEnf, ibNotes),
+    ]);
     onDone();
   }
 
@@ -1257,6 +1267,12 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
       );
       if (compErr) { setErr(compErr.message); setSaving(false); return; }
     }
+    const chg = (slug: string, was: string | null | undefined, now: string, enf: string, nt: string) => ({ slug, expiration: (now || "") !== (was ?? "") ? (now || null) : null, enforcement: enf || null, notes: nt || null });
+    const tankWas = (k: string) => (trailer as any)?.[`tank_${k}_expiration_date`] as string | null | undefined;
+    await syncLegacyPermits(companyId, "trailer", trailerId!, [
+      chg("trailer_registration", trailer?.trailer_reg_expiration_date, trRegExp, trRegEnf, trRegNotes), chg("annual_inspection", trailer?.trailer_inspection_expiration_date, trInsExp, trInsEnf, trInsNotes),
+      ...tanks.map((t) => chg(`tank_${t.key}`, tankWas(t.key), t.date || "", "", t.notes || "")),
+    ]);
     onDone();
   }
 
