@@ -2790,6 +2790,20 @@ export default function HomePage() {
         const parkedBar = nums.length > 0 ? <TrailerHeader variant="side" trailerId={trailerId} loaded={byComp} data={trailerHdr} /> : null;
         const dels = parkedSnap.deliveries.filter((d) => d.status !== "cancelled");
         const who = mine ? "You" : handoffName ?? "Another driver";
+        // Same read-only details the open trip shows: the plan letter, a splash note, blends off target, the Load Report.
+        const storedP = getTripPlan(userId || null, parked.trip_id);
+        const matchP = storedP?.snapshot ? null : findMatchingPlan(sheetPresets, layoutFromProducts(Object.fromEntries(nums.map((n) => [n, byComp[n] ?? null])), nums));
+        const planLabelP = storedP?.snapshot ? `Plan ${slotLetter(storedP.slot)}` : matchP ? `Plan ${slotLetter(matchP.slot)}` : "";
+        const splashP = getTripSplash(userId || null, parked.trip_id);
+        const blendP = Object.entries(splashP).flatMap(([k, sp]) => {
+          const rows = aboardP.filter((r) => r.comp_number === Number(k));
+          if (rows.length < 2) return [];
+          const add = rows.filter((r) => r.product_id === sp.additiveProductId).reduce((t, r) => t + (r.gross_gallons ?? 0), 0);
+          const base = rows.filter((r) => r.product_id !== sp.additiveProductId).reduce((t, r) => t + (r.gross_gallons ?? 0), 0);
+          const pct = blendPct(add, base);
+          return pct != null && offTarget(pct, sp.pct) ? [`C${k} is ${blendLabel(pct)} (${pct.toFixed(1)}%), target ${sp.pct}%`] : [];
+        });
+        const loadIdP = [...parkedSnap.pickups].filter((q) => q.load_id && (q.outcome === "loaded" || q.left_at)).sort((x, y) => y.seq - x.seq)[0]?.load_id ?? null;
         return (
           <TripCardView
             style={{ ...card, marginBottom: 14, borderColor: "rgba(96,165,250,0.6)" }}
@@ -2797,7 +2811,7 @@ export default function HomePage() {
             heading="No trip in progress"
             right={<span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", color: "#93c5fd", whiteSpace: "nowrap" }}>PARKED PRELOADED</span>}
             route={(parked.shipper || parked.customer) ? [parked.shipper, parked.customer].filter(Boolean).join(" → ") : null}
-            plan={{ label: "", comps: nums.map((n) => chipFor(byComp[n] ?? null)) }}
+            plan={{ label: planLabelP, comps: nums.map((n) => chipFor(byComp[n] ?? null)), splash: Object.keys(splashP).length ? { text: "Splash ✓", on: true, onTap: () => {} } : null }}
             pickups={pickupRows(parkedSnap.pickups, {
               currentId: null,
               noLoadReason: (c) => noLoadReasonLabel(c) ?? "",
@@ -2810,6 +2824,12 @@ export default function HomePage() {
             })}
             footer={(
               <div style={{ marginTop: 12 }}>
+                {loadIdP && (
+                  <button type="button" onClick={() => { setOpeningReport(true); shell.postPlannerIntent("report", loadIdP); }} {...busyProps(openingReport)} style={{ ...smallLink, display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 8 }}>Load Report {openingReport ? <Spinner size={11} /> : "›"}</button>
+                )}
+                {blendP.length > 0 && (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24", marginBottom: 8 }}>{blendP.map((t) => <div key={t}>Blend off target: {t}</div>)}</div>
+                )}
                 <div style={{ fontSize: 13, color: muted }}>
                   {who} parked this trailer
                   {parked.parked_at ? ` ${new Date(parked.parked_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
