@@ -32,6 +32,7 @@ import RackSelectSheet from "./components/RackSelectSheet";
 import TerminalOutageBanner from "./components/TerminalOutageBanner";
 import { useActiveOutageBanner } from "./hooks/useTerminalOutageReports";
 import { useIsLandscape } from "./hooks/useOrientation";
+import SetupSessionBanner from "./components/SetupSessionBanner";
 import { CalculatorShellProvider, useCalculatorShell } from "./CalculatorShellContext";
 import { addDaysISO_, isPastISO_, formatMDYWithCountdown_ } from "./utils/dates";
 import { normState } from "./utils/normalize";
@@ -295,6 +296,14 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
+      {/* Always reachable while an admin is using the app as another driver, on every planner page. */}
+      {shell.setupSession && (
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 70, padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
+          <div style={{ pointerEvents: "auto", background: "#0b0b0b", borderRadius: 2 }}>
+            <SetupSessionBanner targetDisplayName={shell.setupSession.targetDisplayName} returnTo={shell.setupSession.returnTo} />
+          </div>
+        </div>
+      )}
       <TripSync userId={shell.effectiveUserId || null} />
 
       <EquipmentModal

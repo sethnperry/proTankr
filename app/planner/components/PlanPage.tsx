@@ -14,7 +14,6 @@ import { styles } from "../ui/styles";
 import { usePlanner } from "../PlannerContext";
 import PlanCompartmentsSection from "./PlanCompartmentsSection";
 import PlanActionsSection from "./PlanActionsSection";
-import SetupSessionBanner from "./SetupSessionBanner";
 import { PartialEquipmentPanel } from "./PartialEquipmentPanel";
 import { PlannerGates } from "./PlannerGates";
 
@@ -63,7 +62,6 @@ export default function PlanPage() {
     setOnboardingDone,
     setPresetQuickPickOpen,
     setWizardNew,
-    setupSession,
     targetWeight,
     terminalLabel,
     terminalProducts,
@@ -113,7 +111,6 @@ export default function PlanPage() {
         </div>,
         document.body,
       )}
-      {setupSession && <SetupSessionBanner targetDisplayName={setupSession.targetDisplayName} returnTo={setupSession.returnTo} />}
 
       {/* One content column in both orientations (capped in landscape). */}
       <div style={isLandscape ? { maxWidth: LANDSCAPE_MAX_W, margin: "0 auto" } : undefined}>
