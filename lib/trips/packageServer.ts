@@ -109,8 +109,8 @@ async function photo(admin: SupabaseClient, bucket: string, path: string): Promi
   } catch { return { bytes: null, note: "photo could not be read" }; }
 }
 
-const DOC_PURPOSES = new Set(["document", "manifest"]);
-const PURPOSE_LABEL: Record<string, string> = { fuel_receipt: "Fuel receipt", scale_ticket: "Scale ticket", tank_ticket: "Tank ticket", document: "Document", manifest: "Manifest", inspection: "Inspection", down_time: "Down time", paper_log: "Paper log" };
+const DOC_PURPOSES = new Set(["document", "manifest", "bol"]);
+const PURPOSE_LABEL: Record<string, string> = { fuel_receipt: "Fuel receipt", scale_ticket: "Scale ticket", tank_ticket: "Tank ticket", document: "Document", manifest: "Manifest", bol: "BOL", inspection: "Inspection", down_time: "Down time", paper_log: "Paper log" };
 
 /** Everything the driver collected while this trip was open: fuel stops, captured photos, repair requests. */
 export async function loadPackageItems(admin: SupabaseClient, trip: TripRow): Promise<PackageItem[]> {

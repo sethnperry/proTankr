@@ -4,9 +4,10 @@
 // how a batch of photos moves from "taking" to "saved". Files live in the private form-captures bucket under
 // {company_id}/{user_id}/{capture_id}/, which is what the bucket's access rules read.
 
-export type CapturePurpose = "fuel_receipt" | "scale_ticket" | "tank_ticket" | "document" | "down_time" | "paper_log" | "inspection" | "manifest";
+export type CapturePurpose = "fuel_receipt" | "scale_ticket" | "tank_ticket" | "document" | "down_time" | "paper_log" | "inspection" | "manifest" | "bol";
 
-export const CAPTURE_PURPOSES: Record<CapturePurpose, { label: string; maxPhotos: number }> = {
+/** `scan`: taken with the document scanner (page found, flattened, light evened out) instead of a plain photo. */
+export const CAPTURE_PURPOSES: Record<CapturePurpose, { label: string; maxPhotos: number; scan?: boolean }> = {
   fuel_receipt: { label: "Fuel receipt", maxPhotos: 4 },
   scale_ticket: { label: "Scale ticket", maxPhotos: 4 },
   tank_ticket: { label: "Tank ticket", maxPhotos: 4 },
@@ -15,6 +16,7 @@ export const CAPTURE_PURPOSES: Record<CapturePurpose, { label: string; maxPhotos
   paper_log: { label: "Paper log", maxPhotos: 6 },
   inspection: { label: "Inspection", maxPhotos: 12 },
   manifest: { label: "Manifest", maxPhotos: 6 },
+  bol: { label: "BOL", maxPhotos: 8, scan: true },
 };
 
 export const CAPTURE_BUCKET = "form-captures";

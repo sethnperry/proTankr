@@ -341,6 +341,14 @@ export function DeliveryDashboard({
   const [stepErr, setStepErr] = useState<string | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
+  // The BOL scan for this trip (scanned once in the close-out, or earlier from another stop).
+  const [bolOpen, setBolOpen] = useState(false);
+  const [bolPages, setBolPages] = useState(0);
+  const loadBolPages = React.useCallback(async () => {
+    const { data } = await supabase.from("form_captures").select("file_paths").eq("purpose", "bol").eq("ref_type", "trip").eq("ref_id", delivery.trip_id);
+    setBolPages(((data ?? []) as { file_paths: string[] | null }[]).reduce((n, r) => n + (r.file_paths?.length ?? 0), 0));
+  }, [delivery.trip_id]);
+  useEffect(() => { if (open) void loadBolPages(); }, [open, loadBolPages]);
   const [err, setErr] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [consigneeOpen, setConsigneeOpen] = useState(false);
@@ -1159,6 +1167,13 @@ export function DeliveryDashboard({
         <>
           <div style={{ ...miniLabel, margin: "2px 2px 8px" }}>How it went · all optional</div>
           <div style={{ ...sectionCard, padding: 0 }}>
+            {companyId && userId && (
+              <Section title="BOL" summary={bolPages > 0 ? `${bolPages} page${bolPages === 1 ? "" : "s"} scanned` : "Scan it"} summaryColor={bolPages > 0 ? "#4ade80" : undefined}
+                open={section === "bol"} onToggle={() => toggle("bol")}>
+                <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>Scan the paper BOL. It finds the page, flattens it and evens out shadows, so it goes in the trip package clean.</div>
+                <button type="button" onClick={() => setBolOpen(true)} style={{ ...rowBtn, padding: "12px 0", borderBottom: "none", fontWeight: 800 }}>{bolPages > 0 ? "Scan another page ›" : "Scan the BOL ›"}</button>
+              </Section>
+            )}
             <Section title="Tank readings" summary={readingsSummary}
               summaryColor={firstDrop && readingsCount < products.length ? "#fb923c" : settings.require_tank_readings && readingsCount < products.length ? "#fbbf24" : undefined}
               open={section === "readings"} onToggle={() => toggle("readings")}>
@@ -1410,6 +1425,11 @@ export function DeliveryDashboard({
         submitLabel={step && step.phase === "after" && step.productIdx === products.length - 1 ? "Done" : "Next"}
         onSubmit={goNext}
       />
+
+      {companyId && userId && (
+        <CaptureSheet open={bolOpen} purpose="bol" title="BOL" companyId={companyId} userId={userId} refType="trip" refId={delivery.trip_id}
+          onDone={() => { setBolOpen(false); void loadBolPages(); }} onClose={() => setBolOpen(false)} />
+      )}
 
       {onTicketPhotos && (
         <CaptureSheet open={ticketOpen} purpose="tank_ticket" title="Meter ticket" companyId={companyId} userId={userId} refType="delivery" refId={delivery.delivery_id}

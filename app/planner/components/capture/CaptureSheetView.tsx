@@ -9,6 +9,7 @@ import React from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { PRIMARY_BTN, SECONDARY_BTN } from "@/lib/ui/look";
 import { CameraButton } from "../equipment/AddDocumentSheet";
+import { DocumentScanner } from "../scan/DocumentScanner";
 import { CAPTURE_PURPOSES, canAddPhoto, saveBlock, type CapturePhoto, type CapturePurpose } from "@/lib/capture/capture";
 
 const MUTED = "rgba(255,255,255,0.5)";
@@ -37,12 +38,23 @@ export function CaptureSheetView({ open, purpose, title, photos, urlFor, saving,
   const label = title ?? CAPTURE_PURPOSES[purpose].label;
   const block = saveBlock(photos);
   const room = canAddPhoto(purpose, photos);
+  const scan = !!CAPTURE_PURPOSES[purpose].scan;
+  const [scanning, setScanning] = React.useState(false);
   return (
     <FullscreenModal open={open} title={label} onClose={onClose} footer={null}>
+      {scan && <DocumentScanner open={scanning} title={`Scan ${label}`} onClose={() => setScanning(false)} onDone={(f) => { setScanning(false); onAdd([f]); }} />}
       {photos.length === 0 ? (
-        <CameraButton multiple onFile={onAdd} style={{ ...PRIMARY_BTN, display: "block", textAlign: "center", padding: "46px 0", fontSize: 18, fontWeight: 800 }}>
-          Take a photo
-        </CameraButton>
+        scan ? (
+          <>
+            <button type="button" onClick={() => setScanning(true)} style={{ ...PRIMARY_BTN, display: "block", width: "100%", textAlign: "center", padding: "46px 0", fontSize: 18, fontWeight: 800, cursor: "pointer" }}>Scan the {label}</button>
+            <div style={{ fontSize: 12, color: MUTED, textAlign: "center", margin: "8px 0" }}>Finds the page, flattens it and evens out shadows. Use the light in dim places.</div>
+            <CameraButton multiple onFile={onAdd} style={{ ...SECONDARY_BTN, display: "block", textAlign: "center", padding: "12px 0", fontSize: 13, fontWeight: 800 }}>Take a plain photo instead</CameraButton>
+          </>
+        ) : (
+          <CameraButton multiple onFile={onAdd} style={{ ...PRIMARY_BTN, display: "block", textAlign: "center", padding: "46px 0", fontSize: 18, fontWeight: 800 }}>
+            Take a photo
+          </CameraButton>
+        )
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
@@ -64,7 +76,10 @@ export function CaptureSheetView({ open, purpose, title, photos, urlFor, saving,
               );
             })}
           </div>
-          {room && (
+          {room && scan && (
+            <button type="button" onClick={() => setScanning(true)} style={{ ...SECONDARY_BTN, display: "block", width: "100%", textAlign: "center", padding: "13px 0", marginTop: 10, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>+ Scan another page</button>
+          )}
+          {room && !scan && (
             <CameraButton multiple onFile={onAdd} style={{ ...SECONDARY_BTN, display: "block", textAlign: "center", padding: "13px 0", marginTop: 10, fontSize: 14, fontWeight: 800 }}>
               + Add another photo
             </CameraButton>
