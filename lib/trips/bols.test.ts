@@ -38,3 +38,13 @@ test("finishing: only the last delivery cares; required blocks, otherwise one re
   assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: false }), "warn");
   assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: true }), "ok");
 });
+
+test("a BOL number has to be entered and look like one", async () => {
+  const { bolProblem } = await import("./bols.ts");
+  assert.equal(bolProblem(""), "Enter the BOL number.");
+  assert.equal(bolProblem("   "), "Enter the BOL number.");
+  assert.match(bolProblem("1") ?? "", /full BOL/);
+  assert.match(bolProblem("--") ?? "", /full BOL/);
+  assert.equal(bolProblem("759277"), null);
+  assert.equal(bolProblem(" AB-12 "), null);
+});

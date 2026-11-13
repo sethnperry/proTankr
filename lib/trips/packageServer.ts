@@ -122,11 +122,14 @@ export async function loadPackageItems(admin: SupabaseClient, trip: TripRow, bol
   const driver = trip.driver_id;
   const items: PackageItem[] = [];
 
-  const [fuel, caps, wos] = await Promise.all([
+  const [fuel, windowCaps, bolCaps, wos] = await Promise.all([
     rows<any>(admin.from("fuel_purchases").select("*").eq("driver_id", driver).eq("status", "complete").gte("started_at", from).lte("started_at", to).order("started_at")),
     rows<any>(admin.from("form_captures").select("*").eq("user_id", driver).gte("created_at", from).lte("created_at", to).order("created_at")),
+    // BOL scans belong to the trip itself: found by their link, whenever and by whoever scanned them (a BOL can be filed later from the document center).
+    rows<any>(admin.from("form_captures").select("*").eq("ref_id", trip.trip_id).like("ref_type", "bol:%").order("created_at")),
     rows<any>(admin.from("work_orders").select("*").eq("reported_by", driver).gte("created_at", from).lte("created_at", to).order("created_at")),
   ]);
+  const caps = [...windowCaps, ...bolCaps.filter((b) => !windowCaps.some((w) => w.capture_id === b.capture_id))];
   const pays = fuel.length ? await rows<any>(admin.from("fuel_purchase_payments").select("*").in("purchase_id", fuel.map((f) => f.id))) : [];
   const usedCaptures = new Set<string>();
 

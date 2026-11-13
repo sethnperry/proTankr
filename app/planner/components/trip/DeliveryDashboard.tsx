@@ -19,7 +19,8 @@
 // the rest is kept on the phone until Finish.
 
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
-import { bolFinishPolicy, bolRef, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
+import { BolPagesSheet } from "./BolPagesSheet";
+import { bolFinishPolicy, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
 import { afterPartial, partialEntry, type PartialDrop } from "@/lib/trips/partialDrops";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
@@ -1200,7 +1201,7 @@ export function DeliveryDashboard({
                         </div>
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 800, color: !g.bol ? muted : n > 0 ? "#4ade80" : "#fbbf24", whiteSpace: "nowrap" }}>
-                        {!g.bol ? "Add it at loading" : n > 0 ? `${n} page${n === 1 ? "" : "s"} ✓ · add ›` : "Scan ›"}
+                        {!g.bol ? "Add it at loading" : n > 0 ? `${n} page${n === 1 ? "" : "s"} ✓ · view ›` : "Scan ›"}
                       </span>
                     </button>
                   );
@@ -1459,9 +1460,9 @@ export function DeliveryDashboard({
         onSubmit={goNext}
       />
 
-      {companyId && userId && bolFor && (
-        <CaptureSheet open purpose="bol" title={`BOL ${bolFor}`} companyId={companyId} userId={userId} refType={bolRef(bolFor)} refId={delivery.trip_id}
-          onDone={() => { setBolFor(null); void loadBolPages(); }} onClose={() => setBolFor(null)} />
+      {companyId && userId && (
+        <BolPagesSheet open={!!bolFor} bol={bolFor} tripId={delivery.trip_id} companyId={companyId} userId={userId}
+          onClose={() => setBolFor(null)} onChanged={() => void loadBolPages()} />
       )}
 
       {onTicketPhotos && (

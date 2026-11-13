@@ -12,6 +12,7 @@ import { numOrNull } from "../../components/trip/tripUi";
 import { calculateNetGallons, netMethodForProduct } from "@/lib/trips/netGallons";
 import { defaultStepTimes } from "@/lib/trips/tripFlow";
 import { normalizeRef } from "@/lib/trips/refs";
+import { bolProblem } from "@/lib/trips/bols";
 import { buildBolGroups, distributeWhole, initialBolAssignment, type BolAssignment } from "@/lib/trips/bolGroups";
 import { loadingOffset } from "@/lib/trips/useTripData";
 import type { LoadingModalProps } from "./types";
@@ -216,8 +217,9 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
     let netN: number | null = null;
     if (trip) {
       bol = seqBol.trim();
-      if (!bol) {
-        setSeqError("Enter the BOL number.");
+      const bolErr = bolProblem(bol);
+      if (bolErr) {
+        setSeqError(bolErr);
         return;
       }
       if (!seqSupplier.trim()) {

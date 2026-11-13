@@ -305,6 +305,19 @@ export default function HomePage() {
   const [unitRegions, setUnitRegions] = useState<Record<string, string | null>>({});
   const [explainOpen, setExplainOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
+  // The driver's trips from the last two weeks with the BOL numbers on them, for filing a scanned BOL against a load.
+  const recentBolTrips = () => {
+    if (!store || !userId) return [];
+    const since = Date.now() - 14 * 86400_000;
+    return store.list("trips", (t) => t.driver_id === userId && t.status !== "cancelled" && Date.parse(t.started_at ?? "") >= since)
+      .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))
+      .map((t) => {
+        const order = store.list("trip_orders", (o) => o.trip_id === t.trip_id && o.is_primary)[0]?.order_number;
+        const groups = bolGroups(store.list("trip_compartment_loads", (c) => c.trip_id === t.trip_id), store.list("trip_pickups", (p) => p.trip_id === t.trip_id), (id) => productName(id));
+        const day = t.started_at ? new Date(t.started_at).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "";
+        return { tripId: t.trip_id, label: `${order ? `Order ${order}` : "Trip"} · ${day} · ${t.customer ?? ""}`.replace(/ · $/, ""), bols: groups.map((g) => g.bol).filter(Boolean) as string[] };
+      });
+  };
   const [downTimeOpen, setDownTimeOpen] = useState(false);
   useStuckSyncReporter(state, userId || null, companyId || null);
   const shift = useShift({ store, state, syncNow, userId: userId || null, companyId: companyId || null, maxHours: Number(settings.max_shift_hours ?? 12) });
@@ -3265,7 +3278,7 @@ export default function HomePage() {
           setPaperLogOpen(false);
         }} />
 
-      <DocumentSheet open={docOpen} onClose={() => setDocOpen(false)} companyId={companyId} userId={userId || null}
+      <DocumentSheet open={docOpen} onClose={() => setDocOpen(false)} companyId={companyId} userId={userId || null} bolTrips={docOpen ? recentBolTrips() : []}
         onDone={(type, note, cap) => {
           if (companyId && userId) recordShiftEvent(getTripStore(userId), { companyId, userId, actorId: userId, type: DOCUMENT_EVENT, payload: { ...documentPayload(type, note, cap) } });
           setDocOpen(false);

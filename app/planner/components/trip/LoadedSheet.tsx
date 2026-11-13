@@ -6,6 +6,7 @@
 // and API come from the Planner's Log the Load; net is calculated from them
 // and can be edited to match the BOL.
 
+import { bolProblem } from "@/lib/trips/bols";
 import { readFinishLoading } from "@/lib/trips/finishStamp";
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -168,8 +169,8 @@ export function LoadedSheet({
     const tp = timesProblem(times);
     if (tp) return setErr(tp);
     if (!delayReasonOk(times, settings.loading_delay_threshold_minutes, reasonId, note)) return setErr("Pick a delay reason.");
-    const missingBol = rows.some((r) => !(perRowBol ? r.bol.trim() : bol.trim()));
-    if (missingBol) return setErr("Enter the BOL number.");
+    const bolErr = rows.map((r) => bolProblem(perRowBol ? r.bol : bol)).find(Boolean);
+    if (bolErr) return setErr(bolErr);
     if (rows.some((r) => !(numOrNull(r.gross)! > 0))) return setErr("Every compartment needs gross gallons.");
     if (needsOdometer && numOrNull(odometer) == null) return setErr("Enter the odometer.");
     if (!signed) return setErr("Accept your signature to finish.");

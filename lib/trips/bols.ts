@@ -64,3 +64,11 @@ export function bolFinishPolicy(o: { isLast: boolean; required: boolean; missing
   if (o.required) return "block";
   return o.warned ? "ok" : "warn";
 }
+
+/** A BOL number has to be there and look like one (at least three characters with a letter or digit). */
+export function bolProblem(v: string | null | undefined): string | null {
+  const t = String(v ?? "").trim();
+  if (!t) return "Enter the BOL number.";
+  if (t.length < 3 || !/[0-9A-Za-z]/.test(t)) return "That doesn't look like a full BOL number.";
+  return null;
+}
