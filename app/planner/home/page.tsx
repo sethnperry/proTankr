@@ -171,6 +171,8 @@ import { FreightSheet } from "../components/freight/FreightSheet";
 import { useFreight } from "../hooks/useFreight";
 import { useEmptyMoves } from "../hooks/useEmptyMoves";
 import { useStampContext } from "../hooks/useStampContext";
+import { useCatchUp } from "../hooks/useCatchUp";
+import { CatchUpSheet } from "../components/shift/CatchUpSheet";
 import { OdometerConfirmSheet } from "../components/moves/OdometerConfirmSheet";
 import { moveFromStamp } from "@/lib/moves/emptyMoves";
 import { EmptyMoveSheet } from "../components/moves/EmptyMoveSheet";
@@ -432,6 +434,7 @@ export default function HomePage() {
   const { suppliers, addSupplier } = useSuppliers(store, state, companyId, userId);
   const locList = useDeliveryLocationList(companyId, userId);
   const locations = locList.locations;
+  const catchUp = useCatchUp({ store, state, syncNow, userId: userId || null, companyId: companyId || null, truckId: truckId ?? null, trailerId: trailerId ?? null, locations, shiftOpen: !!shift.current });
   const { data: products } = useProductsCatalog();
   const { data: terminalCatalog } = useTerminalsCatalog();
 
@@ -1524,7 +1527,9 @@ export default function HomePage() {
     shift.end({ odometer: odo, lat: stampCtx.lat, lon: stampCtx.lon, place_id: stampCtx.placeId, place_text: stampPlaceLabel, location_source: stampCtx.source, odometer_source: stampCtx.guess === odo ? "truck" : "typed" });
     const m = emptyMoves.current;
     if (m) emptyMoves.end(m.move_id, odo, { id: stampCtx.placeId, text: stampCtx.placeText }, at);
-    void askTruckStatus(startedAt);
+    // Anything the truck did that the app didn't see is asked about first; then the truck's status.
+    if (truckId && startedAt) void catchUp.begin({ truckId, from: startedAt, to: at, endOdo: odo }, () => void askTruckStatus(startedAt));
+    else void askTruckStatus(startedAt);
   };
   // A move that ends at a maintenance place leaves its equipment there: the trailer if it came with one, else the truck.
   // Marks it "Out of service / Maintenance" at that place (status and pin), the same record the equipment status window writes.
@@ -3304,6 +3309,7 @@ export default function HomePage() {
         <button type="button" style={{ width: "100%", padding: "14px 0", marginTop: 10, fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", cursor: "pointer" }}
           onClick={() => { const go = bobtailAsk; setBobtailAsk(null); if (go) openEquipPicker(go, true); }}>Pick a trailer now</button>
       </FullscreenModal>
+      <CatchUpSheet open={catchUp.open} cards={catchUp.cards} onDone={(a) => void catchUp.apply(a)} onSkip={catchUp.skip} />
       <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
         locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}
