@@ -54,3 +54,13 @@ export function pagesByBol(rows: { ref_type: string | null; file_paths: string[]
 
 /** BOL numbers with no scan yet (numbers only: a compartment with no number can't be scanned against anything). */
 export const unscanned = (groups: BolGroup[], pages: Record<string, number>): BolGroup[] => groups.filter((g) => g.bol && !(pages[g.bol] > 0));
+
+/**
+ * What Finish does about unscanned BOLs. Scans are taken at the end of the trip (once the paper is marked up), so
+ * only the last delivery cares: "block" when the company requires them, "warn" once otherwise, else "ok".
+ */
+export function bolFinishPolicy(o: { isLast: boolean; required: boolean; missing: number; warned: boolean }): "ok" | "warn" | "block" {
+  if (!o.isLast || o.missing === 0) return "ok";
+  if (o.required) return "block";
+  return o.warned ? "ok" : "warn";
+}

@@ -22,6 +22,8 @@ export type TripSettings = {
   delivery_delay_threshold_minutes: number;
   require_consignee_signature: boolean;
   require_tank_readings: boolean;
+  /** Every BOL on the trip must be scanned before the trip can be closed (20261127000000). Absent = off. */
+  require_bol_scan?: boolean;
   // Dispatch timeline rules (20261020020000). Absent before that migration.
   max_shift_hours?: number;
   gauging_cutoff?: string;

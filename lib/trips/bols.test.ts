@@ -29,3 +29,12 @@ test("scans are kept per BOL number and the missing ones are named", () => {
   const g = bolGroups([c({ comp_number: 1, bol_number: "759277" }), c({ comp_number: 2, bol_number: "ZZ9" })] as any, pickups, () => "ULSD");
   assert.deepEqual(unscanned(g, pages).map((x) => x.bol), ["ZZ9"]);
 });
+
+test("finishing: only the last delivery cares; required blocks, otherwise one reminder", async () => {
+  const { bolFinishPolicy } = await import("./bols.ts");
+  assert.equal(bolFinishPolicy({ isLast: false, required: true, missing: 2, warned: false }), "ok");
+  assert.equal(bolFinishPolicy({ isLast: true, required: true, missing: 0, warned: false }), "ok");
+  assert.equal(bolFinishPolicy({ isLast: true, required: true, missing: 1, warned: true }), "block");
+  assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: false }), "warn");
+  assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: true }), "ok");
+});

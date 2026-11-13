@@ -19,7 +19,7 @@
 // the rest is kept on the phone until Finish.
 
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
-import { bolRef, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
+import { bolFinishPolicy, bolRef, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
 import { afterPartial, partialEntry, type PartialDrop } from "@/lib/trips/partialDrops";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
@@ -864,10 +864,15 @@ export function DeliveryDashboard({
     if (over && !lateAnswer) return setErr("Was there a delay? Tap Yes or No.");
     const needReason = preDropLate || (over && lateAnswer === "yes");
     if (needReason && !reasonId && !note.trim()) return setErr("Pick a delay reason.");
-    // A BOL number with no scan: one reminder, then it's the driver's call.
-    if (bolMissing.length > 0 && !bolWarned.current) {
-      bolWarned.current = true; setSection("bol"); setWstep("details");
-      return setErr(`BOL ${bolMissing.map((g) => g.bol).join(", ")} ${bolMissing.length === 1 ? "isn't" : "aren't"} scanned yet. Scan ${bolMissing.length === 1 ? "it" : "them"}, or tap Finish again to go without.`);
+    // BOLs are scanned at the end of the trip, once the paper is marked up, so this only applies to the last delivery.
+    // Required: the trip can't close without every numbered BOL scanned. Otherwise one reminder, then it's the driver's call.
+    const bolPolicy = bolFinishPolicy({ isLast, required: settings.require_bol_scan === true, missing: bolMissing.length, warned: bolWarned.current });
+    if (bolPolicy !== "ok") {
+      const names = bolMissing.map((g) => g.bol).join(", ");
+      setSection("bol"); setWstep("details");
+      if (bolPolicy === "block") return setErr(`Scan BOL ${names} to close this trip.`);
+      bolWarned.current = true;
+      return setErr(`BOL ${names} ${bolMissing.length === 1 ? "isn't" : "aren't"} scanned yet. Scan ${bolMissing.length === 1 ? "it" : "them"}, or tap Finish again to go without.`);
     }
     if (retainedAll.length > 0 && !retainNote.trim()) { setSection("tanks"); return setErr("Leave a note for the next driver about the product left aboard."); }
     const toDc = (c: TripCompartmentLoadRow, tank: string | null): DeliveredCompartment => ({
@@ -1178,11 +1183,11 @@ export function DeliveryDashboard({
         <>
           <div style={{ ...miniLabel, margin: "2px 2px 8px" }}>How it went · all optional</div>
           <div style={{ ...sectionCard, padding: 0 }}>
-            {companyId && userId && bolGroups.length > 0 && (
+            {companyId && userId && isLast && bolGroups.length > 0 && (
               <Section title="BOL" summary={bolNumbers.length === 0 ? "No BOL number yet" : bolMissing.length === 0 ? `${bolNumbers.length} of ${bolNumbers.length} scanned` : `${bolNumbers.length - bolMissing.length} of ${bolNumbers.length} scanned`}
-                summaryColor={bolNumbers.length === 0 || bolMissing.length > 0 ? "#fbbf24" : "#4ade80"}
+                summaryColor={bolNumbers.length === 0 ? "#fbbf24" : bolMissing.length > 0 ? (settings.require_bol_scan ? "#f87171" : "#fbbf24") : "#4ade80"}
                 open={section === "bol"} onToggle={() => toggle("bol")}>
-                <div style={{ fontSize: 13, color: muted, marginBottom: 6 }}>Scan every BOL on this load. Each number gets its own pages. It finds the page, flattens it and evens out shadows.</div>
+                <div style={{ fontSize: 13, color: muted, marginBottom: 6 }}>Scan every BOL on this trip now, with your notes and markings on it. Each number gets its own pages.{settings.require_bol_scan ? " Your company requires every BOL scanned to close the trip." : ""}</div>
                 {bolGroups.map((g) => {
                   const n = g.bol ? bolPages[g.bol] ?? 0 : 0;
                   return (

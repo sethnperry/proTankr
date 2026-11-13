@@ -100,6 +100,7 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       delivery_delay_threshold_minutes: Math.min(1440, settings.delivery_delay_threshold_minutes),
       require_consignee_signature: settings.require_consignee_signature,
       require_tank_readings: settings.require_tank_readings,
+      require_bol_scan: settings.require_bol_scan === true,
       max_shift_hours: Math.min(24, Math.max(1, settings.max_shift_hours ?? 12)),
       gauging_cutoff: (settings.gauging_cutoff ?? "23:30").slice(0, 5),
       gauging_minutes: Math.min(600, Math.max(0, settings.gauging_minutes ?? 30)),
@@ -222,6 +223,8 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           value={settings.require_consignee_signature} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_consignee_signature: v }))} />
         <CheckRow label="Tank readings" help="Before and after readings for every tank of each product delivered."
           value={settings.require_tank_readings} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_tank_readings: v }))} />
+        <CheckRow label="BOL scans to close the trip" help="Every BOL number on the trip needs its scan before the last delivery can be finished. Drivers scan at the end of the trip, once the paper is marked up. Off by default."
+          value={settings.require_bol_scan === true} disabled={!isAdmin} onChange={(v) => setSettings((s) => ({ ...s, require_bol_scan: v }))} />
         {isAdmin && <button aria-busy={!!(busy)} type="button" onClick={saveSettings} disabled={busy} style={{ ...btn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save settings"}</button>}
       </div>
       {msg && <div style={{ color: msg.ok ? "#4ade80" : "#f87171", fontSize: 14, marginBottom: 12 }}>{msg.text}</div>}
