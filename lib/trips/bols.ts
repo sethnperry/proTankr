@@ -57,12 +57,12 @@ export const unscanned = (groups: BolGroup[], pages: Record<string, number>): Bo
 
 /**
  * What Finish does about unscanned BOLs. Scans are taken at the end of the trip (once the paper is marked up), so
- * only the last delivery cares: "block" when the company requires them, "warn" once otherwise, else "ok".
+ * only the last delivery cares: "block" when the company requires them, else "ok".
  */
 export function bolFinishPolicy(o: { isLast: boolean; required: boolean; missing: number; warned: boolean }): "ok" | "warn" | "block" {
   if (!o.isLast || o.missing === 0) return "ok";
-  if (o.required) return "block";
-  return o.warned ? "ok" : "warn";
+  // Only a company that requires scans gets in the way; otherwise scanning is the driver's call, no reminder.
+  return o.required ? "block" : "ok";
 }
 
 /** A BOL number has to be there and look like one (at least three characters with a letter or digit). */

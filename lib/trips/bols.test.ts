@@ -35,7 +35,7 @@ test("finishing: only the last delivery cares; required blocks, otherwise one re
   assert.equal(bolFinishPolicy({ isLast: false, required: true, missing: 2, warned: false }), "ok");
   assert.equal(bolFinishPolicy({ isLast: true, required: true, missing: 0, warned: false }), "ok");
   assert.equal(bolFinishPolicy({ isLast: true, required: true, missing: 1, warned: true }), "block");
-  assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: false }), "warn");
+  assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: false }), "ok");
   assert.equal(bolFinishPolicy({ isLast: true, required: false, missing: 1, warned: true }), "ok");
 });
 
