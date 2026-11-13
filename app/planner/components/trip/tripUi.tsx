@@ -149,6 +149,13 @@ export function SignatureAccept({ savedPath, onSave, accepted, onAccept, who }: 
   const [err, setErr] = useState<string | null>(null);
   const [redraw, setRedraw] = useState(false);
   const onDraft = React.useCallback((p: string | null) => setDraft(p), []);
+  // A saved signature starts accepted so drivers can tap through; unchecking it stays unchecked.
+  const autoAccepted = React.useRef(false);
+  React.useEffect(() => {
+    if (savedPath && !redraw && !accepted && !autoAccepted.current) onAccept(true);
+    if (savedPath) autoAccepted.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedPath]);
 
   if (!savedPath || redraw) {
     return (
