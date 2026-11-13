@@ -1047,3 +1047,18 @@ export function undoArriveDelivery(store: TripStoreLike, args: { userId: string;
     actor_id: args.userId, delivery_id: args.delivery.delivery_id, payload: { was: args.delivery.arrived_at },
   });
 }
+
+/**
+ * Product aboard a trailer on someone else's live trip (open or parked): the other trips on this trailer that still
+ * hold a compartment marked loaded. Used to stop a second load going onto a trailer that is already loaded.
+ */
+export function otherTripsAboard(
+  trips: { trip_id: string; trailer_id: string | null; status: string; driver_id: string }[],
+  comps: { trip_id: string; disposition: string }[],
+  trailerId: string | null,
+  ownTripId: string | null,
+): { trip_id: string; driver_id: string; status: string }[] {
+  if (!trailerId) return [];
+  const live = new Set(["draft", "loading", "in_transit", "delivering", "parked"]);
+  return trips.filter((t) => t.trailer_id === trailerId && t.trip_id !== ownTripId && live.has(t.status) && comps.some((c) => c.trip_id === t.trip_id && c.disposition === "loaded"));
+}

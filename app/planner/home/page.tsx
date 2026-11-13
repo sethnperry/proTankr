@@ -76,6 +76,7 @@ import {
   confirmLoaded,
   finishDelivery,
   handoffCandidate,
+  otherTripsAboard,
   nextStep,
   onBoard,
   PARK_FOR_LABEL,
@@ -446,8 +447,10 @@ export default function HomePage() {
     try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch { return; }
     autoEndSeen.current = true;
     const pl = (ev.payload ?? {}) as { truck_id?: string | null; odometer?: number | null; place_text?: string | null };
+    const pl2 = (ev.payload ?? {}) as { truck_id?: string | null; trailer_id?: string | null };
     const t = new Date(s.endedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     setNotice({ text: `Your shift was ended automatically at ${t}${pl.place_text ? ` at ${pl.place_text}` : ""}, when your truck showed off duty. Check your day.`, tripId: null });
+    if (pl2.truck_id) rememberLastEquipment(userId, { truckId: pl2.truck_id, trailerId: pl2.trailer_id ?? null }); // the truck the server parked: Begin Trip offers it again
     if (pl.truck_id) void catchUp.begin({ truckId: pl.truck_id, from: s.startedAt, to: s.endedAt, endOdo: pl.odometer ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shift.shifts, userId, locations.length]);
@@ -2000,6 +2003,24 @@ export default function HomePage() {
         {
           // One trailer, one trip: another driver's open trip on it has to be taken over or closed first.
           if (handoff && !parked) { setNotice({ text: `${handoffName ?? "Another driver"} has an open trip on this trailer. Take it over, or have it closed, before starting a new one.`, tripId: null } as any); break; }
+          // One trailer, one load: a trailer that already holds product on another live trip can't take a second load.
+          if (trailerId && !parked) {
+            void (async () => {
+              const { data: ot } = await supabase.from("trips").select("trip_id, trailer_id, status, driver_id").eq("trailer_id", trailerId).in("status", ["draft", "loading", "in_transit", "delivering", "parked"]);
+              const ids = ((ot ?? []) as { trip_id: string }[]).map((x) => x.trip_id);
+              const { data: oc } = ids.length ? await supabase.from("trip_compartment_loads").select("trip_id, disposition").in("trip_id", ids).eq("disposition", "loaded") : { data: [] as { trip_id: string; disposition: string }[] };
+              const blocking = otherTripsAboard((ot ?? []) as any, (oc ?? []) as any, trailerId, null);
+              if (blocking.length) {
+                const who = blocking[0].driver_id === userId ? "you" : (handoffName ?? "another driver");
+                setNotice({ text: `This trailer already has product aboard on ${who === "you" ? "your other" : `${who}'s`} trip. Take that trip over (or resume it), or have it closed, before loading again.`, tripId: null });
+                return;
+              }
+              proceedStart();
+            })();
+            return;
+          }
+          proceedStart();
+          function proceedStart() {
           // A load parked on this trailer is resumed (or taken over), never a new trip: same shift and truck steps first.
           const proceed = parked
             ? () => void askEquipment(() => doResume())
@@ -2017,6 +2038,7 @@ export default function HomePage() {
             }
             proceed();
           } else askShiftStart(need.reason, proceed, { always: true });
+          }
         }
         break;
       case "planner":

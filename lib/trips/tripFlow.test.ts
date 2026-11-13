@@ -502,3 +502,16 @@ test("partial drop: part goes at stop one, the rest stays aboard and is dropped 
   assert.equal(getTrip().status, "complete");
   assert.equal(trip.trip_id, getTrip().trip_id);
 });
+
+test("otherTripsAboard: product aboard on another live trip blocks a second load", async () => {
+  const { otherTripsAboard } = await import("./tripFlow.ts");
+  const trips = [
+    { trip_id: "a", trailer_id: "T", status: "parked", driver_id: "x" },
+    { trip_id: "b", trailer_id: "T", status: "complete", driver_id: "y" },
+    { trip_id: "c", trailer_id: "U", status: "in_transit", driver_id: "z" },
+  ];
+  const comps = [{ trip_id: "a", disposition: "loaded" }, { trip_id: "b", disposition: "delivered" }, { trip_id: "c", disposition: "loaded" }];
+  assert.deepEqual(otherTripsAboard(trips, comps, "T", null).map((t) => t.trip_id), ["a"]);
+  assert.equal(otherTripsAboard(trips, comps, "T", "a").length, 0);
+  assert.equal(otherTripsAboard(trips, comps, null, null).length, 0);
+});
