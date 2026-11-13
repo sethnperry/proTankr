@@ -214,6 +214,7 @@ import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel, useScrollBackdrop } from "./dashLook";
 import { DispatchNotices } from "./DispatchNotices";
+import { addTrailerAlert, clearTrailerAlerts, fetchTrailerAlerts, sendPendingTrailerAlerts, type TrailerAlert } from "@/lib/trips/trailerAlerts";
 import { GaugePanel, TerminalAccessStrip, ToolPanel, type ToolItem } from "./DashboardChrome";
 import { QualificationCard, type QualTerminal } from "./QualificationStrip";
 import { openAccessSteps, useAccessQualifications } from "../components/access/useAccessSteps";
@@ -548,6 +549,11 @@ export default function HomePage() {
   // A load parked on the trailer this driver holds (theirs after a layover, or
   // someone else's for a slip seat).
   const parked = !openTrip ? parkedTripOnTrailer(trips, trailerId) : null;
+  // A note left on the trailer I hold: product still aboard (Retain).
+  const [trailerNotes, setTrailerNotes] = useState<TrailerAlert[]>([]);
+  const [clearAlertAsk, setClearAlertAsk] = useState(false);
+  const reloadTrailerAlerts = () => { if (trailerId) void fetchTrailerAlerts(trailerId).then(setTrailerNotes); else setTrailerNotes([]); };
+  useEffect(() => { void sendPendingTrailerAlerts().then(reloadTrailerAlerts); }, [trailerId]); // eslint-disable-line react-hooks/exhaustive-deps
   const parkedSnap = useMemo(
     () => (store && parked ? tripSnapshot(store, parked.trip_id) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1303,6 +1309,12 @@ export default function HomePage() {
     clearDeliveryDraft(finishDeliveryRow.delivery_id);
     endDelay();
     setFinishOpen(false);
+    // Product left aboard: a big alert on this trailer for whoever takes it. A finished trip clears any old one.
+    if (trailerId && v.retained.length > 0 && v.retainNote) {
+      void addTrailerAlert({ company_id: companyId, trailer_id: trailerId, trip_id: tripId, note: v.retainNote, compartments: v.retained.map((c) => c.comp_number), created_by: userId }).then(() => reloadTrailerAlerts());
+    } else if (trailerId && tripComplete) {
+      void clearTrailerAlerts(trailerId, userId).then(() => reloadTrailerAlerts());
+    }
     const orderNo = children?.primaryOrder?.order_number;
     setNotice(tripComplete
       ? { text: orderNo ? `Order ${orderNo} · Trip complete.` : "Trip complete.", tripId }
@@ -2441,6 +2453,32 @@ export default function HomePage() {
           </span>
         );
       })()} />
+
+      {trailerNotes.length > 0 && (
+        <div role="alert" style={{ margin: "0 0 12px", border: "2px solid #fbbf24", background: "rgba(251,191,36,0.14)", padding: 14 }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: "#fbbf24", letterSpacing: "0.02em" }}>⚠️ PRODUCT ABOARD THIS TRAILER</div>
+          {trailerNotes.map((a) => (
+            <div key={a.alert_id} style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>{a.note}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
+                {a.compartments.length ? `C${a.compartments.join(", C")} · ` : ""}left {new Date(a.created_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={() => setClearAlertAsk(true)}
+            style={{ marginTop: 12, padding: "9px 12px", fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", border: "1px solid rgba(251,191,36,0.6)", background: "transparent", color: "#fbbf24", cursor: "pointer" }}>Product is gone, clear this alert</button>
+          {clearAlertAsk && (
+            <div style={{ marginTop: 10, fontSize: 14 }}>
+              Only clear it if the product is off this trailer.
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button type="button" onClick={() => { if (trailerId && userId) void clearTrailerAlerts(trailerId, userId).then(() => { setClearAlertAsk(false); reloadTrailerAlerts(); }); }}
+                  style={{ padding: "10px 14px", fontWeight: 800, border: "none", background: "#fff", color: "#000", cursor: "pointer" }}>Clear</button>
+                <button type="button" onClick={() => setClearAlertAsk(false)} style={{ padding: "10px 14px", fontWeight: 800, border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: "#fff", cursor: "pointer" }}>Keep</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={stillWorking} />

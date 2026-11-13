@@ -68,6 +68,7 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
     BLOCKED,
     { code: "tanks_not_ready", label: "Load won't fit / tanks full" },
     { code: "other_delivery", label: "Another truck delivering" },
+    { code: "no_fit", label: "No Fit" },
     { code: "store_closed", label: "Store closed / no one to receive" },
     { code: "customer_wait", label: "Customer asked me to wait" },
     { code: "store_equipment", label: "Equipment problem at the store" },
@@ -78,6 +79,22 @@ export const DELAY_REASONS: Record<DelayLeg, DelayReasonOption[]> = {
 };
 
 export const OTHER_CODE = "other";
+
+/** Reasons a drop was held up, offered when the company hasn't written its own. Saved as the delay note (no id needed). */
+export const DROP_DELAY_BUILTINS: string[] = [
+  "No Fit",
+  "Blocked access to the delivery area",
+  "Store closed / no one to receive",
+  "Tanks full or not ready",
+  "Customer asked me to wait",
+  "Waiting on the store to clear the fill",
+  "Fill hard to find or reach",
+  "Equipment problem at the store",
+  "Vapor recovery or hose problem",
+  "Waiting on dispatch for instructions",
+  "Unsafe conditions on site",
+  "Truck problem",
+];
 
 /** Reasons that are a moment, not a wait: they are stamped on the timeline with no timer (Truck Down). */
 export const INSTANT_CODES = new Set(["breakdown"]);

@@ -18,6 +18,7 @@
 // Progress (tank picks, readings) is saved to the trip as the driver goes;
 // the rest is kept on the phone until Finish.
 
+import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
@@ -85,6 +86,8 @@ export type FinishDeliverySubmit = {
   unaccountedMin: number | null;
   delivered: DeliveredCompartment[];
   retained: DeliveredCompartment[];
+  /** What the next driver must know about the product left aboard. Required with Retain. */
+  retainNote: string | null;
   tanks: DeliveryTankReading[];
   consigneeName: string | null;
   consigneeSignature: string | null;
@@ -317,6 +320,7 @@ export function DeliveryDashboard({
   const [beginText, setBeginText] = useState("");
   const [finishText, setFinishText] = useState("");
   const [reasonId, setReasonId] = useState<string | null>(null);
+  const [retainNote, setRetainNote] = useState("");
   const [note, setNote] = useState("");
   const [lateAnswer, setLateAnswer] = useState<"yes" | "no" | null>(null);
   const [step, setStep] = useState<Step | null>(null);
@@ -823,6 +827,7 @@ export function DeliveryDashboard({
     if (over && !lateAnswer) return setErr("Was there a delay? Tap Yes or No.");
     const needReason = preDropLate || (over && lateAnswer === "yes");
     if (needReason && !reasonId && !note.trim()) return setErr("Pick a delay reason.");
+    if (retained.length > 0 && !retainNote.trim()) { setSection("tanks"); return setErr("Leave a note for the next driver about the product left aboard."); }
     const toDc = (c: TripCompartmentLoadRow, tank: string | null): DeliveredCompartment => ({
       compartment_load_id: c.compartment_load_id, comp_number: c.comp_number, product_id: c.product_id, tank_number: tank,
     });
@@ -835,6 +840,7 @@ export function DeliveryDashboard({
       unaccountedMin: over && lateAnswer === "no" && outcome ? outcome.minutes : null,
       delivered: delivered.map((c) => toDc(c, choice[c.compartment_load_id])),
       retained: retained.map((c) => toDc(c, null)),
+      retainNote: retained.length > 0 ? retainNote.trim() : null,
       tanks: buildTanks(),
       consigneeName: consigneeName.trim() || null,
       consigneeSignature: consigneeSig,
@@ -1011,14 +1017,22 @@ export function DeliveryDashboard({
   const toggleIn = (list: string[], set: (v: string[]) => void, code: string) => set(list.includes(code) ? list.filter((x) => x !== code) : [...list, code]);
 
   const reasonOptions = reasons.filter((r) => r.kind === "delivery" && r.is_active);
+  // The built-in reasons are saved as the note (reason id stays empty); picking "Other" leaves the note to type.
+  const builtinMatch = reasonId == null && DROP_DELAY_BUILTINS.includes(note) ? note : null;
+  const reasonValue = reasonId ?? (builtinMatch ? `b:${builtinMatch}` : "__other__");
   const reasonPicker = (
     <div style={{ marginTop: 8 }}>
-      <select value={reasonId ?? "__other__"} onChange={(e) => setReasonId(e.target.value === "__other__" ? null : e.target.value)}
-        style={{ ...fieldInput, marginBottom: 8 }}>
+      <select value={reasonValue} onChange={(e) => {
+        const v = e.target.value;
+        if (v === "__other__") { setReasonId(null); setNote(""); }
+        else if (v.startsWith("b:")) { setReasonId(null); setNote(v.slice(2)); }
+        else setReasonId(v);
+      }} style={{ ...fieldInput, marginBottom: 8 }}>
         {reasonOptions.map((r) => <option key={r.reason_id} value={r.reason_id}>{r.label}</option>)}
+        {DROP_DELAY_BUILTINS.filter((l) => !reasonOptions.some((r) => r.label.toLowerCase() === l.toLowerCase())).map((l) => <option key={l} value={`b:${l}`}>{l}</option>)}
         <option value="__other__">Other</option>
       </select>
-      {reasonId == null && (
+      {reasonId == null && !builtinMatch && (
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What held you up?" style={fieldInput} />
       )}
     </div>
@@ -1093,6 +1107,13 @@ export function DeliveryDashboard({
           {retained.length > 0 && (
             <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, textAlign: "center" }}>
               Retained compartments stay aboard. Finish, then pick the next delivery or Park preloaded.
+            </div>
+          )}
+          {retained.length > 0 && (
+            <div style={{ border: "1px solid rgba(251,191,36,0.6)", background: "rgba(251,191,36,0.08)", padding: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#fbbf24", marginBottom: 6 }}>⚠️ Note for the next driver (required)</div>
+              <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>Shown as a big alert to anyone who takes this trailer. How much is left, where it goes, anything they must know.</div>
+              <input value={retainNote} onChange={(e) => setRetainNote(e.target.value)} placeholder="e.g. About 2,000 gal ULSD in C1, going to Store 674" style={fieldInput} />
             </div>
           )}
           {navRow(nextLabelFor("tanks"), goNextStep)}
