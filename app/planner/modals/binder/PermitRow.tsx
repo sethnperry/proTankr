@@ -121,12 +121,7 @@ export function PermitRow({
     setUploading(true);
     setErr(null);
     try {
-      if (replace) {
-        for (const p of pages) {
-          await supabase.storage.from("equipment-docs").remove([p.file_path]);
-          await supabase.from("equipment_attachments").delete().eq("id", p.id);
-        }
-      }
+      const old = replace ? [...pages] : []; // removed only after the new file is safely saved
       const pageOrder = replace ? 0 : pages.length;
       const ext = file.name.split(".").pop() ?? "bin";
       const newId = crypto.randomUUID();
@@ -155,6 +150,10 @@ export function PermitRow({
       if (dbErr) {
         await supabase.storage.from("equipment-docs").remove([filePath]);
         throw dbErr;
+      }
+      for (const p of old) {
+        await supabase.storage.from("equipment-docs").remove([p.file_path]);
+        await supabase.from("equipment_attachments").delete().eq("id", p.id);
       }
       onDocsChanged();
     } catch (e: any) {

@@ -41,11 +41,12 @@ export function BolPagesSheet({ open, bol, tripId, companyId, userId, onClose, o
   // Takes a page out of the capture it came from (the capture row keeps its other pages).
   const removePage = async (p: Page) => {
     setErr(null);
+    // The file first: the rule that lets any teammate delete it looks for the page on the capture row.
+    await supabase.storage.from(CAPTURE_BUCKET).remove([p.path]);
     const { data } = await supabase.from("form_captures").select("file_paths").eq("capture_id", p.captureId).maybeSingle();
     const rest = ((data as { file_paths: string[] | null } | null)?.file_paths ?? []).filter((x) => x !== p.path);
     const { error } = await supabase.from("form_captures").update({ file_paths: rest, client_updated_at: new Date().toISOString() }).eq("capture_id", p.captureId);
     if (error) { setErr(error.message); return false; }
-    void supabase.storage.from(CAPTURE_BUCKET).remove([p.path]);
     return true;
   };
 

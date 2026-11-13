@@ -483,13 +483,8 @@ export function DocHubModal({
     setUploadErr(null);
 
     try {
-      // If replacing, delete existing pages
-      if (mode === "replace" && conflictGroup) {
-        for (const page of conflictGroup.pages) {
-          await supabase.storage.from("equipment-docs").remove([page.file_path]);
-          await supabase.from("equipment_attachments").delete().eq("id", page.id);
-        }
-      }
+      // If replacing, the old pages go only after the new one is saved (a failed upload must not lose the document).
+      const oldPages = mode === "replace" && conflictGroup ? [...conflictGroup.pages] : [];
 
       // Determine page order
       const existingPages = mode === "add"
@@ -531,6 +526,11 @@ export function DocHubModal({
         // Rollback storage upload
         await supabase.storage.from("equipment-docs").remove([filePath]);
         throw dbErr;
+      }
+
+      for (const page of oldPages) {
+        await supabase.storage.from("equipment-docs").remove([page.file_path]);
+        await supabase.from("equipment_attachments").delete().eq("id", page.id);
       }
 
       // Reset upload form
