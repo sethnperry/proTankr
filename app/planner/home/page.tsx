@@ -435,6 +435,22 @@ export default function HomePage() {
   const locList = useDeliveryLocationList(companyId, userId);
   const locations = locList.locations;
   const catchUp = useCatchUp({ store, state, syncNow, userId: userId || null, companyId: companyId || null, truckId: truckId ?? null, trailerId: trailerId ?? null, locations, shiftOpen: !!shift.current });
+  // A shift the server ended (off duty 15 minutes): tell the driver once, and open the catch-up for the day.
+  const autoEndSeen = useRef(false);
+  useEffect(() => {
+    if (autoEndSeen.current || !userId || !locations.length) return;
+    const s = [...shift.shifts].reverse().find((x) => !x.open && x.endedAt && x.events.some((e) => e.event_type === "shift_end" && (e.payload as any)?.auto));
+    const ev = s?.events.find((e) => e.event_type === "shift_end" && (e.payload as any)?.auto);
+    if (!s || !ev || !s.endedAt || Date.now() - Date.parse(s.endedAt) > 48 * 3600_000) return;
+    const k = `proTankr:u:${userId}:autoEndSeen:${ev.event_id}`;
+    try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch { return; }
+    autoEndSeen.current = true;
+    const pl = (ev.payload ?? {}) as { truck_id?: string | null; odometer?: number | null; place_text?: string | null };
+    const t = new Date(s.endedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    setNotice({ text: `Your shift was ended automatically at ${t}${pl.place_text ? ` at ${pl.place_text}` : ""}, when your truck showed off duty. Check your day.`, tripId: null });
+    if (pl.truck_id) void catchUp.begin({ truckId: pl.truck_id, from: s.startedAt, to: s.endedAt, endOdo: pl.odometer ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shift.shifts, userId, locations.length]);
   const { data: products } = useProductsCatalog();
   const { data: terminalCatalog } = useTerminalsCatalog();
 
