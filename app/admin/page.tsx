@@ -63,6 +63,7 @@ import AccountRulesModal from "./AccountRulesModal";
 import CalloutRoutesModal from "./CalloutRoutesModal";
 import { useLongShifts } from "./useLongShifts";
 import DelaysModal from "./DelaysModal";
+import EodReportModal from "./EodReportModal";
 import FuelSettingsModal from "./FuelSettingsModal";
 import TerminalSetupModal from "./TerminalSetupModal";
 import TelematicsModal from "./TelematicsModal";
@@ -1314,6 +1315,7 @@ export default function AdminPage() {
   const [paperLogsOpen, setPaperLogsOpen] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [longShiftsOpen, setLongShiftsOpen] = useState(false);
+  const [eodOpen, setEodOpen] = useState(false);
   const [shiftReviewOpen, setShiftReviewOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [deadheadOpen, setDeadheadOpen] = useState(false);
@@ -2049,6 +2051,7 @@ export default function AdminPage() {
   ].filter(Boolean)) as { label: string; go: () => void }[];
   const setupTiles = ([
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { label: "Trip Settings", go: () => setTripSettingsOpen(true) },
+    myRole === "admin" && { label: "End of Day report", go: () => setEodOpen(true) },
     myRole === "admin" && { label: "Fuel", go: () => setFuelSettingsOpen(true) },
     myRole === "admin" && { label: "Telematics", go: () => setTelematicsOpen(true) },
     myRole === "admin" && { label: "IFTA", go: () => setIftaOpen(true) },
@@ -2651,6 +2654,7 @@ export default function AdminPage() {
       <TelematicsModal open={telematicsOpen} onClose={() => setTelematicsOpen(false)} companyId={companyId!} />
       <TerminalSetupModal open={terminalSetupOpen} onClose={() => setTerminalSetupOpen(false)} userId={currentUserId || null} companyId={companyId || null} />
       <FuelSettingsModal open={fuelSettingsOpen} onClose={() => setFuelSettingsOpen(false)} companyId={companyId!} />
+      <EodReportModal open={eodOpen} onClose={() => setEodOpen(false)} companyId={companyId!} />
       <DelaysModal open={delaysOpen} onClose={() => setDelaysOpen(false)} companyId={companyId!} />
       <TripSettingsModal open={tripSettingsOpen} onClose={() => setTripSettingsOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
       <TargetWeightPolicyModal open={targetWeightPolicyOpen} onClose={() => setTargetWeightPolicyOpen(false)} companyId={companyId!} />
