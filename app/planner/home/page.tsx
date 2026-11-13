@@ -1942,6 +1942,8 @@ export default function HomePage() {
     switch (step.kind) {
       case "start":
         {
+          // One trailer, one trip: another driver's open trip on it has to be taken over or closed first.
+          if (handoff && !parked) { setNotice({ text: `${handoffName ?? "Another driver"} has an open trip on this trailer. Take it over, or have it closed, before starting a new one.`, tripId: null } as any); break; }
           // A load parked on this trailer is resumed (or taken over), never a new trip: same shift and truck steps first.
           const proceed = parked
             ? () => void askEquipment(() => doResume())
