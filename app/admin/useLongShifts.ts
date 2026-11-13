@@ -17,6 +17,9 @@ export function useLongShifts(companyId: string | null, enabled: boolean) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [tick, setTick] = useState(0);
+  const reload = () => setTick((t) => t + 1);
+
   useEffect(() => {
     if (!companyId || !enabled) return;
     let alive = true;
@@ -34,8 +37,8 @@ export function useLongShifts(companyId: string | null, enabled: boolean) {
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [companyId, enabled]);
+  }, [companyId, enabled, tick]);
 
   const rows = useMemo(() => longShifts(events, maxHours, new Date().toISOString(), new Date(Date.now() - DAYS * 86400_000).toISOString()), [events, maxHours]);
-  return { rows, missing: unexplained(rows).length, maxHours, loading, error };
+  return { rows, events, reload, missing: unexplained(rows).length, maxHours, loading, error };
 }

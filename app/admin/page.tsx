@@ -48,6 +48,7 @@ import ReimbursementsModal from "./ReimbursementsModal";
 import ScaleRecordsModal from "./ScaleRecordsModal";
 import PaperLogsModal from "./PaperLogsModal";
 import DocumentsModal from "./DocumentsModal";
+import ShiftReviewModal from "./ShiftReviewModal";
 import LongShiftsModal from "./LongShiftsModal";
 import MaintenanceModal from "./MaintenanceModal";
 import DeadheadModal from "./DeadheadModal";
@@ -1313,6 +1314,7 @@ export default function AdminPage() {
   const [paperLogsOpen, setPaperLogsOpen] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [longShiftsOpen, setLongShiftsOpen] = useState(false);
+  const [shiftReviewOpen, setShiftReviewOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [deadheadOpen, setDeadheadOpen] = useState(false);
   const [perDiemAdminOpen, setPerDiemAdminOpen] = useState(false);
@@ -1751,7 +1753,7 @@ export default function AdminPage() {
       items.push({
         key: "long-shifts", severity: "warning", label: "Long shifts",
         detail: `${longShifts.missing} over ${longShifts.maxHours} h with no explanation`, days: null,
-        onOpen: () => setLongShiftsOpen(true),
+        onOpen: () => setShiftReviewOpen(true),
       });
     }
     return items;
@@ -1948,7 +1950,7 @@ export default function AdminPage() {
     selected: regionSel, onChange: setRegionSel,
   }), [trucks, trailers, members, regionSel]);
   const onGauge = (k: GaugeKey) => { if (k === "delayed") setDelaysOpen(true); else if (k === "callouts") setCalloutsOpen(true); else if (k === "billable") setDeadheadOpen(true); };
-  const onOpenNeed = (k: NeedsItem["key"]) => { if (k === "repairs") setWorkOrdersOpen(true); else if (k === "shifts") setLongShiftsOpen(true); else if (k === "billable") setDeadheadOpen(true); else if (k === "errors") setDashMode("desk"); else setMaintenanceOpen(true); };
+  const onOpenNeed = (k: NeedsItem["key"]) => { if (k === "repairs") setWorkOrdersOpen(true); else if (k === "shifts") setShiftReviewOpen(true); else if (k === "billable") setDeadheadOpen(true); else if (k === "errors") setDashMode("desk"); else setMaintenanceOpen(true); };
 
   if (loading) return <div style={{ ...css.page, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.6 }}>Loading…</div>;
   if (err)     return <div style={css.page}><Banner msg={err} type="error" /></div>;
@@ -2637,6 +2639,8 @@ export default function AdminPage() {
       {myRole === "admin" && <PerDiemModal open={perDiemAdminOpen} onClose={() => setPerDiemAdminOpen(false)} companyId={companyId!} />}
       {myRole === "admin" && <DeadheadModal open={deadheadOpen} onClose={() => setDeadheadOpen(false)} companyId={companyId!} />}
       <MaintenanceModal open={maintenanceOpen} onClose={() => setMaintenanceOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
+      <ShiftReviewModal open={shiftReviewOpen} onClose={() => setShiftReviewOpen(false)} companyId={companyId!} managerId={currentUserId} events={longShifts.events} maxHours={longShifts.maxHours}
+        onChanged={() => { longShifts.reload(); dash.reload(); }} />
       <LongShiftsModal open={longShiftsOpen} onClose={() => setLongShiftsOpen(false)} companyId={companyId!} rows={longShifts.rows} maxHours={longShifts.maxHours} loading={longShifts.loading} error={longShifts.error} />
       <DocumentsModal open={documentsOpen} onClose={() => setDocumentsOpen(false)} companyId={companyId!} />
       <ConnectedDashFooter />
