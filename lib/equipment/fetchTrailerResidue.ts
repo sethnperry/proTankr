@@ -26,17 +26,18 @@ export async function fetchTrailerResidue(ids: string[]): Promise<{ sizes: Trail
 
   // The newest few finished loads per trailer. A compartment's residue is what it last held, which can be an
   // older load when the newest one left that compartment empty.
+  // One query per trailer: a single shared query is capped at 1000 rows, which silently cut off the loads of any
+  // trailer that had sat idle for a while, so its residue vanished.
   const loadsBy = new Map<string, { loadId: string; at: string }[]>();
-  for (const part of chunk([...comboTrailer.keys()], 80)) {
-    const { data } = await supabase.from("load_log").select("load_id, combo_id, completed_at").in("combo_id", part).eq("status", "loaded")
-      .not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(1000);
-    for (const r of (data ?? []) as { load_id: string; combo_id: string; completed_at: string }[]) {
-      const tid = comboTrailer.get(r.combo_id);
-      if (!tid) continue;
-      const arr = loadsBy.get(tid) ?? [];
-      arr.push({ loadId: r.load_id, at: r.completed_at });
-      loadsBy.set(tid, arr);
-    }
+  const combosOf = new Map<string, string[]>();
+  for (const [cid, tid] of comboTrailer) (combosOf.get(tid) ?? combosOf.set(tid, []).get(tid)!).push(cid);
+  const tids = [...combosOf.keys()];
+  for (const part of chunk(tids, 10)) {
+    await Promise.all(part.map(async (tid) => {
+      const { data } = await supabase.from("load_log").select("load_id, completed_at").in("combo_id", combosOf.get(tid)!).eq("status", "loaded")
+        .not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(40);
+      loadsBy.set(tid, ((data ?? []) as { load_id: string; completed_at: string }[]).map((r) => ({ loadId: r.load_id, at: r.completed_at })));
+    }));
   }
   const lastWash = new Map<string, string>();
   for (const part of chunk(ids, 80)) {
@@ -45,7 +46,7 @@ export async function fetchTrailerResidue(ids: string[]): Promise<{ sizes: Trail
   }
   const recent = new Map<string, string[]>(); // trailer -> its newest standing loads, newest first
   for (const [tid, arr] of loadsBy) {
-    const live = arr.sort((x, y) => y.at.localeCompare(x.at)).filter((l) => residueStands(l.at, lastWash.get(tid) ?? null)).slice(0, 8);
+    const live = arr.sort((x, y) => y.at.localeCompare(x.at)).filter((l) => residueStands(l.at, lastWash.get(tid) ?? null)).slice(0, 40);
     if (live.length) recent.set(tid, live.map((l) => l.loadId));
   }
   const byLoad = new Map<string, Record<number, string>>();

@@ -20,7 +20,8 @@ import { productColorFor } from "../../utils/productColor";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useCompanyRoster } from "@/app/planner/hooks/useCompanyRoster";
 import { PickSheet } from "@/lib/ui/PickSheet";
-import type { TripCompartmentLoadRow, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
+import type { EmptyMoveRow, TripCompartmentLoadRow, TripDeliveryRow, TripOrderRow, TripPickupRow, TripRow } from "@/lib/trips/types";
+import { moveKindLabel, moveMiles } from "@/lib/moves/emptyMoves";
 import { fmtDateTime } from "../../trips/PtdDocument";
 import { usePending } from "@/lib/ui/pending";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -45,8 +46,8 @@ const card: React.CSSProperties = {
 const chip: React.CSSProperties = { padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(255,255,255,0.14)", background: "#0a0a0b", color: "rgba(255,255,255,0.8)" };
 const chipOn: React.CSSProperties = { ...chip, border: "1px solid #fff", background: "#fff", color: "#000" };
 
-type Bundle = { trips: TripRow[]; orders: TripOrderRow[]; pickups: TripPickupRow[]; deliveries: TripDeliveryRow[]; comps: TripCompartmentLoadRow[] };
-const EMPTY: Bundle = { trips: [], orders: [], pickups: [], deliveries: [], comps: [] };
+type Bundle = { trips: TripRow[]; orders: TripOrderRow[]; pickups: TripPickupRow[]; deliveries: TripDeliveryRow[]; comps: TripCompartmentLoadRow[]; moves: EmptyMoveRow[] };
+const EMPTY: Bundle = { trips: [], orders: [], pickups: [], deliveries: [], comps: [], moves: [] };
 
 const PERIODS = [{ id: "7", label: "7d", days: 7 }, { id: "30", label: "30d", days: 30 }, { id: "90", label: "90d", days: 90 }, { id: "all", label: "All", days: 0 }];
 
@@ -63,6 +64,32 @@ async function fetchChildren(ids: string[], isLive: () => boolean, onPart: (p: P
     if (!isLive()) return;
     onPart({ orders: (o.data ?? []) as TripOrderRow[], pickups: (pk.data ?? []) as TripPickupRow[], deliveries: (dl.data ?? []) as TripDeliveryRow[], comps: (cl.data ?? []) as TripCompartmentLoadRow[] });
   }
+}
+
+/** An empty move (bobtail, empty return, reposition) as a two-line card in the trips list. */
+function MoveCard({ m, who, trailerParts, trailerWord }: { m: EmptyMoveRow; who: string; trailerParts: PlanLineComp[]; trailerWord: string | null }) {
+  const done = !!m.ended_at;
+  const miles = moveMiles(m);
+  const from = m.from_text || "—";
+  const to = m.to_text || (done ? "—" : "…");
+  return (
+    <div style={{ ...card, cursor: "default", display: "block", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 800 }}>{who}</span>
+        <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+          {m.trailer_id && trailerParts.length > 0 && <PlanLine letter="" detail={false} comps={trailerParts} />}
+        </span>
+        {trailerWord && <span style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>{trailerWord}</span>}
+        <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: done ? "#4ade80" : "#60a5fa" }}>{done ? "Complete" : "Enroute"}</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+        <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
+          <span style={{ fontWeight: 800, color: "#fff" }}>{moveKindLabel(m.kind)}</span>{" · "}{from} → {to}{miles != null ? ` · ${miles} mi` : ""}
+        </span>
+        <span className="dash-num" style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap" }}>{done ? fmtDateTime(m.ended_at) : `Began ${fmtDateTime(m.started_at)}`}</span>
+      </div>
+    </div>
+  );
 }
 
 export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, canForceCancel = false }: {
@@ -124,6 +151,9 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         store.hydrate("trips", trips);
         // Trips deleted on the server leave the phone's list too.
         pruneMissingTrips(store, userId, trips, 50);
+        const since = new Date(Date.now() - 60 * 86400_000).toISOString();
+        const mv = await supabase.from("empty_moves").select("*").eq("driver_id", userId).or(`ended_at.is.null,started_at.gte.${since}`).limit(200);
+        if (!cancelled && !mv.error) store.hydrate("empty_moves", (mv.data ?? []) as EmptyMoveRow[]);
         await fetchChildren(trips.map((x) => x.trip_id), () => !cancelled, (p) => {
           if (p.orders) store.hydrate("trip_orders", p.orders);
           if (p.pickups) store.hydrate("trip_pickups", p.pickups);
@@ -161,7 +191,16 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         const t = await q;
         if (cancelled || t.error) return;
         const trips = (t.data ?? []) as TripRow[];
-        setServer({ ...EMPTY, trips });
+        // Empty moves for the same filters (period, truck, driver), so the list is every move the fleet made.
+        let mq = supabase.from("empty_moves").select("*").eq("company_id", companyId).order("started_at", { ascending: false }).limit(120);
+        if (days) mq = mq.gte("started_at", new Date(Date.now() - days * 86400000).toISOString());
+        if (truckId) mq = mq.eq("truck_id", truckId);
+        else if (areaTruckIds) mq = mq.in("truck_id", areaTruckIds.length ? areaTruckIds : NONE);
+        if (driverId) mq = mq.eq("driver_id", driverId);
+        else if (region) mq = mq.in("driver_id", region.driverIds.size ? [...region.driverIds] : NONE);
+        const mv = await mq;
+        if (cancelled) return;
+        setServer({ ...EMPTY, trips, moves: mv.error ? [] : ((mv.data ?? []) as EmptyMoveRow[]) });
         await fetchChildren(trips.map((x) => x.trip_id), () => !cancelled, (p) => {
           setServer((b) => ({ ...b, orders: [...b.orders, ...(p.orders ?? [])], pickups: [...b.pickups, ...(p.pickups ?? [])], deliveries: [...b.deliveries, ...(p.deliveries ?? [])], comps: [...b.comps, ...(p.comps ?? [])] }));
           if (p.deliveries) void loadLocs(p.deliveries, () => !cancelled);
@@ -187,6 +226,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
       pickups: store.list("trip_pickups", (k) => ids.has(k.trip_id)),
       deliveries: store.list("trip_deliveries", (d) => ids.has(d.trip_id)),
       comps: store.list("trip_compartment_loads", (c) => ids.has(c.trip_id)),
+      moves: store.list("empty_moves", (m) => m.driver_id === userId),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company, server, store, userId, state]);
@@ -230,21 +270,26 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, locs, catalog.data, company, userId]);
-  const hdr = useTrailerHeaderData(rows.map((r) => r.trip.trailer_id));
+  const hdr = useTrailerHeaderData([...rows.map((r) => r.trip.trailer_id), ...bundle.moves.map((m) => m.trailer_id)]);
   // A trailer with nothing in motion is Residue (it still holds its last product) or Cleaned (washed, nothing in it).
   const trailerStateFor = (ts: string | null, trailerId: string | null) =>
     (ts ?? (trailerId && Object.keys(hdr.residue[trailerId] ?? {}).length ? "Residue" : "Cleaned")) as "Cleaned" | "Residue" | "Loading" | "Loaded" | "Unloading" | "Preloaded";
   // The trailer as plan-style codes, highest compartment first: D2/--/D2.
-  const codesFor = (trailerId: string | null, loadedByIn: Record<number, string | null>): PlanLineComp[] => {
-    // With nothing of this trip aboard, the trailer shows what it last held; blank only once it is cleaned.
+  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>): PlanLineComp[] => {
+    // A compartment holding this trip's product shows its code. An empty one shows dashes in the color of the last
+    // product it held (residue), and gray dashes only once the trailer is cleaned.
     const res = (trailerId && hdr.residue[trailerId]) || {};
-    const loadedBy: Record<number, string | null> = Object.keys(loadedByIn).length ? loadedByIn : res;
     const nums = new Set<number>([...Object.keys(loadedBy).map(Number), ...((trailerId && hdr.sizes[trailerId]) || []).map((c) => c.comp)]);
-    return [...nums].sort((x, y) => y - x).map((n) => {
-      const p = loadedBy[n] ? catalog.data.find((x) => x.product_id === loadedBy[n]) : null;
+    const info = (pid: string | null | undefined) => {
+      const p = pid ? catalog.data.find((x) => x.product_id === pid) : null;
       const name = p ? (p.display_name ?? p.product_name) : null;
-      const code = p ? String(p.button_code ?? (name ?? "PRD").split(" ")[0]).trim().toUpperCase() : null;
-      return { num: n, code, name, color: p ? (p.hex_code?.trim() || productColorFor(name ?? "")) : null };
+      return { p, name, color: p ? (p.hex_code?.trim() || productColorFor(name ?? "")) : null };
+    };
+    return [...nums].sort((x, y) => y - x).map((n) => {
+      const here = info(loadedBy[n]);
+      if (here.p) return { num: n, code: String(here.p.button_code ?? (here.name ?? "PRD").split(" ")[0]).trim().toUpperCase(), name: here.name, color: here.color };
+      const last = info(res[n]);
+      return last.p ? { num: n, code: "--", name: last.name, color: last.color } : { num: n, code: null, name: null, color: null };
     });
   };
   // An open trip shows its ETA when dispatch planned one; a finished one, when it ended.
@@ -286,6 +331,20 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
   const orderNumbers = useMemo(() => [...new Set(bundle.orders.map((o) => o.order_number).filter(Boolean) as string[])].sort(), [bundle.orders]);
   const hasOrder = (tripId: string) => bundle.orders.some((o) => o.trip_id === tripId && o.order_number === orderNo);
   const visible = (showHidden || company ? rows : rows.filter((r) => !r.trip.driver_hidden)).filter((r) => !orderNo || hasOrder(r.trip.trip_id));
+  const moveWho = (m: EmptyMoveRow) => [(driverName.get(m.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", m.truck_id ? truckName.get(m.truck_id) : null].filter(Boolean).join(" ");
+  // Empty moves sit in the same list, by the time they ended (or started, while open).
+  const moveWhen = (m: EmptyMoveRow) => m.ended_at ?? m.started_at;
+  const tripWhen = (r: { trip: TripRow }) => r.trip.completed_at ?? r.trip.cancelled_at ?? r.trip.started_at ?? "";
+  const feed = useMemo(() => {
+    type Item = { t: "trip"; row: (typeof visible)[number]; at: string } | { t: "move"; m: EmptyMoveRow; at: string };
+    const queued = visible.filter((r) => r.trip.status === "dispatched").map((row): Item => ({ t: "trip", row, at: "9999" }));
+    const rest: Item[] = [
+      ...visible.filter((r) => r.trip.status !== "dispatched").map((row): Item => ({ t: "trip", row, at: tripWhen(row) || "9999" })),
+      ...(orderNo ? [] : bundle.moves.filter((m) => !(m.notes === "Cancelled" && m.end_miles == null)).map((m): Item => ({ t: "move", m, at: moveWhen(m) }))),
+    ].sort((a, b) => b.at.localeCompare(a.at));
+    return [...queued, ...rest];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, bundle.moves, orderNo]);
   const setHidden = (tripId: string, hidden: boolean) => {
     if (!store) return;
     setTripHidden(store, tripId, hidden);
@@ -333,7 +392,9 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
           {loading ? "Loading…" : rows.length ? "Nothing to show." : company ? "No trips match." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {visible.map(({ trip, order, more, route, loadedBy, trailerState: ts, truckLabel }) => {
+      {feed.map((f) => {
+        if (f.t === "move") return <MoveCard key={f.m.move_id} m={f.m} who={moveWho(f.m)} trailerParts={codesFor(f.m.trailer_id, {})} trailerWord={f.m.trailer_id ? trailerStateFor(null, f.m.trailer_id) : null} />;
+        const { trip, order, more, route, loadedBy, trailerState: ts, truckLabel } = f.row;
         const s = { ...STATUS[trip.status], label: truckLabel };
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
