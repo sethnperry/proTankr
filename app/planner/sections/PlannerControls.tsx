@@ -53,6 +53,8 @@ export default function PlannerControls(props: any) {
             flexWrap: "nowrap",
             width: "100%",
             alignItems: "flex-end",
+            // Room for the custom-cap gallons hung below the bars.
+            paddingBottom: compartments.some((c: any) => compPlan?.[Number(c.comp_number)]?.capOverride != null) ? 20 : 0,
           }}>
             {(() => {
               const n = compartments.length;
@@ -137,7 +139,7 @@ export default function PlannerControls(props: any) {
                     title={`Comp ${compNumber}`}
                     style={{
                       display: "flex", flexDirection: "column", alignItems: "center",
-                      cursor: "pointer", userSelect: "none",
+                      cursor: "pointer", userSelect: "none", position: "relative",
                       width: barW, flexShrink: 0, flexGrow: 0,
                     }}
                   >
@@ -204,9 +206,11 @@ export default function PlannerControls(props: any) {
                       {code}
                     </div>
 
-                    {/* Gallons only when the driver set a custom cap. */}
+                    {/* Gallons only when the driver set a custom cap. Hung below the
+                        column (not in the flow) so bars never shift; the strip
+                        pads its bottom to make room instead. */}
                     {hasOverride && (
-                      <div style={{ marginTop: 2, fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 700, color: "#ffb020", letterSpacing: -0.2 }}>
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, textAlign: "center", marginTop: 2, fontSize: "clamp(10px, 2.4vw, 13px)", fontWeight: 600, color: "rgba(140,140,140,0.9)", letterSpacing: -0.2 }}>
                         {Math.round(effMax).toLocaleString()}
                       </div>
                     )}
