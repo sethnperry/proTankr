@@ -14,7 +14,9 @@ import { dispatchedForDriver } from "@/lib/trips/tripLogic";
 import { swapRunOrder } from "@/lib/dispatch/dispatchTrip";
 import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
-import { TrailerHeader, useTrailerHeaderData } from "../TrailerViews";
+import { useTrailerHeaderData } from "../TrailerViews";
+import { PlanLine, type PlanLineComp } from "../PlanLine";
+import { productColorFor } from "../../utils/productColor";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useCompanyRoster } from "@/app/planner/hooks/useCompanyRoster";
 import { PickSheet } from "@/lib/ui/PickSheet";
@@ -28,9 +30,9 @@ const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
   dispatched: { label: "Dispatched", color: "#93c5fd" },
   draft: { label: "Not loaded", color: "rgba(255,255,255,0.5)" },
   loading: { label: "Loading", color: "#fbbf24" },
-  in_transit: { label: "In transit", color: "#60a5fa" },
+  in_transit: { label: "Enroute", color: "#60a5fa" },
   delivering: { label: "Delivering", color: "#60a5fa" },
-  parked: { label: "Parked preloaded", color: "#93c5fd" },
+  parked: { label: "Preloaded", color: "#93c5fd" },
   complete: { label: "Complete", color: "#4ade80" },
   cancelled: { label: "Cancelled", color: "rgba(255,255,255,0.35)" },
 };
@@ -210,11 +212,31 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         if (c.trip_id !== t.trip_id || c.disposition === "cancelled" || !c.product_id) continue;
         loadedBy[c.comp_number] = c.product_id;
       }
-      return { trip: t, loadedBy, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
+      const mine = bundle.comps.filter((c) => c.trip_id === t.trip_id && c.disposition !== "cancelled");
+      const aboard = mine.some((c) => c.disposition === "loaded");
+      const delivered = mine.some((c) => c.disposition === "delivered");
+      const trailerState = t.status === "cancelled" ? "Empty" : aboard ? "Loaded" : delivered ? "Residue" : "Empty";
+      return { trip: t, loadedBy, trailerState, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, locs, catalog.data, company, userId]);
   const hdr = useTrailerHeaderData(rows.map((r) => r.trip.trailer_id));
+  // The trailer as plan-style codes, highest compartment first: D2/--/D2.
+  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>): PlanLineComp[] => {
+    const nums = new Set<number>([...Object.keys(loadedBy).map(Number), ...((trailerId && hdr.sizes[trailerId]) || []).map((c) => c.comp)]);
+    return [...nums].sort((x, y) => y - x).map((n) => {
+      const p = loadedBy[n] ? catalog.data.find((x) => x.product_id === loadedBy[n]) : null;
+      const name = p ? (p.display_name ?? p.product_name) : null;
+      const code = p ? String(p.button_code ?? (name ?? "PRD").split(" ")[0]).trim().toUpperCase() : null;
+      return { num: n, code, name, color: p ? (p.hex_code?.trim() || productColorFor(name ?? "")) : null };
+    });
+  };
+  // An open trip shows its ETA when dispatch planned one; a finished one, when it ended.
+  const endText = (t: TripRow) => {
+    if (t.status === "complete" || t.status === "cancelled") return fmtDateTime(t.cancelled_at ?? t.completed_at ?? t.started_at);
+    const eta = fmtDateTime(t.planned_end_at);
+    return eta ? `ETA ${eta}` : (fmtDateTime(t.started_at) ? `Began ${fmtDateTime(t.started_at)}` : "Not started");
+  };
 
   // Admin clean-up: cancel an open trip with a typed confirmation.
   const [killing, setKilling] = useState<{ tripId: string; label: string; status: string } | null>(null);
@@ -295,7 +317,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
           {loading ? "Loading…" : rows.length ? "Nothing to show." : company ? "No trips match." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {visible.map(({ trip, order, more, route, loadedBy }) => {
+      {visible.map(({ trip, order, more, route, loadedBy, trailerState }) => {
         const s = STATUS[trip.status];
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
@@ -313,29 +335,26 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
             onKeyDown={(e) => { if (e.key === "Enter") open(trip.trip_id); }}
             style={{ ...card, display: "flex", padding: 0, overflow: "hidden", opacity: trip.driver_hidden && !company ? 0.55 : 1, ...(canOpenOptions ? { WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" } : {}) }}>
             <div style={{ flex: 1, minWidth: 0, padding: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ display: "flex", gap: 6, minWidth: 0, fontSize: 16, fontWeight: 800 }}>
-                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {order ? `Order ${order}` : ptdCode(trip.trip_id)}
-                  </span>
-                  {more > 0 && <span style={{ flexShrink: 0, color: "rgba(255,255,255,0.55)" }}>+{more}</span>}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: s.color, flexShrink: 0 }}>{s.label}</div>
+              {/* Line 1: who and truck, what the trailer carries and its state, then the truck's state. */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 800 }}>{who}</span>
+                <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                  <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy)} />
+                </span>
+                <span style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>{trailerState}</span>
+                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: s.color }}>{s.label}</span>
               </div>
-
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
-                {route || [trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
+              {/* Line 2: order, terminal and city to customer and store; ETA or the end time at the right. */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
+                  <span style={{ fontWeight: 800, color: "#fff" }}>{order ?? ptdCode(trip.trip_id)}{more > 0 ? ` +${more}` : ""}</span>
+                  {" · "}{route || [trip.shipper, trip.customer].filter(Boolean).join(" → ") || "—"}
+                </span>
+                <span className="dash-num" style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap" }}>
+                  {endText(trip)}
+                </span>
               </div>
               {reasons && <div style={{ fontSize: 13, color: "#f87171", marginTop: 2 }}>{reasons}</div>}
-              {(
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center", gap: 10, marginTop: 8 }}>
-                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14, fontWeight: 700 }}>{who}</span>
-                  <span style={{ minWidth: 0 }}><TrailerHeader variant="side" trailerId={trip.trailer_id} loaded={loadedBy} data={hdr} height={12} /></span>
-                  <span className="dash-num" style={{ textAlign: "right", fontSize: 12, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap" }}>
-                    {fmtDateTime(trip.cancelled_at ?? trip.completed_at ?? trip.started_at) || "Not started"}
-                  </span>
-                </div>
-              )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 2 }}>
                 <span />
                 {trip.status === "dispatched" && queue.length > 1 && (
