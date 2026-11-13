@@ -258,6 +258,7 @@ export function usePlanSlotsView(i: Inputs) {
       setBaselineOverrides(overridesSnapshot(plan, cgSlider));
     }
     setWizardNew(false);
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("plan-saved", { detail: { slot: target } }));
     if (detourActive()) { finishDetour(target); router.push(RESUME_URL); return; }
     if (!wizardNew && !active) router.push("/planner?plan=1");
     // eslint-disable-next-line react-hooks/exhaustive-deps

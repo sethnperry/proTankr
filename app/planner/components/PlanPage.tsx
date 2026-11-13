@@ -6,6 +6,7 @@
 // planner model with usePlanner(); holds layout only.
 
 import { detourActive, finishDetour, RESUME_URL } from "@/lib/trips/planDetour";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Spinner } from "@/lib/ui/pending";
 import { TripEquipmentSheets } from "./trip/TripEquipmentSheets";
@@ -71,6 +72,20 @@ export default function PlanPage() {
   } = usePlanner();
   // A driver holding only a truck or only a trailer has no tare or compartments, so the
   // plan is replaced by a prompt to pick the missing unit and cannot load.
+  // "Plan A saved" notice, fired by the Save Plan button and by the builder finishing.
+  const [savedSlot, setSavedSlot] = useState<number | null>(null);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const onSaved = (e: Event) => {
+      const slot = Number((e as CustomEvent).detail?.slot);
+      if (!Number.isFinite(slot) || slot < 1) return;
+      setSavedSlot(slot);
+      if (t) clearTimeout(t);
+      t = setTimeout(() => setSavedSlot(null), 2600);
+    };
+    window.addEventListener("plan-saved", onSaved);
+    return () => { window.removeEventListener("plan-saved", onSaved); if (t) clearTimeout(t); };
+  }, []);
   const isPartialEquipment = equipment.isBobtail || equipment.isTrailerOnly;
 
   // Landscape trims the page padding and raises the max width (1100 elsewhere).
@@ -89,6 +104,12 @@ export default function PlanPage() {
       {(leaving || reportPending) && typeof document !== "undefined" && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 49, background: "#0b0b0b", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: "rgba(255,255,255,0.55)", fontSize: 15 }}>
           <Spinner size={14} />{leaving ?? "Opening load report…"}
+        </div>,
+        document.body,
+      )}
+      {savedSlot != null && typeof document !== "undefined" && createPortal(
+        <div role="status" style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 90, zIndex: 80, background: "#16a34a", color: "#fff", fontSize: 15, fontWeight: 800, padding: "12px 20px", borderRadius: 2, boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
+          ✓ Plan {String.fromCharCode(64 + savedSlot)} saved
         </div>,
         document.body,
       )}
@@ -157,6 +178,7 @@ export default function PlanPage() {
               planSlots.saveToSlot(to);
               setActiveSlotLetter(to);
               setBaselineOverrides(currentOverrides);
+              window.dispatchEvent(new CustomEvent("plan-saved", { detail: { slot: to } }));
               if (detourActive()) { finishDetour(to); leaveTo(RESUME_URL, "Back to your trip…"); }
             } else setWizardNew(true);
           }}
