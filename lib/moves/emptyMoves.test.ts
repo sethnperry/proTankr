@@ -41,6 +41,8 @@ test("odometer entry: required, numeric, not below the start", () => {
   assert.equal(odometerProblem("abc", null), "That isn't a valid odometer.");
   assert.equal(odometerProblem("12345678901", null), "That's too many digits for an odometer.");
   assert.equal(odometerProblem("1,234,567", null), null);
+  assert.equal(odometerProblem("412,300.", 0), null);
+  assert.equal(parseOdometer("412,300."), 412300);
   assert.equal(odometerProblem("0", null), "That isn't a valid odometer.");
   assert.equal(odometerProblem("412,300", 412000), null);
   assert.match(odometerProblem("411999", 412000)!, /Lower than the last reading \(412,000\)/);

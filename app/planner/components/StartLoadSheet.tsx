@@ -9,7 +9,7 @@
 // Deliveries are picked from the saved location list (the same picker as the
 // dashboard, with "+ New location"), never typed as free text.
 
-import { MAX_ODOMETER } from "@/lib/moves/emptyMoves";
+import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ValueEntryOverlay from "./ValueEntryOverlay";
 import { slotLetter, type PresetSummary } from "@/lib/trips/tripPlan";
@@ -222,7 +222,7 @@ export function StartLoadSheet({
   const commitEdit = () => {
     if (!edit) return;
     setV((s) => {
-      if (edit === "miles") return { ...s, beginMiles: draft.trim() };
+      if (edit === "miles") return { ...s, beginMiles: cleanOdometer(draft) };
       if (edit === "order") return { ...s, orderNumber: draft.trim() };
       if (edit === "shipper") return { ...s, shipper: draft.trim() };
       if (edit === "customer") return { ...s, customer: draft.trim() };
@@ -232,7 +232,7 @@ export function StartLoadSheet({
     });
     const [next, ...rest] = queue;
     setQueue(rest);
-    if (next) openEdit(next, { ...v, beginMiles: edit === "miles" ? draft.trim() : v.beginMiles });
+    if (next) openEdit(next, { ...v, beginMiles: edit === "miles" ? cleanOdometer(draft) : v.beginMiles });
     else setEdit(null);
   };
   const cancelEdit = () => { setEdit(null); setQueue([]); };

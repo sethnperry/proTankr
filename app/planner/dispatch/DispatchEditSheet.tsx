@@ -5,6 +5,7 @@
 // can be changed; a stop the truck has already used keeps its own record (buildStartLoad's rule).
 // When product is already aboard, a caution comes first: the change corrects the record.
 
+import { cleanOdometer } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "../home/dashLook";
@@ -68,7 +69,7 @@ export function DispatchEditSheet({ ft, terminals, locations, tanks, companyId, 
     try {
       const taken = numbers.length ? await serverOrderConflicts(companyId, numbers, ft.trip.trip_id) : [];
       if (taken.length) { setError(`Order ${taken[0]} is already on another trip.`); return; }
-      const miles = v.beginMiles.trim() === "" ? null : Number(v.beginMiles);
+      const miles = cleanOdometer(v.beginMiles) === "" ? null : Number(cleanOdometer(v.beginMiles));
       const rows = buildStartLoad({
         companyId, userId: ft.trip.driver_id, truckId: ft.trip.truck_id ?? null, trailerId: ft.trip.trailer_id ?? null,
         orderNumber: v.orderNumber, extraOrderNumbers: v.extraOrderNumbers, shipper: v.shipper, customer: v.customer,

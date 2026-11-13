@@ -18,7 +18,7 @@
 // Progress (tank picks, readings) is saved to the trip as the driver goes;
 // the rest is kept on the phone until Finish.
 
-import { MAX_ODOMETER } from "@/lib/moves/emptyMoves";
+import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
 import React, { useEffect, useMemo, useState } from "react";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
 import { TankMap, type MapComp, type MapTank } from "./TankMap";
@@ -455,7 +455,7 @@ export function DeliveryDashboard({
   const isLast = !nextLeg;
   const unitSuffix = unit === "gallons" ? "gal" : "in";
   const arrivedAt = delivery.arrived_at ?? delivery.begin_at ?? new Date().toISOString();
-  const miles = numOrNull(odometer);
+  const miles = numOrNull(cleanOdometer(odometer));
 
   // Where a compartment goes: its split, or its one tank with all the gallons.
   const targetsFor = (c: TripCompartmentLoadRow): { tank: string; gallons: number }[] => {

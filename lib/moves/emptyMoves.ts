@@ -68,17 +68,25 @@ export type Stamp = { at: string; odometer: number; lat: number | null; lon: num
 /** No truck reads this high; the database column holds less than 100 million, so a longer number is a typo. */
 export const MAX_ODOMETER = 9_999_999;
 
+/** Tidies a typed or pasted odometer: drops commas, spaces, units and a trailing period ("412,300." -> "412300"). */
+export function cleanOdometer(raw: string): string {
+  const t = String(raw ?? "").replace(/[^0-9.]/g, "");
+  const i = t.indexOf(".");
+  const whole = i < 0 ? t : t.slice(0, i);
+  const frac = i < 0 ? "" : t.slice(i + 1).replace(/\./g, "").slice(0, 1);
+  return frac ? `${whole}.${frac}` : whole;
+}
+
 /** Why an odometer entry can't be accepted, or null. `floor` is the lowest it may be (the move's start). */
 export function odometerProblem(raw: string, floor: number | null): string | null {
-  const t = raw.replace(/,/g, "").trim();
-  if (!t) return "Enter the odometer.";
-  const n = Number(t);
+  if (!raw.trim()) return "Enter the odometer.";
+  const n = Number(cleanOdometer(raw));
   if (!Number.isFinite(n) || n <= 0) return "That isn't a valid odometer.";
   if (n > MAX_ODOMETER) return "That's too many digits for an odometer.";
   if (floor != null && n < floor) return `Lower than the last reading (${Math.round(floor).toLocaleString("en-US")}).`;
   return null;
 }
-export const parseOdometer = (raw: string): number | null => (odometerProblem(raw, null) ? null : Number(raw.replace(/,/g, "").trim()));
+export const parseOdometer = (raw: string): number | null => (odometerProblem(raw, null) ? null : Number(cleanOdometer(raw)));
 
 /** The saved place a position is at, else its city text. */
 export function placeFor(locations: DeliveryLocation[], pos: { lat: number; lon: number } | null, city: string | null): { id: string | null; text: string | null } {

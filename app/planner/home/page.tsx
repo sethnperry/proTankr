@@ -1,4 +1,5 @@
 "use client";
+import { cleanOdometer } from "@/lib/moves/emptyMoves";
 import { Spinner, busyProps, busyText, usePending } from "@/lib/ui/pending";
 // app/planner/home/page.tsx
 //
@@ -948,7 +949,7 @@ export default function HomePage() {
       setError("Still signing you in. Try again in a moment.");
       return;
     }
-    const miles = v.beginMiles.trim() === "" ? null : Number(v.beginMiles);
+    const miles = cleanOdometer(v.beginMiles) === "" ? null : Number(cleanOdometer(v.beginMiles));
     setBusy(true);
     setError(null);
     try {
