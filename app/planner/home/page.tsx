@@ -1941,16 +1941,15 @@ export default function HomePage() {
     if (parkRequested) { setParkOpen(true); return; }
     switch (step.kind) {
       case "start":
-        if (parked) {
-          doResume();
-          break;
-        }
         {
-          const proceed = () => void askEquipment(() => askFuelFirst(() => {
-            if (dispatchedList.length) { beginDispatchedLoad(); return; }
-            setError(null);
-            setSheetOpen(true);
-          }));
+          // A load parked on this trailer is resumed (or taken over), never a new trip: same shift and truck steps first.
+          const proceed = parked
+            ? () => void askEquipment(() => doResume())
+            : () => void askEquipment(() => askFuelFirst(() => {
+              if (dispatchedList.length) { beginDispatchedLoad(); return; }
+              setError(null);
+              setSheetOpen(true);
+            }));
           // Telematics connected and on duty: the shift is already running (or starts now at that time), no window.
           const need = beginTripShift(myHos, Date.now());
           if (!need.ask) {
@@ -2533,7 +2532,7 @@ export default function HomePage() {
         }}
       >
         {openingPlanner ? busyText(true, "Opening Planner…") : parkRequested ? "Park it" : parked && step.kind === "start"
-          ? (parked.driver_id === userId ? "Resume Trip" : "Take Over Trip")
+          ? ((parked.parked_by === userId || (!parked.parked_by && parked.driver_id === userId)) ? "Resume Trip" : "Begin Trip")
           : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
           : step.label}
       </button>}
@@ -2719,28 +2718,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Parked preloaded on this trailer */}
-      {parked && (
-        <div style={{ ...card, marginBottom: 14, borderColor: "rgba(96,165,250,0.55)" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Parked preloaded
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>
-            {parked.parked_by === userId || (!parked.parked_by && parked.driver_id === userId) ? "You" : handoffName ?? "Another driver"} parked this trailer
-            {parked.parked_at ? ` ${new Date(parked.parked_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
-            {parked.parked_for ? ` · ${PARK_FOR_LABEL[parked.parked_for]}` : ""}
-          </div>
-          {parked.parked_where && <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>At {parked.parked_where}</div>}
-          {parked.parked_note && <div style={{ fontSize: 13, marginTop: 4 }}>&ldquo;{parked.parked_note}&rdquo;</div>}
-          <div style={{ marginTop: 8 }}>
-            {onBoardLines(parkedSnap?.compLoads).map((l) => <div key={l} style={{ fontSize: 14 }}>{l}</div>)}
-          </div>
-          <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
-            {parked.driver_id === userId ? "Resume to deliver it." : "Take it over to deliver it. The trip moves to you."}
-          </div>
-        </div>
-      )}
-
       {/* Trip */}
       {openTrip ? (
         <TripCardView
@@ -2801,7 +2778,56 @@ export default function HomePage() {
             </div>
           )}
         />
-      ) : (
+      ) : parked && parkedSnap ? (() => {
+        // A load parked on this trailer: the same trip card, loaded, in blue. A trailer holding a parked load can't start a new trip.
+        const mine = parked.parked_by === userId || (!parked.parked_by && parked.driver_id === userId);
+        const aboardP = onBoard(parkedSnap.compLoads);
+        const byComp: Record<number, string | null> = {};
+        for (const c of aboardP) byComp[c.comp_number] = c.product_id;
+        const nums = [...new Set([...Object.keys(compSizes).map(Number), ...aboardP.map((c) => c.comp_number)])].sort((a, b) => b - a);
+        const parkedBar = nums.length > 0 ? <TrailerHeader variant="side" trailerId={trailerId} loaded={byComp} data={trailerHdr} /> : null;
+        const dels = parkedSnap.deliveries.filter((d) => d.status !== "cancelled");
+        const who = mine ? "You" : handoffName ?? "Another driver";
+        return (
+          <TripCardView
+            style={{ ...card, marginBottom: 14, borderColor: "rgba(96,165,250,0.6)" }}
+            bar={parkedBar}
+            heading="No trip in progress"
+            right={<span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", color: "#93c5fd", whiteSpace: "nowrap" }}>PARKED PRELOADED</span>}
+            route={(parked.shipper || parked.customer) ? [parked.shipper, parked.customer].filter(Boolean).join(" → ") : null}
+            plan={{ label: "", comps: nums.map((n) => chipFor(byComp[n] ?? null)) }}
+            pickups={pickupRows(parkedSnap.pickups, {
+              currentId: null,
+              noLoadReason: (c) => noLoadReasonLabel(c) ?? "",
+              place: (p) => { const t = p.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(p.terminal_id)) : null; return t ? [t.city, t.state].filter(Boolean).join(", ") : [p.city, p.state].filter(Boolean).join(", "); },
+            })}
+            deliveries={deliveryRows(dels, {
+              headedId: aboardP.length > 0 ? plannedDeliveries(parkedSnap.deliveries)[0]?.delivery_id ?? null : null,
+              place: (d) => { const loc = d.location_id ? locations.find((l) => l.location_id === d.location_id) : null; return loc ? locationPlace(loc) : ""; },
+              name: deliveryName,
+            })}
+            footer={(
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 13, color: muted }}>
+                  {who} parked this trailer
+                  {parked.parked_at ? ` ${new Date(parked.parked_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
+                  {parked.parked_for ? ` · ${PARK_FOR_LABEL[parked.parked_for]}` : ""}
+                  {parked.parked_where ? ` · at ${parked.parked_where}` : ""}
+                </div>
+                {parked.parked_note && (
+                  <div style={{ fontSize: 15, fontWeight: 700, marginTop: 8, padding: "8px 10px", background: "rgba(96,165,250,0.12)", border: "1px solid rgba(96,165,250,0.45)" }}>&ldquo;{parked.parked_note}&rdquo;</div>
+                )}
+                <div style={{ marginTop: 8 }}>
+                  {aboardP.sort((a, b) => a.comp_number - b.comp_number).map((c) => (
+                    <div key={c.compartment_load_id} className="dash-num" style={{ fontSize: 15, fontWeight: 800, padding: "6px 10px", marginTop: 4, background: "rgba(96,165,250,0.12)", border: "1px solid rgba(96,165,250,0.45)" }}>{loadLine(c)}</div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>{mine ? "Resume to deliver it." : "Begin the trip to deliver it. It moves to you."}</div>
+              </div>
+            )}
+          />
+        );
+      })() : (
         <div style={{ ...card, marginBottom: 14 }}>
           {trailerBar && <div style={{ marginBottom: 8 }}>{trailerBar}</div>}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>

@@ -8,14 +8,14 @@ export type CapturePurpose = "fuel_receipt" | "scale_ticket" | "tank_ticket" | "
 
 /** `scan`: taken with the document scanner (page found, flattened, light evened out) instead of a plain photo. */
 export const CAPTURE_PURPOSES: Record<CapturePurpose, { label: string; maxPhotos: number; scan?: boolean }> = {
-  fuel_receipt: { label: "Fuel receipt", maxPhotos: 4 },
-  scale_ticket: { label: "Scale ticket", maxPhotos: 4 },
-  tank_ticket: { label: "Tank ticket", maxPhotos: 4 },
-  document: { label: "Document", maxPhotos: 20 },
+  fuel_receipt: { label: "Fuel receipt", maxPhotos: 4, scan: true },
+  scale_ticket: { label: "Scale ticket", maxPhotos: 4, scan: true },
+  tank_ticket: { label: "Tank ticket", maxPhotos: 4, scan: true },
+  document: { label: "Document", maxPhotos: 20, scan: true },
   down_time: { label: "Down time", maxPhotos: 6 },
-  paper_log: { label: "Paper log", maxPhotos: 6 },
+  paper_log: { label: "Paper log", maxPhotos: 6, scan: true },
   inspection: { label: "Inspection", maxPhotos: 12 },
-  manifest: { label: "Manifest", maxPhotos: 6 },
+  manifest: { label: "Manifest", maxPhotos: 6, scan: true },
   bol: { label: "BOL", maxPhotos: 8, scan: true },
 };
 

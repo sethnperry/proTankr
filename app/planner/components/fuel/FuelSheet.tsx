@@ -19,6 +19,7 @@
 //   4. Details: receipt photo first, then the store, gallons, amounts. Can be
 //      finished later.
 
+import { DocumentScanner } from "../scan/DocumentScanner";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -180,6 +181,7 @@ export default function FuelSheet({
   const [d, setD] = useState<FuelDetails>({ dieselGallons: "", filledToFull: true, storeName: "", storeNumber: "", city: "", state: "", notes: "", hasReceipt: false });
   const [total, setTotal] = useState("");
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   // What the reader found on the receipt photo. A suggestion the driver taps to use.
   const [suggest, setSuggest] = useState<OcrFields | null>(null);
 
@@ -423,6 +425,7 @@ export default function FuelSheet({
   });
 
   const needReceipt = receiptRequired(p.pay_kind, settings);
+  const scanner = <DocumentScanner open={scanOpen} title="Scan receipt" onClose={() => setScanOpen(false)} onDone={(f) => { setScanOpen(false); void pickReceipt(f); }} />;
   const missing = missingForComplete(p, d, needReceipt, total);
   const save = () => run(async () => {
     if (missing.length) { setErr(`Still needed: ${missing.join(", ")}`); return; }
@@ -490,6 +493,7 @@ export default function FuelSheet({
   if (detailsShown) {
     return (
       <FullscreenModal open={open} title="Fuel Details" onClose={onClose} footer={null}>
+        {scanner}
         {unsentNote}
         <div style={{ ...box, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
           <span style={{ color: muted }}>At the pump</span>
@@ -507,11 +511,9 @@ export default function FuelSheet({
               <button type="button" style={{ ...link, color: "#f87171" }} onClick={() => { setReceipt(null); setSuggest(null); setD((x) => ({ ...x, hasReceipt: false })); }}>Retake</button>
             </div>
           ) : (
-            <label style={{ ...secondary, display: "block", textAlign: "center", padding: "13px 0", fontSize: 15 }}>
-              {busy ? "Uploading…" : "📷 Photo of Receipt"}
-              <input type="file" accept="image/*" capture="environment" hidden disabled={busy}
-                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pickReceipt(f); }} />
-            </label>
+            <button type="button" disabled={busy} onClick={() => setScanOpen(true)} style={{ ...secondary, display: "block", width: "100%", textAlign: "center", padding: "13px 0", fontSize: 15, cursor: "pointer" }}>
+              {busy ? "Uploading…" : "Scan the receipt"}
+            </button>
           )}
         </div>
 
