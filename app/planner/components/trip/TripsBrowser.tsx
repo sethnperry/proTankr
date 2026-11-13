@@ -28,15 +28,16 @@ import { forceCancelTrip } from "@/lib/dispatch/tripEdits";
 
 const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
   dispatched: { label: "Dispatched", color: "#93c5fd" },
-  draft: { label: "Not loaded", color: "rgba(255,255,255,0.5)" },
-  loading: { label: "Loading", color: "#fbbf24" },
+  draft: { label: "Enroute", color: "#60a5fa" },
+  loading: { label: "Arrived", color: "#fbbf24" },
   in_transit: { label: "Enroute", color: "#60a5fa" },
-  delivering: { label: "Delivering", color: "#60a5fa" },
-  parked: { label: "Preloaded", color: "#93c5fd" },
+  delivering: { label: "Enroute", color: "#60a5fa" },
+  parked: { label: "Parked", color: "#93c5fd" },
   complete: { label: "Complete", color: "#4ade80" },
-  cancelled: { label: "Cancelled", color: "rgba(255,255,255,0.35)" },
+  cancelled: { label: "Canceled", color: "rgba(255,255,255,0.35)" },
 };
 
+const TRAILER_COLOR: Record<string, string> = { Cleaned: "rgba(255,255,255,0.55)", Residue: "rgba(255,255,255,0.55)", Loading: "#fbbf24", Loaded: "#4ade80", Unloading: "#60a5fa", Preloaded: "#93c5fd" };
 const card: React.CSSProperties = {
   display: "block", width: "100%", textAlign: "left", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.03)", padding: 12, marginBottom: 10, color: "#fff", cursor: "pointer",
@@ -215,14 +216,29 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
       const mine = bundle.comps.filter((c) => c.trip_id === t.trip_id && c.disposition !== "cancelled");
       const aboard = mine.some((c) => c.disposition === "loaded");
       const delivered = mine.some((c) => c.disposition === "delivered");
-      const trailerState = t.status === "cancelled" ? "Empty" : aboard ? "Loaded" : delivered ? "Residue" : "Empty";
-      return { trip: t, loadedBy, trailerState, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
+      // The trailer's cargo condition: Cleaned or Residue at rest, Loading, Loaded, Unloading, Preloaded.
+      const atDrop = drops.some((d) => d.arrived_at && !d.left_at);
+      const atRack = bundle.pickups.some((k) => k.trip_id === t.trip_id && k.arrived_at && !k.left_at && !k.outcome);
+      const trailerState: "Cleaned" | "Residue" | "Loading" | "Loaded" | "Unloading" | "Preloaded" | null =
+        t.status === "parked" ? "Preloaded"
+        : t.status === "complete" || t.status === "cancelled" ? (delivered ? "Residue" : null)
+        : atDrop ? "Unloading" : atRack ? "Loading" : aboard ? "Loaded" : null;
+      // Truck: where it is in the trip; Arrived whenever it is sitting at a stop.
+      const truckLabel = t.status === "complete" || t.status === "cancelled" || t.status === "parked" || t.status === "dispatched" ? STATUS[t.status].label
+        : atDrop || atRack ? "Arrived" : "Enroute";
+      return { trip: t, loadedBy, trailerState, truckLabel, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, locs, catalog.data, company, userId]);
   const hdr = useTrailerHeaderData(rows.map((r) => r.trip.trailer_id));
+  // A trailer with nothing in motion is Residue (it still holds its last product) or Cleaned (washed, nothing in it).
+  const trailerStateFor = (ts: string | null, trailerId: string | null) =>
+    (ts ?? (trailerId && Object.keys(hdr.residue[trailerId] ?? {}).length ? "Residue" : "Cleaned")) as "Cleaned" | "Residue" | "Loading" | "Loaded" | "Unloading" | "Preloaded";
   // The trailer as plan-style codes, highest compartment first: D2/--/D2.
-  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>): PlanLineComp[] => {
+  const codesFor = (trailerId: string | null, loadedByIn: Record<number, string | null>): PlanLineComp[] => {
+    // With nothing of this trip aboard, the trailer shows what it last held; blank only once it is cleaned.
+    const res = (trailerId && hdr.residue[trailerId]) || {};
+    const loadedBy: Record<number, string | null> = Object.keys(loadedByIn).length ? loadedByIn : res;
     const nums = new Set<number>([...Object.keys(loadedBy).map(Number), ...((trailerId && hdr.sizes[trailerId]) || []).map((c) => c.comp)]);
     return [...nums].sort((x, y) => y - x).map((n) => {
       const p = loadedBy[n] ? catalog.data.find((x) => x.product_id === loadedBy[n]) : null;
@@ -317,8 +333,8 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
           {loading ? "Loading…" : rows.length ? "Nothing to show." : company ? "No trips match." : "No trips yet. Start one from the Driver Dashboard."}
         </div>
       )}
-      {visible.map(({ trip, order, more, route, loadedBy, trailerState }) => {
-        const s = STATUS[trip.status];
+      {visible.map(({ trip, order, more, route, loadedBy, trailerState: ts, truckLabel }) => {
+        const s = { ...STATUS[trip.status], label: truckLabel };
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
         const who = [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", trip.truck_id ? truckName.get(trip.truck_id) : null].filter(Boolean).join(" ");
@@ -341,7 +357,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
                 <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                   <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy)} />
                 </span>
-                <span style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>{trailerState}</span>
+                <span style={{ flexShrink: 0, fontSize: 12, color: TRAILER_COLOR[trailerStateFor(ts, trip.trailer_id)] }}>{trailerStateFor(ts, trip.trailer_id)}</span>
                 <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: s.color }}>{s.label}</span>
               </div>
               {/* Line 2: order, terminal and city to customer and store; ETA or the end time at the right. */}
