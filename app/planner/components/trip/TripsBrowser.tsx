@@ -39,6 +39,8 @@ const STATUS: Record<TripRow["status"], { label: string; color: string }> = {
 };
 
 const TRAILER_COLOR: Record<string, string> = { Cleaned: "rgba(255,255,255,0.55)", Residue: "rgba(255,255,255,0.55)", Loading: "#fbbf24", Loaded: "#4ade80", Unloading: "#60a5fa", Preloaded: "#93c5fd" };
+// Product codes show only while product is in motion on the trailer; otherwise dashes.
+const CODE_STATES = new Set(["Loading", "Loaded", "Unloading", "Preloaded"]);
 const card: React.CSSProperties = {
   display: "block", width: "100%", textAlign: "left", borderRadius: 2, border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.03)", padding: 12, marginBottom: 10, color: "#fff", cursor: "pointer",
@@ -77,7 +79,7 @@ function MoveCard({ m, who, trailerParts, trailerWord }: { m: EmptyMoveRow; who:
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
         <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 800 }}>{who}</span>
         <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-          {m.trailer_id && trailerParts.length > 0 && <PlanLine letter="" detail={false} comps={trailerParts} />}
+          {m.trailer_id && m.kind !== "bobtail" ? (trailerParts.length > 0 && <PlanLine letter="" detail={false} comps={trailerParts} />) : <span style={{ fontSize: 14, fontWeight: 800, color: "#60a5fa" }}>Bobtail</span>}
         </span>
         {trailerWord && <span style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>{trailerWord}</span>}
         <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: done ? "#4ade80" : "#60a5fa" }}>{done ? "Complete" : "Enroute"}</span>
@@ -275,7 +277,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
   const trailerStateFor = (ts: string | null, trailerId: string | null) =>
     (ts ?? (trailerId && Object.keys(hdr.residue[trailerId] ?? {}).length ? "Residue" : "Cleaned")) as "Cleaned" | "Residue" | "Loading" | "Loaded" | "Unloading" | "Preloaded";
   // The trailer as plan-style codes, highest compartment first: D2/--/D2.
-  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>): PlanLineComp[] => {
+  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>, showCodes: boolean): PlanLineComp[] => {
     // A compartment holding this trip's product shows its code. An empty one shows dashes in the color of the last
     // product it held (residue), and gray dashes only once the trailer is cleaned.
     const res = (trailerId && hdr.residue[trailerId]) || {};
@@ -286,7 +288,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
       return { p, name, color: p ? (p.hex_code?.trim() || productColorFor(name ?? "")) : null };
     };
     return [...nums].sort((x, y) => y - x).map((n) => {
-      const here = info(loadedBy[n]);
+      const here = info(showCodes ? loadedBy[n] : null);
       if (here.p) return { num: n, code: String(here.p.button_code ?? (here.name ?? "PRD").split(" ")[0]).trim().toUpperCase(), name: here.name, color: here.color };
       const last = info(res[n]);
       return last.p ? { num: n, code: "--", name: last.name, color: last.color } : { num: n, code: null, name: null, color: null };
@@ -393,7 +395,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         </div>
       )}
       {feed.map((f) => {
-        if (f.t === "move") return <MoveCard key={f.m.move_id} m={f.m} who={moveWho(f.m)} trailerParts={codesFor(f.m.trailer_id, {})} trailerWord={f.m.trailer_id ? trailerStateFor(null, f.m.trailer_id) : null} />;
+        if (f.t === "move") return <MoveCard key={f.m.move_id} m={f.m} who={moveWho(f.m)} trailerParts={codesFor(f.m.trailer_id, {}, false)} trailerWord={f.m.trailer_id && f.m.kind !== "bobtail" ? trailerStateFor(null, f.m.trailer_id) : null} />;
         const { trip, order, more, route, loadedBy, trailerState: ts, truckLabel } = f.row;
         const s = { ...STATUS[trip.status], label: truckLabel };
         const cancelled = trip.status === "cancelled";
@@ -416,9 +418,11 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
                 <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 800 }}>{who}</span>
                 <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                  <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy)} />
+                  {trip.trailer_id
+                    ? <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy, CODE_STATES.has(trailerStateFor(ts, trip.trailer_id)))} />
+                    : <span style={{ fontSize: 14, fontWeight: 800, color: "#60a5fa" }}>Bobtail</span>}
                 </span>
-                <span style={{ flexShrink: 0, fontSize: 12, color: TRAILER_COLOR[trailerStateFor(ts, trip.trailer_id)] }}>{trailerStateFor(ts, trip.trailer_id)}</span>
+                {trip.trailer_id && <span style={{ flexShrink: 0, fontSize: 12, color: TRAILER_COLOR[trailerStateFor(ts, trip.trailer_id)] }}>{trailerStateFor(ts, trip.trailer_id)}</span>}
                 <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: s.color }}>{s.label}</span>
               </div>
               {/* Line 2: order, terminal and city to customer and store; ETA or the end time at the right. */}
