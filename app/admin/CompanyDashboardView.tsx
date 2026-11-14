@@ -33,6 +33,8 @@ export type CompanyDashboardProps = {
   statsSlot?: React.ReactNode;
   /** The old "Needs Attention" list (equipment, permits, shifts), kept inside the Needs you sheet. */
   needsSlot?: React.ReactNode;
+  /** The On shift sheet: drivers actually on shift, each with their day. Without it, the day ribbon's names are listed. */
+  onShiftSlot?: React.ReactNode;
   deskSlot?: React.ReactNode;
   onOpenNeed: (k: NeedsItem["key"]) => void;
   loading?: boolean;
@@ -207,8 +209,12 @@ export function CompanyDashboardView(p: CompanyDashboardProps) {
       </FullscreenModal>
 
       <FullscreenModal open={sheet === "shift"} title="On shift" onClose={() => setSheet(null)} footer={null}>
-        {p.ribbon.lanes.length === 0 && <div style={{ color: L.muted, fontSize: 14 }}>No driver activity {p.ribbon.dayLabel}.</div>}
-        {p.ribbon.lanes.map((l) => <div key={l.userId} style={{ ...L.secondary, display: "flex", justifyContent: "space-between", padding: "12px 14px", marginBottom: 6, fontSize: 14 }}><b>{l.name}</b><span style={{ color: L.muted }}>{l.region ?? "No region"}</span></div>)}
+        {p.onShiftSlot ?? (
+          <>
+            {p.ribbon.lanes.length === 0 && <div style={{ color: L.muted, fontSize: 14 }}>No driver activity {p.ribbon.dayLabel}.</div>}
+            {p.ribbon.lanes.map((l) => <div key={l.userId} style={{ ...L.secondary, display: "flex", justifyContent: "space-between", padding: "12px 14px", marginBottom: 6, fontSize: 14 }}><b>{l.name}</b></div>)}
+          </>
+        )}
       </FullscreenModal>
 
       <FullscreenModal open={sheet === "heat"} title="Compliance by region" onClose={() => setSheet(null)} footer={null}>

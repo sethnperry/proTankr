@@ -15,6 +15,7 @@ import DecoupleModal from "@/app/planner/modals/DecoupleModal";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
 import { ModeSwitch, RegionButton } from "@/app/planner/components/dash/DashChrome";
 import { ToolPanel, type ToolItem } from "@/app/planner/home/DashboardChrome";
+import { OnShiftDays } from "./OnShiftDays";
 import { PeriodPicker } from "@/lib/ui/PeriodPicker";
 import { rangeBounds, deviceTz, type DateRange } from "@/lib/reports/dateRange";
 import { localDateOf, localMidnightMs } from "@/lib/worklog/time";
@@ -1938,6 +1939,12 @@ export default function AdminPage() {
   const dashCampaigns = useMemo(() => campaignBars(dash.boards).filter((b) => b.total > 0), [dash.boards]);
   const dashHosRisk = useMemo(() => dash.hosRisk.filter((h) => inRegions(regionSel, rosterRegion.get(h.userId))), [dash.hosRisk, regionSel, rosterRegion]);
   const dashNeeds = useMemo(() => needsYou({ repairsAwaiting: dash.repairsAwaiting, unconfirmedShifts: dash.shifts.unconfirmed + longShifts.missing, unreviewedBillable: dash.unreviewedBillable, pendingReviews: dash.pendingReviews, deskErrors: scope?.canResolve ? openCount(deskVisible) : 0 }), [dash.repairsAwaiting, dash.shifts.unconfirmed, longShifts.missing, dash.unreviewedBillable, dash.pendingReviews, scope, deskVisible]);
+  // Drivers actually on a shift right now (the same set the gauge counts), with when it began.
+  const onShiftDrivers = useMemo(() => [...dash.shifts.onShiftUsers]
+    .filter((u) => inRegions(regionSel, rosterRegion.get(u)))
+    .map((u) => ({ userId: u, name: dash.plan.roster.find((m) => m.user_id === u)?.display_name ?? "Driver", startedAt: dash.shifts.onShiftStart.get(u) ?? new Date().toISOString() }))
+    .sort((a, b) => a.name.localeCompare(b.name)), [dash.shifts.onShiftUsers, dash.shifts.onShiftStart, dash.plan.roster, regionSel, rosterRegion]);
+  const truckNameById = useMemo(() => new Map(trucks.map((t) => [t.truck_id, String((t as any).truck_name ?? "")])), [trucks]);
   const dashGauges = useMemo(() => {
     const cells = dashHeat.rows.flatMap((r) => r.cells);
     const onShift = [...dash.shifts.onShiftUsers].filter((u) => inRegions(regionSel, rosterRegion.get(u))).length;
@@ -2171,6 +2178,7 @@ export default function AdminPage() {
           periodSlot={<PeriodPicker companyId={companyId ?? null} userId={undefined} allowAll onChange={setPeriodRange} />}
           statsSlot={statsNode}
           needsSlot={needsNode}
+          onShiftSlot={<OnShiftDays companyId={companyId ?? null} drivers={onShiftDrivers} truckNames={truckNameById} />}
           deskSlot={scope ? (
             <DeskView groups={deskGroups} stuck={deskStuck} canResolve={scope.canResolve} canUseAs={scope.canUseAs} loading={desk.loading} error={desk.error}
               onResolve={desk.resolve}

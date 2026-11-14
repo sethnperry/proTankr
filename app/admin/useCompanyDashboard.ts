@@ -35,7 +35,7 @@ export function useCompanyDashboard(o: { companyId: string | null; enabled: bool
 
   const [units, setUnits] = useState<FleetUnit[]>([]);
   const [repairsAwaiting, setRepairsAwaiting] = useState(0);
-  const [shifts, setShifts] = useState({ onShift: 0, unconfirmed: 0, onShiftUsers: new Set<string>() });
+  const [shifts, setShifts] = useState({ onShift: 0, unconfirmed: 0, onShiftUsers: new Set<string>(), onShiftStart: new Map<string, string>() });
   const [callouts, setCallouts] = useState({ count: 0, blocking: 0 });
   const [delayedMin, setDelayedMin] = useState(0);
   const [billableMin, setBillableMin] = useState(0);
@@ -69,12 +69,14 @@ export function useCompanyDashboard(o: { companyId: string | null; enabled: bool
     for (const e of evs) byUser.set(e.user_id, [...(byUser.get(e.user_id) ?? []), e]);
     let onShift = 0, unconfirmed = 0;
     const onShiftUsers = new Set<string>();
+    const onShiftStart = new Map<string, string>();
     for (const [uid, list] of byUser) {
       const ss = deriveShifts(list, uid, nowIso);
-      if (openShift(ss)) { onShift += 1; onShiftUsers.add(uid); }
+      const cur = openShift(ss);
+      if (cur) { onShift += 1; onShiftUsers.add(uid); onShiftStart.set(uid, cur.startedAt); }
       unconfirmed += ss.filter((s) => s.unconfirmed).length;
     }
-    setShifts({ onShift, unconfirmed, onShiftUsers });
+    setShifts({ onShift, unconfirmed, onShiftUsers, onShiftStart });
 
     // Call-outs in the range (Now = today): all active, and the ones still blocking a plan (today or later).
     const co = (await q<any[]>(supabase.from("callouts").select("callout_id, shift_date, status").eq("company_id", companyId).eq("status", "active").gte("shift_date", range.fromDate).lte("shift_date", range.toDate).limit(1000))) ?? [];
