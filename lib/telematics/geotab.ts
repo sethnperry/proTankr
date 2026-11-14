@@ -40,14 +40,31 @@ async function rpc(f: Fetch, host: string, method: string, params: unknown): Pro
   return json?.result;
 }
 
-async function session(f: Fetch, c: GeotabCreds, fresh = false): Promise<Session> {
+// A sign-in is shared by every server instance (through the cache store), not just reused inside one: a new
+// Authenticate on every cold start or cron tick piles up sessions on the account, and a driver's own login is also
+// the one on their tablet. The session itself lasts days; a call that finds it dead signs in again (see `call`).
+const SHARED_SESSION_MS = 6 * 3600_000;
+
+async function session(f: Fetch, c: GeotabCreds, fresh = false, cache?: CacheStore): Promise<Session> {
   const key = `${c.database}|${c.userName}`.toLowerCase();
   const hit = sessions.get(key);
   if (!fresh && hit && Date.now() - hit.at < SESSION_MS) return hit;
+  if (!fresh && cache) {
+    try {
+      const e = await cache.get(`session:${key}`);
+      const v = e?.v as Session | null | undefined;
+      if (e && v?.credentials?.sessionId && Date.now() - e.at < SHARED_SESSION_MS) {
+        const s: Session = { path: v.path, credentials: v.credentials, at: Date.now() };
+        sessions.set(key, s);
+        return s;
+      }
+    } catch { /* no shared session: sign in */ }
+  }
   const r = await rpc(f, "my.geotab.com", "Authenticate", { database: c.database, userName: c.userName, password: c.password });
   if (!r?.credentials?.sessionId) throw new TelematicsAuthError("Geotab sign-in failed.");
   const s: Session = { path: r.path && r.path !== "ThisServer" ? String(r.path) : "my.geotab.com", credentials: r.credentials, at: Date.now() };
   sessions.set(key, s);
+  if (cache) { try { await cache.set(`session:${key}`, { path: s.path, credentials: s.credentials, at: s.at }); } catch { /* a repeat sign-in is the only cost */ } }
   return s;
 }
 
@@ -83,12 +100,12 @@ const groupIdsOf = (d: any): { groupIds?: string[] } => {
 export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheStore): TelematicsProvider {
   // One retry with a fresh session if the cached one has expired.
   const call = async (method: string, params: Record<string, unknown>) => {
-    let s = await session(f, c);
+    let s = await session(f, c, false, cache);
     try {
       return await rpc(f, s.path, method, { ...params, credentials: s.credentials });
     } catch (e) {
       if (!(e instanceof TelematicsAuthError)) throw e;
-      s = await session(f, c, true);
+      s = await session(f, c, true, cache);
       return rpc(f, s.path, method, { ...params, credentials: s.credentials });
     }
   };

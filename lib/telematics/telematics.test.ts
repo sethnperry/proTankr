@@ -366,3 +366,26 @@ test("moving the truck within a quarter mile is not leaving the stop", () => {
   assert.equal(stillAtStop({ lat: 28.0145, lon: -82 }, fence, anchor), false); // ~0.31 mi from where it sat
   assert.equal(stillAtStop({ lat: 28.0001, lon: -82 }, fence, null), true);    // inside the fence
 });
+
+test("a sign-in saved in the shared store is reused instead of authenticating again", async () => {
+  const { geotabProvider } = await import("./geotab.ts");
+  const { memoryStore } = await import("./cache.ts");
+  const store = memoryStore();
+  const calls: string[] = [];
+  const f = (async (_u: string, init?: { body?: string }) => {
+    const m = JSON.parse(init?.body ?? "{}").method as string;
+    calls.push(m);
+    const result = m === "Authenticate" ? { path: "ThisServer", credentials: { database: "db", sessionId: "S1", userName: "shared-user" } } : [];
+    return { ok: true, json: async () => ({ result }) } as Response;
+  }) as unknown as typeof fetch;
+  const creds = { database: "db", userName: "shared-user", password: "x" };
+  await store.set("session:db|shared-user", { path: "my.geotab.com", credentials: { database: "db", sessionId: "S0", userName: "shared-user" }, at: Date.now() });
+  await geotabProvider(creds, f, store).listGroups();
+  assert.equal(calls.includes("Authenticate"), false);
+  // Without a saved one it signs in once and saves it for the next instance.
+  const store2 = memoryStore();
+  const creds2 = { database: "db", userName: "other-user", password: "x" };
+  await geotabProvider(creds2, f, store2).listGroups();
+  assert.equal(calls.filter((c) => c === "Authenticate").length, 1);
+  assert.ok((await store2.get("session:db|other-user"))?.v);
+});
