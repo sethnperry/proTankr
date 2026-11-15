@@ -389,3 +389,32 @@ test("a sign-in saved in the shared store is reused instead of authenticating ag
   assert.equal(calls.filter((c) => c === "Authenticate").length, 1);
   assert.ok((await store2.get("session:db|other-user"))?.v);
 });
+
+test("a failed sign-in rests the login instead of retrying, and a rate limit rests it for a minute", async () => {
+  const { geotabProvider } = await import("./geotab.ts");
+  const { memoryStore } = await import("./cache.ts");
+  const store = memoryStore();
+  let auths = 0;
+  const bad = (async (_u: string, init?: { body?: string }) => {
+    const m = JSON.parse(init?.body ?? "{}").method as string;
+    if (m === "Authenticate") { auths++; return { ok: true, json: async () => ({ error: { message: "Incorrect login credentials", errors: [{ name: "InvalidUserException" }] } }) } as Response; }
+    return { ok: true, json: async () => ({ result: [] }) } as Response;
+  }) as unknown as typeof fetch;
+  const p = geotabProvider({ database: "db", userName: "bad-user", password: "x" }, bad, store);
+  await assert.rejects(() => p.listGroups());
+  await assert.rejects(() => p.listGroups());
+  assert.equal(auths, 1); // the second read did not try the bad login again
+
+  // Rate limit: one "quota" answer and the next call is refused without reaching Geotab.
+  let gets = 0;
+  const limited = (async (_u: string, init?: { body?: string }) => {
+    const m = JSON.parse(init?.body ?? "{}").method as string;
+    if (m === "Authenticate") return { ok: true, json: async () => ({ result: { path: "ThisServer", credentials: { database: "db", sessionId: "S", userName: "lim-user" } } }) } as Response;
+    gets++;
+    return { ok: true, json: async () => ({ error: { message: "API calls quota exceeded. Maximum admitted 10 per 1m" } }) } as Response;
+  }) as unknown as typeof fetch;
+  const q = geotabProvider({ database: "db", userName: "lim-user", password: "x" }, limited, memoryStore());
+  await assert.rejects(() => q.listGroups());
+  await assert.rejects(() => q.listGroups(), /resting/);
+  assert.equal(gets, 1);
+});

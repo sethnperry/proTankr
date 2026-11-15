@@ -17,7 +17,7 @@ export function useMyHos(companyId: string | null, enabled: boolean): HosAvailab
     let off = false;
     let timer: number | undefined;
     let linked = false;
-    let wait = 120_000;
+    let wait = 300_000;
     let misses = 0;
     const run = async () => {
       if (document.visibilityState !== "hidden") {
@@ -31,7 +31,7 @@ export function useMyHos(companyId: string | null, enabled: boolean): HosAvailab
           if (!r.ok) {
             // A failed answer (Geotab busy, a server hiccup) is not "no telematics": keep the last
             // reading and ask again, instead of going quiet until the app is reopened.
-            if (!off) timer = window.setTimeout(run, 120_000);
+            if (!off) timer = window.setTimeout(run, 300_000);
             return;
           }
           const j = await r.json();
@@ -39,8 +39,8 @@ export function useMyHos(companyId: string | null, enabled: boolean): HosAvailab
           if (!j?.connected) { setHos(null); return; } // no telematics: stop asking
           // No hours yet (not linked, or Geotab didn't answer this time): keep asking every two
           // minutes for a while, so one bad answer doesn't hide the card for ten.
-          if (!j.hos) { misses += 1; wait = misses <= 5 ? 120_000 : 600_000; }
-          else { misses = 0; setHos(j.hos as HosAvailability); wait = 120_000; }
+          if (!j.hos) { misses += 1; wait = misses <= 5 ? 300_000 : 600_000; }
+          else { misses = 0; setHos(j.hos as HosAvailability); wait = 300_000; }
         } catch { /* keep the last reading */ }
       }
       if (!off) timer = window.setTimeout(run, wait);

@@ -44,6 +44,12 @@ async function rpc(f: Fetch, host: string, method: string, params: unknown): Pro
 // Authenticate on every cold start or cron tick piles up sessions on the account, and a driver's own login is also
 // the one on their tablet. The session itself lasts days; a call that finds it dead signs in again (see `call`).
 const SHARED_SESSION_MS = 6 * 3600_000;
+// After a failed sign-in (a changed password, say) the login rests, so we never hammer a bad login: repeated failed
+// sign-ins are how an account gets locked. After Geotab says "too many calls", that login rests for a minute.
+const AUTH_REST_MS = 30 * 60_000;
+const RATE_REST_MS = 60_000;
+const restUntil = new Map<string, number>();
+const restCheckedAt = new Map<string, number>();
 
 async function session(f: Fetch, c: GeotabCreds, fresh = false, cache?: CacheStore): Promise<Session> {
   const key = `${c.database}|${c.userName}`.toLowerCase();
@@ -60,8 +66,29 @@ async function session(f: Fetch, c: GeotabCreds, fresh = false, cache?: CacheSto
       }
     } catch { /* no shared session: sign in */ }
   }
-  const r = await rpc(f, "my.geotab.com", "Authenticate", { database: c.database, userName: c.userName, password: c.password });
-  if (!r?.credentials?.sessionId) throw new TelematicsAuthError("Geotab sign-in failed.");
+  if (cache) {
+    try {
+      const m = await cache.get(`authfail:${key}`);
+      if (m && (m.v as { fail?: boolean } | null)?.fail && Date.now() - m.at < AUTH_REST_MS) throw new TelematicsAuthError("Geotab sign-in is resting after a failed sign-in. It tries again in a while.");
+    } catch (e) { if (e instanceof TelematicsAuthError) throw e; }
+  }
+  let r: any;
+  try {
+    r = await rpc(f, "my.geotab.com", "Authenticate", { database: c.database, userName: c.userName, password: c.password });
+    if (!r?.credentials?.sessionId) throw new TelematicsAuthError("Geotab sign-in failed.");
+  } catch (e) {
+    if (e instanceof TelematicsAuthError && cache) { try { await cache.set(`authfail:${key}`, { fail: true }); } catch { /* the rest is only a precaution */ } }
+    throw e;
+  }
+  if (cache) {
+    try {
+      // Every sign-in is written down (newest 40), so a driver's sign-out can be matched against ours.
+      const log = ((await cache.get(`authlog:${key}`))?.v as { at: string; fresh: boolean }[] | null) ?? [];
+      await cache.set(`authlog:${key}`, [...log, { at: new Date().toISOString(), fresh }].slice(-40));
+      const m = await cache.get(`authfail:${key}`);
+      if (m && (m.v as { fail?: boolean } | null)?.fail) await cache.set(`authfail:${key}`, null);
+    } catch { /* the log is only a diagnostic */ }
+  }
   const s: Session = { path: r.path && r.path !== "ThisServer" ? String(r.path) : "my.geotab.com", credentials: r.credentials, at: Date.now() };
   sessions.set(key, s);
   if (cache) { try { await cache.set(`session:${key}`, { path: s.path, credentials: s.credentials, at: s.at }); } catch { /* a repeat sign-in is the only cost */ } }
@@ -99,14 +126,36 @@ const groupIdsOf = (d: any): { groupIds?: string[] } => {
 
 export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheStore): TelematicsProvider {
   // One retry with a fresh session if the cached one has expired.
+  const loginKey = `${c.database}|${c.userName}`.toLowerCase();
+  const resting = async (): Promise<boolean> => {
+    if ((restUntil.get(loginKey) ?? 0) > Date.now()) return true;
+    // Another instance may have tripped it; look at the shared marker at most every ten seconds.
+    if (cache && Date.now() - (restCheckedAt.get(loginKey) ?? 0) > 10_000) {
+      restCheckedAt.set(loginKey, Date.now());
+      try {
+        const m = await cache.get(`ratelimit:${loginKey}`);
+        if (m && Date.now() - m.at < RATE_REST_MS) { restUntil.set(loginKey, m.at + RATE_REST_MS); return true; }
+      } catch { /* no shared marker */ }
+    }
+    return false;
+  };
   const call = async (method: string, params: Record<string, unknown>) => {
+    if (await resting()) throw new Error(`Geotab rate limit: this login is resting for a minute [${method}]`);
     let s = await session(f, c, false, cache);
     try {
-      return await rpc(f, s.path, method, { ...params, credentials: s.credentials });
+      try {
+        return await rpc(f, s.path, method, { ...params, credentials: s.credentials });
+      } catch (e) {
+        if (!(e instanceof TelematicsAuthError)) throw e;
+        s = await session(f, c, true, cache);
+        return await rpc(f, s.path, method, { ...params, credentials: s.credentials });
+      }
     } catch (e) {
-      if (!(e instanceof TelematicsAuthError)) throw e;
-      s = await session(f, c, true, cache);
-      return rpc(f, s.path, method, { ...params, credentials: s.credentials });
+      if (e instanceof Error && !(e instanceof TelematicsAuthError) && /quota|limit/i.test(e.message) && !/resting/.test(e.message)) {
+        restUntil.set(loginKey, Date.now() + RATE_REST_MS);
+        if (cache) { try { await cache.set(`ratelimit:${loginKey}`, true); } catch { /* the local rest still applies */ } }
+      }
+      throw e;
     }
   };
 
@@ -674,7 +723,11 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
     attachedAll: async () => pairsToMap<string, string[]>(await cached(cache, "attached", 2 * 60_000, async () => mapToPairs(await base.attachedAll()))),
     activeShipments: (vehicleId: string) => cached(cache, `ship:${vehicleId}`, 5 * 60_000, () => base.activeShipments(vehicleId)),
     lastDriverOf: (vehicleId: string) => cached(cache, `lastdrv:${vehicleId}`, 2 * 60_000, () => base.lastDriverOf(vehicleId)),
-    hos: (id: string, tz?: string) => cached(cache, `hos:${id}:${tz ?? ""}`, 2 * 60_000, () => base.hos(id, tz)),
+    // Hours are read at most every five minutes; a driver who has been off duty for a while only every fifteen.
+    hos: (id: string, tz?: string) => cached(cache, `hos:${id}:${tz ?? ""}`, (v: Awaited<ReturnType<typeof base.hos>>) => {
+      const off = v?.status === "OFF" && v.offSince && Date.now() - Date.parse(v.offSince) > 30 * 60_000;
+      return off ? 15 * 60_000 : 5 * 60_000;
+    }, () => base.hos(id, tz)),
     positions: async () => pairsToMap<string, VehicleReading>(await cached(cache, "positions", 30_000, async () => mapToPairs(await base.positions()))),
     currentDrivers: async () => pairsToMap<string, string>(await cached(cache, "currentdrivers", 30_000, async () => mapToPairs(await base.currentDrivers()))),
   };

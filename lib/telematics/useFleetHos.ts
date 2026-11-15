@@ -29,7 +29,7 @@ export function useFleetHos(companyId: string | null, enabled: boolean, nonce = 
           setHos(new Map(Object.entries(j.hos as Record<string, HosAvailability>)));
         } catch { /* keep the last values */ }
       }
-      if (!off) timer = window.setTimeout(run, 180_000);
+      if (!off) timer = window.setTimeout(run, 300_000);
     };
     void run();
     return () => { off = true; if (timer) window.clearTimeout(timer); };
