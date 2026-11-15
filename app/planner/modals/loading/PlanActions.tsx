@@ -15,6 +15,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     logLoadButtonRef,
     onBackToPlanner,
     onRackDelay,
+    onEndRackDelay,
     rackDelayStartedAt,
     onBeginLoading,
     loadingBegun,
@@ -57,8 +58,10 @@ export function PlanActions({ m }: { m: LoadingModel }) {
 
       <button
         type="button"
-        onClick={onRackDelay}
-        disabled={busy || delayRunning || !needsBegin || !onRackDelay}
+        // Before loading begins, Begin Loading ends the delay. Once loading has begun, a delay can still start (the line
+        // stopped, the rack went down) and a tap on its clock ends it.
+        onClick={delayRunning && !needsBegin ? onEndRackDelay : onRackDelay}
+        disabled={busy || !onRackDelay || (delayRunning && needsBegin) || (delayRunning && !onEndRackDelay)}
         style={{
           width: "100%",
           padding: "12px 16px",
@@ -69,11 +72,11 @@ export function PlanActions({ m }: { m: LoadingModel }) {
           color: "rgba(255,255,255,0.90)",
           fontSize: 15,
           fontWeight: 700,
-          cursor: delayRunning ? "default" : "pointer",
+          cursor: delayRunning && needsBegin ? "default" : "pointer",
           opacity: busy ? 0.55 : 1,
         }}
       >
-        {delayRunning ? <span style={{ color: "#fbbf24" }}>Rack Delay · <span style={{ fontVariantNumeric: "tabular-nums" }}>{clock}</span></span> : "Rack Delay"}
+        {delayRunning ? <span style={{ color: "#fbbf24" }}>Rack Delay · <span style={{ fontVariantNumeric: "tabular-nums" }}>{clock}</span>{!needsBegin ? " · tap to end" : ""}</span> : "Rack Delay"}
       </button>
 
       <button

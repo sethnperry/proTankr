@@ -156,9 +156,10 @@ export default function PlanReviewFlow() {
         loadWorkflow.onLoadedFromLoadingModal(entries, extras ? { afterTripRecord: () => recordTripLoaded(extras, false) } : undefined)
       }
       trip={tripModeForLoading}
-      onFinishLoadingStart={() => { const pk = tripPickup ?? tripWaitingPickup ?? null; if (pk && !pk.left_at) stampFinishLoading(pk.pickup_id); loadGeoShips(); }}
+      onFinishLoadingStart={() => { if (effectiveUserId && tripStoreHook.store) { endRunningDelay(tripStoreHook.store, effectiveUserId); setRackDelayStartedAt(null); } const pk = tripPickup ?? tripWaitingPickup ?? null; if (pk && !pk.left_at) stampFinishLoading(pk.pickup_id); loadGeoShips(); }}
       onUpdateCardOnly={handleCouldntLoad}
       onRackDelay={() => setRackDelayOpen(true)}
+      onEndRackDelay={() => { if (effectiveUserId && tripStoreHook.store) endRunningDelay(tripStoreHook.store, effectiveUserId); setRackDelayStartedAt(null); }}
       rackDelayStartedAt={rackDelayStartedAt}
       onBeginLoading={beginLoadingAfterDelay}
       loadingBegun={!(tripPickup ?? tripWaitingPickup) || !!(tripPickup ?? tripWaitingPickup)?.begin_at}
