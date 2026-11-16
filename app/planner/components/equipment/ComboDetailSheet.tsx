@@ -17,6 +17,8 @@ import type { TrackUnit } from "@/lib/equipment/trackList";
 import { PRIMARY_BTN as primaryBtn, SECONDARY_BTN as secondaryBtn } from "@/lib/ui/look";
 import { CameraButton } from "./AddDocumentSheet";
 import { TelematicsLink } from "./TelematicsPanel";
+import { fleetStatusColor, fleetStatusLabel } from "../../modals/EquipmentStatusModal";
+import { storyLine } from "@/lib/equipment/statusStoryLogic";
 
 const MUTED = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.14)", padding: 14, marginBottom: 12 };
@@ -61,6 +63,60 @@ function useUnitInfo(kind: "truck" | "trailer", id: string, companyId: string): 
   return info;
 }
 
+type NowInfo = { driver: string | null; driverAt: string | null; openTrip: string | null };
+const OPEN_TRIP: Record<string, string> = { draft: "On a trip, not started loading", loading: "Loading", in_transit: "En route", delivering: "Delivering", parked: "Parked preloaded" };
+
+/** What the unit is doing now and who last had it: the open trip on it, else who parked it, else the newest trip. */
+function useUnitNow(kind: "truck" | "trailer", id: string): NowInfo | null {
+  const [now, setNow] = useState<NowInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setNow(null);
+    void (async () => {
+      try {
+        const col = kind === "truck" ? "truck_id" : "trailer_id";
+        const [park, trips] = await Promise.all([
+          supabase.from("equipment_parks").select("parked_by, parked_at").eq("unit_kind", kind).eq("unit_id", id).maybeSingle(),
+          supabase.from("trips").select("driver_id, status, started_at").eq(col, id).order("started_at", { ascending: false }).limit(5),
+        ]);
+        const rows = (trips.data ?? []) as { driver_id: string | null; status: string; started_at: string | null }[];
+        const open = rows.find((r) => OPEN_TRIP[r.status]);
+        const p = park.data as { parked_by: string | null; parked_at: string | null } | null;
+        const last = rows[0];
+        const who = open?.driver_id ?? p?.parked_by ?? last?.driver_id ?? null;
+        const at = open ? open.started_at : p?.parked_by ? p.parked_at : last?.started_at ?? null;
+        let driver: string | null = null;
+        if (who) {
+          const { data } = await supabase.rpc("get_display_names_full", { p_user_ids: [who] });
+          driver = ((data ?? []) as { display_name: string | null }[])[0]?.display_name ?? null;
+        }
+        if (alive) setNow({ driver, driverAt: at, openTrip: open ? OPEN_TRIP[open.status] : null });
+      } catch { if (alive) setNow({ driver: null, driverAt: null, openTrip: null }); }
+    })();
+    return () => { alive = false; };
+  }, [kind, id]);
+  return now;
+}
+
+function RightNow({ kind, unit }: { kind: "truck" | "trailer"; unit: TrackUnit }) {
+  const now = useUnitNow(kind, unit.id);
+  const label = unit.statusCode ? fleetStatusLabel(unit.statusCode) || unit.statusCode : "No status set";
+  return (
+    <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", borderBottom: "1px solid rgba(255,255,255,0.1)", padding: "10px 0", marginBottom: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: MUTED }}>Right now</div>
+      <div style={{ fontSize: 16, fontWeight: 900, marginTop: 4, color: unit.statusCode ? fleetStatusColor(unit.statusCode) : "#fff" }}>
+        ● {label}{unit.subStatus ? ` · ${unit.subStatus}` : ""}
+      </div>
+      {now?.openTrip && <div style={{ fontSize: 14, fontWeight: 700, marginTop: 4 }}>{now.openTrip}</div>}
+      {unit.statusLocation && <div style={{ fontSize: 13, marginTop: 4 }}>At <b>{unit.statusLocation}</b>{unit.statusUpdatedAt ? <span style={{ color: MUTED }}> · {storyLine("", { byName: null, at: unit.statusUpdatedAt, source: null })}</span> : null}</div>}
+      {unit.statusNotes && <div style={{ fontSize: 13, marginTop: 4, color: "rgba(255,255,255,0.75)" }}>{unit.statusNotes}</div>}
+      <div style={{ fontSize: 13, marginTop: 6, color: MUTED }}>
+        {now == null ? "Looking up the last driver…" : now.driver ? <>{now.openTrip ? "Driver" : "Last driver"}: <b style={{ color: "#fff" }}>{now.driver}</b>{now.driverAt ? ` · ${new Date(now.driverAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}` : ""}</> : "No driver on record."}
+      </div>
+    </div>
+  );
+}
+
 function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "trailer"; unit: TrackUnit; companyId: string; onOpenFile: () => void }) {
   const info = useUnitInfo(kind, unit.id, companyId);
   const alerts = useUnitAlerts(kind, unit.id, companyId);
@@ -75,6 +131,7 @@ function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "t
     <div style={card}>
       <div style={label}>{kind === "truck" ? "Truck" : "Trailer"}</div>
       <div style={{ fontSize: 24, fontWeight: 900, margin: "6px 0 8px" }}>{unit.name}</div>
+      <RightNow kind={kind} unit={unit} />
       {!info ? <div style={{ fontSize: 13, color: MUTED }}>Loading…</div> : (
         <>
           {row("Year / make / model", ymm || <span style={{ color: MUTED }}>Not on file</span>)}

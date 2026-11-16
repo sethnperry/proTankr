@@ -3,11 +3,16 @@
 //
 // The main Equipment dialog: report section, action row, Select Equipment button.
 
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { StatusBlock } from "./StatusBlock";
 import { COLOR_TARE, COLOR_SERVICE, COLOR_WASH, saveBtnStyle, S } from "./styles";
 import type { SoloModel } from "./useSoloEquipment";
+import { ToolGlyph } from "@/app/planner/home/DashboardChrome";
+import { useEquipmentTools } from "@/lib/ui/equipmentTools";
+
+// Dark buttons with an icon, same size as Done.
+const darkBtn: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer", marginTop: 10 };
 
 export function MainDialog({ m }: { m: SoloModel }) {
   const {
@@ -32,6 +37,7 @@ export function MainDialog({ m }: { m: SoloModel }) {
     washLines,
   } = m;
   // With nothing selected there is nothing to look at here: go straight to the picker, once per opening.
+  const tools = useEquipmentTools();
   const autoPicked = useRef(false);
   const hasUnit = !!selectedCombo || !!selectedTrailerId || !!selectedTruckId;
   useEffect(() => {
@@ -61,16 +67,17 @@ export function MainDialog({ m }: { m: SoloModel }) {
             </div>
           )}
 
-          <button type="button" style={{ ...S.selectEquipmentBtn, marginBottom: 14 }} onClick={() => setPickerOpen(true)}>
-            Select Equipment
-          </button>
-
           {/* ── Status report -- replaces the old grid + per-card away
               badge/caption. See the statusBlockEl computation above. ── */}
           {!hasUnit && (
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, textAlign: "center", margin: "8px 8px 18px" }}>
               Pick the truck and trailer you're running today.
             </div>
+          )}
+          {!hasUnit && (
+            <button type="button" style={{ ...darkBtn, marginTop: 0 }} onClick={() => setPickerOpen(true)}>
+              <ToolGlyph name="locate" color="#fff" />Select Equipment
+            </button>
           )}
           {hasUnit && <StatusBlock m={m} />}
 
@@ -151,8 +158,21 @@ export function MainDialog({ m }: { m: SoloModel }) {
             {/* Stud -- pulled out of the small action-button row into its
                 own full-width button, same size/shape as Done, directly
                 above it -- per explicit direction. */}
-            <button type="button" onClick={openStatus} style={{ ...saveBtnStyle, marginTop: 14 }}>
-              Stud
+            <button type="button" onClick={openStatus} style={{ ...darkBtn, marginTop: 14 }}>
+              STUD
+            </button>
+            {tools?.onInspect && (
+              <button type="button" onClick={() => { handleClose(); tools.onInspect?.(); }} style={darkBtn}>
+                <ToolGlyph name="plan" color="#fff" />Inspect
+              </button>
+            )}
+            {tools?.onTruckDown && (
+              <button type="button" onClick={() => { handleClose(); tools.onTruckDown?.(); }} style={darkBtn}>
+                <ToolGlyph name="truck" color="#fff" />Truck down
+              </button>
+            )}
+            <button type="button" onClick={() => setPickerOpen(true)} style={darkBtn}>
+              <ToolGlyph name="locate" color="#fff" />Select Equipment
             </button>
 
             {/* This modal opts out of FullscreenModal's own default Done

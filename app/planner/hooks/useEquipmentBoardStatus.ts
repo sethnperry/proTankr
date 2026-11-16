@@ -14,12 +14,13 @@ import { productColorFor } from "../utils/productColor";
 import { dotsFor, initialsOf, driverActivity, nextDeliveryIndex, placeLine, lastPlace, storeLabel, type LoadedDot } from "@/lib/equipment/boardStatus";
 import { stripSegments, type StripSeg } from "@/lib/equipment/trailerStrip";
 import { fetchTrailerResidue } from "@/lib/equipment/fetchTrailerResidue";
+import type { PlanLineComp } from "../components/PlanLine";
 
 // A fuel stop left open longer than this was abandoned, not in progress.
 const FUEL_STALE_MS = 3 * 3600_000;
 const CARRYING = ["loading", "in_transit", "delivering", "parked"];
 
-export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], trailerIds: string[], refreshKey?: unknown) {
+export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], trailerIds: string[], refreshKey?: unknown, truckIds: string[] = []) {
   const catalog = useProductsCatalog();
   const terminals = useTerminalsCatalog();
   const [plannedPickup, setPlannedPickup] = useState<Record<string, string>>({});
@@ -32,6 +33,29 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
 
   const [activity, setActivity] = useState<Record<string, string>>({});
   const [destByTrailer, setDestByTrailer] = useState<Record<string, string>>({});
+
+  // Who last parked each unit (initials), for a unit nobody holds right now.
+  const [parkedByUnit, setParkedByUnit] = useState<Record<string, string>>({});
+  const unitKey = [...new Set([...truckIds, ...trailerIds])].sort().join(",");
+  useEffect(() => {
+    if (!enabled || !unitKey) { setParkedByUnit({}); return; }
+    let alive = true;
+    void (async () => {
+      try {
+        const ids = unitKey.split(",");
+        const { data } = await supabase.from("equipment_parks").select("unit_id, parked_by").in("unit_id", ids);
+        const rows = ((data ?? []) as { unit_id: string; parked_by: string | null }[]).filter((r) => r.parked_by);
+        const who = [...new Set(rows.map((r) => r.parked_by as string))];
+        if (!who.length) { if (alive) setParkedByUnit({}); return; }
+        const { data: nm } = await supabase.rpc("get_display_names_full", { p_user_ids: who });
+        const ini = new Map(((nm ?? []) as { user_id?: string; display_name?: string | null }[]).map((r) => [r.user_id ?? "", initialsOf(r.display_name)]));
+        const out: Record<string, string> = {};
+        for (const r of rows) { const v = ini.get(r.parked_by as string); if (v) out[r.unit_id] = v; }
+        if (alive) setParkedByUnit(out);
+      } catch { /* fail open */ }
+    })();
+    return () => { alive = false; };
+  }, [enabled, unitKey, refreshKey]);
 
   const claimKey = [...new Set(claimerIds)].sort().join(",");
   const trailerKey = [...new Set(trailerIds)].sort().join(",");
@@ -224,5 +248,22 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return out;
   }, [compSizes, aboard, residueBy, colorOf]);
 
-  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer };
+  // Each trailer as plan-style codes, highest comp first: D2/--/D2. A loaded compartment shows its product code; an
+  // empty one shows dashes in the color of what it last held, gray once washed.
+  const codesByTrailer = useMemo(() => {
+    const codeOf = new Map(catalog.data.map((p) => [p.product_id, String(p.button_code ?? (p.display_name || p.product_name || "PRD").split(" ")[0]).trim().toUpperCase()]));
+    const out: Record<string, PlanLineComp[]> = {};
+    for (const [tid, comps] of Object.entries(compSizes)) {
+      const now = new Map((aboard[tid] ?? []).filter((a) => a.productId).map((a) => [a.comp, a.productId as string]));
+      out[tid] = [...comps].sort((a, b) => b.comp - a.comp).map((c) => {
+        const pid = now.get(c.comp);
+        if (pid) return { num: c.comp, code: codeOf.get(pid) ?? "PRD", name: null, color: colorOf(pid) };
+        const rp = residueBy[tid]?.[c.comp];
+        return rp ? { num: c.comp, code: "--", name: null, color: colorOf(rp) } : { num: c.comp, code: null, name: null, color: null };
+      });
+    }
+    return out;
+  }, [catalog.data, compSizes, aboard, residueBy, colorOf]);
+
+  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer, codesByTrailer, parkedByUnit };
 }

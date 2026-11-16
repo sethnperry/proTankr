@@ -174,6 +174,7 @@ export function TerminalAccessStrip({ place, summary, onOpenTerminal, onOpenStep
 
 export type ToolIcon = "truck" | "terminal" | "store" | "card" | "route" | "chart" | "fuel" | "people" | "locate" | "plan" | "lock" | "radio";
 
+export const ToolGlyph = Icon;
 function Icon({ name, color, fluid }: { name: ToolIcon; color: string; fluid?: boolean }) {
   const p = { fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (

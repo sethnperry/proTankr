@@ -172,6 +172,7 @@ import RackDelaySheet from "../components/RackDelaySheet";
 import { RackDelayButton } from "../components/trip/RackDelayButton";
 import { readShopDown, writeShopDown, SHOP_BLOCK, type ShopDown } from "@/lib/trips/shopDown";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
+import { setEquipmentTools } from "@/lib/ui/equipmentTools";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 import { FreightSheet } from "../components/freight/FreightSheet";
 import { useFreight } from "../hooks/useFreight";
@@ -268,6 +269,14 @@ type PickerMode =
   | { mode: "select" }
   | { mode: "split"; ids: string[]; from: string | null }
   | { mode: "reroute"; delivery: TripDeliveryRow };
+
+/** Tells the Equipment modal what Inspect and Truck down do on this page (cleared when the page goes away). */
+function EquipmentToolsRegistrar({ onInspect, onTruckDown }: { onInspect: () => void; onTruckDown: () => void }) {
+  const a = useRef(onInspect); a.current = onInspect;
+  const b = useRef(onTruckDown); b.current = onTruckDown;
+  useEffect(() => { setEquipmentTools({ onInspect: () => a.current(), onTruckDown: () => b.current() }); return () => setEquipmentTools(null); }, []);
+  return null;
+}
 
 export default function HomePage() {
   const shell = useCalculatorShell();
@@ -2708,6 +2717,7 @@ export default function HomePage() {
       </div>
       <div className="d2-o4">
       {/* Tools. Left: the things on the cards above, top to bottom. Right: records. */}
+      <EquipmentToolsRegistrar onInspect={() => setInspectOpen(true)} onTruckDown={() => { repairFromDelay.current = false; setRepairOpen(true); }} />
       <SectionLabel>Tools</SectionLabel>
       {(() => {
         // Six tiles. Tiles with a list open a pop-out of smaller tools; the Reports tile holds every form.
@@ -2724,10 +2734,7 @@ export default function HomePage() {
         const tools: ToolItem[] = [
           { icon: "fuel", label: "Fuel", sub: fuel.active ? "In progress" : null, subColor: fuel.active ? "#fbbf24" : undefined, onClick: () => void tapFuel() },
           { icon: "plan", label: "Planner", sub: "Set up load plans", onClick: () => nav.go("plan", "/planner?plan=1"), busy: nav.is("plan") },
-          { icon: "truck", label: "Equipment", sub: equipmentLabel, subColor: undefined, onClick: openEquipment, group: [
-            { icon: "truck", label: "Equipment", sub: equipmentLabel, onClick: openEquipment },
-            A.truckDown, A.inspect,
-          ] },
+          { icon: "truck", label: "Equipment", sub: equipmentLabel, subColor: undefined, onClick: openEquipment },
           { icon: "store", label: "Location", sub: null, group: [
             terminalsTool(() => shell.setTerminalHubOpen(true)),
             deliveriesTool(() => setManageLocsOpen(true)),

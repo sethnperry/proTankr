@@ -14,6 +14,7 @@ import React from "react";
 import type { TrackRows, TrackUnit } from "@/lib/equipment/trackList";
 import type { StripSeg } from "@/lib/equipment/trailerStrip";
 import { BirdTab } from "../TrailerViews";
+import { PlanLine, type PlanLineComp } from "../PlanLine";
 import { truckLine } from "@/lib/equipment/boardStatus";
 import { fleetStatusColor, fleetStatusLabel } from "../../modals/EquipmentStatusModal";
 
@@ -26,7 +27,7 @@ const TILE_H = 64;
 const tileMine: React.CSSProperties = { background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.45)", color: "#fff" };
 const tileBase: React.CSSProperties = {
   borderRadius: 2, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
-  height: TILE_H, padding: "0 10px", display: "flex", alignItems: "center", gap: 8, overflow: "hidden", textAlign: "center", userSelect: "none", color: "rgba(255,255,255,0.85)", minWidth: 0, boxSizing: "border-box",
+  minHeight: TILE_H, padding: "6px 10px", display: "flex", alignItems: "center", gap: 8, overflow: "hidden", textAlign: "center", userSelect: "none", color: "rgba(255,255,255,0.85)", minWidth: 0, boxSizing: "border-box",
 };
 const plus: React.CSSProperties = {
   borderRadius: 2, border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", height: TILE_H, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px",
@@ -48,6 +49,11 @@ type Props = {
   lastPlaceByTrailer?: Record<string, string>;
   /** Compartment strip per trailer id (see useEquipmentBoardStatus). */
   strips?: Record<string, StripSeg[]>;
+  /** New look (Select Equipment): each trailer as plan-style codes (D2/--/D2), and who last had each unit (initials).
+   *  With `codes`, trucks read "SP - In Use", trailers get status plus codes, and a combo's trailer tile is just the
+   *  number and codes. */
+  codes?: Record<string, PlanLineComp[]>;
+  lastBy?: Record<string, string>;
   /** The viewer's own pair (highlighted). */
   mine?: { truckId: string | null; trailerId: string | null };
   /** A loose unit waiting to be coupled (outlined). */
@@ -88,8 +94,19 @@ function StatusLine({ u }: { u: TrackUnit }) {
   return null;
 }
 
+function statusText(u: TrackUnit, holderInitials: string, mine: boolean, lastBy?: Record<string, string>): { text: string; color: string } | null {
+  const abnormal = !!u.statusCode && u.statusCode !== "in_use";
+  const label = abnormal ? fleetStatusLabel(u.statusCode ?? "") : holderInitials || mine || u.statusCode === "in_use" ? "In Use" : "";
+  const ini = mine ? "Me" : holderInitials || lastBy?.[u.id] || "";
+  const text = label ? (ini ? `${ini} - ${label}` : label) : ini;
+  return text ? { text, color: abnormal ? fleetStatusColor(u.statusCode ?? "") : "rgba(255,255,255,0.7)" } : null;
+}
+
 export function EquipmentBoard(p: Props) {
   const { rows } = p;
+  const fresh = !!p.codes;
+  const small = (text: string, color: string) => <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{text}</div>;
+  const codeLine = (id: string) => (p.codes?.[id]?.length ? <div style={{ marginTop: 3, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}><PlanLine letter="" detail={false} comps={p.codes![id]} /></div> : null);
   const isMine = (truckId: string, trailerId: string) => !!p.mine && p.mine.truckId === truckId && p.mine.trailerId === trailerId;
 
   return (
@@ -114,7 +131,8 @@ export function EquipmentBoard(p: Props) {
                   style={{ display: "grid", gridTemplateColumns: "1fr 26px 1fr", alignItems: "stretch", cursor: "pointer" }}>
                   <Tile dot={dotFor(c.truck)} style={tile as React.CSSProperties}>
                     <Name>{c.truck.name}</Name>
-                    {(tl.tone !== "none" || mine) && (
+                    {fresh && (() => { const s = statusText(c.truck, holder ? p.initials[holder] ?? "" : "", mine, p.lastBy); return s ? small(s.text, s.color) : null; })()}
+                    {!fresh && (tl.tone !== "none" || mine) && (
                       <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: tl.tone === "status" ? fleetStatusColor(c.truck.statusCode ?? "") : "rgba(255,255,255,0.6)" }}>
                         {/* The driver's own equipment reads "Mine"; everyone else's keeps In Use plus initials. */}
                         {tl.tone === "use" || (tl.tone === "none" && mine) ? (() => { const ini = mine ? "Me" : holder ? p.initials[holder] ?? "" : ""; const act = holder ? p.activity?.[holder] : null; return act ? `${ini}${ini ? " · " : ""}${act}` : ini ? `In Use · ${ini}` : "In Use"; })() : tl.text}
@@ -122,9 +140,9 @@ export function EquipmentBoard(p: Props) {
                     )}
                   </Tile>
                   <div aria-hidden style={{ alignSelf: "center", height: 2, background: "rgba(255,255,255,0.45)" }} />
-                  <Tile style={tile as React.CSSProperties} strip={segs}>
+                  <Tile style={tile as React.CSSProperties} strip={fresh ? undefined : segs}>
                     <Name>{c.trailer.name}</Name>
-                    {loadedText(segs) ? (
+                    {fresh ? codeLine(c.trailer.id) : loadedText(segs) ? (
                       p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : p.lastPlaceByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : null
                     ) : p.lastPlaceByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : <StatusLine u={c.trailer} />}
                   </Tile>
@@ -149,7 +167,7 @@ export function EquipmentBoard(p: Props) {
                   <Tile key={u.id} dot={dotFor(u)} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
-                    <StatusLine u={u} />
+                    {fresh ? (() => { const s = statusText(u, "", mine, p.lastBy); return s ? small(s.text, s.color) : null; })() : <StatusLine u={u} />}
                   </Tile>
                 );
               })}
@@ -165,10 +183,10 @@ export function EquipmentBoard(p: Props) {
                 const pending = p.pendingId === u.id;
                 const segs = p.strips?.[u.id];
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} strip={segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u)} strip={fresh ? undefined : segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
-                    {loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
+                    {fresh ? <>{(() => { const s = statusText(u, "", mine, p.lastBy); return s ? small(s.text, s.color) : null; })()}{codeLine(u.id)}</> : loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
                       : p.lastPlaceByTrailer?.[u.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[u.id]}</div> : <StatusLine u={u} />}
                   </Tile>
                 );

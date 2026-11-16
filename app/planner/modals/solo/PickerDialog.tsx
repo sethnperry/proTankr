@@ -7,6 +7,8 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { EquipmentBoard } from "../../components/equipment/EquipmentBoard";
 import { saveBtnStyle, S } from "./styles";
 import { createLongPress } from "./longPress";
+import { ImportUnitModal } from "./ImportUnitModal";
+import { useState } from "react";
 import type { SoloModel } from "./useSoloEquipment";
 
 export function PickerDialog({ m }: { m: SoloModel }) {
@@ -18,6 +20,9 @@ export function PickerDialog({ m }: { m: SoloModel }) {
     boardTapTruck,
     canAddRemove,
     claimedByCombo,
+    companyId,
+    loadEquipment,
+    myRole,
     coupleFrom,
     filter,
     loading,
@@ -37,6 +42,8 @@ export function PickerDialog({ m }: { m: SoloModel }) {
     trailers,
     trucks,
   } = m;
+  const [importOpen, setImportOpen] = useState(false);
+  const canImport = myRole === "admin";
   return (
     <>
       {/* ── Select Equipment -- the two-column truck/trailer grid + connector
@@ -136,6 +143,7 @@ export function PickerDialog({ m }: { m: SoloModel }) {
             initials={boardStatus.initials}
             activity={boardStatus.activity} destByTrailer={boardStatus.destByTrailer} lastPlaceByTrailer={boardStatus.lastPlaceByTrailer}
             strips={boardStatus.strips}
+            codes={boardStatus.codesByTrailer} lastBy={boardStatus.parkedByUnit}
             mine={{ truckId: selectedTruckId, trailerId: selectedTrailerId }}
             loading={loading}
             onCombo={(c) => setDetailComboId(c.comboId)}
@@ -156,6 +164,12 @@ export function PickerDialog({ m }: { m: SoloModel }) {
                 : undefined
             }
           />
+          {canImport && (
+            <button type="button" onClick={() => setImportOpen(true)}
+              style={{ ...saveBtnStyle, background: "rgba(255,255,255,0.06)", color: "#fff", border: "1px solid rgba(255,255,255,0.18)", marginTop: 20 }}>
+              Import
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -165,12 +179,13 @@ export function PickerDialog({ m }: { m: SoloModel }) {
                 setSelectedTrailerId(null);
               }
             }}
-            style={{ ...saveBtnStyle, marginTop: 20 }}
+            style={{ ...saveBtnStyle, marginTop: canImport ? 10 : 20 }}
           >
             Done
           </button>
         </div>
       </FullscreenModal>
+      {canImport && <ImportUnitModal open={importOpen} onClose={() => setImportOpen(false)} companyId={companyId} onImported={() => loadEquipment()} />}
     </>
   );
 }

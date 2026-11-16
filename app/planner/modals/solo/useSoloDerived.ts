@@ -109,6 +109,7 @@ export function useSoloDerived(
     combos.map((c) => c.claimed_by).filter((x): x is string => !!x),
     trailers.map((t) => t.trailer_id),
     combos.length,
+    trucks.map((t) => t.truck_id),
   );
   const detailRow = detailComboId ? (boardRows.combos.find((c) => c.comboId === detailComboId) ?? null) : null;
   const detailCombo = detailComboId ? (combos.find((c) => c.combo_id === detailComboId) ?? null) : null;
