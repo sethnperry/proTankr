@@ -37,6 +37,8 @@ export type CompanyDashboardProps = {
   onShiftSlot?: React.ReactNode;
   deskSlot?: React.ReactNode;
   onOpenNeed: (k: NeedsItem["key"]) => void;
+  /** A down unit tapped in the Down sheet. */
+  onOpenUnit?: (kind: "truck" | "trailer", id: string) => void;
   loading?: boolean;
 };
 
@@ -200,7 +202,12 @@ export function CompanyDashboardView(p: CompanyDashboardProps) {
 
       <FullscreenModal open={sheet === "down"} title="Down" onClose={() => setSheet(null)} footer={null}>
         {down.length === 0 && <div style={{ color: L.muted, fontSize: 14 }}>No units in Deadline.</div>}
-        {down.map((b) => <div key={b.id} style={{ ...L.secondary, display: "flex", justifyContent: "space-between", padding: "12px 14px", marginBottom: 6, fontSize: 14 }}><b>{b.kind === "truck" ? "Truck" : "Trailer"} {b.name}</b><span style={{ color: L.muted }}>{b.days}d in Deadline</span></div>)}
+        {down.map((b) => (
+          <button key={b.id} type="button" disabled={!p.onOpenUnit} onClick={() => { setSheet(null); p.onOpenUnit?.(b.kind, b.id); }} className="dash-press"
+            style={{ ...L.secondary, display: "flex", width: "100%", justifyContent: "space-between", padding: "12px 14px", marginBottom: 6, fontSize: 14, color: "#fff", cursor: p.onOpenUnit ? "pointer" : "default", textAlign: "left" }}>
+            <b>{b.kind === "truck" ? "Truck" : "Trailer"} {b.name}</b><span style={{ color: L.muted }}>{b.days}d in Deadline{p.onOpenUnit ? " ›" : ""}</span>
+          </button>
+        ))}
       </FullscreenModal>
 
       <FullscreenModal open={sheet === "hours"} title="Hours risk" onClose={() => setSheet(null)} footer={null}>

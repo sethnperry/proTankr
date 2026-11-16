@@ -1659,13 +1659,6 @@ export default function AdminPage() {
 
     for (const t of trucks) {
       if (!t.active || !matchesScope(t.region, t.local_area)) continue;
-      if (t.status_code === "deadline") {
-        items.push({
-          key: `flag-truck-${t.truck_id}`, severity: "danger",
-          label: t.truck_name, detail: "Flagged Deadline", days: null,
-          onOpen: () => void openDownUnit("truck", t.truck_id),
-        });
-      }
       for (const f of TRUCK_PERMIT_FIELDS) {
         const days = daysUntil(t[f.key] as string | null);
         if (days == null || days >= 30) continue;
@@ -1688,13 +1681,6 @@ export default function AdminPage() {
 
     for (const t of trailers) {
       if (!t.active || !matchesScope(t.region, t.local_area)) continue;
-      if (t.status_code === "deadline") {
-        items.push({
-          key: `flag-trailer-${t.trailer_id}`, severity: "danger",
-          label: t.trailer_name, detail: "Flagged Deadline", days: null,
-          onOpen: () => void openDownUnit("trailer", t.trailer_id),
-        });
-      }
       for (const f of TRAILER_PERMIT_FIELDS) {
         const days = daysUntil(t[f.key] as string | null);
         if (days == null || days >= 30) continue;
@@ -1781,7 +1767,7 @@ export default function AdminPage() {
       });
     }
     return items;
-  }, [openDownUnit, trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea, longShifts.missing, longShifts.maxHours]);
+  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea, longShifts.missing, longShifts.maxHours]);
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
@@ -2215,6 +2201,7 @@ export default function AdminPage() {
               loadTimeline={desk.loadTimeline} />
           ) : undefined}
           onOpenNeed={onOpenNeed}
+          onOpenUnit={(kind, id) => void openDownUnit(kind, id)}
         />
       )}
 
