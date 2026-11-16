@@ -117,7 +117,10 @@ export async function GET(req: NextRequest) {
     // Shipping documents (BOL numbers) on the truck's Drive app, if the company uses them.
     const shipments = await p.activeShipments(vid).catch(() => []);
     await admin.from("telematics_connections").update({ last_ok_at: new Date().toISOString(), last_error: null }).eq("company_id", companyId);
-    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, shipments, driverName, lastDriver, heldByName, hos });
+    const { data: dbRow } = await admin.from("telematics_connections").select("database_name").eq("company_id", companyId).maybeSingle();
+    const db = (dbRow as { database_name?: string } | null)?.database_name;
+    const geotabUrl = db ? `https://my.geotab.com/${encodeURIComponent(db)}/#vehicle,id:${encodeURIComponent(vid)}` : null;
+    return NextResponse.json({ connected: true, ...reading, city, state, trailerId, trailerName, trailerKnown, geotabTrailers, shipments, driverName, lastDriver, heldByName, hos, geotabUrl });
   } catch (e) {
     console.warn("[telematics] reading failed:", (e as Error).message);
     // A broken link shows up in the Desk error list (once an hour per company, not once per poll).

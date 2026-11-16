@@ -6,7 +6,8 @@
 // ProTankr's own logic. "Update from Geotab" reads the telematics, shows what would change
 // (including a trailer hookup that no longer matches) and only saves after you acknowledge it.
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 import { fetchPositionDebug, fetchTruckReading, fetchVehicleReading, type TruckReading } from "@/lib/telematics/useTruckReading";
@@ -20,6 +21,10 @@ import type { TrackUnit } from "@/lib/equipment/trackList";
 import type { TrackChange } from "@/lib/telematics/trackChanges";
 import EquipmentStatusModal, { fleetStatusColor, fleetStatusLabel, type FleetStatus } from "../../modals/EquipmentStatusModal";
 import { muted } from "../trip/tripUi";
+import { fetchStatusStory, storyLine, type StatusStory } from "@/lib/equipment/statusStory";
+import type { StoryPin } from "./UnitStoryMap";
+
+const UnitStoryMap = dynamic(() => import("./UnitStoryMap"), { ssr: false });
 
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted };
 const card: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.14)", padding: 14, marginBottom: 12 };
@@ -27,7 +32,9 @@ const bigBtn: React.CSSProperties = { display: "block", width: "100%", textAlign
 
 type Preview = { changes: TrackChange[]; canSeparate: boolean; truckId: string; truckName: string; observed: { city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null; trailerName: string | null } };
 
-export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded, geoTrailer, onAddedTrailer }: {
+export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded, geoTrailer, onAddedTrailer, story = false }: {
+  /** The Down chip's view: one unit, and the story of how it got its status (who, when, where, notes). */
+  story?: boolean;
   open: boolean; onClose: () => void; companyId: string;
   truck: TrackUnit | null; trailer: TrackUnit | null;
   /** A Geotab vehicle that isn't a ProTankr truck (found through a driver). */
@@ -55,6 +62,15 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
   const [separate, setSeparate] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { data: catalog } = useProductsCatalog();
+  const focus = story ? (truck ?? trailer) : null;
+  const [told, setTold] = useState<StatusStory | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  useEffect(() => {
+    if (!open || !focus) { setTold(null); return; }
+    let off = false;
+    void fetchStatusStory(focus.kind, focus.id, companyId, focus.statusUpdatedAt).then((s) => { if (!off) setTold(s); });
+    return () => { off = true; };
+  }, [open, focus?.id, focus?.statusUpdatedAt, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const truckId = truck?.id ?? vehicle?.id ?? null;
 
   const load = useCallback(async (id: string) => {
@@ -151,7 +167,58 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
 
   const hasPos = reading?.lat != null && reading?.lon != null;
   const place = [reading?.city, reading?.state].filter(Boolean).join(", ");
-  const title = geoTrailer ? `Trailer ${geoTrailer.name}` : [truck ? `Truck ${truck.name}` : vehicle ? `Vehicle ${vehicle.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
+  const title = story && focus ? `${focus.kind === "truck" ? "Truck" : "Trailer"} ${focus.name}` : geoTrailer ? `Trailer ${geoTrailer.name}` : [truck ? `Truck ${truck.name}` : vehicle ? `Vehicle ${vehicle.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
+
+  const verbFor = (code: string | null) => code === "deadline" ? "Deadlined" : code === "readyline" ? "Marked Readyline" : code === "in_use" ? "Set in use" : "Status set";
+  const pins = useMemo<StoryPin[]>(() => {
+    const out: StoryPin[] = [];
+    const sc = focus?.statusCode ?? null;
+    const there = told?.lat != null && told?.lon != null ? { lat: told.lat, lon: told.lon } : null;
+    const now = reading?.lat != null && reading?.lon != null ? { lat: reading.lat, lon: reading.lon } : null;
+    const metres = there && now ? Math.hypot((there.lat - now.lat) * 111_320, (there.lon - now.lon) * 111_320 * Math.cos(there.lat * Math.PI / 180)) : null;
+    if (there) out.push({ key: "there", ...there, label: metres != null && metres < 50 ? `${focus?.name} · ${verbFor(sc).toLowerCase()} here, still here` : `${focus?.name} · ${verbFor(sc).toLowerCase()} here`, sub: told?.placeLabel ?? focus?.statusLocation ?? "Saved location", color: "#f87171" });
+    if (now && !(metres != null && metres < 50)) out.push({ key: "now", ...now, label: `${focus?.name} · now`, sub: `Geotab · ${ageText(reading?.at ?? null)}`, color: "#60a5fa" });
+    return out;
+  }, [told, reading, focus]);
+
+  const storyCard = (u: TrackUnit) => (
+    <div key={u.id} style={card}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 22, fontWeight: 900 }}>{u.kind === "truck" ? "Truck" : "Trailer"} {u.name}</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 14, fontWeight: 900, color: u.statusCode ? fleetStatusColor(u.statusCode) : muted }}>● {u.statusCode ? fleetStatusLabel(u.statusCode) || u.statusCode : "No status"}{u.subStatus ? ` · ${u.subStatus}` : ""}</span>
+      </div>
+      <div style={{ fontSize: 14, marginTop: 8 }}>{told ? storyLine(verbFor(u.statusCode), told) : u.statusUpdatedAt ? storyLine(verbFor(u.statusCode), { byName: null, at: u.statusUpdatedAt, source: null }) : "No status history on file."}</div>
+      {told && !told.byName && u.statusUpdatedAt && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Who set it wasn't recorded.</div>}
+
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <div style={label}>{verbFor(u.statusCode)} at</div>
+        <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{u.statusLocation || told?.placeLabel || <span style={{ color: muted, fontWeight: 600 }}>No location saved</span>}</div>
+        {told?.lat != null && told?.lon != null && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{told.placeLabel && u.statusLocation && told.placeLabel !== u.statusLocation ? `${told.placeLabel} · ` : ""}{told.lat.toFixed(5)}, {told.lon.toFixed(5)}</div>}
+      </div>
+
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <div style={label}>Notes from the driver</div>
+        <div style={{ fontSize: 15, marginTop: 4, whiteSpace: "pre-wrap", color: u.statusNotes ? "#fff" : muted }}>{u.statusNotes || "Nothing noted."}</div>
+        {(u.region || u.localArea || u.currentRegion || u.currentLocalArea) && (
+          <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>
+            {[u.currentRegion ?? u.region, u.currentLocalArea ?? u.localArea].filter(Boolean).join(" · ")}
+            {(u.currentRegion && u.currentRegion !== u.region) || (u.currentLocalArea && u.currentLocalArea !== u.localArea) ? ` (home: ${[u.region, u.localArea].filter(Boolean).join(" · ") || "none"})` : ""}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+        {reading?.geotabUrl && (
+          <a href={reading.geotabUrl} target="_blank" rel="noopener noreferrer" style={{ ...bigBtn, flex: "1 1 140px", width: "auto", background: "#fff", color: "#000", textDecoration: "none", boxSizing: "border-box" }}>Track in Geotab</a>
+        )}
+        <button type="button" disabled={pins.length === 0} onClick={() => setMapOpen(true)}
+          style={{ ...bigBtn, flex: "1 1 140px", width: "auto", background: "rgba(255,255,255,0.1)", color: "#fff", opacity: pins.length ? 1 : 0.4 }}>Show on map</button>
+        <button type="button" onClick={() => setStatusUnit(u)}
+          style={{ ...bigBtn, flex: "0 0 auto", width: "auto", padding: "13px 18px", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}>STUD</button>
+      </div>
+    </div>
+  );
 
   const unitCard = (u: TrackUnit) => (
     <div key={u.id} style={card}>
@@ -195,8 +262,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
           ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
         </>
       )}
-      {truck && unitCard(truck)}
-      {trailer && unitCard(trailer)}
+      {story && focus ? storyCard(focus) : <>{truck && unitCard(truck)}{trailer && unitCard(trailer)}</>}
 
       {(truck || vehicle) && (
         <div style={card}>
@@ -343,7 +409,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
                   )}
                 </div>
               )}
-              {hasPos && <><div style={{ fontSize: 12, marginTop: 10, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
+              {hasPos && !story && <><div style={{ fontSize: 12, marginTop: 10, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
               <a href={mapsUrl(reading.lat!, reading.lon!)} target="_blank" rel="noopener noreferrer"
                 style={{ ...bigBtn, marginTop: 14, background: "rgba(255,255,255,0.1)", color: "#fff", textDecoration: "none", boxSizing: "border-box" }}>
                 Open in Maps
@@ -377,6 +443,8 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
           ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
         </>
       )}
+
+      {story && focus && <UnitStoryMap open={mapOpen} onClose={() => setMapOpen(false)} title={`${focus.kind === "truck" ? "Truck" : "Trailer"} ${focus.name}`} pins={pins} />}
 
       {/* Acknowledge what will change before anything is saved. */}
       <FullscreenModal open={!!preview} onClose={() => setPreview(null)} title="Update from Geotab" footer={null}>

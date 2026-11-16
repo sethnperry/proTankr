@@ -1649,11 +1649,11 @@ export default function AdminPage() {
       const { data } = await supabase.from(k === "truck" ? "trucks" : "trailers").select(`${k}_id, ${k}_name, ${COLS}`).eq(`${k}_id`, uid).maybeSingle();
       return data ? toU(data, k) : null;
     };
-    const pair = combos.find((c) => c.active && (kind === "truck" ? c.truck_id === id : c.trailer_id === id));
-    const truck = kind === "truck" ? await one("truck", id) : pair ? await one("truck", pair.truck_id) : null;
-    const trailer = kind === "trailer" ? await one("trailer", id) : pair ? await one("trailer", pair.trailer_id) : null;
+        // The Down chip is about this one unit; its partner is only mentioned in the live Geotab details.
+    const truck = kind === "truck" ? await one("truck", id) : null;
+    const trailer = kind === "trailer" ? await one("trailer", id) : null;
     if (truck || trailer) setDownUnit({ truck, trailer });
-  }, [combos]);
+  }, []);
   const attentionItems = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
 
@@ -2089,7 +2089,7 @@ export default function AdminPage() {
     <div style={{ ...css.page, maxWidth: undefined }} className="admin-page-root dash-wrap d2">
       <DashStyles />
       {downUnit && companyId && (
-        <TrackDetail open onClose={() => setDownUnit(null)} companyId={companyId}
+        <TrackDetail open story onClose={() => setDownUnit(null)} companyId={companyId}
           truck={downUnit.truck} trailer={downUnit.trailer} allTrucks={downUnit.truck ? [downUnit.truck] : []}
           canAdd={false} onChanged={() => void loadAll()} onSwitchTruck={() => { /* single unit from the dashboard */ }} />
       )}
