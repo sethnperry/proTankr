@@ -9,7 +9,6 @@ import { fetchProductsCatalogCached } from "@/lib/queries/useProductsCatalog";
 import { fetchTerminalsCatalogCached, TERMINALS_CATALOG_QUERY_KEY } from "@/lib/queries/useTerminalsCatalog";
 import ComboEditModal from "@/lib/ui/driver/ComboEditModal";
 import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/driver/EquipmentDetails";
-import { EquipmentTable } from "./EquipmentTable";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
 import EquipmentModal from "@/app/planner/modals/EquipmentModal";
@@ -1267,16 +1266,11 @@ export default function AdminPage() {
   const [usersOpen,      setUsersOpen]      = useState(false);
   const fleetSetup = useFleetSetup(companyId, usersOpen && !isSolo && (myRole === "admin" || myRole === "dispatch"));
   const [setupRowId, setSetupRowId] = useState<string | null>(null);
-  const [equipOpen,      setEquipOpen]      = useState(false);
   // The same Equipment screen a driver sees (selected equipment, Scale/Service/Wash/Edit, STUD, Inspect, Truck down, Select Equipment, Track).
   const [myEquipOpen,    setMyEquipOpen]    = useState(false);
   const myEquipment = useEquipment(currentUserId);
-  const [equipTab,       setEquipTab]       = useState<"trucks"|"trailers"|"combos"|"table">("table");
   const [terminalsOpen,  setTerminalsOpen]  = useState(false);
   // keep for compat
-  const trucksOpen   = equipOpen && equipTab === "trucks";
-  const trailersOpen = equipOpen && equipTab === "trailers";
-  const combosOpen   = equipOpen && equipTab === "combos";
 
   // Quick Find -- one box searching across Users/Equipment/Terminals at
   // once, jumping into whichever section actually has the match rather
@@ -1850,11 +1844,11 @@ export default function AdminPage() {
     setQuickFind("");
   }
   function jumpToTruck(t: Truck) {
-    setEquipOpen(true); setEquipTab("trucks"); setTruckFilter(""); setTruckSearch(t.truck_name);
+    void openDownUnit("truck", t.truck_id);
     setQuickFind("");
   }
   function jumpToTrailer(t: Trailer) {
-    setEquipOpen(true); setEquipTab("trailers"); setTrailerFilter(""); setTrailerSearch(t.trailer_name);
+    void openDownUnit("trailer", t.trailer_id);
     setQuickFind("");
   }
   function jumpToTerminal(t: Terminal) {
@@ -2389,168 +2383,6 @@ export default function AdminPage() {
       {/* ── EQUIPMENT (Trucks, Trailers, Combos) -- modal opened via its own
            "Equipment" tile below. Admin/lead only, same as before. Content
            unchanged from the old inline section, just relocated. ── */}
-      {equipOpen && (myRole === "admin" || myRole === "lead") && (
-        <Modal title="Equipment" onClose={() => setEquipOpen(false)} wide>
-          {(flaggedTruckCount + flaggedTrailerCount) > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 2, padding: "2px 8px" }}>
-                ⚠ {flaggedTruckCount + flaggedTrailerCount} flagged
-              </span>
-            </div>
-          )}
-          {/* Tab bar */}
-          <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            {([["table","Table",trucks.length + trailers.length],["trucks","Trucks",trucks.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["trailers","Trailers",trailers.filter(t=>t.active && matchesScope(t.region, t.local_area)).length],["combos","Combos",scopedActiveComboCount]] as const).map(([tab, label, count]) => (
-              <button key={tab} type="button"
-                onClick={() => setEquipTab(tab)}
-                style={{ flex: 1, background: "none", border: "none", borderBottom: equipTab === tab ? "2px solid rgba(255,255,255,0.70)" : "2px solid transparent", cursor: "pointer", padding: "8px 4px", fontSize: 13, fontWeight: equipTab === tab ? 800 : 500, color: equipTab === tab ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.35)", transition: "all 150ms" }}>
-                {label} <span style={{ fontSize: 11, opacity: 0.6 }}>({count})</span>
-              </button>
-            ))}
-          </div>
-
-          {equipTab === "table" && (
-            <EquipmentTable trucks={trucks} trailers={trailers} companyId={companyId!} canDelete={myRole === "admin"} onOpenTelematics={() => setTelematicsOpen(true)} onOpenTruck={(t) => setTruckModal(t)} onOpenTrailer={(t) => setTrailerModal(t)} onChanged={() => void loadAll()} />
-          )}
-
-          {/* Trucks tab */}
-          {equipTab === "trucks" && (
-            <>
-              {(flaggedTruckCount > 0 || truckIdsExpiring.size > 0) && (
-                <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
-                  {flaggedTruckCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setTruckFilter(f => f === "flagged" ? "" : "flagged")}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
-                        border: truckFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
-                        background: truckFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
-                        color: "#f87171", fontSize: 12, fontWeight: 700,
-                      }}
-                    >
-                      ⚠ {flaggedTruckCount} truck{flaggedTruckCount !== 1 ? "s" : ""} flagged Deadline
-                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "flagged" ? "showing" : "tap to view"}</span>
-                    </button>
-                  )}
-                  {truckIdsExpiring.size > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setTruckFilter(f => f === "expiring" ? "" : "expiring")}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
-                        border: truckFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
-                        background: truckFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
-                        color: "#fdba74", fontSize: 12, fontWeight: 700,
-                      }}
-                    >
-                      {truckIdsExpiring.size} truck{truckIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
-                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{truckFilter === "expiring" ? "showing" : "tap to view"}</span>
-                    </button>
-                  )}
-                </div>
-              )}
-              <div style={{ ...filterRow, alignItems: "center" }}>
-                <input value={truckSearch} onChange={e => setTruckSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                <select value={truckFilter} onChange={e => setTruckFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                  <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
-                </select>
-                <select value={truckSort} onChange={e => setTruckSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                  <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
-                  <option value="region:asc">Region A→Z</option><option value="status:asc">Status A→Z</option>
-                </select>
-                <button style={plusBtn} onClick={() => setTruckModal("new")} title="Add truck">+</button>
-              </div>
-              {!truckSearch && truckFilter === "" ? (
-                <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or filter to find trucks.</div>
-              ) : filteredTrucks.length === 0 ? (
-                <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trucks match your filter.</div>
-              ) : (
-                filteredTrucks.map(t => <TruckCard key={t.truck_id} truck={t} companyId={companyId!} onEdit={() => setTruckModal(t)} otherPermits={truckOtherPermits[t.truck_id]} />)
-              )}
-            </>
-          )}
-
-          {/* Trailers tab */}
-          {equipTab === "trailers" && (
-            <>
-              {(flaggedTrailerCount > 0 || trailerIdsExpiring.size > 0) && (
-                <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 }}>
-                  {flaggedTrailerCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setTrailerFilter(f => f === "flagged" ? "" : "flagged")}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
-                        border: trailerFilter === "flagged" ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(239,68,68,0.25)",
-                        background: trailerFilter === "flagged" ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.06)",
-                        color: "#f87171", fontSize: 12, fontWeight: 700,
-                      }}
-                    >
-                      ⚠ {flaggedTrailerCount} trailer{flaggedTrailerCount !== 1 ? "s" : ""} flagged Deadline
-                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "flagged" ? "showing" : "tap to view"}</span>
-                    </button>
-                  )}
-                  {trailerIdsExpiring.size > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setTrailerFilter(f => f === "expiring" ? "" : "expiring")}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, width: "100%",
-                        padding: "8px 12px", borderRadius: 2, cursor: "pointer", textAlign: "left" as const,
-                        border: trailerFilter === "expiring" ? "1px solid rgba(251,146,60,0.45)" : "1px solid rgba(251,146,60,0.22)",
-                        background: trailerFilter === "expiring" ? "rgba(251,146,60,0.12)" : "rgba(251,146,60,0.06)",
-                        color: "#fdba74", fontSize: 12, fontWeight: 700,
-                      }}
-                    >
-                      {trailerIdsExpiring.size} trailer{trailerIdsExpiring.size !== 1 ? "s" : ""} with a permit expiring soon
-                      <span style={{ marginLeft: "auto", fontWeight: 500, opacity: 0.75 }}>{trailerFilter === "expiring" ? "showing" : "tap to view"}</span>
-                    </button>
-                  )}
-                </div>
-              )}
-              <div style={{ ...filterRow, alignItems: "center" }}>
-                <input value={trailerSearch} onChange={e => setTrailerSearch(e.target.value)} placeholder="Search unit, VIN, region…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                <select value={trailerFilter} onChange={e => setTrailerFilter(e.target.value as ActiveFilter)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                  <option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="flagged">Flagged</option><option value="expiring">Expiring Soon</option>
-                </select>
-                <select value={trailerSort} onChange={e => setTrailerSort(e.target.value)} style={{ ...css.select, fontSize: 12, padding: "7px 8px" }}>
-                  <option value="name:asc">Name A→Z</option><option value="name:desc">Name Z→A</option>
-                  <option value="region:asc">Region A→Z</option>
-                </select>
-                <button style={plusBtn} onClick={() => setTrailerModal("new")} title="Add trailer">+</button>
-              </div>
-              {!trailerSearch && trailerFilter === "" ? (
-                <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search or filter to find trailers.</div>
-              ) : filteredTrailers.length === 0 ? (
-                <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No trailers match your filter.</div>
-              ) : (
-                filteredTrailers.map(t => <TrailerCard key={t.trailer_id} trailer={t} companyId={companyId!} onEdit={() => setTrailerModal(t)} />)
-              )}
-            </>
-          )}
-
-          {/* Combos tab */}
-          {equipTab === "combos" && (
-            <>
-              <div style={{ ...filterRow, alignItems: "center" }}>
-                <input value={comboSearch} onChange={e => setComboSearch(e.target.value)} placeholder="Search truck, trailer, driver…" style={{ ...css.input, flex: 1, minWidth: 140, padding: "7px 10px" }} />
-                <button style={plusBtn} onClick={() => setCoupleModal(true)} title="New combo">+</button>
-              </div>
-              {!comboSearch ? (
-                <div style={{ ...css.card, color: T.muted, fontSize: 13, textAlign: "center" as const }}>Search to find combos, or tap + to create one.</div>
-              ) : filteredCombos.length === 0 ? (
-                <div style={{ ...css.card, color: T.muted, fontSize: 13 }}>No combos match your search.</div>
-              ) : (
-                filteredCombos.map(c => <ComboCard key={c.combo_id} combo={c} onEdit={() => setComboEditModal(c)} />)
-              )}
-            </>
-          )}
-        </Modal>
-      )}
 
       {/* ── TERMINALS -- modal opened via its own "Terminals" tile below.
            Content unchanged from the old inline section, just relocated. ── */}
