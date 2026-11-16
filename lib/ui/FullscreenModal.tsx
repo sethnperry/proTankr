@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 type Props = {
   open: boolean;
@@ -27,6 +27,20 @@ type Props = {
 };
 
 export function FullscreenModal({ open, title, onClose, children, footer, headerRight, hideCloseButton }: Props) {
+  // With the keyboard up the visible area is shorter than the screen; follow it so the header and the
+  // bottom controls both stay on screen instead of the panel being pushed off the top.
+  const [vv, setVv] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const v = window.visualViewport;
+    if (!v) return;
+    const sync = () => setVv(window.innerHeight - v.height > 80 ? { top: v.offsetTop, height: v.height } : null);
+    sync();
+    v.addEventListener("resize", sync);
+    v.addEventListener("scroll", sync);
+    return () => { v.removeEventListener("resize", sync); v.removeEventListener("scroll", sync); setVv(null); };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -57,7 +71,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
 
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-x-0 z-50" style={vv ? { top: vv.top, height: vv.height } : { top: 0, bottom: 0 }}>
       {/* Backdrop: dim + blur. Click backdrop to close */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -69,7 +83,7 @@ export function FullscreenModal({ open, title, onClose, children, footer, header
       <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-6">
         <div
           className="flex w-full max-w-2xl flex-col rounded-[2px] border border-white/15 bg-[#0b0b0b] text-white shadow-2xl"
-          style={{ height: "min(92dvh, 900px)" }}
+          style={{ height: vv ? "min(100%, 900px)" : "min(92dvh, 900px)" }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

@@ -62,7 +62,7 @@ export function SquawkSheet({ open, onClose, userId, ctx, initialType, cityOptio
   return (
     <>
       <FullscreenModal open={open} onClose={onClose} title="Squawk" footer={null}>
-        <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 140px)" }}>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 10 }}>
             <button type="button" onClick={() => setPickCh(true)} style={{ flex: 1, textAlign: "left", padding: "10px 12px", background: "#0f0f10", border: `1px solid ${hair}`, color: "#fff", cursor: "pointer" }}>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: muted }}>Channel</div>
