@@ -81,6 +81,28 @@ export default function ProTankrDashPage() {
     const { error: err } = await supabase.from("platform_settings").upsert({ key: "squawk", value, updated_at: new Date().toISOString() });
     setSqMsg(err ? { ok: false, text: err.message } : { ok: true, text: "Saved." });
   }
+  // "Hey ProTankr" announcements
+  type Ann = { id: string; subject: string; body: string; active: boolean; created_at: string };
+  const [anns, setAnns] = useState<Ann[]>([]);
+  const [annSubject, setAnnSubject] = useState("");
+  const [annBody, setAnnBody] = useState("");
+  const [annMsg, setAnnMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const loadAnns = useCallback(async () => {
+    const r = await supabase.from("admin_announcements").select("id, subject, body, active, created_at").order("created_at", { ascending: false }).limit(15);
+    setAnns((r.data ?? []) as Ann[]);
+  }, []);
+  useEffect(() => { void loadAnns(); }, [loadAnns]);
+  async function postAnn() {
+    setAnnMsg(null);
+    const { data: u } = await supabase.auth.getUser();
+    const { error: err } = await supabase.from("admin_announcements").insert({ subject: annSubject.trim(), body: annBody.trim(), created_by: u.user?.id });
+    if (err) { setAnnMsg({ ok: false, text: err.message }); return; }
+    setAnnSubject(""); setAnnBody(""); setAnnMsg({ ok: true, text: "Sent. Everyone sees it within a few minutes." }); void loadAnns();
+  }
+  async function setAnnActive(id: string, active: boolean) {
+    await supabase.from("admin_announcements").update({ active }).eq("id", id);
+    void loadAnns();
+  }
   async function toggleTrainingCampaign() {
     const next = !(trainingCampaign ?? true);
     setCampaignErr(null);
@@ -428,6 +450,31 @@ export default function ProTankrDashPage() {
           </button>
         </div>
         {campaignErr && <div style={{ fontSize: 12, color: "#f87171", marginTop: 8 }}>{campaignErr}</div>}
+      </div>
+
+      {/* Hey ProTankr announcements */}
+      <div style={card}>
+        <div style={cardTitle}>Hey ProTankr</div>
+        <div style={cardSub}>A banner for every user. The subject is the banner; tapping it opens the message. It stays on each person's screen until they clear it.</div>
+        <input value={annSubject} maxLength={140} onChange={(e) => setAnnSubject(e.target.value)} placeholder="Subject (the banner)"
+          style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, marginBottom: 8 }} />
+        <textarea value={annBody} rows={4} maxLength={4000} onChange={(e) => setAnnBody(e.target.value)} placeholder="Message"
+          style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, marginBottom: 8, fontFamily: "inherit", resize: "vertical" }} />
+        <button type="button" disabled={!annSubject.trim()} onClick={() => void postAnn()}
+          style={{ padding: "10px 16px", border: "none", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, background: "#fff", color: "#000", opacity: annSubject.trim() ? 1 : 0.5 }}>Send to everyone</button>
+        {annMsg && <div style={{ fontSize: 12, color: annMsg.ok ? "#4ade80" : "#f87171", marginTop: 8 }}>{annMsg.text}</div>}
+        {anns.length > 0 && <div style={{ marginTop: 14 }}>
+          {anns.map((a) => (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              <div style={{ minWidth: 0, opacity: a.active ? 1 : 0.45 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.subject}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{new Date(a.created_at).toLocaleString()}{a.active ? "" : " · pulled"}</div>
+              </div>
+              <button type="button" onClick={() => void setAnnActive(a.id, !a.active)}
+                style={{ flexShrink: 0, padding: "6px 12px", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2, cursor: "pointer", fontSize: 12, fontWeight: 800, background: "none", color: "#fff" }}>{a.active ? "Pull" : "Restore"}</button>
+            </div>
+          ))}
+        </div>}
       </div>
 
       {/* Squawk expiry */}

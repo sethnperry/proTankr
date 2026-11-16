@@ -12,6 +12,7 @@ import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/drive
 import { EquipmentTable } from "./EquipmentTable";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
+import AnnouncementBanner from "@/app/planner/components/AnnouncementBanner";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
 import { ModeSwitch, RegionButton } from "@/app/planner/components/dash/DashChrome";
 import { ToolPanel, type ToolItem } from "@/app/planner/home/DashboardChrome";
@@ -2081,6 +2082,7 @@ export default function AdminPage() {
   return (
     <div style={{ ...css.page, maxWidth: undefined }} className="admin-page-root dash-wrap d2">
       <DashStyles />
+      <div style={{ margin: "0 -16px 12px" }}><AnnouncementBanner userId={currentUserId || null} /></div>
       <div className="admin-header-row" style={{ marginBottom: 20 }}>
         <ConnectedDashHeader current="company" line={companyName} right={dashEnabled ? (
           <>
