@@ -16,5 +16,5 @@ test("no terminal products, or products that don't match the plan", () => {
   assert.match(m({ ...ok, unavailableComps: 2 }).text, /verify the terminal products/);
 });
 test("anything else still says something", () => {
-  assert.match(m(ok).title, /Couldn't start/);
+  assert.match(m(ok).title, /Couldn't begin/);
 });
