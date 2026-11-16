@@ -4,6 +4,7 @@
 // Shared pieces for the trip screens (Loaded, Finish Delivery): styles, the
 // three-times editor with a delay reason, and signatures.
 
+import { CustomSelect } from "@/lib/ui/CustomSelect";
 import React, { useEffect, useRef, useState } from "react";
 import { delayMinutes, needsDelayReason, type StepTimes } from "@/lib/trips/tripFlow";
 import type { DelayReason } from "@/lib/trips/useTripData";
@@ -110,12 +111,14 @@ export function DelayReasonField({ times, threshold, reasons, kind, reasonId, no
       </div>
       {need && (
         <div style={{ marginTop: 8 }}>
-          <select value={reasonId ?? "__other__"} onChange={(e) => onChange(e.target.value === "__other__" ? null : e.target.value, note)}
-            style={{ ...fieldInput, marginBottom: 8 }}>
-            {issues.map((t) => <option key={t.code} value={issueChoiceValue(t.code)}>{t.label}</option>)}
-            {opts.map((r) => <option key={r.reason_id} value={r.reason_id}>{r.label}</option>)}
-            <option value="__other__">Other</option>
-          </select>
+          <div style={{ marginBottom: 8 }}>
+            <CustomSelect value={reasonId ?? "__other__"} onChange={(v) => onChange(v === "__other__" ? null : v, note)}
+              options={[
+                ...issues.map((t) => ({ value: issueChoiceValue(t.code), label: t.label })),
+                ...opts.map((r) => ({ value: r.reason_id, label: r.label })),
+                { value: "__other__", label: "Other" },
+              ]} />
+          </div>
           {reasonId == null && (
             <input value={note} onChange={(e) => onChange(null, e.target.value)} placeholder="What held you up?" style={fieldInput} />
           )}

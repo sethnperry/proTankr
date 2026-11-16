@@ -11,7 +11,7 @@ import { sendTripPackage } from "@/lib/trips/useTripPackagePrefs";
 
 const MUTE = "rgba(255,255,255,0.55)", HAIR = "rgba(255,255,255,0.14)";
 const btn = (primary: boolean): React.CSSProperties => ({ width: "100%", padding: "15px 0", fontSize: 15, fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase", cursor: "pointer", marginTop: 10, border: primary ? "none" : `1px solid ${HAIR}`, background: primary ? "#fff" : "transparent", color: primary ? "#000" : "#fff" });
-const EXTRA_KEY = "proTankr:packageExtraEmails";
+export const EXTRA_KEY = "proTankr:packageExtraEmails";
 
 export function TripPackageSheet({ open, tripId, orderNumber, myEmail, autoOn, onClose }: {
   open: boolean; tripId: string | null; orderNumber: string | null; myEmail: string | null; autoOn: boolean | null; onClose: () => void;

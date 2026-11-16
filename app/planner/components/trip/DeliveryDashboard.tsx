@@ -18,6 +18,11 @@
 // Progress (tank picks, readings) is saved to the trip as the driver goes;
 // the rest is kept on the phone until Finish.
 
+import { EXTRA_KEY } from "./TripPackageSheet";
+import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
+import { CustomSelect } from "@/lib/ui/CustomSelect";
+import { SiteNotes } from "@/app/planner/components/site/SiteNotes";
+import { useSiteNote } from "@/lib/sites/useSites";
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
 import { BolPagesSheet } from "./BolPagesSheet";
 import { bolFinishPolicy, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
@@ -319,6 +324,12 @@ export function DeliveryDashboard({
 
   // Pop-outs and sections
   const [section, setSection] = useState<string | null>(null);
+  // Who gets the trip package when the order closes (the last stop only). The send step at the end uses the same choices.
+  const emailPkg = useEmailTripPackage(userId ?? null);
+  const [pkgExtra, setPkgExtra] = useState("");
+  useEffect(() => { try { setPkgExtra(localStorage.getItem(EXTRA_KEY) ?? ""); } catch { /* storage blocked */ } }, []);
+  const pkgExtraCount = pkgExtra.split(/[\s,;]+/).filter(Boolean).length;
+  const siteNote = useSiteNote("location", delivery.location_id ?? null);
   const [pickFor, setPickFor] = useState<string | null>(null); // compartment_load_id
   // Part of a compartment dropped here, the rest kept aboard (wet hose or a partial drop).
   const [partials, setPartials] = useState<Record<string, PartialState>>({});
@@ -1076,16 +1087,17 @@ export function DeliveryDashboard({
   const reasonValue = reasonId ?? (builtinMatch ? `b:${builtinMatch}` : "__other__");
   const reasonPicker = (
     <div style={{ marginTop: 8 }}>
-      <select value={reasonValue} onChange={(e) => {
-        const v = e.target.value;
-        if (v === "__other__") { setReasonId(null); setNote(""); }
-        else if (v.startsWith("b:")) { setReasonId(null); setNote(v.slice(2)); }
-        else setReasonId(v);
-      }} style={{ ...fieldInput, marginBottom: 8 }}>
-        {reasonOptions.map((r) => <option key={r.reason_id} value={r.reason_id}>{r.label}</option>)}
-        {DROP_DELAY_BUILTINS.filter((l) => !reasonOptions.some((r) => r.label.toLowerCase() === l.toLowerCase())).map((l) => <option key={l} value={`b:${l}`}>{l}</option>)}
-        <option value="__other__">Other</option>
-      </select>
+      <div style={{ marginBottom: 8 }}>
+        <CustomSelect value={reasonValue} onChange={(v) => {
+          if (v === "__other__") { setReasonId(null); setNote(""); }
+          else if (v.startsWith("b:")) { setReasonId(null); setNote(v.slice(2)); }
+          else setReasonId(v);
+        }} options={[
+          ...reasonOptions.map((r) => ({ value: r.reason_id, label: r.label })),
+          ...DROP_DELAY_BUILTINS.filter((l) => !reasonOptions.some((r) => r.label.toLowerCase() === l.toLowerCase())).map((l) => ({ value: `b:${l}`, label: l })),
+          { value: "__other__", label: "Other" },
+        ]} />
+      </div>
       {reasonId == null && !builtinMatch && (
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What held you up?" style={fieldInput} />
       )}
@@ -1208,6 +1220,12 @@ export function DeliveryDashboard({
                 })}
               </Section>
             )}
+            {delivery.location_id && (
+              <Section title="Site notes" summary={siteNote.note?.note ? siteNote.note.note.split("\n")[0] : "None"}
+                open={section === "notes"} onToggle={() => toggle("notes")}>
+                <SiteNotes kind="location" id={delivery.location_id} mode="edit" userId={userId} showAttribution label="If anything changed, update it before you go" />
+              </Section>
+            )}
             <Section title="Tank readings" summary={readingsSummary}
               summaryColor={firstDrop && readingsCount < products.length ? "#fb923c" : settings.require_tank_readings && readingsCount < products.length ? "#fbbf24" : undefined}
               open={section === "readings"} onToggle={() => toggle("readings")}>
@@ -1279,6 +1297,22 @@ export function DeliveryDashboard({
               <textarea value={issueNote} onChange={(e) => setIssueNote(e.target.value)} rows={3} placeholder="What happened"
                 style={{ ...fieldInput, marginTop: 8, resize: "vertical", fontFamily: "inherit" }} />
             </Section>
+
+            {isLast && (
+              <Section title="Email trip package" summary={[emailPkg.on ? "Copy to me" : null, pkgExtraCount ? `${pkgExtraCount} other${pkgExtraCount === 1 ? "" : "s"}` : null].filter(Boolean).join(" + ") || "Not sent unless you choose"}
+                open={section === "email"} onToggle={() => toggle("email")}>
+                <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>When the order closes you get one PDF: cover, PTD, BOLs, then receipts and tickets.</div>
+                <button type="button" onClick={() => void emailPkg.setOn(!emailPkg.on)} disabled={emailPkg.on == null}
+                  style={{ ...pill(!!emailPkg.on), width: "100%", padding: "12px 0", fontSize: 14, marginBottom: 10 }}>
+                  {emailPkg.on ? "Automatic copy to me is ON ✓" : "Send me an automatic copy"}
+                </button>
+                <div style={{ ...miniLabel, marginBottom: 4 }}>Also send to (up to 3)</div>
+                <input value={pkgExtra} onChange={(e) => setPkgExtra(e.target.value)} placeholder="dispatch@company.com, billing@company.com" inputMode="email" autoCapitalize="none"
+                  onBlur={() => { try { localStorage.setItem(EXTRA_KEY, pkgExtra.split(/[\s,;]+/).filter(Boolean).slice(0, 3).join(", ")); } catch { /* storage blocked */ } }}
+                  style={fieldInput} />
+                <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>These addresses are filled in on the last screen. Nothing goes out until you send it there.</div>
+              </Section>
+            )}
 
             <Section title="Ending miles" summary={miles != null ? miles.toLocaleString("en-US") : isLast ? "Required" : "—"}
               summaryColor={miles == null && isLast ? "#fbbf24" : undefined}
