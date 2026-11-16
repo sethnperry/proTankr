@@ -81,13 +81,13 @@ export function SquawkSheet({ open, onClose, userId, ctx, initialType, cityOptio
             {!ch?.key && <div style={{ color: muted, fontSize: 14, padding: "12px 0" }}>{ch?.why ?? "Pick a channel."}</div>}
             {ch?.key && feed.messages.length === 0 && !feed.loading && <div style={{ color: muted, fontSize: 14, padding: "12px 0" }}>Quiet. Messages here disappear on their own.</div>}
             {feed.messages.map((m) => (
-              <div key={m.id} style={{ marginBottom: 10, display: "flex", flexDirection: "column", alignItems: m.sender_id === userId ? "flex-end" : "flex-start" }}>
-                <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>{m.sender_id === userId ? "You" : senderLabel(m, ctx.companyId ?? null)} · {time(m.created_at)}</div>
-                <div style={{ maxWidth: "86%", padding: "9px 12px", background: m.sender_id === userId ? "#fff" : "#1a1a1c", color: m.sender_id === userId ? "#000" : "#fff", border: `1px solid ${hair}`, fontSize: 15, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+              <div key={m.id} style={{ marginBottom: 10, display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start" }}>
+                <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>{m.mine ? "You" : senderLabel(m, ctx.companyId ?? null)} · {time(m.created_at)}</div>
+                <div style={{ maxWidth: "86%", padding: "9px 12px", background: m.mine ? "#fff" : "#1a1a1c", color: m.mine ? "#000" : "#fff", border: `1px solid ${hair}`, fontSize: 15, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
                   {m.body}
-                  {m.attachments.map((a) => <AttachmentChip key={a.path} a={a} dark={m.sender_id === userId} />)}
+                  {m.attachments.map((a) => <AttachmentChip key={a.path} a={a} dark={!!m.mine} />)}
                 </div>
-                {m.sender_id === userId && <button type="button" onClick={() => void feed.retract(m.id)} style={{ border: "none", background: "none", color: muted, fontSize: 11, cursor: "pointer", padding: "2px 0" }}>Retract</button>}
+                {m.mine && <button type="button" onClick={() => void feed.retract(m.id)} style={{ border: "none", background: "none", color: muted, fontSize: 11, cursor: "pointer", padding: "2px 0" }}>Retract</button>}
                 {hasAttachments(m) && <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 3, maxWidth: "86%" }}>{ATTACHMENT_NOTICE}</div>}
               </div>
             ))}

@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase/client";
 import { MAX_ATTACHMENTS, type Attachment, type SquawkType } from "./squawk";
 
 export type SquawkMessage = {
-  id: string; channel_type: SquawkType; channel_key: string; sender_id: string; sender_label: string;
+  id: string; channel_type: SquawkType; channel_key: string; sender_label: string; mine?: boolean;
   company_id: string | null; sender_initials: string | null; sender_truck: string | null; sender_company: string | null;
   body: string; attachments: Attachment[]; created_at: string;
 };
@@ -35,9 +35,13 @@ export function useSquawkFeed(type: SquawkType | null, key: string | null, open:
   const q = useQuery({
     queryKey: ["squawk", "feed", type, key], enabled: open && !!type && !!key, staleTime: 15_000,
     queryFn: async (): Promise<SquawkMessage[]> => {
-      const { data } = await supabase.from("squawk_messages").select("id, channel_type, channel_key, company_id, sender_id, sender_label, sender_initials, sender_truck, sender_company, body, attachments, created_at")
+      const { data } = await supabase.from("squawk_messages").select("id, channel_type, channel_key, company_id, sender_label, sender_initials, sender_truck, sender_company, body, attachments, created_at")
         .eq("channel_type", type!).eq("channel_key", key!).order("created_at", { ascending: true }).limit(200);
-      return ((data ?? []) as SquawkMessage[]).map((m) => ({ ...m, attachments: Array.isArray(m.attachments) ? m.attachments : [] }));
+      const rows = (data ?? []) as SquawkMessage[];
+      // Which are mine comes from the server; the sender's account id is never sent to anyone.
+      const mineRes = rows.length ? await supabase.rpc("squawk_mine", { p_ids: rows.map((m) => m.id) }) : { data: [] };
+      const mine = new Set(((mineRes.data ?? []) as unknown[]).map(String));
+      return rows.map((m) => ({ ...m, mine: mine.has(m.id), attachments: Array.isArray(m.attachments) ? m.attachments : [] }));
     },
   });
   // What is on screen has been read: that starts the expiry clock.
@@ -77,15 +81,19 @@ export async function signedUrl(path: string): Promise<string | null> {
   return data?.signedUrl ?? null;
 }
 
+type UnreadRow = { channel_type: string; channel_key: string; n: number };
+async function fetchUnread(): Promise<UnreadRow[]> {
+  const { data } = await supabase.rpc("squawk_unread");
+  return (data ?? []) as UnreadRow[];
+}
+const total = (d: unknown) => ((d as UnreadRow[] | undefined) ?? []).reduce((a, r) => a + Number(r.n), 0);
+
 /** Unread counts by channel, and the realtime subscription that keeps them (and any open feed) current. */
 export function useSquawkAlerts(userId: string | null, onNew?: () => void) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["squawk", "unread", userId], enabled: !!userId, staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data } = await supabase.rpc("squawk_unread");
-      return ((data ?? []) as { channel_type: string; channel_key: string; n: number }[]);
-    },
+    queryFn: fetchUnread,
   });
   const cb = useRef(onNew);
   cb.current = onNew;
@@ -94,7 +102,9 @@ export function useSquawkAlerts(userId: string | null, onNew?: () => void) {
     const ch = supabase.channel(`squawk:${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "squawk_messages" }, (payload) => {
         void qc.invalidateQueries({ queryKey: ["squawk"] });
-        if ((payload.new as { sender_id?: string } | null)?.sender_id !== userId) cb.current?.();
+        // Chirp only when someone else's message raised the unread count (your own never does).
+        const before = total(qc.getQueryData(["squawk", "unread", userId]));
+        void qc.fetchQuery({ queryKey: ["squawk", "unread", userId], staleTime: 0, queryFn: fetchUnread }).then((d) => { if (total(d) > before) cb.current?.(); });
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
