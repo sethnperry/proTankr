@@ -84,7 +84,8 @@ export type StoreDelivery = {
   tripId: string | null;
   isMine: boolean;
   ownCompany: boolean;
-  // Our driver's name, or another carrier's short company name.
+  // Our driver's name, or another carrier's short company name (with that driver's initials).
+  initials?: string | null;
   who: string;
   leftAt: string | null;
   products: { productId: string | null; gallons: number }[];
@@ -124,6 +125,7 @@ export function useStoreDeliveries(locationId: string | null, refreshKey: unknow
           isMine: !!r.is_mine,
           ownCompany: !!r.own_company,
           who: String(r.who ?? "Driver"),
+          initials: r.initials ? String(r.initials) : null,
           leftAt: r.left_at ?? null,
           products: ((r.products ?? []) as any[]).map((p) => ({ productId: p.product_id ?? null, gallons: Number(p.gallons ?? 0) })),
           tanks: ((r.tanks ?? []) as any[]).map((t) => ({
@@ -187,7 +189,7 @@ export function useTerminalLoads(terminalId: string | null, refreshKey?: unknown
 }
 
 export type OtherCarrierTruck = {
-  tripId: string; who: string; arrived: boolean; arrivedAt: string | null;
+  tripId: string; who: string; initials: string | null; arrived: boolean; arrivedAt: string | null;
   comps: { compNumber: number; productId: string | null; gallons: number }[];
   // The trailer's compartments and what each last held (residue); empty when not known.
   sizes: { comp: number; size: number | null }[];
@@ -207,7 +209,7 @@ export function useOtherCarriers(kind: "terminal" | "location", id: string | nul
           kind === "terminal" ? { p_terminal_id: id } : { p_location_id: id });
         if (error) throw error;
         const rows = (Array.isArray(data) ? data : []) as any[];
-        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), arrived: !!r.arrived, arrivedAt: r.arrived_at ?? null, comps: mapComps(r),
+        if (!cancelled) setItems(rows.map((r) => ({ tripId: String(r.trip_id), who: String(r.who ?? "Carrier"), initials: r.initials ? String(r.initials) : null, arrived: !!r.arrived, arrivedAt: r.arrived_at ?? null, comps: mapComps(r),
           sizes: mapSizes(r),
           residue: Object.fromEntries(((r.residue ?? []) as any[]).filter((z) => z.product_id).map((z) => [Number(z.comp_number), String(z.product_id)])) })));
       } catch (e) {

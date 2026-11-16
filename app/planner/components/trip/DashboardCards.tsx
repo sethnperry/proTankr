@@ -108,9 +108,11 @@ export function CollapsibleCard({ title, summary, summaryColor, children }: {
 
 // ── Shared run rows: "SP 25184" (our own drivers) or the carrier's name, then the trailer drawn sideways ──
 export const initialsOf = (name: string | null | undefined) => (name ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase();
-export function runLabel(o: { ownCompany: boolean; who: string | null; truck: string | null }): string {
-  if (!o.ownCompany) return o.who || "Carrier";
-  return [initialsOf(o.who) || "Driver", o.truck].filter(Boolean).join(" ");
+// One rule everywhere a truck is listed: initials, a dash, then the truck number for our own company, or the short
+// company name for another company ("SP - 25184", "SP - Gemini").
+export function runLabel(o: { ownCompany: boolean; who: string | null; truck: string | null; initials?: string | null }): string {
+  if (!o.ownCompany) return [o.initials, o.who || "Carrier"].filter(Boolean).join(" - ");
+  return [initialsOf(o.who) || "Driver", o.truck].filter(Boolean).join(" - ");
 }
 /** What was loaded or delivered in each compartment, drawn sideways with C1 on the right. */
 export function CompsStrip({ comps, productInfo }: { comps: { compNumber: number; productId: string | null; gallons: number }[]; productInfo: ProductInfoFn }) {
@@ -260,7 +262,7 @@ export function RecentDeliveriesCard({ storeName, items, productInfo, onOpenTrip
               style={{ ...rowStyle, borderTop: "none", width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer" }}
             >
               <span style={{ ...nameStyle, maxWidth: "34%", color: d.ownCompany ? "#fff" : "rgba(255,255,255,0.8)" }}>
-                {runLabel({ ownCompany: d.ownCompany, who: d.who, truck: d.truck })}
+                {runLabel({ ownCompany: d.ownCompany, who: d.who, truck: d.truck, initials: d.initials })}
               </span>
               <span style={{ flex: 1, minWidth: 0 }}><CarrierStrip comps={d.comps} sizes={d.sizes} residue={{}} productInfo={productInfo} /></span>
               <span style={{ color: muted, fontSize: 12, flexShrink: 0 }}>{when(d.leftAt)}</span>
@@ -427,7 +429,7 @@ export function StoreActivityCard({ storeName, items: all, productInfo, onPickSt
       {items.length === 0 && <div style={{ ...rowStyle, color: muted }}>No company loads are delivering, on the way or planned for {storeName}.</div>}
       {items.map((x) => {
         const st = STATE_LABEL[x.state];
-        const label = x.external ? runLabel({ ownCompany: false, who: x.driverName, truck: null }) : x.isMine && myLabel ? myLabel : runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName });
+        const label = x.external ? runLabel({ ownCompany: false, who: x.driverName, truck: null, initials: x.external?.initials }) : x.isMine && myLabel ? myLabel : runLabel({ ownCompany: true, who: x.driverName, truck: x.truckName });
         return (
           <div key={x.tripId} style={rowStyle}>
             <div style={{ display: "flex", gap: 8 }}>

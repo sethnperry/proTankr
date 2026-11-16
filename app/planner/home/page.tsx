@@ -728,7 +728,7 @@ export default function HomePage() {
   const recent = useStoreDeliveries(selectedLoc?.location_id ?? null, completedDeliveries);
   const roster = useCompanyRoster(companyId);
   // "SP 25184": my initials and truck, for my own rows.
-  const myLabel = [initialsOf(roster.members.find((m) => m.user_id === userId)?.display_name), equipment.currentTruckName].filter(Boolean).join(" ") || "You";
+  const myLabel = [initialsOf(roster.members.find((m) => m.user_id === userId)?.display_name), equipment.currentTruckName].filter(Boolean).join(" - ") || "You";
   const [statusOpen, setStatusOpen] = useState(false);
   const statusPlace = useMemo(() => {
     const t = alertTerminalId ? terminalCatalog.find((x) => String(x.terminal_id) === alertTerminalId) : null;
@@ -2221,7 +2221,7 @@ export default function HomePage() {
     for (const o of otherToStore) {
       list.push({
         tripId: o.tripId, isMine: false, driverName: o.who, truckName: null, plannedStartAt: null, trailerId: null, loaded: {},
-        state: o.arrived ? "delivering" : o.comps.length > 0 ? "enroute" : "loading", products: [], external: { comps: o.comps },
+        state: o.arrived ? "delivering" : o.comps.length > 0 ? "enroute" : "loading", products: [], external: { comps: o.comps, initials: o.initials },
       });
     }
     return list;
@@ -2530,6 +2530,15 @@ export default function HomePage() {
   useEffect(() => {
     try { const raw = squawkCityKey ? localStorage.getItem(squawkCityKey) : null; if (raw) setSquawkCity(JSON.parse(raw)); } catch { /* storage blocked */ }
   }, [squawkCityKey]);
+  // The next delivery's store, named the same in every company, so "To drop" reaches other carriers too.
+  const nextDropLoc = snap ? plannedDeliveries(snap.deliveries)[0]?.location_id ?? null : null;
+  const [dropSiteKey, setDropSiteKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!nextDropLoc) { setDropSiteKey(null); return; }
+    let off = false;
+    void supabase.rpc("squawk_site_key", { p_location_id: nextDropLoc }).then((r) => { if (!off) setDropSiteKey((r.data as string | null) ?? null); });
+    return () => { off = true; };
+  }, [nextDropLoc]);
   const squawkCtx: SquawkCtx = (() => {
     // With a trip underway the city is the trip's terminal's; otherwise the one the driver picked, else the Planner's.
     const pk = snap ? (activePickup(snap.pickups) ?? [...snap.pickups].sort((a, b) => a.seq - b.seq).find((p) => !p.left_at && p.outcome !== "no_load")) : null;
@@ -2537,7 +2546,7 @@ export default function HomePage() {
     const city = t?.city ? { city: String(t.city), state: String((t as any).state ?? pk?.state ?? "") } : squawkCity ?? (location.selectedCity && location.selectedState ? { city: String(location.selectedCity), state: String(location.selectedState) } : null);
     const nextDel = snap ? plannedDeliveries(snap.deliveries)[0] : null;
     const toRack = snap && !aboardRows.length ? pk?.terminal_id ?? null : null;
-    return { toRackTerminalId: toRack ? String(toRack) : null, toDropLocationId: nextDel?.location_id ? String(nextDel.location_id) : null, companyId: companyId || null, city: city?.city ?? null, state: city?.state || null, region: myArea.region, localArea: myArea.localArea, truckId: truckId ?? null, trailerId: trailerId ?? null };
+    return { toRackTerminalId: toRack ? String(toRack) : null, toDropSiteKey: dropSiteKey, companyId: companyId || null, city: city?.city ?? null, state: city?.state || null, region: myArea.region, localArea: myArea.localArea, truckId: truckId ?? null, trailerId: trailerId ?? null };
   })();
   const squawkCities = useMemo(() => [...new Set(terminalCatalog.filter((t) => t.city && (t as any).state).map((t) => `${t.city}|${(t as any).state}`))].sort().map((v) => ({ value: v, label: v.replace("|", ", ") })), [terminalCatalog]);
   const squawkTop = topUnread(unreadRows);

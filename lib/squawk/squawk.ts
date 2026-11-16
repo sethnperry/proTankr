@@ -12,8 +12,8 @@ export const SQUAWK_TYPES: { type: SquawkType; label: string; hint: string }[] =
   { type: "company", label: "Company wide", hint: "Everyone in your company" },
   { type: "region", label: "My region", hint: "Drivers in your region" },
   { type: "local_area", label: "My local area", hint: "Drivers in your local area" },
-  { type: "to_rack", label: "To rack", hint: "Drivers of your company headed to the same terminal" },
-  { type: "to_drop", label: "To drop", hint: "Drivers of your company headed to the same delivery" },
+  { type: "to_rack", label: "To rack", hint: "Drivers of any company headed to the same terminal" },
+  { type: "to_drop", label: "To drop", hint: "Drivers of any company headed to the same store" },
   { type: "truck", label: "This truck", hint: "Whoever is on this truck" },
   { type: "trailer", label: "This trailer", hint: "Whoever is on this trailer" },
 ];
@@ -24,7 +24,7 @@ export type SquawkCtx = {
   region: string | null; localArea: string | null;
   truckId: string | null; trailerId: string | null;
   /** The terminal and delivery location my open trip is headed to next. */
-  toRackTerminalId?: string | null; toDropLocationId?: string | null;
+  toRackTerminalId?: string | null; toDropSiteKey?: string | null;
 };
 
 export const cityKey = (city: string, state: string) => `${city.trim().toLowerCase()}|${state.trim().toUpperCase()}`;
@@ -39,8 +39,8 @@ export function channelKey(type: SquawkType, c: SquawkCtx): string | null {
     case "company": return c.companyId;
     case "region": return c.companyId && c.region?.trim() ? `${c.companyId}|${norm(c.region)}` : null;
     case "local_area": return c.companyId && c.region?.trim() && c.localArea?.trim() ? `${c.companyId}|${norm(c.region)}|${norm(c.localArea)}` : null;
-    case "to_rack": return c.companyId && c.toRackTerminalId ? `${c.companyId}|${c.toRackTerminalId}` : null;
-    case "to_drop": return c.companyId && c.toDropLocationId ? `${c.companyId}|${c.toDropLocationId}` : null;
+    case "to_rack": return c.toRackTerminalId ?? null;
+    case "to_drop": return c.toDropSiteKey ?? null;
     case "truck": return c.truckId;
     case "trailer": return c.trailerId;
   }
@@ -73,3 +73,11 @@ export function topUnread(rows: { channel_type: string; channel_key: string; n: 
   return list[0] ?? null;
 }
 export const totalUnread = (rows: { n: number | string }[]) => rows.reduce((s, r) => s + Number(r.n), 0);
+
+/** "SP - 25184" for our own company's trucks, "SP - Gemini" for another company's. */
+export function senderLabel(m: { company_id?: string | null; sender_initials?: string | null; sender_truck?: string | null; sender_company?: string | null; sender_label: string }, myCompanyId: string | null): string {
+  const ini = m.sender_initials ?? "";
+  const mine = !!myCompanyId && m.company_id === myCompanyId;
+  const second = mine ? m.sender_truck : m.sender_company;
+  return ini || second ? [ini, second].filter(Boolean).join(" - ") : m.sender_label;
+}

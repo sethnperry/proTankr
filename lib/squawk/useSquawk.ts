@@ -12,6 +12,7 @@ import { MAX_ATTACHMENTS, type Attachment, type SquawkType } from "./squawk";
 
 export type SquawkMessage = {
   id: string; channel_type: SquawkType; channel_key: string; sender_id: string; sender_label: string;
+  company_id: string | null; sender_initials: string | null; sender_truck: string | null; sender_company: string | null;
   body: string; attachments: Attachment[]; created_at: string;
 };
 
@@ -34,7 +35,7 @@ export function useSquawkFeed(type: SquawkType | null, key: string | null, open:
   const q = useQuery({
     queryKey: ["squawk", "feed", type, key], enabled: open && !!type && !!key, staleTime: 15_000,
     queryFn: async (): Promise<SquawkMessage[]> => {
-      const { data } = await supabase.from("squawk_messages").select("id, channel_type, channel_key, sender_id, sender_label, body, attachments, created_at")
+      const { data } = await supabase.from("squawk_messages").select("id, channel_type, channel_key, company_id, sender_id, sender_label, sender_initials, sender_truck, sender_company, body, attachments, created_at")
         .eq("channel_type", type!).eq("channel_key", key!).order("created_at", { ascending: true }).limit(200);
       return ((data ?? []) as SquawkMessage[]).map((m) => ({ ...m, attachments: Array.isArray(m.attachments) ? m.attachments : [] }));
     },

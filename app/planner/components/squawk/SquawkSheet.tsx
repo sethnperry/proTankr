@@ -9,7 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { PickSheet } from "@/lib/ui/PickSheet";
 import { CameraButton } from "../equipment/AddDocumentSheet";
-import { ATTACHMENT_NOTICE, MAX_ATTACHMENTS, MAX_BODY, availableChannels, cityLabel, hasAttachments, isCityType, type SquawkCtx, type SquawkType } from "@/lib/squawk/squawk";
+import { ATTACHMENT_NOTICE, MAX_ATTACHMENTS, MAX_BODY, availableChannels, cityLabel, hasAttachments, isCityType, senderLabel, type SquawkCtx, type SquawkType } from "@/lib/squawk/squawk";
 import { signedUrl, useSquawkFeed } from "@/lib/squawk/useSquawk";
 
 const muted = "rgba(255,255,255,0.5)";
@@ -82,7 +82,7 @@ export function SquawkSheet({ open, onClose, userId, ctx, initialType, cityOptio
             {ch?.key && feed.messages.length === 0 && !feed.loading && <div style={{ color: muted, fontSize: 14, padding: "12px 0" }}>Quiet. Messages here disappear on their own.</div>}
             {feed.messages.map((m) => (
               <div key={m.id} style={{ marginBottom: 10, display: "flex", flexDirection: "column", alignItems: m.sender_id === userId ? "flex-end" : "flex-start" }}>
-                <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>{m.sender_id === userId ? "You" : m.sender_label} · {time(m.created_at)}</div>
+                <div style={{ fontSize: 11, color: muted, marginBottom: 2 }}>{m.sender_id === userId ? "You" : senderLabel(m, ctx.companyId ?? null)} · {time(m.created_at)}</div>
                 <div style={{ maxWidth: "86%", padding: "9px 12px", background: m.sender_id === userId ? "#fff" : "#1a1a1c", color: m.sender_id === userId ? "#000" : "#fff", border: `1px solid ${hair}`, fontSize: 15, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
                   {m.body}
                   {m.attachments.map((a) => <AttachmentChip key={a.path} a={a} dark={m.sender_id === userId} />)}

@@ -103,7 +103,7 @@ export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenT
   });
   const otherRow = (x: (typeof other)[number], onSite: boolean): Row => ({
     key: `o-${x.tripId}`,
-    label: runLabel({ ownCompany: false, who: x.who, truck: null }),
+    label: runLabel({ ownCompany: false, who: x.who, truck: null, initials: x.initials }),
     strip: <CarrierStrip comps={x.comps} sizes={x.sizes} residue={x.residue} productInfo={product} />,
     right: onSite ? elapsed(x.arrivedAt, now) ?? "At site" : "—",
   });
@@ -111,7 +111,7 @@ export function SiteBoard({ kind, id, name, trips, product, now, etaFor, onOpenT
   const onSite = [...own.filter((o) => !!o.arrivedAt).map((o) => ownRow(o, true)), ...other.filter((x) => x.arrived).map((x) => otherRow(x, true))];
   const prevRows: Row[] = previous.slice(0, 5).map((d) => ({
     key: d.deliveryId,
-    label: runLabel({ ownCompany: d.ownCompany, who: d.who, truck: d.truck }),
+    label: runLabel({ ownCompany: d.ownCompany, who: d.who, truck: d.truck, initials: d.initials }),
     strip: <CarrierStrip comps={d.comps} sizes={d.sizes} residue={{}} productInfo={product} />,
     right: shortWhen(d.leftAt),
     rightColor: MUTE,
