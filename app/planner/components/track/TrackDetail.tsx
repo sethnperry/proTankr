@@ -204,6 +204,26 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
               {onOpenCoupled && <span style={{ marginLeft: "auto", color: muted }}>›</span>}
             </button>
           ) : <div style={{ fontSize: 15, marginTop: 4, color: muted }}>Not coupled to anything.</div>}
+          {/* Geotab is the source of truth for what is actually hooked up. */}
+          {u.kind === "truck" && reading && coupledWith && reading.geotabTrailers && !reading.geotabTrailers.some((t) => t.name.trim().toLowerCase() === coupledWith.name.trim().toLowerCase()) && (
+            <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>
+              {reading.geotabTrailers.length ? `Geotab shows ${reading.geotabTrailers.map((t) => t.name).join(", ")} hooked to this truck, not ${coupledWith.name}.` : reading.trailerKnown ? `Geotab shows no trailer hooked to this truck, so this pairing may be out of date.` : null}
+            </div>
+          )}
+        </div>
+      )}
+
+      {u.kind === "truck" && reading && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={label}>Now (Geotab)</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{place || (hasPos ? "Position found" : "No position")}{reading.at ? <span style={{ fontSize: 12, color: muted, fontWeight: 500 }}> · {ageText(reading.at)}</span> : null}</div>
+          <div style={{ fontSize: 14, marginTop: 4 }}>
+            {reading.driverName
+              ? <>Driver: <b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in)</span></>
+              : reading.lastDriver
+                ? <>Last driver: <b>{reading.lastDriver.name}</b> <span style={{ color: muted }}>· {reading.lastDriver.outAt ? `signed out ${ageText(reading.lastDriver.outAt)}` : `signed in ${ageText(reading.lastDriver.at)}`}</span></>
+                : <span style={{ color: muted }}>No driver found in Geotab.</span>}
+          </div>
         </div>
       )}
 

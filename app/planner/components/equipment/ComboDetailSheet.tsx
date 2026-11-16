@@ -19,6 +19,8 @@ import { CameraButton } from "./AddDocumentSheet";
 import { TelematicsLink } from "./TelematicsPanel";
 import { fleetStatusColor, fleetStatusLabel } from "../../modals/EquipmentStatusModal";
 import { storyLine } from "@/lib/equipment/statusStoryLogic";
+import { fetchTruckReading, type TruckReading } from "@/lib/telematics/useTruckReading";
+import { ageText } from "@/lib/equipment/trackFormat";
 
 const MUTED = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.14)", padding: 14, marginBottom: 12 };
@@ -98,8 +100,21 @@ function useUnitNow(kind: "truck" | "trailer", id: string): NowInfo | null {
   return now;
 }
 
-function RightNow({ kind, unit }: { kind: "truck" | "trailer"; unit: TrackUnit }) {
+function RightNow({ kind, unit, partnerName }: { kind: "truck" | "trailer"; unit: TrackUnit; partnerName?: string | null }) {
   const now = useUnitNow(kind, unit.id);
+  // For a truck, Geotab is the source of truth for where it is, who last drove it and what is hooked to it.
+  const [geo, setGeo] = useState<TruckReading | null>(null);
+  useEffect(() => {
+    if (kind !== "truck") return;
+    let alive = true;
+    setGeo(null);
+    void fetchTruckReading(unit.id).then((r) => { if (alive) setGeo(r); });
+    return () => { alive = false; };
+  }, [kind, unit.id]);
+  const geoDriver = geo ? (geo.driverName ?? geo.lastDriver?.name ?? null) : null;
+  const geoPlace = geo ? [geo.city, geo.state].filter(Boolean).join(", ") : "";
+  const hooked = geo?.geotabTrailers ?? [];
+  const mismatch = !!(geo && partnerName && geo.trailerKnown !== false && !hooked.some((t) => t.name.trim().toLowerCase() === partnerName.trim().toLowerCase()));
   const label = unit.statusCode ? fleetStatusLabel(unit.statusCode) || unit.statusCode : "No status set";
   return (
     <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", borderBottom: "1px solid rgba(255,255,255,0.1)", padding: "10px 0", marginBottom: 8 }}>
@@ -110,14 +125,18 @@ function RightNow({ kind, unit }: { kind: "truck" | "trailer"; unit: TrackUnit }
       {now?.openTrip && <div style={{ fontSize: 14, fontWeight: 700, marginTop: 4 }}>{now.openTrip}</div>}
       {unit.statusLocation && <div style={{ fontSize: 13, marginTop: 4 }}>At <b>{unit.statusLocation}</b>{unit.statusUpdatedAt ? <span style={{ color: MUTED }}> · {storyLine("", { byName: null, at: unit.statusUpdatedAt, source: null })}</span> : null}</div>}
       {unit.statusNotes && <div style={{ fontSize: 13, marginTop: 4, color: "rgba(255,255,255,0.75)" }}>{unit.statusNotes}</div>}
+      {geo && (geoPlace || geo.lat != null) && <div style={{ fontSize: 13, marginTop: 4 }}>Now: <b>{geoPlace || "Position found"}</b><span style={{ color: MUTED }}> · Geotab {ageText(geo.at)}</span></div>}
+      {mismatch && <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>{hooked.length ? `Geotab shows ${hooked.map((t) => t.name).join(", ")} hooked to this truck, not ${partnerName}.` : `Geotab shows no trailer hooked to this truck, so the pairing may be out of date.`}</div>}
       <div style={{ fontSize: 13, marginTop: 6, color: MUTED }}>
-        {now == null ? "Looking up the last driver…" : now.driver ? <>{now.openTrip ? "Driver" : "Last driver"}: <b style={{ color: "#fff" }}>{now.driver}</b>{now.driverAt ? ` · ${new Date(now.driverAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}` : ""}</> : "No driver on record."}
+        {geoDriver
+          ? <>{geo?.driverName ? "Driver" : "Last driver"}: <b style={{ color: "#fff" }}>{geoDriver}</b> · Geotab</>
+          : now == null ? "Looking up the last driver…" : now.driver ? <>{now.openTrip ? "Driver" : "Last driver"}: <b style={{ color: "#fff" }}>{now.driver}</b>{now.driverAt ? ` · ${new Date(now.driverAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}` : ""}</> : "No driver on record."}
       </div>
     </div>
   );
 }
 
-function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "trailer"; unit: TrackUnit; companyId: string; onOpenFile: () => void }) {
+function UnitSection({ kind, unit, companyId, onOpenFile, partnerName }: { kind: "truck" | "trailer"; unit: TrackUnit; companyId: string; onOpenFile: () => void; partnerName?: string | null }) {
   const info = useUnitInfo(kind, unit.id, companyId);
   const alerts = useUnitAlerts(kind, unit.id, companyId);
   const permits = alerts.alerts.filter((a) => a.kind === "permit");
@@ -131,7 +150,7 @@ function UnitSection({ kind, unit, companyId, onOpenFile }: { kind: "truck" | "t
     <div style={card}>
       <div style={label}>{kind === "truck" ? "Truck" : "Trailer"}</div>
       <div style={{ fontSize: 24, fontWeight: 900, margin: "6px 0 8px" }}>{unit.name}</div>
-      <RightNow kind={kind} unit={unit} />
+      <RightNow kind={kind} unit={unit} partnerName={partnerName} />
       {!info ? <div style={{ fontSize: 13, color: MUTED }}>Loading…</div> : (
         <>
           {row("Year / make / model", ymm || <span style={{ color: MUTED }}>Not on file</span>)}
@@ -178,7 +197,7 @@ export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, hol
   return (
     <FullscreenModal open={open} onClose={onClose} title={[truck?.name, trailer?.name].filter(Boolean).join(" / ")} footer={null}>
       {holderLabel && <div style={{ fontSize: 13, color: MUTED, marginBottom: 10 }}>{holderLabel}</div>}
-      {truck && <UnitSection kind="truck" unit={truck} companyId={companyId} onOpenFile={() => onOpenFile("truck")} />}
+      {truck && <UnitSection kind="truck" unit={truck} companyId={companyId} onOpenFile={() => onOpenFile("truck")} partnerName={trailer?.name ?? null} />}
       {trailer && <UnitSection kind="trailer" unit={trailer} companyId={companyId} onOpenFile={() => onOpenFile("trailer")} />}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 4 }}>
         <button type="button" onClick={onDropSwap} style={{ ...primaryBtn, padding: "14px 4px", fontSize: 13 }}>{primaryLabel}</button>
