@@ -186,7 +186,18 @@ export function EquipmentBoard(p: Props) {
                   <Tile key={u.id} dot={dotFor(u)} strip={fresh ? undefined : segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
-                    {fresh ? <>{(() => { const s = statusText(u, "", mine, p.lastBy); return s ? small(s.text, s.color) : null; })()}{codeLine(u.id)}</> : loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
+                    {fresh ? (() => {
+                      // Initials, status and the compartments' products on ONE line.
+                      const s = statusText(u, "", mine, p.lastBy);
+                      const c = p.codes?.[u.id];
+                      if (!s && !c?.length) return null;
+                      return (
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8, marginTop: 3, minWidth: 0 }}>
+                          {s && <span style={{ fontSize: 12, fontWeight: 800, color: s.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{s.text}</span>}
+                          {c && c.length > 0 && <span style={{ flexShrink: 0, whiteSpace: "nowrap" }}><PlanLine letter="" detail={false} comps={c} /></span>}
+                        </div>
+                      );
+                    })() : loadedText(segs) ? (p.destByTrailer?.[u.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[u.id]}</div> : null)
                       : p.lastPlaceByTrailer?.[u.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[u.id]}</div> : <StatusLine u={u} />}
                   </Tile>
                 );

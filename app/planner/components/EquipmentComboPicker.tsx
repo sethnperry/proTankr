@@ -43,7 +43,7 @@ export default function EquipmentComboPicker({
     { region: null, localArea: null }, search,
   ), [active, truckNameById, trailerNameById, search]);
   const claimedByCombo = useMemo(() => Object.fromEntries(active.map((c) => [c.combo_id, c.claimed_by ?? null])), [active]);
-  const status = useEquipmentBoardStatus(open, active.map((c) => c.claimed_by).filter((x): x is string => !!x), active.map((c) => String(c.trailer_id)), active.length);
+  const status = useEquipmentBoardStatus(open, active.map((c) => c.claimed_by).filter((x): x is string => !!x), active.map((c) => String(c.trailer_id)), active.length, active.map((c) => String(c.truck_id)));
 
   return (
     <FullscreenModal open={open} title="Select Equipment" onClose={onClose}>
@@ -60,6 +60,7 @@ export default function EquipmentComboPicker({
           initials={status.initials}
           activity={status.activity} destByTrailer={status.destByTrailer} lastPlaceByTrailer={status.lastPlaceByTrailer}
           strips={status.strips}
+          codes={status.codesByTrailer} lastBy={status.parkedByUnit}
           combosOnly
           onCombo={(c) => onPick(c.comboId)}
           emptyNote="No equipment found."

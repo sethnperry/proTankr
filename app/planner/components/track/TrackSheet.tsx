@@ -183,7 +183,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     ? (detailTrailer ?? (combos.find((c) => c.truckId === detailTruck.id) ? trailerById.get(combos.find((c) => c.truckId === detailTruck.id)!.trailerId) ?? null : null))
     : detailTrailer ? (() => { const c = combos.find((x) => x.trailerId === detailTrailer.id); return c ? truckById.get(c.truckId) ?? null : null; })() : null;
 
-  const boardStatus = useEquipmentBoardStatus(open, Object.values(claimedByCombo).filter((x): x is string => !!x), trailers.map((t) => t.id), combos.length);
+  const boardStatus = useEquipmentBoardStatus(open, Object.values(claimedByCombo).filter((x): x is string => !!x), trailers.map((t) => t.id), combos.length, trucks.map((t) => t.id));
   const myCombo = myTruckId ? combos.find((c) => c.truckId === myTruckId) : null;
   const mine = (truckId: string | null, trailerId: string | null) => (!!myTruckId && truckId === myTruckId) || (!!myTrailerId && trailerId === myTrailerId);
 
@@ -318,6 +318,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         initials={boardStatus.initials}
         activity={boardStatus.activity} destByTrailer={boardStatus.destByTrailer} lastPlaceByTrailer={boardStatus.lastPlaceByTrailer}
         strips={boardStatus.strips}
+        codes={boardStatus.codesByTrailer} lastBy={boardStatus.parkedByUnit}
         mine={{ truckId: myTruckId, trailerId: myTrailerId }}
         loading={loading}
         onCombo={(c) => setPick({ truckId: c.truck.id, trailerId: c.trailer.id })}
