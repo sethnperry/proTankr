@@ -101,8 +101,10 @@ export function nextStep(
     return {
       kind: "planner",
       // Loading counts as started only when the driver taps Begin Loading (begin_at), not when a plan was previewed.
-      label: p.begin_at ? "Continue Trip" : "Begin Loading",
-      detail: p.begin_at ? `Loading${where}` : `Check the rack, then begin loading${where}`,
+      // Plan Review is the one place Begin Loading is tapped (it stamps begin_at). Until then this opens it, and after
+      // backing out it jumps back in.
+      label: p.begin_at ? "Continue Trip" : "Plan Review",
+      detail: p.begin_at ? `Loading${where}` : `Check the rack, then begin loading in Plan Review${where}`,
     };
   }
   // Every rack so far ended without a load (rack hop): pick the next one.

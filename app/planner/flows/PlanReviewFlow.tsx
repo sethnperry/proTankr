@@ -15,6 +15,8 @@ import { reportRows } from "../utils/reportRows";
 import LoadingModal from "../modals/LoadingModal";
 import { styles } from "../ui/styles";
 import { usePlanner } from "../PlannerContext";
+import { useTripSettings } from "@/lib/trips/useTripData";
+import { DEFAULT_SOP_TERMINAL } from "@/lib/sites/siteStats";
 
 export default function PlanReviewFlow() {
   const {
@@ -55,6 +57,7 @@ export default function PlanReviewFlow() {
     terminalProducts,
     tripStoreHook,
   } = usePlanner();
+  const sopSettings = useTripSettings(shell.companyId ?? null);
 
   // ── Rack Delay: a reason starts the running delay (same one the dashboard's Delay button shows) and warns
   // other drivers headed to this terminal. Plan Review stays open.
@@ -159,6 +162,7 @@ export default function PlanReviewFlow() {
       onFinishLoadingStart={() => { if (effectiveUserId && tripStoreHook.store) { endRunningDelay(tripStoreHook.store, effectiveUserId); setRackDelayStartedAt(null); } const pk = tripPickup ?? tripWaitingPickup ?? null; if (pk && !pk.left_at) stampFinishLoading(pk.pickup_id); loadGeoShips(); }}
       onUpdateCardOnly={handleCouldntLoad}
       onRackDelay={() => setRackDelayOpen(true)}
+      beginNote={sopSettings.settings.sop_terminal_begin?.trim() || DEFAULT_SOP_TERMINAL}
       onEndRackDelay={() => { if (effectiveUserId && tripStoreHook.store) endRunningDelay(tripStoreHook.store, effectiveUserId); setRackDelayStartedAt(null); }}
       rackDelayStartedAt={rackDelayStartedAt}
       onBeginLoading={beginLoadingAfterDelay}

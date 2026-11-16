@@ -681,12 +681,9 @@ export default function HomePage() {
   const [rackSheetOpen, setRackSheetOpen] = useState(false);
   // At the rack but loading hasn't started: the rack window shows the arrival and the Begin Loading button.
   const arrivalPickup = snap?.pickups.find((p) => p.arrived_at && !p.begin_at && !p.left_at && !p.outcome) ?? null;
+  // Opens Plan Review. Nothing is stamped here: Begin Loading in Plan Review is the one place the start time is set.
   const startLoading = () => {
     if (!store || !arrivalPickup) return;
-    const at = new Date().toISOString();
-    endDelay(at); // a delay at the rack ends when loading really starts
-    store.put("trip_pickups", { pickup_id: arrivalPickup.pickup_id, begin_at: at });
-    void syncNow();
     setOpeningPlanner(true);
     setRackSheetOpen(false);
     shell.postPlannerIntent("begin");
@@ -2075,8 +2072,7 @@ export default function HomePage() {
               // Loading not started yet: the rack window comes first (arrival time, products, Begin Loading). Once it has
               // started, Plan Review opens right over this screen (the Planner host stays mounted in the layout). If there
               // is no plan, or it can't start, the host sends the driver to the Planner instead.
-              if (arrivalPickup) { setOpeningPlanner(false); setRackSheetOpen(true); }
-              else shell.postPlannerIntent("begin");
+              shell.postPlannerIntent("begin");
             }
           })();
         }
@@ -3216,11 +3212,7 @@ export default function HomePage() {
       <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)}
         footer={arrivalPickup ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <SopLine text={settings.sop_terminal_begin?.trim() || DEFAULT_SOP_TERMINAL} />
-            <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Begin Loading</button>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); shell.postPlannerIntent("begin"); }} style={{ flex: 1, padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>Preview Plan</button>
-            </div>
+            <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Plan Review</button>
           </div>
         ) : null}>
         {(() => {
@@ -3240,7 +3232,7 @@ export default function HomePage() {
                     <span style={{ fontSize: 14, fontWeight: 600, color: muted }}> · waiting {Math.max(0, Math.round((Date.now() - Date.parse(arrivalPickup.arrived_at)) / 60000))} min</span>
                   </div>
                   <div style={{ marginTop: 4 }}><SiteAverage kind="terminal" id={rackTerminalId || null} /></div>
-                  <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Tap Begin Loading when you begin. That sets your loading start time.</div>
+                  <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Open Plan Review to check the plan. Begin Loading there sets your loading start time.</div>
                 </div>
               )}
               {arrivalPickup?.arrived_at && rackTerminalId && <div style={{ marginTop: 8 }}><SiteNotes kind="terminal" id={rackTerminalId} mode="edit" userId={userId} /></div>}

@@ -4,6 +4,7 @@
 // Plan Review: Finish Loading, Rack Delay, Couldn't Load, Back to Planner.
 
 import { useEffect, useState } from "react";
+import { SopLine } from "../../components/site/SiteNotes";
 import { CARD_BG, CARD_BORDER, CARD_SHADOW } from "../../cards/cardTheme";
 import type { LoadingModel } from "./useLoadingModel";
 
@@ -16,6 +17,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     onBackToPlanner,
     onRackDelay,
     onEndRackDelay,
+    beginNote,
     rackDelayStartedAt,
     onBeginLoading,
     loadingBegun,
@@ -45,6 +47,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     /* Action buttons -- the "next steps" that used to live in a separate
              sheet, now directly in the modal. */
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+      {needsBegin && beginNote && <SopLine text={beginNote} />}
       <button
         ref={logLoadButtonRef}
         type="button"
