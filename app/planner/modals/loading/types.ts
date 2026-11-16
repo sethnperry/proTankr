@@ -37,7 +37,7 @@ export type LoadingTripMode = {
   arrivedAt: string | null;
   departedAt?: string | null; // when the truck's position showed it leave (telematics)
   existingTimes: StepTimes | null;
-  // When Start Loading was tapped (the pickup's begin time), if recorded.
+  // When Begin Loading was tapped (the pickup's begin time), if recorded.
   beganAt: string | null;
   existingDelayReasonId: string | null;
   existingDelayNote: string | null;

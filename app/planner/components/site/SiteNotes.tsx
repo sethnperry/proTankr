@@ -57,6 +57,7 @@ export function SiteNotes({ kind, id, mode, userId, showAttribution = false, lab
       <textarea value={draft} rows={3} onChange={(e) => { setDraft(e.target.value); setSaved(false); }} onBlur={() => void commit()}
         placeholder={kind === "terminal" ? "Where to pull up, how the rack runs, anything to know before you go in…" : "Gate code, where the fills are, anything to know before you get out…"}
         style={{ width: "100%", boxSizing: "border-box", marginTop: 6, padding: "10px 12px", fontSize: 15, color: "#fff", background: "rgba(255,255,255,0.05)", border: `1px solid ${hair}`, borderRadius: 2, resize: "vertical", fontFamily: "inherit" }} />
+      {kind === "location" && <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Shared with every company that delivers here.</div>}
       {dirty && <button type="button" onClick={() => void commit()} disabled={busy} style={{ marginTop: 8, padding: "9px 14px", fontSize: 13, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer" }}>Save notes</button>}
       {err && <div style={{ color: "#f87171", fontSize: 13, marginTop: 6 }}>{err}</div>}
       {attribution && <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>{attribution}</div>}

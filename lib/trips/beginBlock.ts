@@ -16,5 +16,5 @@ export function beginBlockMessage(s: BeginBlockState): BeginBlock {
   if (!s.presetsReady) return { title: "Plans still loading", text: "Your plans haven't finished loading. Wait a moment and tap Begin Loading again." };
   if (s.plannedProducts === 0) return { title: "No plan selected", text: "There is no plan for this load. Pick a plan from the Planner tile, then tap Begin Loading." };
   if (s.terminalProducts === 0 || s.unavailableComps > 0) return { title: "No products match the plan", text: "No products match the selected plan. Please verify the terminal products." };
-  return { title: "Couldn't start loading", text: "Loading couldn't start. Wait a moment and tap Begin Loading again. If it keeps happening, tell dispatch." };
+  return { title: "Couldn't begin loading", text: "Loading couldn't start. Wait a moment and tap Begin Loading again. If it keeps happening, tell dispatch." };
 }

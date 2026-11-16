@@ -100,9 +100,9 @@ export function nextStep(
     }
     return {
       kind: "planner",
-      // Loading counts as started only when the driver taps Start Loading (begin_at), not when a plan was previewed.
+      // Loading counts as started only when the driver taps Begin Loading (begin_at), not when a plan was previewed.
       label: p.begin_at ? "Continue Trip" : "Begin Loading",
-      detail: p.begin_at ? `Loading${where}` : `Check the rack, then start loading${where}`,
+      detail: p.begin_at ? `Loading${where}` : `Check the rack, then begin loading${where}`,
     };
   }
   // Every rack so far ended without a load (rack hop): pick the next one.
@@ -127,7 +127,7 @@ export type StepTimes = { arrivedAt: string; beginAt: string; leftAt: string };
 
 // Prefilled times when the driver finishes a step: begin = now − offset,
 // leave = now. Begin never lands before arrival. `beganAt` is a begin time the
-// driver already recorded (Start Loading in the Planner); when it's valid it
+// driver already recorded (Begin Loading in the Planner); when it's valid it
 // wins over the offset.
 export function defaultStepTimes(now: Date, offsetMinutes: number, arrivedAt: string | null, beganAt?: string | null, departedAt?: string | null): StepTimes {
   // When the truck's position showed it leaving, that beats the moment of the tap.
@@ -472,7 +472,7 @@ export function closePickupNoLoad(
     reason: string; // TerminalIssueCode or "other"
     note: string | null;
     arrivedAt: string | null;
-    beginAt?: string | null; // Start Loading, if it was tapped before giving up
+    beginAt?: string | null; // Begin Loading, if it was tapped before giving up
     leftAt: string;
   } & Clock,
 ) {

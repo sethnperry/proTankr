@@ -267,6 +267,8 @@ export function LocationEditor({
       }
       if (res.error) throw new Error(res.error.message);
       const locationId = (res.data as { location_id: string }).location_id;
+      // A new place's notes go to the shared site note, so other carriers see them too.
+      if (!draft.location_id && draft.notes.trim()) { try { await supabase.rpc("set_site_note", { p_location_id: locationId, p_note: draft.notes.trim() }); } catch { /* the place saved; the note can be added again */ } }
 
       // Tanks: existing ones by id, new ones by number, removed ones retired.
       const keep = draft.tanks.filter((t) => t.tank_number.trim());

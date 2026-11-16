@@ -34,9 +34,10 @@ export function useSiteNote(kind: SiteKind, id: string | null) {
         const r = data as { note: string | null; updated_by: string | null; updated_at: string | null } | null;
         return { note: r?.note ?? "", updatedBy: r?.updated_by ?? null, updatedByName: await nameOf(r?.updated_by ?? null), updatedAt: r?.updated_at ?? null };
       }
-      const { data } = await supabase.from("delivery_locations").select("notes, notes_updated_by, notes_updated_at").eq("location_id", id!).maybeSingle();
-      const r = data as { notes: string | null; notes_updated_by?: string | null; notes_updated_at?: string | null } | null;
-      return { note: r?.notes ?? "", updatedBy: r?.notes_updated_by ?? null, updatedByName: await nameOf(r?.notes_updated_by ?? null), updatedAt: r?.notes_updated_at ?? null };
+      // A drop site's note is shared with every company (same store by name, number and place); `by` is the company.
+      const { data } = await supabase.rpc("get_site_note", { p_location_id: id! });
+      const r = data as { note?: string | null; updated_at?: string | null; by?: string | null } | null;
+      return { note: r?.note ?? "", updatedBy: null, updatedByName: r?.by ?? null, updatedAt: r?.updated_at ?? null };
     },
   });
   /** Saves the note; resolves with an error message or null. */
@@ -49,9 +50,8 @@ export function useSiteNote(kind: SiteKind, id: string | null) {
       const { error } = await supabase.from("terminal_notes").upsert({ terminal_id: id, note: t, updated_by: userId, updated_at: now }, { onConflict: "terminal_id" });
       if (error) return error.message;
     } else {
-      const { data, error } = await supabase.from("delivery_locations").update({ notes: t || null, notes_updated_by: userId, notes_updated_at: now, client_updated_at: now }).eq("location_id", id).select("location_id");
+      const { error } = await supabase.rpc("set_site_note", { p_location_id: id, p_note: t });
       if (error) return error.message;
-      if (!data?.length) return "That note couldn't be saved. You may not have access to this location.";
     }
     void qc.invalidateQueries({ queryKey: key });
     return null;
