@@ -65,6 +65,22 @@ export default function ProTankrDashPage() {
   const [trainingCampaign, setTrainingCampaign] = useState<boolean | null>(null);
   const [campaignErr, setCampaignErr] = useState<string | null>(null);
   useEffect(() => { void readCampaignEnabled(TRAINING_CAMPAIGN_KEY).then(setTrainingCampaign); }, []);
+  // Squawk expiry (minutes): only a ProTankr admin can change these (platform_settings is writable by super admins only).
+  const [sqCfg, setSqCfg] = useState<{ view_ttl_min: string; unviewed_cap_min: string; feed_age_min: string }>({ view_ttl_min: "60", unviewed_cap_min: "240", feed_age_min: "240" });
+  const [sqMsg, setSqMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    void supabase.from("platform_settings").select("value").eq("key", "squawk").maybeSingle().then((r) => {
+      const v = (r.data?.value ?? {}) as Record<string, number>;
+      setSqCfg({ view_ttl_min: String(v.view_ttl_min ?? 60), unviewed_cap_min: String(v.unviewed_cap_min ?? 240), feed_age_min: String(v.feed_age_min ?? 240) });
+    });
+  }, []);
+  async function saveSquawk() {
+    setSqMsg(null);
+    const num = (s: string, lo: number, hi: number) => Math.min(hi, Math.max(lo, parseInt(s, 10) || lo));
+    const value = { view_ttl_min: num(sqCfg.view_ttl_min, 1, 1440), unviewed_cap_min: num(sqCfg.unviewed_cap_min, 5, 4320), feed_age_min: num(sqCfg.feed_age_min, 5, 4320) };
+    const { error: err } = await supabase.from("platform_settings").upsert({ key: "squawk", value, updated_at: new Date().toISOString() });
+    setSqMsg(err ? { ok: false, text: err.message } : { ok: true, text: "Saved." });
+  }
   async function toggleTrainingCampaign() {
     const next = !(trainingCampaign ?? true);
     setCampaignErr(null);
@@ -412,6 +428,21 @@ export default function ProTankrDashPage() {
           </button>
         </div>
         {campaignErr && <div style={{ fontSize: 12, color: "#f87171", marginTop: 8 }}>{campaignErr}</div>}
+      </div>
+
+      {/* Squawk expiry */}
+      <div style={card}>
+        <div style={cardTitle}>Squawk expiry</div>
+        <div style={cardSub}>Minutes. Messages are filtered out on the server once expired and deleted with their files within about five minutes.</div>
+        {([["view_ttl_min", "Gone after it is viewed (per person, and first other reader on a truck or trailer)"], ["unviewed_cap_min", "Gone after posting if nobody has viewed it"], ["feed_age_min", "Feed channels: gone after posting"]] as const).map(([k, label]) => (
+          <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+            <div style={{ fontSize: 13, minWidth: 0 }}>{label}</div>
+            <input inputMode="numeric" value={sqCfg[k]} onChange={(e) => setSqCfg((c) => ({ ...c, [k]: e.target.value.replace(/[^0-9]/g, "") }))}
+              style={{ width: 80, textAlign: "right", padding: "8px 10px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2 }} />
+          </div>
+        ))}
+        <button type="button" onClick={() => void saveSquawk()} style={{ padding: "10px 16px", border: "none", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, background: "#fff", color: "#000" }}>Save</button>
+        {sqMsg && <div style={{ fontSize: 12, color: sqMsg.ok ? "#4ade80" : "#f87171", marginTop: 8 }}>{sqMsg.text}</div>}
       </div>
 
       {/* Planner Safety (placeholder) */}

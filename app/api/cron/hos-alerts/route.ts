@@ -19,6 +19,7 @@ import { runWorklogs } from "@/lib/worklog/sendWorklogs";
 import { runNotifications } from "@/lib/notify/server";
 import { runEodReports } from "@/lib/eod/eodServer";
 import { runAutoEndShifts } from "@/lib/shifts/autoEndServer";
+import { runSquawkCleanup } from "@/lib/squawk/cleanupServer";
 import { runAbandonedTrips } from "@/lib/trips/abandonedServer";
 import { runAccountRules } from "@/lib/accounts/server";
 import type { Level } from "@/lib/telematics/hosTripNotify";
@@ -191,6 +192,7 @@ async function handle(req: NextRequest) {
   let notifications: unknown = null;
   try { await runAccountRules(); } catch (e) { console.warn("[cron] account rules failed:", (e as Error).message); }
   try { notifications = await runNotifications(); } catch (e) { console.warn("[cron] notifications failed:", (e as Error).message); }
+  try { await runSquawkCleanup(); } catch (e) { console.warn("[cron] squawk cleanup failed:", (e as Error).message); }
   try { await runAutoEndShifts(); } catch (e) { console.warn("[cron] auto end shift failed:", (e as Error).message); }
   try { await runEodReports(); } catch (e) { console.warn("[cron] end of day failed:", (e as Error).message); }
   let abandoned: unknown = null;

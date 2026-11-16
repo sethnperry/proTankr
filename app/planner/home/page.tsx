@@ -25,6 +25,9 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { SquawkSheet } from "../components/squawk/SquawkSheet";
+import { SQUAWK_TYPES, topUnread, totalUnread, type SquawkCtx, type SquawkType } from "@/lib/squawk/squawk";
+import { playChirp, useMyArea, useSquawkAlerts } from "@/lib/squawk/useSquawk";
 import { SiteAverage, SiteNotes, SopLine } from "../components/site/SiteNotes";
 import { DEFAULT_SOP_DROP, DEFAULT_SOP_TERMINAL } from "@/lib/sites/siteStats";
 import { DropSiteSheet, type DropProduct } from "../components/trip/DropSiteSheet";
@@ -2517,6 +2520,26 @@ export default function HomePage() {
     return pk?.terminal_id ? { kind: "terminal" as const, id: String(pk.terminal_id), title: pk.name ?? "Terminal", word: "Terminal notes" } : null;
   })();
   const [siteNotesOpen, setSiteNotesOpen] = useState(false);
+  // ── Squawk ──
+  const [squawkOpen, setSquawkOpen] = useState(false);
+  const [squawkType, setSquawkType] = useState<SquawkType | null>(null);
+  const myArea = useMyArea(userId || null);
+  const unreadRows = useSquawkAlerts(userId || null, playChirp);
+  const squawkCityKey = userId ? `proTankr:u:${userId}:squawkCity` : null;
+  const [squawkCity, setSquawkCity] = useState<{ city: string; state: string } | null>(null);
+  useEffect(() => {
+    try { const raw = squawkCityKey ? localStorage.getItem(squawkCityKey) : null; if (raw) setSquawkCity(JSON.parse(raw)); } catch { /* storage blocked */ }
+  }, [squawkCityKey]);
+  const squawkCtx: SquawkCtx = (() => {
+    // With a trip underway the city is the trip's terminal's; otherwise the one the driver picked, else the Planner's.
+    const pk = snap ? (activePickup(snap.pickups) ?? [...snap.pickups].sort((a, b) => a.seq - b.seq).find((p) => !p.left_at && p.outcome !== "no_load")) : null;
+    const t = pk?.terminal_id ? terminalCatalog.find((x) => String(x.terminal_id) === String(pk.terminal_id)) : null;
+    const city = t?.city ? { city: String(t.city), state: String((t as any).state ?? pk?.state ?? "") } : squawkCity ?? (location.selectedCity && location.selectedState ? { city: String(location.selectedCity), state: String(location.selectedState) } : null);
+    return { companyId: companyId || null, city: city?.city ?? null, state: city?.state || null, region: myArea.region, localArea: myArea.localArea, truckId: truckId ?? null, trailerId: trailerId ?? null };
+  })();
+  const squawkCities = useMemo(() => [...new Set(terminalCatalog.filter((t) => t.city && (t as any).state).map((t) => `${t.city}|${(t as any).state}`))].sort().map((v) => ({ value: v, label: v.replace("|", ", ") })), [terminalCatalog]);
+  const squawkTop = topUnread(unreadRows);
+  const squawkNew = totalUnread(unreadRows);
   const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
     && step.kind !== "next_rack";
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
@@ -2714,6 +2737,7 @@ export default function HomePage() {
             ...tankCheckItems, A.termWork, A.truckDown, A.inspect,
           ] },
         ];
+        tools.push({ icon: "radio", label: "Squawk", sub: squawkNew ? `${squawkNew} new` : null, subColor: squawkNew ? "#60a5fa" : undefined, onClick: () => { setSquawkType(null); setSquawkOpen(true); } });
         // Track is its own tile, for admin and dispatch only (not on a driver's board).
         if (shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin) {
           tools.push({ icon: "locate", label: "Track", sub: "Equipment & drivers", onClick: () => setFindTruckOpen(true) });
@@ -2953,6 +2977,13 @@ export default function HomePage() {
         </div>
       )}
 
+      {squawkTop && !squawkOpen && (
+        <button type="button" className="dash-press" onClick={() => { setSquawkType(squawkTop.type); setSquawkOpen(true); }}
+          style={{ ...card, display: "flex", alignItems: "center", gap: 10, width: "100%", marginBottom: 14, textAlign: "left", color: "#fff", cursor: "pointer", borderColor: "rgba(96,165,250,0.55)" }}>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 800 }}>Squawk · {squawkNew} new<span style={{ color: muted, fontWeight: 600 }}> in {SQUAWK_TYPES.find((c) => c.type === squawkTop.type)?.label ?? "a channel"}</span></span>
+          <span style={{ color: muted }}>›</span>
+        </button>
+      )}
       {notice && (
         <div style={{ ...card, marginBottom: 14, borderColor: "rgba(74,222,128,0.5)", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{notice.text}</span>
@@ -3298,6 +3329,9 @@ export default function HomePage() {
           </button>
         )}
       </FullscreenModal>
+      <SquawkSheet open={squawkOpen} onClose={() => setSquawkOpen(false)} userId={userId || null} ctx={squawkCtx} initialType={squawkType}
+        cityOptions={squawkCities}
+        onCity={(v) => { const [city, state] = v.split("|"); const c = { city, state }; setSquawkCity(c); try { if (squawkCityKey) localStorage.setItem(squawkCityKey, JSON.stringify(c)); } catch { /* storage blocked */ } }} />
       <FullscreenModal open={siteNotesOpen && !!notesSite} title={notesSite?.title ?? ""} onClose={() => setSiteNotesOpen(false)} footer={null}>
         {notesSite && (
           <>

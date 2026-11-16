@@ -9,7 +9,7 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 
 /** One pick from a list, with search at the top. "" = no filter. */
 export function PickSheet({ open, title, allLabel, options, value, onPick, onClose }: {
-  open: boolean; title: string; allLabel: string; options: { value: string; label: string }[]; value: string; onPick: (v: string) => void; onClose: () => void;
+  open: boolean; title: string; allLabel?: string; options: { value: string; label: string }[]; value: string; onPick: (v: string) => void; onClose: () => void;
 }) {
   const [q, setQ] = useState("");
   useEffect(() => { if (open) setQ(""); }, [open]);
@@ -26,7 +26,7 @@ export function PickSheet({ open, title, allLabel, options, value, onPick, onClo
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" autoFocus
         style={{ width: "100%", boxSizing: "border-box", background: "#0a0a0b", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 16, padding: "11px 12px", borderRadius: 0, outline: "none", marginBottom: 10 }} />
       <div style={{ background: "#0f0f10", border: "1px solid rgba(255,255,255,0.12)" }}>
-        {!q.trim() && row("", allLabel)}
+        {!q.trim() && allLabel && row("", allLabel)}
         {shown.length === 0 && <div style={{ padding: 14, fontSize: 14, color: "rgba(255,255,255,0.5)" }}>No matches.</div>}
         {shown.map((o) => row(o.value, o.label))}
       </div>
