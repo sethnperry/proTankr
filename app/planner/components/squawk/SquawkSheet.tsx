@@ -87,6 +87,7 @@ export function SquawkSheet({ open, onClose, userId, ctx, initialType, cityOptio
                   {m.body}
                   {m.attachments.map((a) => <AttachmentChip key={a.path} a={a} dark={m.sender_id === userId} />)}
                 </div>
+                {m.sender_id === userId && <button type="button" onClick={() => void feed.retract(m.id)} style={{ border: "none", background: "none", color: muted, fontSize: 11, cursor: "pointer", padding: "2px 0" }}>Retract</button>}
                 {hasAttachments(m) && <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 3, maxWidth: "86%" }}>{ATTACHMENT_NOTICE}</div>}
               </div>
             ))}

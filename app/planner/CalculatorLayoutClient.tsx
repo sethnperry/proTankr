@@ -18,6 +18,7 @@
 // metadata exports to live in a server component -- this client component
 // holds all the actual interactive shell logic.
 
+import { useKeepAwake } from "@/lib/pwa/keepAwake";
 import PlannerHost from "./PlannerHost";
 import { AccessStepsHost } from "./components/access/AccessStepsHost";
 import React, { useEffect, useState } from "react";
@@ -242,6 +243,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
   // consumers elsewhere (page.tsx, PlannerControls.tsx), so the initial
   // render never mismatches between server and client.
   const isLandscape = useIsLandscape();
+  useKeepAwake(); // the screen stays on while the app is open, until the driver puts it to sleep
   const terminalId = shell.location.selectedTerminalId ? String(shell.location.selectedTerminalId) : null;
   const outageBanner = useActiveOutageBanner(terminalId, shell.effectiveUserId || null, shell.plannedProductIds);
   return (

@@ -4,7 +4,7 @@
 // (supabase/migrations/20261117000000_squawk.sql) decides who may read or send; this only builds keys and labels.
 // Pure: no React, no Supabase.
 
-export type SquawkType = "city_network" | "city_internal" | "company" | "region" | "local_area" | "truck" | "trailer";
+export type SquawkType = "city_network" | "city_internal" | "company" | "region" | "local_area" | "to_rack" | "to_drop" | "truck" | "trailer";
 
 export const SQUAWK_TYPES: { type: SquawkType; label: string; hint: string }[] = [
   { type: "city_network", label: "Terminal city network", hint: "Drivers of every company in this city" },
@@ -12,6 +12,8 @@ export const SQUAWK_TYPES: { type: SquawkType; label: string; hint: string }[] =
   { type: "company", label: "Company wide", hint: "Everyone in your company" },
   { type: "region", label: "My region", hint: "Drivers in your region" },
   { type: "local_area", label: "My local area", hint: "Drivers in your local area" },
+  { type: "to_rack", label: "To rack", hint: "Drivers of your company headed to the same terminal" },
+  { type: "to_drop", label: "To drop", hint: "Drivers of your company headed to the same delivery" },
   { type: "truck", label: "This truck", hint: "Whoever is on this truck" },
   { type: "trailer", label: "This trailer", hint: "Whoever is on this trailer" },
 ];
@@ -21,6 +23,8 @@ export type SquawkCtx = {
   city: string | null; state: string | null;
   region: string | null; localArea: string | null;
   truckId: string | null; trailerId: string | null;
+  /** The terminal and delivery location my open trip is headed to next. */
+  toRackTerminalId?: string | null; toDropLocationId?: string | null;
 };
 
 export const cityKey = (city: string, state: string) => `${city.trim().toLowerCase()}|${state.trim().toUpperCase()}`;
@@ -35,6 +39,8 @@ export function channelKey(type: SquawkType, c: SquawkCtx): string | null {
     case "company": return c.companyId;
     case "region": return c.companyId && c.region?.trim() ? `${c.companyId}|${norm(c.region)}` : null;
     case "local_area": return c.companyId && c.region?.trim() && c.localArea?.trim() ? `${c.companyId}|${norm(c.region)}|${norm(c.localArea)}` : null;
+    case "to_rack": return c.companyId && c.toRackTerminalId ? `${c.companyId}|${c.toRackTerminalId}` : null;
+    case "to_drop": return c.companyId && c.toDropLocationId ? `${c.companyId}|${c.toDropLocationId}` : null;
     case "truck": return c.truckId;
     case "trailer": return c.trailerId;
   }
@@ -42,7 +48,7 @@ export function channelKey(type: SquawkType, c: SquawkCtx): string | null {
 
 const WHY: Record<SquawkType, string> = {
   city_network: "Pick a city", city_internal: "Pick a city", company: "No company", region: "No region on your profile",
-  local_area: "No local area on your profile", truck: "No truck selected", trailer: "No trailer selected",
+  local_area: "No local area on your profile", to_rack: "No rack to go to", to_drop: "No delivery to go to", truck: "No truck selected", trailer: "No trailer selected",
 };
 
 export type SquawkChannel = { type: SquawkType; label: string; hint: string; key: string | null; why: string | null };

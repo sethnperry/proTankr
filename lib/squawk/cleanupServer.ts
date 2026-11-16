@@ -14,7 +14,7 @@ export async function runSquawkCleanup(nowMs = Date.now()): Promise<number> {
   // Per-person messages last at most the unviewed cap plus one view window after posting.
   const areaCut = new Date(nowMs - (cap + ttl) * 60_000).toISOString();
   const { data: gone } = await admin.from("squawk_messages").select("id, attachments")
-    .or(`and(channel_type.neq.local_area,expires_at.lt.${nowIso}),and(channel_type.eq.local_area,created_at.lt.${areaCut})`).limit(500);
+    .or(`retracted_at.not.is.null,and(channel_type.not.in.(local_area,to_rack,to_drop),expires_at.lt.${nowIso}),and(channel_type.in.(local_area,to_rack,to_drop),created_at.lt.${areaCut})`).limit(500);
   const rows = (gone ?? []) as { id: string; attachments: { path?: string }[] | null }[];
   if (!rows.length) return 0;
   const paths = rows.flatMap((r) => (Array.isArray(r.attachments) ? r.attachments : []).map((a) => a?.path).filter((p): p is string => !!p));

@@ -33,6 +33,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { SelfProfileView } from "./SelfProfileView";
 import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
+import { useKeepAwake, writeKeepAwake } from "@/lib/pwa/keepAwake";
 import { supabase } from "@/lib/supabase/client";
 import JoinFleetView from "@/app/planner/components/JoinFleetView";
 import FuelPinsView from "@/app/planner/components/FuelPinsView";
@@ -120,6 +121,7 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
   const [pushMsg, setPushMsg] = useState<string | null>(null);
   useEffect(() => { if (open) void pushEnabledHere().then(setPushOn); }, [open]);
   const emailPkg = useEmailTripPackage(open ? authUserId ?? null : null);
+  const awake = useKeepAwake();
   const togglePush = async () => {
     setPushMsg(null);
     if (pushOn) { await disablePush(); setPushOn(false); return; }
@@ -183,6 +185,9 @@ export default function SettingsModal({ open, onClose, companyId, myRole, authUs
                   {pushMsg && <div style={{ fontSize: 12, color: "#f87171", marginTop: -4 }}>{pushMsg}</div>}
                 </>
               )}
+              <SettingsRow label="Keep screen on" sub={!awake.supported ? "This device or browser doesn't allow it" : awake.on ? (awake.held ? "On while the app is open. Pressing the power button still puts it to sleep." : "On, but your device is not allowing it right now (battery saver?)") : "Off: the screen sleeps on its usual timer"}
+                right={<span style={{ fontSize: 13, fontWeight: 800, color: awake.on && awake.supported ? "#4ade80" : "rgba(255,255,255,0.45)" }}>{awake.on && awake.supported ? "On" : "Off"}</span>}
+                onClick={() => { if (awake.supported) writeKeepAwake(!awake.on); }} />
               <SettingsRow label="Email me my trip package" sub="When a trip finishes: PTD, BOLs and receipts in one PDF, sent to your email"
                 right={<span style={{ fontSize: 13, fontWeight: 800, color: emailPkg.on ? "#4ade80" : "rgba(255,255,255,0.45)" }}>{emailPkg.on == null ? "…" : emailPkg.on ? "On" : "Off"}</span>}
                 onClick={() => { if (emailPkg.on != null) void emailPkg.setOn(!emailPkg.on); }} />

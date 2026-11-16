@@ -63,7 +63,12 @@ export function useSquawkFeed(type: SquawkType | null, key: string | null, open:
     void qc.invalidateQueries({ queryKey: ["squawk", "feed", type, key] });
     return null;
   }, [type, key, userId, qc]);
-  return { messages: q.data ?? [], loading: q.isLoading, send };
+  /** The sender takes a message back; it is gone for everyone at once. */
+  const retract = useCallback(async (id: string) => {
+    await supabase.rpc("squawk_retract", { p_id: id });
+    void qc.invalidateQueries({ queryKey: ["squawk"] });
+  }, [qc]);
+  return { messages: q.data ?? [], loading: q.isLoading, send, retract };
 }
 
 export async function signedUrl(path: string): Promise<string | null> {
