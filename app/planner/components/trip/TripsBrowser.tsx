@@ -270,7 +270,10 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         : atDrop || atRack ? "Arrived" : "Enroute";
       const aboardBy: Record<number, string | null> = {};
       for (const c of mine) if (c.disposition === "loaded" && c.product_id) aboardBy[c.comp_number] = c.product_id;
-      return { trip: t, loadedBy: aboardBy, trailerState, truckLabel, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
+      // A finished trip's trailer is empty; what it just delivered is its residue (the trailer's live residue may belong to a later trip).
+      const residueBy: Record<number, string | null> = {};
+      if (t.status === "complete" || t.status === "cancelled") for (const c of mine) if (c.disposition === "delivered" && c.product_id) residueBy[c.comp_number] = c.product_id;
+      return { trip: t, loadedBy: aboardBy, residueBy, trailerState, truckLabel, order: primary?.order_number ?? numbered[0]?.order_number ?? null, more: Math.max(0, numbered.length - 1), route };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, locs, catalog.data, company, userId]);
@@ -279,11 +282,11 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
   const trailerStateFor = (ts: string | null, trailerId: string | null) =>
     (ts ?? (trailerId && Object.keys(hdr.residue[trailerId] ?? {}).length ? "Residue" : "Cleaned")) as "Cleaned" | "Residue" | "Loading" | "Loaded" | "Unloading" | "Preloaded";
   // The trailer as plan-style codes, highest compartment first: D2/--/D2.
-  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>, showCodes: boolean): PlanLineComp[] => {
+  const codesFor = (trailerId: string | null, loadedBy: Record<number, string | null>, showCodes: boolean, residueBy?: Record<number, string | null>): PlanLineComp[] => {
     // A compartment holding this trip's product shows its code. An empty one shows dashes in the color of the last
     // product it held (residue), and gray dashes only once the trailer is cleaned.
-    const res = (trailerId && hdr.residue[trailerId]) || {};
-    const nums = new Set<number>([...Object.keys(loadedBy).map(Number), ...((trailerId && hdr.sizes[trailerId]) || []).map((c) => c.comp)]);
+    const res = Object.keys(residueBy ?? {}).length ? { ...((trailerId && hdr.residue[trailerId]) || {}), ...residueBy } : (trailerId && hdr.residue[trailerId]) || {};
+    const nums = new Set<number>([...Object.keys(loadedBy).map(Number), ...Object.keys(residueBy ?? {}).map(Number), ...((trailerId && hdr.sizes[trailerId]) || []).map((c) => c.comp)]);
     const info = (pid: string | null | undefined) => {
       const p = pid ? catalog.data.find((x) => x.product_id === pid) : null;
       const name = p ? (p.display_name ?? p.product_name) : null;
@@ -398,7 +401,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
       )}
       {feed.map((f) => {
         if (f.t === "move") return <MoveCard key={f.m.move_id} m={f.m} who={moveWho(f.m)} trailerParts={codesFor(f.m.trailer_id, {}, false)} trailerWord={f.m.trailer_id && f.m.kind !== "bobtail" ? trailerStateFor(null, f.m.trailer_id) : null} />;
-        const { trip, order, more, route, loadedBy, trailerState: ts, truckLabel } = f.row;
+        const { trip, order, more, route, loadedBy, residueBy, trailerState: ts, truckLabel } = f.row;
         const s = { ...STATUS[trip.status], label: truckLabel };
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
@@ -421,7 +424,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
                 <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 800 }}>{who}</span>
                 <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                   {trip.trailer_id
-                    ? <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy, CODE_STATES.has(trailerStateFor(ts, trip.trailer_id)))} />
+                    ? <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy, CODE_STATES.has(trailerStateFor(ts, trip.trailer_id)), residueBy)} />
                     : <span style={{ fontSize: 14, fontWeight: 800, color: "#60a5fa" }}>Bobtail</span>}
                 </span>
                 {trip.trailer_id && <span style={{ flexShrink: 0, fontSize: 12, color: TRAILER_COLOR[trailerStateFor(ts, trip.trailer_id)] }}>{trailerStateFor(ts, trip.trailer_id)}</span>}
