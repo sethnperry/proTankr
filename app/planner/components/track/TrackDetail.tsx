@@ -32,7 +32,9 @@ const bigBtn: React.CSSProperties = { display: "block", width: "100%", textAlign
 
 type Preview = { changes: TrackChange[]; canSeparate: boolean; truckId: string; truckName: string; observed: { city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null; trailerName: string | null } };
 
-export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded, geoTrailer, onAddedTrailer, story = false }: {
+export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded, geoTrailer, onAddedTrailer, story = false, coupledWith, coupledKnown = false, onOpenCoupled }: {
+  /** What the shown unit is coupled to (story mode). `coupledKnown` says whether to claim "not coupled" when null. */
+  coupledWith?: TrackUnit | null; coupledKnown?: boolean; onOpenCoupled?: () => void;
   /** The Down chip's view: one unit, and the story of how it got its status (who, when, where, notes). */
   story?: boolean;
   open: boolean; onClose: () => void; companyId: string;
@@ -190,6 +192,20 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
       </div>
       <div style={{ fontSize: 14, marginTop: 8 }}>{told ? storyLine(verbFor(u.statusCode), told) : u.statusUpdatedAt ? storyLine(verbFor(u.statusCode), { byName: null, at: u.statusUpdatedAt, source: null }) : "No status history on file."}</div>
       {told && !told.byName && u.statusUpdatedAt && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Who set it wasn't recorded.</div>}
+
+      {(coupledWith || coupledKnown) && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={label}>Coupled to</div>
+          {coupledWith ? (
+            <button type="button" onClick={onOpenCoupled} disabled={!onOpenCoupled}
+              style={{ display: "flex", alignItems: "baseline", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, marginTop: 4, color: "#fff", cursor: onOpenCoupled ? "pointer" : "default" }}>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>{coupledWith.kind === "truck" ? "Truck" : "Trailer"} {coupledWith.name}</span>
+              <span style={{ fontSize: 13, color: coupledWith.statusCode ? fleetStatusColor(coupledWith.statusCode) : muted }}>● {coupledWith.statusCode ? fleetStatusLabel(coupledWith.statusCode) || coupledWith.statusCode : "No status"}</span>
+              {onOpenCoupled && <span style={{ marginLeft: "auto", color: muted }}>›</span>}
+            </button>
+          ) : <div style={{ fontSize: 15, marginTop: 4, color: muted }}>Not coupled to anything.</div>}
+        </div>
+      )}
 
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <div style={label}>{verbFor(u.statusCode)} at</div>

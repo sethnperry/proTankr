@@ -12,6 +12,9 @@ import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/drive
 import { EquipmentTable } from "./EquipmentTable";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
+import EquipmentModal from "@/app/planner/modals/EquipmentModal";
+import { useEquipment } from "@/app/planner/hooks/useEquipment";
+import { EquipmentReports } from "@/app/planner/components/equipment/EquipmentReports";
 import { TrackDetail } from "@/app/planner/components/track/TrackDetail";
 import type { TrackUnit } from "@/lib/equipment/trackList";
 import AnnouncementBanner from "@/app/planner/components/AnnouncementBanner";
@@ -1265,6 +1268,9 @@ export default function AdminPage() {
   const fleetSetup = useFleetSetup(companyId, usersOpen && !isSolo && (myRole === "admin" || myRole === "dispatch"));
   const [setupRowId, setSetupRowId] = useState<string | null>(null);
   const [equipOpen,      setEquipOpen]      = useState(false);
+  // The same Equipment screen a driver sees (selected equipment, Scale/Service/Wash/Edit, STUD, Inspect, Truck down, Select Equipment, Track).
+  const [myEquipOpen,    setMyEquipOpen]    = useState(false);
+  const myEquipment = useEquipment(currentUserId);
   const [equipTab,       setEquipTab]       = useState<"trucks"|"trailers"|"combos"|"table">("table");
   const [terminalsOpen,  setTerminalsOpen]  = useState(false);
   // keep for compat
@@ -2077,7 +2083,7 @@ export default function AdminPage() {
   ].filter(Boolean)) as { label: string; go: () => void }[];
   const toolItems: ToolItem[] = [
     !isSolo && (myRole === "admin" || myRole === "dispatch") && { icon: "people" as const, label: "Users", onClick: () => setUsersOpen(true) },
-    (myRole === "admin" || myRole === "lead") && { icon: "truck" as const, label: "Equipment", onClick: () => setEquipOpen(true) },
+    (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "truck" as const, label: "Equipment", onClick: () => setMyEquipOpen(true) },
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "terminal" as const, label: "Terminals", onClick: () => setTerminalsMenuOpen(true) },
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "chart" as const, label: "Utilization", onClick: () => setFleetUtilOpen(true) },
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "route" as const, label: "Delays", onClick: () => setDelaysOpen(true) },
@@ -2092,6 +2098,21 @@ export default function AdminPage() {
         <TrackDetail open story onClose={() => setDownUnit(null)} companyId={companyId}
           truck={downUnit.truck} trailer={downUnit.trailer} allTrucks={downUnit.truck ? [downUnit.truck] : []}
           canAdd={false} onChanged={() => void loadAll()} onSwitchTruck={() => { /* single unit from the dashboard */ }} />
+      )}
+      {companyId && currentUserId && (
+        <>
+          <EquipmentModal open={myEquipOpen} onClose={() => setMyEquipOpen(false)} authUserId={currentUserId}
+            selectedComboId={myEquipment.selectedComboId ?? ""} onSelectComboId={(id: string) => myEquipment.setSelectedComboId(id)} onRefreshCombos={myEquipment.fetchCombos}
+            myRole={myRole} currentTruckId={myEquipment.currentTruckId} currentTrailerId={myEquipment.currentTrailerId}
+            setCurrentEquipment={myEquipment.setCurrentEquipment} onRefreshCurrentEquipment={myEquipment.loadCurrentEquipment} />
+          {myEquipOpen && (
+            <EquipmentReports userId={currentUserId} companyId={companyId}
+              units={[
+                ...((myEquipment.selectedCombo?.truck_id ?? myEquipment.currentTruckId) ? [{ kind: "truck" as const, id: (myEquipment.selectedCombo?.truck_id ?? myEquipment.currentTruckId) as string, name: myEquipment.truckNameById?.[(myEquipment.selectedCombo?.truck_id ?? myEquipment.currentTruckId) as string] ?? myEquipment.currentTruckName ?? "" }] : []),
+                ...((myEquipment.selectedCombo?.trailer_id ?? myEquipment.currentTrailerId) ? [{ kind: "trailer" as const, id: (myEquipment.selectedCombo?.trailer_id ?? myEquipment.currentTrailerId) as string, name: myEquipment.trailerNameById?.[(myEquipment.selectedCombo?.trailer_id ?? myEquipment.currentTrailerId) as string] ?? myEquipment.currentTrailerName ?? "" }] : []),
+              ]} />
+          )}
+        </>
       )}
       <div style={{ margin: "0 -16px 12px" }}><AnnouncementBanner userId={currentUserId || null} /></div>
       <div className="admin-header-row" style={{ marginBottom: 20 }}>

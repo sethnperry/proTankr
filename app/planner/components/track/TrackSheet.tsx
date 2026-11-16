@@ -175,6 +175,13 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const canManage = role === "admin" || role === "dispatch" || role === "lead";
   const detailTruck = pick?.truckId ? truckById.get(pick.truckId) ?? null : null;
   const detailTrailer = pick?.trailerId ? trailerById.get(pick.trailerId) ?? null : null;
+  // One unit at a time, with what it is coupled to: a truck (or a trailer alone) is the subject, its partner a line.
+  const storyOn = !!(detailTruck || detailTrailer) && !pick?.vehicle && !pick?.geoTrailer;
+  const subjectTruck = detailTruck;
+  const subjectTrailer = detailTruck ? null : detailTrailer;
+  const partner: TrackUnit | null = detailTruck
+    ? (detailTrailer ?? (combos.find((c) => c.truckId === detailTruck.id) ? trailerById.get(combos.find((c) => c.truckId === detailTruck.id)!.trailerId) ?? null : null))
+    : detailTrailer ? (() => { const c = combos.find((x) => x.trailerId === detailTrailer.id); return c ? truckById.get(c.truckId) ?? null : null; })() : null;
 
   const boardStatus = useEquipmentBoardStatus(open, Object.values(claimedByCombo).filter((x): x is string => !!x), trailers.map((t) => t.id), combos.length);
   const myCombo = myTruckId ? combos.find((c) => c.truckId === myTruckId) : null;
@@ -330,7 +337,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
       {pick && companyId && (
         <TrackDetail
           open onClose={() => setPick(null)} companyId={companyId}
-          truck={detailTruck} trailer={detailTrailer} vehicle={pick.vehicle ?? null} geoTrailer={pick.geoTrailer ?? null} allTrucks={trucks}
+          story={storyOn} coupledWith={partner} coupledKnown={storyOn} onOpenCoupled={partner ? () => setPick(partner.kind === "truck" ? { truckId: partner.id, trailerId: null } : { truckId: null, trailerId: partner.id }) : undefined}
+          truck={storyOn ? subjectTruck : detailTruck} trailer={storyOn ? subjectTrailer : detailTrailer} vehicle={pick.vehicle ?? null} geoTrailer={pick.geoTrailer ?? null} allTrucks={trucks}
           onAddedTrailer={async (id) => { await reload(); setPick({ truckId: null, trailerId: id }); }}
           canAdd={canManage}
           onAdded={async (id) => { await reload(); openTruck(id); }}

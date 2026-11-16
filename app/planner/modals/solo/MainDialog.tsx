@@ -10,6 +10,7 @@ import { COLOR_TARE, COLOR_SERVICE, COLOR_WASH, saveBtnStyle, S } from "./styles
 import type { SoloModel } from "./useSoloEquipment";
 import { ToolGlyph } from "@/app/planner/home/DashboardChrome";
 import { useEquipmentTools } from "@/lib/ui/equipmentTools";
+import { TrackSheet } from "@/app/planner/components/track/TrackSheet";
 
 // Dark buttons with an icon, same size as Done.
 const darkBtn: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", padding: "14px 18px", borderRadius: 2, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer", marginTop: 10 };
@@ -19,6 +20,8 @@ export function MainDialog({ m }: { m: SoloModel }) {
     error,
     handleClose,
     loading,
+    myRole,
+    companyId,
     open,
     openEdit,
     openStatus,
@@ -38,6 +41,8 @@ export function MainDialog({ m }: { m: SoloModel }) {
   } = m;
   // With nothing selected there is nothing to look at here: go straight to the picker, once per opening.
   const tools = useEquipmentTools();
+  const [trackOpen, setTrackOpen] = React.useState(false);
+  const canTrack = myRole === "admin" || myRole === "dispatch" || myRole === "lead";
   const autoPicked = useRef(false);
   const hasUnit = !!selectedCombo || !!selectedTrailerId || !!selectedTruckId;
   useEffect(() => {
@@ -77,6 +82,11 @@ export function MainDialog({ m }: { m: SoloModel }) {
           {!hasUnit && (
             <button type="button" style={{ ...darkBtn, marginTop: 0 }} onClick={() => setPickerOpen(true)}>
               <ToolGlyph name="locate" color="#fff" />Select Equipment
+            </button>
+          )}
+          {!hasUnit && canTrack && (
+            <button type="button" style={darkBtn} onClick={() => setTrackOpen(true)}>
+              <ToolGlyph name="route" color="#fff" />Track
             </button>
           )}
           {hasUnit && <StatusBlock m={m} />}
@@ -174,6 +184,11 @@ export function MainDialog({ m }: { m: SoloModel }) {
             <button type="button" onClick={() => setPickerOpen(true)} style={darkBtn}>
               <ToolGlyph name="locate" color="#fff" />Select Equipment
             </button>
+            {canTrack && (
+              <button type="button" onClick={() => setTrackOpen(true)} style={darkBtn}>
+                <ToolGlyph name="route" color="#fff" />Track
+              </button>
+            )}
 
             {/* This modal opts out of FullscreenModal's own default Done
                 button (footer={null}, see header comment -- everything here
@@ -189,6 +204,7 @@ export function MainDialog({ m }: { m: SoloModel }) {
           )}
         </div>
       </FullscreenModal>
+      {canTrack && <TrackSheet open={trackOpen} onClose={() => setTrackOpen(false)} companyId={companyId} role={myRole ?? null} myTruckId={selectedTruckId} myTrailerId={selectedTrailerId} />}
     </>
   );
 }
