@@ -52,7 +52,7 @@ const fieldLabel: React.CSSProperties = {
 
 export default function EquipmentStatusModal({
   open, onClose, companyId, unitKind, unitId, unitName, currentStatus, currentNotes,
-  currentSubStatus, homeLocalArea, onSaved, presetRegion, presetLocalArea, presetPin, pair, locationOptional = false, allowed, onParkPreloaded,
+  currentSubStatus, homeLocalArea, onSaved, presetRegion, presetLocalArea, presetPin, pair, locationOptional = false, allowed, onParkPreloaded, endShift = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -85,6 +85,8 @@ export default function EquipmentStatusModal({
   allowed?: FleetStatus[];
   /** Loaded truck at End shift: shows Park preloaded in place of Readyline. */
   onParkPreloaded?: () => void;
+  /** End of a shift: Readyline is the default, and a Deadline on a coupled pair asks which unit is down. */
+  endShift?: boolean;
 }) {
   const [status, setStatus] = useState<FleetStatus>("in_use");
   const [region, setRegion] = useState("");
@@ -98,6 +100,7 @@ export default function EquipmentStatusModal({
   const [locBusy, setLocBusy] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [unitInfo, setUnitInfo] = useState<UnitInfo[]>([]);
+  const [askWhich, setAskWhich] = useState(false);
 
   // Nearest saved place (within 0.3 mi) names the pin and fills region / local area.
   async function nearestPlace(lat: number, lon: number): Promise<Pick<Pin, "label" | "placeId" | "region" | "localArea">> {
@@ -157,7 +160,9 @@ export default function EquipmentStatusModal({
     })();
     const first = (allowed?.[0] ?? "in_use") as FleetStatus;
     const cur = currentStatus as FleetStatus;
-    setStatus(cur && (!allowed || allowed.includes(cur)) ? cur : first);
+    // At the end of a shift the answer is almost always Readyline; Deadline is the exception.
+    setStatus(endShift && (!allowed || allowed.includes("readyline")) ? "readyline" : cur && (!allowed || allowed.includes(cur)) ? cur : first);
+    setAskWhich(false);
     setRegion(presetRegion ?? "");
     setLocalArea(presetLocalArea ?? "");
     setSubStatus(currentSubStatus ?? "");
@@ -175,21 +180,40 @@ export default function EquipmentStatusModal({
       setErr("Set the location first: tap + Set location while you're at the equipment.");
       return;
     }
+    // A coupled pair going to Deadline at the end of a shift: which unit is actually down?
+    if (endShift && pair && status === "deadline") { setAskWhich(true); return; }
+    await saveFor("both");
+  }
+
+  /** `down`: which unit is deadlined (only matters for a pair at End shift). One unit down splits the pair:
+   *  that unit stays Deadline, the other becomes Readyline, and both are parked here. Both down stay coupled. */
+  async function saveFor(down: "both" | "truck" | "trailer") {
+    setAskWhich(false);
     setBusy(true);
     setErr(null);
     try {
       const units: ["truck" | "trailer", string][] = pair ? [["truck", pair.truckId], ["trailer", pair.trailerId]] : [[unitKind, unitId]];
+      const split = !!pair && endShift && status === "deadline" && down !== "both";
       for (const [kind, id] of units) {
+        const thisDown = !split || kind === down;
         const { error } = await supabase.rpc("set_equipment_status", {
           p_unit_kind: kind,
           p_unit_id: id,
-          p_status: status,
+          p_status: thisDown ? status : "readyline",
           p_region: (pin?.region ?? presetRegion ?? "").trim() || null,
           p_local_area: (pin?.localArea ?? presetLocalArea ?? "").trim() || null,
-          p_notes: notes.trim() || null,
-          p_sub_status: subStatus.trim() || null,
+          p_notes: thisDown ? notes.trim() || null : null,
+          p_sub_status: thisDown ? subStatus.trim() || null : null,
         });
         if (error) throw error;
+      }
+      if (split && pair) {
+        // The pair comes apart where it is parked; the units keep their own status and share the pin below.
+        try {
+          const { data: c } = await supabase.from("equipment_combos").select("combo_id").eq("truck_id", pair.truckId).eq("trailer_id", pair.trailerId).eq("active", true).limit(1).maybeSingle();
+          const cid = (c as { combo_id?: string } | null)?.combo_id;
+          if (cid) await supabase.rpc("decouple_combo", { p_combo_id: cid });
+        } catch { /* statuses already saved; the pair can be decoupled from the equipment modal */ }
       }
       // A new pin is written with the status; the units' old pin stays if none was set. Units in use have none.
       if (pin && offDuty) {
@@ -325,7 +349,7 @@ export default function EquipmentStatusModal({
 
         <button aria-busy={!!(busy)}
           type="button"
-          onClick={save}
+          onClick={() => void save()}
           disabled={busy}
           style={{
             width: "100%", padding: "14px 18px", borderRadius: 2, border: "none",
@@ -336,6 +360,19 @@ export default function EquipmentStatusModal({
         </button>
       </div>
     </FullscreenModal>
+    {pair && (
+      <FullscreenModal open={askWhich} onClose={() => setAskWhich(false)} title="Which unit is down?" footer={null}>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
+          Pick what is deadlined. If it is only one unit, the other goes to Readyline and the two are parked here, uncoupled.
+        </div>
+        {([["truck", `Truck ${pair.truckName}`], ["trailer", `Trailer ${pair.trailerName}`], ["both", `Both ${pair.truckName} / ${pair.trailerName}`]] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => void saveFor(k)} disabled={busy}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: "16px 14px", marginBottom: 10, borderRadius: 2, cursor: "pointer", border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 17, fontWeight: 800 }}>
+            {label}{k === "both" ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>Stay coupled, both deadlined</span> : null}
+          </button>
+        ))}
+      </FullscreenModal>
+    )}
     <PinMap open={mapOpen} start={shownPin ? { lat: shownPin.lat, lon: shownPin.lon } : null} initialQuery=""
       unitLabel={pair ? `${pair.truckName} / ${pair.trailerName}` : unitName} units={unitInfo} companyId={companyId}
       onUse={(r) => void usePinResult(r)} onClose={() => setMapOpen(false)} />

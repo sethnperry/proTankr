@@ -3440,7 +3440,8 @@ export default function HomePage() {
         onStart={termWork.start} onStop={termWork.stop} />
       <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Continue without a shift" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
       {endAsk && truckId && companyId && (
-        <EquipmentStatusModal open onClose={() => setEndAsk(null)} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
+        <EquipmentStatusModal open endShift onClose={() => setEndAsk(null)} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
+          pair={trailerId ? { truckId, trailerId, truckName: endAsk.name, trailerName: (equipment.trailerNameById?.[trailerId] || equipment.currentTrailerName || "") } : null}
           currentStatus={endAsk.status} currentNotes={endAsk.notes} currentSubStatus={endAsk.sub} homeLocalArea={endAsk.area}
           allowed={endAsk.sleeper ? ["in_use", "deadline", "readyline"] : ["deadline", "readyline"]}
           onParkPreloaded={endAsk.loaded ? () => { setEndAsk(null); setParkOpen(true); } : undefined}
