@@ -1,7 +1,7 @@
 "use client";
 
 import { useHeldUnitGuard } from "./HeldUnitGuard";
-import { noticeUnitChange, type HeldUnit } from "@/lib/equipment/adminNotice";
+import { noticeUnitChange } from "@/lib/equipment/adminNotice";
 import TruckFuelTankField from "./TruckFuelTankField";
 import TruckSleeperField from "./TruckSleeperField";
 import React, { useEffect, useMemo, useState } from "react";
@@ -904,11 +904,9 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
       return;
     }
     // Staff editing a truck a driver is using: warn first, tell the driver after.
-    let heldAfter: HeldUnit[] = [];
     if (!isNew && truck) {
       const g = await heldGuard.guard([{ kind: "truck", id: truck.truck_id, name: truck.truck_name }], "Your changes save now.");
       if (!g.ok) return;
-      heldAfter = g.held;
     }
     setSaving(true); setErr(null);
     const payload: any = {
@@ -951,11 +949,13 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
       chg("alliance_hazmat", truck?.alliance_expiration_date, alliExp, alliEnf, alliNotes), chg("fleet_insurance", truck?.fleet_ins_expiration_date, fleetExp, fleetEnf, fleetNotes),
       chg("hazmat_lic", truck?.hazmat_lic_expiration_date, hazLicExp, hazLicEnf, hazLicNotes), chg("inner_bridge", truck?.inner_bridge_expiration_date, ibExp, ibEnf, ibNotes),
     ]);
-    for (const h of heldAfter) void noticeUnitChange(h.kind, h.id, "edit", name.trim() !== truck?.truck_name ? `details edited, now Truck ${name.trim()}` : "details edited");
+    if (!isNew && truck) void noticeUnitChange("truck", truck.truck_id, "edit", name.trim() !== truck.truck_name ? `details edited, now Truck ${name.trim()}` : "details edited");
     onDone();
   }
 
   async function deleteTruck() {
+    const g = await heldGuard.guard([{ kind: "truck", id: truck!.truck_id, name: truck!.truck_name }], "", "A truck a driver is using can't be deleted. Wait until they are done with it.", true);
+    if (!g.ok || g.held.length) return;
     if (!confirm("Permanently delete this truck? This cannot be undone.")) return;
     setSaving(true); setErr(null);
     try {
@@ -1235,14 +1235,12 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
       return;
     }
     // Staff editing a trailer a driver is using: warn first (and refuse compartment changes mid-trip), tell the driver after.
-    let heldAfter: HeldUnit[] = [];
     if (!isNew && trailer) {
       const { data: dbc } = await supabase.from("trailer_compartments").select("comp_number, max_gallons, cap_gallons").eq("trailer_id", trailer.trailer_id);
       const sig = (a: { comp_number: number; max_gallons: number | null; cap_gallons?: number | null }[]) => JSON.stringify([...a].sort((x, y) => x.comp_number - y.comp_number).map((c) => [Number(c.comp_number), Number(c.max_gallons), c.cap_gallons == null ? null : Number(c.cap_gallons)]));
       const compsChanged = sig((dbc ?? []) as any) !== sig(comps as any);
       const g = await heldGuard.guard([{ kind: "trailer", id: trailer.trailer_id, name: trailer.trailer_name }], compsChanged ? "Compartment sizes and caps change their loading plan." : "Your changes save now.", compsChanged ? "Compartment sizes and caps can't be changed while they're on a trip. Wait until it's done." : undefined);
       if (!g.ok) return;
-      heldAfter = g.held;
     }
     setSaving(true); setErr(null);
     const payload: any = {
@@ -1296,11 +1294,13 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
       chg("trailer_registration", trailer?.trailer_reg_expiration_date, trRegExp, trRegEnf, trRegNotes), chg("annual_inspection", trailer?.trailer_inspection_expiration_date, trInsExp, trInsEnf, trInsNotes),
       ...tanks.map((t) => chg(`tank_${t.key}`, tankWas(t.key), t.date || "", "", t.notes || "")),
     ]);
-    for (const h of heldAfter) void noticeUnitChange(h.kind, h.id, "edit", name.trim() !== trailer?.trailer_name ? `details edited, now Trailer ${name.trim()}` : "details edited");
+    if (!isNew && trailer) void noticeUnitChange("trailer", trailer.trailer_id, "edit", name.trim() !== trailer.trailer_name ? `details edited, now Trailer ${name.trim()}` : "details edited");
     onDone();
   }
 
   async function deleteTrailer() {
+    const g = await heldGuard.guard([{ kind: "trailer", id: trailer!.trailer_id, name: trailer!.trailer_name }], "", "A trailer a driver is using can't be deleted. Wait until they are done with it.", true);
+    if (!g.ok || g.held.length) return;
     if (!confirm("Permanently delete this trailer? This cannot be undone.")) return;
     setSaving(true); setErr(null);
     try {

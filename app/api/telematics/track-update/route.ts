@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
         // Frees the old trailer; whoever holds the truck keeps the truck.
         const { error } = await admin.rpc("_evict_combo_to_partial", { p_combo_id: combo.combo_id, p_claiming_truck: null, p_claiming_trailer: combo.trailer_id });
         if (error) return NextResponse.json({ error: `Saved the position, but couldn't separate the pair: ${error.message}` }, { status: 500 });
+        // The driver (or the next one) hears that the pairing was changed from here. Never fails the update.
+        try { await admin.rpc("_unit_event", { p_actor: uid, p_kind: "truck", p_unit_id: truckId, p_action: "separate", p_summary: "the trailer was separated from the truck because Geotab shows it hooked elsewhere" }); } catch { /* the pair is already separated */ }
       }
       applied = true;
     }

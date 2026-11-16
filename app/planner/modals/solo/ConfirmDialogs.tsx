@@ -3,6 +3,7 @@
 //
 // Deadline, away, commandeer, remove and new-tare confirmations.
 
+import { TakeoverBlockedDialog } from "./TakeoverBlockedDialog";
 import type { SoloModel } from "./useSoloEquipment";
 
 export function ConfirmDialogs({ m }: { m: SoloModel }) {
@@ -11,6 +12,8 @@ export function ConfirmDialogs({ m }: { m: SoloModel }) {
     busy,
     combos,
     commandeerTarget,
+    takeoverBlocked,
+    setTakeoverBlocked,
     confirmAway,
     confirmCommandeer,
     confirmDeadline,
@@ -177,6 +180,8 @@ export function ConfirmDialogs({ m }: { m: SoloModel }) {
       {/* ── Commandeer confirmation -- selecting a truck/trailer another
           driver currently has claimed. couple_combo's p_force:true would
           otherwise silently force-decouple it with no warning at all. ── */}
+      <TakeoverBlockedDialog blocked={takeoverBlocked} onClose={() => setTakeoverBlocked(null)} />
+
       {commandeerTarget && (
         <div
           style={{

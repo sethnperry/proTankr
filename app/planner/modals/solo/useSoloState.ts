@@ -135,8 +135,20 @@ export function useSoloState(props: Props) {
   // Loose-unit pop-out, and the unit waiting for its partner after "Couple".
   const [detailUnit, setDetailUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   const [coupleFrom, setCoupleFrom] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
-  const [takeCombo, setTakeCombo] = useState<{ truckId: string; trailerId: string; ownerName: string | null } | null>(null);
-  const [commandeerTarget, setCommandeerTarget] = useState<{ kind: "truck" | "trailer"; id: string; ownerName: string } | null>(null);
+  const [takeCombo, setTakeComboRaw] = useState<{ truckId: string; trailerId: string; ownerName: string | null } | null>(null);
+  const [commandeerTarget, setCommandeerTargetRaw] = useState<{ kind: "truck" | "trailer"; id: string; ownerName: string } | null>(null);
+  // An admin or dispatcher never takes over equipment a driver is using: the take-over becomes an explanation instead.
+  // (A solo company's admin is the driver, so this only applies to fleets.)
+  const noTakeover = isSolo === false && (myRole === "admin" || myRole === "dispatch");
+  const [takeoverBlocked, setTakeoverBlocked] = useState<{ what: string; ownerName: string | null } | null>(null);
+  const setTakeCombo = (v: { truckId: string; trailerId: string; ownerName: string | null } | null) => {
+    if (v && noTakeover) { setTakeoverBlocked({ what: "combo", ownerName: v.ownerName }); return; }
+    setTakeComboRaw(v);
+  };
+  const setCommandeerTarget = (v: { kind: "truck" | "trailer"; id: string; ownerName: string } | null) => {
+    if (v && noTakeover) { setTakeoverBlocked({ what: v.kind, ownerName: v.ownerName }); return; }
+    setCommandeerTargetRaw(v);
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -246,6 +258,7 @@ export function useSoloState(props: Props) {
     coupleFrom,
     setCoupleFrom,
     takeCombo,
+    takeoverBlocked, setTakeoverBlocked,
     setTakeCombo,
     commandeerTarget,
     setCommandeerTarget,

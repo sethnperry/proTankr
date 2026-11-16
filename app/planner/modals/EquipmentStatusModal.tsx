@@ -194,7 +194,7 @@ export default function EquipmentStatusModal({
     const g = await heldGuard.guard(units, `The status changes to ${fleetStatusLabel(status) || status} now, but the driver keeps the equipment until their shift ends.`);
     if (!g.ok) { setAskWhich(false); return; }
     const saved = await saveForConfirmed(down);
-    if (saved) for (const h of g.held) void noticeUnitChange(h.kind, h.id, "status", `status set to ${fleetStatusLabel(status) || status}${notes.trim() ? `. ${notes.trim()}` : ""}`);
+    if (saved) for (const h of units) void noticeUnitChange(h.kind, h.id, "status", `status set to ${fleetStatusLabel(status) || status}${notes.trim() ? `. ${notes.trim()}` : ""}`);
   }
 
   /** `down`: which unit is deadlined (only matters for a pair at End shift). One unit down splits the pair:

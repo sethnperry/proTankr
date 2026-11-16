@@ -13,11 +13,11 @@ export function useHeldUnitGuard() {
   const resolver = useRef<((ok: boolean) => void) | null>(null);
 
   /** `what` says what is about to happen. `block` stops the change when the holder is on an open trip. */
-  const guard = useCallback(async (units: { kind: "truck" | "trailer"; id: string; name: string }[], what: string, block?: string): Promise<{ ok: boolean; held: HeldUnit[] }> => {
+  const guard = useCallback(async (units: { kind: "truck" | "trailer"; id: string; name: string }[], what: string, block?: string, blockAlways = false): Promise<{ ok: boolean; held: HeldUnit[] }> => {
     const held: HeldUnit[] = [];
     for (const u of units) { const info = await unitHolderInfo(u.kind, u.id); if (info.holderId) held.push({ ...u, info }); }
     if (held.length === 0) return { ok: true, held };
-    const blocked = !!block && held.some((h) => h.info.openTrip);
+    const blocked = !!block && (blockAlways || held.some((h) => h.info.openTrip));
     const text = blocked ? `${heldWarning(held, "").split(". They'll")[0]}. ${block}` : heldWarning(held, what);
     const ok = await new Promise<boolean>((resolve) => { resolver.current = resolve; setAsk({ text, blocked }); });
     return { ok: ok && !blocked, held };
