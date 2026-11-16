@@ -196,7 +196,9 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
       {(coupledWith || coupledKnown) && (
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <div style={label}>Coupled to</div>
-          {coupledWith ? (
+          {u.kind === "truck" && reading?.trailerKnown && (reading.geotabTrailers?.length ?? 0) === 0 ? (
+            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4, color: "#60a5fa" }}>Bobtail <span style={{ fontSize: 12, fontWeight: 500, color: muted }}>· Geotab shows no trailer hooked{coupledWith ? `; ProTankr still has it paired with Trailer ${coupledWith.name}` : ""}</span></div>
+          ) : coupledWith ? (
             <button type="button" onClick={onOpenCoupled} disabled={!onOpenCoupled}
               style={{ display: "flex", alignItems: "baseline", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, marginTop: 4, color: "#fff", cursor: onOpenCoupled ? "pointer" : "default" }}>
               <span style={{ fontSize: 16, fontWeight: 800 }}>{coupledWith.kind === "truck" ? "Truck" : "Trailer"} {coupledWith.name}</span>
@@ -205,10 +207,8 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
             </button>
           ) : <div style={{ fontSize: 15, marginTop: 4, color: muted }}>Not coupled to anything.</div>}
           {/* Geotab is the source of truth for what is actually hooked up. */}
-          {u.kind === "truck" && reading && coupledWith && reading.geotabTrailers && !reading.geotabTrailers.some((t) => t.name.trim().toLowerCase() === coupledWith.name.trim().toLowerCase()) && (
-            <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>
-              {reading.geotabTrailers.length ? `Geotab shows ${reading.geotabTrailers.map((t) => t.name).join(", ")} hooked to this truck, not ${coupledWith.name}.` : reading.trailerKnown ? `Geotab shows no trailer hooked to this truck, so this pairing may be out of date.` : null}
-            </div>
+          {u.kind === "truck" && reading && coupledWith && (reading.geotabTrailers?.length ?? 0) > 0 && !reading.geotabTrailers!.some((t) => t.name.trim().toLowerCase() === coupledWith.name.trim().toLowerCase()) && (
+            <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>Geotab shows {reading.geotabTrailers!.map((t) => t.name).join(", ")} hooked to this truck, not {coupledWith.name}.</div>
           )}
         </div>
       )}

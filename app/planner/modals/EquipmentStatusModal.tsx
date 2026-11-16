@@ -16,6 +16,8 @@
 // the flag, and coupling the unit for real already re-stamps its current
 // location from the driver's own profile.
 
+import { useHeldUnitGuard } from "@/lib/ui/driver/HeldUnitGuard";
+import { noticeUnitChange } from "@/lib/equipment/adminNotice";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -101,6 +103,8 @@ export default function EquipmentStatusModal({
   const [mapOpen, setMapOpen] = useState(false);
   const [unitInfo, setUnitInfo] = useState<UnitInfo[]>([]);
   const [askWhich, setAskWhich] = useState(false);
+  // Staff changing a unit a driver is using: warn first, notify after (the driver keeps their hold until their shift ends).
+  const heldGuard = useHeldUnitGuard();
 
   // Nearest saved place (within 0.3 mi) names the pin and fills region / local area.
   async function nearestPlace(lat: number, lon: number): Promise<Pick<Pin, "label" | "placeId" | "region" | "localArea">> {
@@ -185,9 +189,17 @@ export default function EquipmentStatusModal({
     await saveFor("both");
   }
 
+  async function saveFor(down: "both" | "truck" | "trailer") {
+    const units = pair ? [{ kind: "truck" as const, id: pair.truckId, name: pair.truckName }, { kind: "trailer" as const, id: pair.trailerId, name: pair.trailerName }] : [{ kind: unitKind, id: unitId, name: unitName }];
+    const g = await heldGuard.guard(units, `The status changes to ${fleetStatusLabel(status) || status} now, but the driver keeps the equipment until their shift ends.`);
+    if (!g.ok) { setAskWhich(false); return; }
+    const saved = await saveForConfirmed(down);
+    if (saved) for (const h of g.held) void noticeUnitChange(h.kind, h.id, "status", `status set to ${fleetStatusLabel(status) || status}${notes.trim() ? `. ${notes.trim()}` : ""}`);
+  }
+
   /** `down`: which unit is deadlined (only matters for a pair at End shift). One unit down splits the pair:
    *  that unit stays Deadline, the other becomes Readyline, and both are parked here. Both down stay coupled. */
-  async function saveFor(down: "both" | "truck" | "trailer") {
+  async function saveForConfirmed(down: "both" | "truck" | "trailer"): Promise<boolean> {
     setAskWhich(false);
     setBusy(true);
     setErr(null);
@@ -227,8 +239,10 @@ export default function EquipmentStatusModal({
       }
       onSaved(status);
       onClose();
+      return true;
     } catch (e: any) {
       setErr(e?.message ?? "Failed to update status.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -373,6 +387,7 @@ export default function EquipmentStatusModal({
         ))}
       </FullscreenModal>
     )}
+    {heldGuard.node}
     <PinMap open={mapOpen} start={shownPin ? { lat: shownPin.lat, lon: shownPin.lon } : null} initialQuery=""
       unitLabel={pair ? `${pair.truckName} / ${pair.trailerName}` : unitName} units={unitInfo} companyId={companyId}
       onUse={(r) => void usePinResult(r)} onClose={() => setMapOpen(false)} />

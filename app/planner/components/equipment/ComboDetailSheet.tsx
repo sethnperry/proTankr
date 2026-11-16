@@ -126,7 +126,8 @@ function RightNow({ kind, unit, partnerName }: { kind: "truck" | "trailer"; unit
       {unit.statusLocation && <div style={{ fontSize: 13, marginTop: 4 }}>At <b>{unit.statusLocation}</b>{unit.statusUpdatedAt ? <span style={{ color: MUTED }}> · {storyLine("", { byName: null, at: unit.statusUpdatedAt, source: null })}</span> : null}</div>}
       {unit.statusNotes && <div style={{ fontSize: 13, marginTop: 4, color: "rgba(255,255,255,0.75)" }}>{unit.statusNotes}</div>}
       {geo && (geoPlace || geo.lat != null) && <div style={{ fontSize: 13, marginTop: 4 }}>Now: <b>{geoPlace || "Position found"}</b><span style={{ color: MUTED }}> · Geotab {ageText(geo.at)}</span></div>}
-      {mismatch && <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>{hooked.length ? `Geotab shows ${hooked.map((t) => t.name).join(", ")} hooked to this truck, not ${partnerName}.` : `Geotab shows no trailer hooked to this truck, so the pairing may be out of date.`}</div>}
+      {kind === "truck" && geo?.trailerKnown && hooked.length === 0 && <div style={{ fontSize: 14, fontWeight: 800, marginTop: 4, color: "#60a5fa" }}>Bobtail <span style={{ fontSize: 12, fontWeight: 500, color: MUTED }}>· Geotab shows no trailer hooked{partnerName ? `; ProTankr has it paired with ${partnerName}` : ""}</span></div>}
+      {mismatch && hooked.length > 0 && <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>Geotab shows {hooked.map((t) => t.name).join(", ")} hooked to this truck, not {partnerName}.</div>}
       <div style={{ fontSize: 13, marginTop: 6, color: MUTED }}>
         {geoDriver
           ? <>{geo?.driverName ? "Driver" : "Last driver"}: <b style={{ color: "#fff" }}>{geoDriver}</b> · Geotab</>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useHeldUnitGuard } from "./HeldUnitGuard";
+import { noticeUnitChange, type HeldUnit } from "@/lib/equipment/adminNotice";
 import TruckFuelTankField from "./TruckFuelTankField";
 import TruckSleeperField from "./TruckSleeperField";
 import React, { useEffect, useMemo, useState } from "react";
@@ -824,6 +826,7 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
   truck: Truck | null; companyId: string; onClose: () => void; onDone: () => void; myRole?: string;
 }) {
   const isNew = !truck;
+  const heldGuard = useHeldUnitGuard();
   // Unit # is spec-gated to admin/dispatch/lead once a truck exists -- a new
   // truck still needs a name to be created at all, so creation stays open
   // to whoever's RLS already lets INSERT trucks (unchanged, out of scope).
@@ -900,6 +903,13 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
       setErr("Missing company id (cannot save). Close and reopen Equipment Details, or ask your admin to assign you to a company.");
       return;
     }
+    // Staff editing a truck a driver is using: warn first, tell the driver after.
+    let heldAfter: HeldUnit[] = [];
+    if (!isNew && truck) {
+      const g = await heldGuard.guard([{ kind: "truck", id: truck.truck_id, name: truck.truck_name }], "Your changes save now.");
+      if (!g.ok) return;
+      heldAfter = g.held;
+    }
     setSaving(true); setErr(null);
     const payload: any = {
       truck_name: name.trim(), vin_number: vin || null, plate_number: plate || null, make: make || null, model: model || null,
@@ -941,6 +951,7 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
       chg("alliance_hazmat", truck?.alliance_expiration_date, alliExp, alliEnf, alliNotes), chg("fleet_insurance", truck?.fleet_ins_expiration_date, fleetExp, fleetEnf, fleetNotes),
       chg("hazmat_lic", truck?.hazmat_lic_expiration_date, hazLicExp, hazLicEnf, hazLicNotes), chg("inner_bridge", truck?.inner_bridge_expiration_date, ibExp, ibEnf, ibNotes),
     ]);
+    for (const h of heldAfter) void noticeUnitChange(h.kind, h.id, "edit", name.trim() !== truck?.truck_name ? `details edited, now Truck ${name.trim()}` : "details edited");
     onDone();
   }
 
@@ -985,6 +996,7 @@ function TruckModal({ truck, companyId, onClose, onDone, myRole }: {
 
   return (
     <Modal title={isNew ? "Add Truck" : "Edit Truck"} onClose={onClose} wide>
+      {heldGuard.node}
       {err && <Banner msg={err} type="error" />}
 
       {screen === "front" ? (
@@ -1157,6 +1169,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
   trailer: Trailer | null; companyId: string; onClose: () => void; onDone: () => void; myRole?: string;
 }) {
   const isNew = !trailer;
+  const heldGuard = useHeldUnitGuard();
   // Unit #, total volume/comp, and cap/comp are spec-gated to admin/dispatch/
   // lead once a trailer exists -- a new trailer still needs these to be
   // created at all, so creation stays open (RLS INSERT is unchanged/out of
@@ -1221,6 +1234,16 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
       setErr("Cap can't exceed a compartment's total volume.");
       return;
     }
+    // Staff editing a trailer a driver is using: warn first (and refuse compartment changes mid-trip), tell the driver after.
+    let heldAfter: HeldUnit[] = [];
+    if (!isNew && trailer) {
+      const { data: dbc } = await supabase.from("trailer_compartments").select("comp_number, max_gallons, cap_gallons").eq("trailer_id", trailer.trailer_id);
+      const sig = (a: { comp_number: number; max_gallons: number | null; cap_gallons?: number | null }[]) => JSON.stringify([...a].sort((x, y) => x.comp_number - y.comp_number).map((c) => [Number(c.comp_number), Number(c.max_gallons), c.cap_gallons == null ? null : Number(c.cap_gallons)]));
+      const compsChanged = sig((dbc ?? []) as any) !== sig(comps as any);
+      const g = await heldGuard.guard([{ kind: "trailer", id: trailer.trailer_id, name: trailer.trailer_name }], compsChanged ? "Compartment sizes and caps change their loading plan." : "Your changes save now.", compsChanged ? "Compartment sizes and caps can't be changed while they're on a trip. Wait until it's done." : undefined);
+      if (!g.ok) return;
+      heldAfter = g.held;
+    }
     setSaving(true); setErr(null);
     const payload: any = {
       trailer_name: name.trim(), vin_number: vin || null, plate_number: plate || null, make: make || null, model: model || null,
@@ -1273,6 +1296,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
       chg("trailer_registration", trailer?.trailer_reg_expiration_date, trRegExp, trRegEnf, trRegNotes), chg("annual_inspection", trailer?.trailer_inspection_expiration_date, trInsExp, trInsEnf, trInsNotes),
       ...tanks.map((t) => chg(`tank_${t.key}`, tankWas(t.key), t.date || "", "", t.notes || "")),
     ]);
+    for (const h of heldAfter) void noticeUnitChange(h.kind, h.id, "edit", name.trim() !== trailer?.trailer_name ? `details edited, now Trailer ${name.trim()}` : "details edited");
     onDone();
   }
 
@@ -1313,6 +1337,7 @@ function TrailerModal({ trailer, companyId, onClose, onDone, myRole }: {
 
   return (
     <Modal title={isNew ? "Add Trailer" : "Edit Trailer"} onClose={onClose} wide>
+      {heldGuard.node}
       {err && <Banner msg={err} type="error" />}
 
       {screen === "front" ? (

@@ -32,6 +32,7 @@ import { TerminalHub } from "./components/terminal/TerminalHub";
 import RackSelectSheet from "./components/RackSelectSheet";
 import TerminalOutageBanner from "./components/TerminalOutageBanner";
 import AnnouncementBanner from "./components/AnnouncementBanner";
+import AdminNoticeBanner from "./components/AdminNoticeBanner";
 import { useActiveOutageBanner } from "./hooks/useTerminalOutageReports";
 import { useIsLandscape } from "./hooks/useOrientation";
 import SetupSessionBanner from "./components/SetupSessionBanner";
@@ -278,6 +279,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
           padding needs no extra left inset. */}
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, overflow: "hidden" }}>
         <AnnouncementBanner userId={shell.effectiveUserId || null} />
+        <AdminNoticeBanner userId={shell.effectiveUserId || null} />
         {isLandscape ? (
           <TerminalOutageBanner
             tickerMessage={outageBanner.tickerMessage}
