@@ -12,6 +12,8 @@ import { TruckCard, TrailerCard, TruckModal, TrailerModal } from "@/lib/ui/drive
 import { EquipmentTable } from "./EquipmentTable";
 import type { Truck, Trailer, OtherPermit, Compartment } from "@/lib/ui/driver/EquipmentDetails";
 import DecoupleModal from "@/app/planner/modals/DecoupleModal";
+import { TrackDetail } from "@/app/planner/components/track/TrackDetail";
+import type { TrackUnit } from "@/lib/equipment/trackList";
 import AnnouncementBanner from "@/app/planner/components/AnnouncementBanner";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
 import { ModeSwitch, RegionButton } from "@/app/planner/components/dash/DashChrome";
@@ -1634,6 +1636,24 @@ export default function AdminPage() {
   // without one). Admin/lead only -- matches the Equipment section's own
   // role gate below, since this is entirely equipment/combo data dispatch
   // isn't shown elsewhere on this page either.
+  // A flagged (Deadline) unit opens the Track detail: status, notes, where it is, who had it, the load. Edit stays one tap away there.
+  const [downUnit, setDownUnit] = useState<{ truck: TrackUnit | null; trailer: TrackUnit | null } | null>(null);
+  const openDownUnit = useCallback(async (kind: "truck" | "trailer", id: string) => {
+    const COLS = "region, local_area, current_region, current_local_area, status_code, status_notes, sub_status, status_location, status_updated_at";
+    const toU = (r: any, k: "truck" | "trailer"): TrackUnit => ({
+      id: r[`${k}_id`], name: r[`${k}_name`] ?? "—", kind: k, region: r.region ?? null, localArea: r.local_area ?? null,
+      currentRegion: r.current_region ?? null, currentLocalArea: r.current_local_area ?? null, statusCode: r.status_code ?? null,
+      statusNotes: r.status_notes ?? null, subStatus: r.sub_status ?? null, statusLocation: r.status_location ?? null, statusUpdatedAt: r.status_updated_at ?? null,
+    });
+    const one = async (k: "truck" | "trailer", uid: string) => {
+      const { data } = await supabase.from(k === "truck" ? "trucks" : "trailers").select(`${k}_id, ${k}_name, ${COLS}`).eq(`${k}_id`, uid).maybeSingle();
+      return data ? toU(data, k) : null;
+    };
+    const pair = combos.find((c) => c.active && (kind === "truck" ? c.truck_id === id : c.trailer_id === id));
+    const truck = kind === "truck" ? await one("truck", id) : pair ? await one("truck", pair.truck_id) : null;
+    const trailer = kind === "trailer" ? await one("trailer", id) : pair ? await one("trailer", pair.trailer_id) : null;
+    if (truck || trailer) setDownUnit({ truck, trailer });
+  }, [combos]);
   const attentionItems = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
 
@@ -1643,7 +1663,7 @@ export default function AdminPage() {
         items.push({
           key: `flag-truck-${t.truck_id}`, severity: "danger",
           label: t.truck_name, detail: "Flagged Deadline", days: null,
-          onOpen: () => setTruckModal(t),
+          onOpen: () => void openDownUnit("truck", t.truck_id),
         });
       }
       for (const f of TRUCK_PERMIT_FIELDS) {
@@ -1672,7 +1692,7 @@ export default function AdminPage() {
         items.push({
           key: `flag-trailer-${t.trailer_id}`, severity: "danger",
           label: t.trailer_name, detail: "Flagged Deadline", days: null,
-          onOpen: () => setTrailerModal(t),
+          onOpen: () => void openDownUnit("trailer", t.trailer_id),
         });
       }
       for (const f of TRAILER_PERMIT_FIELDS) {
@@ -1761,7 +1781,7 @@ export default function AdminPage() {
       });
     }
     return items;
-  }, [trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea, longShifts.missing, longShifts.maxHours]);
+  }, [openDownUnit, trucks, trailers, combos, truckOtherPermits, members, memberProfiles, trucksById, trailersById, viewScope, myRegion, myLocalArea, longShifts.missing, longShifts.maxHours]);
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const ATTENTION_COLLAPSED_COUNT = 5;
 
@@ -2082,6 +2102,11 @@ export default function AdminPage() {
   return (
     <div style={{ ...css.page, maxWidth: undefined }} className="admin-page-root dash-wrap d2">
       <DashStyles />
+      {downUnit && companyId && (
+        <TrackDetail open onClose={() => setDownUnit(null)} companyId={companyId}
+          truck={downUnit.truck} trailer={downUnit.trailer} allTrucks={downUnit.truck ? [downUnit.truck] : []}
+          canAdd={false} onChanged={() => void loadAll()} onSwitchTruck={() => { /* single unit from the dashboard */ }} />
+      )}
       <div style={{ margin: "0 -16px 12px" }}><AnnouncementBanner userId={currentUserId || null} /></div>
       <div className="admin-header-row" style={{ marginBottom: 20 }}>
         <ConnectedDashHeader current="company" line={companyName} right={dashEnabled ? (
