@@ -23,13 +23,15 @@ const gal = (n: number) => `${Math.round(n).toLocaleString("en-US")} gal`;
 const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const primary: React.CSSProperties = { width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" };
 
-export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, delay, onBegin, onFinish, onClose }: {
+export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, delay, notes, avg, sop, onBegin, onFinish, onClose }: {
   open: boolean; siteName: string; arrivedAt: string; beganAt: string | null;
   /** The site board (other trucks, recent drops), drawn by the page. */
   board: React.ReactNode;
   products: DropProduct[];
   /** The Delay button, drawn by the page (it owns the running delay). */
   delay: React.ReactNode;
+  /** The site's notes (editable), the average drop time, and the fixed line above Begin: drawn by the page. */
+  notes?: React.ReactNode; avg?: React.ReactNode; sop?: string;
   onBegin: () => void;
   /** Before readings (gallons by tank number) the driver confirmed; empty when none. */
   onFinish: (volumes: Record<string, number>) => void;
@@ -84,6 +86,7 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {sop && <div style={{ padding: "10px 12px", border: "1px solid rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.08)", fontSize: 14, fontWeight: 700, color: "#fde68a" }}>{sop}</div>}
             <button type="button" className="dash-press" onClick={onBegin} style={primary}>Begin Delivery</button>
             {delay}
           </div>
@@ -94,10 +97,11 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
             {clock(beganAt ?? arrivedAt)}
             {!beganAt && <span style={{ fontSize: 14, fontWeight: 600, color: muted }}> · waiting {waited} min</span>}
           </div>
+          {!beganAt && avg && <div style={{ marginTop: 4 }}>{avg}</div>}
           {!beganAt && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Tap Begin Delivery when you start. That sets your delivery start time.</div>}
         </div>
 
-        {!beganAt ? board : (
+        {!beganAt ? (<>{notes && <div style={{ marginBottom: 12 }}>{notes}</div>}{board}</>) : (
           <>
             <div style={{ ...cap, margin: "6px 0 8px", paddingBottom: 6, borderBottom: `1px solid ${hair}` }}>Tank readings before (optional)</div>
             {products.length === 0 && <div style={{ color: muted, fontSize: 14, padding: "8px 0" }}>Nothing aboard for this stop. Finish when you're done.</div>}

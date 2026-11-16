@@ -38,6 +38,9 @@ export type TripSettings = {
   tank_feed_tolerance_gal?: number;
   // Every load has a shipper and a customer (20261114000000). Absent = required.
   require_shipper_customer?: boolean;
+  // The permanent line above Begin in the terminal and drop site windows (20261116000000). Absent or blank = the default.
+  sop_terminal_begin?: string | null;
+  sop_drop_begin?: string | null;
 };
 
 export const DEFAULT_TRIP_SETTINGS: TripSettings = {

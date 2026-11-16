@@ -12,6 +12,7 @@
 // Coordinates feed Near Me: "Use my location" takes the phone's GPS while
 // standing at the site; otherwise the city/state is looked up on save.
 
+import { SiteNotes } from "../site/SiteNotes";
 import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase/client";
@@ -251,7 +252,8 @@ export function LocationEditor({
         delivery_type: draft.delivery_type,
         place_kind: draft.place_kinds[0] ?? "store",
         place_kinds: draft.place_kinds,
-        notes: draft.notes.trim() || null,
+        // An existing place's notes are saved by the notes component (with who edited them); a new place saves its draft.
+        ...(draft.location_id ? {} : { notes: draft.notes.trim() || null }),
         client_updated_at: now,
       };
       const write = (r: Partial<typeof row>) => draft.location_id
@@ -293,7 +295,7 @@ export function LocationEditor({
         // A number that was retired earlier comes back to life on the same row.
         await upsertTanks(added, "location_id,tank_number");
       }
-      onSaved({ ...row, location_id: locationId, is_active: true, starred: location?.starred ?? false });
+      onSaved({ ...row, notes: draft.location_id ? location?.notes ?? null : row.notes ?? null, location_id: locationId, is_active: true, starred: location?.starred ?? false });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't save.");
     } finally {
@@ -392,8 +394,10 @@ export function LocationEditor({
       <div style={{ ...PANEL, padding: 14 }}>
         <Segmented value={draft.delivery_type as "drop" | "pump_off"} onChange={(v) => patch({ delivery_type: v })}
           options={[{ id: "drop", label: "Drop" }, { id: "pump_off", label: "Pump off" }]} />
-        {F("Notes", <textarea value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} rows={3}
-          placeholder="Gate code, where the fills are, anything to know before you get out…" style={{ ...FIELD, resize: "vertical", fontFamily: "inherit" }} />, { marginTop: 14 })}
+        {draft.location_id
+          ? <div style={{ marginTop: 14 }}><SiteNotes kind="location" id={draft.location_id} mode="edit" userId={userId} showAttribution /></div>
+          : F("Notes", <textarea value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} rows={3}
+            placeholder="Gate code, where the fills are, anything to know before you get out…" style={{ ...FIELD, resize: "vertical", fontFamily: "inherit" }} />, { marginTop: 14 })}
       </div>
 
       <Label right={<span className="dash-num" style={{ fontSize: 12, color: MUTE }}>{draft.tanks.length}</span>}>Tanks</Label>

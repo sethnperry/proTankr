@@ -29,6 +29,7 @@
 // left in the DB untouched, just no longer rendered -- cheap to bring
 // back later if ever wanted, nothing destructive here.
 
+import { SiteNotes } from "../components/site/SiteNotes";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
@@ -55,6 +56,8 @@ export default function EditTerminalModal({
   onChanged: () => void;
 }) {
   const [view, setView] = useState<View>("racks");
+  const [me, setMe] = useState<string | null>(null);
+  useEffect(() => { void supabase.auth.getUser().then((r) => setMe(r.data.user?.id ?? null)); }, []);
   const [racks, setRacks] = useState<TerminalRack[]>([]);
   const [selectedRackId, setSelectedRackId] = useState<string>("");
   const [newRackName, setNewRackName] = useState("");
@@ -188,6 +191,12 @@ export default function EditTerminalModal({
       }}
       footer={view === "racks" ? undefined : null}
     >
+      {view === "racks" && (
+        <div style={{ marginBottom: 12 }}>
+          <SiteNotes kind="terminal" id={terminalId} mode="edit" userId={me} showAttribution />
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Shared with every company. No account numbers or codes.</div>
+        </div>
+      )}
       {view === "racks" && (
         <RacksView
           terminalName={terminalName}

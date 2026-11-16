@@ -9,6 +9,7 @@
 // lists are staff (admin/lead/dispatch). Reasons are never deleted, only
 // hidden, so past trips keep their label.
 
+import { DEFAULT_SOP_DROP, DEFAULT_SOP_TERMINAL } from "@/lib/sites/siteStats";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
@@ -111,6 +112,8 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
       require_shipper_customer: settings.require_shipper_customer !== false,
       tank_feed_tolerance_gal: Math.min(2000, Math.max(0, settings.tank_feed_tolerance_gal ?? 50)),
       repair_approver_email: (settings.repair_approver_email ?? "").trim() || null,
+      sop_terminal_begin: (settings.sop_terminal_begin ?? "").trim() || null,
+      sop_drop_begin: (settings.sop_drop_begin ?? "").trim() || null,
     }, { onConflict: "company_id" }).select("company_id");
     setBusy(false);
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
@@ -199,6 +202,16 @@ export default function TripSettingsModal({ open, onClose, companyId, isAdmin }:
           <input type="time" disabled={!isAdmin} value={(settings.gauging_cutoff ?? "23:30").slice(0, 5)}
             onChange={(e) => setSettings((s) => ({ ...s, gauging_cutoff: e.target.value || "23:30" }))} style={{ ...input, width: 120, textAlign: "left" }} />
         </div>
+      </div>
+      <div style={card}>
+        <div style={title}>Begin button reminders</div>
+        <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>A fixed line above the Begin button in the terminal window and the drop site window, telling the driver exactly when to tap it. Leave blank to use the default.</div>
+        <div style={{ fontSize: 15, color: "#fff" }}>Terminal</div>
+        <input disabled={!isAdmin} value={settings.sop_terminal_begin ?? ""} placeholder={DEFAULT_SOP_TERMINAL}
+          onChange={(e) => setSettings((s) => ({ ...s, sop_terminal_begin: e.target.value }))} style={{ ...input, width: "100%", textAlign: "left", boxSizing: "border-box", marginBottom: 10 }} />
+        <div style={{ fontSize: 15, color: "#fff" }}>Drop site</div>
+        <input disabled={!isAdmin} value={settings.sop_drop_begin ?? ""} placeholder={DEFAULT_SOP_DROP}
+          onChange={(e) => setSettings((s) => ({ ...s, sop_drop_begin: e.target.value }))} style={{ ...input, width: "100%", textAlign: "left", boxSizing: "border-box" }} />
       </div>
       <div style={card}>
         <div style={title}>Repair requests</div>

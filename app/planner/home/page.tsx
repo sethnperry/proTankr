@@ -25,6 +25,8 @@ import { useCalculatorShell } from "../CalculatorShellContext";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useTripStore } from "@/lib/trips/useTripStore";
 import { DelayButton } from "../components/trip/DelayButton";
+import { SiteAverage, SiteNotes, SopLine } from "../components/site/SiteNotes";
+import { DEFAULT_SOP_DROP, DEFAULT_SOP_TERMINAL } from "@/lib/sites/siteStats";
 import { DropSiteSheet, type DropProduct } from "../components/trip/DropSiteSheet";
 import { sortTankNames } from "@/lib/trips/tankReadings";
 import { DashboardTour, dashTourSeen, markDashTourSeen } from "../components/tour/DashboardTour";
@@ -2508,6 +2510,17 @@ export default function HomePage() {
   };
   // The most recent load on this trip, for the Load Report link.
   const lastLoadId = [...pickups].filter((p) => p.load_id && (p.outcome === "loaded" || p.left_at)).sort((a, b) => b.seq - a.seq)[0]?.load_id ?? null;
+  // The place whose notes the Site notes link opens: the terminal once the trip is underway, the drop site once loaded.
+  const notesSite = (() => {
+    if (!openTrip || !snap) return null;
+    if (aboardRows.length > 0 && !activePickup(snap.pickups)) {
+      const d = plannedDeliveries(snap.deliveries)[0];
+      return d?.location_id ? { kind: "location" as const, id: d.location_id, title: deliveryName(d), word: "Drop site notes" } : null;
+    }
+    const pk = activePickup(snap.pickups) ?? [...snap.pickups].sort((a, b) => a.seq - b.seq).find((p) => !p.left_at && p.outcome !== "no_load");
+    return pk?.terminal_id ? { kind: "terminal" as const, id: String(pk.terminal_id), title: pk.name ?? "Terminal", word: "Terminal notes" } : null;
+  })();
+  const [siteNotesOpen, setSiteNotesOpen] = useState(false);
   const canAddPickup = !!openTrip && openTrip.status !== "draft" && !!snap && !activePickup(snap.pickups) && !anyDelivered
     && step.kind !== "next_rack";
   const plannedCount = snap ? plannedDeliveries(snap.deliveries).length : 0;
@@ -2849,6 +2862,9 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
+              )}
+              {notesSite && (
+                <button type="button" onClick={() => setSiteNotesOpen(true)} style={smallLink}>{notesSite.word} ›</button>
               )}
               {canAddPickup && pickups.some((p) => p.outcome === "loaded" || (!!p.left_at && !!p.load_id)) && (
                 <button type="button" onClick={openAddPickup} style={smallLink}>+ Another pickup</button>
@@ -3200,6 +3216,7 @@ export default function HomePage() {
       <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)}
         footer={arrivalPickup ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <SopLine text={settings.sop_terminal_begin?.trim() || DEFAULT_SOP_TERMINAL} />
             <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Start Loading</button>
             <div style={{ display: "flex", gap: 8 }}>
               <button type="button" className="dash-press" onClick={() => { setRackSheetOpen(false); shell.postPlannerIntent("begin"); }} style={{ flex: 1, padding: "13px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}>Preview Plan</button>
@@ -3222,9 +3239,11 @@ export default function HomePage() {
                     {new Date(arrivalPickup.arrived_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                     <span style={{ fontSize: 14, fontWeight: 600, color: muted }}> · waiting {Math.max(0, Math.round((Date.now() - Date.parse(arrivalPickup.arrived_at)) / 60000))} min</span>
                   </div>
+                  <div style={{ marginTop: 4 }}><SiteAverage kind="terminal" id={rackTerminalId || null} /></div>
                   <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Tap Start Loading when you begin. That sets your loading start time.</div>
                 </div>
               )}
+              {arrivalPickup?.arrived_at && rackTerminalId && <div style={{ marginTop: 8 }}><SiteNotes kind="terminal" id={rackTerminalId} mode="edit" userId={userId} /></div>}
               <SiteBoard kind="terminal" id={rackTerminalId ?? ""} name={rackName} hideName trips={fleet.trips} product={productInfo} now={new Date()}
                 etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
                 onOpenTrip={(tid) => { setRackSheetOpen(false); nav.go(`trip:${tid}`, `/planner/trips/${tid}`); }} />
@@ -3285,6 +3304,14 @@ export default function HomePage() {
             style={{ display: "block", width: "100%", textAlign: "left", padding: 14, background: "#0f0f10", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 14, cursor: "pointer" }}>
             No delivery location selected. Pick one ›
           </button>
+        )}
+      </FullscreenModal>
+      <FullscreenModal open={siteNotesOpen && !!notesSite} title={notesSite?.title ?? ""} onClose={() => setSiteNotesOpen(false)} footer={null}>
+        {notesSite && (
+          <>
+            <SiteNotes kind={notesSite.kind} id={notesSite.id} mode="read" />
+            <div style={{ fontSize: 12, color: muted, marginTop: 10 }}>Notes can be changed once you arrive and tap Arrived. Until then you can't see what has changed on site.</div>
+          </>
         )}
       </FullscreenModal>
       <ParkedPreloadsCard items={nearbyParked} productInfo={productInfo} onOpenTrip={(id) => nav.go(`trip:${id}`, `/planner/trips/${id}`)} openingId={nav.openingId("trip")} />
@@ -3533,6 +3560,9 @@ export default function HomePage() {
               onOpenTrip={(tid) => { setDropSiteOpen(false); nav.go(`trip:${tid}`, `/planner/trips/${tid}`); }} />
           ) : null}
           delay={<DelayButton leg="at_drop" running={runningDelay} onStart={startDelay} onEnd={() => endDelay()} />}
+          notes={finishDeliveryRow.location_id ? <SiteNotes kind="location" id={finishDeliveryRow.location_id} mode="edit" userId={userId} /> : undefined}
+          avg={<SiteAverage kind="location" id={finishDeliveryRow.location_id ?? null} />}
+          sop={settings.sop_drop_begin?.trim() || DEFAULT_SOP_DROP}
           onBegin={beginDelivery} onFinish={finishFromDropSite}
         />
       )}
