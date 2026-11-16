@@ -82,22 +82,26 @@ export default function ProTankrDashPage() {
     setSqMsg(err ? { ok: false, text: err.message } : { ok: true, text: "Saved." });
   }
   // "Hey ProTankr" announcements
-  type Ann = { id: string; subject: string; body: string; active: boolean; created_at: string };
+  type Ann = { id: string; subject: string; body: string; active: boolean; created_at: string; target_company_ids: string[] | null; target_roles: string[] | null };
   const [anns, setAnns] = useState<Ann[]>([]);
   const [annSubject, setAnnSubject] = useState("");
   const [annBody, setAnnBody] = useState("");
+  const [annCos, setAnnCos] = useState<string[]>([]);
+  const [annRoles, setAnnRoles] = useState<string[]>([]);
+  const [annCoOpen, setAnnCoOpen] = useState(false);
+  const [annCoQ, setAnnCoQ] = useState("");
   const [annMsg, setAnnMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const loadAnns = useCallback(async () => {
-    const r = await supabase.from("admin_announcements").select("id, subject, body, active, created_at").order("created_at", { ascending: false }).limit(15);
+    const r = await supabase.from("admin_announcements").select("id, subject, body, active, created_at, target_company_ids, target_roles").order("created_at", { ascending: false }).limit(15);
     setAnns((r.data ?? []) as Ann[]);
   }, []);
   useEffect(() => { void loadAnns(); }, [loadAnns]);
   async function postAnn() {
     setAnnMsg(null);
     const { data: u } = await supabase.auth.getUser();
-    const { error: err } = await supabase.from("admin_announcements").insert({ subject: annSubject.trim(), body: annBody.trim(), created_by: u.user?.id });
+    const { error: err } = await supabase.from("admin_announcements").insert({ subject: annSubject.trim(), body: annBody.trim(), created_by: u.user?.id, target_company_ids: annCos.length ? annCos : null, target_roles: annRoles.length ? annRoles : null });
     if (err) { setAnnMsg({ ok: false, text: err.message }); return; }
-    setAnnSubject(""); setAnnBody(""); setAnnMsg({ ok: true, text: "Sent. Everyone sees it within a few minutes." }); void loadAnns();
+    setAnnSubject(""); setAnnBody(""); setAnnCos([]); setAnnRoles([]); setAnnCoOpen(false); setAnnMsg({ ok: true, text: "Sent. Everyone sees it within a few minutes." }); void loadAnns();
   }
   async function setAnnActive(id: string, active: boolean) {
     await supabase.from("admin_announcements").update({ active }).eq("id", id);
@@ -460,6 +464,35 @@ export default function ProTankrDashPage() {
           style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, marginBottom: 8 }} />
         <textarea value={annBody} rows={4} maxLength={4000} onChange={(e) => setAnnBody(e.target.value)} placeholder="Message"
           style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 2, marginBottom: 8, fontFamily: "inherit", resize: "vertical" }} />
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)", margin: "4px 0 6px" }}>Send to</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+          {([["driver", "Drivers"], ["lead", "Leads"], ["dispatch", "Dispatch"], ["admin", "Admins"]] as const).map(([k, label]) => {
+            const on = annRoles.includes(k);
+            return <button key={k} type="button" onClick={() => setAnnRoles((r) => on ? r.filter((x) => x !== k) : [...r, k])}
+              style={{ padding: "7px 12px", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, border: "1px solid rgba(255,255,255,0.25)", background: on ? "#fff" : "none", color: on ? "#000" : "#fff" }}>{label}</button>;
+          })}
+          <span style={{ alignSelf: "center", fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{annRoles.length ? "" : "All roles"}</span>
+        </div>
+        <button type="button" onClick={() => setAnnCoOpen((o) => !o)}
+          style={{ width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 2, cursor: "pointer", fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.25)", background: "none", color: "#fff", marginBottom: 8 }}>
+          {annCos.length ? `${annCos.length} ${annCos.length === 1 ? "company" : "companies"}` : "All companies"} <span style={{ opacity: 0.5 }}>{annCoOpen ? "▴" : "▾"}</span>
+        </button>
+        {annCoOpen && (
+          <div style={{ border: "1px solid rgba(255,255,255,0.15)", marginBottom: 8 }}>
+            <input value={annCoQ} onChange={(e) => setAnnCoQ(e.target.value)} placeholder="Search companies"
+              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", fontSize: 16, color: "#fff", background: "rgba(255,255,255,0.06)", border: "none", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {annCos.length > 0 && <button type="button" onClick={() => setAnnCos([])} style={{ width: "100%", textAlign: "left", padding: "8px 12px", border: "none", background: "none", color: "#fbbf24", fontSize: 13, cursor: "pointer" }}>Clear selection (send to all companies)</button>}
+              {companies.filter((c) => c.company_name.toLowerCase().includes(annCoQ.toLowerCase())).map((c) => {
+                const on = annCos.includes(c.company_id);
+                return <button key={c.company_id} type="button" onClick={() => setAnnCos((x) => on ? x.filter((i) => i !== c.company_id) : [...x, c.company_id])}
+                  style={{ display: "flex", gap: 10, width: "100%", textAlign: "left", padding: "8px 12px", border: "none", background: on ? "rgba(255,255,255,0.1)" : "none", color: "#fff", fontSize: 14, cursor: "pointer" }}>
+                  <span style={{ width: 16 }}>{on ? "✓" : ""}</span>{c.company_name}{c.is_solo ? <span style={{ opacity: 0.5 }}> · solo</span> : null}
+                </button>;
+              })}
+            </div>
+          </div>
+        )}
         <button type="button" disabled={!annSubject.trim()} onClick={() => void postAnn()}
           style={{ padding: "10px 16px", border: "none", borderRadius: 2, cursor: "pointer", fontSize: 13, fontWeight: 800, background: "#fff", color: "#000", opacity: annSubject.trim() ? 1 : 0.5 }}>Send to everyone</button>
         {annMsg && <div style={{ fontSize: 12, color: annMsg.ok ? "#4ade80" : "#f87171", marginTop: 8 }}>{annMsg.text}</div>}
@@ -468,7 +501,7 @@ export default function ProTankrDashPage() {
             <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
               <div style={{ minWidth: 0, opacity: a.active ? 1 : 0.45 }}>
                 <div style={{ fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.subject}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{new Date(a.created_at).toLocaleString()}{a.active ? "" : " · pulled"}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{new Date(a.created_at).toLocaleString()} · {a.target_company_ids?.length ? `${a.target_company_ids.length} co.` : "all companies"} · {a.target_roles?.length ? a.target_roles.join("/") : "all roles"}{a.active ? "" : " · pulled"}</div>
               </div>
               <button type="button" onClick={() => void setAnnActive(a.id, !a.active)}
                 style={{ flexShrink: 0, padding: "6px 12px", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 2, cursor: "pointer", fontSize: 12, fontWeight: 800, background: "none", color: "#fff" }}>{a.active ? "Pull" : "Restore"}</button>

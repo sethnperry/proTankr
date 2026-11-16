@@ -11,13 +11,10 @@ export function useAnnouncements(userId: string | null) {
   const q = useQuery({
     queryKey: ["announcements", userId], enabled: !!userId, staleTime: 2 * 60_000, refetchInterval: 5 * 60_000, refetchOnWindowFocus: true,
     queryFn: async (): Promise<Announcement[]> => {
-      const [a, d] = await Promise.all([
-        supabase.from("admin_announcements").select("id, subject, body, created_at").eq("active", true).order("created_at", { ascending: false }).limit(20),
-        supabase.from("announcement_dismissals").select("announcement_id").eq("user_id", userId!),
-      ]);
-      if (a.error) return [];
-      const gone = new Set(((d.data ?? []) as { announcement_id: string }[]).map((r) => r.announcement_id));
-      return ((a.data ?? []) as Announcement[]).filter((x) => !gone.has(x.id));
+      // The server decides who each one is for (companies / roles) and leaves out what this person has cleared.
+      const { data, error } = await supabase.rpc("my_announcements");
+      if (error) return [];
+      return (data ?? []) as Announcement[];
     },
   });
   const clear = useCallback(async (id: string) => {
