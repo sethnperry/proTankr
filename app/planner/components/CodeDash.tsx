@@ -22,7 +22,7 @@ export function CodeDash({ items, fontSize = 14 }: { items: CodeDashItem[]; font
           {i > 0 && <span style={{ color: MUTED, fontWeight: 600 }}>/</span>}
           {g.kind === "loaded"
             ? <span style={{ color: g.color ?? "#fff" }}>{g.code || "▪"}</span>
-            : <span style={{ color: g.kind === "residue" ? g.color ?? MUTED : MUTED }}>–</span>}
+            : <span style={{ color: g.kind === "residue" ? g.color ?? MUTED : MUTED }}>––</span>}
         </React.Fragment>
       ))}
     </span>
@@ -44,7 +44,7 @@ export function CodeDashPick({ items, fontSize = 22 }: { items: CodeDashPickItem
           color: g.kind === "loaded" ? g.color ?? "#fff" : g.kind === "residue" ? g.color ?? MUTED : MUTED,
           cursor: g.onClick ? "pointer" : "default",
         };
-        const label = g.kind === "loaded" ? g.code || "▪" : "–";
+        const label = g.kind === "loaded" ? g.code || "▪" : "––";
         return (
           <React.Fragment key={g.comp}>
             {i > 0 && <span style={{ color: MUTED, fontWeight: 600 }}>/</span>}

@@ -52,7 +52,7 @@ export function TripCardView(p: {
             {p.plan.comps.map((c, i) => (
               <React.Fragment key={i}>
                 {i > 0 && <span style={{ color: muted }}>/</span>}
-                <span style={{ fontWeight: 800, color: c ? c.color ?? "#fff" : muted }}>{c ? c.code : "–"}</span>
+                <span style={{ fontWeight: 800, color: c ? c.color ?? "#fff" : muted }}>{c ? c.code : "––"}</span>
               </React.Fragment>
             ))}
           </span>
