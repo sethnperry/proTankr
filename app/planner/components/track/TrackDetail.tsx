@@ -215,8 +215,17 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
 
       {u.kind === "truck" && reading && (
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          <div style={label}>Now (Geotab)</div>
-          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{place || (hasPos ? "Position found" : "No position")}{reading.at ? <span style={{ fontSize: 12, color: muted, fontWeight: 500 }}> · {ageText(reading.at)}</span> : null}</div>
+          {(() => {
+            // A position older than this is not "now": the truck's tracker hasn't reported since.
+            const stale = !!reading.at && Date.now() - Date.parse(reading.at) > 6 * 3600_000;
+            return (
+              <>
+                <div style={label}>{stale ? "Last known position (Geotab)" : "Now (Geotab)"}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4, color: stale ? muted : undefined }}>{place || (hasPos ? "Position found" : "No position")}{reading.at ? <span style={{ fontSize: 12, color: stale ? "#fb923c" : muted, fontWeight: 500 }}> · {ageText(reading.at)}</span> : null}</div>
+                {stale && <div style={{ fontSize: 12, color: "#fb923c", marginTop: 3 }}>This truck's tracker hasn't reported a position in {ageText(reading.at!).replace(/ ago$/, "")}. The location is old; the driver below is from the sign-in log.</div>}
+              </>
+            );
+          })()}
           <div style={{ fontSize: 14, marginTop: 4 }}>
             {reading.driverName
               ? <>Driver: <b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in)</span></>
