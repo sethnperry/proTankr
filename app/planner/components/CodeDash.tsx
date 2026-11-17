@@ -28,3 +28,32 @@ export function CodeDash({ items, fontSize = 14 }: { items: CodeDashItem[]; font
     </span>
   );
 }
+
+export type CodeDashPickItem = CodeDashItem & { selected?: boolean; title?: string; onClick?: () => void };
+
+/** The same line with each compartment as a tap target (picking compartments): selected ones are outlined in white. */
+export function CodeDashPick({ items, fontSize = 22 }: { items: CodeDashPickItem[]; fontSize?: number }) {
+  if (!items.length) return null;
+  const ordered = [...items].sort((a, b) => b.comp - a.comp);
+  return (
+    <span className="dash-num" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize, fontWeight: 800 }}>
+      {ordered.map((g, i) => {
+        const style: React.CSSProperties = {
+          minWidth: 52, padding: "10px 8px", textAlign: "center", fontSize, fontWeight: 800, lineHeight: 1.1, borderRadius: 2, background: "transparent",
+          border: g.selected ? "2px solid #fff" : g.onClick ? "1px dashed rgba(255,255,255,0.35)" : "1px solid transparent",
+          color: g.kind === "loaded" ? g.color ?? "#fff" : g.kind === "residue" ? g.color ?? MUTED : MUTED,
+          cursor: g.onClick ? "pointer" : "default",
+        };
+        const label = g.kind === "loaded" ? g.code || "▪" : "–";
+        return (
+          <React.Fragment key={g.comp}>
+            {i > 0 && <span style={{ color: MUTED, fontWeight: 600 }}>/</span>}
+            {g.onClick
+              ? <button type="button" title={g.title} aria-label={g.title ?? `C${g.comp}`} onClick={g.onClick} style={style}>{label}</button>
+              : <span title={g.title} style={style}>{label}</span>}
+          </React.Fragment>
+        );
+      })}
+    </span>
+  );
+}

@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabase/client";
 import { grossColor, type AddPickupCheck } from "@/lib/trips/addPickupCheck";
 import { BLEND_CHOICES, canSplashInto, roughLbsPerGal, topOffPlan, validPct } from "@/lib/trips/splash";
 import { productColorFor } from "@/app/planner/utils/productColor";
-import { CompartmentStrip } from "./CompartmentStrip";
+import { CodeDashPick } from "../CodeDash";
 import type { OrderChoice } from "./OrderChooser";
 import type { TripOrderRow } from "@/lib/trips/types";
 import { muted, primaryBtn, sectionCard, sectionTitle } from "./tripUi";
@@ -110,12 +110,14 @@ export function AddPickupSheet({
   const slots = allComps.map((n) => {
     const a = aboard[n];
     const picked = draft.products[n];
-    const loadedColor = a ? colorOf(a.product_id) ?? "#888" : null;
-    const plannedColor = draft.stage === "products" && picked ? colorOf(picked) : null;
+    // Loaded: its code in color. Planned (products step): the picked product. Empty: a dash.
+    const shown = a ? a.product_id : draft.stage === "products" ? picked : null;
+    const info = shown ? byId.get(shown) : null;
     return {
       comp: n,
-      size: compSizes[n] || 1,
-      color: loadedColor ?? plannedColor,
+      kind: info ? "loaded" as const : "empty" as const,
+      code: info?.code ?? (a ? "▪" : null),
+      color: a ? colorOf(a.product_id) ?? "#888" : info ? colorOf(shown) : null,
       selected: draft.comps.includes(n),
       title: a ? `C${n} · ${byId.get(a.product_id ?? "")?.name ?? "Loaded"}` : `C${n} · empty`,
       onClick: draft.stage === "comps" && (splash ? splashable(n) : empty.has(n)) ? () => toggleComp(n) : undefined,
@@ -152,7 +154,7 @@ export function AddPickupSheet({
     <FullscreenModal open={open} title={splash ? "Splash Blend" : "Add Another Pickup"} onClose={onClose} footer={null}>
       <div style={sectionCard}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}><CompartmentStrip slots={slots} height={draft.stage === "comps" ? 34 : 16} gap={5} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}><CodeDashPick items={slots} fontSize={draft.stage === "comps" ? 22 : 17} /></div>
           {check.gross != null && (
             <div style={{ fontSize: 16, fontWeight: 900, color: grossColor(check.gross, check.target), whiteSpace: "nowrap" }}>
               {fmt(check.gross)}

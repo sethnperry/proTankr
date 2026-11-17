@@ -206,7 +206,7 @@ export function useHomeStamp(p: ReturnType<typeof useHomeSteps>) {
   // A compartment with nothing aboard that last held something is residue.
   const hasResidue = Object.keys(compSizes).map(Number).some((n) => !aboard[n] && !!residue[n]);
   // The trailer, full width like a header to its card; the gross (or Residue / Empty) goes under it.
-  const trailerBar = compCount > 0 ? <TrailerHeader variant="side" trailerId={tripTrailerId} loaded={Object.fromEntries(Object.entries(aboard).map(([n, a]) => [Number(n), a.product_id]))} data={trailerHdr} /> : null;
+  const trailerBar = compCount > 0 ? <TrailerHeader variant="bar" trailerId={tripTrailerId} loaded={Object.fromEntries(Object.entries(aboard).map(([n, a]) => [Number(n), a.product_id]))} data={trailerHdr} /> : null;
   const trailerLabel = compCount === 0 ? null : aboardRows.length > 0 && currentGross != null ? (
     <span className="dash-num" style={{ fontSize: 19, fontWeight: 900, color: truckChanged ? "#fbbf24" : grossColor(currentGross, currentTarget), whiteSpace: "nowrap" }}>
       {currentGross.toLocaleString("en-US")}

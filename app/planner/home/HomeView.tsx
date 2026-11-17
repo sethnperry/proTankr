@@ -857,7 +857,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         const byComp: Record<number, string | null> = {};
         for (const c of aboardP) byComp[c.comp_number] = c.product_id;
         const nums = [...new Set([...Object.keys(compSizes).map(Number), ...aboardP.map((c) => c.comp_number)])].sort((a, b) => b - a);
-        const parkedBar = nums.length > 0 ? <TrailerHeader variant="side" trailerId={trailerId} loaded={byComp} data={trailerHdr} /> : null;
+        const parkedBar = nums.length > 0 ? <TrailerHeader variant="bar" trailerId={trailerId} loaded={byComp} data={trailerHdr} /> : null;
         const dels = parkedSnap.deliveries.filter((d) => d.status !== "cancelled");
         const who = mine ? "You" : handoffName ?? "Another driver";
         // Same read-only details the open trip shows: the plan letter, a splash note, blends off target, the Load Report.

@@ -12,6 +12,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { CodeDash } from "./CodeDash";
+import { CompartmentStrip } from "./trip/CompartmentStrip";
 import { segsFor, type StripSeg } from "@/lib/equipment/trailerStrip";
 import { fetchTrailerResidue, type TrailerCompSizes, type TrailerResidue } from "@/lib/equipment/fetchTrailerResidue";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
@@ -23,6 +24,16 @@ export type { StripSeg };
 export function SideView({ segs, height = 10 }: { segs: StripSeg[]; height?: number; gap?: number }) {
   if (!segs.length) return null;
   return <CodeDash fontSize={Math.max(13, height + 2)} items={segs.map((g) => ({ comp: g.comp, kind: g.kind, code: g.code, color: g.color }))} />;
+}
+
+/** The long colored side profile (the trip card's header): compartments left to right sized by volume, C1 on the right. */
+export function BarView({ segs, height = 10, gap = 3 }: { segs: StripSeg[]; height?: number; gap?: number }) {
+  if (!segs.length) return null;
+  return (
+    <CompartmentStrip height={height} gap={gap} slots={segs.map((g) => ({
+      comp: g.comp, size: g.size, color: g.kind === "loaded" ? g.color : null, residue: g.kind === "residue" ? g.color : null,
+    }))} />
+  );
 }
 
 /** The same code-and-dash line, for the right end of a flex-row card. */
@@ -99,7 +110,7 @@ export function TrailerHeader({ trailerId, loaded, variant = "side", data, heigh
   trailerId: string | null | undefined;
   /** What is in each compartment now: compartment number -> product id. */
   loaded: Record<number, string | null | undefined>;
-  variant?: "side" | "bird";
+  variant?: "side" | "bird" | "bar";
   /** From useTrailerHeaderData for a list; omitted, this header looks up its own trailer. */
   data?: TrailerHeaderData;
   height?: number;
@@ -116,5 +127,5 @@ export function TrailerHeader({ trailerId, loaded, variant = "side", data, heigh
   const res: Record<number, string> = {};
   for (const [n, pid] of Object.entries(trailerId ? d.residue[trailerId] ?? {} : {})) { const c = colorOf(pid); if (c) res[Number(n)] = c; }
   const segs = segsFor(trailerId ? d.sizes[trailerId] : undefined, colors, res, codes);
-  return variant === "bird" ? <BirdTab segs={segs} width={width} /> : <SideView segs={segs} height={height} />;
+  return variant === "bird" ? <BirdTab segs={segs} width={width} /> : variant === "bar" ? <BarView segs={segs} height={height} /> : <SideView segs={segs} height={height} />;
 }
