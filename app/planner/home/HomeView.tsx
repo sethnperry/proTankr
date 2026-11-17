@@ -99,6 +99,7 @@ import { RackDelayButton } from "../components/trip/RackDelayButton";
 import { GeotabEquipmentHost } from "../components/equipment/GeotabEquipmentHost";
 
 import { CatchUpSheet } from "../components/shift/CatchUpSheet";
+import { TarePairHost } from "../components/equipment/TarePairHost";
 import { LeftBehindHost } from "../components/equipment/LeftBehindSheet";
 import { OdometerConfirmSheet } from "../components/moves/OdometerConfirmSheet";
 
@@ -1503,6 +1504,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       />
 
       <TripEquipmentSheets {...tripEquip.sheets} />
+      <TarePairHost userId={userId || null} onPaired={(id) => { void (async () => { await equipment.fetchCombos?.(); if (id) equipment.setSelectedComboId?.(id); await equipment.loadCurrentEquipment?.(); })(); }} />
       <LeftBehindHost userId={userId || null} companyId={companyId || null} trailerId={trailerId ?? null} trailerName={equipment.currentTrailerName ?? null} store={store} syncNow={syncNow} />
       <CancelTripSheet
         open={cancelOpen && !!openTrip}

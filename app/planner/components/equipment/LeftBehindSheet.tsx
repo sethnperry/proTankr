@@ -32,7 +32,7 @@ export function LeftBehindHost({ userId, companyId, trailerId, trailerName, stor
     let alive = true;
     void (async () => {
       try {
-        const { data } = await supabase.from("equipment_handoffs").select("handoff_id, user_id, truck_id").eq("trailer_id", trailerId).is("resolved_at", null).order("detected_at", { ascending: false }).limit(1).maybeSingle();
+        const { data } = await supabase.from("equipment_handoffs").select("handoff_id, user_id, truck_id").eq("trailer_id", trailerId).eq("needs_tare", false).is("resolved_at", null).order("detected_at", { ascending: false }).limit(1).maybeSingle();
         if (!alive || !data) return;
         setHandoff(data as Handoff);
         const { data: nm } = await supabase.rpc("get_display_names_full", { p_user_ids: [(data as Handoff).user_id] });

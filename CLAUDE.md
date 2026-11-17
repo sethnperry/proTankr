@@ -10410,8 +10410,9 @@ Local areas are compared trimmed and lower-cased (profiles hold "Tampa " with a 
 
 ## Tracker holds and left-behind trailers (2026-11-25)
 The five-minute cron (`lib/equipment/geotabHolds.ts`) holds a pair for a driver the tracker shows signed in AND on duty/driving
-(`D`/`ON`) who isn't holding it in the app (couple_combo with force; tare = the pair's last, else the truck's, else the
-trailer's, copied and noted on the handoff; none anywhere = not coupled). It writes `equipment_handoffs`; the equipment board
+(`D`/`ON`) who isn't holding it in the app (couple_combo with force, using only that exact pair's last tare). A new pairing has no combo: the handoff is
+saved `needs_tare`, the driver gets a push, and `TarePairHost` waits on the dashboard to take the tare (migration
+`20261125010000`, applied). It writes `equipment_handoffs`; the equipment board
 shows the trailer as "Undefined" until someone answers `LeftBehindHost` (opens on the dashboard when you hold a trailer with
 an unresolved handoff): Empty (sets `trailer_residue_notes`, read by `fetchTrailerResidue`), Partial/Preloaded
 (`createLeftBehindTrip` makes a parked trip for the loading driver; Take Over Trip applies), Not sure. A handoff driver off

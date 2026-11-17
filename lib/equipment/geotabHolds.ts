@@ -7,6 +7,7 @@
 
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { providerFor } from "@/lib/telematics/server";
+import { sendPush, type StoredSub } from "@/lib/push/send";
 
 const RELEASE_AFTER_MS = 20 * 60_000;
 
@@ -69,26 +70,22 @@ async function runCompany(companyId: string): Promise<number> {
     if (!trailerKnown) continue; // can't tell what is hooked: don't split or make a pair
     try {
       if (trailerId) {
-        // The pair's own last tare; failing that the same truck's or the same trailer's last, copied and flagged.
-        const lastTare = async (col: "truck_id" | "trailer_id", id: string, both?: string) => {
-          let q = admin.from("equipment_combos").select("tare_lbs, target_weight").eq(col, id);
-          if (both) q = q.eq("trailer_id", both);
-          const { data } = await q.order("claimed_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
-          return data as { tare_lbs?: number | null; target_weight?: number | null } | null;
-        };
-        let prior = await lastTare("truck_id", truckId, trailerId);
-        let copied: string | null = null;
-        if (prior?.tare_lbs == null) { prior = await lastTare("truck_id", truckId); if (prior?.tare_lbs != null) copied = "the truck's last pairing"; }
-        if (prior?.tare_lbs == null) { prior = await lastTare("trailer_id", trailerId); if (prior?.tare_lbs != null) copied = "the trailer's last pairing"; }
-        const tare = prior?.tare_lbs;
+        // Only this exact pair's own last tare is used. A new pairing needs the driver to enter the tare.
+        const { data: prior } = await admin.from("equipment_combos").select("tare_lbs, target_weight").eq("truck_id", truckId).eq("trailer_id", trailerId)
+          .order("claimed_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+        const tare = (prior as { tare_lbs?: number | null } | null)?.tare_lbs;
         if (tare == null) {
-          // No tare anywhere for these units: no combo can be made. Say so on the handoff; the driver sets the tare when they open the app.
-          if (!existing) await admin.from("equipment_handoffs").insert({ company_id: companyId, user_id: userId, truck_id: truckId, trailer_id: trailerId, note: "No tare on file for this truck or trailer. It was not coupled." });
+          // No combo can exist without a tare: wait for the driver, and tell them once.
+          if (!existing) {
+            await admin.from("equipment_handoffs").insert({ company_id: companyId, user_id: userId, truck_id: truckId, trailer_id: trailerId, needs_tare: true, note: "New pairing: waiting for the tare." });
+            await notifyTare(admin, companyId, userId, truckId, trailerId);
+            changed++;
+          }
           continue;
         }
-        const r = await admin.rpc("couple_combo", { p_truck_id: truckId, p_trailer_id: trailerId, p_user_id: userId, p_tare_lbs: tare, p_target_weight: prior?.target_weight ?? null, p_buffer_lbs: null, p_force: true });
+        const r = await admin.rpc("couple_combo", { p_truck_id: truckId, p_trailer_id: trailerId, p_user_id: userId, p_tare_lbs: tare, p_target_weight: (prior as { target_weight?: number | null } | null)?.target_weight ?? null, p_buffer_lbs: null, p_force: true });
         if (r.error) { console.warn("[geotab-holds] couple failed:", r.error.message); continue; }
-        if (!existing) await admin.from("equipment_handoffs").insert({ company_id: companyId, user_id: userId, truck_id: truckId, trailer_id: trailerId, note: copied ? `Tare copied from ${copied}. Confirm it with a scale ticket.` : null });
+        if (!existing) await admin.from("equipment_handoffs").insert({ company_id: companyId, user_id: userId, truck_id: truckId, trailer_id: trailerId });
         changed++;
       } else {
         const r = await admin.rpc("set_current_equipment", { p_truck_id: truckId, p_trailer_id: null, p_user_id: userId });
@@ -114,4 +111,17 @@ async function runCompany(companyId: string): Promise<number> {
     changed++;
   }
   return changed;
+}
+
+async function notifyTare(admin: ReturnType<typeof getServiceSupabase>, companyId: string, userId: string, truckId: string, trailerId: string) {
+  try {
+    const [t, r, subs] = await Promise.all([
+      admin.from("trucks").select("truck_name").eq("truck_id", truckId).maybeSingle(),
+      admin.from("trailers").select("trailer_name").eq("trailer_id", trailerId).maybeSingle(),
+      admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("company_id", companyId).eq("user_id", userId),
+    ]);
+    const pair = `${(t.data as any)?.truck_name ?? "truck"} / ${(r.data as any)?.trailer_name ?? "trailer"}`;
+    await sendPush((subs.data ?? []) as StoredSub[], { title: "New pairing: enter the tare", body: `You're signed in to ${pair}. Open ProTankr and enter the tare from your scale ticket.`, url: "/planner/home", tag: `tare-${userId}` });
+    await admin.from("equipment_handoffs").update({ notified_at: new Date().toISOString() }).eq("company_id", companyId).eq("user_id", userId).eq("trailer_id", trailerId).is("resolved_at", null);
+  } catch { /* the window still waits on the dashboard */ }
 }
