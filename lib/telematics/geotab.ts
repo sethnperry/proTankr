@@ -379,7 +379,7 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
       const out = new Map<string, string>();
       // Sign-ins: the newest DriverChange per vehicle (a sign-out has an unknown driver).
       const from = new Date(Date.now() - 2 * 86400_000).toISOString();
-      const ch: any[] = (await call("Get", { typeName: "DriverChange", search: { fromDate: from, includeOverlappedChanges: false } }).catch(() => [])) ?? [];
+      const ch: any[] = (await call("Get", { typeName: "DriverChange", search: { fromDate: from } }).catch((e: Error) => { console.error("DriverChange all failed", e.message); return []; })) ?? [];
       ch.sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime)));
       const latest = new Map<string, string | null>();
       for (const r of ch) {
