@@ -124,7 +124,7 @@ export function SquawkSheet({ open, onClose, userId, ctx, initialType, cityOptio
           )}
         </div>
       </FullscreenModal>
-      <PickSheet open={pickCh} title="Channel" options={channels.map((c) => ({ value: c.type, label: c.key ? c.label : `${c.label} · ${c.why}` }))} value={type ?? ""} onPick={(v) => { const c = channels.find((x) => x.type === v); if (c?.key) setType(c.type); else if (c && isCityType(c.type)) { setType(c.type); setPickCity(true); } setPickCh(false); }} onClose={() => setPickCh(false)} />
+      <PickSheet open={pickCh} title="Channel" options={channels.map((c) => ({ value: c.type, label: c.key || c.type === "support" ? c.label : `${c.label} · ${c.why}` }))} value={type ?? ""} onPick={(v) => { const c = channels.find((x) => x.type === v); if (c?.key || c?.type === "support") setType(c.type); else if (c && isCityType(c.type)) { setType(c.type); setPickCity(true); } setPickCh(false); }} onClose={() => setPickCh(false)} />
       <PickSheet open={pickCity} title="City" options={cityOptions} value="" onPick={(v) => { onCity(v); setPickCity(false); }} onClose={() => setPickCity(false)} />
     </>
   );
