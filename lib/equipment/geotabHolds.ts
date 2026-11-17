@@ -50,7 +50,6 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const { data: us } = driverUserIds.length ? await admin.from("user_settings").select("user_id, current_truck_id, current_trailer_id").in("user_id", driverUserIds) : { data: [] as any[] };
   const heldBy = new Map(((us ?? []) as any[]).map((r) => [r.user_id as string, r as { current_truck_id: string | null; current_trailer_id: string | null }]));
 
-  notes.push(`signed in: ${current.size}, mapped: ${[...current].filter(([v, d]) => truckOfVeh.get(v) && userOfProv.get(d)).length}`);
   let changed = 0;
   const seen = new Set<string>(); // handoffs whose driver is still in the truck
   for (const [veh, drvProv] of current) {
@@ -69,7 +68,6 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
     // No duty status for this driver (Geotab doesn't return one for everyone): trust the sign-in itself, the way Track does.
     if (!hos) working = true;
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
-    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"} known=${trailerKnown}`);
     if (holdsTruck && holdsTrailer) continue;
     if (!working) continue;
     if (!trailerKnown) continue; // can't tell what is hooked: don't split or make a pair
@@ -126,7 +124,7 @@ async function notifyTare(admin: ReturnType<typeof getServiceSupabase>, companyI
       admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("company_id", companyId).eq("user_id", userId),
     ]);
     const pair = `${(t.data as any)?.truck_name ?? "truck"} / ${(r.data as any)?.trailer_name ?? "trailer"}`;
-    await sendPush((subs.data ?? []) as StoredSub[], { title: "New pairing: enter the tare", body: `You're signed in to ${pair}. Open ProTankr and enter the tare from your scale ticket.`, url: "/planner/home", tag: `tare-${userId}` });
-    await admin.from("equipment_handoffs").update({ notified_at: new Date().toISOString() }).eq("company_id", companyId).eq("user_id", userId).eq("trailer_id", trailerId).is("resolved_at", null);
+    const sent = await sendPush((subs.data ?? []) as StoredSub[], { title: "New pairing: enter the tare", body: `You're signed in to ${pair}. Open ProTankr and enter the tare from your scale ticket.`, url: "/planner/home", tag: `tare-${userId}` });
+    if (sent > 0) await admin.from("equipment_handoffs").update({ notified_at: new Date().toISOString() }).eq("company_id", companyId).eq("user_id", userId).eq("trailer_id", trailerId).is("resolved_at", null);
   } catch { /* the window still waits on the dashboard */ }
 }
