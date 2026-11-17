@@ -374,13 +374,16 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
       const ch: any[] = (await call("Get", { typeName: "DriverChange", search: { fromDate: from } }).catch((e: Error) => { console.error("DriverChange all failed", e.message); return []; })) ?? [];
       ch.sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime)));
       const latest = new Map<string, string | null>();
+      const atMap = new Map<string, number>();
       for (const r of ch) {
         const dev = r?.device?.id ?? r?.device;
         const raw = r?.driver?.id ?? (typeof r?.driver === "string" ? r.driver : null);
         if (!dev) continue;
         latest.set(String(dev), raw && !/^unknown/i.test(String(raw)) ? String(raw) : null);
+        atMap.set(String(dev), Date.parse(String(r.dateTime)) || 0);
       }
       for (const [dev, d] of latest) if (d) out.set(dev, d);
+      (out as any).signedInAt = atMap;
       if (out.size) return out;
       const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       for (const s of rows ?? []) {

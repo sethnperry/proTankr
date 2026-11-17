@@ -70,7 +70,9 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
       // No duty status for this driver: fall back to the truck itself reporting fresh and moving.
       const pos = fleetPos.get(veh);
       const fresh = !!pos?.at && Date.now() - Date.parse(pos.at) < 15 * 60_000;
-      if (fresh && (pos?.speedMph ?? 0) > 0) working = true;
+      const signedAt: number = ((current as any).signedInAt as Map<string, number> | undefined)?.get(veh) ?? 0;
+      const recentSignIn = signedAt > 0 && Date.now() - signedAt < 3 * 3600_000;
+      if (fresh && ((pos?.speedMph ?? 0) > 0 || recentSignIn)) working = true;
     }
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
     if (holdsTruck && holdsTrailer) continue;
