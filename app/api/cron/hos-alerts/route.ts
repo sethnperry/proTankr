@@ -194,7 +194,8 @@ async function handle(req: NextRequest) {
   try { await runAccountRules(); } catch (e) { console.warn("[cron] account rules failed:", (e as Error).message); }
   try { notifications = await runNotifications(); } catch (e) { console.warn("[cron] notifications failed:", (e as Error).message); }
   try { await runSquawkCleanup(); } catch (e) { console.warn("[cron] squawk cleanup failed:", (e as Error).message); }
-  try { await runGeotabHolds(); } catch (e) { console.warn("[cron] geotab holds failed:", (e as Error).message); }
+  let holds: unknown = null;
+  try { holds = await runGeotabHolds(); } catch (e) { console.warn("[cron] geotab holds failed:", (e as Error).message); }
   try { await runAutoEndShifts(); } catch (e) { console.warn("[cron] auto end shift failed:", (e as Error).message); }
   try { await runEodReports(); } catch (e) { console.warn("[cron] end of day failed:", (e as Error).message); }
   let abandoned: unknown = null;
@@ -204,5 +205,5 @@ async function handle(req: NextRequest) {
   for (const c of (data ?? []) as { company_id: string }[]) {
     try { out[c.company_id] = await runCompany(c.company_id); } catch (e) { out[c.company_id] = (e as Error).message; }
   }
-  return NextResponse.json({ ok: true, reportPushes, worklogs, notifications, abandoned, companies: out });
+  return NextResponse.json({ ok: true, reportPushes, worklogs, notifications, abandoned, holds, companies: out });
 }

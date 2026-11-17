@@ -11,22 +11,24 @@ import { sendPush, type StoredSub } from "@/lib/push/send";
 
 const RELEASE_AFTER_MS = 20 * 60_000;
 
-export async function runGeotabHolds(): Promise<number> {
+export async function runGeotabHolds(): Promise<{ changed: number; notes: string[] }> {
   const admin = getServiceSupabase();
   const { data } = await admin.from("telematics_connections").select("company_id").eq("status", "active");
   let n = 0;
+  const notes: string[] = [];
   for (const c of (data ?? []) as { company_id: string }[]) {
-    try { n += await runCompany(c.company_id); } catch (e) { console.warn("[geotab-holds] company failed:", (e as Error).message); }
+    try { n += await runCompany(c.company_id, notes); } catch (e) { console.warn("[geotab-holds] company failed:", (e as Error).message); }
   }
-  return n;
+  return { changed: n, notes };
 }
 
-async function runCompany(companyId: string): Promise<number> {
+async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const admin = getServiceSupabase();
   const p = await providerFor(companyId);
   if (!p) return 0;
   const nowMs = Date.now(), nowIso = new Date(nowMs).toISOString();
   const current = await p.currentDrivers().catch(() => new Map<string, string>());
+  notes.push(`drivers signed in: ${current.size}`);
   if (current.size === 0) return 0; // no answer: change nothing
   const attached = await p.attachedAll().catch(() => new Map<string, string[]>());
   const trailerKnown = attached.size > 0;
@@ -53,7 +55,7 @@ async function runCompany(companyId: string): Promise<number> {
   const seen = new Set<string>(); // handoffs whose driver is still in the truck
   for (const [veh, drvProv] of current) {
     const truckId = truckOfVeh.get(veh), userId = userOfProv.get(drvProv);
-    if (!truckId || !userId) continue;
+    if (!truckId || !userId) { notes.push(`skip ${veh}/${drvProv}: truck ${truckId ? "mapped" : "unmapped"}, driver ${userId ? "mapped" : "unmapped"}`); continue; }
     const prov = trailerKnown ? (attached.get(veh) ?? []) : [];
     const trailerId = prov.map((t) => trailerOfProv.get(t)).find((x): x is string => !!x) ?? null;
     const mine = heldBy.get(userId);
@@ -65,6 +67,7 @@ async function runCompany(companyId: string): Promise<number> {
     const hos = needsHos ? await p.hos(drvProv).catch(() => null) : null;
     const working = hos?.status === "D" || hos?.status === "ON";
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
+    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"}`);
     if (holdsTruck && holdsTrailer) continue;
     if (!working) continue;
     if (!trailerKnown) continue; // can't tell what is hooked: don't split or make a pair
