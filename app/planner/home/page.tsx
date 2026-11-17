@@ -275,9 +275,19 @@ type PickerMode =
 /** A small steering wheel: Geotab shows this driver behind the wheel of the truck. */
 function WheelIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Driver" style={{ verticalAlign: "-2px", marginRight: 6 }} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Driver" style={{ flexShrink: 0, display: "block" }} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2" /><path d="M12 14v7M10 11.2 3.5 9.5M14 11.2l6.5-1.7" />
     </svg>
+  );
+}
+
+/** The equipment numbers with the wheel in front on the same line, same height with or without it. */
+function EquipLine({ wheel, label }: { wheel: boolean; label: React.ReactNode }) {
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, lineHeight: "inherit" }}>
+      {wheel && <WheelIcon />}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{label}</span>
+    </span>
   );
 }
 
@@ -2613,10 +2623,10 @@ export default function HomePage() {
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
       <ConnectedDashHeader current="driver" line={(() => {
         const chip = dutyChip(myHos, Date.now());
-        if (!chip) return <>{behindWheel && <WheelIcon />}{equipmentLabel}</>;
+        if (!chip) return <><EquipLine wheel={behindWheel} label={equipmentLabel} />;
         return (
           <span style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{behindWheel && <WheelIcon />}{equipmentLabel}</span>
+            <EquipLine wheel={behindWheel} label={equipmentLabel} />
             <span style={{ flexShrink: 0, color: chip.on ? "#4ade80" : "rgba(255,255,255,0.7)" }}
               title={chip.since ? `Since ${new Date(chip.since).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : undefined}>{chip.text}</span>
           </span>
