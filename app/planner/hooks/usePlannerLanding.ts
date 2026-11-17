@@ -43,7 +43,8 @@ export function usePlannerLanding(active: boolean) {
     if (!shell.isSuperAdminResolved) return;
     if (shell.isSolo === null) return;
     const qs = new URLSearchParams(window.location.search);
-    const target = defaultLandingPath(shell.role, shell.isSuperAdmin, shell.isSolo === true);
+    // A super admin has no role-based landing; opening the app still starts on the Driver Dashboard, not the plan editor.
+    const target = defaultLandingPath(shell.role, shell.isSuperAdmin, shell.isSolo === true) ?? (shell.isSuperAdmin ? "/planner/home" : null);
     // A solo driver finishes first-run onboarding here before landing anywhere else.
     if (target && shell.isSolo === true && !onboardingDone) return;
     hasCheckedDefaultLanding = true;

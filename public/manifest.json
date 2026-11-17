@@ -2,7 +2,7 @@
   "name": "ProTankr",
   "short_name": "ProTankr",
   "description": "Verify your load before you cross the scale.",
-  "start_url": "/planner",
+  "start_url": "/planner/home",
   "scope": "/",
   "display": "standalone",
   "background_color": "#111111",
