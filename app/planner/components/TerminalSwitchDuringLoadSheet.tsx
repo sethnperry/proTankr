@@ -84,6 +84,8 @@ type Props = {
   reasonOnly?: boolean;
   onReasonDone?: () => void;
   onReasonCancel?: () => void;
+  // "Couldn't load" only: Cancel load (asks first) sits red at the bottom of the reasons.
+  onCancelLoad?: () => void;
 };
 
 const secondaryRowStyle: React.CSSProperties = {
@@ -100,8 +102,9 @@ const cancelStyle: React.CSSProperties = {
 export default function TerminalSwitchDuringLoadSheet({
   open, prevTerminalName, newTerminalName, onUpdateCardAtPrevious, onSwitchWithoutUpdating,
   darkMode, accentColor, planRows, productNameById, onSubmitOutageReport,
-  requireReason = false, onReasonPicked, reasonOnly = false, onReasonDone, onReasonCancel,
+  requireReason = false, onReasonPicked, reasonOnly = false, onReasonDone, onReasonCancel, onCancelLoad,
 }: Props) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const afterReason = () => { if (reasonOnly) onReasonDone?.(); else setMode("menu"); };
   const [mode, setMode] = useState<"reason" | "otherNote" | "menu" | "reportType" | "reportProducts">(requireReason ? "reason" : "menu");
   const [otherNote, setOtherNote] = useState("");
@@ -116,6 +119,7 @@ export default function TerminalSwitchDuringLoadSheet({
   useEffect(() => {
     if (open) {
       setMode(requireReason ? "reason" : "menu");
+      setConfirmCancel(false);
       setOtherNote("");
       setReasonGiven(false);
       setReportType(null);
@@ -248,7 +252,19 @@ export default function TerminalSwitchDuringLoadSheet({
                 {r.label}
               </button>
             ))}
-            {reasonOnly && <button type="button" style={cancelStyle} onClick={onReasonCancel}>Cancel</button>}
+            {reasonOnly && <button type="button" style={cancelStyle} onClick={onReasonCancel}>Back</button>}
+            {reasonOnly && onCancelLoad && (!confirmCancel ? (
+              <button type="button" style={{ ...cancelStyle, color: "#f87171" }} disabled={submitBusy} onClick={() => setConfirmCancel(true)}>Cancel load</button>
+            ) : (
+              <div style={{ border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, padding: 12, background: "rgba(248,113,113,0.06)" }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Cancel this load?</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>It undoes the load and today&apos;s card update, and stops any delay timer.</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={() => setConfirmCancel(false)} style={{ flex: 1, padding: "11px 0", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", borderRadius: 2 }}>Keep it</button>
+                  <button type="button" onClick={() => { setConfirmCancel(false); onCancelLoad(); }} style={{ flex: 1, padding: "11px 0", border: "none", background: "#f87171", color: "#000", fontSize: 13, fontWeight: 900, cursor: "pointer", borderRadius: 2 }}>Cancel load</button>
+                </div>
+              </div>
+            ))}
           </>
         )}
 

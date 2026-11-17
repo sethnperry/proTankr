@@ -88,12 +88,6 @@ export default function PlanReviewFlow() {
     if (pickup) store.put("trip_pickups", { pickup_id: pickup.pickup_id, begin_at: at });
     setRackDelayStartedAt(null);
   };
-  // Cancel the load altogether: the delay ends, then the load and card are undone.
-  const cancelLoadAltogether = () => {
-    if (effectiveUserId && tripStoreHook.store) endRunningDelay(tripStoreHook.store, effectiveUserId);
-    setRackDelayStartedAt(null);
-    handleBackToPlannerNoUpdate();
-  };
   const startRackDelay = async (code: any, productIds: string[]): Promise<string | null> => {
     const pickup = tripPickup ?? tripWaitingPickup ?? null;
     if (effectiveUserId && pickup && !readRunningDelay(effectiveUserId)) {
@@ -194,7 +188,6 @@ export default function PlanReviewFlow() {
       rackDelayStartedAt={rackDelayStartedAt}
       onBeginLoading={beginLoadingAfterDelay}
       loadingBegun={!(tripPickup ?? tripWaitingPickup) || !!(tripPickup ?? tripWaitingPickup)?.begin_at}
-      onCancelLoad={cancelLoadAltogether}
       // Back to Planner leaves the load, the arrival time and the card exactly as they are.
       onBackToPlanner={() => loadWorkflow.setLoadingOpen(false)}
       onAdjustPlan={handleBackToPlannerNoUpdate}

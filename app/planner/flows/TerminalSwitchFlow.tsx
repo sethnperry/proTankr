@@ -7,6 +7,7 @@
 import TerminalSwitchDuringLoadSheet from "../components/TerminalSwitchDuringLoadSheet";
 import { usePlanner } from "../PlannerContext";
 import { reportRows } from "../utils/reportRows";
+import { endRunningDelay } from "@/lib/trips/delays";
 
 export default function TerminalSwitchFlow() {
   const {
@@ -27,6 +28,9 @@ export default function TerminalSwitchFlow() {
     couldntLoad,
     onCouldntLoadReasonDone,
     finishCouldntLoad,
+    effectiveUserId,
+    tripStoreHook,
+    handleBackToPlannerNoUpdate,
   } = usePlanner();
   const reasonStage = couldntLoad?.stage === "reason";
 
@@ -36,6 +40,12 @@ export default function TerminalSwitchFlow() {
       reasonOnly={reasonStage}
       onReasonDone={onCouldntLoadReasonDone}
       onReasonCancel={finishCouldntLoad}
+      // Cancel the load altogether: the delay ends, then the load and card are undone.
+      onCancelLoad={() => {
+        if (effectiveUserId && tripStoreHook.store) endRunningDelay(tripStoreHook.store, effectiveUserId);
+        finishCouldntLoad();
+        handleBackToPlannerNoUpdate();
+      }}
       prevTerminalName={reasonStage && couldntLoad ? couldntLoad.prev.terminalName : terminalSwitchConfirm?.prev.terminalName ?? ""}
       newTerminalName={terminalSwitchConfirm?.next.terminalName ?? ""}
       onUpdateCardAtPrevious={handleUpdateCardAtPrevious}

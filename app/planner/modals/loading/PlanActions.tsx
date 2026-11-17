@@ -1,7 +1,7 @@
 "use client";
 // app/planner/modals/loading/PlanActions.tsx
 //
-// Plan Review: Finish Loading, Rack Delay, Couldn't Load, Cancel load. (The header's back arrow is the way out.)
+// Plan Review: Finish Loading, Rack Delay, Couldn't Load. (Cancel load is at the bottom of Couldn't Load's reasons; the header's back arrow is the way out.)
 
 import { useEffect, useState } from "react";
 import { SopLine } from "../../components/site/SiteNotes";
@@ -20,12 +20,10 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     rackDelayStartedAt,
     onBeginLoading,
     loadingBegun,
-    onCancelLoad,
     onUpdateCardOnly,
     startLogSequence,
     styles,
   } = m;
-  const [confirmCancel, setConfirmCancel] = useState(false);
   // The running delay's clock, ticking once a second.
   const delayRunning = !!rackDelayStartedAt;
   const needsBegin = loadingBegun === false && !!onBeginLoading;
@@ -102,21 +100,6 @@ export function PlanActions({ m }: { m: LoadingModel }) {
         Couldn&apos;t Load
       </button>
 
-      {onCancelLoad && (!confirmCancel ? (
-        <button type="button" onClick={() => setConfirmCancel(true)} disabled={busy}
-          style={{ width: "100%", padding: "10px 0", border: "none", background: "transparent", color: "#f87171", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.55 : 1 }}>
-          Cancel load
-        </button>
-      ) : (
-        <div style={{ border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, padding: 12, background: "rgba(248,113,113,0.06)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Cancel this load?</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>It undoes the load and today&apos;s card update, and stops any delay timer.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={() => setConfirmCancel(false)} style={{ flex: 1, padding: "11px 0", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", borderRadius: 2 }}>Keep it</button>
-            <button type="button" onClick={() => { setConfirmCancel(false); onCancelLoad(); }} style={{ flex: 1, padding: "11px 0", border: "none", background: "#f87171", color: "#000", fontSize: 13, fontWeight: 900, cursor: "pointer", borderRadius: 2 }}>Cancel load</button>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
