@@ -106,10 +106,10 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
 
   // A driver the tracker shows in one of our trucks who has no ProTankr account: remember who, so the board can say.
   if (outside.length) {
-    const names = new Map((await p.listDrivers().catch(() => [])).map((d) => [d.id, d.name]));
+    const names = new Map((await p.listDrivers().catch(() => [])).map((d) => [d.id, [d.firstName, d.lastName].filter(Boolean).join(" ").trim() || d.name]));
     for (const o of outside) {
       const ex = handoffs.find((h) => !h.user_id && h.external_provider_id === o.drvProv && (h.truck_id ?? null) === o.truckId && (h.trailer_id ?? null) === o.trailerId);
-      if (ex) { seen.add(ex.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso, trailer_id: o.trailerId }).eq("handoff_id", ex.handoff_id); continue; }
+      if (ex) { seen.add(ex.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso, trailer_id: o.trailerId, external_name: names.get(o.drvProv) ?? null }).eq("handoff_id", ex.handoff_id); continue; }
       await admin.from("equipment_handoffs").insert({ company_id: companyId, user_id: null, truck_id: o.truckId, trailer_id: o.trailerId, external_provider_id: o.drvProv, external_name: names.get(o.drvProv) ?? null, note: "Driver is not in ProTankr." });
       changed++;
     }
