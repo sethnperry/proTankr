@@ -2623,7 +2623,7 @@ export default function HomePage() {
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
       <ConnectedDashHeader current="driver" line={(() => {
         const chip = dutyChip(myHos, Date.now());
-        if (!chip) return <><EquipLine wheel={behindWheel} label={equipmentLabel} />;
+        if (!chip) return <EquipLine wheel={behindWheel} label={equipmentLabel} />;
         return (
           <span style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
             <EquipLine wheel={behindWheel} label={equipmentLabel} />
