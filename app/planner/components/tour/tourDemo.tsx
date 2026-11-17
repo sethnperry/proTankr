@@ -8,14 +8,14 @@
 import React from "react";
 import { GaugePanel } from "../../home/DashboardChrome";
 import { LOOK } from "../../home/dashLook";
-import { CompartmentStrip, type StripSlot } from "../trip/CompartmentStrip";
+import { CodeDash, type CodeDashItem } from "../CodeDash";
 
 const muted = "rgba(255,255,255,0.5)";
 const card: React.CSSProperties = { ...LOOK.primary, padding: 14 };
 const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 0.5 };
 
-const SLOTS: StripSlot[] = [
-  { comp: 1, size: 4300, color: "#facc15" }, { comp: 2, size: 1250, color: "#ffffff" }, { comp: 3, size: 3800, color: "#facc15" },
+const SLOTS: CodeDashItem[] = [
+  { comp: 1, kind: "loaded", code: "D2", color: "#facc15" }, { comp: 2, kind: "loaded", code: "87", color: "#ffffff" }, { comp: 3, kind: "loaded", code: "D2", color: "#facc15" },
 ];
 
 type Hot = "expiration" | "loads" | "rack" | "drop" | null;
@@ -47,7 +47,7 @@ export function DemoTripCard({ showOrder = true }: { showOrder?: boolean }) {
         </div>
       )}
       <div style={card}>
-        <div style={{ marginBottom: 8 }}><CompartmentStrip slots={SLOTS} /></div>
+        <div style={{ marginBottom: 8 }}><CodeDash items={SLOTS} fontSize={16} /></div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <span style={label}>Current trip · In transit</span>
           <span style={{ fontSize: 19, fontWeight: 900, color: "#4ade80" }}>79,420<span style={{ fontSize: 10, color: LOOK.muted, marginLeft: 3 }}>LBS</span></span>

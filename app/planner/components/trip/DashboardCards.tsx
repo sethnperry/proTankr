@@ -118,8 +118,9 @@ export function runLabel(o: { ownCompany: boolean; who: string | null; truck: st
 export function CompsStrip({ comps, productInfo }: { comps: { compNumber: number; productId: string | null; gallons: number }[]; productInfo: ProductInfoFn }) {
   if (comps.length === 0) return null;
   const colors: Record<number, string> = {};
-  for (const c of comps) colors[c.compNumber] = colorOf(productInfo(c.productId));
-  return <SideView height={12} segs={segsFor(comps.map((c) => ({ comp: c.compNumber, size: Math.max(1, c.gallons) })), colors)} />;
+  const codes: Record<number, string> = {};
+  for (const c of comps) { colors[c.compNumber] = colorOf(productInfo(c.productId)); codes[c.compNumber] = productInfo(c.productId).code; }
+  return <SideView height={12} segs={segsFor(comps.map((c) => ({ comp: c.compNumber, size: Math.max(1, c.gallons) })), colors, {}, codes)} />;
 }
 /** Another carrier's trailer: what they are loading (filled) and what the rest last held (outlined). */
 export function CarrierStrip({ comps, sizes, residue, productInfo }: {
@@ -130,10 +131,11 @@ export function CarrierStrip({ comps, sizes, residue, productInfo }: {
 }) {
   if (sizes.length === 0) return <CompsStrip comps={comps} productInfo={productInfo} />;
   const loaded: Record<number, string> = {};
-  for (const c of comps) loaded[c.compNumber] = colorOf(productInfo(c.productId));
+  const codes: Record<number, string> = {};
+  for (const c of comps) { loaded[c.compNumber] = colorOf(productInfo(c.productId)); codes[c.compNumber] = productInfo(c.productId).code; }
   const res: Record<number, string> = {};
   for (const [n, pid] of Object.entries(residue)) res[Number(n)] = colorOf(productInfo(pid));
-  return <SideView height={12} segs={segsFor(sizes, loaded, res)} />;
+  return <SideView height={12} segs={segsFor(sizes, loaded, res, codes)} />;
 }
 const nameStyle: React.CSSProperties = { flex: "0 1 auto", minWidth: 0, maxWidth: "55%", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 

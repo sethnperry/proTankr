@@ -11,7 +11,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
-import { CompartmentStrip } from "./trip/CompartmentStrip";
+import { CodeDash } from "./CodeDash";
 import { segsFor, type StripSeg } from "@/lib/equipment/trailerStrip";
 import { fetchTrailerResidue, type TrailerCompSizes, type TrailerResidue } from "@/lib/equipment/fetchTrailerResidue";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
@@ -20,30 +20,15 @@ import { productColorFor } from "../utils/productColor";
 export { segsFor };
 export type { StripSeg };
 
-export function SideView({ segs, height = 10, gap = 3 }: { segs: StripSeg[]; height?: number; gap?: number }) {
+export function SideView({ segs, height = 10 }: { segs: StripSeg[]; height?: number; gap?: number }) {
   if (!segs.length) return null;
-  return (
-    <CompartmentStrip height={height} gap={gap} slots={segs.map((g) => ({
-      comp: g.comp, size: g.size, color: g.kind === "loaded" ? g.color : null, residue: g.kind === "residue" ? g.color : null,
-    }))} />
-  );
+  return <CodeDash fontSize={Math.max(13, height + 2)} items={segs.map((g) => ({ comp: g.comp, kind: g.kind, code: g.code, color: g.color }))} />;
 }
 
-/** The bird's-eye tab. Put it as the last child of a flex-row card whose right padding is 0. */
-export function BirdTab({ segs, width = 20 }: { segs: StripSeg[]; width?: number }) {
+/** The same code-and-dash line, for the right end of a flex-row card. */
+export function BirdTab({ segs }: { segs: StripSeg[]; width?: number }) {
   if (!segs.length) return null;
-  return (
-    <div aria-hidden style={{ alignSelf: "stretch", width, flexShrink: 0, display: "flex", flexDirection: "column", gap: 2, borderLeft: "1px solid rgba(255,255,255,0.12)" }}>
-      {segs.map((g) => (
-        <div key={g.comp} style={{
-          flex: `${g.size} 1 0`, minHeight: 3, boxSizing: "border-box",
-          ...(g.kind === "loaded" ? { background: g.color ?? "#fff", border: `1px solid ${g.color ?? "#fff"}` }
-            : g.kind === "residue" ? { border: `1.5px solid ${g.color ?? "#fff"}` }
-            : { border: "1px solid rgba(255,255,255,0.35)" }),
-        }} />
-      ))}
-    </div>
-  );
+  return <div aria-hidden style={{ alignSelf: "center", flexShrink: 0, padding: "0 10px 0 6px" }}><SideView segs={segs} height={11} /></div>;
 }
 
 /** Compartment sizes for a set of trailers, cached. */
@@ -89,6 +74,18 @@ export function useTrailerHeaderData(trailerIds: (string | null | undefined)[], 
 }
 
 /** Product id -> fill color, from the catalog's hex or the family color. */
+/** Product id -> short code (button code, else the first word of the name). */
+export function useProductCode(): (productId: string | null | undefined) => string | null {
+  const catalog = useProductsCatalog().data;
+  return (id) => {
+    if (!id) return null;
+    const p = catalog.find((x) => x.product_id === id);
+    if (!p) return null;
+    const nm = String(p.display_name || p.product_name || "");
+    return String(p.button_code ?? (nm.split(" ")[0] || "")).trim().toUpperCase() || null;
+  };
+}
+
 export function useProductColor(): (productId: string | null | undefined) => string | null {
   const catalog = useProductsCatalog().data;
   return (id) => {
@@ -111,10 +108,13 @@ export function TrailerHeader({ trailerId, loaded, variant = "side", data, heigh
   const own = useTrailerHeaderData(data ? [] : [trailerId]);
   const d = data ?? own;
   const colorOf = useProductColor();
+  const codeOf = useProductCode();
+  const codes: Record<number, string> = {};
+  for (const [n, pid] of Object.entries(loaded)) { const c = codeOf(pid ?? null); if (c) codes[Number(n)] = c; }
   const colors: Record<number, string | null> = {};
   for (const [n, pid] of Object.entries(loaded)) colors[Number(n)] = colorOf(pid ?? null);
   const res: Record<number, string> = {};
   for (const [n, pid] of Object.entries(trailerId ? d.residue[trailerId] ?? {} : {})) { const c = colorOf(pid); if (c) res[Number(n)] = c; }
-  const segs = segsFor(trailerId ? d.sizes[trailerId] : undefined, colors, res);
+  const segs = segsFor(trailerId ? d.sizes[trailerId] : undefined, colors, res, codes);
   return variant === "bird" ? <BirdTab segs={segs} width={width} /> : <SideView segs={segs} height={height} />;
 }

@@ -227,6 +227,11 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return (id: string) => by.get(id) ?? "#ffffff";
   }, [catalog.data]);
 
+  const codeOf = useMemo(() => {
+    const by = new Map(catalog.data.map((p) => { const nm = String(p.display_name || p.product_name || ""); return [p.product_id, String(p.button_code ?? (nm.split(" ")[0] || "")).trim().toUpperCase()] as const; }));
+    return (id: string) => by.get(id) ?? "";
+  }, [catalog.data]);
+
   const loadedByTrailer = useMemo(() => {
     const out: Record<string, LoadedDot[]> = {};
     for (const [tid, comps] of Object.entries(aboard)) {
@@ -240,13 +245,14 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     const out: Record<string, StripSeg[]> = {};
     for (const [tid, comps] of Object.entries(compSizes)) {
       const now: Record<number, string> = {};
-      for (const a of aboard[tid] ?? []) if (a.productId) now[a.comp] = colorOf(a.productId);
+      const codes: Record<number, string> = {};
+      for (const a of aboard[tid] ?? []) if (a.productId) { now[a.comp] = colorOf(a.productId); codes[a.comp] = codeOf(a.productId); }
       const res: Record<number, string> = {};
       for (const [c, pid] of Object.entries(residueBy[tid] ?? {})) res[Number(c)] = colorOf(pid);
-      out[tid] = stripSegments(comps, now, res);
+      out[tid] = stripSegments(comps, now, res, codes);
     }
     return out;
-  }, [compSizes, aboard, residueBy, colorOf]);
+  }, [compSizes, aboard, residueBy, colorOf, codeOf]);
 
   // Each trailer as plan-style codes, highest comp first: D2/--/D2. A loaded compartment shows its product code; an
   // empty one shows dashes in the color of what it last held, gray once washed.

@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { CompartmentStrip } from "@/app/planner/components/trip/CompartmentStrip";
+import { CodeDash } from "@/app/planner/components/CodeDash";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { readPlannedComps } from "@/lib/trips/addPickupCheck";
 import type { CatalogProduct } from "@/lib/queries/useProductsCatalog";
@@ -104,7 +104,7 @@ export function DispatchedPreview({
         ))}
 
         <div style={{ marginTop: 14 }}>
-          {slots.length > 0 ? <CompartmentStrip slots={slots} height={16} gap={5} /> : <div style={{ fontSize: 12, color: muted }}>No compartment plan from dispatch.</div>}
+          {slots.length > 0 ? <CodeDash fontSize={18} items={comps.map((c) => ({ comp: c.n, kind: planned.get(c.n) ? "loaded" as const : "empty" as const, code: planned.get(c.n) ? codeOf(planned.get(c.n)!) : null, color: colorOf(planned.get(c.n)) }))} /> : <div style={{ fontSize: 12, color: muted }}>No compartment plan from dispatch.</div>}
           {productsAboard.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", marginTop: 8, fontSize: 13 }}>
               {[...planned.entries()].sort((a, b) => a[0] - b[0]).map(([n, pid]) => (
