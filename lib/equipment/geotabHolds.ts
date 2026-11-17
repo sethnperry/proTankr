@@ -50,12 +50,17 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const { data: us } = driverUserIds.length ? await admin.from("user_settings").select("user_id, current_truck_id, current_trailer_id").in("user_id", driverUserIds) : { data: [] as any[] };
   const heldBy = new Map(((us ?? []) as any[]).map((r) => [r.user_id as string, r as { current_truck_id: string | null; current_trailer_id: string | null }]));
 
-  const outside: { veh: string; drvProv: string; truckId: string; trailerId: string | null }[] = [];
+  const outside: { veh: string; drvProv: string; truckId: string | null; trailerId: string | null }[] = [];
   let changed = 0;
   const seen = new Set<string>(); // handoffs whose driver is still in the truck
   for (const [veh, drvProv] of current) {
     const truckId = truckOfVeh.get(veh), userId = userOfProv.get(drvProv);
-    if (truckId && !userId) { outside.push({ veh, drvProv, truckId, trailerId: (trailerKnown ? (attached.get(veh) ?? []) : []).map((t) => trailerOfProv.get(t)).find((x): x is string => !!x) ?? null }); continue; }
+    if (!userId) {
+      // A driver with no ProTankr account: remember who is in our truck, or hauling one of our trailers.
+      const tr = (trailerKnown ? (attached.get(veh) ?? []) : []).map((t) => trailerOfProv.get(t)).find((x): x is string => !!x) ?? null;
+      if (truckId || tr) outside.push({ veh, drvProv, truckId: truckId ?? null, trailerId: tr });
+      continue;
+    }
     if (!truckId || !userId) { continue; }
     const prov = trailerKnown ? (attached.get(veh) ?? []) : [];
     const trailerId = prov.map((t) => trailerOfProv.get(t)).find((x): x is string => !!x) ?? null;
@@ -103,7 +108,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   if (outside.length) {
     const names = new Map((await p.listDrivers().catch(() => [])).map((d) => [d.id, d.name]));
     for (const o of outside) {
-      const ex = handoffs.find((h) => !h.user_id && h.external_provider_id === o.drvProv && h.truck_id === o.truckId);
+      const ex = handoffs.find((h) => !h.user_id && h.external_provider_id === o.drvProv && (h.truck_id ?? null) === o.truckId && (h.trailer_id ?? null) === o.trailerId);
       if (ex) { seen.add(ex.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso, trailer_id: o.trailerId }).eq("handoff_id", ex.handoff_id); continue; }
       await admin.from("equipment_handoffs").insert({ company_id: companyId, user_id: null, truck_id: o.truckId, trailer_id: o.trailerId, external_provider_id: o.drvProv, external_name: names.get(o.drvProv) ?? null, note: "Driver is not in ProTankr." });
       changed++;
@@ -113,9 +118,10 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   // A driver the tracker no longer shows in the truck: after a while the pair is released where it stopped.
   const positions = await p.positions().catch(() => new Map());
   for (const h of handoffs) {
-    if (seen.has(h.handoff_id) || !h.truck_id) continue;
+    if (seen.has(h.handoff_id)) continue;
     if (nowMs - Date.parse(h.last_seen_at) < RELEASE_AFTER_MS) continue;
     if (!h.user_id) { await admin.from("equipment_handoffs").update({ ended_at: nowIso }).eq("handoff_id", h.handoff_id); continue; }
+    if (!h.truck_id) continue;
     const veh = vehOfTruck.get(h.truck_id);
     const pos = veh ? (positions.get(veh) as { lat?: number; lon?: number } | undefined) : undefined;
     // Still the same driver's pair in ProTankr? If someone else took it since, there is nothing to release.
