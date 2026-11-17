@@ -50,6 +50,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const { data: us } = driverUserIds.length ? await admin.from("user_settings").select("user_id, current_truck_id, current_trailer_id").in("user_id", driverUserIds) : { data: [] as any[] };
   const heldBy = new Map(((us ?? []) as any[]).map((r) => [r.user_id as string, r as { current_truck_id: string | null; current_trailer_id: string | null }]));
 
+  notes.push(`signed in: ${current.size}, mapped: ${[...current].filter(([v, d]) => truckOfVeh.get(v) && userOfProv.get(d)).length}`);
   let changed = 0;
   const seen = new Set<string>(); // handoffs whose driver is still in the truck
   for (const [veh, drvProv] of current) {
