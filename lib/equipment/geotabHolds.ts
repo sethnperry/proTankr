@@ -76,7 +76,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
       if (fresh && (pos?.speedMph ?? 0) > 0) working = true;
     }
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
-    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"}${hosErr ? ` (${hosErr})` : ""} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"}`);
+    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"}${hosErr ? ` (${hosErr})` : ""} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"} pos=${JSON.stringify(fleetPos.get(veh) ?? null)} working=${working}`);
     if (holdsTruck && holdsTrailer) continue;
     if (!working) continue;
     if (!trailerKnown) continue; // can't tell what is hooked: don't split or make a pair
