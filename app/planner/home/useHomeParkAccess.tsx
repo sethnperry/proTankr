@@ -233,7 +233,7 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
     if (!store || !userId) return;
     if (openTrip) { setNotice({ text: "Finish or cancel your current load before starting an empty move.", tripId: null }); return; }
     if (emptyMoves.current) { setNotice({ text: "An empty move is already in progress. Tap Arrive when you get there.", tripId: null }); return; }
-    runGates(() => void askEquipment(() => setStampAsk({ kind: "move_begin" })));
+    runGates(() => void askEquipment(() => setStampAsk({ kind: "move_begin" }), { needTrailer: false }));
   };
 
   const onBigButton = () => {
@@ -245,7 +245,7 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
     switch (step.kind) {
       case "start":
         {
-          if (!parked && !dispatchedList.length) { startEmptyMove(); break; }
+          if (!parked && (!dispatchedList.length || !trailerId)) { startEmptyMove(); break; }
           // One trailer, one trip: another driver's open trip on it has to be taken over or closed first.
           if (handoff && !parked) { setNotice({ text: `${handoffName ?? "Another driver"} has an open trip on this trailer. Take it over, or have it closed, before starting a new one.`, tripId: null } as any); break; }
           // One trailer, one load: a trailer that already holds product on another live trip can't take a second load.

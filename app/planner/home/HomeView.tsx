@@ -188,7 +188,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     behindWheel,
     blendWarnings,
     blockNotice,
-    bobtailAsk,
     breakCountsRed,
     breakNote,
     busy,
@@ -374,7 +373,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     setAlertsOpen,
     setAutoArrive,
     setBlockNotice,
-    setBobtailAsk,
     setCalloutOpen,
     setCancelErr,
     setCancelOpen,
@@ -605,7 +603,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         {openingPlanner ? busyText(true, "Opening Planner…") : parkRequested ? "Park it" : parked && step.kind === "start"
           ? ((parked.parked_by === userId || (!parked.parked_by && parked.driver_id === userId)) ? "Resume Trip" : "Begin Trip")
           : step.kind === "start" && emptyMoves.current && !openTrip ? "Arrive"
-          : step.kind === "start" && dispatchedList.length ? "Begin Trip"
+          : step.kind === "start" && dispatchedList.length && trailerId ? "Begin Trip"
           : step.kind === "start" ? "Empty Move"
           : step.label}
       </button>}
@@ -1372,13 +1370,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       <ExplanationSheet open={explainOpen} hours={shift.current?.hours ?? 0} reasons={reasonsOrDefault(reasons as any, "shift_explanation")} onClose={() => setExplainOpen(false)}
         onSubmit={(pick) => { shift.explain({ ...explanationPayload(pick, shift.current?.hours ?? 0) }); finishShift(); setExplainOpen(false); }}
         onSkip={() => { finishShift(); setExplainOpen(false); }} />
-      <FullscreenModal open={!!bobtailAsk} title="Trailer needed" onClose={() => setBobtailAsk(null)} footer={null}>
-        <div style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 14 }}>You have a truck but no trailer. A trip can't begin without one. Bobtail to a trailer first, or pick a trailer now.</div>
-        <button type="button" style={{ width: "100%", padding: "16px 0", fontSize: 15, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", border: "none", background: "#fff", color: "#000", cursor: "pointer" }}
-          onClick={() => { const go = bobtailAsk; setBobtailAsk(null); resumeAfterMove.current = go; startEmptyMove(); }}>Bobtail to a trailer</button>
-        <button type="button" style={{ width: "100%", padding: "14px 0", marginTop: 10, fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", cursor: "pointer" }}
-          onClick={() => { const go = bobtailAsk; setBobtailAsk(null); if (go) openEquipPicker(go, true); }}>Pick a trailer now</button>
-      </FullscreenModal>
       <CatchUpSheet open={catchUp.open} cards={catchUp.cards} onDone={(a) => void catchUp.apply(a)} onSkip={catchUp.skip} />
       <FullscreenModal open={moveConfirm} title="Empty move" onClose={() => setMoveConfirm(false)} footer={null}>
         <div style={{ fontSize: 16, fontWeight: 800 }}>Start an empty move?</div>

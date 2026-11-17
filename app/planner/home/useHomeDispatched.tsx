@@ -104,7 +104,7 @@ import { type DispatchedItem } from "./DispatchedCard";
 import type { useHomeDelays } from "./useHomeDelays";
 
 export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
-  const { addingLoad, setAddingLoad, children, compSizes, companyId, deliveryName, editing, emptyMoves, equipAsk, equipSawOpen, equipSwitching, equipment, location, locations, openTrip, parkStampRef, plannedNames, resumeAfterMove, resumeDraft, router, setBobtailAsk, setBusy, setEquipAsk, setEquipSwitching, setError, setNotice, setPlannedNames, setSheetOpen, setVerifyActive, setVerifyTripId, sheetPresets, shell, snap, state, store, storedLocId, suppliers, syncNow, terminalName, trailerId, trips, truckId, userId, verifyActive, verifyBaseTerminal, verifyTripId } = p;
+  const { addingLoad, setAddingLoad, children, compSizes, companyId, deliveryName, editing, emptyMoves, equipAsk, equipSawOpen, equipSwitching, equipment, location, locations, openTrip, parkStampRef, plannedNames, resumeAfterMove, resumeDraft, router, setBusy, setEquipAsk, setEquipSwitching, setError, setNotice, setPlannedNames, setSheetOpen, setVerifyActive, setVerifyTripId, sheetPresets, shell, snap, state, store, storedLocId, suppliers, syncNow, terminalName, trailerId, trips, truckId, userId, verifyActive, verifyBaseTerminal, verifyTripId } = p;
 
   // ── Loads dispatch planned for this driver ───────────────────────────────
   const dispatchedList = useMemo(() => (userId ? dispatchedForDriver(trips, userId) : []), [trips, userId]);
@@ -154,7 +154,6 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     if (!a) return;
     const verdict = beginEquipmentVerdict({ hasCombo: !!equipment.selectedComboId, hasTruck: !!equipment.selectedComboId || equipment.isBobtail, hasTrailer: !!equipment.selectedComboId && !equipment.isBobtail, needTrailer: a.needTrailer });
     if (verdict === "go") a.then();
-    else if (verdict === "bobtail") setBobtailAsk(() => a.then);
     else setNotice({ text: a.needTrailer ? "Pick a truck and trailer to begin the trip." : "Pick a truck first.", tripId: null });
   }, [equipSwitching, shell.equipOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const openEquipPicker = (go: () => void, needTrailer: boolean) => { setEquipAsk({ then: go, needTrailer }); setEquipSwitching(true); shell.setEquipOpen(true); };
@@ -163,7 +162,6 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     if (!userId || !companyId || shell.setupSession) { go(); return; }
     const verdict = beginEquipmentVerdict({ hasCombo: !!equipment.selectedComboId, hasTruck: !!truckId || equipment.isBobtail, hasTrailer: !!trailerId && !equipment.isBobtail, needTrailer });
     if (verdict === "go") { go(); return; }
-    if (verdict === "bobtail") { setBobtailAsk(() => go); return; }
     openEquipPicker(go, needTrailer);
   };
   // After an empty move started from the bobtail suggestion ends with a trailer coupled, the Begin Trip sequence carries on.
