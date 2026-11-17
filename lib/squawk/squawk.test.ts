@@ -14,6 +14,8 @@ test("keys match the server's, and a missing piece leaves a channel closed", () 
   assert.equal(channelKey("to_rack", { ...ctx, toRackTerminalId: "tm" }), "tm");
   assert.equal(channelKey("to_drop", { ...ctx, toDropSiteKey: "FL~loves~495" }), "FL~loves~495");
   assert.equal(channelKey("trailer", ctx), null);
+  assert.equal(channelKey("support", { ...ctx, userId: "u1" }), "u1");
+  assert.equal(channelKey("support", { ...ctx, userId: "u1", isSuperAdmin: true }), null);
   const noCity = availableChannels({ ...ctx, city: null, state: null });
   assert.equal(noCity.find((c) => c.type === "city_network")?.why, "Pick a city");
   assert.equal(noCity.find((c) => c.type === "company")?.why, null);

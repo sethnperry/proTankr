@@ -17,6 +17,8 @@ import { useRouter } from "next/navigation";
 import { ConnectedDashHeader, ConnectedDashFooter, SharedToolsPanel } from "@/app/planner/components/dash/ConnectedDash";
 import { DashStyles } from "@/app/planner/home/dashLook";
 import SuperDeskModal from "./SuperDeskModal";
+import SuperSquawkModal, { useSupportInbox } from "./SuperSquawkModal";
+import { SUPPORT_NAME } from "@/lib/squawk/squawk";
 import { supabase } from "@/lib/supabase/client";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { TRAINING_CAMPAIGN_KEY, readCampaignEnabled } from "@/lib/platformSettings";
@@ -49,6 +51,10 @@ export default function ProTankrDashPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
+  const [squawkOpen, setSquawkOpen] = useState(false);
+  const [adminId, setAdminId] = useState("");
+  useEffect(() => { void supabase.auth.getUser().then((r) => setAdminId(r.data.user?.id ?? "")); }, []);
+  const inbox = useSupportInbox(authorized);
 
   const [selectedId, setSelectedId] = useState<string>("");
   const [nameDraft, setNameDraft] = useState<string>("");
@@ -306,6 +312,12 @@ export default function ProTankrDashPage() {
       <DashStyles />
       <div style={{ marginBottom: 16 }}><ConnectedDashHeader current="protankr" line="All companies" /></div>
 
+      {inbox.unread > 0 && (
+        <button type="button" onClick={() => setSquawkOpen(true)} style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 14, padding: "12px 16px", border: "1px solid #60a5fa", background: "rgba(96,165,250,0.12)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+          {SUPPORT_NAME} · {inbox.unread} new {inbox.unread === 1 ? "message" : "messages"} ›
+        </button>
+      )}
+
       {error && <div style={{ ...card, background: "rgba(180,40,40,0.16)", borderColor: "rgba(180,40,40,0.32)", fontSize: 13 }}>{error}</div>}
 
       {/* Stats */}
@@ -407,6 +419,7 @@ export default function ProTankrDashPage() {
         <button type="button" onClick={() => setDeskOpen(true)} style={primaryBtn}>Open Desk</button>
       </div>
       <SuperDeskModal open={deskOpen} onClose={() => setDeskOpen(false)} />
+      <SuperSquawkModal open={squawkOpen} onClose={() => setSquawkOpen(false)} adminId={adminId} companies={companies.map((c) => ({ company_id: c.company_id, company_name: c.company_name }))} />
 
       {/* Invite Solo Driver */}
       <div style={card}>
@@ -549,7 +562,7 @@ export default function ProTankrDashPage() {
           <div>• Terminal catalog / data-quality tools</div>
         </div>
       </div>
-      <div style={{ marginTop: 20 }}><SharedToolsPanel /></div>
+      <div style={{ marginTop: 20 }}><SharedToolsPanel extra={[{ icon: "radio", label: "Squawk", sub: inbox.unread ? `${inbox.unread} new` : SUPPORT_NAME, onClick: () => setSquawkOpen(true) }]} /></div>
       <ConnectedDashFooter />
     </div></div>
   );

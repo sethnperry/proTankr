@@ -2570,7 +2570,7 @@ export default function HomePage() {
     const city = t?.city ? { city: String(t.city), state: String((t as any).state ?? pk?.state ?? "") } : squawkCity ?? (location.selectedCity && location.selectedState ? { city: String(location.selectedCity), state: String(location.selectedState) } : null);
     const nextDel = snap ? plannedDeliveries(snap.deliveries)[0] : null;
     const toRack = snap && !aboardRows.length ? pk?.terminal_id ?? null : null;
-    return { toRackTerminalId: toRack ? String(toRack) : null, toDropSiteKey: dropSiteKey, companyId: companyId || null, city: city?.city ?? null, state: city?.state || null, region: myArea.region, localArea: myArea.localArea, truckId: truckId ?? null, trailerId: trailerId ?? null };
+    return { toRackTerminalId: toRack ? String(toRack) : null, toDropSiteKey: dropSiteKey, userId, isSuperAdmin: shell.isSuperAdmin, companyId: companyId || null, city: city?.city ?? null, state: city?.state || null, region: myArea.region, localArea: myArea.localArea, truckId: truckId ?? null, trailerId: trailerId ?? null };
   })();
   const squawkCities = useMemo(() => [...new Set(terminalCatalog.filter((t) => t.city && (t as any).state).map((t) => `${t.city}|${(t as any).state}`))].sort().map((v) => ({ value: v, label: v.replace("|", ", ") })), [terminalCatalog]);
   const squawkTop = topUnread(unreadRows);
