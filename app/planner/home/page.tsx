@@ -3458,6 +3458,8 @@ export default function HomePage() {
           onSaved={(s: FleetStatus) => {
             setEndAsk(null);
             void equipment.fetchCombos?.();
+            void equipment.loadCurrentEquipment?.(); // parking let go of the units: the dashboard must stop showing them
+            equipment.clearSelectedEquipment?.();
             parkStampRef.current = null; // the status window writes the pin itself
           }} />
       )}

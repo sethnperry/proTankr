@@ -252,8 +252,9 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
     const saved = fromUser ?? fromAnon;
 
     if (saved?.comboId) {
+      // A pairing another driver has since taken (a slip-seat partner) doesn't come back from this phone's memory.
       const exists = combos.some(
-        (c) => String(c.combo_id) === String(saved.comboId) && c.active !== false
+        (c) => String(c.combo_id) === String(saved.comboId) && c.active !== false && (!c.claimed_by || String(c.claimed_by) === String(effectiveUserId))
       );
       setSelectedComboIdRaw(exists ? String(saved.comboId) : "");
 
@@ -265,6 +266,14 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
     hydratedForKeyRef.current = effectiveKey;
     hydratingRef.current = false;
   }, [combosLoading, combos, isSetup, effectiveUserId, authUserId, effectiveKey, userKey, anonKey]);
+
+  // Ending a shift lets go of the equipment: forget the selection here and on this phone.
+  const clearSelectedEquipment = useCallback(() => {
+    setSelectedComboIdRaw("");
+    if (isSetup) return;
+    writePersistedEquip(anonKey, "");
+    if (authUserId) writePersistedEquip(userKey, "");
+  }, [isSetup, anonKey, userKey, authUserId]);
 
   // Re-derive setup selection whenever combos refresh (e.g. after claim/slip seat)
   useEffect(() => {
@@ -388,11 +397,12 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
     isTrailerOnly,
     setCurrentEquipment,
     loadCurrentEquipment,
+    clearSelectedEquipment,
   }), [
     combos, combosLoading, combosError, selectedComboId, setSelectedComboId,
     selectedCombo, truckNameById, trailerNameById, equipmentLabel, fetchCombos,
     primaryTruckIds, primaryTrailerIds, loadPrimaryEquipment, togglePrimaryTruck, togglePrimaryTrailer,
     currentTruckId, currentTrailerId, currentTruckName, currentTrailerName,
-    isBobtail, isTrailerOnly, setCurrentEquipment, loadCurrentEquipment,
+    isBobtail, isTrailerOnly, setCurrentEquipment, loadCurrentEquipment, clearSelectedEquipment,
   ]);
 }
