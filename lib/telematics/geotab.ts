@@ -369,9 +369,10 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
 
     /** Diagnostic: the raw driver fields of a vehicle's status record. */
     async rawStatus(vehicleId: string) {
-      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
-      const r = (rows ?? []).find((x) => String(x?.device?.id) === vehicleId);
-      return r ? { driver: r.driver ?? null, isHistoricLastDriver: r.isHistoricLastDriver, isDriving: r.isDriving, isDeviceCommunicating: r.isDeviceCommunicating, dateTime: r.dateTime, speed: r.speed } : null;
+      const all: any[] = (await call("Get", { typeName: "DeviceStatusInfo" })) ?? [];
+      const one: any[] = (await call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id: vehicleId } } })) ?? [];
+      const pick = (r: any) => (r ? { driver: r.driver ?? null, isHistoricLastDriver: r.isHistoricLastDriver, isDriving: r.isDriving, dateTime: r.dateTime } : null);
+      return { allRows: all.length, withDriver: all.filter((x) => driverOf(x).current).length, inAll: pick(all.find((x) => String(x?.device?.id) === vehicleId)), single: pick(one[0]) };
     },
 
     async currentDrivers(): Promise<Map<string, string>> {
