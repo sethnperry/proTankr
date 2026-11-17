@@ -54,6 +54,8 @@ type Props = {
    *  number and codes. */
   codes?: Record<string, PlanLineComp[]>;
   lastBy?: Record<string, string>;
+  /** Units the tracker shows a driver in with no confirmed pairing: the corner dot turns amber. */
+  unconfirmed?: Set<string>;
   /** The viewer's own pair (highlighted). */
   mine?: { truckId: string | null; trailerId: string | null };
   /** A loose unit waiting to be coupled (outlined). */
@@ -81,7 +83,8 @@ function Tile({ children, strip, style, dot, ...rest }: { children: React.ReactN
   );
 }
 
-const dotFor = (u: TrackUnit) => (u.statusCode ? fleetStatusColor(u.statusCode) : null);
+const UNCONFIRMED_DOT = "#fbbf24";
+const dotFor = (u: TrackUnit, unconfirmed?: Set<string>) => (unconfirmed?.has(u.id) ? UNCONFIRMED_DOT : u.statusCode ? fleetStatusColor(u.statusCode) : null);
 const loadedText = (segs?: StripSeg[]) => !!segs?.some((g) => g.kind === "loaded");
 
 function Name({ children }: { children: React.ReactNode }) {
@@ -129,7 +132,7 @@ export function EquipmentBoard(p: Props) {
                   onClick={() => p.onCombo?.(c)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); p.onCombo?.(c); } }}
                   style={{ display: "grid", gridTemplateColumns: "1fr 26px 1fr", alignItems: "stretch", cursor: "pointer" }}>
-                  <Tile dot={dotFor(c.truck)} style={tile as React.CSSProperties}>
+                  <Tile dot={dotFor(c.truck, p.unconfirmed)} style={tile as React.CSSProperties}>
                     <Name>{c.truck.name}</Name>
                     {fresh && (() => { const s = statusText(c.truck, holder ? p.initials[holder] ?? "" : "", mine, p.lastBy); return s ? small(s.text, s.color) : null; })()}
                     {!fresh && (tl.tone !== "none" || mine) && (
@@ -164,7 +167,7 @@ export function EquipmentBoard(p: Props) {
                 const mine = p.mine?.truckId === u.id;
                 const pending = p.pendingId === u.id;
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u, p.unconfirmed)} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTruck?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {fresh ? (() => { const s = statusText(u, "", mine, p.lastBy); return s ? small(s.text, s.color) : null; })() : <StatusLine u={u} />}
@@ -183,7 +186,7 @@ export function EquipmentBoard(p: Props) {
                 const pending = p.pendingId === u.id;
                 const segs = p.strips?.[u.id];
                 return (
-                  <Tile key={u.id} dot={dotFor(u)} strip={fresh ? undefined : segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
+                  <Tile key={u.id} dot={dotFor(u, p.unconfirmed)} strip={fresh ? undefined : segs} style={{ ...(mine ? tileMine : {}), ...(pending ? { border: "2px solid #fff", background: "rgba(255,255,255,0.14)" } : {}), cursor: "pointer" }}
                     onClick={() => { if (!lp || !lp.didFire()) p.onTrailer?.(u); }} {...(lp?.handlers as object)}>
                     <Name>{u.name}</Name>
                     {fresh ? (() => {

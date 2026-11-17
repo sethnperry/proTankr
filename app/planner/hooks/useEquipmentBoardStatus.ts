@@ -38,9 +38,11 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
 
   // Who last parked each unit (initials), for a unit nobody holds right now.
   const [parkedByUnit, setParkedByUnit] = useState<Record<string, string>>({});
+  // Units the tracker puts a driver in with no confirmed pairing yet.
+  const [unconfirmed, setUnconfirmed] = useState<Set<string>>(new Set());
   const unitKey = [...new Set([...truckIds, ...trailerIds])].sort().join(",");
   useEffect(() => {
-    if (!enabled || !unitKey) { setParkedByUnit({}); return; }
+    if (!enabled || !unitKey) { setParkedByUnit({}); setUnconfirmed(new Set()); return; }
     let alive = true;
     void (async () => {
       try {
@@ -57,6 +59,7 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
           if (h.truck_id && idSet.has(h.truck_id)) handed.push({ unit_id: h.truck_id, parked_by: h.user_id });
           if (h.trailer_id && idSet.has(h.trailer_id)) handed.push({ unit_id: h.trailer_id, parked_by: h.user_id });
         }
+        if (alive) setUnconfirmed(new Set(handed.map((r) => r.unit_id)));
         const all = [...rows, ...handed];
         const who = [...new Set(all.map((r) => r.parked_by as string))];
         if (!who.length) { if (alive) setParkedByUnit({}); return; }
@@ -297,5 +300,5 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return out;
   }, [catalog.data, compSizes, aboard, residueBy, colorOf, undefinedIds]);
 
-  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer, codesByTrailer, parkedByUnit };
+  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer, codesByTrailer, parkedByUnit, unconfirmed };
 }
