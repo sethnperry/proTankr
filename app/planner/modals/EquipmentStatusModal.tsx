@@ -103,6 +103,8 @@ export default function EquipmentStatusModal({
   const [mapOpen, setMapOpen] = useState(false);
   const [unitInfo, setUnitInfo] = useState<UnitInfo[]>([]);
   const [askWhich, setAskWhich] = useState(false);
+  // A deadlined unit that was only being repositioned: it goes back to Deadline, notes kept, unless the driver says otherwise.
+  const [resume, setResume] = useState<{ by: string | null; at: string | null } | null>(null);
   // Staff changing a unit a driver is using: warn first, notify after (the driver keeps their hold until their shift ends).
   const heldGuard = useHeldUnitGuard();
 
@@ -167,6 +169,18 @@ export default function EquipmentStatusModal({
     // At the end of a shift the answer is almost always Readyline; Deadline is the exception.
     setStatus(endShift && (!allowed || allowed.includes("readyline")) ? "readyline" : cur && (!allowed || allowed.includes(cur)) ? cur : first);
     setAskWhich(false);
+    setResume(null);
+    void (async () => {
+      try {
+        const { data } = await supabase.from("equipment_deadline_resume").select("notes, sub_status, deadlined_at, deadlined_by_name").in("unit_id", ids.map((x) => x[1]));
+        const r = ((data ?? []) as { notes: string | null; sub_status: string | null; deadlined_at: string | null; deadlined_by_name: string | null }[])[0];
+        if (!r) return;
+        if (!allowed || allowed.includes("deadline")) setStatus("deadline");
+        if (r.notes) setNotes(r.notes);
+        if (r.sub_status) setSubStatus(r.sub_status);
+        setResume({ by: r.deadlined_by_name ?? null, at: r.deadlined_at ?? null });
+      } catch { /* no resume note: the usual defaults stand */ }
+    })();
     setRegion(presetRegion ?? "");
     setLocalArea(presetLocalArea ?? "");
     setSubStatus(currentSubStatus ?? "");
@@ -258,6 +272,12 @@ export default function EquipmentStatusModal({
           </div>
         )}
 
+        {resume && (
+          <div style={{ border: "1px solid rgba(248,113,113,0.6)", padding: 12, fontSize: 13, lineHeight: 1.5 }}>
+            <b style={{ color: "#f87171" }}>Deadlined{resume.by ? ` by ${resume.by}` : ""}{resume.at ? ` on ${new Date(resume.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}` : ""}</b>, and you were only repositioning it.
+            It goes back to Deadline with the same notes. Confirm, add notes, or change the status if it was repaired.
+          </div>
+        )}
         <div>
           <label style={fieldLabel}>Status</label>
           <div style={{ display: "grid", gap: 8 }}>

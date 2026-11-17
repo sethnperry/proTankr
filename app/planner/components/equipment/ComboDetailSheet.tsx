@@ -181,7 +181,9 @@ function UnitSection({ kind, unit, companyId, onOpenFile, partnerName }: { kind:
   );
 }
 
-export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, holderLabel, onOpenFile, onDropSwap, onStud, onDocCaptured, primaryLabel = "Drop / Swap" }: {
+export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, holderLabel, onOpenFile, onDropSwap, onStud, onDocCaptured, primaryLabel = "Drop / Swap", secondSeat }: {
+  /** Attach as the second seat of a truck someone else is driving (shown only then). */
+  secondSeat?: () => void;
   open: boolean; onClose: () => void; companyId: string;
   /** A combo passes both; a loose unit passes just its own. */
   truck: TrackUnit | null; trailer: TrackUnit | null;
@@ -209,6 +211,7 @@ export function ComboDetailSheet({ open, onClose, companyId, truck, trailer, hol
           <CameraButton onFile={(f) => onDocCaptured(truck ? "truck" : "trailer", f)} style={docBtn}>+ New Doc</CameraButton>
         )}
       </div>
+      {secondSeat && <button type="button" onClick={secondSeat} style={{ ...secondaryBtn, width: "100%", marginTop: 10 }}>Join as second seat</button>}
       <button type="button" onClick={onClose} style={{ ...secondaryBtn, width: "100%", marginTop: 10 }}>Close</button>
       {chooseUnit && truck && trailer && (
         <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>

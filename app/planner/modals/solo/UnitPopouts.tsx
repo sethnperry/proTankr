@@ -4,12 +4,15 @@
 // Loose-unit and combo pop-outs, drop/swap, documents, take-over.
 
 import React from "react";
+import { supabase } from "@/lib/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import BinderModal from "../BinderModal";
 import { ComboDetailSheet } from "../../components/equipment/ComboDetailSheet";
 import { AddDocumentSheet } from "../../components/equipment/AddDocumentSheet";
 import type { SoloModel } from "./useSoloEquipment";
 
 export function UnitPopouts({ m }: { m: SoloModel }) {
+  const qc = useQueryClient();
   const {
     authUserId,
     boardRows,
@@ -94,6 +97,11 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
           }
           onOpenFile={(kind) => setDocUnit({ kind, id: kind === "truck" ? detailRow.truck.id : detailRow.trailer.id })}
           primaryLabel={detailMine ? "Drop / Swap" : detailCombo?.claimed_by ? "Take over" : "Select"}
+          secondSeat={!detailMine && detailCombo?.claimed_by && detailCombo.claimed_by !== authUserId ? async () => {
+            const { error } = await supabase.rpc("join_second_seat", { p_truck_id: detailRow.truck.id, p_source: "app" });
+            setDetailComboId(null); setPickerOpen(false);
+            if (error) window.alert(error.message); else void qc.invalidateQueries({ queryKey: ["secondSeat"] });
+          } : undefined}
           onDropSwap={() => {
             if (detailMine) { setDropSwapOpen(true); return; }
             // Not yours yet: this button selects the pair (a parked pair is free; one in use asks first).

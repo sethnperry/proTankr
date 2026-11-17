@@ -355,6 +355,18 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
       return { driverId: String(last.driver.id), at: String(last.dateTime), outAt: next ? String(next.dateTime) : null };
     },
 
+    async coDriversOf(vehicleId: string): Promise<string[]> {
+      // A co-driver signed in through Drive's "Add driver" shows up as a driver change on the vehicle that is not the
+      // main driver. The exact marking varies by version, so anything whose type reads passenger / co-driver counts,
+      // and a later change for the same driver on this vehicle (a sign-out) ends it.
+      const from = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const rows: any[] = (await call("Get", { typeName: "DriverChange", search: { deviceSearch: { id: vehicleId }, fromDate: from } }).catch(() => [])) ?? [];
+      const here = rows.filter((r) => r?.driver?.id && r.dateTime && (!r.device?.id || String(r.device.id) === vehicleId)).sort((a, b) => String(a.dateTime).localeCompare(String(b.dateTime)));
+      const latest = new Map<string, any>();
+      for (const r of here) latest.set(String(r.driver.id), r);
+      return [...latest.values()].filter((r) => /passenger|co-?driver|second/i.test(String(r.type ?? "")) && !/^unknown|^nodriver/i.test(String(r.driver.id))).map((r) => String(r.driver.id));
+    },
+
     async currentDrivers(): Promise<Map<string, string>> {
       const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       const out = new Map<string, string>();
@@ -730,5 +742,6 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
     }, () => base.hos(id, tz)),
     positions: async () => pairsToMap<string, VehicleReading>(await cached(cache, "positions", 30_000, async () => mapToPairs(await base.positions()))),
     currentDrivers: async () => pairsToMap<string, string>(await cached(cache, "currentdrivers", 30_000, async () => mapToPairs(await base.currentDrivers()))),
+    coDriversOf: (vehicleId: string) => cached(cache, `codrv:${vehicleId}`, 2 * 60_000, () => base.coDriversOf(vehicleId)),
   };
 }

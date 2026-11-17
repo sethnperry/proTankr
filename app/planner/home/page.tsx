@@ -173,6 +173,8 @@ import { RackDelayButton } from "../components/trip/RackDelayButton";
 import { readShopDown, writeShopDown, SHOP_BLOCK, type ShopDown } from "@/lib/trips/shopDown";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 import { setEquipmentTools } from "@/lib/ui/equipmentTools";
+import { GeotabEquipmentHost } from "../components/equipment/GeotabEquipmentHost";
+import { useGeotabEquipment, useSecondSeat } from "../hooks/useGeotabEquipment";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 import { FreightSheet } from "../components/freight/FreightSheet";
 import { useFreight } from "../hooks/useFreight";
@@ -269,6 +271,15 @@ type PickerMode =
   | { mode: "select" }
   | { mode: "split"; ids: string[]; from: string | null }
   | { mode: "reroute"; delivery: TripDeliveryRow };
+
+/** A small steering wheel: Geotab shows this driver behind the wheel of the truck. */
+function WheelIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Driver" style={{ verticalAlign: "-2px", marginRight: 6 }} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2" /><path d="M12 14v7M10 11.2 3.5 9.5M14 11.2l6.5-1.7" />
+    </svg>
+  );
+}
 
 /** Tells the Equipment modal what Inspect and Truck down do on this page (cleared when the page goes away). */
 function EquipmentToolsRegistrar({ onInspect, onTruckDown }: { onInspect: () => void; onTruckDown: () => void }) {
@@ -634,8 +645,12 @@ export default function HomePage() {
   const placeLabel = [location.selectedCity, location.selectedState].filter(Boolean).join(", ");
   const pickupLabel = terminalName ? `${terminalName}${placeLabel ? ` · ${placeLabel}` : ""}` : null;
 
+  // Geotab shows who is behind the wheel: a steering wheel by the numbers when that is you, and a second-seat line when it is someone else.
+  const geoMine = useGeotabEquipment(userId).geo;
+  const secondSeat = useSecondSeat(userId).seat;
+  const behindWheel = !!(geoMine?.signedIn && geoMine.role === "driver" && geoMine.truck && (equipment.selectedCombo?.truck_id ?? equipment.currentTruckId) === geoMine.truck.id);
   const equipmentLabel = equipment.equipmentLabel
-    ?? (equipment.isBobtail ? `Truck ${equipment.currentTruckName ?? ""} (bobtail)`.trim() : "No equipment selected");
+    ?? (equipment.isBobtail ? `Truck ${equipment.currentTruckName ?? ""} (bobtail)`.trim() : secondSeat ? `Second seat · Truck ${secondSeat.truckName ?? ""}${secondSeat.driverName ? ` · driver ${secondSeat.driverName}` : ""}` : "No equipment selected");
 
   // Near Me measures from the pickup terminal (§4).
   const origin = useMemo<LatLon | null>(() => {
@@ -2598,10 +2613,10 @@ export default function HomePage() {
       {/* Title with the dashboard switcher; the truck/trailer number under it in gray. */}
       <ConnectedDashHeader current="driver" line={(() => {
         const chip = dutyChip(myHos, Date.now());
-        if (!chip) return equipmentLabel;
+        if (!chip) return <>{behindWheel && <WheelIcon />}{equipmentLabel}</>;
         return (
           <span style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{equipmentLabel}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{behindWheel && <WheelIcon />}{equipmentLabel}</span>
             <span style={{ flexShrink: 0, color: chip.on ? "#4ade80" : "rgba(255,255,255,0.7)" }}
               title={chip.since ? `Since ${new Date(chip.since).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : undefined}>{chip.text}</span>
           </span>
@@ -3494,6 +3509,7 @@ export default function HomePage() {
           setDownTimeOpen(false);
         }} onClose={() => setDownTimeOpen(false)} />
 
+      <GeotabEquipmentHost userId={userId} equipment={equipment} />
       <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId} role={shell.role ?? null} myTruckId={truckId} myTrailerId={trailerId} />
 
       </div>

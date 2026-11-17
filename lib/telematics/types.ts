@@ -69,6 +69,8 @@ export interface TelematicsProvider {
   lastDriverOf(vehicleId: string): Promise<{ driverId: string; at: string; outAt?: string | null } | null>;
   /** The driver signed in to each vehicle right now: provider vehicle id -> provider driver id. */
   currentDrivers(): Promise<Map<string, string>>;
+  /** Drivers signed in to the vehicle as a co-driver (Drive's "Add driver"), best effort: provider driver ids. */
+  coDriversOf(vehicleId: string): Promise<string[]>;
   /** The last driver recorded for each vehicle that has nobody signed in now. */
   historicDrivers(): Promise<Map<string, string>>;
   /** Plain-language lines about why a vehicle has no position (troubleshooting). */
