@@ -252,7 +252,7 @@ export function StartLoadSheet({
     <>
     <FullscreenModal
       open={open}
-      title={forDriver ? "Plan Trip" : editing ? "Edit Trip" : "Begin Trip"}
+      title={editing ? "Edit Trip" : "New Load"}
       onClose={onClose}
       footer={
         <div style={{ padding: "12px 16px" }}>
@@ -268,7 +268,7 @@ export function StartLoadSheet({
               opacity: busy || missing.length > 0 ? 0.5 : 1, cursor: busy ? "default" : "pointer",
             }}
           >
-            {forDriver ? "Plan this load" : editing ? "Save" : "Begin Trip"}
+            {editing ? "Save" : "Add load"}
           </button>
         </div>
       }

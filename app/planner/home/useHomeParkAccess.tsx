@@ -108,7 +108,7 @@ import type { UnitAlertSummary } from "@/lib/equipment/unitAlerts";
 import type { useHomeRacks } from "./useHomeRacks";
 
 export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
-  const { aboard, aboardRows, alignPlannerToPickup, answerStop, arrival, arriveAtRef, askEquipment, askFuelFirst, askShiftStart, beginDispatchedLoad, clock, compSizes, companyId, deliveryName, dispatchedList, dutyStop, endDelay, equipment, expirations, fleet, fuelOn, handoff, handoffAcked, handoffName, hookup, lastShiftEndedMs, learnArrival, location, myDelivery, myHos, openDelivery, openTrip, parkOpen, parked, productInfo, productName, selectedLoc, setBlockNotice, setBreakTick, setDropSiteOpen, setError, setExpSheetOpen, setFinishOpen, setHandoffAcked, setHandoffName, setLoadedOpen, setMyRegion, setNextRackPending, setNotice, setOpeningPlanner, setParkOpen, setParkRegions, setPicker, setRackSheetOpen, setSheetOpen, setSheetPresets, setSplashOpen, setSplashTermPending, setTripSplashState, setTruckSheetWatch, setUnitAlertsOpen, sheetOpen, sheetPresets, shell, shift, shopDown, snap, splashNums, splashRoomLbs, splashSawPicker, splashTermPending, step, store, syncNow, terminalCatalog, terminalName, terminals, trailerId, tripSplash, truckId, truckIdLive, unitAlertsOpen, userId, wrapEl } = p;
+  const { emptyMoves, setStampAsk, aboard, aboardRows, alignPlannerToPickup, answerStop, arrival, arriveAtRef, askEquipment, askFuelFirst, askShiftStart, beginDispatchedLoad, clock, compSizes, companyId, deliveryName, dispatchedList, dutyStop, endDelay, equipment, expirations, fleet, fuelOn, handoff, handoffAcked, handoffName, hookup, lastShiftEndedMs, learnArrival, location, myDelivery, myHos, openDelivery, openTrip, parkOpen, parked, productInfo, productName, selectedLoc, setBlockNotice, setBreakTick, setDropSiteOpen, setError, setExpSheetOpen, setFinishOpen, setHandoffAcked, setHandoffName, setLoadedOpen, setMyRegion, setNextRackPending, setNotice, setOpeningPlanner, setParkOpen, setParkRegions, setPicker, setRackSheetOpen, setSheetOpen, setSheetPresets, setSplashOpen, setSplashTermPending, setTripSplashState, setTruckSheetWatch, setUnitAlertsOpen, sheetOpen, sheetPresets, shell, shift, shopDown, snap, splashNums, splashRoomLbs, splashSawPicker, splashTermPending, step, store, syncNow, terminalCatalog, terminalName, terminals, trailerId, tripSplash, truckId, truckIdLive, unitAlertsOpen, userId, wrapEl } = p;
 
   // Arrival is never stamped automatically: a truck inside a stop's fence may be fueling or waiting on a delay.
   // The driver is asked (the card below, or the duty-log stop card) and answers.
@@ -216,13 +216,36 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
     void syncNow();
   };
 
+  // Begin Trip and an empty move both start the same way: the shift (when telematics doesn't already show one), then the rest.
+  const runGates = (proceed: () => void) => {
+    // Telematics connected and on duty: the shift is already running (or starts now at that time), no window.
+    const need = beginTripShift(myHos, Date.now());
+    if (!need.ask) {
+      if (!shift.current) {
+        const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: false, lastEndedMs: lastShiftEndedMs, declinedSince: null });
+        shift.start(t ? new Date(t.atMs).toISOString() : undefined, "geotab");
+      }
+      proceed();
+    } else askShiftStart(need.reason, proceed, { always: true });
+  };
+  // Empty move: starts at the truck's odometer (confirmed by the driver); the big button then reads Arrive.
+  const startEmptyMove = () => {
+    if (!store || !userId) return;
+    if (openTrip) { setNotice({ text: "Finish or cancel your current load before starting an empty move.", tripId: null }); return; }
+    if (emptyMoves.current) { setNotice({ text: "An empty move is already in progress. Tap Arrive when you get there.", tripId: null }); return; }
+    runGates(() => void askEquipment(() => setStampAsk({ kind: "move_begin" })));
+  };
+
   const onBigButton = () => {
     setNotice(null);
     if (!store || !userId) return;
     if (parkRequested) { setParkOpen(true); return; }
+    // An empty move in progress: the button is Arrive. Odometer, then the equipment status window.
+    if (emptyMoves.current && !openTrip) { setStampAsk({ kind: "move_end" }); return; }
     switch (step.kind) {
       case "start":
         {
+          if (!parked && !dispatchedList.length) { startEmptyMove(); break; }
           // One trailer, one trip: another driver's open trip on it has to be taken over or closed first.
           if (handoff && !parked) { setNotice({ text: `${handoffName ?? "Another driver"} has an open trip on this trailer. Take it over, or have it closed, before starting a new one.`, tripId: null } as any); break; }
           // One trailer, one load: a trailer that already holds product on another live trip can't take a second load.
@@ -251,15 +274,7 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
               setError(null);
               setSheetOpen(true);
             }));
-          // Telematics connected and on duty: the shift is already running (or starts now at that time), no window.
-          const need = beginTripShift(myHos, Date.now());
-          if (!need.ask) {
-            if (!shift.current) {
-              const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: false, lastEndedMs: lastShiftEndedMs, declinedSince: null });
-              shift.start(t ? new Date(t.atMs).toISOString() : undefined, "geotab");
-            }
-            proceed();
-          } else askShiftStart(need.reason, proceed, { always: true });
+          runGates(proceed);
           }
         }
         break;
@@ -596,5 +611,5 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
     const pk = activePickup(snap.pickups) ?? [...snap.pickups].sort((a, b) => a.seq - b.seq).find((p) => !p.left_at && p.outcome !== "no_load");
     return pk?.terminal_id ? { kind: "terminal" as const, id: String(pk.terminal_id), title: pk.name ?? "Terminal", word: "Terminal notes" } : null;
   })();
-  return { ...p, confirmDetectedArrival, confirmDutyArrival, onBigButton, truckAlerts, trailerAlerts, dropCount, countColor, loadLine, onBoardLines, showPark, parkRequested, handoffAlert, dismissHandoff, doPark, doTakeOver, expGroups, expTotal, expWorst, L, card, stepsByTerminal, readiness, readinessLabel, openTerminalList, pickups, liveDeliveries, anyDelivered, planLine, chipFor, baseByComp, splashPlanProp, splashPickup, baseStop, splashComps, saveSplash, swapSplashOrder, blendWarnings, keepBlendAsLoaded, lastLoadId, notesSite } as const;
+  return { ...p, startEmptyMove, confirmDetectedArrival, confirmDutyArrival, onBigButton, truckAlerts, trailerAlerts, dropCount, countColor, loadLine, onBoardLines, showPark, parkRequested, handoffAlert, dismissHandoff, doPark, doTakeOver, expGroups, expTotal, expWorst, L, card, stepsByTerminal, readiness, readinessLabel, openTerminalList, pickups, liveDeliveries, anyDelivered, planLine, chipFor, baseByComp, splashPlanProp, splashPickup, baseStop, splashComps, saveSplash, swapSplashOrder, blendWarnings, keepBlendAsLoaded, lastLoadId, notesSite } as const;
 }

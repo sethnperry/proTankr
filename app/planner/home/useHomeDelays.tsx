@@ -362,7 +362,7 @@ export function useHomeDelays(p: ReturnType<typeof useHomeBase>) {
     saveTripDraft(userId, v);
     router.push(`/planner?plan=1&detour=${what === "new" ? "new" : `edit&slot=${what}`}`);
   };
-  const editing = !!openTrip;
+  const editing = !!openTrip && !p.addingLoad;
 
   // Terminals picked on the dashboard are ahead of time: the rack is asked on Arrive.
   useEffect(() => {

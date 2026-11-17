@@ -78,10 +78,11 @@ export function ExpirationsSheet({ open, groups, onClose, title = "Expirations",
   );
 }
 
-export function LoadsSheet({ open, items, onClose, onRun }: { open: boolean; items: DispatchedItem[]; onClose: () => void; onRun?: (tripId: string) => void }) {
+export function LoadsSheet({ open, items, onClose, onRun, onSwap }: { open: boolean; items: DispatchedItem[]; onClose: () => void; onRun?: (tripId: string) => void; onSwap?: (a: string, b: string) => void }) {
   return (
-    <FullscreenModal open={open} title={`Dispatched loads (${items.length})`} onClose={onClose} footer={null}>
-      <DispatchedCard items={items} onRun={onRun} />
+    <FullscreenModal open={open} title={`Loads (${items.length})`} onClose={onClose} footer={null}>
+      {items.length === 0 && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)" }}>No loads yet. Tap + Add load on the dashboard.</div>}
+      <DispatchedCard items={items} onRun={onRun} onSwap={onSwap} />
     </FullscreenModal>
   );
 }

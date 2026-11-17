@@ -104,7 +104,7 @@ import { type DispatchedItem } from "./DispatchedCard";
 import type { useHomeDelays } from "./useHomeDelays";
 
 export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
-  const { children, compSizes, companyId, deliveryName, editing, emptyMoves, equipAsk, equipSawOpen, equipSwitching, equipment, location, locations, openTrip, parkStampRef, plannedNames, resumeAfterMove, resumeDraft, router, setBobtailAsk, setBusy, setEquipAsk, setEquipSwitching, setError, setNotice, setPlannedNames, setSheetOpen, setVerifyActive, setVerifyTripId, sheetPresets, shell, snap, state, store, storedLocId, suppliers, syncNow, terminalName, trailerId, trips, truckId, userId, verifyActive, verifyBaseTerminal, verifyTripId } = p;
+  const { addingLoad, setAddingLoad, children, compSizes, companyId, deliveryName, editing, emptyMoves, equipAsk, equipSawOpen, equipSwitching, equipment, location, locations, openTrip, parkStampRef, plannedNames, resumeAfterMove, resumeDraft, router, setBobtailAsk, setBusy, setEquipAsk, setEquipSwitching, setError, setNotice, setPlannedNames, setSheetOpen, setVerifyActive, setVerifyTripId, sheetPresets, shell, snap, state, store, storedLocId, suppliers, syncNow, terminalName, trailerId, trips, truckId, userId, verifyActive, verifyBaseTerminal, verifyTripId } = p;
 
   // ── Loads dispatch planned for this driver ───────────────────────────────
   const dispatchedList = useMemo(() => (userId ? dispatchedForDriver(trips, userId) : []), [trips, userId]);
@@ -206,6 +206,15 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       loc.setSelectedRackId(pk.rack_id);
     }
   };
+  // Run earlier / later from the Loads chip: the two loads trade places (start time and sequence).
+  const swapDispatched = (aId: string, bId: string) => {
+    const a = dispatchedList.find((t) => t.trip_id === aId);
+    const b = dispatchedList.find((t) => t.trip_id === bId);
+    if (!store || !a || !b) return;
+    store.put("trips", { trip_id: a.trip_id, planned_start_at: b.planned_start_at ?? null, dispatch_seq: b.dispatch_seq ?? 0 });
+    store.put("trips", { trip_id: b.trip_id, planned_start_at: a.planned_start_at ?? null, dispatch_seq: a.dispatch_seq ?? 0 });
+    void syncNow();
+  };
   const beginDispatchedLoad = (tripId?: string) => {
     const trip = tripId ? dispatchedList.find((t) => t.trip_id === tripId) : dispatchedList[0];
     if (!store || !userId || !trip || openTrip) return;
@@ -248,7 +257,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
 
   const initialValues = useMemo<StartLoadValues>(() => {
     if (resumeDraft) return resumeDraft;
-    if (openTrip && children && snap) {
+    if (openTrip && children && snap && !addingLoad) {
       const planned = plannedDeliveries(snap.deliveries);
       return {
         orderNumber: children.primaryOrder?.order_number ?? "",
@@ -307,7 +316,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       if (star) return { locationId: star.location_id, oneOffName: null, deliveryType: star.delivery_type };
       return { locationId: null, oneOffName: "", deliveryType: "drop" };
     }
-  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId, resumeDraft]);
+  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId, resumeDraft, addingLoad]);
 
   const submit = async (v: StartLoadValues) => {
     if (!store || !userId || !companyId) {
@@ -325,7 +334,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         setError(`Order ${repeated[0]} is entered twice.`);
         return;
       }
-      const excludeTrip = openTrip?.trip_id ?? null;
+      const excludeTrip = editing ? openTrip?.trip_id ?? null : null;
       const localUsed = usedOrderNumbers(trips, store.list("trip_orders", () => true), excludeTrip);
       const taken = conflicts(numbers, localUsed);
       if (!taken.length) taken.push(...(await serverOrderConflicts(companyId, numbers, excludeTrip)));
@@ -360,11 +369,25 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         {
           now: new Date(),
           newId,
-          existing: openTrip && children
+          existing: editing && openTrip && children
             ? { trip: openTrip, orders: children.orders, pickups: children.pickups, deliveries: store.list("trip_deliveries", (d) => d.trip_id === openTrip.trip_id) }
             : null,
         },
       );
+      if (addingLoad) {
+        // A load added by the driver is a planned load, same as one dispatch sends: it waits in the Loads chip until they begin it.
+        const loads = dispatchedForDriver(trips, userId);
+        const lastStart = Math.max(0, ...loads.map((t) => Date.parse(t.planned_start_at ?? "") || 0));
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+        Object.assign(rows.trip, {
+          status: "dispatched", started_at: null, truck_id: null, trailer_id: null, begin_miles: null, start_city: null, start_state: null,
+          dispatched_by: userId, planned_start_at: new Date(Math.max(nowMs, lastStart + 60_000)).toISOString(),
+          dispatch_seq: Math.max(0, ...loads.map((t) => t.dispatch_seq ?? 0)) + 1, client_updated_at: nowIso,
+        });
+        rows.events = [];
+        if (rows.pickups[0] && v.supplier?.supplier_id) Object.assign(rows.pickups[0], { supplier_id: v.supplier.supplier_id });
+      }
       applyStartLoad(store, rows);
       // Dispatch's plan: save it as a plan slot when asked (optionally changing it in the Planner first).
       let planSlot = v.planSlot;
@@ -399,11 +422,12 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       setTripSupplier(userId, rows.trip.trip_id, v.supplier);
       const pickupTid = dispatchedPickup ? String(dispatchedPickup.terminal_id) : location.selectedTerminalId ? String(location.selectedTerminalId) : null;
       const pickupLoaded = !!(editing && children?.pickup?.load_id);
-      if (v.supplier && pickupTid && !pickupLoaded && (!editing || !sameSupplier(prevSupplier, v.supplier))) {
+      if (!addingLoad && v.supplier && pickupTid && !pickupLoaded && (!editing || !sameSupplier(prevSupplier, v.supplier))) {
         seedTerminalPicks(userId, pickupTid, v.supplier);
         if (v.supplier.supplier_id) void linkSupplierToTerminal({ companyId, supplierId: v.supplier.supplier_id, terminalId: pickupTid });
       }
       setSheetOpen(false);
+      setAddingLoad(false);
       setVerifyActive(false);
       void syncNow();
       if (openPlanner) router.push("/planner?plan=1");
@@ -413,5 +437,5 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       setBusy(false);
     }
   };
-  return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, dispatchedPickup, initialValues, submit } as const;
+  return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, initialValues, submit } as const;
 }

@@ -131,17 +131,17 @@ const CANCEL_STYLE: React.CSSProperties = { flex: 1, padding: "10px 0", borderRa
  * delay to log but a load can still be cancelled, and a load with product aboard can't be cancelled (park it or
  * deliver it). Cancel asks first; what follows (the reasons, then the odometer, time and place) is the page's own flow.
  */
-export function DelayButton({ leg, onCancel, ...rest }: Omit<CoreProps, "leg" | "flush"> & { leg: DelayLeg | null; onCancel?: () => void }) {
+export function DelayButton({ leg, onCancel, cancelWord = "load", ...rest }: Omit<CoreProps, "leg" | "flush"> & { leg: DelayLeg | null; onCancel?: () => void; cancelWord?: "load" | "move" }) {
   const [confirm, setConfirm] = useState(false);
   const sb: React.CSSProperties = { flex: 1, padding: "11px 0", borderRadius: 2, fontSize: 13, fontWeight: 800, cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff" };
-  const cancelBtn = onCancel ? <button type="button" onClick={() => setConfirm(true)} style={CANCEL_STYLE}>Cancel load</button> : null;
+  const cancelBtn = onCancel ? <button type="button" onClick={() => setConfirm(true)} style={CANCEL_STYLE}>Cancel {cancelWord}</button> : null;
   const confirmBlock = confirm && onCancel ? (
     <div style={{ marginTop: 8, padding: 12, border: "1px solid rgba(248,113,113,0.55)", borderRadius: 2, background: "rgba(248,113,113,0.06)" }}>
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Cancel this load?</div>
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>You'll be asked why, then to confirm the odometer. The empty run starts from here.</div>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Cancel this {cancelWord}?</div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>{cancelWord === "move" ? "The empty move ends now with no distance, so it counts for nothing in a report." : "You'll be asked why, then to confirm the odometer. The empty run starts from here."}</div>
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" onClick={() => setConfirm(false)} style={sb}>Keep it</button>
-        <button type="button" onClick={() => { setConfirm(false); onCancel(); }} style={{ ...sb, background: "#f87171", color: "#000", border: "none" }}>Cancel load</button>
+        <button type="button" onClick={() => { setConfirm(false); onCancel(); }} style={{ ...sb, background: "#f87171", color: "#000", border: "none" }}>Cancel {cancelWord}</button>
       </div>
     </div>
   ) : null;

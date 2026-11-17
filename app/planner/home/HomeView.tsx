@@ -149,7 +149,7 @@ import { DispatchedCard } from "./DispatchedCard";
 
 // Sheets that only open on a tap load after the page is up, not before it can draw.
 import type { useHome } from "./useHome";
-import { SquawkSheet, DropSiteSheet, StartLoadSheet, LoadedSheet, LocationPicker, AddPickupSheet, FreightSheet, EmptyMoveSheet, TankCheckSheet, PerDiemSheet, STATUS_LABEL, muted, smallLink, EquipLine, EquipmentToolsRegistrar, InfoRow, SyncDetailsSheet } from "./homeShared";
+import { SquawkSheet, DropSiteSheet, StartLoadSheet, LoadedSheet, LocationPicker, AddPickupSheet, FreightSheet, TankCheckSheet, PerDiemSheet, STATUS_LABEL, muted, smallLink, EquipLine, EquipmentToolsRegistrar, InfoRow, SyncDetailsSheet } from "./homeShared";
 
 export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
   const {
@@ -179,6 +179,12 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     baseStop,
     beginDelivery,
     beginDispatchedLoad,
+    startEmptyMove,
+    addingLoad,
+    setAddingLoad,
+    moveConfirm,
+    setMoveConfirm,
+    swapDispatched,
     behindWheel,
     blendWarnings,
     blockNotice,
@@ -281,7 +287,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     logDutyDelay,
     manageLocsOpen,
     mergedHere,
-    moveOpen,
     myDelivery,
     myHos,
     myRegion,
@@ -394,7 +399,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     setLoadedOpen,
     setLoadsSheetOpen,
     setManageLocsOpen,
-    setMoveOpen,
     setNoLoadErr,
     setNoLoadOpen,
     setNotice,
@@ -578,7 +582,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       <GaugePanel square top={0} cells={[
           { label: "Expiration", value: String(expTotal), color: expWorst ? EXPIRY_COLOR[expWorst] : LOOK.muted, onClick: () => setExpSheetOpen(true) },
           { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
-            onClick: dispatchedList.length > 0 ? () => setLoadsSheetOpen(true) : undefined },
+            onClick: () => setLoadsSheetOpen(true) },
           { label: "To Rack", value: String(rackCount),
             color: countColor(rackCount), onClick: () => setRackSheetOpen(true) },
           { label: myDelivery?.delivery_type === "pump_off" ? "To Pump" : "To Drop", value: String(dropCount),
@@ -600,9 +604,16 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       >
         {openingPlanner ? busyText(true, "Opening Planner…") : parkRequested ? "Park it" : parked && step.kind === "start"
           ? ((parked.parked_by === userId || (!parked.parked_by && parked.driver_id === userId)) ? "Resume Trip" : "Begin Trip")
-          : dispatchedList.length && step.kind === "start" ? "Begin Dispatch"
+          : step.kind === "start" && emptyMoves.current && !openTrip ? "Arrive"
+          : step.kind === "start" && dispatchedList.length ? "Begin Trip"
+          : step.kind === "start" ? "Empty Move"
           : step.label}
       </button>}
+      {step.kind === "start" && emptyMoves.current && !openTrip && !openingPlanner && (
+        <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>
+          Empty move in progress since {new Date(emptyMoves.current.started_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}. Tap when you get there.
+        </div>
+      )}
       {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{parkRequested ? "Dispatch asked you to park this load" : step.detail}</div>
       )}
@@ -623,6 +634,16 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
             {backBusy ? "…" : "Back in service"}
           </button>
         </div>
+      )}
+      {!openingPlanner && (
+        <button type="button" className="dash-press" onClick={() => { setError(null); setAddingLoad(true); setSheetOpen(true); }}
+          style={{ width: "100%", marginTop: 8, padding: "13px 0", fontSize: 14, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", cursor: "pointer", background: "#141415", color: "#fff", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2 }}>
+          + Add load
+        </button>
+      )}
+      {emptyMoves.current && !openTrip && !openingPlanner && (
+        <DelayButton leg={null} running={null} onStart={startDelay} onEnd={() => endDelay()} cancelWord="move"
+          onCancel={() => { emptyMoves.discard(emptyMoves.current!.move_id); }} />
       )}
       {(delayLeg || canCancelNow) && !openingPlanner && (
         <DelayButton leg={delayLeg ? runningDelay?.leg ?? delayLeg : null} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
@@ -658,7 +679,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           inspect: { icon: "plan" as const, label: "Inspect", sub: "Truck or trailer", onClick: () => setInspectOpen(true) },
           tankCheck: { icon: "plan" as const, label: "Tank check", sub: "Store tank readings", onClick: () => setTankCheckOpen(true) },
           termWork: { icon: "terminal" as const, label: "Terminal work", sub: termWork.current ? `Running ${workClock(workMinutes(termWork.current, Date.now()))}` : "Timer", subColor: termWork.current ? "#fbbf24" : undefined, onClick: () => setTermWorkOpen(true) },
-          emptyMove: { icon: "locate" as const, label: "Empty move", sub: emptyMoves.current ? "In progress" : "Bobtail, repo", subColor: emptyMoves.current ? "#fbbf24" : undefined, onClick: () => setMoveOpen(true) },
+          emptyMove: { icon: "locate" as const, label: "Empty move", sub: emptyMoves.current ? "In progress" : "Bobtail, repo", subColor: emptyMoves.current ? "#fbbf24" : undefined, onClick: () => { if (openTrip) setNotice({ text: "Finish or cancel your current load before starting an empty move.", tripId: null }); else if (emptyMoves.current) setNotice({ text: "An empty move is already in progress. Tap Arrive when you get there.", tripId: null }); else setMoveConfirm(true); } },
           freight: { icon: "truck" as const, label: "Freight", sub: freight.loads.some((l) => l.status === "open") ? "Load open" : "Van, flatbed, LTS", subColor: freight.loads.some((l) => l.status === "open") ? "#4ade80" : undefined, onClick: () => setFreightOpen(true) },
         };
         const tankCheckItems = shell.isSolo === false ? [A.tankCheck] : [];
@@ -1149,7 +1170,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           To Rack gauge. */}
 
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
-      <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onClose={() => setLoadsSheetOpen(false)}
+      <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onSwap={swapDispatched} onClose={() => setLoadsSheetOpen(false)}
         onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); void askEquipment(() => beginDispatchedLoad(id)); }} />
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
@@ -1354,15 +1375,21 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       <FullscreenModal open={!!bobtailAsk} title="Trailer needed" onClose={() => setBobtailAsk(null)} footer={null}>
         <div style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 14 }}>You have a truck but no trailer. A trip can't begin without one. Bobtail to a trailer first, or pick a trailer now.</div>
         <button type="button" style={{ width: "100%", padding: "16px 0", fontSize: 15, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", border: "none", background: "#fff", color: "#000", cursor: "pointer" }}
-          onClick={() => { const go = bobtailAsk; setBobtailAsk(null); resumeAfterMove.current = go; setMoveOpen(true); }}>Bobtail to a trailer</button>
+          onClick={() => { const go = bobtailAsk; setBobtailAsk(null); resumeAfterMove.current = go; startEmptyMove(); }}>Bobtail to a trailer</button>
         <button type="button" style={{ width: "100%", padding: "14px 0", marginTop: 10, fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", cursor: "pointer" }}
           onClick={() => { const go = bobtailAsk; setBobtailAsk(null); if (go) openEquipPicker(go, true); }}>Pick a trailer now</button>
       </FullscreenModal>
       <CatchUpSheet open={catchUp.open} cards={catchUp.cards} onDone={(a) => void catchUp.apply(a)} onSkip={catchUp.skip} />
-      <EmptyMoveSheet open={moveOpen} onClose={() => setMoveOpen(false)} truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
-        hasTrailer={!!trailerId} liveOdometer={truckReading?.odometerMi ?? null} current={emptyMoves.current} recent={emptyMoves.moves}
-        locations={locations} tanks={locList.tanks} origin={origin} companyId={companyId} userId={userId}
-        onBegin={(a) => emptyMoves.begin({ truckId, trailerId, ...a })} onEnd={endMoveAndMark} onDiscard={emptyMoves.discard} onLocationAdded={() => void locList.reload()} />
+      <FullscreenModal open={moveConfirm} title="Empty move" onClose={() => setMoveConfirm(false)} footer={null}>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>Start an empty move?</div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", lineHeight: 1.5, margin: "8px 0 14px" }}>
+          The truck is going somewhere with no load. You'll confirm the odometer, then the big button reads Arrive. Tap it when you get there and update the equipment status.
+        </div>
+        <button type="button" style={{ width: "100%", padding: "16px 0", fontSize: 15, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", border: "none", background: "#fff", color: "#000", cursor: "pointer" }}
+          onClick={() => { setMoveConfirm(false); startEmptyMove(); }}>Start empty move</button>
+        <button type="button" style={{ width: "100%", padding: "14px 0", marginTop: 10, fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", cursor: "pointer" }}
+          onClick={() => setMoveConfirm(false)}>Not now</button>
+      </FullscreenModal>
       <FreightSheet open={freightOpen} onClose={() => setFreightOpen(false)} companyId={companyId} userId={userId}
         truck={truckId ? { id: truckId, name: equipment.currentTruckName ?? equipmentLabel ?? "Truck" } : null}
         coupledTrailer={equipment.currentTrailerId ? { id: equipment.currentTrailerId, name: equipment.currentTrailerName ?? "Trailer" } : null}
@@ -1384,19 +1411,20 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onStart={termWork.start} onStop={termWork.stop} />
       <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Continue without a shift" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
       {endAsk && truckId && companyId && (
-        <EquipmentStatusModal open endShift onClose={() => setEndAsk(null)} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
+        <EquipmentStatusModal open endShift={!endAsk.arrival} onClose={() => setEndAsk(null)} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
           pair={trailerId ? { truckId, trailerId, truckName: endAsk.name, trailerName: (equipment.trailerNameById?.[trailerId] || equipment.currentTrailerName || "") } : null}
           currentStatus={endAsk.status} currentNotes={endAsk.notes} currentSubStatus={endAsk.sub} homeLocalArea={endAsk.area}
-          allowed={endAsk.sleeper ? ["in_use", "deadline", "readyline"] : ["deadline", "readyline"]}
+          allowed={endAsk.arrival ? undefined : endAsk.sleeper ? ["in_use", "deadline", "readyline"] : ["deadline", "readyline"]}
           onParkPreloaded={endAsk.loaded ? () => { setEndAsk(null); setParkOpen(true); } : undefined}
           presetRegion={parkPreset?.region ?? null} presetLocalArea={parkPreset?.local_area ?? null}
           presetPin={parkStampRef.current?.lat != null && parkStampRef.current?.lon != null ? { lat: parkStampRef.current.lat, lon: parkStampRef.current.lon, label: parkStampRef.current.label, placeId: parkStampRef.current.placeId } : null}
           locationOptional={!!parkStampRef.current?.lat}
           onSaved={(s: FleetStatus) => {
+            const arrival = !!endAsk.arrival;
             setEndAsk(null);
             void equipment.fetchCombos?.();
             void equipment.loadCurrentEquipment?.(); // parking let go of the units: the dashboard must stop showing them
-            equipment.clearSelectedEquipment?.();
+            if (!arrival) equipment.clearSelectedEquipment?.(); // an arrival keeps what the driver holds unless the status released it
             parkStampRef.current = null; // the status window writes the pin itself
           }} />
       )}
@@ -1478,8 +1506,9 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onLocationAdded={() => void locList.reload()}
         busy={busy}
         error={error}
-        onClose={() => { setSheetOpen(false); setVerifyActive(false); }}
+        onClose={() => { setSheetOpen(false); setAddingLoad(false); setVerifyActive(false); }}
         onSubmit={submit}
+        forDriver={addingLoad ? "self" : null}
         liveMiles={truckReading?.odometerMi ?? null}
         suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
       />
@@ -1495,8 +1524,8 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       />
       {/* After the cancel window and the end-shift flow so it opens over them, not behind. */}
       <OdometerConfirmSheet open={!!stampAsk && !!truckId}
-        title={stampAsk?.kind === "shift" ? "End shift" : "Load cancelled"}
-        lead={stampAsk?.kind === "shift" ? "Confirm the truck's odometer to end your shift." : "Confirm the truck's odometer. The empty run starts here."}
+        title={stampAsk?.kind === "shift" ? "End shift" : stampAsk?.kind === "move_begin" ? "Empty move" : stampAsk?.kind === "move_end" ? "Arrived" : "Load cancelled"}
+        lead={stampAsk?.kind === "shift" ? "Confirm the truck's odometer to end your shift." : stampAsk?.kind === "move_end" ? "Confirm the truck's odometer. The empty move ends here." : "Confirm the truck's odometer. The empty run starts here."}
         placeLabel={stampPlaceLabel} loading={stampCtx.loading} guess={stampCtx.guess} floor={stampFloor}
         onConfirm={(n) => void confirmStamp(n)} onBack={() => setStampAsk(null)} />
       <NoLoadSheet

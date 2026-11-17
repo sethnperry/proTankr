@@ -103,7 +103,7 @@ import { type ExpGroup, type ExpRow } from "./DashboardSheets";
 import type { useHomeSteps } from "./useHomeSteps";
 
 export function useHomeStamp(p: ReturnType<typeof useHomeSteps>) {
-  const { addDraft, addSawPicker, addTermPending, askTruckStatus, catchUp, children, clock, compSizes, companyId, currentGross, currentTarget, emptyMoves, locList, location, locations, onCancelSubmit, openTrip, orderPickup, parkStampRef, placedTerminals, productInfo, setAddBusy, setAddDraft, setAddOpen, setAddTermPending, setNotice, setOrderBusy, setOrderErr, setOrderPickup, setSplashOpen, setStampAsk, shell, shift, snap, stampAsk, store, syncNow, terminalName, trailerId, tripSplash, tripTrailerId, trips, truckChanged, truckId, userId } = p;
+  const { askArrivalStatus, addDraft, addSawPicker, addTermPending, askTruckStatus, catchUp, children, clock, compSizes, companyId, currentGross, currentTarget, emptyMoves, locList, location, locations, onCancelSubmit, openTrip, orderPickup, parkStampRef, placedTerminals, productInfo, setAddBusy, setAddDraft, setAddOpen, setAddTermPending, setNotice, setOrderBusy, setOrderErr, setOrderPickup, setSplashOpen, setStampAsk, shell, shift, snap, stampAsk, store, syncNow, terminalName, trailerId, tripSplash, tripTrailerId, trips, truckChanged, truckId, userId } = p;
 
   // ── Odometer stamp: cancel a load / end a shift ────────────────────────────
   // Where the truck is when the load is cancelled: the rack the driver is still at, else GPS (see useStampContext).
@@ -130,6 +130,18 @@ export function useHomeStamp(p: ReturnType<typeof useHomeSteps>) {
       if (truckId) {
         emptyMoves.begin({ truckId, trailerId, kind: trailerId ? "empty_return" : "bobtail", from: { id: stampCtx.placeId, text: stampCtx.placeText }, to: { id: null, text: null }, beginMiles: odo, at: ask.v.cancelledAt || at, source: stampCtx.guess === odo ? "geotab" : "app" });
       }
+      return;
+    }
+    if (ask.kind === "move_begin") {
+      setStampAsk(null);
+      if (truckId) emptyMoves.begin({ truckId, trailerId, kind: trailerId ? "empty_return" : "bobtail", from: { id: stampCtx.placeId, text: stampCtx.placeText }, to: { id: null, text: null }, beginMiles: odo, at, source: stampCtx.guess === odo ? "geotab" : "app" });
+      return;
+    }
+    if (ask.kind === "move_end") {
+      setStampAsk(null);
+      const mv = emptyMoves.current;
+      if (mv) endMoveAndMark(mv.move_id, odo, { id: stampCtx.placeId, text: stampCtx.placeText }, at);
+      void askArrivalStatus();
       return;
     }
     // End shift: the shift record carries the same stamp, and an open move ends here.
