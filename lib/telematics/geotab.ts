@@ -367,6 +367,13 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
       return [...latest.values()].filter((r) => /passenger|co-?driver|second/i.test(String(r.type ?? "")) && !/^unknown|^nodriver/i.test(String(r.driver.id))).map((r) => String(r.driver.id));
     },
 
+    /** Diagnostic: the raw driver fields of a vehicle's status record. */
+    async rawStatus(vehicleId: string) {
+      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
+      const r = (rows ?? []).find((x) => String(x?.device?.id) === vehicleId);
+      return r ? { driver: r.driver ?? null, isHistoricLastDriver: r.isHistoricLastDriver, isDriving: r.isDriving, isDeviceCommunicating: r.isDeviceCommunicating, dateTime: r.dateTime, speed: r.speed } : null;
+    },
+
     async currentDrivers(): Promise<Map<string, string>> {
       const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       const out = new Map<string, string>();

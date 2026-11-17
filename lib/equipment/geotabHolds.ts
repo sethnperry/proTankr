@@ -29,6 +29,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const nowMs = Date.now(), nowIso = new Date(nowMs).toISOString();
   const current = await p.currentDrivers().catch(() => new Map<string, string>());
   notes.push(`drivers signed in: ${current.size}`);
+  try { notes.push(`raw 25184 (b14B8): ${JSON.stringify(await (p as any).rawStatus?.("b14B8"))}`); } catch (e) { notes.push(`raw failed: ${(e as Error).message}`); }
   if (current.size === 0) return 0; // no answer: change nothing
   const attached = await p.attachedAll().catch(() => new Map<string, string[]>());
   const trailerKnown = attached.size > 0;
