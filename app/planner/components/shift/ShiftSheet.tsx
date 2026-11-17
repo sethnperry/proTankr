@@ -10,10 +10,10 @@ import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { useDashLook } from "@/app/planner/home/dashLook";
 import { recapDate, type Recap } from "@/lib/shifts/recap";
 
-export function ShiftSheet({ open, onClose, scheduled, running, recap, periodLabel, onStart, onEnd, onCallout, onSignOut }: {
+export function ShiftSheet({ open, onClose, scheduled, running, recap, periodLabel, onStart, onEnd, onCallout, onStandby, onSignOut }: {
   open: boolean; onClose: () => void;
   scheduled: string | null; running: boolean; recap: Recap; periodLabel: string;
-  onStart: () => void; onEnd: () => void; onCallout: () => void; onSignOut: () => void;
+  onStart: () => void; onEnd: () => void; onCallout: () => void; onStandby?: () => void; onSignOut: () => void;
 }) {
   const L = useDashLook();
   const [confirmOut, setConfirmOut] = useState(false);
@@ -47,6 +47,7 @@ export function ShiftSheet({ open, onClose, scheduled, running, recap, periodLab
       {!confirmOut ? (
         <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
           <button type="button" onClick={onCallout} className="dash-press" style={small}>Call out</button>
+          {onStandby && <button type="button" onClick={onStandby} className="dash-press" style={small}>Standby</button>}
           <button type="button" onClick={() => setConfirmOut(true)} className="dash-press" style={{ ...small, color: "#f87171" }}>Sign out</button>
         </div>
       ) : (

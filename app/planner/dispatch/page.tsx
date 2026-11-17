@@ -95,6 +95,7 @@ import type { FinderPerson } from "@/lib/dispatch/driverFinder";
 import type { DayTrip, Others } from "@/lib/dispatch/validateDay";
 import { DriverList, type TerminalOption, type DriverEquip } from "./DriverList";
 import { SuppliersModal } from "./SuppliersModal";
+import { StandbyBoard } from "./StandbyBoard";
 import { DispatchedBoard } from "./DispatchedBoard";
 import { AllocationModal, LEVEL_COLOR, type AllocRow } from "./AllocationModal";
 import { contractUsage, typicalGallons, wouldExceed, type Level } from "@/lib/dispatch/allocation";
@@ -421,6 +422,7 @@ export default function DispatchPage() {
     }));
   }, [terminalsCatalog, plan.usedTerminalIds]);
   const [suppliersOpen, setSuppliersOpen] = useState<null | "pick" | "manage">(null);
+  const [standbyOpen, setStandbyOpen] = useState(false);
   const canManageSuppliers = shell.role === "admin" || shell.role === "dispatch" || shell.isSuperAdmin;
   const companySuppliers = useCompanySuppliers(companyId || null);
   const busyByDriver = useMemo(() => {
@@ -844,6 +846,7 @@ export default function DispatchPage() {
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       locationsTool(() => setLocsOpen(true)),
       { icon: "terminal" as const, label: "Suppliers", onClick: () => setSuppliersOpen("manage") },
+      { icon: "people" as const, label: "On Call", onClick: () => setStandbyOpen(true) },
       { icon: "people" as const, label: "Call-outs", sub: activeCallouts.rows.length ? `${activeCallouts.rows.length} active` : null, subColor: activeCallouts.rows.length ? "#fbbf24" : undefined, onClick: () => setCalloutsOpen(true) },
       ...sharedTools,
     ];
@@ -1036,6 +1039,7 @@ export default function DispatchPage() {
         <SuppliersModal open={suppliersOpen !== null} onClose={() => setSuppliersOpen(null)} companyId={companyId} userId={authUserId}
           canManage={canManageSuppliers} terminals={terminalOptions} initialTerminalId={null} />
       )}
+      <StandbyBoard open={standbyOpen} onClose={() => setStandbyOpen(false)} companyId={companyId || null} />
       <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId || null} role={shell.role ?? null} myTruckId={null} myTrailerId={null} />
       {companyId && <FleetCardsModal open={fleetCardsOpen} onClose={() => setFleetCardsOpen(false)} companyId={companyId} />}
       </>

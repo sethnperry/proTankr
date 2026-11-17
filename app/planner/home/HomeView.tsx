@@ -20,6 +20,7 @@ import { Spinner, busyProps, busyText } from "@/lib/ui/pending";
 
 import React from "react";
 import { BackArrow } from "@/lib/ui/BackArrow";
+import { StandbySheet } from "../components/standby/StandbySheet";
 import { StampQuestion, stampClock } from "../components/StampQuestion";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { HosRecapModal } from "@/app/planner/components/trip/HosRecap";
@@ -516,6 +517,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
   } = h;
   // Back arrow in the arrival window: keep or undo the arrival time.
   const [leaveArrival, setLeaveArrival] = React.useState(false);
+  const [standbyOpen, setStandbyOpen] = React.useState(false);
   return (
     <DashLookProvider value={L}>
     <DashStyles />
@@ -1405,7 +1407,9 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       )}
       <ShiftSheet open={shiftOpen} onClose={() => setShiftOpen(false)} scheduled={shiftRecapData.scheduled} running={!!shift.current} recap={shiftRecapData.recap} periodLabel={shiftRecapData.periodLabel}
         onStart={() => shift.start()} onEnd={() => { setShiftOpen(false); requestEnd(); }}
-        onCallout={() => { setShiftOpen(false); setCalloutOpen(true); }} onSignOut={() => void dashIdentity.signOut()} />
+        onCallout={() => { setShiftOpen(false); setCalloutOpen(true); }} onStandby={() => { setShiftOpen(false); setStandbyOpen(true); }} onSignOut={() => void dashIdentity.signOut()} />
+      <StandbySheet open={standbyOpen} onClose={() => setStandbyOpen(false)} userId={userId || null} companyId={companyId || null}
+        cycleLeftMin={myHos?.cycleLeftMin ?? null} recapDays={myHos?.recap?.days ?? []} />
       <CalloutSheet open={calloutOpen} onClose={() => setCalloutOpen(false)} reasons={reasonsOrDefault(reasons as any, "callout")} divisions={callouts.divisions} defaultDivision={callouts.profile.division} tz={callouts.tz} mine={callouts.mine}
         onWithdraw={callouts.withdraw}
         onCreate={async (v) => {

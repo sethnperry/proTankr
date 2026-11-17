@@ -10395,6 +10395,19 @@ Add to this as more turn up.
 ## Side notes (not scheduled work)
 - `docs/eld-notes.md`: running notes on building our own ELD (rules, Geotab behavior, ideas). Nothing built. When the user says to flag something for the ELD, append it there from any session.
 
+## Standby / On Call (version one, 2026-11-24)
+Drivers offer windows of extra hours; dispatch sees them on a Gantt and grades coverage per market. Migration
+`20261124000000_standby.sql` (applied): `standby_markets` (name, local_areas text[], required_count), `standby_signups`
+(start_at, end_at, withdrawn_at), `standby_positions(signup)` (security definer: a driver's position and the list size per
+market their local area is in, among overlapping windows, earliest sign-up first; no other driver's name leaves it).
+Local areas are compared trimmed and lower-cased (profiles hold "Tampa " with a trailing space).
+- Driver: Shift sheet -> Standby (`components/standby/StandbySheet.tsx`): cycle left, a calculator (`lib/standby/hosPreview.ts`,
+  rolling 8 local days from Geotab's `recap.days`, 34-hour reset from block end or cycle-out), sign up, position per market.
+- Dispatch: Tools -> On Call (`dispatch/StandbyBoard.tsx`): region and local-area filters, saved markets, Gantt, coverage row.
+- Not built yet (version two): fairness ranking, promotion offers and notifications when a position crosses the wanted
+  number, lock time before a window, auto-drop when hours no longer fit, reliability/credit tracking.
+- Unverified live: the calculator against real Geotab recap days, and the board with real signups.
+
 ## Files safe to delete
 - `supabase/migrations_old/` — **already gone**, confirmed 2026-09-23 (no
   longer present in the repo; nothing left to do here).
