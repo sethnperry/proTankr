@@ -635,17 +635,14 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       )}
       {!openingPlanner && (
         <button type="button" className="dash-press" onClick={() => { setError(null); setAddingLoad(true); setSheetOpen(true); }}
-          style={{ width: "100%", marginTop: 8, padding: "13px 0", fontSize: 14, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", cursor: "pointer", background: "#141415", color: "#fff", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 2 }}>
+          style={{ width: "100%", marginTop: 8, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", background: "transparent", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 2 }}>
           + Add load
         </button>
       )}
-      {emptyMoves.current && !openTrip && !openingPlanner && (
-        <DelayButton leg={null} running={null} onStart={startDelay} onEnd={() => endDelay()} cancelWord="move"
-          onCancel={() => { emptyMoves.discard(emptyMoves.current!.move_id); }} />
-      )}
-      {(delayLeg || canCancelNow) && !openingPlanner && (
+      {(delayLeg || canCancelNow || (!!emptyMoves.current && !openTrip)) && !openingPlanner && (
         <DelayButton leg={delayLeg ? runningDelay?.leg ?? delayLeg : null} running={runningDelay} onStart={startDelay} onEnd={() => endDelay()}
-          onCancel={canCancelNow ? () => { setCancelErr(null); setCancelOpen(true); } : undefined}
+          cancelWord={canCancelNow ? "load" : "move"}
+          onCancel={canCancelNow ? () => { setCancelErr(null); setCancelOpen(true); } : emptyMoves.current && !openTrip ? () => { emptyMoves.discard(emptyMoves.current!.move_id); } : undefined}
           rackActions={canNoLoad ? { onAnotherRack: () => { setNoLoadErr(null); setNoLoadOpen(true); } } : undefined} />
       )}
       {gaugingAsk && <GaugingAskSheet terminalId={gaugingAsk.id} terminalName={gaugingAsk.name} onClose={() => setGaugingAsk(null)} />}

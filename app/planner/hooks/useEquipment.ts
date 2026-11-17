@@ -252,9 +252,9 @@ export function useEquipment(authUserId: string, setupSession?: SetupSession | n
     const saved = fromUser ?? fromAnon;
 
     if (saved?.comboId) {
-      // A pairing another driver has since taken (a slip-seat partner) doesn't come back from this phone's memory.
+      // A pairing another driver has since taken, or one that was released (shift ended, parked), doesn't come back from this phone's memory: only a pair still claimed by this driver does.
       const exists = combos.some(
-        (c) => String(c.combo_id) === String(saved.comboId) && c.active !== false && (!c.claimed_by || String(c.claimed_by) === String(effectiveUserId))
+        (c) => String(c.combo_id) === String(saved.comboId) && c.active !== false && String(c.claimed_by ?? "") === String(effectiveUserId)
       );
       setSelectedComboIdRaw(exists ? String(saved.comboId) : "");
 
