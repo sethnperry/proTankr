@@ -39,7 +39,8 @@ export function useDashIdentity(): DashIdentity {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      // getSession reads the stored session (no network round trip); getUser would add one before anything else could load.
+      const user = (await supabase.auth.getSession()).data.session?.user;
       if (!user || cancelled) return;
       const [{ data: mRows }, { data: sRow }, { data: sa }, { data: prof }] = await Promise.all([
         supabase.from("user_companies").select("company_id, role, company:companies(company_id, company_name, is_solo)").eq("user_id", user.id),

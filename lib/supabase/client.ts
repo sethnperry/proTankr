@@ -1,6 +1,7 @@
 // lib/supabase/client.ts
 import { createBrowserClient } from "@supabase/ssr";
 import { authCookieOptionsForHost } from "./cookieScope";
+import { makeDedupeFetch } from "./dedupeFetch";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -40,6 +41,8 @@ const hostname = typeof window !== "undefined" ? window.location.hostname : "";
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
   // demo.protankr.com gets its own host-only cookie -- see cookieScope.ts.
   cookieOptions: authCookieOptionsForHost(hostname),
+  // Identical reads asked within a few seconds share one request (see dedupeFetch.ts).
+  global: typeof window !== "undefined" ? { fetch: makeDedupeFetch(window.fetch.bind(window)) } : undefined,
 });
 
 /**

@@ -25,11 +25,7 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BackToDashboard } from "./components/dash/BackToDashboard";
 import { dashboardForPath } from "@/lib/ui/driver/dashboards";
-import EquipmentModal from "./modals/EquipmentModal";
-import LocationModal from "./modals/LocationModal";
-import MyTerminalsModal from "./modals/MyTerminalsModal";
 import { TerminalHub } from "./components/terminal/TerminalHub";
-import RackSelectSheet from "./components/RackSelectSheet";
 import TerminalOutageBanner from "./components/TerminalOutageBanner";
 import AnnouncementBanner from "./components/AnnouncementBanner";
 import AdminNoticeBanner from "./components/AdminNoticeBanner";
@@ -41,6 +37,12 @@ import { addDaysISO_, isPastISO_, formatMDYWithCountdown_ } from "./utils/dates"
 import { normState } from "./utils/normalize";
 import { themeIconStroke } from "./theme";
 import { useTripStore } from "@/lib/trips/useTripStore";
+import dynamic from "next/dynamic";
+// Modals that open on a tap load after the shell is up, not before it can draw.
+const EquipmentModal = dynamic(() => import("./modals/EquipmentModal"), { ssr: false });
+const LocationModal = dynamic(() => import("./modals/LocationModal"), { ssr: false });
+const MyTerminalsModal = dynamic(() => import("./modals/MyTerminalsModal"), { ssr: false });
+const RackSelectSheet = dynamic(() => import("./components/RackSelectSheet"), { ssr: false });
 
 
 // outageBanner is now a prop, not fetched inside Header itself -- landscape

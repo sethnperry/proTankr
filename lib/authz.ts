@@ -35,6 +35,19 @@ export async function getSessionUserOrRedirect() {
 }
 
 /**
+ * A quick sign-in gate for page layouts: reads the session from the cookie (and refreshes it if it has expired)
+ * instead of asking Supabase Auth over the network, which cost a round trip before every page could start to
+ * render. It decides only whether to send a visitor to /login: every row of data is still guarded by the database's
+ * own row-level security, and anything that must be certain (admin routes) keeps using getSessionUserOrRedirect.
+ */
+export async function getSessionFastOrRedirect() {
+  const supabase = await createSupabaseServer();
+  const { data } = await supabase.auth.getSession();
+  if (!data.session?.user) redirect("/login");
+  return { supabase, user: data.session.user };
+}
+
+/**
  * Optional app-side helper (NOT DB truth) for quickly gating UI.
  * DB truth is public.super_admins + requireSuperAdmin().
  */

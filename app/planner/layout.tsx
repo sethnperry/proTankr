@@ -28,7 +28,7 @@
 
 import type { Metadata, Viewport } from "next";
 import CalculatorLayoutClient from "./CalculatorLayoutClient";
-import { getSessionUserOrRedirect } from "@/lib/authz";
+import { getSessionFastOrRedirect } from "@/lib/authz";
 
 export const viewport: Viewport = {
   themeColor: "#ffffff",
@@ -51,6 +51,6 @@ export const metadata: Metadata = {
 // does real work (e.g. catching a session that expires mid-visit), this is
 // just the first line of defense now.
 export default async function CalculatorLayout({ children }: { children: React.ReactNode }) {
-  await getSessionUserOrRedirect();
+  await getSessionFastOrRedirect();
   return <CalculatorLayoutClient>{children}</CalculatorLayoutClient>;
 }
