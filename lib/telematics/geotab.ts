@@ -369,15 +369,28 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
 
     /** Diagnostic: the raw driver fields of a vehicle's status record. */
     async rawStatus(vehicleId: string) {
-      const all: any[] = (await call("Get", { typeName: "DeviceStatusInfo" })) ?? [];
-      const one: any[] = (await call("Get", { typeName: "DeviceStatusInfo", search: { deviceSearch: { id: vehicleId } } })) ?? [];
-      const pick = (r: any) => (r ? { driver: r.driver ?? null, isHistoricLastDriver: r.isHistoricLastDriver, isDriving: r.isDriving, dateTime: r.dateTime } : null);
-      return { allRows: all.length, withDriver: all.filter((x) => driverOf(x).current).length, inAll: pick(all.find((x) => String(x?.device?.id) === vehicleId)), single: pick(one[0]) };
+      const from = new Date(Date.now() - 3 * 86400_000).toISOString();
+      const ch: any[] = (await call("Get", { typeName: "DriverChange", search: { fromDate: from, deviceSearch: { id: vehicleId } } })) ?? [];
+      ch.sort((x, y) => String(y.dateTime).localeCompare(String(x.dateTime)));
+      return { changes: ch.length, latest: ch.slice(0, 2).map((r) => ({ at: r.dateTime, driver: r.driver?.id ?? r.driver, type: r.type })) };
     },
 
     async currentDrivers(): Promise<Map<string, string>> {
-      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       const out = new Map<string, string>();
+      // Sign-ins: the newest DriverChange per vehicle (a sign-out has an unknown driver).
+      const from = new Date(Date.now() - 2 * 86400_000).toISOString();
+      const ch: any[] = (await call("Get", { typeName: "DriverChange", search: { fromDate: from, includeOverlappedChanges: false } }).catch(() => [])) ?? [];
+      ch.sort((x, y) => String(x.dateTime).localeCompare(String(y.dateTime)));
+      const latest = new Map<string, string | null>();
+      for (const r of ch) {
+        const dev = r?.device?.id ?? r?.device;
+        const raw = r?.driver?.id ?? (typeof r?.driver === "string" ? r.driver : null);
+        if (!dev) continue;
+        latest.set(String(dev), raw && !/^unknown/i.test(String(raw)) ? String(raw) : null);
+      }
+      for (const [dev, d] of latest) if (d) out.set(dev, d);
+      if (out.size) return out;
+      const rows: any[] = await call("Get", { typeName: "DeviceStatusInfo" });
       for (const s of rows ?? []) {
         const dev = s?.device?.id, d = driverOf(s).current;
         if (dev && d) out.set(String(dev), d);
