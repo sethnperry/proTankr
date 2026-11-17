@@ -65,10 +65,11 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
     const existing = handoffs.find((h) => h.user_id === userId && h.truck_id === truckId);
     // Signed in but off duty (ended their shift and left the tracker logged in) is not driving: never hold for that.
     const needsHos = !!existing || !(holdsTruck && holdsTrailer);
-    const hos = needsHos ? await p.hos(drvProv).catch(() => null) : null;
+    let hosErr = "";
+    const hos = needsHos ? await p.hos(drvProv).catch((e: Error) => { hosErr = e.message.slice(0, 120); return null; }) : null;
     const working = hos?.status === "D" || hos?.status === "ON";
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
-    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"}`);
+    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"}${hosErr ? ` (${hosErr})` : ""} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"}`);
     if (holdsTruck && holdsTrailer) continue;
     if (!working) continue;
     if (!trailerKnown) continue; // can't tell what is hooked: don't split or make a pair
