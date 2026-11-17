@@ -68,6 +68,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
     // No duty status for this driver (Geotab doesn't return one for everyone): trust the sign-in itself, the way Track does.
     if (!hos) working = true;
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
+    notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"} known=${trailerKnown}`);
     if (holdsTruck && holdsTrailer) continue;
     if (!working) continue;
     if (!trailerKnown) continue; // can't tell what is hooked: don't split or make a pair
