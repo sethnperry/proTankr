@@ -22,6 +22,8 @@ import { defaultLandingPath } from "@/lib/ui/driver/navDestinations";
 
 let hasCheckedDefaultLanding = false;
 
+const LANDING_KEY = "proTankr:landing";
+
 export function usePlannerLanding(active: boolean) {
   const shell = useCalculatorShell();
   const router = useRouter();
@@ -32,6 +34,17 @@ export function usePlannerLanding(active: boolean) {
     setOnboardingDone(isOnboardingComplete(effectiveUserId || null));
   }, [effectiveUserId]);
   const onboardingActive = shell.isSolo === true && !onboardingDone && !!effectiveUserId && !!shell.companyId;
+
+  // Opening the app cold: go straight to where this phone landed last time, without waiting for role, super-admin and
+  // company lookups. The checks below still run for a first visit, and each dashboard guards itself.
+  useEffect(() => {
+    if (hasCheckedDefaultLanding || !active) return;
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.get("begin") || qs.get("report") || qs.get("plan")) return;
+    let last: string | null = null;
+    try { last = localStorage.getItem(LANDING_KEY); } catch { /* storage blocked */ }
+    if (last && last.startsWith("/")) { hasCheckedDefaultLanding = true; router.replace(last); }
+  }, [active, router]);
 
   useEffect(() => {
     if (hasCheckedDefaultLanding) return;
@@ -49,7 +62,7 @@ export function usePlannerLanding(active: boolean) {
     if (target && shell.isSolo === true && !onboardingDone) return;
     hasCheckedDefaultLanding = true;
     if (qs.get("begin") || qs.get("report") || qs.get("plan")) return;
-    if (target) router.replace(target);
+    if (target) { try { localStorage.setItem(LANDING_KEY, target); } catch { /* storage blocked */ } router.replace(target); }
   }, [shell.role, shell.isSuperAdmin, shell.isSuperAdminResolved, shell.isSolo, onboardingDone, active, router]);
 
   return { onboardingDone, setOnboardingDone, onboardingActive };

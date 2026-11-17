@@ -49,6 +49,16 @@ export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboar
   // Equipment is only required where a plan is edited (the trailer's compartments). The dashboard never blocks entry:
   // parking a unit releases it, and Begin Trip asks for equipment again before anything can load.
   if (pathname !== "/planner") return null;
+  // Nothing to ask until the equipment has loaded, and not while the app is on its way to the dashboard.
+  if (equipment.combosLoading) return null;
+  if (typeof window !== "undefined") {
+    const qs = new URLSearchParams(window.location.search);
+    if (!qs.get("plan") && !qs.get("begin") && !qs.get("report")) {
+      let last: string | null = null;
+      try { last = localStorage.getItem("proTankr:landing"); } catch { /* storage blocked */ }
+      if (last) return null;
+    }
+  }
   return (
     <SetupGate
       comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}
