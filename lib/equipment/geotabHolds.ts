@@ -52,6 +52,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const { data: us } = driverUserIds.length ? await admin.from("user_settings").select("user_id, current_truck_id, current_trailer_id").in("user_id", driverUserIds) : { data: [] as any[] };
   const heldBy = new Map(((us ?? []) as any[]).map((r) => [r.user_id as string, r as { current_truck_id: string | null; current_trailer_id: string | null }]));
 
+  const fleetPos = await p.positions().catch(() => new Map<string, { speedMph: number | null; at: string | null }>());
   let changed = 0;
   const seen = new Set<string>(); // handoffs whose driver is still in the truck
   for (const [veh, drvProv] of current) {
@@ -67,7 +68,13 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
     const needsHos = !!existing || !(holdsTruck && holdsTrailer);
     let hosErr = "";
     const hos = needsHos ? await p.hos(drvProv).catch((e: Error) => { hosErr = e.message.slice(0, 120); return null; }) : null;
-    const working = hos?.status === "D" || hos?.status === "ON";
+    let working = hos?.status === "D" || hos?.status === "ON";
+    if (!hos) {
+      // No duty status for this driver: fall back to the truck itself reporting fresh and moving.
+      const pos = fleetPos.get(veh);
+      const fresh = !!pos?.at && Date.now() - Date.parse(pos.at) < 15 * 60_000;
+      if (fresh && (pos?.speedMph ?? 0) > 0) working = true;
+    }
     if (existing && working) { seen.add(existing.handoff_id); await admin.from("equipment_handoffs").update({ last_seen_at: nowIso }).eq("handoff_id", existing.handoff_id); }
     notes.push(`${veh}: user ${userId.slice(0, 8)} hos=${hos?.status ?? "none"}${hosErr ? ` (${hosErr})` : ""} holds=${holdsTruck}/${holdsTrailer} trailer=${trailerId ? "yes" : "no"}`);
     if (holdsTruck && holdsTrailer) continue;
