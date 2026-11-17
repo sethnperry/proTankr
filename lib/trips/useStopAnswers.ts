@@ -5,6 +5,7 @@
 // without opening the app. Oldest first. The dashboard applies each one (stamping the stop's own
 // time, then asking only for the reason) and marks it applied.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
@@ -27,10 +28,7 @@ export function useStopAnswers(userId: string | null | undefined) {
   }, [userId]);
   useEffect(() => {
     void load();
-    const onVis = () => { if (document.visibilityState === "visible") void load(); };
-    document.addEventListener("visibilitychange", onVis);
-    const t = window.setInterval(load, 60_000);
-    return () => { document.removeEventListener("visibilitychange", onVis); window.clearInterval(t); };
+    return startPoll(() => void load(), 60_000);
   }, [load]);
   const markApplied = useCallback(async (id: string) => {
     setAnswers((a) => a.filter((x) => x.id !== id));

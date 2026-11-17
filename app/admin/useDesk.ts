@@ -5,6 +5,7 @@
 // behind them, and a driver's timeline on request. Polls every minute. Resolving and retrying write back here.
 // Every read fails open. The rules are in lib/desk/desk.ts.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { deviceTz } from "@/lib/reports/dateRange";
@@ -54,10 +55,7 @@ export function useDesk(o: { companyId: string | null; allCompanies: boolean; en
   useEffect(() => {
     if (!enabled) return;
     void load();
-    const t = window.setInterval(() => void load(), POLL_MS);
-    const onVis = () => { if (document.visibilityState === "visible") void load(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+    return startPoll(() => void load(), POLL_MS);
   }, [enabled, load]);
 
   const resolve = useCallback(async (ids: string[]): Promise<string | null> => {

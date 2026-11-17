@@ -6,6 +6,7 @@
 // screen needs (unit status, shifts, call-outs, delay and billable minutes, the day's activity). Every read fails
 // open: a failure hides that figure, never the dashboard. The rules are in lib/company/company.ts.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { usePlanData } from "@/lib/dispatch/useDispatchData";
@@ -166,10 +167,7 @@ export function useCompanyDashboard(o: { companyId: string | null; enabled: bool
   useEffect(() => {
     if (!enabled) return;
     void load();
-    const id = window.setInterval(() => setTick((n) => n + 1), POLL_MS);
-    const onVis = () => { if (document.visibilityState === "visible") setTick((n) => n + 1); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+    return startPoll(() => setTick((n) => n + 1), POLL_MS);
   }, [enabled, load]);
   useEffect(() => { if (tick > 0) void load(); }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -9,6 +9,7 @@
 // Both read straight from the server and fail open (an error leaves the card
 // empty, never breaks the dashboard).
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { unitAlerts, type UnitAlertSummary, type OdometerPoint, type ServiceTypeInput, type ServiceRecordInput } from "@/lib/equipment/unitAlerts";
@@ -71,8 +72,7 @@ export function useTerminalStatus(terminalId: string | null, preferredRackId: st
 
   useEffect(() => {
     void load();
-    const id = window.setInterval(() => void load(), STATUS_POLL_MS);
-    return () => window.clearInterval(id);
+    return startPoll(() => void load(), STATUS_POLL_MS);
   }, [load]);
 
   return { rackId, rackName, rackCount, products, loading, reload: load };
@@ -218,8 +218,8 @@ export function useOtherCarriers(kind: "terminal" | "location", id: string | nul
       }
     };
     void run();
-    const t = window.setInterval(() => void run(), 60_000);
-    return () => { cancelled = true; window.clearInterval(t); };
+    const stop = startPoll(() => void run(), 60_000);
+    return () => { cancelled = true; stop(); };
   }, [kind, id]);
   return items;
 }

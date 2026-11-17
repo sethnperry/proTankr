@@ -12,6 +12,7 @@
 //                    and 90 days of loads (for access gaps).
 //   useConflictAcks  LIVE: who marked which conflict handled, and why.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { activePickup } from "@/lib/trips/tripFlow";
@@ -35,10 +36,7 @@ const POLL_MS = 60_000;
 function usePoll(fn: () => Promise<void>, deps: unknown[]) {
   useEffect(() => {
     void fn();
-    const id = window.setInterval(() => void fn(), POLL_MS);
-    const onVis = () => { if (document.visibilityState === "visible") void fn(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+    return startPoll(() => void fn(), POLL_MS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
@@ -173,8 +171,8 @@ export function useTerminalUse(userIds: string[]) {
       } catch { /* fail open: no gaps shown */ }
     };
     void run();
-    const id = window.setInterval(() => void run(), 600_000);
-    return () => { alive = false; window.clearInterval(id); };
+    const stop = startPoll(() => void run(), 600_000);
+    return () => { alive = false; stop(); };
   }, [ukey]); // eslint-disable-line react-hooks/exhaustive-deps
   return loads;
 }

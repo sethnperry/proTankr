@@ -3,6 +3,7 @@
 //
 // One driver's trips for the Plan board's "whole day": finished, in progress
 // and dispatched-not-begun, from the last 48 hours on. Polls once a minute.
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripPickupRow, TripRow } from "@/lib/trips/types";
@@ -42,8 +43,8 @@ export function useDriverTrips(driverId: string | null) {
     setLoading(!!driverId);
     let off = false;
     void load().finally(() => { if (!off) setLoading(false); });
-    const t = window.setInterval(() => void load(), 60_000);
-    return () => { off = true; window.clearInterval(t); };
+    const stop = startPoll(() => void load(), 60_000);
+    return () => { off = true; stop(); };
   }, [load, driverId]);
   return { trips, loading, reload: load };
 }

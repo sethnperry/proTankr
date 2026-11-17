@@ -8,6 +8,7 @@
 // driver still hasn't tapped Arrive after a few minutes a browser notification
 // goes out once ("Seth's truck is at Citgo; not arrived in the app").
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { buildTripRoute, type Place } from "@/lib/trips/fleetProgress";
@@ -62,8 +63,8 @@ export function useGeofenceWatch(o: {
       setPoints(m);
     };
     void load();
-    const t = window.setInterval(() => void load(), 30 * 60_000);
-    return () => { off = true; window.clearInterval(t); };
+    const stop = startPoll(() => void load(), 30 * 60_000);
+    return () => { off = true; stop(); };
   }, [companyId]);
 
   const signature = useMemo(() => [...positions.entries()].map(([k, v]) => `${k}:${v.at}`).join("|"), [positions]);

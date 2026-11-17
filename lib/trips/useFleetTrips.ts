@@ -6,6 +6,7 @@
 // their children are readable by any company member under the phase 1 RLS.
 // Refreshes every minute and when the tab comes back into view.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Place } from "./fleetProgress";
@@ -132,13 +133,7 @@ export function useFleetTrips(companyId: string | null) {
 
   useEffect(() => {
     void load();
-    const id = window.setInterval(() => void load(), POLL_MS);
-    const onVis = () => { if (document.visibilityState === "visible") void load(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    return startPoll(() => void load(), POLL_MS);
   }, [load]);
 
   const live = useMemo(() => trips.filter((t) => t.trip.status !== "dispatched"), [trips]);

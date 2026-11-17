@@ -5,6 +5,7 @@
 // what they are doing, ETA). Open one to see their day as a wave and a brief report of each trip. The wave and the
 // rows are built by lib/company/driverDayWave.ts.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
@@ -56,8 +57,8 @@ function useDays(companyId: string | null, drivers: OnShiftDriver[]) {
       if (!off) setDays(byDriver);
     };
     void load();
-    const t = window.setInterval(() => void load(), 60_000);
-    return () => { off = true; window.clearInterval(t); };
+    const stop = startPoll(() => void load(), 60_000);
+    return () => { off = true; stop(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, key]);
   return { days, locs };

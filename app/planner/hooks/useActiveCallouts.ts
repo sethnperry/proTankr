@@ -5,6 +5,7 @@
 // can't have a plan completed for that day until the call-out is corrected. Staff can read these. Thin data
 // hook; the rule is calloutBlock in lib/callouts/callout.ts. Refreshes on a slow poll and when asked.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { CalloutRow } from "@/lib/trips/types";
@@ -20,8 +21,7 @@ export function useActiveCallouts(companyId: string | null) {
   useEffect(() => {
     if (!companyId) return;
     void load();
-    const t = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(t);
+    return startPoll(() => void load(), 60_000);
   }, [companyId, load]);
   return { rows, reload: load };
 }

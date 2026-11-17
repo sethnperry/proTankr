@@ -36,6 +36,7 @@
 // Terminal tab's own product list never disagrees with this banner -- see
 // CLAUDE.md "Terminal outage banners" for the full design.
 
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { resolveEffectiveRackId } from "../utils/rack";
@@ -386,8 +387,7 @@ export function useActiveOutageBanner(
     // poll cuts this query's aggregate volume by two-thirds with no real
     // loss of freshness -- part of the 2026-08-31 performance pass (see
     // CLAUDE.md).
-    const id = setInterval(fetchAndCompose, OUTAGE_POLL_MS);
-    return () => clearInterval(id);
+    return startPoll(fetchAndCompose, OUTAGE_POLL_MS);
   }, [fetchAndCompose]);
 
   return { tickerMessage, reports, timeZone: timeZone || "America/New_York", refresh: fetchAndCompose };

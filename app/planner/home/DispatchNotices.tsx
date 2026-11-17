@@ -3,6 +3,7 @@
 //
 // Notices from dispatch on the driver's dashboard ("Meet John G at Shell to load").
 // Renders nothing when there are none, or before the table exists.
+import { startPoll } from "@/lib/ui/startPoll";
 import { useCallback, useEffect, useState } from "react";
 import { dismissNotice, fetchOpenNotices, type DriverNotice } from "@/lib/dispatch/driverNotices";
 import { useDashLook } from "./dashLook";
@@ -13,8 +14,7 @@ export function DispatchNotices({ userId }: { userId: string | null }) {
   const load = useCallback(async () => { if (userId) setList(await fetchOpenNotices(userId)); }, [userId]);
   useEffect(() => {
     void load();
-    const id = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(id);
+    return startPoll(() => void load(), 60_000);
   }, [load]);
   if (list.length === 0) return null;
   return (
