@@ -30,8 +30,6 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
 
   const [compSizes, setCompSizes] = useState<Record<string, { comp: number; size: number | null }[]>>({});
   const [residueBy, setResidueBy] = useState<Record<string, Record<number, string>>>({});
-  // Trailers a driver took (shown by the tracker) without anyone saying what they hold: "Undefined" until someone does.
-  const [undefinedIds, setUndefinedIds] = useState<Set<string>>(new Set());
 
   const [activity, setActivity] = useState<Record<string, string>>({});
   const [destByTrailer, setDestByTrailer] = useState<Record<string, string>>({});
@@ -40,33 +38,44 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
   const [parkedByUnit, setParkedByUnit] = useState<Record<string, string>>({});
   // Units the tracker puts a driver in with no confirmed pairing yet.
   const [unconfirmed, setUnconfirmed] = useState<Set<string>>(new Set());
+  const [linked, setLinked] = useState<Set<string>>(new Set());
   const unitKey = [...new Set([...truckIds, ...trailerIds])].sort().join(",");
   useEffect(() => {
-    if (!enabled || !unitKey) { setParkedByUnit({}); setUnconfirmed(new Set()); return; }
+    if (!enabled || !unitKey) { setParkedByUnit({}); setUnconfirmed(new Set()); setLinked(new Set()); return; }
     let alive = true;
     void (async () => {
       try {
         const ids = unitKey.split(",");
+        const handedIds = new Set<string>();
         const [pk, ho] = await Promise.all([
           supabase.from("equipment_parks").select("unit_id, parked_by").in("unit_id", ids),
           // A driver the tracker shows in a truck with no confirmed pairing yet: an unconfirmed pairing.
-          supabase.from("equipment_handoffs").select("user_id, truck_id, trailer_id").is("ended_at", null).is("resolved_at", null),
+          supabase.from("equipment_handoffs").select("user_id, truck_id, trailer_id, external_name").is("ended_at", null).is("resolved_at", null),
         ]);
         const rows: { unit_id: string; parked_by: string | null }[] = ((pk.data ?? []) as { unit_id: string; parked_by: string | null }[]).filter((r) => r.parked_by);
         const idSet = new Set(ids);
         const handed: { unit_id: string; parked_by: string | null }[] = [];
-        for (const h of (ho.data ?? []) as { user_id: string; truck_id: string | null; trailer_id: string | null }[]) {
-          if (h.truck_id && idSet.has(h.truck_id)) handed.push({ unit_id: h.truck_id, parked_by: h.user_id });
-          if (h.trailer_id && idSet.has(h.trailer_id)) handed.push({ unit_id: h.trailer_id, parked_by: h.user_id });
+        const outsiders: Record<string, string> = {};
+        const links = new Set<string>();
+        for (const h of (ho.data ?? []) as { user_id: string | null; truck_id: string | null; trailer_id: string | null; external_name: string | null }[]) {
+          // Geotab shows this trailer hooked to this truck: the pair is confirmed by the tracker.
+          if (h.truck_id && h.trailer_id) links.add(`${h.truck_id}|${h.trailer_id}`);
+          for (const u of [h.truck_id, h.trailer_id]) {
+            if (!u || !idSet.has(u)) continue;
+            if (h.user_id) handed.push({ unit_id: u, parked_by: h.user_id });
+            else if (h.external_name) outsiders[u] = initialsOf(h.external_name);
+            handedIds.add(u);
+          }
         }
-        if (alive) setUnconfirmed(new Set(handed.map((r) => r.unit_id)));
+        if (alive) { setUnconfirmed(handedIds); setLinked(links); }
         const all = [...rows, ...handed];
         const who = [...new Set(all.map((r) => r.parked_by as string))];
-        if (!who.length) { if (alive) setParkedByUnit({}); return; }
+        if (!who.length) { if (alive) setParkedByUnit({ ...outsiders }); return; }
         const { data: nm } = await supabase.rpc("get_display_names_full", { p_user_ids: who });
         const ini = new Map(((nm ?? []) as { user_id?: string; display_name?: string | null }[]).map((r) => [r.user_id ?? "", initialsOf(r.display_name)]));
         const out: Record<string, string> = {};
         for (const r of all) { const v = ini.get(r.parked_by as string); if (v) out[r.unit_id] = v; }
+        Object.assign(out, outsiders);
         if (alive) setParkedByUnit(out);
       } catch { /* fail open */ }
     })();
@@ -238,18 +247,6 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return () => { alive = false; };
   }, [enabled, trailerKey, refreshKey]);
 
-  useEffect(() => {
-    if (!enabled || !trailerKey) { setUndefinedIds(new Set()); return; }
-    let alive = true;
-    void (async () => {
-      try {
-        const { data } = await supabase.from("equipment_handoffs").select("trailer_id").in("trailer_id", trailerKey.split(",")).is("resolved_at", null);
-        if (alive) setUndefinedIds(new Set(((data ?? []) as { trailer_id: string | null }[]).map((r) => r.trailer_id).filter((x): x is string => !!x)));
-      } catch { /* fail open: no Undefined tag */ }
-    })();
-    return () => { alive = false; };
-  }, [enabled, trailerKey, refreshKey]);
-
   const colorOf = useMemo(() => {
     const by = new Map(catalog.data.map((p) => [p.product_id, p.hex_code || productColorFor(p.display_name || p.product_name)]));
     return (id: string) => by.get(id) ?? "#ffffff";
@@ -288,7 +285,6 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     const codeOf = new Map(catalog.data.map((p) => [p.product_id, String(p.button_code ?? (p.display_name || p.product_name || "PRD").split(" ")[0]).trim().toUpperCase()]));
     const out: Record<string, PlanLineComp[]> = {};
     for (const [tid, comps] of Object.entries(compSizes)) {
-      if (undefinedIds.has(tid)) { out[tid] = [{ num: 0, code: "Undefined", name: null, color: "#fbbf24" }]; continue; }
       const now = new Map((aboard[tid] ?? []).filter((a) => a.productId).map((a) => [a.comp, a.productId as string]));
       out[tid] = [...comps].sort((a, b) => b.comp - a.comp).map((c) => {
         const pid = now.get(c.comp);
@@ -298,7 +294,7 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
       });
     }
     return out;
-  }, [catalog.data, compSizes, aboard, residueBy, colorOf, undefinedIds]);
+  }, [catalog.data, compSizes, aboard, residueBy, colorOf]);
 
-  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer, codesByTrailer, parkedByUnit, unconfirmed };
+  return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer, codesByTrailer, parkedByUnit, unconfirmed, linked };
 }

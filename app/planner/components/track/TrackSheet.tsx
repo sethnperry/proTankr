@@ -318,7 +318,7 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         initials={boardStatus.initials}
         activity={boardStatus.activity} destByTrailer={boardStatus.destByTrailer} lastPlaceByTrailer={boardStatus.lastPlaceByTrailer}
         strips={boardStatus.strips}
-        codes={boardStatus.codesByTrailer} lastBy={boardStatus.parkedByUnit} unconfirmed={boardStatus.unconfirmed}
+        codes={boardStatus.codesByTrailer} lastBy={boardStatus.parkedByUnit} unconfirmed={boardStatus.unconfirmed} linked={boardStatus.linked}
         mine={{ truckId: myTruckId, trailerId: myTrailerId }}
         loading={loading}
         onCombo={(c) => setPick({ truckId: c.truck.id, trailerId: c.trailer.id })}

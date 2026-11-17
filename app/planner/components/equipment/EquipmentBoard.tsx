@@ -56,6 +56,8 @@ type Props = {
   lastBy?: Record<string, string>;
   /** Units the tracker shows a driver in with no confirmed pairing: the corner dot turns amber. */
   unconfirmed?: Set<string>;
+  /** "truck|trailer" pairs the tracker shows hooked together (so that trailer's dot is dropped). */
+  linked?: Set<string>;
   /** The viewer's own pair (highlighted). */
   mine?: { truckId: string | null; trailerId: string | null };
   /** A loose unit waiting to be coupled (outlined). */
@@ -83,8 +85,8 @@ function Tile({ children, strip, style, dot, ...rest }: { children: React.ReactN
   );
 }
 
-const UNCONFIRMED_DOT = "#fbbf24";
-const dotFor = (u: TrackUnit, unconfirmed?: Set<string>) => (unconfirmed?.has(u.id) ? UNCONFIRMED_DOT : u.statusCode ? fleetStatusColor(u.statusCode) : null);
+// The only dot: red on a unit the tracker puts a driver in that nobody has confirmed.
+const dotFor = (u: TrackUnit, unconfirmed?: Set<string>) => (unconfirmed?.has(u.id) ? "#ef4444" : null);
 const loadedText = (segs?: StripSeg[]) => !!segs?.some((g) => g.kind === "loaded");
 
 function Name({ children }: { children: React.ReactNode }) {
@@ -143,7 +145,7 @@ export function EquipmentBoard(p: Props) {
                     )}
                   </Tile>
                   <div aria-hidden style={{ alignSelf: "center", height: 2, background: "rgba(255,255,255,0.45)" }} />
-                  <Tile style={tile as React.CSSProperties} strip={fresh ? undefined : segs}>
+                  <Tile dot={p.unconfirmed?.has(c.trailer.id) && !p.linked?.has(`${c.truck.id}|${c.trailer.id}`) ? "#ef4444" : null} style={tile as React.CSSProperties} strip={fresh ? undefined : segs}>
                     <Name>{c.trailer.name}</Name>
                     {fresh ? codeLine(c.trailer.id) : loadedText(segs) ? (
                       p.destByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 12, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.destByTrailer[c.trailer.id]}</div> : p.lastPlaceByTrailer?.[c.trailer.id] ? <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.lastPlaceByTrailer[c.trailer.id]}</div> : null
