@@ -367,14 +367,6 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
       return [...latest.values()].filter((r) => /passenger|co-?driver|second/i.test(String(r.type ?? "")) && !/^unknown|^nodriver/i.test(String(r.driver.id))).map((r) => String(r.driver.id));
     },
 
-    /** Diagnostic: the raw driver fields of a vehicle's status record. */
-    async rawStatus(vehicleId: string) {
-      const from = new Date(Date.now() - 3 * 86400_000).toISOString();
-      const ch: any[] = (await call("Get", { typeName: "DriverChange", search: { fromDate: from, deviceSearch: { id: vehicleId } } })) ?? [];
-      ch.sort((x, y) => String(y.dateTime).localeCompare(String(x.dateTime)));
-      return { changes: ch.length, latest: ch.slice(0, 2).map((r) => ({ at: r.dateTime, driver: r.driver?.id ?? r.driver, type: r.type })) };
-    },
-
     async currentDrivers(): Promise<Map<string, string>> {
       const out = new Map<string, string>();
       // Sign-ins: the newest DriverChange per vehicle (a sign-out has an unknown driver).
