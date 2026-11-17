@@ -45,14 +45,25 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     void (async () => {
       try {
         const ids = unitKey.split(",");
-        const { data } = await supabase.from("equipment_parks").select("unit_id, parked_by").in("unit_id", ids);
-        const rows = ((data ?? []) as { unit_id: string; parked_by: string | null }[]).filter((r) => r.parked_by);
-        const who = [...new Set(rows.map((r) => r.parked_by as string))];
+        const [pk, ho] = await Promise.all([
+          supabase.from("equipment_parks").select("unit_id, parked_by").in("unit_id", ids),
+          // A driver the tracker shows in a truck with no confirmed pairing yet: an unconfirmed pairing.
+          supabase.from("equipment_handoffs").select("user_id, truck_id, trailer_id").is("ended_at", null).is("resolved_at", null),
+        ]);
+        const rows: { unit_id: string; parked_by: string | null }[] = ((pk.data ?? []) as { unit_id: string; parked_by: string | null }[]).filter((r) => r.parked_by);
+        const idSet = new Set(ids);
+        const handed: { unit_id: string; parked_by: string | null }[] = [];
+        for (const h of (ho.data ?? []) as { user_id: string; truck_id: string | null; trailer_id: string | null }[]) {
+          if (h.truck_id && idSet.has(h.truck_id)) handed.push({ unit_id: h.truck_id, parked_by: h.user_id });
+          if (h.trailer_id && idSet.has(h.trailer_id)) handed.push({ unit_id: h.trailer_id, parked_by: h.user_id });
+        }
+        const all = [...rows, ...handed];
+        const who = [...new Set(all.map((r) => r.parked_by as string))];
         if (!who.length) { if (alive) setParkedByUnit({}); return; }
         const { data: nm } = await supabase.rpc("get_display_names_full", { p_user_ids: who });
         const ini = new Map(((nm ?? []) as { user_id?: string; display_name?: string | null }[]).map((r) => [r.user_id ?? "", initialsOf(r.display_name)]));
         const out: Record<string, string> = {};
-        for (const r of rows) { const v = ini.get(r.parked_by as string); if (v) out[r.unit_id] = v; }
+        for (const r of all) { const v = ini.get(r.parked_by as string); if (v) out[r.unit_id] = v; }
         if (alive) setParkedByUnit(out);
       } catch { /* fail open */ }
     })();
