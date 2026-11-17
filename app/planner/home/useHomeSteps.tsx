@@ -116,12 +116,14 @@ import { type ExpGroup, type ExpRow } from "./DashboardSheets";
 
 import { useFuelStop } from "@/lib/fuel/useFuelStop";
 import { useFuelSetup } from "@/lib/fuel/useFuelSetup";
+import { sendTripPackage } from "@/lib/trips/useTripPackagePrefs";
+import { EXTRA_KEY } from "../components/trip/TripPackageSheet";
 
 // Sheets that only open on a tap load after the page is up, not before it can draw.
 import type { useHomeDispatched } from "./useHomeDispatched";
 
 export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
-  const { arriveAtRef, askGauging, autoStarted, children, companyId, completedDeliveries, endDelay, equipment, finishOpen, freightOpen, fuelOpen, hopRef, lastHosLevel, lastShiftEndedMs, loadedOpen, locList, location, locations, moveOpen, notifyPerm, openTrip, picker, productName, products, reloadTrailerAlerts, rememberDelivery, runningDelay, serverPushOn, setBlockNotice, setCancelBusy, setCancelErr, setCancelOpen, setCompSizes, setDropSiteOpen, setFinishOpen, setFuelAsk, setHookupOkId, setLoadedGeoBols, setLoadedOpen, setNotice, setNotifyPerm, setPicker, setPkgTrip, setTripSplashState, sheetOpen, shell, shift, shiftAsk, snap, state, step, store, syncNow, terminalCatalog, terminalName, trailerId, tripSplash, truckId, truckSheetWatch, userId } = p;
+  const { emailPkg, arriveAtRef, askGauging, autoStarted, children, companyId, completedDeliveries, endDelay, equipment, finishOpen, freightOpen, fuelOpen, hopRef, lastHosLevel, lastShiftEndedMs, loadedOpen, locList, location, locations, moveOpen, notifyPerm, openTrip, picker, productName, products, reloadTrailerAlerts, rememberDelivery, runningDelay, serverPushOn, setBlockNotice, setCancelBusy, setCancelErr, setCancelOpen, setCompSizes, setDropSiteOpen, setFinishOpen, setFuelAsk, setHookupOkId, setLoadedGeoBols, setLoadedOpen, setNotice, setNotifyPerm, setPicker, setTripSplashState, sheetOpen, shell, shift, shiftAsk, snap, state, step, store, syncNow, terminalCatalog, terminalName, trailerId, tripSplash, truckId, truckSheetWatch, userId } = p;
 
   // Fuel stop: tapping Fuel stamps the start time right away.
   const fuel = useFuelStop(userId || null, companyId || null);
@@ -337,7 +339,13 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
       void clearTrailerAlerts(trailerId, userId).then(() => reloadTrailerAlerts());
     }
     const orderNo = children?.primaryOrder?.order_number;
-    if (tripComplete) setPkgTrip({ tripId, order: orderNo ?? null });
+    // The email choices are made in Details; at the close the package goes out without another screen.
+    if (tripComplete) {
+      if (emailPkg.on === true) void sendTripPackage(tripId, "auto");
+      let extra: string[] = [];
+      try { extra = (localStorage.getItem(EXTRA_KEY) ?? "").split(/[\s,;]+/).filter(Boolean).slice(0, 3); } catch { /* storage blocked */ }
+      if (extra.length) void sendTripPackage(tripId, "manual", extra);
+    }
     setNotice(tripComplete
       ? { text: orderNo ? `Order ${orderNo} · Trip complete.` : "Trip complete.", tripId }
       : v.retained.length

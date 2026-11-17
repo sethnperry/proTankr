@@ -1310,7 +1310,7 @@ export function DeliveryDashboard({
                 <input value={pkgExtra} onChange={(e) => setPkgExtra(e.target.value)} placeholder="dispatch@company.com, billing@company.com" inputMode="email" autoCapitalize="none"
                   onBlur={() => { try { localStorage.setItem(EXTRA_KEY, pkgExtra.split(/[\s,;]+/).filter(Boolean).slice(0, 3).join(", ")); } catch { /* storage blocked */ } }}
                   style={fieldInput} />
-                <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>These addresses are filled in on the last screen. Nothing goes out until you send it there.</div>
+                <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>These addresses get the package when the order closes.</div>
               </Section>
             )}
 

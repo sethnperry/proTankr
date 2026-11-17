@@ -132,7 +132,6 @@ import { TrackSheet } from "../components/track/TrackSheet";
 import { DashLookProvider, DashStyles, LOOK, SectionLabel } from "./dashLook";
 import { DispatchNotices } from "./DispatchNotices";
 import { bolGroups } from "@/lib/trips/bols";
-import { TripPackageSheet } from "../components/trip/TripPackageSheet";
 
 import { clearTrailerAlerts } from "@/lib/trips/trailerAlerts";
 import { GaugePanel, ToolPanel, type ToolItem } from "./DashboardChrome";
@@ -230,7 +229,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     dropSiteOpen,
     dutyStop,
     editing,
-    emailPkg,
     emptyMoves,
     endAsk,
     endDelay,
@@ -332,7 +330,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     picker,
     pickupLabel,
     pickups,
-    pkgTrip,
     planDetour,
     planLine,
     plannedCount,
@@ -409,7 +406,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     setParkOpen,
     setPerDiemOpen,
     setPicker,
-    setPkgTrip,
     setRackDelayOpen,
     setRackSheetOpen,
     setRackStudOpen,
@@ -571,7 +567,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         </div>
       )}
 
-      <TripPackageSheet open={!!pkgTrip} tripId={pkgTrip?.tripId ?? null} orderNumber={pkgTrip?.order ?? null} myEmail={shell.authEmail || null} autoOn={emailPkg.on} onClose={() => setPkgTrip(null)} />
       <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={stillWorking} />
 
