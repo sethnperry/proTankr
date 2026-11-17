@@ -171,6 +171,12 @@ export type LoadingModalProps = {
   trip?: LoadingTripMode | null;
   // Finish Loading was tapped: the page asks the telematics app for the shipment number once.
   onFinishLoadingStart?: () => void;
+  // The Finish Loading time kept on the phone for this pickup (ISO), and a way to take it back. Backing out of the
+  // Finish Loading windows asks whether to keep or undo it.
+  getFinishStamp?: () => string | null;
+  onUndoFinishStamp?: () => void;
+  // Plan Review's back arrow (top left). The container decides where it goes and what it asks.
+  onBack?: () => void;
   // Update Card, No Load: cancels the load, keeps today's terminal access.
   onUpdateCardOnly: () => void;
   // Rack Delay: why the truck is held up at the rack (starts a delay, warns other drivers).

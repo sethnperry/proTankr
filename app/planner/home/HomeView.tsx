@@ -19,6 +19,8 @@ import { Spinner, busyProps, busyText } from "@/lib/ui/pending";
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
 import React from "react";
+import { BackArrow } from "@/lib/ui/BackArrow";
+import { StampQuestion, stampClock } from "../components/StampQuestion";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { HosRecapModal } from "@/app/planner/components/trip/HosRecap";
 
@@ -218,6 +220,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     doPark,
     doTakeOver,
     doUndoArrival,
+    undoBeginDeliveryNow,
     docOpen,
     downTimeOpen,
     dropCount,
@@ -511,6 +514,8 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     userId,
     workingPickup,
   } = h;
+  // Back arrow in the arrival window: keep or undo the arrival time.
+  const [leaveArrival, setLeaveArrival] = React.useState(false);
   return (
     <DashLookProvider value={L}>
     <DashStyles />
@@ -1187,7 +1192,8 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           );
         })()}
       </FullscreenModal>
-      <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => setRackSheetOpen(false)}
+      <FullscreenModal open={rackSheetOpen} title={rackCity ? `${rackName} · ${rackCity}` : rackName} onClose={() => (arrivalPickup?.arrived_at ? setLeaveArrival(true) : setRackSheetOpen(false))}
+        headerLeft={<BackArrow onClick={() => (arrivalPickup?.arrived_at ? setLeaveArrival(true) : setRackSheetOpen(false))} />}
         footer={arrivalPickup ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button type="button" className="dash-press" onClick={startLoading} style={{ width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>Plan Review</button>
@@ -1235,6 +1241,11 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           );
         })()}
       </FullscreenModal>
+      <StampQuestion open={leaveArrival && rackSheetOpen} title="Leave the arrival window?"
+        keepLabel={`Keep arrival time ${stampClock(arrivalPickup?.arrived_at)}`} undoLabel="Undo arrival time"
+        onKeep={() => { setLeaveArrival(false); setRackSheetOpen(false); }}
+        onUndo={() => { setLeaveArrival(false); setRackSheetOpen(false); doUndoArrival(); }}
+        onStay={() => setLeaveArrival(false)} />
       {rackTerminalId && (
         <TerminalStatusSheet
           open={rackStudOpen} onClose={() => setRackStudOpen(false)} terminalId={rackTerminalId} terminalName={rackName}
@@ -1529,6 +1540,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       {finishDeliveryRow?.arrived_at && snap && (
         <DropSiteSheet
           open={dropSiteOpen} onClose={() => setDropSiteOpen(false)}
+          onUndoArrival={() => { setDropSiteOpen(false); doUndoArrival(); }} onUndoBegin={() => { setDropSiteOpen(false); undoBeginDeliveryNow(); }}
           siteName={deliveryName(finishDeliveryRow)} arrivedAt={finishDeliveryRow.arrived_at} beganAt={finishDeliveryRow.begin_at ?? null}
           products={dropProducts}
           slots={[...new Set([...Object.keys(compSizes).map(Number), ...onBoard(snap.compLoads).map((c) => c.comp_number)])].sort((a, b) => a - b)}

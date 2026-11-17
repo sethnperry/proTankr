@@ -37,6 +37,7 @@ import { rememberTanks, useDeliveryLocationList, useDriverSignature, useTripSett
 import { airMiles, locationTitle } from "@/lib/trips/deliveryLocations";
 
 import { applyStartLoad, buildStartLoad, lastShipperCustomer, openTripForDriver, dispatchedForDriver, beginDispatched, truckBeginMiles, tripChildren, type StartLoadDelivery } from "@/lib/trips/tripLogic";
+import { unlinkCancelledLoad } from "@/lib/trips/tripLogic";
 import { activePickup, arriveDelivery, undoableArrival, undoArrivePickup, undoArriveDelivery, closePickupNoLoad, canCancelLoad, onBoard } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 
@@ -218,7 +219,11 @@ export function useHomeRacks(p: ReturnType<typeof useHomeStamp>) {
     if (!store || !userId || !undoable) return;
     const id = undoable.kind === "pickup" ? undoable.pickup.pickup_id : undoable.delivery.delivery_id;
     try { localStorage.setItem(noAutoKey(id), "1"); } catch {}
-    if (undoable.kind === "pickup") undoArrivePickup(store, { userId, pickup: undoable.pickup, now: new Date(), newId });
+    if (undoable.kind === "pickup") {
+      // A plan previewed from the arrival window attached a planned load: detach it first (the orphaned plan row is cleared by the next load).
+      if (undoable.pickup.load_id) unlinkCancelledLoad(store, { userId, loadId: undoable.pickup.load_id, now: new Date(), newId });
+      undoArrivePickup(store, { userId, pickup: undoable.pickup, now: new Date(), newId });
+    }
     else undoArriveDelivery(store, { userId, delivery: undoable.delivery, now: new Date(), newId });
     void syncNow();
     setUndoConfirm(false);

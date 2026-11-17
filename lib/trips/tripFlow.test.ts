@@ -10,6 +10,7 @@ import {
   arriveDelivery,
   arrivePickup,
   undoableArrival,
+  undoBeginPickup,
   undoArrivePickup,
   canCancelLoad,
   cancelLoad,
@@ -74,7 +75,7 @@ test("next step walks the whole trip", () => {
 
   linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
   // A previewed plan is not a started load: the driver is still asked to begin.
-  assert.equal(nextStep(getTrip(), snap()).label, "Plan Review");
+  assert.equal(nextStep(getTrip(), snap()).label, "Return to Load");
   s.put("trip_pickups", { pickup_id: snap().pickups[0].pickup_id, begin_at: NOW.toISOString() });
   assert.equal(nextStep(getTrip(), snap()).label, "Continue Trip");
 
@@ -463,11 +464,17 @@ test("undo an accidental pickup arrival", () => {
   assert.equal(undoableArrival(snap()), null);
 });
 
-test("undo is refused once a load is attached", () => {
+test("undo still works with a previewed plan attached, and is refused once loading has begun", () => {
   const { s, newId, snap } = setup();
   arrivePickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
   linkLoadToOpenTrip(s, { userId: ME, loadId: "L1", pickup: { terminalId: "term-1", rackId: null }, now: NOW, newId });
+  assert.equal(undoableArrival(snap())?.kind, "pickup");
+  s.put("trip_pickups", { pickup_id: snap().pickups[0].pickup_id, begin_at: NOW.toISOString() });
   assert.equal(undoableArrival(snap()), null);
+  undoBeginPickup(s, { userId: ME, pickup: snap().pickups[0], now: NOW, newId });
+  assert.equal(snap().pickups[0].begin_at, null);
+  assert.equal(undoableArrival(snap())?.kind, "pickup");
+  assert.equal(nextStep(s.list("trips")[0] as any, snap()).label, "Return to Load");
 });
 
 

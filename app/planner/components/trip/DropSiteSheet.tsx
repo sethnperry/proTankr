@@ -11,6 +11,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
 import { ullage } from "@/lib/trips/ullage";
+import { BackArrow } from "@/lib/ui/BackArrow";
+import { StampQuestion, stampClock } from "../StampQuestion";
 
 export type DropTank = { number: string; capacity: number | null; last: number | null };
 /** A product on this delivery with every store tank that holds it. */
@@ -55,7 +57,7 @@ function BolCard({ slots, comps }: { slots: number[]; comps: DropComp[] }) {
   );
 }
 
-export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, comps = [], slots = [], delay, notes, avg, sop, onBegin, onFinish, onClose }: {
+export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, comps = [], slots = [], delay, notes, avg, sop, onBegin, onFinish, onUndoArrival, onUndoBegin, onClose }: {
   open: boolean; siteName: string; arrivedAt: string; beganAt: string | null;
   /** The site board (other trucks, recent drops), drawn by the page. */
   board: React.ReactNode;
@@ -67,10 +69,13 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
   /** The site's notes (editable), the average drop time, and the fixed line above Begin: drawn by the page. */
   notes?: React.ReactNode; avg?: React.ReactNode; sop?: string;
   onBegin: () => void;
+  /** The back arrow's two answers: take the arrival time back, or take the Begin Delivery time back. Both leave the window. */
+  onUndoArrival: () => void; onUndoBegin: () => void;
   /** Before readings (gallons by tank number) the driver confirmed; empty when none. */
   onFinish: (volumes: Record<string, number>) => void;
   onClose: () => void;
 }) {
+  const [leaveAsk, setLeaveAsk] = useState(false);
   const [vol, setVol] = useState<Record<string, string>>({});
   const [done, setDone] = useState<Set<number>>(new Set()); // products whose window was passed with Next or Done
   const [idx, setIdx] = useState<number | null>(null);      // the product whose window is open
@@ -112,7 +117,7 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
 
   return (
     <>
-      <FullscreenModal open={open} title={siteName} onClose={onClose}
+      <FullscreenModal open={open} title={siteName} onClose={() => setLeaveAsk(true)} headerLeft={<BackArrow onClick={() => setLeaveAsk(true)} />}
         footer={beganAt ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button type="button" className="dash-press" onClick={finish} style={primary}>Finish</button>
@@ -161,6 +166,12 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
         )}
       </FullscreenModal>
 
+      <StampQuestion open={open && leaveAsk} title={beganAt ? "Leave this delivery?" : "Leave the arrival window?"}
+        keepLabel={beganAt ? `Keep begin delivery time ${stampClock(beganAt)}` : `Keep arrival time ${stampClock(arrivedAt)}`}
+        undoLabel={beganAt ? "Undo begin delivery time" : "Undo arrival time"}
+        onKeep={() => { setLeaveAsk(false); onClose(); }}
+        onUndo={() => { setLeaveAsk(false); if (beganAt) onUndoBegin(); else onUndoArrival(); }}
+        onStay={() => setLeaveAsk(false)} />
       <ValueEntryOverlay
         open={open && !!beganAt && !!cur}
         title={cur ? `${cur.name}${cur.tanks.length === 1 ? ` · Tank ${cur.tanks[0].number}` : ""} · Before` : ""}

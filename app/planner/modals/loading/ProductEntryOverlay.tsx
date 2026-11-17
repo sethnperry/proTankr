@@ -241,7 +241,7 @@ export function ProductEntryOverlay({ m }: { m: LoadingModel }) {
             <span>If the BOL shows more than one, use the lowest API and the coldest temperature.</span>
           </div>
         }
-        onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : cancelLogSequence}
+        onCancel={compSeqIndex != null && compSeqIndex > 0 ? goToPreviousCompStep : m.askLeaveFinish}
         cancelLabel={compSeqIndex != null && compSeqIndex > 0 ? "‹ Back" : "Cancel"}
         onSubmit={() => {
           void commitCompStep();

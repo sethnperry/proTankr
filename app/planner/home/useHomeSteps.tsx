@@ -41,7 +41,7 @@ import { rememberTanks } from "@/lib/trips/useTripData";
 import { airMiles, kindsOf, locationTitle, type LatLon } from "@/lib/trips/deliveryLocations";
 
 import { applyStartLoad, buildStartLoad, lastShipperCustomer, openTripForDriver, dispatchedForDriver, beginDispatched, truckBeginMiles, tripChildren, type StartLoadDelivery } from "@/lib/trips/tripLogic";
-import { activePickup, addPickup, arrivePickup, compartmentsForDelivery, closePickupNoLoad, cancelLoad, confirmLoaded, finishDelivery, onBoard, plannedDeliveries, rerouteDelivery, saveDeliveryProgress, splitToNewDelivery, type DeliveryDestination } from "@/lib/trips/tripFlow";
+import { undoBeginDelivery, activePickup, addPickup, arrivePickup, compartmentsForDelivery, closePickupNoLoad, cancelLoad, confirmLoaded, finishDelivery, onBoard, plannedDeliveries, rerouteDelivery, saveDeliveryProgress, splitToNewDelivery, type DeliveryDestination } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 
 import { type CancelTripSubmit } from "../components/trip/CancelTripSheet";
@@ -278,6 +278,12 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     saveDeliveryProgress(store, { delivery: finishDeliveryRow, beginAt: at, newId });
     void syncNow();
   };
+  // The back arrow in the begun drop window: take the Begin Delivery tap back; the arrival window is next.
+  const undoBeginDeliveryNow = () => {
+    if (!store || !userId || !finishDeliveryRow) return;
+    undoBeginDelivery(store, { userId, delivery: finishDeliveryRow, now: new Date(), newId });
+    void syncNow();
+  };
   const finishFromDropSite = (volumes: Record<string, number>) => {
     if (!store || !finishDeliveryRow) return;
     const old = new Map(store.list("trip_delivery_tanks", (t) => t.delivery_id === finishDeliveryRow.delivery_id).map((t) => [t.tank_number, t]));
@@ -476,5 +482,5 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     });
     return () => { alive = false; };
   }, [tripTrailerId]);
-  return { ...p, askFuelFirst, onCancelSubmit, fuel, fuelOn, truckReading, hookup, hookupKey, myHos, hosVsTrip, breakCountsRed, breakNote, fuelSetup, clock, loadedPickup, finishDeliveryRow, openDelivery, beginDelivery, finishFromDropSite, onLoadedSubmit, mergedHere, onFinishSubmit, onDeliveryProgress, productInfo, dropProducts, onPick, addAnotherPickup, tripTrailerId } as const;
+  return { ...p, undoBeginDeliveryNow, askFuelFirst, onCancelSubmit, fuel, fuelOn, truckReading, hookup, hookupKey, myHos, hosVsTrip, breakCountsRed, breakNote, fuelSetup, clock, loadedPickup, finishDeliveryRow, openDelivery, beginDelivery, finishFromDropSite, onLoadedSubmit, mergedHere, onFinishSubmit, onDeliveryProgress, productInfo, dropProducts, onPick, addAnotherPickup, tripTrailerId } as const;
 }

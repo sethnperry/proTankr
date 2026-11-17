@@ -4,6 +4,7 @@
 // Finish Loading / Edit Load: one window per product (BOL, API, temp, gross, net), split loads, then times and signature on a trip.
 
 import { useRef } from "react";
+import { useFinishLeave } from "./useFinishLeave";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { apiRangeProblem } from "../../utils/apiBasis";
 import { useSequencePrefill } from "./useSequencePrefill";
@@ -86,8 +87,11 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
   // resumes a half-finished sequence from a previous load.
   function startLogSequence() {
     // The Finish Loading tap ends loading and starts travel to the delivery.
-    finishTappedAt.current = new Date();
+    // A Finish Loading time kept when the driver backed out earlier (within 6 hours) is still the end of loading.
     if (trip) props.onFinishLoadingStart?.();
+    const kept = trip ? props.getFinishStamp?.() : null;
+    const keptMs = kept ? Date.parse(kept) : NaN;
+    finishTappedAt.current = Number.isFinite(keptMs) && Date.now() - keptMs < 6 * 3600_000 && keptMs <= Date.now() ? new Date(keptMs) : new Date();
     if (orderedCompLines.length === 0) {
       onLoaded({});
       return;
@@ -127,6 +131,7 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
     setCompSeqIndex(null);
     setEditingReport(false);
   }
+  const leave = useFinishLeave({ onTrip: !!trip, editing: editingReport, getStamp: props.getFinishStamp, undoStamp: props.onUndoFinishStamp, leave: cancelLogSequence });
   function goToPreviousCompStep() {
     if (compSeqIndex == null || compSeqIndex <= 0) return;
     setCompSeqIndex(compSeqIndex - 1);
@@ -379,6 +384,7 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
     startLogSequence,
     startEditSequence,
     cancelLogSequence,
+    ...leave,
     goToPreviousCompStep,
     openSplit,
     finishSplit,

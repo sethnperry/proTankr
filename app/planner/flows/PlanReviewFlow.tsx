@@ -6,7 +6,10 @@
 // usePlanner() and hands LoadingModal what it shows. Mount it anywhere under
 // PlannerProvider.
 
-import { stampFinishLoading } from "@/lib/trips/finishStamp";
+import { stampFinishLoading, readFinishLoading, clearFinishLoading } from "@/lib/trips/finishStamp";
+import { undoBeginPickup } from "@/lib/trips/tripFlow";
+import { newId } from "@/lib/trips/tripStore";
+import { StampQuestion, stampClock } from "../components/StampQuestion";
 import { useEffect, useState } from "react";
 import ConnectedSupplierPanel from "../components/ConnectedSupplierPanel";
 import RackDelaySheet from "../components/RackDelaySheet";
@@ -102,9 +105,33 @@ export default function PlanReviewFlow() {
     return r?.error ? "The delay started, but the warning to other drivers didn't go out. Try again from the Terminal sheet." : null;
   };
 
+  // ── The back arrow ──
+  // Before Begin Loading (a previewed plan): back to the arrival window, no question. After Begin Loading: keep or undo that
+  // time, then the dashboard. Off a trip there is no clock, so it just closes.
+  const [beginAsk, setBeginAsk] = useState(false);
+  const livePickup = tripPickup ?? tripWaitingPickup ?? null;
+  const onBack = () => {
+    if (!livePickup) { loadWorkflow.setLoadingOpen(false); return; }
+    if (!livePickup.begin_at) {
+      loadWorkflow.setLoadingOpen(false);
+      try { window.dispatchEvent(new Event("protankr:openRackSheet")); } catch { /* not a browser */ }
+      return;
+    }
+    setBeginAsk(true);
+  };
+  const undoBeginLoading = () => {
+    const store = tripStoreHook.store;
+    if (store && effectiveUserId && livePickup) undoBeginPickup(store, { userId: effectiveUserId, pickup: livePickup, now: new Date(), newId });
+    setBeginAsk(false);
+    loadWorkflow.setLoadingOpen(false);
+  };
+
   return (
     <>
     <LoadingModal
+      onBack={onBack}
+      getFinishStamp={() => (livePickup ? readFinishLoading(livePickup.pickup_id) : null)}
+      onUndoFinishStamp={() => { if (livePickup) clearFinishLoading(livePickup.pickup_id); }}
       supplierSection={<ConnectedSupplierPanel />}
       open={loadWorkflow.loadingOpen}
       onClose={() => {
@@ -159,7 +186,7 @@ export default function PlanReviewFlow() {
         loadWorkflow.onLoadedFromLoadingModal(entries, extras ? { afterTripRecord: () => recordTripLoaded(extras, false) } : undefined)
       }
       trip={tripModeForLoading}
-      onFinishLoadingStart={() => { if (effectiveUserId && tripStoreHook.store) { endRunningDelay(tripStoreHook.store, effectiveUserId); setRackDelayStartedAt(null); } const pk = tripPickup ?? tripWaitingPickup ?? null; if (pk && !pk.left_at) stampFinishLoading(pk.pickup_id); loadGeoShips(); }}
+      onFinishLoadingStart={() => { if (effectiveUserId && tripStoreHook.store) { endRunningDelay(tripStoreHook.store, effectiveUserId); setRackDelayStartedAt(null); } const pk = tripPickup ?? tripWaitingPickup ?? null; if (pk && !pk.left_at) { const kept = Date.parse(readFinishLoading(pk.pickup_id) ?? ""); if (!(Date.now() - kept < 6 * 3600_000)) stampFinishLoading(pk.pickup_id); } loadGeoShips(); }}
       onUpdateCardOnly={handleCouldntLoad}
       onRackDelay={() => setRackDelayOpen(true)}
       beginNote={sopSettings.settings.sop_terminal_begin?.trim() || DEFAULT_SOP_TERMINAL}
@@ -184,6 +211,9 @@ export default function PlanReviewFlow() {
       liveFuelPct={recentFuelPct}
       onSaveFuelTankGallons={saveFuelTankGallons}
     />
+    <StampQuestion open={beginAsk && loadWorkflow.loadingOpen} title="Leave Plan Review?"
+      keepLabel={`Keep begin loading time ${stampClock(livePickup?.begin_at)}`} undoLabel="Undo begin loading time"
+      onKeep={() => { setBeginAsk(false); loadWorkflow.setLoadingOpen(false); }} onUndo={undoBeginLoading} onStay={() => setBeginAsk(false)} />
     {/* After Plan Review in the page, so it stacks above it. */}
     <RackDelaySheet open={rackDelayOpen} products={rackProducts} onClose={() => setRackDelayOpen(false)} onSubmit={startRackDelay} />
     </>

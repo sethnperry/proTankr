@@ -103,8 +103,10 @@ export function nextStep(
       // Loading counts as started only when the driver taps Begin Loading (begin_at), not when a plan was previewed.
       // Plan Review is the one place Begin Loading is tapped (it stamps begin_at). Until then this opens it, and after
       // backing out it jumps back in.
-      label: p.begin_at ? "Continue Trip" : "Plan Review",
-      detail: p.begin_at ? `Loading${where}` : `Check the rack, then begin loading in Plan Review${where}`,
+      // Arrived but not begun: the button returns to the arrival window (its back arrow can leave it, so this brings
+      // the driver back to the same place). Begun: back into Plan Review.
+      label: p.begin_at ? "Continue Trip" : "Return to Load",
+      detail: p.begin_at ? `Loading${where}` : `Back to the arrival window${where}`,
     };
   }
   // Every rack so far ended without a load (rack hop): pick the next one.
@@ -120,7 +122,7 @@ export function nextStep(
     return { kind: "arrive_delivery", label: "Arrive", detail: `Tap when arrived at ${name}`, delivery: next };
   }
   // Arrived but not begun: the drop site window comes first, and Begin Delivery there stamps the real start time.
-  return { kind: "finish_delivery", label: next.begin_at ? "Finish Delivery" : "Begin Delivery", detail: next.begin_at ? name : `Check the drop site, then begin at ${name}`, delivery: next };
+  return { kind: "finish_delivery", label: next.begin_at ? "Finish Delivery" : "Return to Delivery", detail: next.begin_at ? name : `Back to the arrival window at ${name}`, delivery: next };
 }
 
 // ── Times and delays (§5) ────────────────────────────────────────────────────
@@ -1020,10 +1022,11 @@ export type UndoableArrival =
   | { kind: "delivery"; delivery: TripDeliveryRow };
 
 /** The stop the driver arrived at but hasn't started anything at yet, so the
- * Arrive tap can still be taken back. Null once loading has begun, a load is
- * attached, the stop is closed, or a delivery has begun. */
+ * Arrive tap can still be taken back. Null once loading has begun, the stop is
+ * closed, or a delivery has begun. */
 export function undoableArrival(snap: TripSnapshot): UndoableArrival | null {
-  const pk = snap.pickups.find((p) => p.arrived_at && !p.begin_at && !p.load_id && !p.left_at && !p.outcome);
+  // A plan previewed from the arrival window attaches a (planned) load; only a begun load can't be undone.
+  const pk = snap.pickups.find((p) => p.arrived_at && !p.begin_at && !p.left_at && !p.outcome);
   if (pk) return { kind: "pickup", pickup: pk };
   const dl = snap.deliveries.find((d) => d.arrived_at && !d.begin_at && !d.left_at && d.status !== "complete" && d.status !== "cancelled");
   if (dl) return { kind: "delivery", delivery: dl };
@@ -1047,6 +1050,24 @@ export function undoArriveDelivery(store: TripStoreLike, args: { userId: string;
   logEvent(store, args.newId, {
     trip_id: args.delivery.trip_id, event_type: "delivery_arrival_undone", occurred_at: args.now.toISOString(),
     actor_id: args.userId, delivery_id: args.delivery.delivery_id, payload: { was: args.delivery.arrived_at },
+  });
+}
+
+/** Take back a Begin Loading tap: the pickup is arrived but not begun again, so the arrival window comes back. */
+export function undoBeginPickup(store: TripStoreLike, args: { userId: string; pickup: TripPickupRow } & Clock) {
+  store.put("trip_pickups", { pickup_id: args.pickup.pickup_id, begin_at: null });
+  logEvent(store, args.newId, {
+    trip_id: args.pickup.trip_id, event_type: "pickup_begin_undone", occurred_at: args.now.toISOString(),
+    actor_id: args.userId, pickup_id: args.pickup.pickup_id, payload: { was: args.pickup.begin_at },
+  });
+}
+
+/** Take back a Begin Delivery tap: the delivery is arrived but not begun again. */
+export function undoBeginDelivery(store: TripStoreLike, args: { userId: string; delivery: TripDeliveryRow } & Clock) {
+  store.put("trip_deliveries", { delivery_id: args.delivery.delivery_id, begin_at: null });
+  logEvent(store, args.newId, {
+    trip_id: args.delivery.trip_id, event_type: "delivery_begin_undone", occurred_at: args.now.toISOString(),
+    actor_id: args.userId, delivery_id: args.delivery.delivery_id, payload: { was: args.delivery.begin_at },
   });
 }
 

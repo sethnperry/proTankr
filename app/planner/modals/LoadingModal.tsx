@@ -5,6 +5,7 @@
 // composes: the model is loading/useLoadingModel, the pieces are in loading/.
 
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
+import { BackArrow } from "@/lib/ui/BackArrow";
 import { useLoadingModel } from "./loading/useLoadingModel";
 import { PlanView } from "./loading/PlanView";
 import { ReportView } from "./loading/ReportView";
@@ -17,7 +18,8 @@ export type { LoadingTripMode, TripCompExtra, TripLoadExtras, ProductInputs, Tun
 export default function LoadingModal(props: LoadingModalProps) {
   const m = useLoadingModel(props);
   return (
-    <FullscreenModal open={m.open} title={m.report ? "Load Report" : "Plan Review"} onClose={m.onClose} footer={null} hideCloseButton>
+    <FullscreenModal open={m.open} title={m.report ? "Load Report" : "Plan Review"} onClose={m.onClose} footer={null} hideCloseButton
+      headerLeft={!m.report && props.onBack ? <BackArrow onClick={props.onBack} /> : undefined}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: "100%", boxSizing: "border-box" }}>
         {m.report ? <ReportView m={m} /> : <PlanView m={m} />}
       </div>

@@ -296,6 +296,12 @@ export function useHomeDelays(p: ReturnType<typeof useHomeBase>) {
     setRackSheetOpen(false);
     shell.postPlannerIntent("begin");
   };
+  // Plan Review's back arrow (before Begin Loading) comes back here, without a question.
+  useEffect(() => {
+    const h = () => { if (arrivalPickup) setRackSheetOpen(true); };
+    window.addEventListener("protankr:openRackSheet", h);
+    return () => window.removeEventListener("protankr:openRackSheet", h);
+  }, [arrivalPickup?.pickup_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const rackCity = useMemo(() => {
     const t = rackTerminalId ? terminalCatalog.find((x) => String(x.terminal_id) === rackTerminalId) : null;
     return t?.city ? String(t.city) : "";

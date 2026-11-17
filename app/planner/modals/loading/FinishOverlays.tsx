@@ -7,10 +7,11 @@ import ValueEntryOverlay from "../../components/ValueEntryOverlay";
 import { ProductEntryOverlay } from "./ProductEntryOverlay";
 import { SplitLoadOverlay } from "./SplitLoadOverlay";
 import { TripStepOverlays } from "./TripStepOverlays";
+import { StampQuestion, stampClock } from "../../components/StampQuestion";
 import type { LoadingModel } from "./useLoadingModel";
 
 export function FinishOverlays({ m }: { m: LoadingModel }) {
-  const { commitGallonsOverlay, gallonsCap, gallonsInput, gallonsTarget, setGallonsInput, setGallonsTarget } = m;
+  const { finishAsk, setFinishAsk, keepFinishStamp, undoFinishStamp, getFinishStamp, commitGallonsOverlay, gallonsCap, gallonsInput, gallonsTarget, setGallonsInput, setGallonsTarget } = m;
   return (
     <>
       {/* Compartment cap tap-to-adjust -- sets the max gallons for this comp
@@ -28,6 +29,9 @@ export function FinishOverlays({ m }: { m: LoadingModel }) {
       <ProductEntryOverlay m={m} />
       <SplitLoadOverlay m={m} />
       <TripStepOverlays m={m} />
+      <StampQuestion open={finishAsk} title="Leave Finish Loading?"
+        keepLabel={`Keep finish loading time ${stampClock(getFinishStamp?.())}`} undoLabel="Undo finish loading time"
+        onKeep={keepFinishStamp} onUndo={undoFinishStamp} onStay={() => setFinishAsk(false)} />
     </>
   );
 }

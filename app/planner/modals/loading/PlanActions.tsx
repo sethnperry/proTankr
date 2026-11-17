@@ -1,7 +1,7 @@
 "use client";
 // app/planner/modals/loading/PlanActions.tsx
 //
-// Plan Review: Finish Loading, Rack Delay, Couldn't Load, Back to Planner.
+// Plan Review: Finish Loading, Rack Delay, Couldn't Load, Cancel load. (The header's back arrow is the way out.)
 
 import { useEffect, useState } from "react";
 import { SopLine } from "../../components/site/SiteNotes";
@@ -14,7 +14,6 @@ export function PlanActions({ m }: { m: LoadingModel }) {
     loadedDisabled,
     loadedLabel,
     logLoadButtonRef,
-    onBackToPlanner,
     onRackDelay,
     onEndRackDelay,
     beginNote,
@@ -101,26 +100,6 @@ export function PlanActions({ m }: { m: LoadingModel }) {
         }}
       >
         Couldn&apos;t Load
-      </button>
-
-      <button
-        type="button"
-        onClick={onBackToPlanner}
-        disabled={busy}
-        style={{
-          width: "100%",
-          padding: "10px 0",
-          borderRadius: 2,
-          border: "none",
-          background: "transparent",
-          color: "rgba(255,255,255,0.40)",
-          fontSize: 13,
-          fontWeight: 700,
-          cursor: "pointer",
-          opacity: busy ? 0.55 : 1,
-        }}
-      >
-        Back to Planner
       </button>
 
       {onCancelLoad && (!confirmCancel ? (
