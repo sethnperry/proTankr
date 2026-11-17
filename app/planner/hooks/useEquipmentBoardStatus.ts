@@ -30,6 +30,8 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
 
   const [compSizes, setCompSizes] = useState<Record<string, { comp: number; size: number | null }[]>>({});
   const [residueBy, setResidueBy] = useState<Record<string, Record<number, string>>>({});
+  // Trailers a driver took (shown by the tracker) without anyone saying what they hold: "Undefined" until someone does.
+  const [undefinedIds, setUndefinedIds] = useState<Set<string>>(new Set());
 
   const [activity, setActivity] = useState<Record<string, string>>({});
   const [destByTrailer, setDestByTrailer] = useState<Record<string, string>>({});
@@ -222,6 +224,18 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     return () => { alive = false; };
   }, [enabled, trailerKey, refreshKey]);
 
+  useEffect(() => {
+    if (!enabled || !trailerKey) { setUndefinedIds(new Set()); return; }
+    let alive = true;
+    void (async () => {
+      try {
+        const { data } = await supabase.from("equipment_handoffs").select("trailer_id").in("trailer_id", trailerKey.split(",")).is("resolved_at", null);
+        if (alive) setUndefinedIds(new Set(((data ?? []) as { trailer_id: string | null }[]).map((r) => r.trailer_id).filter((x): x is string => !!x)));
+      } catch { /* fail open: no Undefined tag */ }
+    })();
+    return () => { alive = false; };
+  }, [enabled, trailerKey, refreshKey]);
+
   const colorOf = useMemo(() => {
     const by = new Map(catalog.data.map((p) => [p.product_id, p.hex_code || productColorFor(p.display_name || p.product_name)]));
     return (id: string) => by.get(id) ?? "#ffffff";
@@ -260,6 +274,7 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
     const codeOf = new Map(catalog.data.map((p) => [p.product_id, String(p.button_code ?? (p.display_name || p.product_name || "PRD").split(" ")[0]).trim().toUpperCase()]));
     const out: Record<string, PlanLineComp[]> = {};
     for (const [tid, comps] of Object.entries(compSizes)) {
+      if (undefinedIds.has(tid)) { out[tid] = [{ num: 0, code: "Undefined", name: null, color: "#fbbf24" }]; continue; }
       const now = new Map((aboard[tid] ?? []).filter((a) => a.productId).map((a) => [a.comp, a.productId as string]));
       out[tid] = [...comps].sort((a, b) => b.comp - a.comp).map((c) => {
         const pid = now.get(c.comp);
@@ -269,7 +284,7 @@ export function useEquipmentBoardStatus(enabled: boolean, claimerIds: string[], 
       });
     }
     return out;
-  }, [catalog.data, compSizes, aboard, residueBy, colorOf]);
+  }, [catalog.data, compSizes, aboard, residueBy, colorOf, undefinedIds]);
 
   return { initials, loadedByTrailer, strips, activity, destByTrailer, lastPlaceByTrailer, codesByTrailer, parkedByUnit };
 }

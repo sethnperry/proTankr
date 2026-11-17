@@ -62,5 +62,15 @@ export async function fetchTrailerResidue(ids: string[]): Promise<{ sizes: Trail
     for (const id of loads) for (const [c, pid] of Object.entries(byLoad.get(id) ?? {})) if (per[Number(c)] == null) per[Number(c)] = pid;
     if (Object.keys(per).length) residue[tid] = per;
   }
+  // What a driver told us a trailer last held (a handoff answer) wins over older logged loads, per compartment.
+  for (const part of chunk(ids, 80)) {
+    const { data } = await supabase.from("trailer_residue_notes").select("trailer_id, comp_number, product_id, set_at").in("trailer_id", part);
+    for (const r of (data ?? []) as { trailer_id: string; comp_number: number; product_id: string | null; set_at: string }[]) {
+      const newestLoad = loadsBy.get(r.trailer_id)?.[0]?.at ?? null;
+      if (newestLoad && Date.parse(r.set_at) < Date.parse(newestLoad)) continue; // a load since: the load is newer news
+      const per = (residue[r.trailer_id] ??= {});
+      if (r.product_id) per[Number(r.comp_number)] = String(r.product_id); else delete per[Number(r.comp_number)];
+    }
+  }
   return { sizes, residue };
 }

@@ -99,6 +99,7 @@ import { RackDelayButton } from "../components/trip/RackDelayButton";
 import { GeotabEquipmentHost } from "../components/equipment/GeotabEquipmentHost";
 
 import { CatchUpSheet } from "../components/shift/CatchUpSheet";
+import { LeftBehindHost } from "../components/equipment/LeftBehindSheet";
 import { OdometerConfirmSheet } from "../components/moves/OdometerConfirmSheet";
 
 import { LanternflySheet } from "../components/slf/LanternflySheet";
@@ -1502,6 +1503,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       />
 
       <TripEquipmentSheets {...tripEquip.sheets} />
+      <LeftBehindHost userId={userId || null} companyId={companyId || null} trailerId={trailerId ?? null} trailerName={equipment.currentTrailerName ?? null} store={store} syncNow={syncNow} />
       <CancelTripSheet
         open={cancelOpen && !!openTrip}
         title={children?.primaryOrder?.order_number ? `Order ${children.primaryOrder.order_number}` : "Load"}

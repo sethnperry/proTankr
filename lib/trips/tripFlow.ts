@@ -1085,3 +1085,29 @@ export function otherTripsAboard(
   const live = new Set(["draft", "loading", "in_transit", "delivering", "parked"]);
   return trips.filter((t) => t.trailer_id === trailerId && t.trip_id !== ownTripId && live.has(t.status) && comps.some((c) => c.trip_id === t.trip_id && c.disposition === "loaded"));
 }
+
+// ── A trailer left loaded by someone who never used the app ──────────────────
+// The next driver says what is aboard. It becomes a parked trip for the driver who had it (the loading driver), so the
+// usual Take Over Trip applies and the delivery is logged by whoever drops it. Gallons, BOL and order are unknown.
+export function createLeftBehindTrip(
+  store: TripStoreLike,
+  a: { companyId: string; loadingDriverId: string; enteredBy: string; truckId: string | null; trailerId: string; comps: { comp: number; productId: string }[]; loadingDriverName: string | null; newId: () => string; now: Date },
+): string {
+  const nowIso = a.now.toISOString();
+  const tripId = a.newId(), pickupId = a.newId(), orderId = a.newId();
+  const note = `Left loaded${a.loadingDriverName ? ` by ${a.loadingDriverName}` : ""}. The loading details weren't entered in ProTankr.`;
+  store.put("trips", {
+    trip_id: tripId, company_id: a.companyId, driver_id: a.loadingDriverId, created_by: a.enteredBy, status: "parked", entered_late: true,
+    truck_id: a.truckId, trailer_id: a.trailerId, started_at: nowIso, parked_at: nowIso, parked_by: a.loadingDriverId, parked_for: "layover", parked_note: note,
+  } as any);
+  store.put("trip_orders", { order_id: orderId, trip_id: tripId, order_number: null, is_primary: true } as any);
+  store.put("trip_pickups", { pickup_id: pickupId, trip_id: tripId, seq: 1, pickup_type: "terminal", name: "Unknown pickup", left_at: nowIso } as any);
+  for (const c of a.comps) {
+    store.put("trip_compartment_loads", {
+      compartment_load_id: a.newId(), trip_id: tripId, pickup_id: pickupId, order_id: orderId, delivery_id: null, comp_number: c.comp, product_id: c.productId,
+      disposition: "loaded", loading_driver_id: a.loadingDriverId,
+    } as any);
+  }
+  store.put("trip_events", { event_id: a.newId(), trip_id: tripId, event_type: "left_behind_entered", occurred_at: nowIso, actor_id: a.enteredBy, pickup_id: null, delivery_id: null, payload: { loading_driver_id: a.loadingDriverId, comps: a.comps } } as any);
+  return tripId;
+}

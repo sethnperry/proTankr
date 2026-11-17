@@ -10408,6 +10408,16 @@ Local areas are compared trimmed and lower-cased (profiles hold "Tampa " with a 
   number, lock time before a window, auto-drop when hours no longer fit, reliability/credit tracking.
 - Unverified live: the calculator against real Geotab recap days, and the board with real signups.
 
+## Tracker holds and left-behind trailers (2026-11-25)
+The five-minute cron (`lib/equipment/geotabHolds.ts`) holds a pair for a driver the tracker shows signed in AND on duty/driving
+(`D`/`ON`) who isn't holding it in the app (couple_combo with force; tare = the pair's last, else the truck's, else the
+trailer's, copied and noted on the handoff; none anywhere = not coupled). It writes `equipment_handoffs`; the equipment board
+shows the trailer as "Undefined" until someone answers `LeftBehindHost` (opens on the dashboard when you hold a trailer with
+an unresolved handoff): Empty (sets `trailer_residue_notes`, read by `fetchTrailerResidue`), Partial/Preloaded
+(`createLeftBehindTrip` makes a parked trip for the loading driver; Take Over Trip applies), Not sure. A handoff driver off
+duty for 20 minutes releases the pair (`auto_park_equipment`). Migration `20261125000000_geotab_handoffs.sql` (applied).
+Unverified live: the cron path needs the Geotab login on Vercel; only typecheck/build and the SQL were exercised here.
+
 ## Files safe to delete
 - `supabase/migrations_old/` — **already gone**, confirmed 2026-09-23 (no
   longer present in the repo; nothing left to do here).
