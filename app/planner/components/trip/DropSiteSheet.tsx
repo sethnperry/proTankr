@@ -16,6 +16,9 @@ export type DropTank = { number: string; capacity: number | null; last: number |
 /** A product on this delivery with every store tank that holds it. */
 export type DropProduct = { id: string | null; name: string; color: string; gallons: number; tanks: DropTank[] };
 
+/** One compartment aboard: its BOL number, gross gallons and product color. */
+export type DropComp = { n: number; bol: string | null; gallons: number; color: string };
+
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.12)";
 const cap: React.CSSProperties = { fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: muted };
@@ -23,11 +26,42 @@ const gal = (n: number) => `${Math.round(n).toLocaleString("en-US")} gal`;
 const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const primary: React.CSSProperties = { width: "100%", padding: "18px 0", fontSize: 18, fontWeight: 800, background: "#fff", color: "#000", border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" };
 
-export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, delay, notes, avg, sop, onBegin, onFinish, onClose }: {
+/** One card per BOL: "BOL# 5186517 · 3608/--/4300", every trailer compartment in order, "--" for ones not on that BOL.
+ *  Gallons are in the product's color. Helps with blending bio and the like. */
+function BolCard({ slots, comps }: { slots: number[]; comps: DropComp[] }) {
+  if (!comps.length) return null;
+  const keys: (string | null)[] = [];
+  for (const c of comps) if (!keys.includes(c.bol)) keys.push(c.bol);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {keys.map((bol) => (
+        <div key={bol ?? "none"} style={{ padding: "12px 14px", background: "#0f0f10", border: `1px solid ${hair}`, marginBottom: 6, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: muted }}>{bol ? `BOL# ${bol}` : "No BOL#"}</span>
+          <span style={{ color: muted }}>·</span>
+          <span className="dash-num" style={{ fontSize: 18, fontWeight: 800 }}>
+            {slots.map((n, i) => {
+              const c = comps.find((x) => x.n === n && x.bol === bol);
+              return (
+                <React.Fragment key={n}>
+                  {i > 0 && <span style={{ color: muted, fontWeight: 600 }}>/</span>}
+                  <span style={{ color: c ? c.color : muted }}>{c ? Math.round(c.gallons).toLocaleString("en-US").replace(/,/g, "") : "--"}</span>
+                </React.Fragment>
+              );
+            })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, comps = [], slots = [], delay, notes, avg, sop, onBegin, onFinish, onClose }: {
   open: boolean; siteName: string; arrivedAt: string; beganAt: string | null;
   /** The site board (other trucks, recent drops), drawn by the page. */
   board: React.ReactNode;
   products: DropProduct[];
+  /** Compartments aboard with BOL and gross gallons, and the trailer's compartment numbers in order. */
+  comps?: DropComp[]; slots?: number[];
   /** The Delay button, drawn by the page (it owns the running delay). */
   delay: React.ReactNode;
   /** The site's notes (editable), the average drop time, and the fixed line above Begin: drawn by the page. */
@@ -101,8 +135,11 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
           {!beganAt && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Tap Begin Delivery when you start. That sets your delivery start time.</div>}
         </div>
 
+        <BolCard slots={slots.length ? slots : [...new Set(comps.map((c) => c.n))].sort((a, b) => a - b)} comps={comps} />
+
         {!beganAt ? (<>{notes && <div style={{ marginBottom: 12 }}>{notes}</div>}{board}</>) : (
           <>
+            {notes && <div style={{ marginBottom: 12 }}>{notes}</div>}
             <div style={{ ...cap, margin: "6px 0 8px", paddingBottom: 6, borderBottom: `1px solid ${hair}` }}>Tank readings before (optional)</div>
             {products.length === 0 && <div style={{ color: muted, fontSize: 14, padding: "8px 0" }}>Nothing aboard for this stop. Finish when you're done.</div>}
             {products.map((p, i) => (

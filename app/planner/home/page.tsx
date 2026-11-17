@@ -3617,6 +3617,8 @@ export default function HomePage() {
           open={dropSiteOpen} onClose={() => setDropSiteOpen(false)}
           siteName={deliveryName(finishDeliveryRow)} arrivedAt={finishDeliveryRow.arrived_at} beganAt={finishDeliveryRow.begin_at ?? null}
           products={dropProducts}
+          slots={[...new Set([...Object.keys(compSizes).map(Number), ...onBoard(snap.compLoads).map((c) => c.comp_number)])].sort((a, b) => a - b)}
+          comps={onBoard(snap.compLoads).map((c) => { const i = productInfo(c.product_id); return { n: c.comp_number, bol: c.bol_number?.trim() || null, gallons: Number(c.gross_gallons ?? c.net_gallons ?? 0), color: i.hex ?? productColorFor(i.name) }; })}
           board={finishDeliveryRow.location_id ? (
             <SiteBoard kind="location" id={finishDeliveryRow.location_id} name={deliveryName(finishDeliveryRow)} hideName trips={fleet.trips} product={productInfo} now={new Date()}
               etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}
