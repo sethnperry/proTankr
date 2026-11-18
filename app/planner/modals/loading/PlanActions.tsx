@@ -11,6 +11,7 @@ import type { LoadingModel } from "./useLoadingModel";
 export function PlanActions({ m }: { m: LoadingModel }) {
   const {
     busy,
+    footerExtras,
     loadedDisabled,
     loadedLabel,
     logLoadButtonRef,
@@ -55,6 +56,7 @@ export function PlanActions({ m }: { m: LoadingModel }) {
       >
         {needsBegin ? "Begin Loading" : loadedDisabled ? (loadedLabel ?? "Saving…") : "Finish Loading"}
       </button>
+      {footerExtras}
 
       <button
         type="button"

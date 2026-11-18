@@ -280,10 +280,10 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
         break;
       case "planner":
         if (shopDown) { setBlockNotice(SHOP_BLOCK); break; }
-        // Arrived but loading not begun: back to the arrival window (its back arrow can leave it), not straight into Plan Review.
+        // Arrived but loading not begun: Plan Review opens (its arrival line and Begin Loading are there); nothing is stamped here.
         {
           const wp0 = snap?.pickups.find((p) => p.arrived_at && !p.begin_at && !p.left_at && !p.outcome);
-          if (wp0) { alignPlannerToPickup(wp0); setRackSheetOpen(true); break; }
+          if (wp0) { alignPlannerToPickup(wp0); setOpeningPlanner(true); shell.postPlannerIntent("begin"); break; }
         }
         // A delay at the rack (gauging, a long line) keeps running: it ends when loading really begins (below), not
         // when the driver taps Begin Loading, which may only open the Planner to fix the plan.
@@ -343,9 +343,9 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
             }
           } finally {
             void syncNow();
-            // The rack window opens first, not Plan Review: Begin Loading there stamps the real start time.
-            setOpeningPlanner(false);
-            setRackSheetOpen(true);
+            // Plan Review opens straight away: the arrival time is already stamped and Begin Loading there stamps the real start.
+            setOpeningPlanner(true);
+            shell.postPlannerIntent("begin");
           }
         })();
         break;

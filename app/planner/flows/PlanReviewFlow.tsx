@@ -11,7 +11,8 @@ import { undoBeginPickup } from "@/lib/trips/tripFlow";
 import { newId } from "@/lib/trips/tripStore";
 import { StampQuestion, stampClock } from "../components/StampQuestion";
 import { useEffect, useState } from "react";
-import ConnectedSupplierPanel from "../components/ConnectedSupplierPanel";
+import { ArrivalLine, RackExtras } from "../components/rack/RackExtras";
+import { useRouter } from "next/navigation";
 import RackDelaySheet from "../components/RackDelaySheet";
 import { endRunningDelay, readRunningDelay, writeRunningDelay, type RunningDelay } from "@/lib/trips/delays";
 import { reportRows } from "../utils/reportRows";
@@ -61,6 +62,7 @@ export default function PlanReviewFlow() {
     tripStoreHook,
   } = usePlanner();
   const sopSettings = useTripSettings(shell.companyId ?? null);
+  const router = useRouter();
 
   // ── Rack Delay: a reason starts the running delay (same one the dashboard's Delay button shows) and warns
   // other drivers headed to this terminal. Plan Review stays open.
@@ -108,7 +110,8 @@ export default function PlanReviewFlow() {
     if (!livePickup) { loadWorkflow.setLoadingOpen(false); return; }
     if (!livePickup.begin_at) {
       loadWorkflow.setLoadingOpen(false);
-      try { window.dispatchEvent(new Event("protankr:openRackSheet")); } catch { /* not a browser */ }
+      // The dashboard asks whether to keep or undo the arrival time (no separate arrival window any more).
+      try { window.dispatchEvent(new Event("protankr:leaveArrival")); } catch { /* not a browser */ }
       return;
     }
     setBeginAsk(true);
@@ -126,7 +129,8 @@ export default function PlanReviewFlow() {
       onBack={onBack}
       getFinishStamp={() => (livePickup ? readFinishLoading(livePickup.pickup_id) : null)}
       onUndoFinishStamp={() => { if (livePickup) clearFinishLoading(livePickup.pickup_id); }}
-      supplierSection={<ConnectedSupplierPanel />}
+      headerExtra={<ArrivalLine />}
+      footerExtras={<RackExtras />}
       open={loadWorkflow.loadingOpen}
       onClose={() => {
         /* no accidental dismissal -- exits are the explicit buttons */
@@ -190,7 +194,8 @@ export default function PlanReviewFlow() {
       loadingBegun={!(tripPickup ?? tripWaitingPickup) || !!(tripPickup ?? tripWaitingPickup)?.begin_at}
       // Back to Planner leaves the load, the arrival time and the card exactly as they are.
       onBackToPlanner={() => loadWorkflow.setLoadingOpen(false)}
-      onAdjustPlan={handleBackToPlannerNoUpdate}
+      // Adjust plan: release this load (the arrival time stays) and open the Planner on the plan that was selected.
+      onAdjustPlan={async () => { await handleBackToPlannerNoUpdate(); router.push("/planner?plan=1"); }}
       loadedDisabled={loadWorkflow.completeBusy}
       loadedLabel={loadWorkflow.completeBusy ? "Saving…" : "Finish Loading"}
       returnLabel={reportFromDashboard ? "Back to Dashboard" : undefined}

@@ -6,7 +6,7 @@
 import type { LoadingModel } from "./useLoadingModel";
 
 export function ReviewHeader({ m }: { m: LoadingModel }) {
-  const { equipmentLabel, locationLabel, onTapTerminal, rackName, report, terminalLabel } = m;
+  const { equipmentLabel, headerExtra, locationLabel, onTapTerminal, rackName, report, terminalLabel } = m;
   return (
     (equipmentLabel || terminalLabel) && (
       <div
@@ -120,6 +120,7 @@ export function ReviewHeader({ m }: { m: LoadingModel }) {
             )}
           </div>
         )}
+        {!report && headerExtra}
       </div>
     )
   );

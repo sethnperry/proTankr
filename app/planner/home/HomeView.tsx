@@ -521,6 +521,8 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
   } = h;
   // Back arrow in the arrival window: keep or undo the arrival time.
   const [leaveArrival, setLeaveArrival] = React.useState(false);
+  // Plan Review's back arrow (before Begin Loading) asks whether to keep the arrival time or undo it.
+  React.useEffect(() => { const h = () => setLeaveArrival(true); window.addEventListener("protankr:leaveArrival", h); return () => window.removeEventListener("protankr:leaveArrival", h); }, []);
   const [standbyOpen, setStandbyOpen] = React.useState(false);
   return (
     <DashLookProvider value={L}>
@@ -1270,7 +1272,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           );
         })()}
       </FullscreenModal>
-      <StampQuestion open={leaveArrival && rackSheetOpen} title="Leave the arrival window?"
+      <StampQuestion open={leaveArrival} title="Leave Plan Review?"
         keepLabel={`Keep arrival time ${stampClock(arrivalPickup?.arrived_at)}`} undoLabel="Undo arrival time"
         onKeep={() => { setLeaveArrival(false); setRackSheetOpen(false); }}
         onUndo={() => { setLeaveArrival(false); setRackSheetOpen(false); doUndoArrival(); }}

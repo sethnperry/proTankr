@@ -214,6 +214,9 @@ export type LoadingModalProps = {
   terminalLabel?: string | null;
   // The supplier and its loading steps, shown once loading has begun.
   supplierSection?: React.ReactNode;
+  // One header line under the terminal (arrival time, waiting, average load time) and extra buttons under Begin Loading.
+  headerExtra?: React.ReactNode;
+  footerExtras?: React.ReactNode;
   // "City, State" -- rendered next to terminalLabel ("Terminal · City,
   // State"), same pairing the main Planner page's own location line uses.
   locationLabel?: string | null;
