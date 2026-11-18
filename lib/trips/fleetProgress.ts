@@ -10,6 +10,7 @@
 // "bottom". The page turns them into SVG.
 
 import type { TripDeliveryRow, TripPickupRow, TripRow } from "./types.ts";
+import { staleOpenDelivery } from "./staleDelivery.ts";
 import { terminalCode } from "../equipment/boardStatus.ts";
 
 export type NodeState = "done" | "current" | "next" | "upcoming" | "skipped";
@@ -113,6 +114,7 @@ export function buildTripRoute(
     since = pickupRow.begin_at ?? pickupRow.arrived_at;
   } else if (deliveryRow && arrived) {
     status = deliveryRow.begin_at ? `Delivering at ${where}` : `Arrived at ${where}`;
+    if (staleOpenDelivery([deliveryRow], Date.now())) status += " · finish needed";
     since = deliveryRow.begin_at ?? deliveryRow.arrived_at;
   } else if (n.kind === "delivery" && n.key === "delivery") {
     status = "Loaded · no delivery set";

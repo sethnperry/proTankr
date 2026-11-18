@@ -151,6 +151,7 @@ import { DispatchedCard } from "./DispatchedCard";
 
 // Sheets that only open on a tap load after the page is up, not before it can draw.
 import type { useHome } from "./useHome";
+import { staleOpenDelivery } from "@/lib/trips/staleDelivery";
 import { SquawkSheet, DropSiteSheet, StartLoadSheet, LoadedSheet, LocationPicker, AddPickupSheet, FreightSheet, TankCheckSheet, PerDiemSheet, STATUS_LABEL, muted, smallLink, EquipLine, EquipmentToolsRegistrar, InfoRow, SyncDetailsSheet } from "./homeShared";
 
 export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
@@ -251,6 +252,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     failed,
     findTruckOpen,
     finishDeliveryRow,
+    openDelivery,
     finishFromDropSite,
     finishOpen,
     finishShift,
@@ -1096,9 +1098,10 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         const showExp = false;
         const showSync = pendingCount > 0 || failed.length > 0;
         const showFuel = !!fuel.active;
+        const staleFinish = finishDeliveryRow && staleOpenDelivery([finishDeliveryRow], Date.now()) ? finishDeliveryRow : null;
         // Only while something required is missing; the optional steps stay under Profile > Setup.
         const showSetup = !!setup.summary && setup.summary.requiredLeft > 0;
-        if (!showGross && !showExp && !showSync && !showFuel && !showSetup) return null;
+        if (!showGross && !showExp && !showSync && !showFuel && !showSetup && !staleFinish) return null;
         return (
           <div style={{ ...L.secondary, marginTop: 14, overflow: "hidden" }}>
             {showSetup && (
@@ -1108,6 +1111,15 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
                 valueColor={setup.summary!.requiredLeft ? "#f87171" : "#fbbf24"}
                 onClick={() => nav.go("setup", "/planner/setup")}
                 last={!showGross && !showExp && !showSync && !showFuel}
+              />
+            )}
+            {staleFinish && (
+              <InfoRow
+                label="Finish delivery"
+                value="Still open · tap to finish"
+                valueColor="#f87171"
+                onClick={openDelivery}
+                last={!showFuel && !showGross && !showExp && !showSync}
               />
             )}
             {showFuel && (

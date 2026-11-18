@@ -13,6 +13,7 @@ import { deriveShifts, openShift } from "./shiftLogic";
 import { autoEndAt } from "./autoEnd";
 import { nearestPlace } from "./catchUp";
 import type { ShiftEventRow } from "@/lib/trips/types";
+import { isOpenDelivery } from "@/lib/trips/staleDelivery";
 
 const OPEN = ["draft", "loading", "in_transit", "delivering"];
 
@@ -68,7 +69,7 @@ async function runCompany(companyId: string): Promise<number> {
 async function closeShift(companyId: string, userId: string, startedAt: string, at: string, st: any, vehOf: Map<string, string>, places: ReturnType<typeof Array.prototype.map> & any[], p: NonNullable<Awaited<ReturnType<typeof providerFor>>>): Promise<boolean> {
   const admin = getServiceSupabase();
   // The driver's open trip, if any, tells which truck and trailer they had.
-  const { data: tr } = await admin.from("trips").select("trip_id, status, truck_id, trailer_id, trip_compartment_loads(disposition)").eq("driver_id", userId).in("status", OPEN).order("started_at", { ascending: false }).limit(1);
+  const { data: tr } = await admin.from("trips").select("trip_id, status, truck_id, trailer_id, trip_compartment_loads(disposition), trip_deliveries(arrived_at, left_at, status)").eq("driver_id", userId).in("status", OPEN).order("started_at", { ascending: false }).limit(1);
   const trip = ((tr ?? []) as any[])[0] ?? null;
   const truckId: string | null = st?.current_truck_id ?? trip?.truck_id ?? null;
   const trailerId: string | null = st?.current_trailer_id ?? trip?.trailer_id ?? null;
@@ -89,8 +90,13 @@ async function closeShift(companyId: string, userId: string, startedAt: string, 
   if (ins.error) return false;
 
   // A load still aboard is parked where the truck stopped.
+  // A delivery the driver arrived at and never finished is NOT parked: the drop is almost certainly done, the Finish tap is
+  // what's missing. The driver is asked to finish it, and the trip is marked so dispatch can see it.
   const aboard = ((trip?.trip_compartment_loads ?? []) as any[]).some((c) => c.disposition === "loaded");
-  if (trip && aboard) {
+  const midDelivery = !!trip && ((trip.trip_deliveries ?? []) as any[]).some(isOpenDelivery);
+  if (trip && midDelivery) {
+    await admin.from("trip_events").insert({ event_id: randomUUID(), trip_id: trip.trip_id, event_type: "finish_needed", occurred_at: at, actor_id: userId, payload: { auto: true, reason: "shift_ended_mid_delivery", from_status: trip.status } });
+  } else if (trip && aboard) {
     const now = new Date().toISOString();
     await admin.from("trips").update({ status: "parked", parked_at: at, parked_by: userId, parked_for: "layover", parked_where: label, parked_note: "Parked automatically when the shift ended.", client_updated_at: now }).eq("trip_id", trip.trip_id).in("status", OPEN);
     await admin.from("trip_events").insert({ event_id: randomUUID(), trip_id: trip.trip_id, event_type: "parked", occurred_at: at, actor_id: userId, payload: { auto: true, parked_for: "layover", where: label, from_status: trip.status } });
@@ -113,6 +119,6 @@ async function closeShift(companyId: string, userId: string, startedAt: string, 
   // Tell the driver. They open the app to confirm what the truck did.
   const { data: subs } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("company_id", companyId).eq("user_id", userId);
   const when = new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: process.env.REPORT_TZ || "America/New_York" });
-  await sendPush((subs ?? []) as StoredSub[], { title: "Your shift was ended", body: `We ended your shift at ${when}${label ? ` at ${label}` : ""}. Open the app to confirm your day.`, url: "/planner/home", tag: `auto-end-${userId}` });
+  await sendPush((subs ?? []) as StoredSub[], { title: midDelivery ? "Finish your delivery" : "Your shift was ended", body: midDelivery ? `We ended your shift at ${when}, but your delivery is still open. Open the app and tap Finish Delivery so it's recorded.` : `We ended your shift at ${when}${label ? ` at ${label}` : ""}. Open the app to confirm your day.`, url: "/planner/home", tag: `auto-end-${userId}` });
   return true;
 }
