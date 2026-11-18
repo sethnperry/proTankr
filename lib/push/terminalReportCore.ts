@@ -1,7 +1,7 @@
 // lib/push/terminalReportCore.ts
 //
-// A new terminal report is pushed only to a driver it changes: a truck still headed to that rack
-// (not arrived yet) whose load it hits. Terminal-wide reports (long line, terminal issue) hit every
+// A new terminal report is pushed only to a driver it changes: a truck headed to that rack, or at it and
+// not loading yet, whose load it hits. Terminal-wide reports (long line, terminal issue) hit every
 // truck headed there; an out-of-product or allocation report only trucks going for that product.
 // A truck whose products are unknown is skipped (nothing certain to say). Pure.
 

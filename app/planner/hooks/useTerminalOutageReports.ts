@@ -115,6 +115,14 @@ export async function submitOutageReport({
 
   const { error } = await supabase.from("terminal_outage_reports").insert(rows);
   if (error) return { error: error.message };
+  // Tell the other trucks now (their banner and a push), not on the next 5-minute tick. Never holds the driver up.
+  void (async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) await fetch("/api/terminal-reports/push", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    } catch { /* the 5-minute tick still sends it */ }
+  })();
   return { error: null };
 }
 
@@ -387,7 +395,16 @@ export function useActiveOutageBanner(
     // poll cuts this query's aggregate volume by two-thirds with no real
     // loss of freshness -- part of the 2026-08-31 performance pass (see
     // CLAUDE.md).
-    return startPoll(fetchAndCompose, OUTAGE_POLL_MS);
+    // Also when the screen regains focus or a push arrives, so a new report shows without waiting or reopening.
+    const refresh = () => { if (document.visibilityState === "visible") void fetchAndCompose(); };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("protankr:reports-refresh", refresh);
+    const stop = startPoll(fetchAndCompose, OUTAGE_POLL_MS);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("protankr:reports-refresh", refresh);
+      stop();
+    };
   }, [fetchAndCompose]);
 
   return { tickerMessage, reports, timeZone: timeZone || "America/New_York", refresh: fetchAndCompose };

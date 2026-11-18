@@ -172,6 +172,8 @@ self.addEventListener("push", (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch { d = { title: "ProTankr", body: event.data ? event.data.text() : "" }; }
   // The Desk asked this phone to send its saved work: tell any open app window.
+  // Any push: open windows refresh the terminal banner at once.
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => list.forEach((c) => c.postMessage("reports-refresh"))));
   if (d.sync) event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => list.forEach((c) => c.postMessage("sync-now"))));
   event.waitUntil(
     self.registration.showNotification(d.title || "ProTankr", {

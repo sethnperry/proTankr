@@ -80,7 +80,10 @@ export function useTripStore(userId: string | null | undefined) {
       if (document.visibilityState === "visible") void syncNow();
     };
     // The Desk can ask this phone to send its saved work (also retries rows the server rejected).
-    const onSw = (e: MessageEvent) => { if (e.data === "sync-now") { store.retryFailed(); void store.drain(sender); } };
+    const onSw = (e: MessageEvent) => {
+      if (e.data === "sync-now") { store.retryFailed(); void store.drain(sender); }
+      if (e.data === "reports-refresh") { try { window.dispatchEvent(new Event("protankr:reports-refresh")); } catch { /* not a browser */ } }
+    };
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisible);
     try { navigator.serviceWorker?.addEventListener("message", onSw); } catch { /* no service worker */ }

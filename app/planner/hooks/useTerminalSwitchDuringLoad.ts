@@ -79,6 +79,7 @@ export function useTerminalSwitchDuringLoad(a: Args) {
   const [couldntLoad, setCouldntLoad] = useState<
     | { stage: "reason" | "pick"; prev: TerminalSnapshot }
     | { stage: "apply"; prev: TerminalSnapshot; next: TerminalSnapshot }
+    | { stage: "leave_supplier"; prev: TerminalSnapshot }   // asked which supplier was tried here, before moving on (dismissable)
     | { stage: "supplier"; hopped: boolean }
     | null
   >(null);
@@ -293,6 +294,11 @@ export function useTerminalSwitchDuringLoad(a: Args) {
   // The why is answered (a reported issue or a picked reason): open the terminal picker.
   const onCouldntLoadReasonDone = useCallback(() => {
     if (couldntLoad?.stage !== "reason") return;
+    // First: if no supplier was picked at this rack, ask which one was tried (the sheet can be dismissed).
+    setCouldntLoad({ stage: "leave_supplier", prev: couldntLoad.prev });
+  }, [couldntLoad]);
+  const onLeaveSupplierDone = useCallback(() => {
+    if (couldntLoad?.stage !== "leave_supplier") return;
     setTerminalSwitchWatch(couldntLoad.prev);
     setCouldntLoad({ stage: "pick", prev: couldntLoad.prev });
     shell.setTermOpen(true);
@@ -407,7 +413,7 @@ export function useTerminalSwitchDuringLoad(a: Args) {
 
   return {
     terminalSwitchConfirm,
-    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad, startSupplierPick,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, onLeaveSupplierDone, finishCouldntLoad, startSupplierPick,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,

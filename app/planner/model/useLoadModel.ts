@@ -100,7 +100,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
 
   const {
     terminalSwitchConfirm,
-    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad, startSupplierPick,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, onLeaveSupplierDone, finishCouldntLoad, startSupplierPick,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,
@@ -183,7 +183,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
     handleViewAltLoadInReports,
     terminalLabel,
     terminalSwitchConfirm,
-    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, finishCouldntLoad, startSupplierPick,
+    couldntLoad, handleCouldntLoad, onCouldntLoadReasonDone, onLeaveSupplierDone, finishCouldntLoad, startSupplierPick,
     handleTapTerminalInLoadingModal,
     handleUpdateCardAtPrevious,
     handleSwitchWithoutUpdating,

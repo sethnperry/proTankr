@@ -6,27 +6,34 @@
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import { planReportPushes, reportPushText, type HeadedTruck, type NewReport } from "@/lib/push/terminalReportCore";
+import { outageIsActive } from "@/app/planner/utils/dates";
 
 const OPEN = ["draft", "loading", "in_transit", "delivering"];
 
 export async function pushTerminalReports(): Promise<number> {
   const admin = getServiceSupabase();
-  const since = new Date(Date.now() - 20 * 60_000).toISOString();
-  const { data: rs } = await admin.from("terminal_outage_reports")
-    .select("report_id, terminal_id, report_type, product_id, supplier_name, company_id, reporter_user_id").gte("created_at", since);
+  // Every report still showing in the app (reports clear on a 6-hour schedule), not just the last few minutes: a driver
+  // whose trip starts after the report was posted still hears about it. Each report goes to each driver once.
+  const nowMs = Date.now();
+  const since = new Date(nowMs - 8 * 3600_000).toISOString();
+  const { data: rs0 } = await admin.from("terminal_outage_reports")
+    .select("report_id, terminal_id, report_type, product_id, supplier_name, company_id, reporter_user_id, created_at, last_activity_at").gte("created_at", since);
+  const tzRows = (rs0 ?? []).length ? (await admin.from("terminals").select("terminal_id, timezone").in("terminal_id", [...new Set(((rs0 ?? []) as any[]).map((r) => String(r.terminal_id)))])).data : [];
+  const tzOf = new Map(((tzRows ?? []) as any[]).map((t) => [String(t.terminal_id), (t.timezone as string | null) || "America/New_York"]));
+  const rs = ((rs0 ?? []) as any[]).filter((r) => outageIsActive(r.report_type, Date.parse(r.created_at), nowMs, tzOf.get(String(r.terminal_id)) ?? "America/New_York", r.last_activity_at ? Date.parse(r.last_activity_at) : null));
   const reports: NewReport[] = ((rs ?? []) as any[]).map((r) => ({
     reportId: r.report_id, terminalId: String(r.terminal_id), type: r.report_type, productId: r.product_id ?? null,
     supplierName: r.supplier_name ?? null, companyId: r.company_id, reporterUserId: r.reporter_user_id ?? null,
   }));
   if (!reports.length) return 0;
   const { data: ts } = await admin.from("trips")
-    .select("driver_id, company_id, trip_pickups(seq, terminal_id, arrived_at, left_at, outcome, planned_comps, load_id)")
+    .select("driver_id, company_id, trip_pickups(seq, terminal_id, arrived_at, begin_at, left_at, outcome, planned_comps, load_id)")
     .in("status", OPEN).not("driver_id", "is", null);
   const loadIds: string[] = [];
   const heads: { userId: string; companyId: string; terminalId: string; comps: string[]; loadId: string | null }[] = [];
   for (const t of (ts ?? []) as any[]) {
     const live = ((t.trip_pickups ?? []) as any[]).filter((k) => k.outcome !== "no_load" && !k.left_at).sort((a, b) => a.seq - b.seq)[0];
-    if (!live || live.arrived_at || !live.terminal_id) continue; // headed there, not arrived yet
+    if (!live || live.begin_at || !live.terminal_id) continue; // headed there, or at the rack and not loading yet
     const comps = ((live.planned_comps ?? []) as { product_id?: string }[]).map((c) => c.product_id).filter((x): x is string => !!x);
     if (live.load_id) loadIds.push(live.load_id);
     heads.push({ userId: t.driver_id, companyId: t.company_id, terminalId: String(live.terminal_id), comps, loadId: live.load_id ?? null });

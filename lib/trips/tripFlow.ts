@@ -106,7 +106,7 @@ export function nextStep(
       // Arrived but not begun: the button returns to the arrival window (its back arrow can leave it, so this brings
       // the driver back to the same place). Begun: back into Plan Review.
       label: p.begin_at ? "Continue Trip" : "Return to Load",
-      detail: p.begin_at ? `Loading${where}` : `Back to the arrival window${where}`,
+      detail: p.begin_at ? `Loading${where}` : `Back to Plan Review${where}`,
     };
   }
   // Every rack so far ended without a load (rack hop): pick the next one.
