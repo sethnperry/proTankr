@@ -192,7 +192,7 @@ export default function WeeklyRecapModal({ open, onClose, companyId, canEdit }: 
               <>
                 <Table head={["Driver", "Shifts", "ATR", "vs avg", "Recovery", "Under", "Unclaimed", "Review"]} widths="1.6fr .6fr 1fr .8fr .9fr .6fr 1fr 1.6fr"
                   rows={report.drivers.map((d) => [d.name + (d.estimate ? " *" : ""), String(d.shifts), d.insufficient ? "insufficient data" : d.atr == null ? "-" : `${d.atr.toFixed(1)}%`, sgn(d.atrChange), d.recovery == null ? "-" : `${d.recovery.toFixed(1)}%`, String(d.loadsUnder), `${hm(d.unclaimedMin)}${d.largestUnclaimed ? ` · ${d.largestUnclaimed}` : ""}`, d.chips.join(", ") || "-"])} />
-                <div style={{ fontSize: 12, color: MUTE, marginTop: 8 }}>ATR is the share of on-duty time that was standard-pace work or a verified wait. * = no Geotab link, so on-duty time is the app shift (an estimate). Recovery % is Plan Utilization: gallons loaded against gallons available.</div>
+                <div style={{ fontSize: 12, color: MUTE, marginTop: 8 }}>ATR (Accounted-Time Ratio) is the share of on-duty time that was standard-pace work or a verified wait. * = no Geotab link, so on-duty time is the app shift (an estimate). Recovery % is Plan Utilization: gallons loaded against gallons available.</div>
               </>
             )}
             {page === "ledger" && (

@@ -26,7 +26,7 @@ export function drawRecap(d: PdfDoc, r: Recap) {
   d.table(["Driver", "Shifts", "ATR", "vs avg", "Recovery", "Under", "Unclaimed", "Largest", "Review"],
     r.drivers.map((x) => [x.name + (x.estimate ? " *" : ""), String(x.shifts), x.insufficient ? "insufficient data" : x.atr == null ? "-" : `${x.atr.toFixed(1)}%`, sign(x.atrChange), x.recovery == null ? "-" : `${x.recovery.toFixed(1)}%`, String(x.loadsUnder), h(x.unclaimedMin), x.largestUnclaimed ?? "-", x.chips.join(", ")]),
     [0.2, 0.06, 0.12, 0.07, 0.1, 0.06, 0.1, 0.11, 0.18], ["l", "r", "r", "r", "r", "r", "r", "l", "l"], { size: 8 });
-  d.para("* on-duty time is the app shift (no Geotab link): an estimate.", 8);
+  d.para("ATR = Accounted-Time Ratio: share of on-duty time that was standard-pace work or a verified wait. * on-duty time is the app shift (no Geotab link): an estimate.", 8);
 
   d.newPage();
   d.heading("3. Delay ledger");

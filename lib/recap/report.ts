@@ -11,7 +11,7 @@ export type DriverRecovery = { pct: number | null; loads: number; under: number;
 export type PriorRecap = {
   atrMedian: number | null; recoveryPct: number | null; loadedShare: number | null; loads: number; gallons: number;
   placeLost: Record<string, number>;
-  /** Each driver's ATR in recent earlier weeks, newest first. */
+  /** Each driver (ATR = Accounted-Time Ratio)'s ATR in recent earlier weeks, newest first. */
   driverAtr: Record<string, number[]>;
 };
 
