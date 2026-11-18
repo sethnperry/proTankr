@@ -60,6 +60,7 @@ export function StartLoadSheet({
   onSubmit,
   suggestStart,
   liveMiles,
+  milesStatus,
   breakNote,
   planRequired = true,
   forDriver = null,
@@ -78,6 +79,8 @@ export function StartLoadSheet({
   breakNote?: string | null;
   // The truck's odometer from telematics. Fills beginning miles unless one was typed.
   liveMiles?: number | null;
+  /** Whether the tracker is giving usable miles: "warn" shows a red warning on Begin miles. */
+  milesStatus?: "ok" | "warn" | "none";
   open: boolean;
   editing: boolean;
   initial: StartLoadValues;
@@ -286,7 +289,7 @@ export function StartLoadSheet({
         )}
 
         <div style={{ borderTop: hair }}>
-          {!forDriver && <Line label="Begin miles" value={v.beginMiles || null} missing verified={liveMiles != null && v.beginMiles === String(liveMiles)} sub={liveMiles != null && v.beginMiles === String(liveMiles) ? "From telematics" : null} onTap={() => openEdit("miles")} />}
+          {!forDriver && <Line label="Begin miles" value={v.beginMiles || null} missing verified={liveMiles != null && v.beginMiles === String(liveMiles)} warn={milesStatus === "warn" && !(liveMiles != null && v.beginMiles === String(liveMiles))} sub={liveMiles != null && v.beginMiles === String(liveMiles) ? "From telematics" : milesStatus === "warn" ? "Tracker isn't giving miles. Check the dash and enter them." : null} onTap={() => openEdit("miles")} />}
           <Line label="Order #" value={v.orderNumber || null} missing onTap={() => openEdit("order")} />
           {v.extraOrderNumbers.map((n, i) => (
             <Line key={`order-${i}`} label={`Order # ${i + 2}`} value={n || null} missing onTap={() => openEdit(`order:${i}`)} />

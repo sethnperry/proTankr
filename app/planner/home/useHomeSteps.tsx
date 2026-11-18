@@ -47,7 +47,7 @@ import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/tri
 import { type CancelTripSubmit } from "../components/trip/CancelTripSheet";
 import { rackReasonFor } from "@/lib/trips/cancelReasons";
 
-import { useTruckReading, fetchTruckShipments } from "@/lib/telematics/useTruckReading";
+import { useTruckReading, useTruckReadingState, fetchTruckShipments, odometerStatus } from "@/lib/telematics/useTruckReading";
 import { shipmentsForPickup } from "@/lib/telematics/shipmentMatch";
 import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 
@@ -139,7 +139,7 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     setBlockNotice(shell.dashboardNotice);
     shell.clearDashboardNotice();
   }, [shell.dashboardNotice]);
-  const truckReading = useTruckReading(truckId, sheetOpen || finishOpen || fuelOpen || freightOpen || moveOpen || truckSheetWatch, finishOpen ? 60_000 : undefined, fuelOpen); // fuel wants a fresh odometer; a stop that lasted minutes is fine from the cache
+  const { reading: truckReading, failed: truckReadingFailed } = useTruckReadingState(truckId, sheetOpen || finishOpen || fuelOpen || freightOpen || moveOpen || truckSheetWatch, finishOpen ? 60_000 : undefined, fuelOpen); // fuel wants a fresh odometer; a stop that lasted minutes is fine from the cache
   // Hookup detection: which trailer Geotab says is on this truck, read once when the dashboard opens.
   const hookup = useTruckReading(truckId, !!truckId);
   // "It's right" is remembered for that truck and trailer, so the card doesn't come back every time the app opens.
@@ -497,5 +497,5 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     });
     return () => { alive = false; };
   }, [tripTrailerId]);
-  return { ...p, undoBeginDeliveryNow, askFuelFirst, onCancelSubmit, fuel, fuelOn, truckReading, hookup, hookupKey, myHos, hosVsTrip, breakCountsRed, breakNote, fuelSetup, clock, loadedPickup, finishDeliveryRow, openDelivery, beginDelivery, finishFromDropSite, onLoadedSubmit, mergedHere, onFinishSubmit, onDeliveryProgress, productInfo, dropProducts, onPick, addAnotherPickup, tripTrailerId } as const;
+  return { ...p, undoBeginDeliveryNow, askFuelFirst, onCancelSubmit, fuel, fuelOn, truckReading, truckReadingFailed, hookup, hookupKey, myHos, hosVsTrip, breakCountsRed, breakNote, fuelSetup, clock, loadedPickup, finishDeliveryRow, openDelivery, beginDelivery, finishFromDropSite, onLoadedSubmit, mergedHere, onFinishSubmit, onDeliveryProgress, productInfo, dropProducts, onPick, addAnotherPickup, tripTrailerId } as const;
 }

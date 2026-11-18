@@ -64,9 +64,15 @@ export async function fetchVehicleReading(companyId: string, vehicleId: string):
 }
 
 export function useTruckReading(truckId: string | null, active: boolean, pollMs?: number, fresh = false): TruckReading | null {
+  return useTruckReadingState(truckId, active, pollMs, fresh).reading;
+}
+
+/** Same as useTruckReading, plus whether the last ask failed outright (provider down, server hiccup). */
+export function useTruckReadingState(truckId: string | null, active: boolean, pollMs?: number, fresh = false): { reading: TruckReading | null; failed: boolean } {
   const [reading, setReading] = useState<TruckReading | null>(null);
+  const [failedNow, setFailedNow] = useState(false);
   useEffect(() => {
-    if (!active || !truckId) { setReading(null); return; }
+    if (!active || !truckId) { setReading(null); setFailedNow(false); return; }
     let cancelled = false;
     let timer: number | undefined;
     let failures = 0;
@@ -77,10 +83,12 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
         if (failed) {
           // Keep the last reading and ask again soon, a few times, instead of going quiet for good.
           failures += 1;
+          setFailedNow(true);
           if (failures <= 5) timer = window.setTimeout(run, pollMs ?? 30_000);
           return;
         }
         failures = 0;
+        setFailedNow(false);
         setReading(r);
         if (pollMs && r) timer = window.setTimeout(run, pollMs); // no telematics: stop asking
       });
@@ -88,22 +96,7 @@ export function useTruckReading(truckId: string | null, active: boolean, pollMs?
     run();
     return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [truckId, active, pollMs, fresh]);
-  return reading;
+  return { reading, failed: failedNow };
 }
 
-/** Shipment numbers entered in the telematics app on a truck since a time. Empty when there's no connection. */
-export async function fetchTruckShipments(truckId: string | null, sinceIso: string): Promise<{ documentNumber: string; start: string | null; shipperName: string | null; commodity: string | null }[]> {
-  if (!truckId) return [];
-  // Never holds the driver up: gives up after 6 seconds and the app carries on without a suggestion.
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 6000);
-  try {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) return [];
-    const r = await fetch(`/api/telematics/shipments?truckId=${encodeURIComponent(truckId)}&since=${encodeURIComponent(sinceIso)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: ctl.signal });
-    if (!r.ok) return [];
-    const j = await r.json();
-    return j?.connected ? (j.shipments ?? []) : [];
-  } catch { return []; } finally { clearTimeout(timer); }
-}
+export { odometerStatus } from "./odometerStatus";

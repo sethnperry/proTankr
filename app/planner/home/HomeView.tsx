@@ -151,6 +151,7 @@ import { DispatchedCard } from "./DispatchedCard";
 
 // Sheets that only open on a tap load after the page is up, not before it can draw.
 import type { useHome } from "./useHome";
+import { odometerStatus } from "@/lib/telematics/useTruckReading";
 import { staleOpenDelivery } from "@/lib/trips/staleDelivery";
 import { SquawkSheet, DropSiteSheet, StartLoadSheet, LoadedSheet, LocationPicker, AddPickupSheet, FreightSheet, TankCheckSheet, PerDiemSheet, STATUS_LABEL, muted, smallLink, EquipLine, EquipmentToolsRegistrar, InfoRow, SyncDetailsSheet } from "./homeShared";
 
@@ -510,6 +511,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     truckChanged,
     truckId,
     truckReading,
+    truckReadingFailed,
     undoConfirm,
     undoName,
     undoable,
@@ -1512,6 +1514,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onSubmit={submit}
         forDriver={addingLoad ? "self" : null}
         liveMiles={truckReading?.odometerMi ?? null}
+        milesStatus={odometerStatus(truckReading ?? null, truckReadingFailed)}
         suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
       />
 
