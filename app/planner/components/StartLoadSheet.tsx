@@ -59,8 +59,7 @@ export function StartLoadSheet({
   onClose,
   onSubmit,
   suggestStart,
-  liveMiles,
-  milesStatus,
+  liveMiles, milesStatus,
   breakNote,
   planRequired = true,
   forDriver = null,
@@ -79,7 +78,6 @@ export function StartLoadSheet({
   breakNote?: string | null;
   // The truck's odometer from telematics. Fills beginning miles unless one was typed.
   liveMiles?: number | null;
-  /** Whether the tracker is giving usable miles: "warn" shows a red warning on Begin miles. */
   milesStatus?: "ok" | "warn" | "none";
   open: boolean;
   editing: boolean;
