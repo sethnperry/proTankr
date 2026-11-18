@@ -341,10 +341,17 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     const orderNo = children?.primaryOrder?.order_number;
     // The email choices are made in Details; at the close the package goes out without another screen.
     if (tripComplete) {
-      if (emailPkg.on === true) void sendTripPackage(tripId, "auto");
       let extra: string[] = [];
       try { extra = (localStorage.getItem(EXTRA_KEY) ?? "").split(/[\s,;]+/).filter(Boolean).slice(0, 3); } catch { /* storage blocked */ }
-      if (extra.length) void sendTripPackage(tripId, "manual", extra);
+      // The server reads the finished trip, so let it sync first. The "automatic copy" switch is checked by the server
+      // (this screen's copy of it can be older than a change made in Details), and a trip is only ever sent once.
+      void (async () => {
+        try { await syncNow(); } catch { /* the send below says if it couldn't */ }
+        const results = [await sendTripPackage(tripId, "auto")];
+        if (extra.length) results.push(await sendTripPackage(tripId, "manual", extra));
+        const bad = results.find((r) => !r.ok);
+        if (bad && !bad.ok) setNotice({ text: `Trip complete, but the email didn't go out: ${bad.error}`, tripId });
+      })();
     }
     setNotice(tripComplete
       ? { text: orderNo ? `Order ${orderNo} · Trip complete.` : "Trip complete.", tripId }
