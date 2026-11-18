@@ -17,6 +17,9 @@ import { buildRecap, type DriverRecovery, type PriorRecap, type Recap } from "./
 import { PdfDoc } from "../pdf/doc.ts";
 import { drawRecap } from "./recapPdf.ts";
 import { email } from "../eod/eodServer.ts";
+import { deliveryDetailsFor } from "../trips/deliveryDetails.ts";
+import { cityKey, extractLaneLegs } from "./laneStats.ts";
+import { loadLaneBook, recordLaneLegs } from "./laneServer.ts";
 
 const rows = async <T>(p: PromiseLike<{ data: unknown }>): Promise<T[]> => ((await p).data ?? []) as T[];
 const HISTORY_DAYS = 90;
@@ -75,8 +78,8 @@ export async function buildWeeklyRecap(admin: SupabaseClient, companyId: string,
 
   const terminalIds = [...new Set(pickups.map((p: any) => p.terminal_id).filter(Boolean))] as string[];
   const locationIds = [...new Set(deliveries.map((d: any) => d.location_id).filter(Boolean))] as string[];
-  const terms = terminalIds.length ? await rows<{ terminal_id: string; terminal_name: string | null; lat: number | null; lon: number | null }>(admin.from("terminals").select("terminal_id, terminal_name, lat, lon").in("terminal_id", terminalIds)) : [];
-  const locs = locationIds.length ? await rows<{ location_id: string; name: string; location_number: string | null; lat: number | null; lon: number | null }>(admin.from("delivery_locations").select("location_id, name, location_number, lat, lon").in("location_id", locationIds)) : [];
+  const terms = terminalIds.length ? await rows<{ terminal_id: string; terminal_name: string | null; city: string | null; state: string | null; lat: number | null; lon: number | null }>(admin.from("terminals").select("terminal_id, terminal_name, city, state, lat, lon").in("terminal_id", terminalIds)) : [];
+  const locs = locationIds.length ? await rows<{ location_id: string; name: string; location_number: string | null; city: string | null; state: string | null; lat: number | null; lon: number | null }>(admin.from("delivery_locations").select("location_id, name, location_number, city, state, lat, lon").in("location_id", locationIds)) : [];
   const termMap = new Map(terms.map((t) => [t.terminal_id, t]));
   const locMap = new Map(locs.map((l) => [l.location_id, l]));
   const coordMap = new Map<string, LatLon>();
@@ -93,8 +96,8 @@ export async function buildWeeklyRecap(admin: SupabaseClient, companyId: string,
     const gallons = comps.filter((c: any) => c.trip_id === t.trip_id && c.disposition !== "cancelled").reduce((n: number, c: any) => n + Number(c.gross_gallons ?? 0), 0);
     return {
       tripId: t.trip_id, userId: t.driver_id, startedAt: t.started_at, completedAt: t.completed_at, gallons,
-      pickups: pickups.filter((p: any) => p.trip_id === t.trip_id).sort((a: any, b: any) => a.seq - b.seq).map((p: any) => ({ pickupId: p.pickup_id, terminalId: p.terminal_id, name: p.name, arrivedAt: p.arrived_at, beginAt: p.begin_at, leftAt: p.left_at, outcome: p.outcome ?? null, noLoadReason: p.no_load_reason ?? null, hasDelayNote: !!(p.delay_reason_id || p.delay_note) })),
-      deliveries: deliveries.filter((d: any) => d.trip_id === t.trip_id).sort((a: any, b: any) => a.seq - b.seq).map((d: any) => ({ deliveryId: d.delivery_id, locationId: d.location_id, name: d.one_off_name, arrivedAt: d.arrived_at, beginAt: d.begin_at, leftAt: d.left_at, signed: !!d.driver_signed_at, hasDelayNote: !!(d.delay_reason_id || d.delay_note) })),
+      pickups: pickups.filter((p: any) => p.trip_id === t.trip_id).sort((a: any, b: any) => a.seq - b.seq).map((p: any) => ({ pickupId: p.pickup_id, terminalId: p.terminal_id, name: p.name, arrivedAt: p.arrived_at, beginAt: p.begin_at, leftAt: p.left_at, outcome: p.outcome ?? null, noLoadReason: p.no_load_reason ?? null, hasDelayNote: !!(p.delay_reason_id || p.delay_note), odometer: p.odometer == null ? null : Number(p.odometer) })),
+      deliveries: deliveries.filter((d: any) => d.trip_id === t.trip_id).sort((a: any, b: any) => a.seq - b.seq).map((d: any) => ({ deliveryId: d.delivery_id, locationId: d.location_id, name: d.one_off_name, arrivedAt: d.arrived_at, beginAt: d.begin_at, leftAt: d.left_at, signed: !!d.driver_signed_at, hasDelayNote: !!(d.delay_reason_id || d.delay_note), odometer: deliveryDetailsFor(ev, d.delivery_id)?.odometer ?? null })),
       delays: loggedDelays(ev),
     };
   });
@@ -115,6 +118,17 @@ export async function buildWeeklyRecap(admin: SupabaseClient, companyId: string,
   }
   const version = `${weekEnd.slice(0, 7)}`;
   const std = buildStandards(hist, settings, version);
+
+  // Shared lane averages: add the company's completed trips from before this week (once each, ever), then look up the
+  // lanes this week used. A lane with enough trips elsewhere gives the standard when this company has too little of its own.
+  const stopInfo = (key: string) => {
+    if (key.startsWith("t:")) { const t = termMap.get(key.slice(2)); return { name: t?.terminal_name ?? "Terminal", city: cityKey(t?.city, t?.state) }; }
+    const l = locMap.get(key.slice(2)); return { name: l?.name ?? "Delivery", city: cityKey(l?.city, l?.state) };
+  };
+  const cityOf = (key: string | null) => (key ? stopInfo(key).city : null);
+  const earlier = trips.filter((t) => t.completedAt && Date.parse(t.completedAt) < startMs);
+  await recordLaneLegs(admin, earlier.flatMap((t) => extractLaneLegs(t, spans, stopInfo)));
+  std.lanes = await loadLaneBook(admin, weekTrips.flatMap((t) => extractLaneLegs(t, [], stopInfo)), cityOf);
   const scores = scoreShifts(shifts.map((sh) => ({ shift: sh, segments: cutShift(sh, trips, spans, names, settings, tz) })), std, settings, coords);
 
   // Recovery %: the existing payload-utilization numbers for the week (the benchmark system it was first specified on is gone).

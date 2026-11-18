@@ -46,11 +46,13 @@ export type RecapPickup = {
   pickupId: string; terminalId: string | null; name: string | null;
   arrivedAt: string | null; beginAt: string | null; leftAt: string | null;
   outcome: "loaded" | "no_load" | null; noLoadReason: string | null; hasDelayNote: boolean;
+  odometer?: number | null;
 };
 export type RecapDelivery = {
   deliveryId: string; locationId: string | null; name: string | null;
   arrivedAt: string | null; beginAt: string | null; leftAt: string | null;
   signed: boolean; hasDelayNote: boolean;
+  odometer?: number | null;
 };
 export type RecapTrip = {
   tripId: string; userId: string; startedAt: string | null; completedAt: string | null;
@@ -86,7 +88,7 @@ export type Segment = {
 
 export type Scored = Segment & {
   standardMin: number | null;
-  basis: "history" | "history_any_hour" | "distance" | "default" | "actual" | "allowance" | null;
+  basis: "history" | "history_any_hour" | "network" | "distance" | "default" | "actual" | "allowance" | null;
   credit: number;         // minutes credited
   excessMin: number;      // actual over standard (before waits)
   waitCredited: number;

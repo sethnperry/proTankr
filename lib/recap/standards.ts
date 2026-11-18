@@ -8,6 +8,7 @@
 import type { LatLon, RecapSettings, Segment, SegType } from "./types.ts";
 import { airMilesBetween } from "./segments.ts";
 import { bucketOf, median } from "./time.ts";
+import { lookupLane, type LaneBook } from "./laneStats.ts";
 
 export type StandardRow = { key: string; minutes: number; drivers: number; samples: number };
 export type Standards = {
@@ -16,6 +17,8 @@ export type Standards = {
   rows: Map<string, StandardRow>;
   /** How many visits each driver already made to each place ("userId|key"), for the learning allowance. */
   visits: Map<string, number>;
+  /** Lane averages shared across companies (an estimate); filled in by the server when the table exists. */
+  lanes?: LaneBook;
 };
 
 const usable = (g: Segment) => g.type !== "gray" && g.type !== "fuel" && g.key && g.minutes >= 1 && g.minutes < 12 * 60;
@@ -51,18 +54,21 @@ export function buildStandards(history: Segment[], settings: RecapSettings, vers
   return { version, rows, visits };
 }
 
-export type StandardFor = { minutes: number; basis: "history" | "history_any_hour" | "distance" | "default" };
+export type StandardFor = { minutes: number; basis: "history" | "history_any_hour" | "network" | "distance" | "default" };
 
 export function standardFor(seg: Segment, std: Standards, settings: RecapSettings, coords: (key: string | null) => LatLon | null, visitIndex: number): StandardFor | null {
   if (seg.type === "gray" || seg.type === "fuel" || !seg.key) return null;
   let found: StandardFor | null = null;
   const exact = std.rows.get(keyOf(seg.type, seg.key, bucketOf(seg.hour)));
   const any = std.rows.get(keyOf(seg.type, seg.key));
+  const isLeg = seg.type === "loaded_leg" || seg.type === "empty_leg";
   if (exact) found = { minutes: exact.minutes, basis: "history" };
   else if (any) found = { minutes: any.minutes, basis: "history_any_hour" };
-  else if (seg.type === "loaded_leg" || seg.type === "empty_leg") {
-    const a = coords(seg.fromKey), b = coords(seg.toKey);
-    if (a && b) found = { minutes: Math.max(5, (airMilesBetween(a, b) * settings.circuity / settings.avgMph) * 60), basis: "distance" };
+  else if (isLeg) {
+    const lane = lookupLane(std.lanes, seg.type, seg.fromKey, seg.toKey);
+    const ca = coords(seg.fromKey), cb = coords(seg.toKey);
+    if (lane) found = { minutes: Math.max(5, lane.minutes), basis: "network" };
+    else if (ca && cb) found = { minutes: Math.max(5, (airMilesBetween(ca, cb) * settings.circuity / settings.avgMph) * 60), basis: "distance" };
     else found = { minutes: settings.defaultLegMin, basis: "default" };
   } else found = { minutes: seg.type === "rack" ? settings.defaultRackMin : settings.defaultDropMin, basis: "default" };
   // A new place gets a more forgiving standard for its first visits.

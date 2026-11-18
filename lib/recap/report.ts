@@ -52,6 +52,8 @@ export type Recap = {
   patterns: Pattern[];
   system: { allocationHops: SystemRow[]; deadhead: SystemRow[]; terminals: SystemRow[]; notes: string[] };
   completeness: number;
+  /** Legs scored against a lane average built from other companies' trips (an estimate), and how many legs were scored. */
+  networkLegs?: number; legsScored?: number;
 };
 
 const pct = (x: number) => Math.round(x * 1000) / 10;
@@ -133,6 +135,8 @@ export function buildRecap(i: RecapInput): Recap {
     recognition: scored.filter((r) => r.shifts >= 3 && !r.estimate).sort((a, b) => (b.atr as number) - (a.atr as number)).slice(0, 5).map((r) => ({ name: r.name, atr: r.atr as number })),
     ledger: { causes: causes.slice(0, 12), places, heat }, patterns,
     system: systemLens(i, all), completeness,
+    networkLegs: i.scores.reduce((n, sc) => n + sc.segments.filter((x) => x.basis === "network").length, 0),
+    legsScored: i.scores.reduce((n, sc) => n + sc.segments.filter((x) => x.type === "loaded_leg" || x.type === "empty_leg").length, 0),
   };
 }
 
