@@ -49,7 +49,12 @@ export type PtdInput = {
   events: TripEventRow[];
   /** Shift answers "still working" while the ELD showed off duty, from the driver's shift events. */
   shiftEvents?: { event_type: string; occurred_at: string; payload: Record<string, unknown> }[];
+  /** The driver's fuel stops during the trip (company-wide readable), for the timeline. */
+  fuelStops?: FuelStopInput[];
 };
+
+export type FuelStopInput = { started_at: string; finished_at: string | null; completed_at: string | null; status: string; store_name: string | null; store_number: string | null; city: string | null; state: string | null; diesel_gallons: number | string | null; odometer: number | string | null; pay_kind: string | null };
+export type FuelStopRecord = { at: string; endedAt: string | null; place: string; gallons: number | null; odometer: number | null; open: boolean };
 
 export type PtdStop = {
   name: string;
@@ -249,6 +254,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     startedAt: trip.started_at,
     delays: loggedDelays(input.events),
     offDuty: offDutyWork(input.shiftEvents ?? [], trip.started_at, trip.completed_at ?? null),
+    fuelStops: fuelStopsFor(input.fuelStops ?? [], trip.started_at, trip.completed_at ?? null),
     completedAt: trip.completed_at,
     status: trip.status,
     enteredLate: trip.entered_late,
@@ -313,4 +319,26 @@ export function supplierSwitches(events: TripEventRow[], pickupId: string) {
         note: p.note ?? null,
       };
     });
+}
+
+/** The fuel stops that fall inside the trip (start to completion, or to now while it is open), oldest first. */
+export function fuelStopsFor(rows: FuelStopInput[], startedAt: string | null, completedAt: string | null): FuelStopRecord[] {
+  const from = startedAt ? Date.parse(startedAt) : -Infinity;
+  const to = completedAt ? Date.parse(completedAt) : Infinity;
+  const n = (v: number | string | null | undefined) => { const x = v == null ? NaN : Number(v); return Number.isFinite(x) ? x : null; };
+  return rows
+    .filter((r) => { const t = Date.parse(r.started_at); return Number.isFinite(t) && t >= from && t <= to && r.status !== "cancelled"; })
+    .map((r) => {
+      const store = [r.store_name, r.store_number ? `#${r.store_number}` : null].filter(Boolean).join(" ");
+      const city = [r.city, r.state].filter(Boolean).join(" ");
+      return {
+        at: r.started_at,
+        endedAt: r.finished_at ?? r.completed_at ?? null,
+        place: [store, city].filter(Boolean).join(", ") || "Fuel stop",
+        gallons: n(r.diesel_gallons),
+        odometer: n(r.odometer),
+        open: r.status !== "complete",
+      };
+    })
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

@@ -356,7 +356,7 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
         <div style={{ borderLeft: "2px solid #999", marginLeft: 6, paddingLeft: 12 }}>
           {timeline.map((e, i) => (
             <div key={i} style={{ position: "relative", padding: "3px 0", breakInside: "avoid" }}>
-              <span style={{ position: "absolute", left: -18, top: 8, width: 8, height: 8, borderRadius: "50%", background: e.kind === "delay" ? "#b45309" : e.kind === "delivery" ? "#047857" : e.kind === "pickup" ? "#1d4ed8" : ink }} />
+              <span style={{ position: "absolute", left: -18, top: 8, width: 8, height: 8, borderRadius: "50%", background: e.kind === "delay" ? "#b45309" : e.kind === "fuel" ? "#7c3aed" : e.kind === "delivery" ? "#047857" : e.kind === "pickup" ? "#1d4ed8" : ink }} />
               <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
                 <span style={{ fontFamily: "monospace", fontSize: 10, color: faint, whiteSpace: "nowrap", minWidth: print ? 96 : 84 }}>{fmtDateTime(e.at)}</span>
                 <span style={{ fontWeight: 700 }}>{e.text}</span>

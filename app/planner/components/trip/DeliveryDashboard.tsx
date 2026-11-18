@@ -53,6 +53,7 @@ import { supabase } from "@/lib/supabase/client";
 import {
   delayMinutes,
   needsDelayReason,
+  unexplainedWait,
   suggestTank,
   timesProblem,
   type DeliveredCompartment,
@@ -681,7 +682,11 @@ export function DeliveryDashboard({
   const finishIso = fromLocalInput(finishText) || "";
   const timesNow: StepTimes = { arrivedAt: arrivedIso, beginAt: beginIso || arrivedIso, leftAt: finishIso || arrivedIso };
   const outcome = finishIso ? dropOutcome({ expectedEndAt: est.expectedEndAt, finishAt: finishIso, recordedDelayMin, graceMin: rules.graceMin }) : null;
-  const preDropLate = needsDelayReason(delayMinutes(arrivedIso, beginIso || null), settings.delivery_delay_threshold_minutes);
+  // Time between Arrive and the start of the drop. A delay already logged at this drop (the Delay button, a reason that
+  // belongs at the location) explains that much of it, so a reason is only asked for what is left unexplained.
+  // Delays on the road, or before Arrive, never count here.
+  const arriveToBegin = delayMinutes(arrivedIso, beginIso || null);
+  const preDropLate = needsDelayReason(unexplainedWait(arrivedIso, beginIso || null, recordedDelayMin), settings.delivery_delay_threshold_minutes);
   const milesProblem = (): string | null => {
     if (miles == null) return isLast ? "Enter ending miles." : null;
     if (miles > MAX_ODOMETER) return "That's too many digits for an odometer.";
@@ -895,7 +900,8 @@ export function DeliveryDashboard({
     onSubmit({
       times,
       delayReasonId: needReason ? reasonId : delivery.delay_reason_id ?? null,
-      delayNote: needReason && !reasonId ? note.trim() || null : delivery.delay_note ?? null,
+      // No reason asked for because the driver already logged one at the drop: it becomes the delivery's reason.
+      delayNote: needReason && !reasonId ? note.trim() || null : delivery.delay_note ?? (recordedDelayMin > 0 && !needReason ? recordedDelayLabels.map((l) => l.replace(/ \d+ min$/, "")).join(", ") || null : null),
       unaccountedMin: over && lateAnswer === "no" && outcome ? outcome.minutes : null,
       delivered: delivered.filter((c) => !partialOf(c)).map((c) => toDc(c, choice[c.compartment_load_id])),
       retained: retainedAll.map((c) => toDc(c, null)),
@@ -1376,7 +1382,7 @@ export function DeliveryDashboard({
             {preDropLate && (
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 13, color: "#fbbf24" }}>
-                  Arrive to start was {delayMinutes(arrivedIso, beginIso)} min (over {settings.delivery_delay_threshold_minutes}). Reason required.
+                  Arrive to start was {arriveToBegin} min{recordedDelayMin > 0 ? `, ${fmtMin(recordedDelayMin)} of it explained by the delay you logged` : ""} (over {settings.delivery_delay_threshold_minutes}). Reason required.
                 </div>
                 {reasonPicker}
               </div>

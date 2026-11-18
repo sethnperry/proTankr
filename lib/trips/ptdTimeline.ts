@@ -5,7 +5,7 @@
 
 import type { Ptd } from "./ptd.ts";
 
-export type TimelineKind = "trip" | "pickup" | "delivery" | "delay" | "note";
+export type TimelineKind = "trip" | "pickup" | "delivery" | "delay" | "note" | "fuel";
 export type TimelineEntry = { at: string; kind: TimelineKind; text: string; detail?: string | null };
 
 const mins = (n: number | null | undefined) => (n == null ? "" : n >= 60 ? `${Math.floor(n / 60)} h ${n % 60} min` : `${n} min`);
@@ -32,6 +32,16 @@ export function buildTimeline(ptd: Ptd): TimelineEntry[] {
 
   for (const d of ptd.delays) {
     add(d.startedAt, "delay", `Delay · ${d.label}`, `${mins(d.minutes)}${d.note ? ` · ${d.note}` : ""} (ended ${new Date(d.endedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })})`);
+  }
+
+  for (const f of ptd.fuelStops ?? []) {
+    const atPump = f.endedAt ? Math.max(0, Math.round((Date.parse(f.endedAt) - Date.parse(f.at)) / 60000)) : null;
+    const bits = [
+      f.gallons != null ? `${f.gallons.toLocaleString("en-US", { maximumFractionDigits: 1 })} gal diesel` : null,
+      f.odometer != null ? `odometer ${f.odometer.toLocaleString("en-US")}` : null,
+      atPump != null ? `${mins(atPump) || "0 min"} at the pump` : f.open ? "not finished" : null,
+    ].filter(Boolean);
+    add(f.at, "fuel", `Fuel stop · ${f.place}`, bits.join(" · ") || null);
   }
 
   // The ELD showed off duty while the driver was still working (told in line, with why).

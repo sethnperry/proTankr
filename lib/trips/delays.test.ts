@@ -50,3 +50,12 @@ test("rack delay reasons map to terminal warnings", () => {
   assert.equal(delayIssueCode("rack_down"), "rack_down");
   assert.equal(delayIssueCode("gauging"), null);
 });
+
+import { unexplainedWait } from "./tripFlow.ts";
+test("a delay logged at the drop explains the wait; road delays do not count", () => {
+  const a = "2026-11-18T03:55:00Z", b = "2026-11-18T04:40:00Z"; // 45 min arrive to begin
+  assert.equal(unexplainedWait(a, b, 0), 45);
+  assert.equal(unexplainedWait(a, b, 37), 8);
+  assert.equal(unexplainedWait(a, b, 60), 0);
+  assert.equal(unexplainedWait(a, null, 10), null);
+});

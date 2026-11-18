@@ -57,6 +57,7 @@ export default function TripPtdPage() {
   const [flagBusy, setFlagBusy] = useState<string | null>(null);
   const [locPlaces, setLocPlaces] = useState<Record<string, { city: string | null; state: string | null }>>({});
   const isAdmin = shell.role === "admin" || shell.isSuperAdmin;
+  const [fuelStops, setFuelStops] = useState<import("@/lib/trips/ptd").FuelStopInput[]>([]);
   const [shiftEvents, setShiftEvents] = useState<{ event_type: string; occurred_at: string; payload: Record<string, unknown> }[]>([]);
   const [equip, setEquip] = useState<{ truck: string | null; trailer: string | null }>({ truck: null, trailer: null });
 
@@ -188,6 +189,17 @@ export default function TripPtdPage() {
     return () => { off = true; };
   }, [tripDriverId, tripStart]);
 
+  // Fuel stops the driver made during the trip, told in the timeline.
+  const tripEnd = data?.trip.completed_at ?? null;
+  useEffect(() => {
+    if (!tripDriverId || !tripStart) return;
+    let off = false;
+    let q = supabase.from("fuel_purchases").select("started_at,finished_at,completed_at,status,store_name,store_number,city,state,diesel_gallons,odometer,pay_kind").eq("driver_id", tripDriverId).gte("started_at", tripStart);
+    if (tripEnd) q = q.lte("started_at", tripEnd);
+    void q.then(({ data: rows, error }) => { if (!off && !error) setFuelStops((rows ?? []) as typeof fuelStops); });
+    return () => { off = true; };
+  }, [tripDriverId, tripStart, tripEnd]);
+
   const ptd = useMemo(() => {
     if (!data) return null;
     const productName = (id: string | null) => {
@@ -195,13 +207,13 @@ export default function TripPtdPage() {
       const p = products.find((x) => x.product_id === id);
       return p ? String(p.display_name || p.product_name || "Product") : "Product";
     };
-    return buildPtd({ ...data, shiftEvents }, {
+    return buildPtd({ ...data, shiftEvents, fuelStops }, {
       product: productName,
       delivery: (d) => (d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery",
       driver: (id) => (id && names[id]) || "Driver",
       delayReason: (id) => (id ? reasons.find((r) => r.reason_id === id)?.label ?? null : null),
     });
-  }, [data, products, locNames, names, reasons, shiftEvents]);
+  }, [data, products, locNames, names, reasons, shiftEvents, fuelStops]);
 
   // The admin layer: empty segments and their billable flags (company admins only; never printed).
   const segments = useMemo(() => (data && isAdmin ? tripSegments(data.trip, data.pickups, data.deliveries, (d) => ({ name: (d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery", city: (d.location_id && locPlaces[d.location_id]?.city) || null, state: (d.location_id && locPlaces[d.location_id]?.state) || null })) : []), [data, isAdmin, locNames, locPlaces]);

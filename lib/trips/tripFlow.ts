@@ -155,6 +155,12 @@ export function delayMinutes(arrivedAt: string | null | undefined, beginAt: stri
   return Math.max(0, Math.round((b - a) / MIN));
 }
 
+/** Minutes between Arrive and Begin that no logged at-the-location delay explains (null when a time is missing). */
+export function unexplainedWait(arrivedAt: string | null | undefined, beginAt: string | null | undefined, explainedMin: number): number | null {
+  const m = delayMinutes(arrivedAt, beginAt);
+  return m == null ? null : Math.max(0, m - Math.max(0, explainedMin));
+}
+
 export function needsDelayReason(minutes: number | null, thresholdMinutes: number): boolean {
   return minutes != null && minutes > thresholdMinutes;
 }
