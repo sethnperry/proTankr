@@ -148,3 +148,27 @@ test("the recap: ATR per driver, insufficient data under 3 shifts, ledger by cau
   assert.ok(r.ledger.causes.length >= 1);
   assert.equal(r.completeness, 1);
 });
+
+test("the recap renders to a PDF", async () => {
+  const { PdfDoc } = await import("../pdf/doc.ts");
+  const { drawRecap } = await import("./recapPdf.ts");
+  const std = buildStandards(history(5, 40), S, "v1");
+  const sh = shift("u1", "06:00", "10:30");
+  const scores = scoreShifts([{ shift: sh, segments: cutShift(sh, [trip("u1")], [], names, S, TZ) }], std, S, () => null);
+  const r = buildRecap({ companyName: "Acme", weekStart: "2026-11-16", weekEnd: "2026-11-22", tz: TZ, standardsVersion: "v1", settings: S, drivers: [{ userId: "u1", name: "Ann", region: null, area: null }], scores, trips: [trip("u1")], recovery: {}, regionRecovery: { pct: null, loads: 0 }, prior: null, generatedAt: "2026-11-23T09:00:00Z" });
+  const d = await PdfDoc.create();
+  drawRecap(d, r);
+  const bytes = await d.save();
+  assert.ok(bytes.byteLength > 1500);
+  assert.equal(String.fromCharCode(...bytes.slice(0, 4)), "%PDF");
+});
+
+test("a shift left running long after its last event counts only the tail cap as on-duty time", () => {
+  const std = buildStandards([], S, "v1");
+  const sh = shift("u1", "06:00", "22:00"); // last event 09:50, ended at 22:00
+  const [s] = scoreShifts([{ shift: sh, segments: cutShift(sh, [trip("u1")], [], names, S, TZ) }], std, S, () => null);
+  const tail = s.segments.filter((g) => g.type === "gray").pop()!;
+  assert.equal(tail.minutes, 180);
+  assert.equal(s.trimmedMin, 12 * 60 + 10 - 180);
+  assert.equal(Math.round(s.onDutyMin), 16 * 60 - s.trimmedMin);
+});

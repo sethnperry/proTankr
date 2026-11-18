@@ -41,7 +41,14 @@ export function scoreShifts(
   return shifts.map(({ shift, segments }) => {
     let grayLeft = settings.shiftGrayCapMin;
     const endedByHand = !shift.unconfirmed && !!shift.endSource && shift.endSource !== "geotab";
-    const scored: Scored[] = [...segments].sort((a, b) => a.startMs - b.startMs).map((seg): Scored => {
+    let trimmed = 0;
+    const scored: Scored[] = [...segments].sort((a, b) => a.startMs - b.startMs).map((seg0): Scored => {
+      let seg = seg0;
+      if (seg.type === "gray" && seg.grayKind === "end" && seg.minutes > settings.endTailCapMin) {
+        // Left running long after the last thing that happened: count only the cap; the rest is a late end tap, not time to explain.
+        trimmed = seg.minutes - settings.endTailCapMin;
+        seg = { ...seg, minutes: settings.endTailCapMin };
+      }
       const base = { ...seg, standardMin: null as number | null, basis: null as Scored["basis"], credit: 0, excessMin: 0, waitCredited: 0, corroborated: false, unaccounted: 0, cause: null as string | null };
       if (seg.type === "gray") {
         const allow = seg.grayKind === "start" ? settings.startAllowanceMin : seg.grayKind === "end" ? (endedByHand ? settings.endAllowanceMin : 0) : settings.betweenAllowanceMin;
@@ -69,7 +76,7 @@ export function scoreShifts(
       const cause = excess > 0 ? (seg.delayLabels[0] ?? (corroborated ? "Others were slow here too" : seg.afterNote ? "Reason given afterward" : "Unexplained")) : null;
       return { ...base, standardMin: standard, basis: p.standard?.basis ?? null, credit, excessMin: excess, waitCredited: wait, corroborated, unaccounted: Math.max(0, seg.minutes - credit), cause };
     });
-    const onDuty = Math.max(0, (Date.parse(shift.endedAt!) - Date.parse(shift.startedAt)) / 60_000);
-    return { shift, userId: shift.userId, onDutyMin: onDuty, creditMin: scored.reduce((n, s) => n + s.credit, 0), segments: scored, estimate: shift.startSource !== "geotab" };
+    const onDuty = Math.max(0, (Date.parse(shift.endedAt!) - Date.parse(shift.startedAt)) / 60_000 - trimmed);
+    return { shift, userId: shift.userId, onDutyMin: onDuty, creditMin: scored.reduce((n, s) => n + s.credit, 0), segments: scored, estimate: shift.startSource !== "geotab", trimmedMin: trimmed };
   });
 }

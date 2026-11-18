@@ -176,7 +176,7 @@ function detectPatterns(i: RecapInput, byUser: Map<string, ShiftScore[]>, names:
       out.push({ userId, name, kind: "Place", evidence: `${slowMine.length} of ${vis.length} visits to ${vis[0].label}`, avgMinLost: sum(slowMine.map((v) => v.excessMin)) / slowMine.length, action: ACTION.place });
     }
     // Tap habits: end taps the system had to make, long end gaps, gray overruns.
-    const sloppy = shifts.filter((s) => s.shift.unconfirmed || s.shift.endSource === "geotab" || s.segments.some((g) => g.type === "gray" && g.unaccounted > 0));
+    const sloppy = shifts.filter((s) => s.trimmedMin > 0 || s.shift.unconfirmed || s.shift.endSource === "geotab" || s.segments.some((g) => g.type === "gray" && g.unaccounted > 0));
     if (worked >= need && sloppy.length >= need) out.push({ userId, name, kind: "Tap habits", evidence: `${sloppy.length} of ${worked} shifts`, avgMinLost: sum(sloppy.flatMap((s) => s.segments.filter((g) => g.type === "gray").map((g) => g.unaccounted))) / sloppy.length, action: ACTION.tap });
     // Delay reporting: little of the lost time was reported as it happened.
     const lostTotal = sum(shifts.flatMap((s) => s.segments.filter((g) => g.type !== "gray").map((g) => g.excessMin)));

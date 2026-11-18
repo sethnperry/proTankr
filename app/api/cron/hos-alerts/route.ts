@@ -18,6 +18,7 @@ import { pushTerminalReports } from "@/lib/push/terminalReportPush";
 import { runWorklogs } from "@/lib/worklog/sendWorklogs";
 import { runNotifications } from "@/lib/notify/server";
 import { runEodReports } from "@/lib/eod/eodServer";
+import { runWeeklyRecaps } from "@/lib/recap/recapServer";
 import { runAutoEndShifts } from "@/lib/shifts/autoEndServer";
 import { runGeotabHolds } from "@/lib/equipment/geotabHolds";
 import { runSquawkCleanup } from "@/lib/squawk/cleanupServer";
@@ -198,6 +199,7 @@ async function handle(req: NextRequest) {
   try { holds = await runGeotabHolds(); } catch (e) { console.warn("[cron] geotab holds failed:", (e as Error).message); }
   try { await runAutoEndShifts(); } catch (e) { console.warn("[cron] auto end shift failed:", (e as Error).message); }
   try { await runEodReports(); } catch (e) { console.warn("[cron] end of day failed:", (e as Error).message); }
+  try { await runWeeklyRecaps(); } catch (e) { console.warn("[cron] weekly recap failed:", (e as Error).message); }
   let abandoned: unknown = null;
   try { abandoned = await runAbandonedTrips(); } catch (e) { console.warn("[cron] abandoned trips failed:", (e as Error).message); }
   const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active");

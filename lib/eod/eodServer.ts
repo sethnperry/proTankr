@@ -83,7 +83,7 @@ export async function buildEodPdf(admin: SupabaseClient, s: Pick<EodSettings, "c
   return { pdf: await d.save(), drivers: shiftIds.length, loads: trips.length };
 }
 
-async function email(to: string[], subject: string, text: string, filename: string, pdf: Uint8Array) {
+export async function email(to: string[], subject: string, text: string, filename: string, pdf: Uint8Array) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("RESEND_API_KEY not set.");
   const from = process.env.INVITE_FROM_EMAIL ?? "noreply@protankr.com";

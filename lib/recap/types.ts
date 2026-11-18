@@ -15,6 +15,7 @@ export type RecapSettings = {
   betweenAllowanceMin: number;     // gap between trips
   endAllowanceMin: number;         // last event to the end tap
   shiftGrayCapMin: number;         // most gray-zone time credited in one shift
+  endTailCapMin: number;           // a shift left running past its last event: only this much counts as on duty, the rest is a late end tap
   lateAnswerCredit: number;        // credit for a delay reason entered after the fact (0-1)
   corroborationDrivers: number;    // peers over standard at the same place and hour that verify a wait
   evidenceLow: number;             // evidence factor when required steps are missing
@@ -31,7 +32,7 @@ export type RecapSettings = {
 };
 
 export const DEFAULT_RECAP_SETTINGS: RecapSettings = {
-  startAllowanceMin: 20, betweenAllowanceMin: 20, endAllowanceMin: 20, shiftGrayCapMin: 90,
+  startAllowanceMin: 20, betweenAllowanceMin: 20, endAllowanceMin: 20, shiftGrayCapMin: 90, endTailCapMin: 180,
   lateAnswerCredit: 0.5, corroborationDrivers: 3, evidenceLow: 0.5, learningMultiplier: 1.2, learningVisits: 10,
   minDrivers: 5, maxShare: 0.25, avgMph: 45, circuity: 1.25,
   defaultRackMin: 45, defaultDropMin: 45, defaultLegMin: 60, softFlagShifts: 3,
@@ -101,4 +102,5 @@ export type ShiftScore = {
   creditMin: number;
   segments: Scored[];
   estimate: boolean;      // no Geotab link: on-duty time is the app shift
+  trimmedMin: number;     // minutes of a shift left running that are not counted (a late end tap)
 };
