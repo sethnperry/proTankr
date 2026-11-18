@@ -6,6 +6,8 @@
 export type BeginBlockState = {
   tripNeedsArrive: boolean; presetsReady: boolean; hasCombo: boolean; hasTerminal: boolean;
   plannedProducts: number; terminalProducts: number; unavailableComps: number;
+  /** A rack is chosen for the terminal (products come from the rack). Omitted = assume yes. */
+  hasRack?: boolean;
 };
 export type BeginBlock = { title: string; text: string };
 
@@ -14,6 +16,7 @@ export function beginBlockMessage(s: BeginBlockState): BeginBlock {
   if (!s.hasCombo) return { title: "Pick your equipment", text: "Select your truck and trailer before you begin loading." };
   if (!s.hasTerminal) return { title: "Terminal not set", text: "The pickup terminal isn't set. Tap Another rack or check the pickup, then try again." };
   if (!s.presetsReady) return { title: "Plans still loading", text: "Your plans haven't finished loading. Wait a moment and tap Begin Loading again." };
+  if (s.hasRack === false) return { title: "Pick the rack", text: "This terminal has no rack picked yet, so its products can't load. Tap the pin at the top, pick the rack, then tap Begin Loading." };
   if (s.plannedProducts === 0) return { title: "No plan selected", text: "There is no plan for this load. Pick a plan from the Planner tile, then tap Begin Loading." };
   if (s.terminalProducts === 0 || s.unavailableComps > 0) return { title: "No products match the plan", text: "No products match the selected plan. Please verify the terminal products." };
   return { title: "Couldn't begin loading", text: "Loading couldn't start. Wait a moment and tap Begin Loading again. If it keeps happening, tell dispatch." };

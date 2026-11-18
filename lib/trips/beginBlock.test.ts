@@ -18,3 +18,7 @@ test("no terminal products, or products that don't match the plan", () => {
 test("anything else still says something", () => {
   assert.match(m(ok).title, /Couldn't begin/);
 });
+
+test("no rack picked is named before the plan is blamed", () => {
+  assert.equal(m({ ...ok, plannedProducts: 0, terminalProducts: 0, hasRack: false }).title, "Pick the rack");
+});

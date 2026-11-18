@@ -78,7 +78,7 @@ export function useLoadModel(v: UsePlannerViewModel, p: UsePlanModelModel) {
     tripPickup, tripWaitingPickup, tripNeedsArrive, tripModeForLoading, recordTripLoaded,
   } = useTripLoading({ shell, active, effectiveUserId, loadWorkflow, tripStoreHook, supplierPicks, plannedProductIds, compPlan, leaveTo });
 
-  const { handleBackToPlannerNoUpdate, handleRecallLastLoad, handleSubmitOutageReport, requestBegin } = useLoadBegin({ beginAfterOverride, effectiveUserId, loadWorkflow, planSlots, preLoadCardedOnRef, predictedFuelTempF, refreshFuelTemp, resolvedSupplierPicksRef, setActiveSlotLetter, setAltEquipmentPrompt, setApiSafetyOverride, setBeginAfterOverride, setCancelLoadConfirmOpen, setCaptureBaselineNext, setProductTempF, setTempF, setTunedApiTempByProduct, shell, tempFRef, userAdjustedTempRef });
+  const { handleBackToPlannerNoUpdate, handleRecallLastLoad, handleSubmitOutageReport, requestBegin } = useLoadBegin({ beginAfterOverride, activeSlotLetter, compPlan, effectiveUserId, loadWorkflow, planSlots, preLoadCardedOnRef, predictedFuelTempF, refreshFuelTemp, resolvedSupplierPicksRef, setActiveSlotLetter, setAltEquipmentPrompt, setApiSafetyOverride, setBeginAfterOverride, setCancelLoadConfirmOpen, setCaptureBaselineNext, setProductTempF, setTempF, setTunedApiTempByProduct, shell, tempFRef, userAdjustedTempRef });
 
   const { reportPending, reportFromDashboard, openLoadReportAtTerminal } = useLoadReportLauncher({ shell, loadWorkflow, leaveTo });
 

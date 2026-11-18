@@ -283,7 +283,23 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
         // Arrived but loading not begun: Plan Review opens (its arrival line and Begin Loading are there); nothing is stamped here.
         {
           const wp0 = snap?.pickups.find((p) => p.arrived_at && !p.begin_at && !p.left_at && !p.outcome);
-          if (wp0) { alignPlannerToPickup(wp0); setOpeningPlanner(true); shell.postPlannerIntent("begin"); break; }
+          if (wp0) {
+            alignPlannerToPickup(wp0);
+            setOpeningPlanner(true);
+            // A pickup with no rack (a rack hop, or an arrival stamped before a rack was chosen) has no products, so the plan
+            // can't show: ask which rack first, exactly as Arrive does.
+            if (wp0.terminal_id && !wp0.rack_id && store) {
+              void (async () => {
+                try {
+                  const rackId = await shell.askRack(String(wp0.terminal_id));
+                  if (rackId) { store.put("trip_pickups", { pickup_id: wp0.pickup_id, rack_id: rackId }); void syncNow(); }
+                } finally { shell.postPlannerIntent("begin"); }
+              })();
+              break;
+            }
+            shell.postPlannerIntent("begin");
+            break;
+          }
         }
         // A delay at the rack (gauging, a long line) keeps running: it ends when loading really begins (below), not
         // when the driver taps Begin Loading, which may only open the Planner to fix the plan.

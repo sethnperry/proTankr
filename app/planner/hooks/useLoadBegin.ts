@@ -18,6 +18,8 @@ import type { useFuelTempPrediction } from "./useFuelTempPrediction";
 
 type Inputs = {
   beginAfterOverride: boolean;
+  activeSlotLetter: number;
+  compPlan: Record<number, any>;
   effectiveUserId: string | null | undefined;
   loadWorkflow: ReturnType<typeof useLoadWorkflow>;
   planSlots: ReturnType<typeof usePlanSlots>;
@@ -39,8 +41,10 @@ type Inputs = {
   userAdjustedTempRef: MutableRefObject<boolean>;
 };
 
+import { capsDifferOnly } from "../utils/capsDiff";
+
 export function useLoadBegin(i: Inputs) {
-  const { beginAfterOverride, effectiveUserId, loadWorkflow, planSlots, preLoadCardedOnRef, predictedFuelTempF, refreshFuelTemp, resolvedSupplierPicksRef, setActiveSlotLetter, setAltEquipmentPrompt, setApiSafetyOverride, setBeginAfterOverride, setCancelLoadConfirmOpen, setCaptureBaselineNext, setProductTempF, setTempF, setTunedApiTempByProduct, shell, tempFRef, userAdjustedTempRef } = i;
+  const { beginAfterOverride, activeSlotLetter, compPlan, effectiveUserId, loadWorkflow, planSlots, preLoadCardedOnRef, predictedFuelTempF, refreshFuelTemp, resolvedSupplierPicksRef, setActiveSlotLetter, setAltEquipmentPrompt, setApiSafetyOverride, setBeginAfterOverride, setCancelLoadConfirmOpen, setCaptureBaselineNext, setProductTempF, setTempF, setTunedApiTempByProduct, shell, tempFRef, userAdjustedTempRef } = i;
   const { equipment, location, terminals } = shell;
   // "Back to Planner" -- per explicit follow-up, this must genuinely undo
   // everything: no load logged AND the terminal card reverted to whatever
@@ -86,6 +90,12 @@ export function useLoadBegin(i: Inputs) {
       terminalId: location.selectedTerminalId,
       prevValue: terminals.accessDateByTerminalId[location.selectedTerminalId] ?? null,
     };
+    // The caps set for this load stay with the plan: if the plan on screen is a saved plan with the same products and only
+    // the caps differ, save it back, so the next trip starts with them instead of the driver setting them again.
+    try {
+      const saved: any = activeSlotLetter >= 1 ? planSlots.peekSlot(activeSlotLetter) : null;
+      if (saved && capsDifferOnly(saved.compPlan, compPlan)) planSlots.saveToSlot(activeSlotLetter);
+    } catch { /* a failed save never stops the load */ }
     loadWorkflow.beginLoadToSupabase();
     // Terminal access steps: starts them if there's no access here, or shows
     // what's left if they're underway (see AccessStepsHost).

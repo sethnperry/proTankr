@@ -80,7 +80,7 @@ export function usePlannerIntents(i: Inputs) {
           const msg = beginBlockMessage({
             tripNeedsArrive: !!w.tripNeedsArrive, presetsReady: !!w.presetsReady, hasCombo: !!w.combo,
             hasTerminal: !!w.terminal && !!w.state && !!w.city && !!w.cityId,
-            plannedProducts: Number(w.plannedProducts) || 0, terminalProducts: Number(w.terminalProducts) || 0, unavailableComps: Number(w.unavailableComps) || 0,
+            hasRack: !!w.rack, plannedProducts: Number(w.plannedProducts) || 0, terminalProducts: Number(w.terminalProducts) || 0, unavailableComps: Number(w.unavailableComps) || 0,
           });
           shell.postDashboardNotice(msg.title, msg.text);
         }
