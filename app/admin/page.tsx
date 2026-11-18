@@ -2063,7 +2063,6 @@ export default function AdminPage() {
     myRole === "admin" && { label: "Terminal work", go: () => setTermWorkAdminOpen(true) },
     myRole === "admin" && { label: "Per diem", go: () => setPerDiemAdminOpen(true) },
     myRole === "admin" && { label: "Billable time", go: () => setDeadheadOpen(true) },
-    (myRole === "admin" || myRole === "dispatch") && { label: "Weekly Recap", go: () => setRecapOpen(true) },
     myRole === "admin" && { label: "Reimbursements", go: () => setReimbOpen(true) },
   ].filter(Boolean)) as { label: string; go: () => void }[];
   const setupTiles = ([
@@ -2084,6 +2083,7 @@ export default function AdminPage() {
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "terminal" as const, label: "Terminals", onClick: () => setTerminalsMenuOpen(true) },
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "chart" as const, label: "Utilization", onClick: () => setFleetUtilOpen(true) },
     (myRole === "admin" || myRole === "lead" || myRole === "dispatch") && { icon: "route" as const, label: "Delays", onClick: () => setDelaysOpen(true) },
+    (myRole === "admin" || myRole === "dispatch" || identity.isSuperAdmin) && { icon: "chart" as const, label: "Weekly Recap", onClick: () => setRecapOpen(true) },
     recordTiles.length > 0 && { icon: "plan" as const, label: "Records", onClick: () => setRecordsMenuOpen(true) },
     setupTiles.length > 0 && { icon: "lock" as const, label: "Setup", onClick: () => setSetupMenuOpen(true) },
   ].filter(Boolean) as ToolItem[];
@@ -2533,7 +2533,7 @@ export default function AdminPage() {
       <TerminalSetupModal open={terminalSetupOpen} onClose={() => setTerminalSetupOpen(false)} userId={currentUserId || null} companyId={companyId || null} />
       <FuelSettingsModal open={fuelSettingsOpen} onClose={() => setFuelSettingsOpen(false)} companyId={companyId!} />
       <EodReportModal open={eodOpen} onClose={() => setEodOpen(false)} companyId={companyId!} />
-      <WeeklyRecapModal open={recapOpen} onClose={() => setRecapOpen(false)} companyId={companyId!} canEdit={myRole === "admin"} />
+      <WeeklyRecapModal open={recapOpen} onClose={() => setRecapOpen(false)} companyId={companyId!} canEdit={myRole === "admin" || identity.isSuperAdmin} />
       <DelaysModal open={delaysOpen} onClose={() => setDelaysOpen(false)} companyId={companyId!} />
       <TripSettingsModal open={tripSettingsOpen} onClose={() => setTripSettingsOpen(false)} companyId={companyId!} isAdmin={myRole === "admin"} />
       <TargetWeightPolicyModal open={targetWeightPolicyOpen} onClose={() => setTargetWeightPolicyOpen(false)} companyId={companyId!} />
