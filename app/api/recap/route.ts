@@ -48,6 +48,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, drivers: r.drivers.length });
     }
 
+    if (action === "staff") {
+      const { data: staff } = await admin.from("user_companies").select("user_id, role").eq("company_id", companyId).in("role", ["owner", "admin", "dispatch"]);
+      const ids = ((staff ?? []) as { user_id: string }[]).map((x) => x.user_id);
+      const { data: profs } = ids.length ? await admin.from("profiles").select("user_id, display_name").in("user_id", ids) : { data: [] };
+      const nm = new Map(((profs ?? []) as { user_id: string; display_name: string | null }[]).map((p) => [p.user_id, p.display_name ?? ""]));
+      const list: { name: string; email: string; role: string }[] = [];
+      for (const st of (staff ?? []) as { user_id: string; role: string }[]) { const { data: au } = await admin.auth.admin.getUserById(st.user_id); const e = au?.user?.email; if (e) list.push({ name: nm.get(st.user_id) || e, email: e.toLowerCase(), role: st.role }); }
+      return NextResponse.json({ ok: true, staff: list });
+    }
+
     if (action === "email" || action === "pdf") {
       if (!week) return NextResponse.json({ error: "Pick a week." }, { status: 400 });
       const { data: row } = await admin.from("weekly_recaps").select("report").eq("company_id", companyId).eq("week_start", week).maybeSingle();
