@@ -231,6 +231,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     dispatchedItems,
     dispatchedList,
     dispatchedPickup,
+    startPickupChange,
     doPark,
     doTakeOver,
     doUndoArrival,
@@ -1489,7 +1490,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         initial={initialValues}
         pickupLabel={dispatchedPickup ? [dispatchedPickup.name, [dispatchedPickup.city, dispatchedPickup.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") : editing && children?.pickup?.load_id ? children.pickup.name ?? pickupLabel : pickupLabel}
         pickupTerminalId={dispatchedPickup ? String(dispatchedPickup.terminal_id) : editing && children?.pickup?.load_id ? (children.pickup.terminal_id ? String(children.pickup.terminal_id) : null) : (location.selectedTerminalId ? String(location.selectedTerminalId) : null)}
-        onChangePickup={() => (location.selectedCity ? shell.setTermOpen(true) : shell.setLocOpen(true))}
+        onChangePickup={() => { startPickupChange(); if (location.selectedCity) shell.setTermOpen(true); else shell.setLocOpen(true); }}
         suppliers={suppliers}
         onAddSupplier={addSupplier}
         presets={sheetPresets}

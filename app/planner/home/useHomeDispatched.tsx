@@ -21,7 +21,7 @@ import { cleanOdometer } from "@/lib/moves/emptyMoves";
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase/client";
 
@@ -246,6 +246,16 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     }
   }, [verifyTripId, openTrip?.trip_id]);
   // The dispatched pickup, used while the driver hasn't changed the terminal.
+  // The driver tapped Pickup and chose a terminal (even the one the Planner was already on): the dispatched pickup no longer applies.
+  const pickAtTap = useRef<number | null>(null);
+  const [, bumpPick] = useState(0);
+  const startPickupChange = () => { pickAtTap.current = shell.terminalPicks; };
+  useEffect(() => {
+    if (pickAtTap.current == null || shell.termOpen || shell.locOpen || shell.rackPickerOpen || shell.rackResolving) return;
+    const picked = shell.terminalPicks > pickAtTap.current;
+    pickAtTap.current = null;
+    if (picked) { verifyBaseTerminal.current = "__picked__"; bumpPick((n) => n + 1); }
+  }, [shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, shell.terminalPicks]); // eslint-disable-line react-hooks/exhaustive-deps
   const dispatchedPickup = (() => {
     const pk = editing ? children?.pickup : null;
     if (!verifyActive || !pk || pk.load_id || pk.arrived_at || !pk.terminal_id) return null;
@@ -389,6 +399,8 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         if (rows.pickups[0] && v.supplier?.supplier_id) Object.assign(rows.pickups[0], { supplier_id: v.supplier.supplier_id });
       }
       applyStartLoad(store, rows);
+      // Editing the pickup's supplier saves it on the pickup itself too, not only on this phone.
+      if (editing && !addingLoad && children?.pickup && !children.pickup.load_id) store.put("trip_pickups", { pickup_id: children.pickup.pickup_id, supplier_id: v.supplier?.supplier_id ?? null });
       // Dispatch's plan: save it as a plan slot when asked (optionally changing it in the Planner first).
       let planSlot = v.planSlot;
       let openPlanner = false;
@@ -438,5 +450,5 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     }
   };
   useEffect(() => { if (!addingLoad) setPlanEquip(null); }, [addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, initialValues, submit } as const;
+  return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
 }

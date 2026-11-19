@@ -164,6 +164,8 @@ type ShellValue = {
   // to become the "still resolving" signal itself (multi-rack case) or the
   // rack is auto-set (0/1-rack case).
   rackResolving: boolean;
+  /** How many times a terminal has been picked (any picker). Lets a screen tell "chose one" from "just closed it". */
+  terminalPicks: number;
 };
 
 const ShellContext = createContext<ShellValue | null>(null);
@@ -518,6 +520,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
   // this was a real bug (the terminal-switch confirm sheet and the rack
   // picker briefly showed at the same time) before this flag was added.
   const [rackResolving, setRackResolving] = useState(false);
+  const [terminalPicks, setTerminalPicks] = useState(0);
 
   const [plannerIntent, setPlannerIntent] = useState<PlannerIntent | null>(null);
   const intentIdRef = useRef(0);
@@ -565,6 +568,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
 
   const chooseTerminal = useCallback((terminalId: string) => {
     latestTerminalRequestRef.current = terminalId;
+    setTerminalPicks((n) => n + 1);
     location.setSelectedTerminalId(terminalId);
     if (!terminalId || deferRackRef.current) {
       location.setSelectedRackId("");
@@ -629,7 +633,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
-    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, dashboardNotice, postDashboardNotice, clearDashboardNotice, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
+    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, dashboardNotice, postDashboardNotice, clearDashboardNotice, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving, terminalPicks,
   }), [
     authEmail, authUserId, setupSession, effectiveUserId,
     equipment, location, terminals, expirations,
@@ -645,7 +649,7 @@ export function CalculatorShellProvider({ children }: { children: React.ReactNod
     role, companyId, isSolo, isSuperAdmin, isSuperAdminResolved,
     selectedDriverId, setSelectedDriverId,
     plannedProductIds, setPlannedProductIds,
-    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving,
+    chooseTerminal, setDeferRackPick, plannerIntent, postPlannerIntent, consumePlannerIntent, loadOverlayOpen, setLoadOverlayOpen, askRack, rackPickerOpen, rackPickerRacks, resolveRackPick, rackResolving, terminalPicks,
   ]);
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
