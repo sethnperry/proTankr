@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole, isCompanyAdmin, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole, isCompanyAdmin } from "@/lib/auth/server";
+import { providerFor } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

@@ -6,7 +6,8 @@
 // only (it is used while inviting). Fails soft like the other telematics routes.
 
 import { NextRequest, NextResponse } from "next/server";
-import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
+import { providerFor } from "@/lib/telematics/server";
 import { closeNames, normName } from "@/lib/telematics/nameMatch";
 import type { ProviderDriver } from "@/lib/telematics/types";
 

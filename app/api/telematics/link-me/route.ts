@@ -6,7 +6,8 @@
 // With all:true, staff link the whole roster. With userId, an admin/dispatch/lead links that member instead (after editing their profile).
 
 import { NextRequest, NextResponse } from "next/server";
-import { autoLinkAllDrivers, autoLinkDriver, callerId, companyRole, isCompanyAdmin } from "@/lib/telematics/server";
+import { callerId, companyRole, isCompanyAdmin } from "@/lib/auth/server";
+import { autoLinkAllDrivers, autoLinkDriver } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 

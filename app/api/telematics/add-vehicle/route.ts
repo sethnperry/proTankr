@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
+import { providerFor } from "@/lib/telematics/server";
 import { DEFAULT_OPTS, truckPatch, type TruckRow } from "@/lib/telematics/unitSync";
 import { decodeVins } from "@/lib/telematics/vinDecode";
 import { bestPerName, importableVehicles } from "@/lib/telematics/dedupe";

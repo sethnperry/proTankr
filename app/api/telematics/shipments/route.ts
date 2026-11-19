@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
+import { providerFor } from "@/lib/telematics/server";
 import { BLOCK_MS, WINDOW_MS, decide, forVehicle, isQuotaError, type CacheRecord, type ShipmentRow } from "@/lib/telematics/shipmentCache";
 
 export const runtime = "nodejs";

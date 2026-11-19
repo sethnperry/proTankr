@@ -4,7 +4,7 @@
 // a report so the other trucks hear at once instead of on the next 5-minute tick. Signed-in callers only.
 
 import { NextRequest, NextResponse } from "next/server";
-import { callerId } from "@/lib/telematics/server";
+import { callerId } from "@/lib/auth/server";
 import { pushTerminalReports } from "@/lib/push/terminalReportPush";
 
 export const runtime = "nodejs";

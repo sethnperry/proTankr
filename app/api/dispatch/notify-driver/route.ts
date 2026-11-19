@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 
 export const runtime = "nodejs";

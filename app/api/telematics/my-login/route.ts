@@ -11,7 +11,7 @@ import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { geotabProvider } from "@/lib/telematics/geotab";
 import { encryptSecret } from "@/lib/telematics/crypto";
 import { TelematicsAuthError } from "@/lib/telematics/types";
-import { callerId, companyRole } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 

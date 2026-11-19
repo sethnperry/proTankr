@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { autoLinkAllDrivers, autoLinkDriver, callerId, companyRole, providerFor, providerForDriver, driverOwnProviders, hosOwnFirst } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
+import { autoLinkAllDrivers, autoLinkDriver, providerFor, providerForDriver, driverOwnProviders, hosOwnFirst } from "@/lib/telematics/server";
 import type { HosAvailability } from "@/lib/telematics/types";
 
 export const runtime = "nodejs";

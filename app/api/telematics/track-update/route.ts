@@ -10,7 +10,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { stateCode } from "@/lib/geo/usStates";
-import { callerId, companyRole, providerFor, trailerNames } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
+import { providerFor, trailerNames } from "@/lib/telematics/server";
 import { buildChanges } from "@/lib/telematics/trackChanges";
 
 export const runtime = "nodejs";

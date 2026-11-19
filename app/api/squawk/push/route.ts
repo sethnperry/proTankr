@@ -3,7 +3,7 @@
 // POST { id } -> push a Squawk message the caller just sent to everyone in its channel. Only the sender may call it.
 
 import { NextRequest, NextResponse } from "next/server";
-import { callerId } from "@/lib/telematics/server";
+import { callerId } from "@/lib/auth/server";
 import { pushSquawkMessage } from "@/lib/squawk/squawkPush";
 
 export const runtime = "nodejs";

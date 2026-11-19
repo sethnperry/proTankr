@@ -9,7 +9,8 @@ import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { groupNames } from "@/lib/telematics/groups";
 import { bestPerName, importableVehicles } from "@/lib/telematics/dedupe";
 import { decodeVins } from "@/lib/telematics/vinDecode";
-import { callerId, companyRole, isCompanyAdmin, providerFor } from "@/lib/telematics/server";
+import { callerId, companyRole, isCompanyAdmin } from "@/lib/auth/server";
+import { providerFor } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

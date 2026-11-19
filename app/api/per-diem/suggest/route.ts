@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, providerFor } from "@/lib/telematics/server";
+import { callerId } from "@/lib/auth/server";
+import { providerFor } from "@/lib/telematics/server";
 import { classifyStops, classifyTrail, dayBounds, type DaySuggestion, type TripStop } from "@/lib/perdiem/perDiem";
 import { stateCode } from "@/lib/geo/usStates";
 

@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { callerId, companyRole, providerFor, trailerNames } from "@/lib/telematics/server";
+import { callerId, companyRole } from "@/lib/auth/server";
+import { providerFor, trailerNames } from "@/lib/telematics/server";
 import { detectStops, drivesBetween } from "@/lib/shifts/trailStops";
 
 export const runtime = "nodejs";

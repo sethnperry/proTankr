@@ -17,7 +17,8 @@ import { bestPerName, importableVehicles } from "@/lib/telematics/dedupe";
 import { parseOpts, regionFor, truckPatch, type TruckRow } from "@/lib/telematics/unitSync";
 import { decodeVins } from "@/lib/telematics/vinDecode";
 import { TelematicsAuthError } from "@/lib/telematics/types";
-import { autoLinkAllDrivers, callerId, companyRole, isCompanyAdmin, providerFor, rosterMembers } from "@/lib/telematics/server";
+import { callerId, companyRole, isCompanyAdmin } from "@/lib/auth/server";
+import { autoLinkAllDrivers, providerFor, rosterMembers } from "@/lib/telematics/server";
 
 export const runtime = "nodejs";
 

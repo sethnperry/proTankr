@@ -59,7 +59,7 @@ phone GPS replaces them), and IFTA state miles. Everything else is typed or alre
    **Shift start/end done 2026-11-27**: a trip always starts the shift (Begin Trip opens the start-time window; Start now skips it;
    telematics only prefills the time); the Geotab silent auto-start and the Geotab off-duty auto-end are gone. Shift end is
    `lib/shifts/wrapUp.ts`: 30 min quiet after the last load (3 h with a trip open) asks "Are you still working?" on screen and by
-   push; 15 min with no answer ends it at the last activity. Still to do: move `callerId`/`companyRole` out of the telematics module.
+   push; 15 min with no answer ends it at the last activity. `callerId`/`companyRole`/`isCompanyAdmin` moved to `lib/auth/server.ts` (2026-11-27).
 3. **Phone GPS for equipment position** (section 4), then rebuild Track, the dispatch dots and arrival/departure on it.
 4. **One company setting**, `telematics_enabled`, read by `providerFor` and every client hook, with a test pass over a
    company that has it off. Keep Hours, Odometer prefill and IFTA behind it as "supplements".
