@@ -6,6 +6,9 @@
 import type { UnitLastService } from "./serviceInfo";
 import type { TruckRow, TrailerRow, ComboRow, UnitServiceDue, UnitWash } from "./types";
 import { useRef, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { holderIsWorking } from "@/lib/equipment/holderWorking";
+import type { ShiftEventRow } from "@/lib/trips/types";
 import { type ServiceType } from "../ServiceTypeManager";
 import { type EquipmentFilter } from "../RegionLocalAreaFilterModal";
 import type { Props } from "./types";
@@ -137,16 +140,30 @@ export function useSoloState(props: Props) {
   const [coupleFrom, setCoupleFrom] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   const [takeCombo, setTakeComboRaw] = useState<{ truckId: string; trailerId: string; ownerName: string | null } | null>(null);
   const [commandeerTarget, setCommandeerTargetRaw] = useState<{ kind: "truck" | "trailer"; id: string; ownerName: string } | null>(null);
-  // An admin or dispatcher never takes over equipment a driver is using: the take-over becomes an explanation instead.
+  // An admin or dispatcher never takes over equipment a driver is working with: the take-over becomes an explanation instead
   // (A solo company's admin is the driver, so this only applies to fleets.)
   const noTakeover = isSolo === false && (myRole === "admin" || myRole === "dispatch");
   const [takeoverBlocked, setTakeoverBlocked] = useState<{ what: string; ownerName: string | null } | null>(null);
+  // ...unless that driver isn't working: no shift open and no trip open (a claim nobody used) is idle and can be taken.
+  const holderWorking = async (truckId: string | null, trailerId: string | null): Promise<boolean> => {
+    const c = combos.find((x) => x.active && x.claimed_by && ((truckId && x.truck_id === truckId) || (trailerId && x.trailer_id === trailerId)));
+    const userId = c?.claimed_by ?? null;
+    if (!userId) return false;
+    try {
+      const since = new Date(Date.now() - 3 * 86400_000).toISOString();
+      const [se, tr] = await Promise.all([
+        supabase.from("shift_events").select("*").eq("user_id", userId).gte("occurred_at", since).order("occurred_at"),
+        supabase.from("trips").select("status").eq("driver_id", userId).in("status", ["draft", "loading", "in_transit", "delivering"]).limit(1),
+      ]);
+      return holderIsWorking({ userId, shiftEvents: (se.data ?? []) as ShiftEventRow[], tripStatuses: ((tr.data ?? []) as { status: string }[]).map((t) => t.status), nowIso: new Date().toISOString() });
+    } catch { return true; /* can't tell: don't take it from someone */ }
+  };
   const setTakeCombo = (v: { truckId: string; trailerId: string; ownerName: string | null } | null) => {
-    if (v && noTakeover) { setTakeoverBlocked({ what: "combo", ownerName: v.ownerName }); return; }
+    if (v && noTakeover) { void holderWorking(v.truckId, v.trailerId).then((w) => (w ? setTakeoverBlocked({ what: "combo", ownerName: v.ownerName }) : setTakeComboRaw(v))); return; }
     setTakeComboRaw(v);
   };
   const setCommandeerTarget = (v: { kind: "truck" | "trailer"; id: string; ownerName: string } | null) => {
-    if (v && noTakeover) { setTakeoverBlocked({ what: v.kind, ownerName: v.ownerName }); return; }
+    if (v && noTakeover) { void holderWorking(v.kind === "truck" ? v.id : null, v.kind === "trailer" ? v.id : null).then((w) => (w ? setTakeoverBlocked({ what: v.kind, ownerName: v.ownerName }) : setCommandeerTargetRaw(v))); return; }
     setCommandeerTargetRaw(v);
   };
 
