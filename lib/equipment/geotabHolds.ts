@@ -50,6 +50,20 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
   const { data: us } = driverUserIds.length ? await admin.from("user_settings").select("user_id, current_truck_id, current_trailer_id").in("user_id", driverUserIds) : { data: [] as any[] };
   const heldBy = new Map(((us ?? []) as any[]).map((r) => [r.user_id as string, r as { current_truck_id: string | null; current_trailer_id: string | null }]));
 
+  // A driver who ended their ProTankr shift is done for the day, even while still signed in to the tracker and driving home.
+  // Their latest shift event being an end means: never (re)hold equipment for them. ProTankr is the source of truth.
+  const endedShift = new Set<string>();
+  if (driverUserIds.length) {
+    const { data: ev } = await admin.from("shift_events").select("user_id, event_type, occurred_at").in("user_id", driverUserIds)
+      .in("event_type", ["shift_start", "shift_end"]).gte("occurred_at", new Date(nowMs - 20 * 3600_000).toISOString()).order("occurred_at", { ascending: false }).limit(2000);
+    const seenUser = new Set<string>();
+    for (const e of (ev ?? []) as { user_id: string; event_type: string }[]) {
+      if (seenUser.has(e.user_id)) continue;
+      seenUser.add(e.user_id);
+      if (e.event_type === "shift_end") endedShift.add(e.user_id);
+    }
+  }
+
   const outside: { veh: string; drvProv: string; truckId: string | null; trailerId: string | null }[] = [];
   let changed = 0;
   const seen = new Set<string>(); // handoffs whose driver is still in the truck
@@ -64,6 +78,7 @@ async function runCompany(companyId: string, notes: string[]): Promise<number> {
     if (!truckId || !userId) { continue; }
     const prov = trailerKnown ? (attached.get(veh) ?? []) : [];
     const trailerId = prov.map((t) => trailerOfProv.get(t)).find((x): x is string => !!x) ?? null;
+    if (endedShift.has(userId)) continue;
     const mine = heldBy.get(userId);
     const holdsTruck = mine?.current_truck_id === truckId;
     const holdsTrailer = !trailerId || mine?.current_trailer_id === trailerId;
