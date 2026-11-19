@@ -78,6 +78,8 @@ export function usePlanDay(d: PlanDayDeps) {
 
   const dispatchAll = async () => {
     if (!d.companyId || !d.dispatcherId || !d.driverId || !report) return;
+    // A load needs a trailer; only an empty move may run a truck alone.
+    if (!d.trailerId) { setMsg({ ok: false, text: "A load needs a trailer. Pick the equipment first." }); return; }
     setBusy(true); setMsg(null);
     try {
       let seq = d.prior.length;

@@ -105,6 +105,7 @@ import { typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
 import { useCompanySuppliers } from "@/lib/suppliers/useSupplierAdmin";
 import { TripsBrowser } from "../components/trip/TripsBrowser";
 import { PlanMoveSheet } from "./PlanMoveSheet";
+import { DispatchTypeSheet } from "./DispatchTypeSheet";
 import { LocationsHub, locationsTool } from "../components/locations/LocationsHub";
 import { useDeliveryLocationList, useTripSettings } from "@/lib/trips/useTripData";
 import { classifyLive } from "@/lib/dispatch/liveGroups";
@@ -399,6 +400,7 @@ export default function DispatchPage() {
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
   const [locsOpen, setLocsOpen] = useState(false); // the Locations tool
   const [planMoveOpen, setPlanMoveOpen] = useState(false);
+  const [dispatchTypeOpen, setDispatchTypeOpen] = useState(false);
   const [tripsOpen, setTripsOpen] = useState(false); // the Trips tool
   const lowHours = useMemo(
     () => buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now()),
@@ -844,7 +846,7 @@ export default function DispatchPage() {
     const dashTools: ToolItem[] = [
       { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
       { icon: "route" as const, label: "Trips", onClick: () => setTripsOpen(true) },
-      { icon: "route" as const, label: "Dispatch a move", onClick: () => setPlanMoveOpen(true) },
+      { icon: "route" as const, label: "Dispatch", onClick: () => setDispatchTypeOpen(true) },
       { icon: "locate" as const, label: "Track", onClick: () => setFindTruckOpen(true) },
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       locationsTool(() => setLocsOpen(true)),
@@ -949,6 +951,9 @@ export default function DispatchPage() {
         footer={<ConnectedDashFooter />}
       />
       <CalloutsModal open={calloutsOpen} onClose={() => { setCalloutsOpen(false); void activeCallouts.reload(); }} companyId={companyId || ""} userId={authUserId || null} canEdit />
+      <DispatchTypeSheet open={dispatchTypeOpen} onClose={() => setDispatchTypeOpen(false)} drivers={plan.roster.map((m) => ({ id: m.user_id, name: m.display_name ?? "Driver" }))}
+        onEmpty={() => { setDispatchTypeOpen(false); setPlanMoveOpen(true); }}
+        onLoaded={(id) => { setDispatchTypeOpen(false); setMode("plan"); setTlDriverId(id); setPlanTripFor(id); }} />
       <PlanMoveSheet open={planMoveOpen} onClose={() => setPlanMoveOpen(false)} companyId={companyId || null} dispatcherId={authUserId || null}
         drivers={plan.roster.map((m) => ({ id: m.user_id, name: m.display_name ?? "Driver" }))} initialDriverId={null}
         heldFor={(id) => { const h = heldEquipment.get(id); return h ? { truckId: h.truckId, trailerId: h.trailerId } : null; }}
