@@ -83,7 +83,6 @@ import { telematicsStart } from "@/lib/shifts/autoStart";
 
 import { SHOP_BLOCK } from "@/lib/trips/shopDown";
 
-import { useGeotabEquipment, useSecondSeat } from "../hooks/useGeotabEquipment";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 
 import { beginTripShift } from "@/lib/shifts/dutyStatus";

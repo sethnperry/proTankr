@@ -99,7 +99,6 @@ import { RepairSheet } from "../components/repair/RepairSheet";
 import RackDelaySheet from "../components/RackDelaySheet";
 import { RackDelayButton } from "../components/trip/RackDelayButton";
 
-import { GeotabEquipmentHost } from "../components/equipment/GeotabEquipmentHost";
 
 import { CatchUpSheet } from "../components/shift/CatchUpSheet";
 import { TarePairHost } from "../components/equipment/TarePairHost";
@@ -1501,7 +1500,6 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           setDownTimeOpen(false);
         }} onClose={() => setDownTimeOpen(false)} />
 
-      <GeotabEquipmentHost userId={userId} equipment={equipment} />
       <TrackSheet open={findTruckOpen} onClose={() => setFindTruckOpen(false)} companyId={companyId} role={shell.role ?? null} myTruckId={truckId} myTrailerId={trailerId} />
 
       </div>

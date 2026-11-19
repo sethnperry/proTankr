@@ -81,7 +81,7 @@ import { snoozed, telematicsStart } from "@/lib/shifts/autoStart";
 
 import { writeShopDown } from "@/lib/trips/shopDown";
 
-import { useGeotabEquipment, useSecondSeat } from "../hooks/useGeotabEquipment";
+import { useSecondSeat } from "../hooks/useSecondSeat";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 
 import { beginTripShift, offDutyAsk, telematicsLive } from "@/lib/shifts/dutyStatus";
@@ -236,9 +236,8 @@ export function useHomeDelays(p: ReturnType<typeof useHomeBase>) {
   const pickupLabel = terminalName ? `${terminalName}${placeLabel ? ` · ${placeLabel}` : ""}` : null;
 
   // Geotab shows who is behind the wheel: a steering wheel by the numbers when that is you, and a second-seat line when it is someone else.
-  const geoMine = useGeotabEquipment(userId).geo;
   const secondSeat = useSecondSeat(userId).seat;
-  const behindWheel = !!(geoMine?.signedIn && geoMine.role === "driver" && geoMine.truck && (equipment.selectedCombo?.truck_id ?? equipment.currentTruckId) === geoMine.truck.id);
+  const behindWheel = false; // no tracker: "behind the wheel" is not inferred anymore
   const equipmentLabel = equipment.equipmentLabel
     ?? (equipment.isBobtail ? `Truck ${equipment.currentTruckName ?? ""} (bobtail)`.trim() : secondSeat ? `Second seat · Truck ${secondSeat.truckName ?? ""}${secondSeat.driverName ? ` · driver ${secondSeat.driverName}` : ""}` : "No equipment selected");
 

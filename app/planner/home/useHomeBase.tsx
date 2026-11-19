@@ -94,7 +94,6 @@ import { type RepairUnit } from "../components/repair/RepairSheet";
 import { readShopDown, writeShopDown, type ShopDown } from "@/lib/trips/shopDown";
 import { createRepairWorkOrder } from "@/lib/repairs/repairRequest";
 
-import { useGeotabEquipment, useSecondSeat } from "../hooks/useGeotabEquipment";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 import { useFreight } from "../hooks/useFreight";
 import { useEmptyMoves } from "../hooks/useEmptyMoves";

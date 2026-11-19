@@ -53,8 +53,10 @@ phone GPS replaces them), and IFTA state miles. Everything else is typed or alre
 
 1. **Done 2026-11-26:** End shift ends a running delay and always releases the equipment (parked-preloaded included);
    the hold cron no longer re-holds a driver who ended their shift.
-2. **Stop the fighting:** delete `geotabHolds`, `GeotabEquipmentHost`/`useGeotabEquipment` and `syncTrailerEvents`;
-   make shift start/end suggestion-only; move `callerId`/`companyRole` out of the telematics module.
+2. **Stop the fighting:** ~~delete `geotabHolds`, `GeotabEquipmentHost`/`useGeotabEquipment` and `syncTrailerEvents`~~ **done 2026-11-26**
+   (also removed `GeotabEquipmentSheet`, `geotabMatch`, the `my-equipment` and `trailer-events` routes; the hold cron call is gone from
+   `hos-alerts`; `useSecondSeat` moved to `hooks/useSecondSeat.ts`; "behind the wheel" on the dashboard is no longer inferred).
+   Still to do: make shift start/end suggestion-only; move `callerId`/`companyRole` out of the telematics module.
 3. **Phone GPS for equipment position** (section 4), then rebuild Track, the dispatch dots and arrival/departure on it.
 4. **One company setting**, `telematics_enabled`, read by `providerFor` and every client hook, with a test pass over a
    company that has it off. Keep Hours, Odometer prefill and IFTA behind it as "supplements".

@@ -1,30 +1,11 @@
 "use client";
-// app/planner/hooks/useGeotabEquipment.ts
+// app/planner/hooks/useSecondSeat.ts
 //
-// What Geotab says about THIS driver's truck right now, polled every three minutes while the dashboard is open (the
-// server shares Geotab answers between everyone, so this is cheap), plus the driver's own second-seat row.
+// The truck this driver is attached to in the second seat (a ProTankr feature, independent of any tracker).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
-import type { GeoMine } from "@/lib/equipment/geotabMatch";
-
-export function useGeotabEquipment(userId: string | null, enabled = true) {
-  const qc = useQueryClient();
-  const key = ["geotabMine", userId];
-  const q = useQuery({
-    queryKey: key, enabled: !!userId && enabled, staleTime: 2 * 60_000, refetchInterval: 3 * 60_000, refetchOnWindowFocus: true, retry: 0,
-    queryFn: async (): Promise<GeoMine | null> => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return null;
-      const r = await fetch("/api/telematics/my-equipment", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-      return r.ok ? ((await r.json()) as GeoMine) : null;
-    },
-  });
-  const refresh = useCallback(() => qc.invalidateQueries({ queryKey: key }), [qc, userId]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { geo: q.data ?? null, refresh };
-}
 
 export type SecondSeat = { truckId: string; truckName: string | null; driverName: string | null } | null;
 

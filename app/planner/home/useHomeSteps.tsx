@@ -49,7 +49,6 @@ import { rackReasonFor } from "@/lib/trips/cancelReasons";
 
 import { useTruckReading, useTruckReadingState, fetchTruckShipments, odometerStatus } from "@/lib/telematics/useTruckReading";
 import { shipmentsForPickup } from "@/lib/telematics/shipmentMatch";
-import { syncTrailerEvents } from "@/lib/trips/syncTrailerEvents";
 
 import { useMyHos } from "@/lib/telematics/useMyHos";
 import { shouldNotifyHosTrip, type Level } from "@/lib/telematics/hosTripNotify";
@@ -95,7 +94,6 @@ import { telematicsStart } from "@/lib/shifts/autoStart";
 
 import { readShopDown, writeShopDown, SHOP_BLOCK, type ShopDown } from "@/lib/trips/shopDown";
 
-import { useGeotabEquipment, useSecondSeat } from "../hooks/useGeotabEquipment";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 
 import { telematicsLive } from "@/lib/shifts/dutyStatus";
@@ -198,20 +196,6 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     }
     lastHosLevel.current = hosLevel;
   }, [hosLevel]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Geotab hooks and drops land on the open trip's log, now and every ten minutes.
-  const logTripId = openTrip?.trip_id ?? null;
-  useEffect(() => {
-    if (!store || !userId || !logTripId) return;
-    let off = false;
-    const run = () => {
-      const t = store.list("trips", (x) => x.trip_id === logTripId)[0];
-      if (t && !off) void syncTrailerEvents(store, { trip: t, userId }).then((n) => { if (n && !off) void syncNow(); });
-    };
-    run();
-    const id = window.setInterval(run, 600_000);
-    return () => { off = true; window.clearInterval(id); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, userId, logTripId]);
   const fuelSetup = useFuelSetup(fuelOpen ? companyId || null : null);
   const clock = () => ({ now: arriveAtRef.current ?? new Date(), newId });
   const onCancelSubmit = async (v: CancelTripSubmit) => {

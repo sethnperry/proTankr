@@ -73,7 +73,6 @@ import { snoozed, telematicsStart } from "@/lib/shifts/autoStart";
 
 import { readShopDown, writeShopDown, SHOP_BLOCK, type ShopDown } from "@/lib/trips/shopDown";
 
-import { useGeotabEquipment, useSecondSeat } from "../hooks/useGeotabEquipment";
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 
 import { beginTripShift, offDutyAsk, telematicsLive } from "@/lib/shifts/dutyStatus";
