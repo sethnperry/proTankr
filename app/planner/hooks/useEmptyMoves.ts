@@ -15,12 +15,16 @@ export function useEmptyMoves(o: { store: TripStore | null; state: TripStoreStat
   useEffect(() => {
     if (!store || !userId) return;
     let alive = true;
-    const since = new Date(Date.now() - 60 * 86400_000).toISOString();
-    void (async () => {
+    const load = async () => {
+      const since = new Date(Date.now() - 60 * 86400_000).toISOString();
       const { data, error } = await supabase.from("empty_moves").select("*").eq("driver_id", userId).or(`ended_at.is.null,started_at.gte.${since}`).limit(200);
       if (alive && !error) store.hydrate("empty_moves", (data ?? []) as EmptyMoveRow[]);
-    })();
-    return () => { alive = false; };
+    };
+    void load();
+    // Moves dispatch lines up while the app is open show up when the driver comes back to the screen.
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVisible); };
   }, [store, userId]);
 
   const moves = useMemo(() => (store && userId ? store.list("empty_moves", (m) => m.driver_id === userId).sort((a, b) => b.started_at.localeCompare(a.started_at)) : []), [store, userId, state]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,11 +52,18 @@ export function useEmptyMoves(o: { store: TripStore | null; state: TripStoreStat
     void syncNow();
   }, [store, syncNow]);
 
+  /** A planned (dispatched) move begins: the patch stamps the real start and equipment (see lib/moves/dispatchedMoves beginPatch). */
+  const beginPlanned = useCallback((fields: Record<string, unknown>) => {
+    if (!store) return;
+    store.put("empty_moves", fields as any);
+    void syncNow();
+  }, [store, syncNow]);
+
   const patch = useCallback((moveId: string, fields: Partial<Pick<EmptyMoveRow, "begin_miles" | "end_miles" | "to_place_id" | "to_text" | "from_place_id" | "from_text">>) => {
     if (!store) return;
     store.put("empty_moves", { move_id: moveId, ...fields } as any);
     void syncNow();
   }, [store, syncNow]);
 
-  return { moves, current, begin, end, discard, patch };
+  return { moves, current, begin, beginPlanned, end, discard, patch };
 }

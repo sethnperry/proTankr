@@ -311,7 +311,7 @@ export function useHomeBase() {
     } catch { /* no question: the status stays as it is */ }
   };
   // Cancelling a load and ending a shift both stop to confirm the odometer first (see OdometerConfirmSheet).
-  const [stampAsk, setStampAsk] = useState<{ kind: "cancel"; v: CancelTripSubmit } | { kind: "shift" } | { kind: "move_begin" } | { kind: "move_end" } | null>(null);
+  const [stampAsk, setStampAsk] = useState<{ kind: "cancel"; v: CancelTripSubmit } | { kind: "shift" } | { kind: "move_begin"; plannedId?: string } | { kind: "move_end" } | null>(null);
   const finishShift = () => {
     if (truckId) { setStampAsk({ kind: "shift" }); return; }
     const startedAt = shift.current?.startedAt ?? null; shift.end(); void askTruckStatus(startedAt);

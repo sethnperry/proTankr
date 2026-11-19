@@ -104,6 +104,7 @@ import { serverOrderConflicts } from "@/lib/trips/refCheck";
 import { typicalStartMinutes, clock } from "@/lib/dispatch/forecast";
 import { useCompanySuppliers } from "@/lib/suppliers/useSupplierAdmin";
 import { TripsBrowser } from "../components/trip/TripsBrowser";
+import { PlanMoveSheet } from "./PlanMoveSheet";
 import { LocationsHub, locationsTool } from "../components/locations/LocationsHub";
 import { useDeliveryLocationList, useTripSettings } from "@/lib/trips/useTripData";
 import { classifyLive } from "@/lib/dispatch/liveGroups";
@@ -397,6 +398,7 @@ export default function DispatchPage() {
   );
   const locList = useDeliveryLocationList(companyId || null, authUserId || null);
   const [locsOpen, setLocsOpen] = useState(false); // the Locations tool
+  const [planMoveOpen, setPlanMoveOpen] = useState(false);
   const [tripsOpen, setTripsOpen] = useState(false); // the Trips tool
   const lowHours = useMemo(
     () => buildHosAlerts(fleetTrips.filter((f) => f.trip.status !== "parked").map((f) => ({ tripId: f.trip.trip_id, userId: f.trip.driver_id ?? null, driverName: f.driverName, truckName: f.truckName })), fleetHos, Date.now()),
@@ -842,6 +844,7 @@ export default function DispatchPage() {
     const dashTools: ToolItem[] = [
       { icon: "people", label: "Drivers", onClick: () => document.getElementById("dispatch-drivers")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
       { icon: "route" as const, label: "Trips", onClick: () => setTripsOpen(true) },
+      { icon: "route" as const, label: "Dispatch a move", onClick: () => setPlanMoveOpen(true) },
       { icon: "locate" as const, label: "Track", onClick: () => setFindTruckOpen(true) },
       { icon: "card", label: "Fleet Cards", onClick: () => setFleetCardsOpen(true) },
       locationsTool(() => setLocsOpen(true)),
@@ -946,6 +949,11 @@ export default function DispatchPage() {
         footer={<ConnectedDashFooter />}
       />
       <CalloutsModal open={calloutsOpen} onClose={() => { setCalloutsOpen(false); void activeCallouts.reload(); }} companyId={companyId || ""} userId={authUserId || null} canEdit />
+      <PlanMoveSheet open={planMoveOpen} onClose={() => setPlanMoveOpen(false)} companyId={companyId || null} dispatcherId={authUserId || null}
+        drivers={plan.roster.map((m) => ({ id: m.user_id, name: m.display_name ?? "Driver" }))} initialDriverId={null}
+        heldFor={(id) => { const h = heldEquipment.get(id); return h ? { truckId: h.truckId, trailerId: h.trailerId } : null; }}
+        truckName={(id) => (id ? plan.input?.trucks.get(id) ?? null : null)} trailerName={(id) => (id ? plan.input?.trailers.get(id) ?? null : null)}
+        locations={locList.locations} tanks={locList.tanks} onLocationAdded={() => void locList.reload()} />
       <LocationsHub open={locsOpen} onClose={() => setLocsOpen(false)} companyId={companyId || null} userId={authUserId || null} role={shell.role ?? null} isSuperAdmin={!!shell.isSuperAdmin} />
       <FullscreenModal open={tripsOpen} title="Trips" onClose={() => setTripsOpen(false)} footer={null}>
         {tripsOpen && <TripsBrowser mode="company" userId={authUserId || null} companyId={companyId || null} onOpen={openTrip} canForceCancel={shell.role === "admin" || !!shell.isSuperAdmin}

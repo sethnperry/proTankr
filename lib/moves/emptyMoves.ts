@@ -11,10 +11,10 @@ export const MOVE_KINDS: { id: MoveKind; label: string; hint: string }[] = [
   { id: "empty_return", label: "Empty return", hint: "Heading back with an empty trailer." },
   { id: "reposition", label: "Reposition", hint: "Moving to be ready for the next load." },
 ];
-export const moveKindLabel = (k: string | null | undefined) => MOVE_KINDS.find((m) => m.id === k)?.label ?? "Empty move";
+export const moveKindLabel = (k: string | null | undefined) => k === "hook" ? "Hook trailer" : k === "drop" ? "Drop trailer" : MOVE_KINDS.find((m) => m.id === k)?.label ?? "Empty move";
 
 export const openMove = (moves: EmptyMoveRow[], driverId: string): EmptyMoveRow | null =>
-  moves.filter((m) => m.driver_id === driverId && !m.ended_at).sort((a, b) => b.started_at.localeCompare(a.started_at))[0] ?? null;
+  moves.filter((m) => m.driver_id === driverId && !m.ended_at && !m.dispatched).sort((a, b) => b.started_at.localeCompare(a.started_at))[0] ?? null;
 
 /** Bobtail when no trailer is held, an empty return when a trailer is. */
 export const suggestKind = (hasTrailer: boolean): MoveKind => (hasTrailer ? "empty_return" : "bobtail");

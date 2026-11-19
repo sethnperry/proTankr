@@ -10395,6 +10395,9 @@ Add to this as more turn up.
 ## Side notes (not scheduled work)
 - `docs/eld-notes.md`: running notes on building our own ELD (rules, Geotab behavior, ideas). Nothing built. When the user says to flag something for the ELD, append it there from any session.
 
+## Dispatched moves (2026-11-19)
+Dispatch lines up bobtail, empty, hook-trailer and drop-trailer moves like loads (Dispatch Dashboard -> **Dispatch a move**, `app/planner/dispatch/PlanMoveSheet.tsx`). They are `empty_moves` rows with `dispatched = true` (migration `20261119000000_dispatched_moves.sql`, **apply it first**: until then the sheet says so and nothing else changes). Equipment defaults to what the driver holds and can be changed. Driver Dashboard: `DispatchedMovesCard` shows the next move as the big button and the rest below; a bobtail/empty move starts with the odometer stamp and ends with Arrive like any move; hook/drop are one confirm (drop releases the trailer, hook opens the equipment window). `openMove` and auto end-of-shift ignore planned moves. Not built: hook auto-coupling with tare, an equipment schedule that warns on double booking, a driver planning their own moves (the sheet is dispatch-side only).
+
 ## Standby / On Call (version one, 2026-11-24)
 Drivers offer windows of extra hours; dispatch sees them on a Gantt and grades coverage per market. Migration
 `20261124000000_standby.sql` (applied): `standby_markets` (name, local_areas text[], required_count), `standby_signups`

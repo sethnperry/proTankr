@@ -38,6 +38,8 @@ import { DutyStopCard } from "./DutyStopCard";
 import { readRunningDelay, writeRunningDelay, dropDelayMinutes, type RunningDelay } from "@/lib/trips/delays";
 
 import { locationPlace, locationTitle } from "@/lib/trips/deliveryLocations";
+import { DispatchedMovesCard } from "../components/moves/DispatchedMovesCard";
+import { beginPatch, dispatchedMovesFor, stepKindOf, stepText } from "@/lib/moves/dispatchedMoves";
 
 import TerminalOutageDetailModal from "../modals/TerminalOutageDetailModal";
 
@@ -626,6 +628,23 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           Empty move in progress since {new Date(emptyMoves.current.started_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}. Tap when you get there.
         </div>
       )}
+      {step.kind === "start" && !openTrip && !openingPlanner && (() => {
+        const planned = userId ? dispatchedMovesFor(emptyMoves.moves, userId) : [];
+        const place = (id: string | null, text: string | null) => { const l = id ? locations.find((x) => x.location_id === id) : null; return l ? locationTitle(l) : text || "—"; };
+        const trailerName = (id: string | null) => (id ? ((equipment as { trailerNameById?: Record<string, string> }).trailerNameById?.[id] ?? null) : null);
+        const startMove = (m: (typeof planned)[number]) => {
+          if (!truckId) { setNotice({ text: "Pick your truck first, then start the move.", tripId: null }); return; }
+          setStampAsk({ kind: "move_begin", plannedId: m.move_id });
+        };
+        const doInstant = (m: (typeof planned)[number]) => {
+          emptyMoves.beginPlanned(beginPatch(m, { atIso: new Date().toISOString(), truckId: truckId ?? null, trailerId: stepKindOf(m) === "drop" ? (m.trailer_id ?? trailerId ?? null) : (m.trailer_id ?? null), beginMiles: truckReading?.odometerMi != null ? Math.round(truckReading.odometerMi) : null }));
+          if (stepKindOf(m) === "drop") void equipment.setCurrentEquipment?.(truckId ?? null, null);
+          else shell.setEquipOpen(true);
+        };
+        return <DispatchedMovesCard moves={planned} text={(m) => stepText(m, { place, trailer: trailerName })}
+          when={(m) => (m.planned_start_at ? new Date(m.planned_start_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }) : null)}
+          onStart={startMove} onInstant={doInstant} blockedBy={emptyMoves.current ? "Arrive at your current move first." : null} />;
+      })()}
       {step.kind !== "start" && !openingPlanner && !arriveCardPending && (
         <div style={{ textAlign: "center", fontSize: 13, color: muted, marginTop: 6 }}>{parkRequested ? "Dispatch asked you to park this load" : step.detail}</div>
       )}

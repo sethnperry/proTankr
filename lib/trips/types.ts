@@ -317,10 +317,12 @@ export type FreightStopRow = Synced & { stop_id: string; freight_id: string; seq
 
 export type EmptyMoveRow = Synced & {
   move_id: string; company_id: string; driver_id: string; truck_id: string | null; trailer_id: string | null;
-  kind: "bobtail" | "empty_return" | "reposition";
+  kind: "bobtail" | "empty_return" | "reposition" | "hook" | "drop";
   from_place_id: string | null; from_text: string | null; to_place_id: string | null; to_text: string | null;
   started_at: string; ended_at: string | null; begin_miles: number | null; end_miles: number | null;
   billable: boolean | null; notes: string | null; source: "app" | "geotab" | "manual";
+  // Planned moves (dispatch, or a driver planning the day): waiting until begun.
+  dispatched?: boolean; planned_start_at?: string | null; dispatched_by?: string | null; dispatch_seq?: number | null; planned_note?: string | null;
 };
 
 export type SlfAttestationRow = Synced & {

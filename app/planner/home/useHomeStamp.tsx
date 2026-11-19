@@ -97,6 +97,7 @@ import { terminalReadiness, type ReadinessInput } from "@/lib/terminals/readines
 
 import { EXP_WARN_DAYS, type ExpiryState } from "@/lib/expiry";
 
+import { beginPatch } from "@/lib/moves/dispatchedMoves";
 import { type ExpGroup, type ExpRow } from "./DashboardSheets";
 
 // Sheets that only open on a tap load after the page is up, not before it can draw.
@@ -134,6 +135,12 @@ export function useHomeStamp(p: ReturnType<typeof useHomeSteps>) {
     }
     if (ask.kind === "move_begin") {
       setStampAsk(null);
+      // A dispatched move begins: the planned row gets its real start, odometer, place and equipment.
+      if (ask.plannedId && truckId) {
+        const planned = emptyMoves.moves.find((x) => x.move_id === ask.plannedId);
+        if (planned) emptyMoves.beginPlanned({ ...beginPatch(planned, { atIso: at, truckId, trailerId: trailerId ?? null, beginMiles: odo }), from_place_id: stampCtx.placeId, from_text: stampCtx.placeText, source: stampCtx.guess === odo ? "geotab" : "app" });
+        return;
+      }
       if (truckId) emptyMoves.begin({ truckId, trailerId, kind: trailerId ? "empty_return" : "bobtail", from: { id: stampCtx.placeId, text: stampCtx.placeText }, to: { id: null, text: null }, beginMiles: odo, at, source: stampCtx.guess === odo ? "geotab" : "app" });
       return;
     }

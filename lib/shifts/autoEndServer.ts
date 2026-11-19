@@ -102,7 +102,10 @@ async function closeShift(companyId: string, userId: string, startedAt: string, 
     await admin.from("trip_events").insert({ event_id: randomUUID(), trip_id: trip.trip_id, event_type: "parked", occurred_at: at, actor_id: userId, payload: { auto: true, parked_for: "layover", where: label, from_status: trip.status } });
   }
   // An empty move still running ends here.
-  await admin.from("empty_moves").update({ ended_at: at, end_miles: odo, client_updated_at: new Date().toISOString() }).eq("driver_id", userId).is("ended_at", null);
+  // Only a move that has begun ends here; planned (dispatched) ones keep waiting. Filtered in code so this works before the column exists.
+  const { data: openMoves } = await admin.from("empty_moves").select("*").eq("driver_id", userId).is("ended_at", null);
+  const running = ((openMoves ?? []) as { move_id: string; dispatched?: boolean | null }[]).filter((m) => !m.dispatched).map((m) => m.move_id);
+  if (running.length) await admin.from("empty_moves").update({ ended_at: at, end_miles: odo, client_updated_at: new Date().toISOString() }).in("move_id", running);
 
   // The truck: Readyline / Parked unless its status was already set during this shift.
   let setStatus = true;

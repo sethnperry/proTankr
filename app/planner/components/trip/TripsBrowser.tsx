@@ -79,6 +79,7 @@ function DispatchedPlanLine({ plan }: { plan: DispatchedPlan }) {
 /** An empty move (bobtail, empty return, reposition) as a two-line card in the trips list. */
 function MoveCard({ m, who, trailerParts, trailerWord }: { m: EmptyMoveRow; who: string; trailerParts: PlanLineComp[]; trailerWord: string | null }) {
   const done = !!m.ended_at;
+  const planned = !!m.dispatched && !done;
   const miles = moveMiles(m);
   const from = m.from_text || "—";
   const to = m.to_text || (done ? "—" : "…");
@@ -90,13 +91,13 @@ function MoveCard({ m, who, trailerParts, trailerWord }: { m: EmptyMoveRow; who:
           {m.trailer_id && m.kind !== "bobtail" ? (trailerParts.length > 0 && <PlanLine letter="" detail={false} comps={trailerParts} />) : <span style={{ fontSize: 14, fontWeight: 800, color: "#60a5fa" }}>Bobtail</span>}
         </span>
         {trailerWord && <span style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>{trailerWord}</span>}
-        <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: done ? "#4ade80" : "#60a5fa" }}>{done ? "Complete" : "Enroute"}</span>
+        <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: done ? "#4ade80" : "#60a5fa" }}>{done ? "Complete" : planned ? "Dispatched" : "Enroute"}</span>
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
         <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
           <span style={{ fontWeight: 800, color: "#fff" }}>{moveKindLabel(m.kind)}</span>{" · "}{from} → {to}{miles != null ? ` · ${miles} mi` : ""}
         </span>
-        <span className="dash-num" style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap" }}>{done ? fmtDateTime(m.ended_at) : `Began ${fmtDateTime(m.started_at)}`}</span>
+        <span className="dash-num" style={{ flexShrink: 0, fontSize: 12, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap" }}>{done ? fmtDateTime(m.ended_at) : planned ? (fmtDateTime(m.planned_start_at ?? null) || "Not started") : `Began ${fmtDateTime(m.started_at)}`}</span>
       </div>
     </div>
   );
