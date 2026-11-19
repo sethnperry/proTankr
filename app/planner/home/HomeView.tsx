@@ -3,6 +3,7 @@
 //
 // What the Driver Dashboard draws. Every value and handler comes from useHome.
 
+import { releaseEquipment } from "@/lib/equipment/releaseEquipment";
 import { Spinner, busyProps, busyText } from "@/lib/ui/pending";
 // app/planner/home/page.tsx
 //
@@ -1450,7 +1451,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onStart={termWork.start} onStop={termWork.stop} />
       <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Continue without a shift" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
       {endAsk && truckId && companyId && (
-        <EquipmentStatusModal open endShift={!endAsk.arrival} onClose={() => setEndAsk(null)} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
+        <EquipmentStatusModal open endShift={!endAsk.arrival} onClose={() => { const wasEnd = !endAsk.arrival; setEndAsk(null); if (wasEnd) void releaseEquipment(truckId, trailerId).then(() => { void equipment.fetchCombos?.(); void equipment.loadCurrentEquipment?.(); equipment.clearSelectedEquipment?.(); }); }} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
           pair={trailerId ? { truckId, trailerId, truckName: endAsk.name, trailerName: (equipment.trailerNameById?.[trailerId] || equipment.currentTrailerName || "") } : null}
           currentStatus={endAsk.status} currentNotes={endAsk.notes} currentSubStatus={endAsk.sub} homeLocalArea={endAsk.area}
           allowed={endAsk.arrival ? undefined : endAsk.sleeper ? ["in_use", "deadline", "readyline"] : ["deadline", "readyline"]}

@@ -20,6 +20,7 @@
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
+import { releaseEquipment } from "@/lib/equipment/releaseEquipment";
 import React, { useEffect, useMemo } from "react";
 
 import type { TripPickupRow } from "@/lib/trips/types";
@@ -208,6 +209,8 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
     setFinishOpen(false);
     setNotice({ text: "Load parked. Start another trip when you're ready.", tripId: openTrip.trip_id });
     void syncNow();
+    // Parking at the end of a shift lets go of the truck and trailer: the parked load shows as parked, not as mine.
+    if (!shift.current) void releaseEquipment(truckId, trailerId).then(() => { void equipment.fetchCombos?.(); void equipment.loadCurrentEquipment?.(); equipment.clearSelectedEquipment?.(); });
   };
   truckIdLive.current = truckId ?? null;
   const doResume = () => {

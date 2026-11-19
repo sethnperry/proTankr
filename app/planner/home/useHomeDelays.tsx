@@ -108,11 +108,18 @@ import { initialsOf } from "../components/trip/DashboardCards";
 import type { useHomeBase } from "./useHomeBase";
 
 export function useHomeDelays(p: ReturnType<typeof useHomeBase>) {
-  const { companyId, equipment, location, locations, openTrip, openingPlanner, openingReport, repairFromDelay, resumeDraft, router, runningDelay, setAutoArrive, setBackBusy, setBlockNotice, setGaugingAsk, setNotice, setOpeningPlanner, setOpeningReport, setRackSheetOpen, setRepairOpen, setResumeDraft, setRunningDelay, setSheetOpen, setShopDown, setStoredLocId, setTrailerNotes, sheetOpen, shell, shopDown, snap, startDelayRef, state, step, store, storedLocId, syncNow, terminalCatalog, terminals, trailerId, trips, userId } = p;
+  const { shift, lastShiftEndedMs, companyId, equipment, location, locations, openTrip, openingPlanner, openingReport, repairFromDelay, resumeDraft, router, runningDelay, setAutoArrive, setBackBusy, setBlockNotice, setGaugingAsk, setNotice, setOpeningPlanner, setOpeningReport, setRackSheetOpen, setRepairOpen, setResumeDraft, setRunningDelay, setSheetOpen, setShopDown, setStoredLocId, setTrailerNotes, sheetOpen, shell, shopDown, snap, startDelayRef, state, step, store, storedLocId, syncNow, terminalCatalog, terminals, trailerId, trips, userId } = p;
 
   useEffect(() => {
     if (userId) setRunningDelay(readRunningDelay(userId));
   }, [userId]);
+  // A delay never outlives the shift: when the shift has ended, stop it at the moment the shift ended.
+  useEffect(() => {
+    if (!runningDelay || shift.current || !lastShiftEndedMs) return;
+    const started = Date.parse(runningDelay.startedAt);
+    if (Number.isFinite(started) && lastShiftEndedMs >= started) endDelay(new Date(lastShiftEndedMs).toISOString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningDelay, shift.current, lastShiftEndedMs]);
   // Plan Review's Rack Delay starts one from the Planner overlay: pick it up here.
   useEffect(() => {
     const h = () => { if (userId) setRunningDelay(readRunningDelay(userId)); };

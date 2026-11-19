@@ -82,6 +82,7 @@ import { isSplashable, splashPickupPlans, refineSecondStop, type StagedPlanned }
 
 import { headingToTerminal, parkedPreloads, storeActivity } from "@/lib/trips/dashboardCards";
 
+import { releaseEquipment } from "@/lib/equipment/releaseEquipment";
 import { statusSetThisShift } from "@/lib/shifts/endStatus";
 import { snoozed } from "@/lib/shifts/autoStart";
 import { useShiftRecap } from "../hooks/useShiftRecap";
@@ -296,9 +297,15 @@ export function useHomeBase() {
     try {
       const { data } = await supabase.from("trucks").select("truck_name, status_updated_at, has_sleeper, status_code, status_notes, sub_status, local_area").eq("truck_id", truckId).maybeSingle();
       const t = data as { truck_name?: string; status_updated_at?: string | null; has_sleeper?: boolean; status_code?: string | null; status_notes?: string | null; sub_status?: string | null; local_area?: string | null } | null;
-      if (!t || statusSetThisShift(t.status_updated_at, shiftStartedAt)) return;
+      // The status was already set this shift, or there is nothing to ask: ending the shift still lets go of the equipment.
+      if (!t || statusSetThisShift(t.status_updated_at, shiftStartedAt)) { void releaseAfterShift(); return; }
       setEndAsk({ name: t.truck_name ?? "", sleeper: !!t.has_sleeper, loaded: !!openTrip && !!snap && onBoard(snap.compLoads).length > 0, status: t.status_code ?? null, notes: t.status_notes ?? null, sub: t.sub_status ?? null, area: t.local_area ?? null });
-    } catch { /* no question: the status stays as it is */ }
+    } catch { void releaseAfterShift(); /* no question to ask */ }
+  };
+  // End of shift always lets go of the truck and trailer (the pairing stays coupled and free).
+  const releaseAfterShift = async () => {
+    await releaseEquipment(truckId, trailerId);
+    void equipment.fetchCombos?.(); void equipment.loadCurrentEquipment?.(); equipment.clearSelectedEquipment?.();
   };
   // Arriving from an empty move: the equipment status window opens so the driver can update it. Every status is allowed.
   const askArrivalStatus = async () => {
