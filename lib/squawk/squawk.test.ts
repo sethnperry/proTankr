@@ -33,3 +33,11 @@ test("sender label: own company sees the truck, others see the company", () => {
   assert.equal(senderLabel(m, "other"), "SP - Gemini");
   assert.equal(senderLabel({ sender_label: "old" }, "co"), "old");
 });
+
+import { squawkPushText } from "./squawkText.ts";
+test("push text names the sender, shortens a long message and handles a file-only one", () => {
+  assert.equal(squawkPushText("TT 25184", "Wreck on I-4", 0), "TT 25184: Wreck on I-4");
+  assert.ok(squawkPushText("TT", "x".repeat(300), 0).length < 160);
+  assert.equal(squawkPushText("TT", "  ", 2), "TT sent 2 files");
+  assert.equal(squawkPushText(null, "hi", 0), "Someone: hi");
+});

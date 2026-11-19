@@ -63,8 +63,16 @@ export function useSquawkFeed(type: SquawkType | null, key: string | null, open:
       if (up.error) return `Couldn't upload ${f.name}: ${up.error.message}`;
       attachments.push({ path, name: f.name, type: f.type, size: f.size });
     }
-    const { error } = await supabase.rpc("squawk_send", { p_type: type, p_key: key, p_body: body, p_attachments: attachments });
+    const { data: newId, error } = await supabase.rpc("squawk_send", { p_type: type, p_key: key, p_body: body, p_attachments: attachments });
     if (error) return error.message;
+    // Tell everyone in the channel (and this phone, so the sender sees what the others see). Never holds the sender up.
+    if (newId) void (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (token) await fetch("/api/squawk/push", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ id: String(newId) }) });
+      } catch { /* the message is sent; the push is a bonus */ }
+    })();
     void qc.invalidateQueries({ queryKey: ["squawk", "feed", type, key] });
     return null;
   }, [type, key, userId, qc]);
