@@ -2,8 +2,8 @@
 // lib/telematics/useArrivalSuggestion.ts
 //
 // Arrival detection for the Driver Dashboard. While the trip's next step is
-// "Arrive" at a terminal or store and the company has a telematics link, the
-// truck's position is checked each minute against that stop's geofence. When it
+// "Arrive" at a terminal or store, the phone's position is checked each minute
+// (while the app is open) against that stop's geofence. When it
 // has come to rest inside, `suggest` carries the time it first did, and the
 // dashboard offers the driver an Arrive tap back-dated to then. Never stamps on
 // its own. Also exports `recordArrivalPoint`, which teaches the geofence where
@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { LatLon } from "@/lib/trips/deliveryLocations";
 import { fenceFor, inside, NEW_WATCH, plausiblePoint, stepWatch, type Watch } from "./geofence";
-import { fetchTruckReading } from "./useTruckReading";
+import { getPhoneReading, phoneLocationDenied } from "@/lib/position/usePhoneReading";
 
 export type ArrivalTarget = { kind: "terminal" | "location"; refId: string; name: string; catalog: LatLon | null };
 
@@ -33,9 +33,9 @@ export async function learnedPoints(companyId: string, t: ArrivalTarget): Promis
 /** Remember where the truck is right now as an arrival point for this stop. */
 export async function recordArrivalPoint(o: { companyId: string; userId: string; truckId: string | null; target: ArrivalTarget }): Promise<void> {
   try {
-    const r = await fetchTruckReading(o.truckId);
-    if (!r || r.lat == null || r.lon == null) return;
-    if (r.at && Date.now() - Date.parse(r.at) > FRESH_MS) return;
+    const r = await getPhoneReading();
+    if (!r) return;
+    if (Date.now() - Date.parse(r.at) > FRESH_MS) return;
     const p = { lat: r.lat, lon: r.lon };
     if (!plausiblePoint(p, o.target.catalog)) return;
     await supabase.from("stop_arrival_points").insert({ company_id: o.companyId, kind: o.target.kind, ref_id: o.target.refId, lat: p.lat, lon: p.lon, recorded_by: o.userId });
@@ -55,7 +55,7 @@ export function useArrivalSuggestion(o: { companyId: string | null; truckId: str
   useEffect(() => {
     watch.current = NEW_WATCH;
     setSinceMs(null);
-    if (!enabled || !companyId || !truckId || !key) return;
+    if (!enabled || !companyId || !key) return;
     let off = false;
     let timer: number | undefined;
     let fence: ReturnType<typeof fenceFor> | undefined;
@@ -65,11 +65,11 @@ export function useArrivalSuggestion(o: { companyId: string | null; truckId: str
       if (t && document.visibilityState !== "hidden") {
         try {
           if (fence === undefined) { fence = fenceFor(await learnedPoints(companyId, t), t.catalog); setLearned(!!fence?.learned); }
-          const r = await fetchTruckReading(truckId);
+          if (phoneLocationDenied()) return; // the driver said no to location: stop checking
+          const r = await getPhoneReading();
           if (off) return;
-          if (!r) return; // no telematics: stop checking
-          if (fence && r.lat != null && r.lon != null && r.at && Date.now() - Date.parse(r.at) <= FRESH_MS) {
-            watch.current = stepWatch(watch.current, { inside: inside({ lat: r.lat, lon: r.lon }, fence), speedMph: r.speedMph ?? null, nowMs: Date.now() });
+          if (fence && r && Date.now() - Date.parse(r.at) <= FRESH_MS) {
+            watch.current = stepWatch(watch.current, { inside: inside({ lat: r.lat, lon: r.lon }, fence), speedMph: r.speedMph, nowMs: Date.now() });
             setSinceMs(watch.current.confirmedAtMs);
           }
         } catch { /* try again next minute */ }
@@ -78,7 +78,7 @@ export function useArrivalSuggestion(o: { companyId: string | null; truckId: str
     };
     void tick();
     return () => { off = true; if (timer) window.clearTimeout(timer); };
-  }, [enabled, companyId, truckId, key]);
+  }, [enabled, companyId, key]);
 
   const snooze = useCallback((min = 20) => setSnoozedUntil(Date.now() + min * 60_000), []);
   const suggest = sinceMs != null && Date.now() >= snoozedUntil ? { sinceMs } : null;

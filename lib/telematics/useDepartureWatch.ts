@@ -1,7 +1,7 @@
 "use client";
 // lib/telematics/useDepartureWatch.ts
 //
-// While the truck is at a stop (arrived, not yet left), watch for it leaving
+// While the driver is at a stop (arrived, not yet left), watch the phone's position for leaving
 // the stop's geofence. The first time it is outside and moving, that time is
 // kept on the phone (geoDepartures) and becomes the default Depart / Finished
 // time, so the record shows when the truck really left, not when the driver
@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { fenceFor, NEW_EXIT, stepExit, stillAtStop, type ExitWatch } from "./geofence";
 import { writeGeoDeparture } from "./geoDepartures";
 import { learnedPoints, type ArrivalTarget } from "./useArrivalSuggestion";
-import { fetchTruckReading } from "./useTruckReading";
+import { getPhoneReading, phoneLocationDenied } from "@/lib/position/usePhoneReading";
 
 const POLL_MS = 60_000;
 const FRESH_MS = 10 * 60_000;
@@ -21,7 +21,7 @@ export function useDepartureWatch(o: { companyId: string | null; truckId: string
   const targetRef = useRef(target);
   targetRef.current = target;
   useEffect(() => {
-    if (!enabled || !companyId || !truckId || !stopKey || !targetRef.current) return;
+    if (!enabled || !companyId || !stopKey || !targetRef.current) return;
     let off = false;
     let timer: number | undefined;
     let w: ExitWatch = NEW_EXIT;
@@ -33,12 +33,13 @@ export function useDepartureWatch(o: { companyId: string | null; truckId: string
       if (t && document.visibilityState !== "hidden") {
         try {
           if (fence === undefined) fence = fenceFor(await learnedPoints(companyId, t), t.catalog);
-          const r = await fetchTruckReading(truckId);
-          if (off || !r) return; // no telematics: stop checking
-          if (fence && r.lat != null && r.lon != null && r.at && Date.now() - Date.parse(r.at) <= FRESH_MS) {
+          if (phoneLocationDenied()) return; // the driver said no to location: stop checking
+          const r = await getPhoneReading();
+          if (off) return;
+          if (fence && r && Date.now() - Date.parse(r.at) <= FRESH_MS) {
             const pos = { lat: r.lat, lon: r.lon };
             if (!anchor) anchor = pos;
-            w = stepExit(w, { inside: stillAtStop(pos, fence, anchor), speedMph: r.speedMph ?? null, nowMs: Date.now() });
+            w = stepExit(w, { inside: stillAtStop(pos, fence, anchor), speedMph: r.speedMph, nowMs: Date.now() });
             if (w.confirmedAtMs != null) { writeGeoDeparture(stopKey, new Date(w.confirmedAtMs).toISOString()); return; }
           }
         } catch { /* try again next minute */ }
@@ -47,5 +48,5 @@ export function useDepartureWatch(o: { companyId: string | null; truckId: string
     };
     void tick();
     return () => { off = true; if (timer) window.clearTimeout(timer); };
-  }, [enabled, companyId, truckId, stopKey]);
+  }, [enabled, companyId, stopKey]);
 }

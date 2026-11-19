@@ -60,7 +60,11 @@ phone GPS replaces them), and IFTA state miles. Everything else is typed or alre
    telematics only prefills the time); the Geotab silent auto-start and the Geotab off-duty auto-end are gone. Shift end is
    `lib/shifts/wrapUp.ts`: 30 min quiet after the last load (3 h with a trip open) asks "Are you still working?" on screen and by
    push; 15 min with no answer ends it at the last activity. `callerId`/`companyRole`/`isCompanyAdmin` moved to `lib/auth/server.ts` (2026-11-27).
-3. **Phone GPS for equipment position** (section 4), then rebuild Track, the dispatch dots and arrival/departure on it.
+3. **Phone GPS for equipment position** (section 4). **Done 2026-11-27:** captures (open/wake, odometer stamps, Arrive) feed the dispatch dots,
+   on-shift list and Track's captured-position card; arrival suggestion, departure watch, the "are you really at the stop" check and
+   fuel-stop city now use the phone's position (`lib/position/usePhoneReading.ts`, speed from the phone or from two fixes; stops asking
+   if location is refused). They only run while the app is open. **Still on Geotab:** Track's detail screen (sign-in, hooked trailer,
+   speed/heading, Update from Geotab) and the odometer/fuel/hours readings.
 4. **One company setting**, `telematics_enabled`, read by `providerFor` and every client hook, with a test pass over a
    company that has it off. Keep Hours, Odometer prefill and IFTA behind it as "supplements".
 5. **Track in Geotab** button in the Track modal (deep link to the unit), the only Geotab surface left there.

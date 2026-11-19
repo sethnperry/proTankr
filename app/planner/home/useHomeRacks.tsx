@@ -41,7 +41,7 @@ import { unlinkCancelledLoad } from "@/lib/trips/tripLogic";
 import { activePickup, arriveDelivery, undoableArrival, undoArrivePickup, undoArriveDelivery, closePickupNoLoad, canCancelLoad, onBoard } from "@/lib/trips/tripFlow";
 import type { TripCompartmentLoadRow, TripDeliveryRow, TripRow } from "@/lib/trips/types";
 
-import { fetchTruckReading } from "@/lib/telematics/useTruckReading";
+import { getPhoneReading } from "@/lib/position/usePhoneReading";
 
 import { useDepartureWatch } from "@/lib/telematics/useDepartureWatch";
 
@@ -257,14 +257,14 @@ export function useHomeRacks(p: ReturnType<typeof useHomeStamp>) {
   useEffect(() => {
     const st = dutyStopRaw;
     const target = arrivalTarget?.catalog ?? null;
-    if (!st || st.answerId || hopPickup || !target || !truckId || stopFar[st.at] !== undefined) return;
+    if (!st || st.answerId || hopPickup || !target || stopFar[st.at] !== undefined) return;
     let off = false;
-    void fetchTruckReading(truckId).then((r) => {
-      if (off || !r || r.lat == null || r.lon == null) return;
-      setStopFar((m) => ({ ...m, [st.at]: airMiles({ lat: r.lat!, lon: r.lon! }, target) > 1 }));
+    void getPhoneReading().then((r) => {
+      if (off || !r) return;
+      setStopFar((m) => ({ ...m, [st.at]: airMiles({ lat: r.lat, lon: r.lon }, target) > 1 }));
     });
     return () => { off = true; };
-  }, [dutyStopRaw?.at, dutyStopRaw?.answerId, arrivalTarget?.catalog, truckId, hopPickup?.pickup_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dutyStopRaw?.at, dutyStopRaw?.answerId, arrivalTarget?.catalog, hopPickup?.pickup_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const dutyStop = dutyStopRaw && !dutyStopRaw.answerId && stopFar[dutyStopRaw.at] === true ? null : dutyStopRaw; // eslint-disable-line react-hooks/exhaustive-deps
   const tapFuel = async () => {
     // Fuel, scale or any other stop waits until the delivery you're at is finished.
