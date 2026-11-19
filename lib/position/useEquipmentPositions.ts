@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { PositionRow } from "./positionRows";
 
 export { rowsToPositions, toLivePos, type UnitPosition } from "./positionRows";
-import { rowsToPositions, type UnitPosition } from "./positionRows";
+import { rowsToPositions, toLivePos, type UnitPosition } from "./positionRows";
 type Row = PositionRow;
 
 export function useEquipmentPositions(companyId: string | null, enabled: boolean, pollMs = 60_000) {
