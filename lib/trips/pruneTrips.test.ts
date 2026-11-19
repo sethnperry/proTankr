@@ -30,12 +30,23 @@ test("a full page only prunes inside its window", () => {
   assert.ok(s.get("trips", "old"));
 });
 
-test("a server-deleted trip goes even with unsent child rows, which are dropped too", () => {
+test("a trip with unsent child rows is kept, never dropped", () => {
   const s = storeWith([trip("a", "2026-10-10T00:00:00Z")]);
   s.put("trip_events", { event_id: "e1", trip_id: "a", type: "note" } as never);
+  const dropped = pruneMissingTrips(s, ME, [trip("z", "2026-10-12T00:00:00Z")], 50);
+  assert.deepEqual(dropped, []);
+  assert.equal(s.list("trips").length, 1);
   assert.equal(s.getState().queue.length, 1);
-  const dropped = pruneMissingTrips(s, ME, [], 50);
-  assert.deepEqual(dropped, ["a"]);
-  assert.equal(s.list("trips").length, 0);
-  assert.equal(s.getState().queue.length, 0);
+});
+
+test("an empty server answer (bad session, hiccup) removes nothing", () => {
+  const s = storeWith([trip("a", "2026-10-10T00:00:00Z"), trip("b", "2026-10-11T00:00:00Z")]);
+  assert.deepEqual(pruneMissingTrips(s, ME, [], 10), []);
+  assert.equal(s.list("trips").length, 2);
+});
+
+test("an open, dispatched or parked trip is never pruned", () => {
+  const s = storeWith(["draft", "loading", "delivering", "dispatched", "parked"].map((st, i) => ({ ...trip(`t${i}`, "2026-10-1" + i + "T00:00:00Z"), status: st } as TripRow)));
+  assert.deepEqual(pruneMissingTrips(s, ME, [trip("z", "2026-10-20T00:00:00Z")], 50), []);
+  assert.equal(s.list("trips").length, 5);
 });
