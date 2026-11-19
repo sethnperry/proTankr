@@ -1,26 +1,24 @@
 "use client";
 // app/planner/components/track/TrackDetail.tsx
 //
-// One truck, one trailer or a pairing: where it is, who's driving, the load it's on and the
-// last known status of each unit. Stud works on the truck and the trailer separately with
-// ProTankr's own logic. "Update from Geotab" reads the telematics, shows what would change
-// (including a trailer hookup that no longer matches) and only saves after you acknowledge it.
+// One truck, one trailer or a pairing, built from ProTankr's own records: the status each unit was given and the story
+// of how (who, when, where), who has it now and who ran it last, what it is coupled to, where it was last captured
+// (the phone's GPS at an event, see lib/position) and the load it is on. STUD sets the status. The only Geotab surface
+// is the "Track in Geotab" link for people who want the live map.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
-import { supabase } from "@/lib/supabase/client";
-import { fetchPositionDebug, fetchTruckReading, fetchVehicleReading, type TruckReading } from "@/lib/telematics/useTruckReading";
 import { fetchTruckTrip } from "@/lib/trips/fetchTruckTrip";
 import { summarizeTruckTrip, type TruckTripSummary } from "@/lib/trips/truckTrip";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { productColorFor } from "../../utils/productColor";
-import { ageText, clockOf, compass, mapsUrl } from "@/lib/equipment/trackFormat";
+import { ageText, clockOf } from "@/lib/equipment/trackFormat";
 import { useEquipmentPositions } from "@/lib/position/useEquipmentPositions";
+import { useGeotabLink } from "@/lib/telematics/useGeotabLink";
+import { useUnitHolder } from "@/lib/equipment/useUnitHolder";
 import { CapturedPosition } from "./CapturedPosition";
-import { hosText } from "@/lib/telematics/progress";
 import type { TrackUnit } from "@/lib/equipment/trackList";
-import type { TrackChange } from "@/lib/telematics/trackChanges";
 import EquipmentStatusModal, { fleetStatusColor, fleetStatusLabel, type FleetStatus } from "../../modals/EquipmentStatusModal";
 import { muted } from "../trip/tripUi";
 import { fetchStatusStory, storyLine, type StatusStory } from "@/lib/equipment/statusStory";
@@ -30,151 +28,52 @@ const UnitStoryMap = dynamic(() => import("./UnitStoryMap"), { ssr: false });
 
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted };
 const card: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.14)", padding: 14, marginBottom: 12 };
-const bigBtn: React.CSSProperties = { display: "block", width: "100%", textAlign: "center", padding: "13px 0", fontWeight: 800, fontSize: 14, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", border: "none" };
+const rule: React.CSSProperties = { marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" };
+const bigBtn: React.CSSProperties = { display: "block", textAlign: "center", padding: "13px 0", fontWeight: 800, fontSize: 14, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", border: "none" };
+const verbFor = (code: string | null) => code === "deadline" ? "Deadlined" : code === "readyline" ? "Marked Readyline" : code === "in_use" ? "Set in use" : "Status set";
 
-type Preview = { changes: TrackChange[]; canSeparate: boolean; truckId: string; truckName: string; observed: { city: string | null; state: string | null; lat: number | null; lon: number | null; at: string | null; trailerName: string | null } };
-
-export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle, allTrucks, canAdd = false, onChanged, onSwitchTruck, onAdded, geoTrailer, onAddedTrailer, story = false, coupledWith, coupledKnown = false, onOpenCoupled }: {
-  /** What the shown unit is coupled to (story mode). `coupledKnown` says whether to claim "not coupled" when null. */
-  coupledWith?: TrackUnit | null; coupledKnown?: boolean; onOpenCoupled?: () => void;
-  /** The Down chip's view: one unit, and the story of how it got its status (who, when, where, notes). */
-  story?: boolean;
+export function TrackDetail({ open, onClose, companyId, truck, trailer, story = false, coupledWith, coupledKnown = false, onOpenCoupled, onChanged }: {
   open: boolean; onClose: () => void; companyId: string;
   truck: TrackUnit | null; trailer: TrackUnit | null;
-  /** A Geotab vehicle that isn't a ProTankr truck (found through a driver). */
-  vehicle?: { id: string; name: string } | null;
-  /** A Geotab trailer that isn't a ProTankr trailer yet. */
-  geoTrailer?: { providerTrailerId: string; name: string; comment: string | null; vin: string | null; plate: string | null; attachedTo: string | null } | null;
-  onAddedTrailer?: (trailerId: string) => void | Promise<void>;
-  allTrucks: TrackUnit[];
-  /** May add this vehicle to ProTankr (admin, dispatch or lead). */
-  canAdd?: boolean;
-  onAdded?: (truckId: string) => void | Promise<void>;
+  /** One unit and the story of how it got its status. `coupledWith` is its partner; `coupledKnown` says whether to claim "not coupled" when there is none. */
+  story?: boolean; coupledWith?: TrackUnit | null; coupledKnown?: boolean; onOpenCoupled?: () => void;
   onChanged: () => void;
-  onSwitchTruck: (truckId: string) => void;
 }) {
-  const [reading, setReading] = useState<TruckReading | null>(null);
   const [trip, setTrip] = useState<TruckTripSummary | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [allBols, setAllBols] = useState(false);
-  const [posDebug, setPosDebug] = useState<string[] | "loading" | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [tripDone, setTripDone] = useState(false);
   const [statusUnit, setStatusUnit] = useState<TrackUnit | null>(null);
-  const [updating, setUpdating] = useState(false);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [separate, setSeparate] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const { data: catalog } = useProductsCatalog();
-  const focus = story ? (truck ?? trailer) : null;
-  const captured = useEquipmentPositions(companyId, open, 30_000);
-  const [told, setTold] = useState<StatusStory | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [told, setTold] = useState<StatusStory | null>(null);
+  const { data: catalog } = useProductsCatalog();
+  const captured = useEquipmentPositions(companyId, open, 30_000);
+  const focus = story ? (truck ?? trailer) : null;
+
+  // The truck whose page "Track in Geotab" opens: this truck, or the truck a trailer is coupled to (a trailer has no tracker).
+  const linkTruckId = truck?.id ?? (coupledWith?.kind === "truck" ? coupledWith.id : null);
+  const geotabHref = useGeotabLink(companyId, linkTruckId, open && !!linkTruckId);
+
   useEffect(() => {
     if (!open || !focus) { setTold(null); return; }
     let off = false;
     void fetchStatusStory(focus.kind, focus.id, companyId, focus.statusUpdatedAt).then((s) => { if (!off) setTold(s); });
     return () => { off = true; };
   }, [open, focus?.id, focus?.statusUpdatedAt, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const truckId = truck?.id ?? vehicle?.id ?? null;
 
-  const load = useCallback(async (id: string) => {
-    setBusy(true); setDone(false);
-    const [r, td] = await Promise.all([
-      truck ? fetchTruckReading(id) : fetchVehicleReading(companyId, id),
-      truck ? fetchTruckTrip(id) : Promise.resolve(null),
-    ]);
-    setReading(r);
-    setTrip(td ? summarizeTruckTrip({ ...td, pos: r?.lat != null && r?.lon != null ? { lat: r.lat, lon: r.lon } : null, nowMs: Date.now() }) : null);
-    setBusy(false); setDone(true);
-  }, []);
-
+  // The load the truck is on (company trips; no tracker needed). Where it is comes from the last capture.
+  const tripTruckId = truck?.id ?? null;
+  const tripPos = tripTruckId ? captured.byUnit.get(`truck:${tripTruckId}`) : undefined;
   useEffect(() => {
-    if (!open) return;
-    setReading(null); setTrip(null); setDone(false); setMsg(null); setPreview(null); setPosDebug(null);
-    if (truckId) void load(truckId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, truckId]);
-
-  async function post(apply: boolean, sep: boolean) {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) throw new Error("Not signed in.");
-    const r = await fetch("/api/telematics/track-update", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ companyId, truckId: truck?.id ?? null, trailerId: truck ? null : trailer?.id ?? null, apply, separate: sep }),
+    if (!open || !tripTruckId) { setTrip(null); setTripDone(false); return; }
+    let off = false;
+    setTripDone(false);
+    void fetchTruckTrip(tripTruckId).then((td) => {
+      if (off) return;
+      setTrip(td ? summarizeTruckTrip({ ...td, pos: tripPos ? { lat: tripPos.lat, lon: tripPos.lon } : null, nowMs: Date.now() }) : null);
+      setTripDone(true);
     });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j?.error ?? "Update failed.");
-    return j as any;
-  }
+    return () => { off = true; };
+  }, [open, tripTruckId, tripPos?.capturedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function addTrailerToProTankr() {
-    if (!geoTrailer) return;
-    setAdding(true); setMsg(null);
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Not signed in.");
-      const r = await fetch("/api/telematics/add-vehicle", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ companyId, trailerProviderId: geoTrailer.providerTrailerId }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.trailerId) throw new Error(j?.error ?? "Couldn't add it.");
-      await onAddedTrailer?.(j.trailerId);
-    } catch (e: any) {
-      setMsg({ ok: false, text: e?.message ?? "Couldn't add it." });
-    } finally { setAdding(false); }
-  }
-
-  async function addToProTankr() {
-    if (!vehicle) return;
-    setAdding(true); setMsg(null);
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Not signed in.");
-      const r = await fetch("/api/telematics/add-vehicle", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ companyId, vehicleId: vehicle.id }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.truckId) throw new Error(j?.error ?? "Couldn't add it.");
-      await onAdded?.(j.truckId);
-    } catch (e: any) {
-      setMsg({ ok: false, text: e?.message ?? "Couldn't add it." });
-    } finally { setAdding(false); }
-  }
-
-  async function startUpdate() {
-    setUpdating(true); setMsg(null);
-    try {
-      const j = await post(false, false);
-      if (!j.connected) { setMsg({ ok: false, text: j.why ?? "Can't reach the telematics for this unit." }); return; }
-      setSeparate(false);
-      setPreview({ changes: j.changes ?? [], canSeparate: !!j.canSeparate, truckId: j.truckId, truckName: j.truckName, observed: j.observed });
-    } catch (e: any) {
-      setMsg({ ok: false, text: e?.message ?? "Update failed." });
-    } finally { setUpdating(false); }
-  }
-
-  async function confirmUpdate() {
-    if (!preview) return;
-    setUpdating(true);
-    try {
-      await post(true, separate);
-      const id = preview.truckId;
-      setPreview(null);
-      onChanged();
-      setMsg({ ok: true, text: "Updated from Geotab." });
-      if (!truck && id) onSwitchTruck(id); // a trailer was found through its truck
-      else if (id) void load(id);
-    } catch (e: any) {
-      setMsg({ ok: false, text: e?.message ?? "Update failed." });
-      setPreview(null);
-    } finally { setUpdating(false); }
-  }
-
-  const hasPos = reading?.lat != null && reading?.lon != null;
-  const place = [reading?.city, reading?.state].filter(Boolean).join(", ");
-  const title = story && focus ? `${focus.kind === "truck" ? "Truck" : "Trailer"} ${focus.name}` : geoTrailer ? `Trailer ${geoTrailer.name}` : [truck ? `Truck ${truck.name}` : vehicle ? `Vehicle ${vehicle.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
-
-  const verbFor = (code: string | null) => code === "deadline" ? "Deadlined" : code === "readyline" ? "Marked Readyline" : code === "in_use" ? "Set in use" : "Status set";
   const pins = useMemo<StoryPin[]>(() => {
     const out: StoryPin[] = [];
     const sc = focus?.statusCode ?? null;
@@ -187,22 +86,27 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
     return out;
   }, [told, captured.byUnit, focus]);
 
+  const title = story && focus ? `${focus.kind === "truck" ? "Truck" : "Trailer"} ${focus.name}` : [truck ? `Truck ${truck.name}` : null, trailer ? `Trailer ${trailer.name}` : null].filter(Boolean).join(" · ");
+
+  const whoHasIt = (u: TrackUnit) => <WhoHasIt unit={u} open={open} />;
+  const statusLine = (u: TrackUnit) => (
+    <span style={{ fontSize: 14, fontWeight: 900, color: u.statusCode ? fleetStatusColor(u.statusCode) : muted }}>● {u.statusCode ? fleetStatusLabel(u.statusCode) || u.statusCode : "No status"}{u.subStatus ? ` · ${u.subStatus}` : ""}</span>
+  );
+
   const storyCard = (u: TrackUnit) => (
     <div key={u.id} style={card}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 22, fontWeight: 900 }}>{u.kind === "truck" ? "Truck" : "Trailer"} {u.name}</span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 14, fontWeight: 900, color: u.statusCode ? fleetStatusColor(u.statusCode) : muted }}>● {u.statusCode ? fleetStatusLabel(u.statusCode) || u.statusCode : "No status"}{u.subStatus ? ` · ${u.subStatus}` : ""}</span>
+        {statusLine(u)}
       </div>
       <div style={{ fontSize: 14, marginTop: 8 }}>{told ? storyLine(verbFor(u.statusCode), told) : u.statusUpdatedAt ? storyLine(verbFor(u.statusCode), { byName: null, at: u.statusUpdatedAt, source: null }) : "No status history on file."}</div>
       {told && !told.byName && u.statusUpdatedAt && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Who set it wasn't recorded.</div>}
 
       {(coupledWith || coupledKnown) && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <div style={rule}>
           <div style={label}>Coupled to</div>
-          {u.kind === "truck" && reading?.trailerKnown && (reading.geotabTrailers?.length ?? 0) === 0 ? (
-            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4, color: "#60a5fa" }}>Bobtail <span style={{ fontSize: 12, fontWeight: 500, color: muted }}>· Geotab shows no trailer hooked{coupledWith ? `; ProTankr still has it paired with Trailer ${coupledWith.name}` : ""}</span></div>
-          ) : coupledWith ? (
+          {coupledWith ? (
             <button type="button" onClick={onOpenCoupled} disabled={!onOpenCoupled}
               style={{ display: "flex", alignItems: "baseline", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, marginTop: 4, color: "#fff", cursor: onOpenCoupled ? "pointer" : "default" }}>
               <span style={{ fontSize: 16, fontWeight: 800 }}>{coupledWith.kind === "truck" ? "Truck" : "Trailer"} {coupledWith.name}</span>
@@ -210,43 +114,18 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
               {onOpenCoupled && <span style={{ marginLeft: "auto", color: muted }}>›</span>}
             </button>
           ) : <div style={{ fontSize: 15, marginTop: 4, color: muted }}>Not coupled to anything.</div>}
-          {/* Geotab is the source of truth for what is actually hooked up. */}
-          {u.kind === "truck" && reading && coupledWith && (reading.geotabTrailers?.length ?? 0) > 0 && !reading.geotabTrailers!.some((t) => t.name.trim().toLowerCase() === coupledWith.name.trim().toLowerCase()) && (
-            <div style={{ fontSize: 12, color: "#fb923c", marginTop: 4 }}>Geotab shows {reading.geotabTrailers!.map((t) => t.name).join(", ")} hooked to this truck, not {coupledWith.name}.</div>
-          )}
         </div>
       )}
 
-      {u.kind === "truck" && reading && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          {(() => {
-            // A position older than this is not "now": the truck's tracker hasn't reported since.
-            const stale = !!reading.at && Date.now() - Date.parse(reading.at) > 6 * 3600_000;
-            return (
-              <>
-                <div style={label}>{stale ? "Last known position (Geotab)" : "Now (Geotab)"}</div>
-                <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4, color: stale ? muted : undefined }}>{place || (hasPos ? "Position found" : "No position")}{reading.at ? <span style={{ fontSize: 12, color: stale ? "#fb923c" : muted, fontWeight: 500 }}> · {ageText(reading.at)}</span> : null}</div>
-                {stale && <div style={{ fontSize: 12, color: "#fb923c", marginTop: 3 }}>This truck's tracker hasn't reported a position in {ageText(reading.at!).replace(/ ago$/, "")}. The location is old; the driver below is from the sign-in log.</div>}
-              </>
-            );
-          })()}
-          <div style={{ fontSize: 14, marginTop: 4 }}>
-            {reading.driverName
-              ? <>Driver: <b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in)</span></>
-              : reading.lastDriver
-                ? <>Last driver: <b>{reading.lastDriver.name}</b> <span style={{ color: muted }}>· {reading.lastDriver.outAt ? `signed out ${ageText(reading.lastDriver.outAt)}` : `signed in ${ageText(reading.lastDriver.at)}`}</span></>
-                : <span style={{ color: muted }}>No driver found in Geotab.</span>}
-          </div>
-        </div>
-      )}
+      <div style={rule}>{whoHasIt(u)}</div>
 
-      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+      <div style={rule}>
         <div style={label}>{verbFor(u.statusCode)} at</div>
         <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{u.statusLocation || told?.placeLabel || <span style={{ color: muted, fontWeight: 600 }}>No location saved</span>}</div>
         {told?.lat != null && told?.lon != null && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{told.placeLabel && u.statusLocation && told.placeLabel !== u.statusLocation ? `${told.placeLabel} · ` : ""}{told.lat.toFixed(5)}, {told.lon.toFixed(5)}</div>}
       </div>
 
-      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+      <div style={rule}>
         <div style={label}>Notes from the driver</div>
         <div style={{ fontSize: 15, marginTop: 4, whiteSpace: "pre-wrap", color: u.statusNotes ? "#fff" : muted }}>{u.statusNotes || "Nothing noted."}</div>
         {(u.region || u.localArea || u.currentRegion || u.currentLocalArea) && (
@@ -258,13 +137,10 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
-        {reading?.geotabUrl && (
-          <a href={reading.geotabUrl} target="_blank" rel="noopener noreferrer" style={{ ...bigBtn, flex: "1 1 140px", width: "auto", background: "#fff", color: "#000", textDecoration: "none", boxSizing: "border-box" }}>Track in Geotab</a>
-        )}
         <button type="button" disabled={pins.length === 0} onClick={() => setMapOpen(true)}
-          style={{ ...bigBtn, flex: "1 1 140px", width: "auto", background: "rgba(255,255,255,0.1)", color: "#fff", opacity: pins.length ? 1 : 0.4 }}>Show on map</button>
+          style={{ ...bigBtn, flex: "1 1 140px", background: "rgba(255,255,255,0.1)", color: "#fff", opacity: pins.length ? 1 : 0.4 }}>Show on map</button>
         <button type="button" onClick={() => setStatusUnit(u)}
-          style={{ ...bigBtn, flex: "0 0 auto", width: "auto", padding: "13px 18px", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}>STUD</button>
+          style={{ ...bigBtn, flex: "0 0 auto", padding: "13px 18px", background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}>STUD</button>
       </div>
     </div>
   );
@@ -285,246 +161,53 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
       <div style={{ fontSize: 13, marginTop: 6, color: muted }}>
         {u.statusLocation ? <>Last known: <span style={{ color: "#fff" }}>{u.statusLocation}</span>{u.statusUpdatedAt ? ` · ${ageText(u.statusUpdatedAt)}` : ""}</> : "No location on file yet."}
       </div>
+      <div style={rule}>{whoHasIt(u)}</div>
     </div>
   );
 
   return (
     <FullscreenModal open={open} onClose={onClose} title={title || "Track"} footer={null}>
-      {geoTrailer && (
-        <>
-          <div style={card}>
-            <div style={label}>Trailer in Geotab</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 8 }}>{geoTrailer.name}</div>
-            <div style={{ fontSize: 14, marginTop: 6 }}>{geoTrailer.vin ? <>VIN <b>{geoTrailer.vin}</b></> : <span style={{ color: muted }}>No VIN in Geotab.</span>}</div>
-            <div style={{ fontSize: 14, marginTop: 2 }}>{geoTrailer.plate ? <>Plate <b>{geoTrailer.plate}</b></> : <span style={{ color: muted }}>No plate in Geotab.</span>}</div>
-            {geoTrailer.comment && <div style={{ fontSize: 13, marginTop: 6, color: "rgba(255,255,255,0.7)" }}>{geoTrailer.comment}</div>}
-            <div style={{ fontSize: 13, marginTop: 8, color: muted }}>{geoTrailer.attachedTo ? `Hooked to ${geoTrailer.attachedTo} right now.` : "Not hooked to a truck right now."}</div>
-          </div>
-          <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>
-            Adding it brings in the number, VIN and plate from Geotab, and the year, make and model from the VIN. Compartments and anything else Geotab doesn't have are left for the first driver to use it to fill in.
-          </div>
-          {msg && <div style={{ fontSize: 14, marginBottom: 10, color: msg.ok ? "#4ade80" : "#f87171" }}>{msg.text}</div>}
-          {canAdd ? (
-            <button type="button" onClick={() => void addTrailerToProTankr()} disabled={adding} aria-busy={adding} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: adding ? 0.6 : 1 }}>
-              {adding ? "Adding…" : "Add trailer to ProTankr"}
-            </button>
-          ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
-        </>
-      )}
-      <CapturedPosition byUnit={captured.byUnit} geotabHref={reading ? "https://my.geotab.com/" : null}
+      <CapturedPosition byUnit={captured.byUnit} geotabHref={geotabHref}
         units={[...(truck ? [{ kind: "truck" as const, id: truck.id, name: truck.name }] : []), ...(trailer ? [{ kind: "trailer" as const, id: trailer.id, name: trailer.name }] : [])]} />
       {story && focus ? storyCard(focus) : <>{truck && unitCard(truck)}{trailer && unitCard(trailer)}</>}
 
-      {(truck || vehicle) && (
+      {truck && tripDone && (
         <div style={card}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={label}>Live from Geotab</span>
-            <span style={{ flex: 1 }} />
-            <button type="button" onClick={() => truckId && void load(truckId)} disabled={busy} aria-busy={busy}
-              style={{ border: "1px solid rgba(255,255,255,0.25)", background: "transparent", color: "#fff", padding: "6px 12px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
-              {busy ? "Fetching…" : "Refresh"}
-            </button>
-          </div>
-          {busy && !reading && <div style={{ fontSize: 14, color: muted, marginTop: 12 }}>Asking Geotab for the last position…</div>}
-          {done && !reading && <div style={{ fontSize: 14, color: "#fb923c", marginTop: 12 }}>Can't locate this truck. It isn't linked to a Geotab vehicle, or Geotab didn't answer. Link it in Company Dashboard → Telematics.</div>}
-          {reading && (
+          {!trip ? (
+            <div style={{ fontSize: 14, color: muted }}>Not on a load right now.</div>
+          ) : (
             <>
-              {!hasPos && (
-                <div style={{ fontSize: 14, color: "#fb923c", marginTop: 12 }}>
-                  Geotab has no position for this vehicle{reading.at ? ` (last report ${ageText(reading.at)})` : ""}. Everything else it reports is below.
-                  <div style={{ marginTop: 6 }}>
-                    <button type="button" onClick={() => { setPosDebug("loading"); void fetchPositionDebug(companyId, truck?.id ?? null, vehicle?.id ?? null).then(setPosDebug); }}
-                      style={{ border: "none", background: "transparent", color: "#93c5fd", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0 }}>
-                      {posDebug ? "Check again" : "Why? Ask Geotab"}
-                    </button>
-                  </div>
-                  {posDebug && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.75)" }}>
-                      {posDebug === "loading" ? "Asking Geotab…" : posDebug.map((l, i) => <div key={i} style={{ marginTop: 2 }}>• {l}</div>)}
-                    </div>
-                  )}
+              <div style={label}>Load</div>
+              <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{trip.status}</div>
+              {trip.next && (
+                <div style={{ fontSize: 14, marginTop: 6 }}>
+                  {trip.next.here ? <>At <b>{trip.next.label}</b></> : <>Next: <b>{trip.next.label}</b>{trip.next.miles != null ? ` · ${trip.next.miles} mi` : ""}</>}
+                  {!trip.next.here && trip.next.etaMs != null && <> · ETA <b>{clockOf(trip.next.etaMs)}</b></>}
                 </div>
               )}
-              {hasPos && (<>
-              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 12 }}>{place || "Position found"}</div>
-              <div style={{ fontSize: 14, marginTop: 4, color: "rgba(255,255,255,0.75)" }}>
-                Last update {ageText(reading.at)}
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>
-                {reading.speedMph != null && reading.speedMph > 2
-                  ? <>Moving {reading.speedMph} mph{compass(reading.bearingDeg) ? <> heading {compass(reading.bearingDeg)} <span style={{ color: muted, fontWeight: 600 }}>({reading.bearingDeg}°)</span></> : null}</>
-                  : <>Stopped{compass(reading.bearingDeg) ? <span style={{ color: muted, fontWeight: 600 }}> · last heading {compass(reading.bearingDeg)}</span> : null}</>}
-              </div>
-              </>)}
-
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                <div style={label}>Driver</div>
-                <div style={{ fontSize: 15, marginTop: 4 }}>
-                  {reading.driverName
-                    ? <><b>{reading.driverName}</b> <span style={{ color: muted }}>(signed in to the truck)</span></>
-                    : reading.lastDriver
-                      ? <><span style={{ color: muted }}>Nobody signed in now. Last driver: </span><b>{reading.lastDriver.name}</b>{" "}
-                          <span style={{ color: muted }}>· {reading.lastDriver.outAt ? `signed out ${ageText(reading.lastDriver.outAt)}` : `signed in ${ageText(reading.lastDriver.at)}`}</span></>
-                      : reading.heldByName
-                        ? <><b>{reading.heldByName}</b> <span style={{ color: muted }}>(has it selected in ProTankr)</span></>
-                        : <span style={{ color: muted }}>No driver found for this truck.</span>}
-                </div>
-                {(reading.driverName || reading.lastDriver) && reading.heldByName && (reading.driverName ?? reading.lastDriver?.name) !== reading.heldByName && (
-                  <div style={{ fontSize: 13, marginTop: 4, color: "#fb923c" }}>ProTankr has it selected by {reading.heldByName}.</div>
-                )}
-                {reading.hos && (() => { const t = hosText(reading.hos); return <div className="dash-num" style={{ fontSize: 13, marginTop: 4, color: t.color }}>Hours · {t.text}</div>; })()}
-              </div>
-
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                <div style={label}>Shipments (BOL numbers)</div>
-                {reading.shipments && reading.shipments.length > 0 ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                    {[...reading.shipments].sort((a, b) => String(b.activeFrom ?? "").localeCompare(String(a.activeFrom ?? ""))).slice(0, allBols ? 200 : 4).map((s) => (
-                      <span key={s.documentNumber} title={[s.shipperName, s.commodity].filter(Boolean).join(" · ") || undefined}
-                        style={{ border: "1px solid rgba(255,255,255,0.3)", padding: "5px 10px", fontSize: 15, fontWeight: 800 }}>
-                        {s.documentNumber}
-                        {(s.shipperName || s.commodity) && <span style={{ fontSize: 11, fontWeight: 600, color: muted }}> {[s.shipperName, s.commodity].filter(Boolean).join(" · ")}</span>}
+              {trip.last && <div style={{ fontSize: 14, marginTop: 4 }}>Last stop: <b>{trip.last.label}</b> · ETA <b>{clockOf(trip.last.etaMs)}</b></div>}
+              {(trip.next?.etaMs != null || trip.last) && <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Estimated from the last captured position and straight-line distance, with time at each stop.</div>}
+              {trip.products.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+                  {trip.products.map((p) => {
+                    const cp = p.productId ? catalog.find((x) => x.product_id === p.productId) : null;
+                    const name = cp ? String(cp.display_name || cp.product_name || "Product") : "Product";
+                    const hex = typeof cp?.hex_code === "string" && cp.hex_code.trim() ? cp.hex_code.trim() : productColorFor(name);
+                    return (
+                      <span key={p.comp} style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 9, height: 9, borderRadius: "50%", background: hex }} />
+                        C{p.comp} {name}{p.gallons ? ` · ${Math.round(p.gallons).toLocaleString("en-US")} gal` : ""}
                       </span>
-                    ))}
-                    {reading.shipments.length > 4 && (
-                      <button type="button" onClick={() => setAllBols((v) => !v)}
-                        style={{ background: "none", border: "none", color: "#93c5fd", fontWeight: 800, fontSize: 13, cursor: "pointer", padding: "5px 2px" }}>
-                        {allBols ? "Show fewer" : `Show all ${reading.shipments.length}`}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 14, marginTop: 4, color: muted }}>None on the truck's Drive app (Assets → Shipments).</div>
-                )}
-              </div>
-
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                <div style={label}>Trailers in Geotab</div>
-                {reading.geotabTrailers && reading.geotabTrailers.length > 0 ? (
-                  <>
-                    {reading.geotabTrailers.map((t, i) => (
-                      <div key={i} style={{ fontSize: 15, marginTop: 6 }}>
-                        <b>{t.name}</b>{" "}
-                        <span style={{ color: muted, fontSize: 13 }}>{t.ours ? "ProTankr trailer" : "not a ProTankr trailer"}</span>
-                        {t.comment && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{t.comment}</div>}
-                      </div>
-                    ))}
-                    <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>Trailer names and comments exactly as entered in Geotab.</div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: 14, marginTop: 4, color: muted }}>
-                    {reading.trailerKnown ? "No trailer attached to this truck in Geotab." : "Geotab isn't reporting any trailer hookups for this company."}
-                  </div>
-                )}
-              </div>
-
-              {(reading.odometerMi != null || reading.fuelLevelPct != null || reading.engineHours != null) && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.1)", fontSize: 14 }}>
-                  {reading.odometerMi != null && <span><span style={{ color: muted }}>Odometer </span><b>{Math.round(reading.odometerMi).toLocaleString("en-US")} mi</b></span>}
-                  {reading.fuelLevelPct != null && <span><span style={{ color: muted }}>Fuel </span><b>{Math.round(reading.fuelLevelPct)}%</b></span>}
-                  {reading.engineHours != null && <span><span style={{ color: muted }}>Engine </span><b>{Math.round(reading.engineHours).toLocaleString("en-US")} h</b></span>}
+                    );
+                  })}
                 </div>
               )}
-              {done && (
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                  {!trip ? (
-                    <div style={{ fontSize: 14, color: muted }}>Not on a load right now.</div>
-                  ) : (
-                    <>
-                      <div style={label}>Load</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>{trip.status}</div>
-                      {trip.next && (
-                        <div style={{ fontSize: 14, marginTop: 6 }}>
-                          {trip.next.here ? <>At <b>{trip.next.label}</b></> : <>Next: <b>{trip.next.label}</b>{trip.next.miles != null ? ` · ${trip.next.miles} mi` : ""}</>}
-                          {!trip.next.here && trip.next.etaMs != null && <> · ETA <b>{clockOf(trip.next.etaMs)}</b></>}
-                        </div>
-                      )}
-                      {trip.last && <div style={{ fontSize: 14, marginTop: 4 }}>Last stop: <b>{trip.last.label}</b> · ETA <b>{clockOf(trip.last.etaMs)}</b></div>}
-                      {(trip.next?.etaMs != null || trip.last) && <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Estimated from straight-line distance, with time at each stop.</div>}
-                      {trip.products.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-                          {trip.products.map((p) => {
-                            const cp = p.productId ? catalog.find((x) => x.product_id === p.productId) : null;
-                            const name = cp ? String(cp.display_name || cp.product_name || "Product") : "Product";
-                            const hex = typeof cp?.hex_code === "string" && cp.hex_code.trim() ? cp.hex_code.trim() : productColorFor(name);
-                            return (
-                              <span key={p.comp} style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: hex }} />
-                                C{p.comp} {name}{p.gallons ? ` · ${Math.round(p.gallons).toLocaleString("en-US")} gal` : ""}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-              {hasPos && !story && <><div style={{ fontSize: 12, marginTop: 10, color: muted }}>{reading.lat!.toFixed(5)}, {reading.lon!.toFixed(5)}</div>
-              <a href={mapsUrl(reading.lat!, reading.lon!)} target="_blank" rel="noopener noreferrer"
-                style={{ ...bigBtn, marginTop: 14, background: "rgba(255,255,255,0.1)", color: "#fff", textDecoration: "none", boxSizing: "border-box" }}>
-                Open in Maps
-              </a></>}
             </>
           )}
         </div>
       )}
 
-      {!truck && !vehicle && trailer && (
-        <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>
-          A trailer has no tracker of its own. Update from Geotab finds it through the truck it's hooked to.
-        </div>
-      )}
-
-      {!geoTrailer && msg && <div style={{ fontSize: 14, marginBottom: 10, color: msg.ok ? "#4ade80" : "#f87171" }}>{msg.text}</div>}
-      {!geoTrailer && (truck || trailer) && (
-        <button type="button" onClick={() => void startUpdate()} disabled={updating} aria-busy={updating} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: updating ? 0.6 : 1 }}>
-          {updating && !preview ? "Reading Geotab…" : "Update from Geotab"}
-        </button>
-      )}
-      {vehicle && !truck && (
-        <>
-          <div style={{ fontSize: 13, color: muted, marginBottom: 10 }}>
-            This vehicle isn't a ProTankr truck yet, so there's no status to update. Adding it brings in its number, VIN and plate from Geotab, and the year, make and model from the VIN, and links it so Update from Geotab works.
-          </div>
-          {canAdd ? (
-            <button type="button" onClick={() => void addToProTankr()} disabled={adding} aria-busy={adding} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: adding ? 0.6 : 1 }}>
-              {adding ? "Adding…" : "Add to ProTankr"}
-            </button>
-          ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
-        </>
-      )}
-
       {story && focus && <UnitStoryMap open={mapOpen} onClose={() => setMapOpen(false)} title={`${focus.kind === "truck" ? "Truck" : "Trailer"} ${focus.name}`} pins={pins} />}
-
-      {/* Acknowledge what will change before anything is saved. */}
-      <FullscreenModal open={!!preview} onClose={() => setPreview(null)} title="Update from Geotab" footer={null}>
-        {preview && (
-          <>
-            <div style={{ fontSize: 14, marginBottom: 12, color: "rgba(255,255,255,0.8)" }}>
-              Geotab says this about truck {preview.truckName}
-              {preview.observed.at ? ` (last position ${ageText(preview.observed.at)})` : ""}. Nothing is saved until you confirm.
-            </div>
-            {preview.changes.length === 0 && <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>No position or pairing information to save.</div>}
-            {preview.changes.map((c, i) => (
-              <div key={i} style={{ ...card, borderColor: c.kind === "hookup" ? "rgba(251,146,60,0.6)" : "rgba(255,255,255,0.14)", fontSize: 14 }}>
-                <div style={{ ...label, color: c.kind === "hookup" ? "#fb923c" : muted, marginBottom: 4 }}>{c.kind === "location" ? "Location" : c.kind === "hookup" ? "Trailer hookup" : "Driver"}</div>
-                {c.text}
-              </div>
-            ))}
-            {preview.canSeparate && (
-              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 14, margin: "4px 0 14px" }}>
-                <input type="checkbox" checked={separate} onChange={(e) => setSeparate(e.target.checked)} style={{ marginTop: 3 }} />
-                <span>Also separate the old pairing in ProTankr. The driver keeps the truck; the trailer shows as loose until it's coupled again.</span>
-              </label>
-            )}
-            <button type="button" onClick={() => void confirmUpdate()} disabled={updating} aria-busy={updating} style={{ ...bigBtn, background: "#fff", color: "#000", opacity: updating ? 0.6 : 1 }}>
-              {updating ? "Saving…" : "OK, update"}
-            </button>
-            <button type="button" onClick={() => setPreview(null)} style={{ ...bigBtn, marginTop: 8, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>Cancel</button>
-          </>
-        )}
-      </FullscreenModal>
 
       {statusUnit && (
         <EquipmentStatusModal
@@ -536,5 +219,21 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
         />
       )}
     </FullscreenModal>
+  );
+}
+
+/** Who has the unit now in ProTankr, and who ran it last. */
+function WhoHasIt({ unit, open }: { unit: TrackUnit; open: boolean }) {
+  const h = useUnitHolder(unit.kind, unit.id, open);
+  return (
+    <>
+      <div style={label}>Driver</div>
+      <div style={{ fontSize: 15, marginTop: 4 }}>
+        {!h.loaded ? <span style={{ color: muted }}>Checking…</span>
+          : h.holder ? <><b>{h.holder.name ?? "A driver"}</b> <span style={{ color: muted }}>has it selected in ProTankr</span></>
+          : <span style={{ color: muted }}>Nobody has it selected right now.</span>}
+      </div>
+      {h.loaded && h.last && <div style={{ fontSize: 13, marginTop: 3, color: muted }}>Last trip: <span style={{ color: "#fff" }}>{h.last.name ?? "a driver"}</span> · {ageText(h.last.at)}</div>}
+    </>
   );
 }

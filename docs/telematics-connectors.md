@@ -63,8 +63,11 @@ phone GPS replaces them), and IFTA state miles. Everything else is typed or alre
 3. **Phone GPS for equipment position** (section 4). **Done 2026-11-27:** captures (open/wake, odometer stamps, Arrive) feed the dispatch dots,
    on-shift list and Track's captured-position card; arrival suggestion, departure watch, the "are you really at the stop" check and
    fuel-stop city now use the phone's position (`lib/position/usePhoneReading.ts`, speed from the phone or from two fixes; stops asking
-   if location is refused). They only run while the app is open. **Still on Geotab:** Track's detail screen (sign-in, hooked trailer,
-   speed/heading, Update from Geotab) and the odometer/fuel/hours readings.
+   if location is refused). They only run while the app is open. **Track rebuilt on ProTankr data (2026-11-27):** status and its story, who has the unit now (claimed pairing or
+   bobtail hold) and the last trip's driver, what it is coupled to, the last captured position and the load; driver search is the company
+   roster. The only Geotab surface is the **Track in Geotab** link (`/api/telematics/geotab-link`, reads our own tables, no Geotab call).
+   Removed: Update from Geotab, Geotab driver/vehicle/trailer search, add-from-search, the `track-update`, `drivers` and `add-vehicle`
+   routes. **Still on Geotab:** the odometer/fuel/hours readings and the import tool.
 4. **One company setting**, `telematics_enabled`, read by `providerFor` and every client hook, with a test pass over a
    company that has it off. Keep Hours, Odometer prefill and IFTA behind it as "supplements".
 5. **Track in Geotab** button in the Track modal (deep link to the unit), the only Geotab surface left there.

@@ -2093,8 +2093,7 @@ export default function AdminPage() {
       <DashStyles />
       {downUnit && companyId && (
         <TrackDetail open story onClose={() => setDownUnit(null)} companyId={companyId}
-          truck={downUnit.truck} trailer={downUnit.trailer} allTrucks={downUnit.truck ? [downUnit.truck] : []}
-          canAdd={false} onChanged={() => void loadAll()} onSwitchTruck={() => { /* single unit from the dashboard */ }} />
+          truck={downUnit.truck} trailer={downUnit.trailer} onChanged={() => void loadAll()} />
       )}
       {companyId && currentUserId && (
         <>

@@ -4,9 +4,9 @@
 // Track: look up a piece of equipment or a driver. The list is laid out like the equipment
 // picker: pairings first (truck and trailer on one row, numerically by truck so the connector
 // runs straight across), then loose trucks, then loose trailers, with the same Region / Local
-// Area / Away filter. Each card shows the unit's last known status. Typing also searches the
-// telematics provider's drivers (members or not) and finds the truck they're in. Picking
-// anything opens the Track detail.
+// Area / Away filter. Each card shows the unit's last known status. Typing also finds drivers
+// on the company roster and the equipment they have selected in ProTankr. Picking anything
+// opens the Track detail. Everything here is ProTankr's own data; Geotab is only a link in the detail.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
@@ -15,26 +15,16 @@ import { supabase } from "@/lib/supabase/client";
 import RegionLocalAreaFilterModal, { type EquipmentFilter } from "../../modals/RegionLocalAreaFilterModal";
 import { fleetStatusColor, fleetStatusLabel } from "../../modals/EquipmentStatusModal";
 import { buildTrackRows, type TrackCombo, type TrackUnit } from "@/lib/equipment/trackList";
-import { ageText, mapsUrl } from "@/lib/equipment/trackFormat";
+import { ageText } from "@/lib/equipment/trackFormat";
+import { useCompanyRoster } from "../../hooks/useCompanyRoster";
+import { useEquipmentPositions } from "@/lib/position/useEquipmentPositions";
 import { fieldInput, muted } from "../trip/tripUi";
-import { hosText } from "@/lib/telematics/progress";
 import { TrackDetail } from "./TrackDetail";
 import { EquipmentBoard } from "../equipment/EquipmentBoard";
 import { useEquipmentBoardStatus } from "../../hooks/useEquipmentBoardStatus";
 import { buildPins, type ParkRow } from "@/lib/equipment/parkedPins";
 
 const ParkedMap = dynamic(() => import("./ParkedMap"), { ssr: false });
-
-type DriverPlace = { vehicleId: string; truckId: string | null; vehicleName: string; lat: number | null; lon: number | null; at: string | null };
-type GeoTrailerHit = { providerTrailerId: string; name: string; comment: string | null; trailerId: string | null; ourName: string | null; vin: string | null; plate: string | null; attachedTo: string | null };
-type VehicleHit = { vehicleId: string; name: string; truckId: string | null; lat: number | null; lon: number | null; at: string | null; speedMph: number | null; driverName: string | null; signedIn: boolean };
-type DriverHit = {
-  providerId: string; name: string; employeeNo: string | null; memberName: string | null;
-  now: DriverPlace | null; last: DriverPlace | null;
-  diag?: string;
-  debug?: string[];
-  hos?: { driveLeftMin: number | null; dutyLeftMin: number | null; status: string | null; statusSince?: string | null; offSince?: string | null; at: string } | null;
-};
 
 const COLS = "id, name, active, region, local_area, current_region, current_local_area, status_code, status_notes, sub_status, status_location, status_updated_at";
 const toUnit = (r: any, kind: "truck" | "trailer"): TrackUnit => ({
@@ -75,25 +65,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const [mapOpen, setMapOpen] = useState(false);
   const [parks, setParks] = useState<ParkRow[]>([]);
   const [parkNames, setParkNames] = useState<Map<string, string>>(new Map());
-  const [drivers, setDrivers] = useState<DriverHit[]>([]);
-  const [vehicles, setVehicles] = useState<VehicleHit[]>([]);
-  const [geoTrailers, setGeoTrailers] = useState<GeoTrailerHit[]>([]);
-  const [driversBusy, setDriversBusy] = useState(false);
-  const [driverNote, setDriverNote] = useState<string | null>(null);
-  const [openDriver, setOpenDriver] = useState<string | null>(null);
-  const [debugLines, setDebugLines] = useState<Record<string, string[] | "loading">>({});
-  const loadDebug = async (driverId: string) => {
-    if (!companyId || debugLines[driverId]) return;
-    setDebugLines((m) => ({ ...m, [driverId]: "loading" }));
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      const r = await fetch(`/api/telematics/drivers?companyId=${encodeURIComponent(companyId)}&debug=${encodeURIComponent(driverId)}`, { headers: { Authorization: `Bearer ${token ?? ""}` }, cache: "no-store" });
-      const j = r.ok ? await r.json() : null;
-      setDebugLines((m) => ({ ...m, [driverId]: j?.lines ?? ["Geotab didn't answer. Close and open this again in a minute."] }));
-    } catch { setDebugLines((m) => ({ ...m, [driverId]: ["Couldn't reach the server."] })); }
-  };
-  const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null; vehicle?: { id: string; name: string } | null; geoTrailer?: GeoTrailerHit | null } | null>(null);
+  const [pick, setPick] = useState<{ truckId: string | null; trailerId: string | null } | null>(null);
+  const [holders, setHolders] = useState<{ userId: string; truckId: string | null; trailerId: string | null }[]>([]);
 
   const reload = useCallback(async () => {
     if (!companyId) return;
@@ -108,6 +81,11 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     setTrailers(((r.data ?? []) as any[]).filter((x) => x.active !== false).map((x) => toUnit(x, "trailer")));
     setCombos(((c.data ?? []) as any[]).filter((x) => x.truck_id && x.trailer_id).map((x) => ({ comboId: x.combo_id, truckId: x.truck_id, trailerId: x.trailer_id })));
     setClaimedByCombo(Object.fromEntries(((c.data ?? []) as any[]).map((x) => [x.combo_id, x.claimed_by ?? null])));
+    // Who has a truck or trailer alone (bobtail / trailer only). Skipped quietly if this role can't read it.
+    try {
+      const h = await supabase.from("user_settings").select("user_id, current_truck_id, current_trailer_id").or("current_truck_id.not.is.null,current_trailer_id.not.is.null");
+      setHolders(((h.data ?? []) as any[]).map((x) => ({ userId: x.user_id, truckId: x.current_truck_id ?? null, trailerId: x.current_trailer_id ?? null })));
+    } catch { setHolders([]); }
     // Where parked units are (one pin per unit; the database drops it when anyone takes the unit).
     const pk = await supabase.from("equipment_parks").select("unit_kind, unit_id, lat, lon, place_label, parked_by, parked_at").eq("company_id", companyId);
     const rowsPk = ((pk.data ?? []) as ParkRow[]);
@@ -120,39 +98,11 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     setLoading(false);
   }, [companyId]);
 
-  const [submitted, setSubmitted] = useState("");
-  useEffect(() => { if (open) { setQ(""); setSubmitted(""); setDrivers([]); setVehicles([]); setGeoTrailers([]); setDriverNote(null); void reload(); } }, [open, reload]);
-
-  // Driver and Geotab-vehicle search against the telematics provider. Geotab limits how many calls it
-  // answers per minute, so this only runs when you press Search (or Enter), never while you type.
-  useEffect(() => {
-    const term = submitted.trim();
-    if (!open || !companyId || term.length < 2) { setDrivers([]); setVehicles([]); setGeoTrailers([]); setDriverNote(null); return; }
-    let off = false;
-    const timer = window.setTimeout(async () => {
-      setDriversBusy(true);
-      try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) return;
-        const r = await fetch(`/api/telematics/drivers?companyId=${encodeURIComponent(companyId)}&q=${encodeURIComponent(term)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-        const j = r.ok ? await r.json() : null;
-        if (off) return;
-        setDrivers(j?.connected ? (j.drivers as DriverHit[]) : []);
-        setVehicles(j?.connected ? ((j.vehicles ?? []) as VehicleHit[]) : []);
-        setGeoTrailers(j?.connected ? ((j.trailers ?? []) as GeoTrailerHit[]) : []);
-        setDriverNote(j && !j.connected ? "Driver search needs the company's Geotab connection." : j?.error ?? null);
-      } catch { if (!off) { setDrivers([]); setVehicles([]); setGeoTrailers([]); } }
-      finally { if (!off) setDriversBusy(false); }
-    }, 0);
-    return () => { off = true; window.clearTimeout(timer); };
-  }, [submitted, open, companyId]);
+  useEffect(() => { if (open) { setQ(""); void reload(); } }, [open, reload]);
 
   const rows = useMemo(() => buildTrackRows(trucks, trailers, combos, { region: filter.region, localArea: filter.localArea, awayOnly: filter.awayOnly }, q), [trucks, trailers, combos, filter, q]);
   const truckById = useMemo(() => new Map(trucks.map((t) => [t.id, t])), [trucks]);
   const trailerById = useMemo(() => new Map(trailers.map((t) => [t.id, t])), [trailers]);
-  // Geotab vehicles not already listed below as one of our own units.
-  const geoVehicles = useMemo(() => vehicles.filter((v) => !v.truckId || !rows.trucks.some((t) => t.id === v.truckId) && !rows.combos.some((c) => c.truck.id === v.truckId)), [vehicles, rows]);
   const unitNames = useMemo(() => {
     const m = new Map<string, string>();
     trucks.forEach((t) => m.set(`truck:${t.id}`, t.name)); trailers.forEach((t) => m.set(`trailer:${t.id}`, t.name));
@@ -172,11 +122,22 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
     const combo = combos.find((c) => c.truckId === truckId);
     setPick({ truckId, trailerId: combo?.trailerId ?? null });
   };
+  const { members } = useCompanyRoster(companyId);
+  const captured = useEquipmentPositions(companyId, open, 60_000);
+  // Drivers matching the search, with the unit they hold: a claimed pairing, or a truck / trailer held alone.
+  const driverHits = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (term.length < 2) return [] as { userId: string; name: string; truckId: string | null; trailerId: string | null }[];
+    const claimed = new Map<string, { truckId: string | null; trailerId: string | null }>();
+    for (const c of combos) { const u = claimedByCombo[c.comboId]; if (u) claimed.set(u, { truckId: c.truckId, trailerId: c.trailerId }); }
+    for (const h of holders) if (!claimed.has(h.userId)) claimed.set(h.userId, { truckId: h.truckId, trailerId: h.trailerId });
+    return members.filter((m) => m.display_name.toLowerCase().includes(term)).slice(0, 8).map((m) => ({ userId: m.user_id, name: m.display_name, truckId: claimed.get(m.user_id)?.truckId ?? null, trailerId: claimed.get(m.user_id)?.trailerId ?? null }));
+  }, [q, members, combos, claimedByCombo, holders]);
   const canManage = role === "admin" || role === "dispatch" || role === "lead";
   const detailTruck = pick?.truckId ? truckById.get(pick.truckId) ?? null : null;
   const detailTrailer = pick?.trailerId ? trailerById.get(pick.trailerId) ?? null : null;
   // One unit at a time, with what it is coupled to: a truck (or a trailer alone) is the subject, its partner a line.
-  const storyOn = !!(detailTruck || detailTrailer) && !pick?.vehicle && !pick?.geoTrailer;
+  const storyOn = !!(detailTruck || detailTrailer);
   const subjectTruck = detailTruck;
   const subjectTrailer = detailTruck ? null : detailTrailer;
   const partner: TrackUnit | null = detailTruck
@@ -187,17 +148,6 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
   const myCombo = myTruckId ? combos.find((c) => c.truckId === myTruckId) : null;
   const mine = (truckId: string | null, trailerId: string | null) => (!!myTruckId && truckId === myTruckId) || (!!myTrailerId && trailerId === myTrailerId);
 
-  const driverLine = (d: DriverHit) => {
-    const p = d.now ?? d.last;
-    if (!p) return <span style={{ color: muted }}>Not signed in to a truck in the last 30 days.</span>;
-    return (
-      <>
-        {d.now ? <>In <b>{p.vehicleName}</b></> : <>Last in <b>{p.vehicleName}</b> <span style={{ color: muted }}>(not signed in now)</span></>}
-        <span style={{ color: muted }}> · {ageText(p.at)}</span>
-      </>
-    );
-  };
-
   return (
     <FullscreenModal open={open} onClose={onClose} title="Track" footer={null}
       headerRight={
@@ -206,18 +156,9 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
           Filter{filtered ? " •" : ""}
         </button>
       }>
-      <form onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim()); }} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Unit number or driver name" enterKeyHint="search" style={{ ...fieldInput, flex: 1, minWidth: 0 }} />
-      </form>
-      {q.trim().length >= 2 && (
-        <button type="button" onClick={() => setSubmitted(q.trim())} disabled={driversBusy} aria-busy={driversBusy}
-          style={{ display: "block", width: "100%", margin: "-4px 0 12px", padding: "11px 0", border: "1px solid rgba(255,255,255,0.35)", background: q.trim() === submitted ? "transparent" : "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
-          {driversBusy ? "Searching Geotab…" : q.trim() === submitted ? "Search Geotab again" : `Search Geotab for “${q.trim()}”`}
-        </button>
-      )}
-      {q.trim().length >= 2 && !loading && rows.combos.length + rows.trucks.length + rows.trailers.length === 0 && q.trim() !== submitted && (
-        <div style={{ fontSize: 13, color: muted, margin: "-4px 0 12px" }}>Nothing in ProTankr matches. Tap Search Geotab to look there; you can add a truck or trailer from the results.</div>
-      )}
+      <div style={{ marginBottom: 12 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Unit number or driver name" enterKeyHint="search" style={{ ...fieldInput, width: "100%", boxSizing: "border-box" }} />
+      </div>
 
       <button type="button" onClick={() => setMapOpen(true)}
         style={{ display: "block", width: "100%", margin: "0 0 12px", padding: "11px 12px", border: "1px solid rgba(255,255,255,0.35)", background: "transparent", color: "#fff", fontWeight: 800, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", textAlign: "left" }}>
@@ -231,82 +172,23 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         </button>
       )}
 
-      {submitted.length >= 2 && (
+      {driverHits.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>
-            Drivers{driversBusy ? " · searching…" : ""}
-          </div>
-          {driverNote && <div style={{ fontSize: 13, color: "#fb923c" }}>{driverNote}</div>}
-          {!driversBusy && !driverNote && drivers.length === 0 && <div style={{ fontSize: 13, color: muted }}>No driver found in Geotab.</div>}
-          {drivers.map((d) => {
-            const p = d.now ?? d.last;
-            const tappable = true;
-            const hosT = d.hos ? hosText(d.hos) : null;
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>Drivers</div>
+          {driverHits.map((d) => {
+            const t = d.truckId ? truckById.get(d.truckId) : null, r = d.trailerId ? trailerById.get(d.trailerId) : null;
+            const cap = d.truckId ? captured.byUnit.get(`truck:${d.truckId}`) : r ? captured.byUnit.get(`trailer:${r.id}`) : undefined;
+            const tappable = !!(t || r);
             return (
-              <div key={d.providerId} style={{ border: "1px solid rgba(255,255,255,0.14)", marginBottom: 8 }}>
-                <button type="button" disabled={!tappable} onClick={() => { if (!p) { setOpenDriver((cur) => (cur === d.providerId ? null : d.providerId)); void loadDebug(d.providerId); return; } if (p.truckId) openTruck(p.truckId); else setPick({ truckId: null, trailerId: null, vehicle: { id: p.vehicleId, name: p.vehicleName } }); }}
-                  style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "transparent", border: "none", color: "#fff", cursor: tappable ? "pointer" : "default" }}>
-                  <div style={{ fontSize: 16, fontWeight: 800 }}>
-                    {d.name}
-                    {d.memberName ? null : <span style={{ fontSize: 11, fontWeight: 700, color: muted, marginLeft: 8 }}>not a ProTankr member</span>}
-                    {d.employeeNo && <span style={{ fontSize: 12, fontWeight: 600, color: muted, marginLeft: 8 }}>#{d.employeeNo}</span>}
-                  </div>
-                  <div style={{ fontSize: 13, marginTop: 3 }}>{driverLine(d)}</div>
-                  {!p && d.diag && <div style={{ fontSize: 11, color: muted, marginTop: 3 }}>{d.diag}</div>}
-                  {!p && <div style={{ fontSize: 11, color: "#93c5fd", marginTop: 3 }}>{openDriver === d.providerId ? "Hide details ▲" : "Tap for details ▼"}</div>}
-                  {!p && openDriver === d.providerId && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.75)" }}>
-                      <div>Geotab doesn't say which vehicle this driver is in. What it returned for them:</div>
-                      {(debugLines[d.providerId] === "loading" ? ["Asking Geotab…"] : (debugLines[d.providerId] as string[] | undefined) ?? ["No further detail was returned."]).map((l, i) => <div key={i} style={{ marginTop: 2, color: muted }}>• {l}</div>)}
-                      {d.hos && <div style={{ marginTop: 4 }}>Hours are known, so the driver exists: {hosText(d.hos).text}</div>}
-                      <div style={{ marginTop: 4 }}>Searching the unit number instead works if you know the truck.</div>
-                    </div>
-                  )}
-                  {hosT && <div className="dash-num" style={{ fontSize: 12, marginTop: 3, color: hosT.color }}>Hours · {hosT.text}</div>}
-                  {p && !p.truckId && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>That vehicle isn't set up as a ProTankr truck. Tap to see it anyway.</div>}
-                </button>
-                {p?.lat != null && p?.lon != null && (
-                  <a href={mapsUrl(p.lat, p.lon)} target="_blank" rel="noopener noreferrer"
-                    style={{ display: "block", padding: "6px 12px 10px", fontSize: 12, fontWeight: 800, color: "#93c5fd", textDecoration: "none" }}>Open in Maps</a>
-                )}
-              </div>
+              <button key={d.userId} type="button" disabled={!tappable} onClick={() => (t ? openTruck(t.id) : r ? setPick({ truckId: null, trailerId: r.id }) : undefined)}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "#fff", cursor: tappable ? "pointer" : "default" }}>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{d.name}</div>
+                <div style={{ fontSize: 13, marginTop: 3 }}>
+                  {t || r ? <>Has <b>{[t ? `Truck ${t.name}` : null, r ? `Trailer ${r.name}` : null].filter(Boolean).join(" / ")}</b> selected{cap ? <span style={{ color: muted }}> · last captured {ageText(cap.capturedAt)}</span> : null}</> : <span style={{ color: muted }}>No equipment selected in ProTankr.</span>}
+                </div>
+              </button>
             );
           })}
-        </div>
-      )}
-
-      {submitted.length >= 2 && geoVehicles.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>Vehicles in Geotab</div>
-          {geoVehicles.map((v) => (
-            <button key={v.vehicleId} type="button"
-              onClick={() => (v.truckId ? openTruck(v.truckId) : setPick({ truckId: null, trailerId: null, vehicle: { id: v.vehicleId, name: v.name } }))}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "#fff", cursor: "pointer" }}>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{v.name}{!v.truckId && <span style={{ fontSize: 11, fontWeight: 700, color: muted, marginLeft: 8 }}>not set up in ProTankr</span>}</div>
-              <div style={{ fontSize: 13, marginTop: 3 }}>
-                {v.driverName ? <>{v.signedIn ? "Driver" : "Last driver"} <b>{v.driverName}</b> · </> : null}
-                {v.speedMph != null && v.speedMph > 2 ? `moving ${v.speedMph} mph` : "stopped"}
-                <span style={{ color: muted }}> · {ageText(v.at)}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {submitted.length >= 2 && geoTrailers.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 6 }}>Trailers in Geotab</div>
-          {geoTrailers.map((t) => (
-            <button key={t.providerTrailerId} type="button"
-              onClick={() => (t.trailerId ? setPick({ truckId: null, trailerId: t.trailerId }) : setPick({ truckId: null, trailerId: null, geoTrailer: t }))}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "#fff", cursor: "pointer" }}>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{t.name}{!t.trailerId && <span style={{ fontSize: 11, fontWeight: 700, color: muted, marginLeft: 8 }}>not in ProTankr</span>}</div>
-              <div style={{ fontSize: 13, marginTop: 3, color: "rgba(255,255,255,0.8)" }}>
-                {[t.vin ? `VIN ${t.vin}` : null, t.plate ? `Plate ${t.plate}` : null].filter(Boolean).join(" · ") || <span style={{ color: muted }}>No VIN or plate in Geotab</span>}
-              </div>
-              <div style={{ fontSize: 12, marginTop: 2, color: muted }}>{t.attachedTo ? `Hooked to ${t.attachedTo} now` : "Not hooked to a truck right now"}</div>
-            </button>
-          ))}
         </div>
       )}
 
@@ -339,12 +221,8 @@ export function TrackSheet({ open, onClose, companyId, role, myTruckId, myTraile
         <TrackDetail
           open onClose={() => setPick(null)} companyId={companyId}
           story={storyOn} coupledWith={partner} coupledKnown={storyOn} onOpenCoupled={partner ? () => setPick(partner.kind === "truck" ? { truckId: partner.id, trailerId: null } : { truckId: null, trailerId: partner.id }) : undefined}
-          truck={storyOn ? subjectTruck : detailTruck} trailer={storyOn ? subjectTrailer : detailTrailer} vehicle={pick.vehicle ?? null} geoTrailer={pick.geoTrailer ?? null} allTrucks={trucks}
-          onAddedTrailer={async (id) => { await reload(); setPick({ truckId: null, trailerId: id }); }}
-          canAdd={canManage}
-          onAdded={async (id) => { await reload(); openTruck(id); }}
+          truck={storyOn ? subjectTruck : detailTruck} trailer={storyOn ? subjectTrailer : detailTrailer}
           onChanged={() => void reload()}
-          onSwitchTruck={(id) => openTruck(id)}
         />
       )}
     </FullscreenModal>
