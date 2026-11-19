@@ -18,6 +18,7 @@
 // metadata exports to live in a server component -- this client component
 // holds all the actual interactive shell logic.
 
+import { capturePosition, flushCaptures } from "@/lib/position/capturePosition";
 import { useKeepAwake } from "@/lib/pwa/keepAwake";
 import PlannerHost from "./PlannerHost";
 import { AccessStepsHost } from "./components/access/AccessStepsHost";
@@ -240,6 +241,25 @@ function TripSync({ userId }: { userId: string | null }) {
   return null;
 }
 
+// App open or wake: one position for the unit the driver holds, so Track and the dispatch dots have a recent point
+// without any continuous tracking. Skipped while an admin is acting as another driver (not their phone, not their truck).
+function PositionCapture() {
+  const shell = useCalculatorShell();
+  const userId = shell.authUserId, companyId = shell.companyId;
+  const truckId = shell.equipment.currentTruckId ?? null, trailerId = shell.equipment.currentTrailerId ?? null;
+  const impersonating = !!shell.setupSession;
+  useEffect(() => {
+    if (!userId || !companyId || impersonating || (!truckId && !trailerId)) return;
+    const go = (cause: "open" | "wake") => { void capturePosition({ userId, companyId, truckId, trailerId, cause }); void flushCaptures(userId); };
+    go("open");
+    const vis = () => { if (document.visibilityState === "visible") go("wake"); };
+    document.addEventListener("visibilitychange", vis);
+    window.addEventListener("online", vis);
+    return () => { document.removeEventListener("visibilitychange", vis); window.removeEventListener("online", vis); };
+  }, [userId, companyId, truckId, trailerId, impersonating]);
+  return null;
+}
+
 function ShellChrome({ children }: { children: React.ReactNode }) {
   const shell = useCalculatorShell();
   // Default (unresolved SSR/first-paint) is false -- same neutral-first
@@ -313,6 +333,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <TripSync userId={shell.effectiveUserId || null} />
+      <PositionCapture />
 
       <EquipmentModal
         open={shell.equipOpen}

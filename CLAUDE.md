@@ -12098,3 +12098,6 @@ which now requires a truck (full pair or bobtail). With nothing nearby to offer,
 full equipment picker, and coming back without a truck keeps the sheet open ("Pick a truck to begin the trip");
 closing the sheet cancels the trip start. Candidate rows read "parked by you - Readyline" (truck status from
 `trucks.status_code`; own pin shows "you" instead of initials). Not click-tested.
+
+## Position capture (2026-11-26, not live until the migration runs)
+Equipment position is captured when something happens, not tracked. `position_captures` (append-only) and `equipment_positions` (latest per truck/trailer, written by a trigger) come from migration `20261126000000_position_captures.sql` (**apply it**; the app fails quietly until then and keeps up to 200 captures per phone). `lib/position/capturePosition.ts` reads the phone GPS, queues the row in localStorage and sends it when it can. Captured so far: app open and wake (`PositionCapture` in the planner layout, at most every 5 minutes, only while the driver holds a unit and is not acting as another driver), every odometer stamp, and Arrive at a pickup or delivery. Not yet: fuel, shift start, hook/drop, and nothing reads `equipment_positions` yet (Track and the dispatch dots still use Geotab). Plan and Geotab inventory: `docs/telematics-connectors.md`.

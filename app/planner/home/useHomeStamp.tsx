@@ -20,6 +20,7 @@
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
+import { capturePosition } from "@/lib/position/capturePosition";
 import { useEffect, useMemo } from "react";
 
 import { supabase } from "@/lib/supabase/client";
@@ -125,6 +126,8 @@ export function useHomeStamp(p: ReturnType<typeof useHomeSteps>) {
     const ask = stampAsk;
     if (!ask) return;
     const at = new Date().toISOString();
+    // Every odometer stamp is also a position capture (the pop-out already has a fix).
+    if (!shell.setupSession) void capturePosition({ userId: shell.authUserId, companyId, truckId, trailerId, cause: ask.kind === "shift" ? "shift_end" : ask.kind, odometer: odo, lat: stampCtx.lat, lon: stampCtx.lon, at });
     if (ask.kind === "cancel") {
       setStampAsk(null);
       await onCancelSubmit({ ...ask.v, endMiles: odo });

@@ -20,6 +20,7 @@
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
+import { capturePosition } from "@/lib/position/capturePosition";
 import { releaseEquipment } from "@/lib/equipment/releaseEquipment";
 import React, { useEffect, useMemo } from "react";
 
@@ -349,6 +350,7 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
         // Which rack isn't known until the driver is there, so it's asked now.
         setOpeningPlanner(true);
         arrivePickup(store, { userId, pickup: step.pickup, ...clock() });
+        if (!shell.setupSession) void capturePosition({ userId: shell.authUserId, companyId, truckId, trailerId, cause: "arrive" });
         const loc = shell.location;
         const pk = step.pickup;
         alignPlannerToPickup(pk);
@@ -387,6 +389,7 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
         // Arrived: only the time is stamped. Nothing opens; the button becomes
         // Finish Delivery, and the sequence starts when the driver taps it.
         arriveDelivery(store, { userId, delivery: step.delivery, ...clock() });
+        if (!shell.setupSession) void capturePosition({ userId: shell.authUserId, companyId, truckId, trailerId, cause: "arrive" });
         void syncNow();
         setDropSiteOpen(true);
         break;
