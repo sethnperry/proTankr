@@ -7,18 +7,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import type { LivePos } from "@/lib/telematics/progress";
+import type { PositionRow } from "./positionRows";
 
-export type UnitPosition = { kind: "truck" | "trailer"; unitId: string; lat: number; lon: number; odometer: number | null; cause: string | null; capturedAt: string; capturedBy: string | null };
-
-type Row = { unit_kind: string; unit_id: string; lat: number; lon: number; odometer: number | null; cause: string | null; captured_at: string; captured_by: string | null };
-
-export function rowsToPositions(rows: Row[]): UnitPosition[] {
-  return rows.filter((r) => (r.unit_kind === "truck" || r.unit_kind === "trailer") && Number.isFinite(Number(r.lat)) && Number.isFinite(Number(r.lon)))
-    .map((r) => ({ kind: r.unit_kind as "truck" | "trailer", unitId: r.unit_id, lat: Number(r.lat), lon: Number(r.lon), odometer: r.odometer != null ? Number(r.odometer) : null, cause: r.cause, capturedAt: r.captured_at, capturedBy: r.captured_by }));
-}
-/** The Dispatch board's live-dot shape. A capture has no speed. */
-export const toLivePos = (p: UnitPosition): LivePos => ({ lat: p.lat, lon: p.lon, speedMph: null, at: p.capturedAt });
+export { rowsToPositions, toLivePos, type UnitPosition } from "./positionRows";
+import { rowsToPositions, type UnitPosition } from "./positionRows";
+type Row = PositionRow;
 
 export function useEquipmentPositions(companyId: string | null, enabled: boolean, pollMs = 60_000) {
   const [list, setList] = useState<UnitPosition[]>([]);

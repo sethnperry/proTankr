@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rowsToPositions, toLivePos } from "./useEquipmentPositions.ts";
+import { rowsToPositions, toLivePos } from "./positionRows.ts";
 
 test("rows become positions; bad rows are dropped; a live dot has no speed", () => {
   const p = rowsToPositions([
