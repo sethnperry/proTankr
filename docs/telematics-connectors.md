@@ -89,7 +89,6 @@ phone GPS replaces them), and IFTA state miles. Everything else is typed or alre
 ## 5. Other issues noticed while auditing
 
 - `callerId` in the telematics module (section 1, row 6).
-- `lib/recap/_dbg.ts` is a stray debug script with a hard-coded company id; delete it.
 - Many hooks poll Geotab on a timer (`useMyHos`, `useFleetHos`, `useFleetPositions`, `useFleetEngineHours`, truck reading,
   geotab equipment). The shared `telematics_cache` softens it, but turning the company switch off should stop all of them
   at the source, not per hook.
