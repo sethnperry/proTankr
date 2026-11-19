@@ -153,6 +153,7 @@ import { DispatchedCard } from "./DispatchedCard";
 import type { useHome } from "./useHome";
 import { odometerStatus } from "@/lib/telematics/useTruckReading";
 import { staleOpenDelivery } from "@/lib/trips/staleDelivery";
+import { PlanEquipmentSheet } from "../components/PlanEquipmentSheet";
 import { SquawkSheet, DropSiteSheet, StartLoadSheet, LoadedSheet, LocationPicker, AddPickupSheet, FreightSheet, TankCheckSheet, PerDiemSheet, STATUS_LABEL, muted, smallLink, EquipLine, EquipmentToolsRegistrar, InfoRow, SyncDetailsSheet } from "./homeShared";
 
 export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
@@ -185,6 +186,10 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     beginDispatchedLoad,
     startEmptyMove,
     addingLoad,
+    planEquip,
+    setPlanEquip,
+    planEquipOpen,
+    setPlanEquipOpen,
     setAddingLoad,
     moveConfirm,
     setMoveConfirm,
@@ -1515,11 +1520,15 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onClose={() => { setSheetOpen(false); setAddingLoad(false); setVerifyActive(false); }}
         onSubmit={submit}
         forDriver={addingLoad ? "self" : null}
+        planEquipLabel={addingLoad ? (planEquip?.label ?? ([equipment.currentTruckName ? `Truck ${equipment.currentTruckName}` : "No truck", equipment.currentTruckName ? (equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Bobtail") : null].filter(Boolean).join(" · "))) : null}
+        onChangeEquipment={addingLoad ? () => setPlanEquipOpen(true) : undefined}
         liveMiles={truckReading?.odometerMi ?? null}
         milesStatus={odometerStatus(truckReading ?? null, truckReadingFailed)}
         suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
       />
 
+      <PlanEquipmentSheet open={planEquipOpen} companyId={companyId || null} truckId={(planEquip ?? { truckId: truckId ?? null }).truckId} trailerId={(planEquip ?? { trailerId: trailerId ?? null }).trailerId}
+        onPick={setPlanEquip} onClose={() => setPlanEquipOpen(false)} />
       <TripEquipmentSheets {...tripEquip.sheets} />
       <TarePairHost userId={userId || null} onPaired={(id) => { void (async () => { await equipment.fetchCombos?.(); if (id) equipment.setSelectedComboId?.(id); await equipment.loadCurrentEquipment?.(); })(); }} />
       <LeftBehindHost userId={userId || null} companyId={companyId || null} trailerId={trailerId ?? null} trailerName={equipment.currentTrailerName ?? null} store={store} syncNow={syncNow} />

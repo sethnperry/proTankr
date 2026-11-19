@@ -52,17 +52,10 @@ export function StartLoadSheet({
   tanks,
   origin,
   companyId,
-  userId,
-  onLocationAdded,
-  busy,
-  error,
-  onClose,
-  onSubmit,
-  suggestStart,
-  liveMiles, milesStatus,
+  userId, onLocationAdded, busy, error, onClose, onSubmit, suggestStart, liveMiles, milesStatus,
   breakNote,
   planRequired = true,
-  forDriver = null,
+  forDriver = null, planEquipLabel = null, onChangeEquipment,
   requireShipperCustomer = false,
   onPlanDetour,
 }: {
@@ -70,6 +63,8 @@ export function StartLoadSheet({
   planRequired?: boolean;
   // Dispatch planning this trip for a driver: no begin miles or start city (the driver gives those at Begin).
   forDriver?: string | null;
+  // Planning a load: which truck and trailer it is for (tap to change). Hidden when not given.
+  planEquipLabel?: string | null; onChangeEquipment?: () => void;
   // Company setting: every load has a shipper and a customer (account rules email by them).
   requireShipperCustomer?: boolean;
   // Make or change a plan in the Planner, then come back here ("new" or an existing slot).
@@ -295,6 +290,7 @@ export function StartLoadSheet({
           <Line label="Shipper" value={v.shipper || null} onTap={() => openEdit("shipper")} />
           <Line label="Customer" value={v.customer || null} onTap={() => openEdit("customer")} />
           {!forDriver && <Line label="Starting from" value={[v.startCity, v.startState].filter((x) => x.trim()).join(", ") || null} missing onTap={() => openEdit("start")} />}
+          {onChangeEquipment && <Line label="Equipment" value={planEquipLabel} missing onTap={onChangeEquipment} />}
           <Line label="Pickup" value={pickupLabel} missing onTap={onChangePickup} />
           <Line label="Supplier" value={v.supplier?.name ?? null} onTap={() => setSupplierOpen(true)} />
           {v.deliveries.map((d, i) => {

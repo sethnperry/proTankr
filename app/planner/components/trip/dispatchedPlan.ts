@@ -17,6 +17,8 @@ export function dispatchedPlanFor(
   local: { slot: number; snapshot: { comps: (string | null)[] } | null } | null,
   catalog: Product[],
   colorOf: (name: string) => string,
+  /** What the load was planned on: a truck with no trailer is a real bobtail; nothing picked is just "not set". */
+  on: { truck: boolean; trailer: boolean } = { truck: false, trailer: false },
 ): DispatchedPlan {
   const info = (pid: string | null | undefined): PlanLineComp extends infer T ? Omit<PlanLineComp, "num"> : never => {
     const p = pid ? catalog.find((x) => x.product_id === pid) : null;
@@ -32,5 +34,7 @@ export function dispatchedPlanFor(
   const letter = local ? String.fromCharCode(64 + local.slot) : null;
   const snap = local?.snapshot?.comps ?? [];
   if (snap.some(Boolean)) return { comps: snap.map((pid, i) => ({ num: snap.length - i, ...info(pid) })), letter, word: null };
-  return { comps: [], letter, word: letter ? `Plan ${letter}` : "Trailer not set" };
+  if (letter) return { comps: [], letter, word: `Plan ${letter}` };
+  if (on.truck && !on.trailer) return { comps: [], letter: null, word: "Bobtail" };
+  return { comps: [], letter: null, word: on.trailer ? "Trailer planned" : "Trailer not set" };
 }

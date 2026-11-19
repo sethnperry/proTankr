@@ -18,3 +18,8 @@ test("only a plan letter is known: say so; nothing known: the trailer isn't set.
   assert.equal(dispatchedPlanFor([], { slot: 2, snapshot: null }, cat, color).word, "Plan B");
   assert.equal(dispatchedPlanFor([], null, cat, color).word, "Trailer not set");
 });
+
+test("a truck planned with no trailer is a real bobtail", () => {
+  assert.equal(dispatchedPlanFor([], null, cat, color, { truck: true, trailer: false }).word, "Bobtail");
+  assert.equal(dispatchedPlanFor([], null, cat, color, { truck: false, trailer: false }).word, "Trailer not set");
+});

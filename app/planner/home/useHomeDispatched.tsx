@@ -104,7 +104,7 @@ import { type DispatchedItem } from "./DispatchedCard";
 import type { useHomeDelays } from "./useHomeDelays";
 
 export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
-  const { addingLoad, setAddingLoad, children, compSizes, companyId, deliveryName, editing, emptyMoves, equipAsk, equipSawOpen, equipSwitching, equipment, location, locations, openTrip, parkStampRef, plannedNames, resumeAfterMove, resumeDraft, router, setBusy, setEquipAsk, setEquipSwitching, setError, setNotice, setPlannedNames, setSheetOpen, setVerifyActive, setVerifyTripId, sheetPresets, shell, snap, state, store, storedLocId, suppliers, syncNow, terminalName, trailerId, trips, truckId, userId, verifyActive, verifyBaseTerminal, verifyTripId } = p;
+  const { addingLoad, planEquip, setPlanEquip, setAddingLoad, children, compSizes, companyId, deliveryName, editing, emptyMoves, equipAsk, equipSawOpen, equipSwitching, equipment, location, locations, openTrip, parkStampRef, plannedNames, resumeAfterMove, resumeDraft, router, setBusy, setEquipAsk, setEquipSwitching, setError, setNotice, setPlannedNames, setSheetOpen, setVerifyActive, setVerifyTripId, sheetPresets, shell, snap, state, store, storedLocId, suppliers, syncNow, terminalName, trailerId, trips, truckId, userId, verifyActive, verifyBaseTerminal, verifyTripId } = p;
 
   // ── Loads dispatch planned for this driver ───────────────────────────────
   const dispatchedList = useMemo(() => (userId ? dispatchedForDriver(trips, userId) : []), [trips, userId]);
@@ -381,6 +381,8 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         Object.assign(rows.trip, {
           status: "dispatched", started_at: null, truck_id: null, trailer_id: null, begin_miles: null, start_city: null, start_state: null,
           dispatched_by: userId, planned_start_at: new Date(Math.max(nowMs, lastStart + 60_000)).toISOString(),
+          // The equipment this load is planned for: the pick in the window, else what is in use now (a truck with no trailer is a bobtail).
+          planned_truck_id: planEquip ? planEquip.truckId : truckId ?? null, planned_trailer_id: planEquip ? planEquip.trailerId : trailerId ?? null,
           dispatch_seq: Math.max(0, ...loads.map((t) => t.dispatch_seq ?? 0)) + 1, client_updated_at: nowIso,
         });
         rows.events = [];
@@ -435,5 +437,6 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       setBusy(false);
     }
   };
+  useEffect(() => { if (!addingLoad) setPlanEquip(null); }, [addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
   return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, initialValues, submit } as const;
 }

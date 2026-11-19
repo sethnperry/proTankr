@@ -413,7 +413,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         const s = { ...STATUS[trip.status], label: truckLabel };
         const cancelled = trip.status === "cancelled";
         const reasons = cancelled ? cancelReasonsText(trip.cancel_reasons) : "";
-        const who = [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", trip.truck_id ? truckName.get(trip.truck_id) : null].filter(Boolean).join(" ");
+        const who = [(driverName.get(trip.driver_id) ?? "").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase() || "Driver", (trip.truck_id ?? (trip.status === "dispatched" ? trip.planned_truck_id : null)) ? truckName.get((trip.truck_id ?? trip.planned_truck_id) as string) : null].filter(Boolean).join(" ");
         const canOpenOptions = company && canForceCancel && trip.status !== "complete" && trip.status !== "cancelled";
         const info = { tripId: trip.trip_id, label: order ? `Order ${order}` : ptdCode(trip.trip_id), status: s.label };
         return (
@@ -433,7 +433,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
                 <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                   {trip.trailer_id
                     ? <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy, CODE_STATES.has(trailerStateFor(ts, trip.trailer_id)), residueBy)} />
-                    : trip.status === "dispatched" ? <DispatchedPlanLine plan={dispatchedPlanFor(bundle.pickups.filter((k) => k.trip_id === trip.trip_id), !company ? getTripPlan(userId, trip.trip_id) : null, catalog.data as never, productColorFor)} />
+                    : trip.status === "dispatched" ? <DispatchedPlanLine plan={dispatchedPlanFor(bundle.pickups.filter((k) => k.trip_id === trip.trip_id), !company ? getTripPlan(userId, trip.trip_id) : null, catalog.data as never, productColorFor, { truck: !!trip.planned_truck_id, trailer: !!trip.planned_trailer_id })} />
                     : <span style={{ fontSize: 14, fontWeight: 800, color: "#60a5fa" }}>Bobtail</span>}
                 </span>
                 {trip.trailer_id && <span style={{ flexShrink: 0, fontSize: 12, color: TRAILER_COLOR[trailerStateFor(ts, trip.trailer_id)] }}>{trailerStateFor(ts, trip.trailer_id)}</span>}
