@@ -321,7 +321,8 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
     Object.fromEntries(Object.entries(tripSplash).map(([n, v]) => [Number(n), v.additiveProductId])),
   );
   const onFinishSubmit = async (v0: FinishDeliverySubmit) => {
-    if (!store || !userId || !companyId || !finishDeliveryRow || !openTrip) return;
+    // Not a silent return: the delivery screen is waiting on this, so say why it can't finish.
+    if (!store || !userId || !companyId || !finishDeliveryRow || !openTrip) throw new Error("The trip isn't loaded on this phone yet. Close this window, reopen the delivery, and try again.");
     const hid = mergedHere(finishDeliveryRow.delivery_id).hidden;
     const more = <T extends { compartment_load_id: string }>(list: T[]): T[] => list.flatMap((c) => [c, ...(hid[c.compartment_load_id] ?? []).map((id) => ({ ...c, compartment_load_id: id }))]);
     const v: FinishDeliverySubmit = { ...v0, delivered: more(v0.delivered), retained: more(v0.retained), bioBlends: v0.bioBlends ? more(v0.bioBlends) : v0.bioBlends };

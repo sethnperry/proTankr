@@ -22,6 +22,7 @@ import { EXTRA_KEY } from "./TripPackageSheet";
 import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
 import { SiteNotes } from "@/app/planner/components/site/SiteNotes";
+import { logHere } from "@/lib/errors/client";
 import { useSiteNote } from "@/lib/sites/useSites";
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
 import { BolPagesSheet } from "./BolPagesSheet";
@@ -291,7 +292,7 @@ export function DeliveryDashboard({
   onTicketPhotos?: (paths: string[]) => void;
   onSaveSignature: (path: string) => Promise<void>;
   onSaveProgress: (p: DeliveryProgress) => void;
-  onSubmit: (v: FinishDeliverySubmit) => void;
+  onSubmit: (v: FinishDeliverySubmit) => void | Promise<void>;
   onClose: () => void;
 }) {
   const landscape = useIsLandscape(480);
@@ -897,7 +898,10 @@ export function DeliveryDashboard({
     });
     setErr(null);
     setFinishing(true);
-    onSubmit({
+    // Never stay on "Finishing…": if the save fails, or nothing answers, say so and let the driver tap Finish again.
+    const unstick = (msg: string) => { setFinishing(false); setErr(msg); void logHere("other", "Finish delivery did not complete", { msg, delivery: delivery.delivery_id }); };
+    const watchdog = window.setTimeout(() => unstick("Finishing is taking too long. Check your signal and tap Finish again. Everything you entered is kept."), 15000);
+    Promise.resolve(onSubmit({
       times,
       delayReasonId: needReason ? reasonId : delivery.delay_reason_id ?? null,
       // No reason asked for because the driver already logged one at the drop: it becomes the delivery's reason.
@@ -930,7 +934,7 @@ export function DeliveryDashboard({
           return sp && sp.length > 1 ? sp.map((x) => ({ comp: c.comp_number, tank: x.tank, gallons: Math.round(x.gallons) })) : [];
         }),
       },
-    });
+    })).catch((e) => unstick(`Couldn't finish: ${(e as Error)?.message || "try again"}`)).finally(() => window.clearTimeout(watchdog));
   };
 
   // ── Compartment bars (Planner look, right to left) ─────────────────────────
