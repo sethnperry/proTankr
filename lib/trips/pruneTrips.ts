@@ -12,6 +12,9 @@
 // at all (a signed-out or expired session also answers with an empty list, no error), it never touches a trip that is
 // still open, dispatched or parked, and it never touches a trip with anything unsent. Only a finished or cancelled
 // trip, fully synced, that the server no longer has is forgotten.
+// One exception, when the caller proves the server's open-trip answer succeeded (`serverTripIds`, every trip the server
+// returned for this driver and trailer): a live trip that is missing from it and has nothing unsent was deleted on the
+// server (a bad trip cleaned up by hand), so it leaves the phone too instead of sitting on the dashboard forever.
 
 import type { TripStore } from "./tripStore.ts";
 import type { TripRow } from "./types.ts";
@@ -21,6 +24,7 @@ export function pruneMissingTrips(
   userId: string,
   server: TripRow[],
   limit: number,
+  opts?: { serverTripIds?: Set<string> },
 ): string[] {
   if (server.length === 0) return []; // an empty answer proves nothing: it is also what a bad session returns
   const onServer = new Set(server.map((t) => t.trip_id));
@@ -37,9 +41,12 @@ export function pruneMissingTrips(
   const dropped: string[] = [];
   for (const t of store.list("trips", (r) => r.driver_id === userId)) {
     if (onServer.has(t.trip_id)) continue;
-    if (full && (!t.started_at || t.started_at < (oldest as string))) continue;
+    const isLive = t.status !== "complete" && t.status !== "cancelled";
+    if (full && !(isLive && opts?.serverTripIds) && (!t.started_at || t.started_at < (oldest as string))) continue;
     if (unsent.has(t.trip_id)) continue;
-    if (t.status !== "complete" && t.status !== "cancelled") continue; // live work stays, whatever the server said
+    const live = t.status !== "complete" && t.status !== "cancelled";
+    if (live && !opts?.serverTripIds) continue; // live work stays, whatever the server said
+    if (live && opts?.serverTripIds?.has(t.trip_id)) continue;
     if (store.forgetTrip(t.trip_id)) dropped.push(t.trip_id); // refuses while any row of it is unsent
   }
   return dropped;

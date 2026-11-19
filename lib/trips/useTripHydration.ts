@@ -55,7 +55,11 @@ export function useTripHydration(
       }
       store.hydrate("trips", [...trips.values()]);
       // A trip deleted on the server (e.g. test data) leaves the phone too.
-      if (!recentRes.error) pruneMissingTrips(store, userId, (recentRes.data ?? []) as TripRow[], 10);
+      if (!recentRes.error) {
+        // Live trips are dropped too, but only when the open-trips answers came back clean and the trip has nothing unsent.
+        const clean = !openRes.error && !trailerRes.error;
+        pruneMissingTrips(store, userId, (recentRes.data ?? []) as TripRow[], 10, clean ? { serverTripIds: new Set(trips.keys()) } : undefined);
+      }
       store.hydrate("compartment_readiness", (readinessRes.data ?? []) as CompartmentReadinessRow[]);
 
       const openIds = [...trips.values()].filter((t) => OPEN_STATUSES.has(t.status) || t.status === "parked" || t.status === "dispatched").map((t) => t.trip_id);

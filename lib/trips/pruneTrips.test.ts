@@ -50,3 +50,23 @@ test("an open, dispatched or parked trip is never pruned", () => {
   assert.deepEqual(pruneMissingTrips(s, ME, [trip("z", "2026-10-20T00:00:00Z")], 50), []);
   assert.equal(s.list("trips").length, 5);
 });
+
+test("a live trip the server answered without, fully synced, is dropped when the open answer was clean", () => {
+  const s = storeWith(["in_transit", "parked", "dispatched"].map((st, i) => ({ ...trip(`t${i}`, "2026-10-1" + i + "T00:00:00Z"), status: st } as TripRow)));
+  const ids = new Set(["z"]);
+  assert.deepEqual(pruneMissingTrips(s, ME, [trip("z", "2026-10-20T00:00:00Z")], 50, { serverTripIds: ids }).sort(), ["t0", "t1", "t2"]);
+  assert.equal(s.list("trips").length, 0);
+});
+
+test("a live trip the server does have is kept, and so is one with anything unsent", () => {
+  const s = storeWith([{ ...trip("here", "2026-10-11T00:00:00Z"), status: "in_transit" } as TripRow, { ...trip("queued", "2026-10-12T00:00:00Z"), status: "in_transit" } as TripRow]);
+  s.put("trips", { ...s.list("trips").find((t) => t.trip_id === "queued")!, notes: "edit" } as TripRow); // an unsent change
+  const out = pruneMissingTrips(s, ME, [trip("here", "2026-10-11T00:00:00Z")], 50, { serverTripIds: new Set(["here"]) });
+  assert.deepEqual(out, []);
+  assert.equal(s.list("trips").length, 2);
+});
+
+test("with no clean open answer, live trips stay as before", () => {
+  const s = storeWith([{ ...trip("a", "2026-10-11T00:00:00Z"), status: "in_transit" } as TripRow]);
+  assert.deepEqual(pruneMissingTrips(s, ME, [trip("z", "2026-10-20T00:00:00Z")], 50), []);
+});
