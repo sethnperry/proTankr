@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useTerminalsCatalog } from "@/lib/queries/useTerminalsCatalog";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
-import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
+import { useEquipmentPositions } from "@/lib/position/useEquipmentPositions";
 import { driveMinutesByDistance } from "@/lib/dispatch/forecast";
 import { buildWave, clock, dayRows, driverStatus, type DayLabels, type DayTrip, type Wave } from "@/lib/company/driverDayWave";
 import { terminalCode } from "@/lib/equipment/boardStatus";
@@ -68,7 +68,7 @@ export function OnShiftDays({ companyId, drivers, truckNames }: { companyId: str
   const { days, locs } = useDays(companyId, drivers);
   const terminals = useTerminalsCatalog().data;
   const products = useProductsCatalog().data;
-  const positions = useFleetPositions(companyId, drivers.length > 0);
+  const positions = useEquipmentPositions(companyId, drivers.length > 0).trucks;
   const [open, setOpen] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => { const t = window.setInterval(() => setNowMs(Date.now()), 60_000); return () => window.clearInterval(t); }, []);
@@ -95,7 +95,9 @@ export function OnShiftDays({ companyId, drivers, truckNames }: { companyId: str
         const lastTrip = [...trips].sort((a, b) => Date.parse(b.trip.started_at ?? "") - Date.parse(a.trip.started_at ?? ""))[0]?.trip;
         const truckId = st.trip?.trip.truck_id ?? lastTrip?.truck_id ?? null;
         const truck = truckId ? truckNames.get(truckId) ?? null : null;
-        const pos = truckId ? positions.get(truckId) : undefined;
+        const rawPos = truckId ? positions.get(truckId) : undefined;
+        // A capture is "last seen": an old one says nothing about where the truck is now, so no ETA is worked out from it.
+        const pos = rawPos && rawPos.at && nowMs - Date.parse(rawPos.at) <= 30 * 60_000 ? rawPos : undefined;
         // ETA: from where the truck is to the next stop, when it is driving there.
         let eta: string | null = null;
         if (st.trip && pos && /en route/i.test(st.text)) {

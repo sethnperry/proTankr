@@ -53,7 +53,7 @@ import { addDaysISO_, formatMDYWithCountdown_ } from "../utils/dates";
 import { canReachDestination } from "@/lib/ui/driver/navDestinations";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useFleetTrips } from "@/lib/trips/useFleetTrips";
-import { useFleetPositions } from "@/lib/telematics/useFleetPositions";
+import { useEquipmentPositions } from "@/lib/position/useEquipmentPositions";
 import { useFleetHos } from "@/lib/telematics/useFleetHos";
 import { linkMeToTelematics } from "@/lib/telematics/linkMe";
 import { hosAlerts as buildHosAlerts } from "@/lib/dispatch/hosAlerts";
@@ -252,7 +252,7 @@ export default function DispatchPage() {
   // ── Dispatch Dashboard (no driver picked) ─────────────────────────────────
   // Mode and horizon are remembered on this device.
   const [mode, setModeState] = useState<DispatchMode>("live");
-  const livePositions = useFleetPositions(companyId || null, mode === "live");
+  const livePositions = useEquipmentPositions(companyId || null, mode === "live").trucks;
   const [hosNonce, setHosNonce] = useState(0);
   const fleetHos = useFleetHos(companyId || null, true, hosNonce);
   // Picking a driver for the timeline: link them to Geotab now (if they match), then reload clocks.

@@ -16,6 +16,8 @@ import { summarizeTruckTrip, type TruckTripSummary } from "@/lib/trips/truckTrip
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { productColorFor } from "../../utils/productColor";
 import { ageText, clockOf, compass, mapsUrl } from "@/lib/equipment/trackFormat";
+import { useEquipmentPositions } from "@/lib/position/useEquipmentPositions";
+import { CapturedPosition } from "./CapturedPosition";
 import { hosText } from "@/lib/telematics/progress";
 import type { TrackUnit } from "@/lib/equipment/trackList";
 import type { TrackChange } from "@/lib/telematics/trackChanges";
@@ -65,6 +67,7 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { data: catalog } = useProductsCatalog();
   const focus = story ? (truck ?? trailer) : null;
+  const captured = useEquipmentPositions(companyId, open, 30_000);
   const [told, setTold] = useState<StatusStory | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   useEffect(() => {
@@ -176,12 +179,13 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
     const out: StoryPin[] = [];
     const sc = focus?.statusCode ?? null;
     const there = told?.lat != null && told?.lon != null ? { lat: told.lat, lon: told.lon } : null;
-    const now = reading?.lat != null && reading?.lon != null ? { lat: reading.lat, lon: reading.lon } : null;
+    const cap = focus ? captured.byUnit.get(`${focus.kind}:${focus.id}`) : undefined;
+    const now = cap ? { lat: cap.lat, lon: cap.lon } : null;
     const metres = there && now ? Math.hypot((there.lat - now.lat) * 111_320, (there.lon - now.lon) * 111_320 * Math.cos(there.lat * Math.PI / 180)) : null;
     if (there) out.push({ key: "there", ...there, label: metres != null && metres < 50 ? `${focus?.name} · ${verbFor(sc).toLowerCase()} here, still here` : `${focus?.name} · ${verbFor(sc).toLowerCase()} here`, sub: told?.placeLabel ?? focus?.statusLocation ?? "Saved location", color: "#f87171" });
-    if (now && !(metres != null && metres < 50)) out.push({ key: "now", ...now, label: `${focus?.name} · now`, sub: `Geotab · ${ageText(reading?.at ?? null)}`, color: "#60a5fa" });
+    if (now && !(metres != null && metres < 50)) out.push({ key: "now", ...now, label: `${focus?.name} · now`, sub: `Last captured · ${ageText(cap?.capturedAt ?? null)}`, color: "#60a5fa" });
     return out;
-  }, [told, reading, focus]);
+  }, [told, captured.byUnit, focus]);
 
   const storyCard = (u: TrackUnit) => (
     <div key={u.id} style={card}>
@@ -307,6 +311,8 @@ export function TrackDetail({ open, onClose, companyId, truck, trailer, vehicle,
           ) : <div style={{ fontSize: 13, color: "#fb923c" }}>An admin, dispatcher or lead can add it.</div>}
         </>
       )}
+      <CapturedPosition byUnit={captured.byUnit} geotabHref={reading ? "https://my.geotab.com/" : null}
+        units={[...(truck ? [{ kind: "truck" as const, id: truck.id, name: truck.name }] : []), ...(trailer ? [{ kind: "trailer" as const, id: trailer.id, name: trailer.name }] : [])]} />
       {story && focus ? storyCard(focus) : <>{truck && unitCard(truck)}{trailer && unitCard(trailer)}</>}
 
       {(truck || vehicle) && (
