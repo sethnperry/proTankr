@@ -148,14 +148,6 @@ export function useHomeSteps(p: ReturnType<typeof useHomeDispatched>) {
   }, [hookupKey]);
   useEffect(() => { setNotifyPerm(notifyPermission()); }, []);
   const myHos = useMyHos(companyId || null, !!companyId && !!userId);
-  useEffect(() => {
-    if (!userId || shiftAsk || !telematicsLive(myHos, Date.now())) return;
-    const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: !!shift.current, lastEndedMs: lastShiftEndedMs, declinedSince: null });
-    if (!t || autoStarted.current === t.since) return;
-    autoStarted.current = t.since;
-    shift.start(new Date(t.atMs).toISOString(), "geotab");
-  }, [myHos, shift.current, lastShiftEndedMs, userId, shiftAsk]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Where the truck is now (every two minutes while a trip is open), against the stops still ahead.
   const livePos = useTruckReading(truckId, !!openTrip && !!truckId, 120_000);
   const hosVsTrip = useMemo(() => {

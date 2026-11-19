@@ -56,7 +56,7 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
   const lastActivityAt = useMemo(() => {
     if (!store || !userId) return null;
     const times = [
-      ...events.map((e) => e.occurred_at),
+      ...events.filter((e) => e.event_type !== "shift_idle_ask").map((e) => e.occurred_at),
       ...store.list("trip_events", (e) => e.actor_id === userId).map((e) => e.occurred_at),
     ];
     return times.sort().pop() ?? null;
@@ -75,6 +75,8 @@ export function useShift({ store, state, syncNow, userId, companyId, maxHours }:
     current,
     shifts,
     prompt,
+    /** The newest sign of work (shift events except the server's question, and trip steps). */
+    lastActivityAt,
     /** Start the shift now, or at a time the driver confirmed (telematics: when they went on duty). */
     start: useCallback((at?: string, source?: ShiftSource) => write(SHIFT_START, undefined, { at, source }), [write]),
     end: useCallback((payload?: Record<string, unknown>) => write(SHIFT_END, payload), [write]),

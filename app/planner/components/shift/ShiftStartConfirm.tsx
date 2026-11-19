@@ -31,7 +31,7 @@ export function ShiftStartConfirm({ open, reason, atMs, nowMs, skipLabel, onConf
           <div style={{ fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: L.muted }}>Start time</div>
           <div className="dash-num" style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{formatDateTime(at)} ›</div>
         </button>
-        <div style={{ fontSize: 12, color: L.faint, marginBottom: 14 }}>Tap to change it if you started earlier.</div>
+        <div style={{ fontSize: 12, color: L.faint, marginBottom: 14 }}>Tap to change it if you started earlier. Start now skips this.</div>
         {err && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 8 }}>{err}</div>}
         <button type="button" className="dash-press" onClick={() => { const p = startTimeProblem(at, nowMs); if (p) return setErr(p); onConfirm(at); }}
           style={{ width: "100%", padding: "16px 0", border: "none", background: "#fff", color: "#000", fontSize: 15, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", borderRadius: 2 }}>Start shift</button>

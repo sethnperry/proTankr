@@ -64,7 +64,7 @@ export function ShiftBar({ shift, prompt, onEnd, onAckLong, onKeepGoing }: {
       )}
       {shift && prompt === "idle" && (
         <div style={{ ...LOOK.secondary, marginTop: 8, padding: "11px 14px" }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Nothing for a while. Still working?</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Are you still working?</div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button type="button" onClick={onKeepGoing} style={{ ...btn, flex: 1 }}>Still working</button>
             <button type="button" onClick={onEnd} style={{ ...btn, flex: 1 }}>End shift</button>

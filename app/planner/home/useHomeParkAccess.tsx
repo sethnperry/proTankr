@@ -85,7 +85,7 @@ import { SHOP_BLOCK } from "@/lib/trips/shopDown";
 
 import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } from "@/lib/repairs/sendRepair";
 
-import { beginTripShift } from "@/lib/shifts/dutyStatus";
+import { telematicsLive } from "@/lib/shifts/dutyStatus";
 
 import { useOtherCarriers } from "../hooks/useDashboardCards";
 
@@ -221,15 +221,11 @@ export function useHomeParkAccess(p: ReturnType<typeof useHomeRacks>) {
 
   // Begin Trip and an empty move both start the same way: the shift (when telematics doesn't already show one), then the rest.
   const runGates = (proceed: () => void) => {
-    // Telematics connected and on duty: the shift is already running (or starts now at that time), no window.
-    const need = beginTripShift(myHos, Date.now());
-    if (!need.ask) {
-      if (!shift.current) {
-        const t = telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: false, lastEndedMs: lastShiftEndedMs, declinedSince: null });
-        shift.start(t ? new Date(t.atMs).toISOString() : undefined, "geotab");
-      }
-      proceed();
-    } else askShiftStart(need.reason, proceed, { always: true });
+    // A trip is always inside a shift. Running already: go on. Otherwise the shift starts with the trip, and the window lets
+    // the driver move the start earlier (they forgot) or tap Start now. Telematics, when live, only suggests the time.
+    if (shift.current) { proceed(); return; }
+    const t = telematicsLive(myHos, Date.now()) ? telematicsStart({ hos: myHos, nowMs: Date.now(), shiftOpen: false, lastEndedMs: lastShiftEndedMs, declinedSince: null }) : null;
+    askShiftStart("Every trip is part of a shift, so your shift starts with it. If you started earlier, change the time.", proceed, { always: true, atMs: t?.atMs });
   };
   // Empty move: starts at the truck's odometer (confirmed by the driver); the big button then reads Arrive.
   const startEmptyMove = () => {

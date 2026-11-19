@@ -1448,7 +1448,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         terminals={(terminals.terminals ?? []).map((t: any) => ({ value: String(t.terminal_id), label: [t.terminal_name, t.city].filter(Boolean).join(", ") }))}
         products={products.map((x: any) => ({ value: String(x.product_id), label: String(x.display_name || x.product_name || "Product") }))}
         onStart={termWork.start} onStop={termWork.stop} />
-      <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Continue without a shift" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
+      <ShiftStartConfirm open={!!shiftAsk} reason={shiftAsk?.reason ?? ""} atMs={shiftAsk?.atMs ?? Date.now()} nowMs={Date.now()} skipLabel={shiftAsk?.always ? "Start now" : "Not now"} onConfirm={confirmShiftStart} onSkip={skipShiftStart} />
       {endAsk && truckId && companyId && (
         <EquipmentStatusModal open endShift={!endAsk.arrival} onClose={() => { const wasEnd = !endAsk.arrival; setEndAsk(null); if (wasEnd) void releaseEquipment(truckId, trailerId).then(() => { void equipment.fetchCombos?.(); void equipment.loadCurrentEquipment?.(); equipment.clearSelectedEquipment?.(); }); }} companyId={companyId} unitKind="truck" unitId={truckId} unitName={endAsk.name}
           pair={trailerId ? { truckId, trailerId, truckName: endAsk.name, trailerName: (equipment.trailerNameById?.[trailerId] || equipment.currentTrailerName || "") } : null}

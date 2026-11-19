@@ -1,97 +1,112 @@
 // lib/shifts/autoEndServer.ts
 //
-// Server side of autoEnd.ts, run on the five-minute tick. For every driver with an open shift whose tracker shows
-// them OFF duty for 15 minutes: end the shift at that time (source geotab, marked auto), park a load still aboard,
-// park the truck where it stopped as Readyline, and tell the driver. The app opens the end-of-shift catch-up the
-// next time it runs. Service client; never import from the browser.
+// Server side of wrapUp.ts, run on the five-minute tick, for every company (no tracker needed). A driver with an open
+// shift and nothing going on for 30 minutes after their last load (3 hours with a trip still open) gets "Are you still
+// working?" as a push (the app shows the same question on screen). No answer for 15 minutes ends the shift at the
+// moment of the last activity: a load still aboard is parked preloaded where the truck stopped, empty equipment goes to
+// Readyline with no driver linked. Service client; never import from the browser.
 
 import { randomUUID } from "node:crypto";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
-import { driverOwnProviders, hosOwnFirst, providerFor } from "@/lib/telematics/server";
 import { sendPush, type StoredSub } from "@/lib/push/send";
-import { deriveShifts, openShift } from "./shiftLogic";
-import { autoEndAt } from "./autoEnd";
+import { deriveShifts, openShift, SHIFT_END } from "./shiftLogic";
+import { wrapUp } from "./wrapUp";
 import { nearestPlace } from "./catchUp";
 import type { ShiftEventRow } from "@/lib/trips/types";
 import { isOpenDelivery } from "@/lib/trips/staleDelivery";
 
+export const SHIFT_IDLE_ASK = "shift_idle_ask";
 const OPEN = ["draft", "loading", "in_transit", "delivering"];
+const DAYS = 3;
 
-export async function runAutoEndShifts(): Promise<number> {
-  const admin = getServiceSupabase();
-  const { data } = await admin.from("telematics_connections").select("company_id").eq("status", "active");
-  let closed = 0;
-  for (const c of (data ?? []) as { company_id: string }[]) {
-    try { closed += await runCompany(c.company_id); } catch (e) { console.warn("[auto-end] company failed:", (e as Error).message); }
-  }
-  return closed;
-}
-
-async function runCompany(companyId: string): Promise<number> {
+export async function runAutoEndShifts(): Promise<{ asked: number; ended: number }> {
   const admin = getServiceSupabase();
   const nowMs = Date.now(), nowIso = new Date(nowMs).toISOString();
-  const { data: ev } = await admin.from("shift_events").select("*").eq("company_id", companyId).gte("occurred_at", new Date(nowMs - 3 * 86400_000).toISOString()).order("occurred_at").limit(5000);
-  const events = (ev ?? []) as ShiftEventRow[];
-  const users = [...new Set(events.map((e) => e.user_id))];
-  const open: { userId: string; startedAt: string }[] = [];
-  for (const u of users) { const s = openShift(deriveShifts(events, u, nowIso)); if (s) open.push({ userId: u, startedAt: s.startedAt }); }
-  if (!open.length) return 0;
-
-  const p = await providerFor(companyId);
-  if (!p) return 0;
-  const ids = open.map((o) => o.userId);
-  const [dm, vm, settings, locs] = await Promise.all([
-    admin.from("telematics_driver_map").select("provider_user_id, user_id").eq("company_id", companyId).in("user_id", ids),
-    admin.from("telematics_vehicle_map").select("provider_vehicle_id, truck_id").eq("company_id", companyId),
-    admin.from("user_settings").select("user_id, current_truck_id, current_trailer_id").in("user_id", ids),
-    admin.from("delivery_locations").select("location_id, name, lat, lon, place_kinds").eq("company_id", companyId),
-  ]);
-  const provUser = new Map(((dm.data ?? []) as any[]).map((r) => [r.user_id as string, r.provider_user_id as string]));
-  const vehOf = new Map(((vm.data ?? []) as any[]).map((r) => [r.truck_id as string, r.provider_vehicle_id as string]));
-  const held = new Map(((settings.data ?? []) as any[]).map((r) => [r.user_id as string, r]));
-  const places = ((locs.data ?? []) as any[]).map((l) => ({ id: String(l.location_id), name: String(l.name), lat: l.lat != null ? Number(l.lat) : null, lon: l.lon != null ? Number(l.lon) : null, kinds: (l.place_kinds ?? []) as string[] }));
-  const own = await driverOwnProviders(companyId, ids.filter((u) => provUser.has(u)));
-
-  let closed = 0;
-  for (const o of open) {
-    const pu = provUser.get(o.userId);
-    if (!pu) continue;
-    let hos = null;
-    try { hos = await hosOwnFirst(p, own, o.userId, pu); } catch { continue; }
-    const at = autoEndAt({ openStartedAt: o.startedAt, hos, nowMs });
-    if (!at) continue;
-    try { if (await closeShift(companyId, o.userId, o.startedAt, at, held.get(o.userId), vehOf, places, p)) closed++; }
-    catch (e) { console.warn("[auto-end] close failed:", (e as Error).message); }
+  const since = new Date(nowMs - DAYS * 86400_000).toISOString();
+  const { data: ev } = await admin.from("shift_events").select("*").gte("occurred_at", since).order("occurred_at").limit(20000);
+  const all = (ev ?? []) as ShiftEventRow[];
+  const byUser = new Map<string, ShiftEventRow[]>();
+  for (const e of all) { const l = byUser.get(e.user_id) ?? []; l.push(e); byUser.set(e.user_id, l); }
+  const open: { userId: string; companyId: string; startedAt: string; events: ShiftEventRow[] }[] = [];
+  for (const [userId, events] of byUser) {
+    const s = openShift(deriveShifts(events, userId, nowIso));
+    if (s) open.push({ userId, companyId: events[events.length - 1].company_id, startedAt: s.startedAt, events: s.events });
   }
-  return closed;
+  if (!open.length) return { asked: 0, ended: 0 };
+
+  const ids = open.map((o) => o.userId);
+  const [tr, te, mv] = await Promise.all([
+    admin.from("trips").select("trip_id, driver_id").in("driver_id", ids).in("status", OPEN),
+    admin.from("trip_events").select("actor_id, occurred_at").in("actor_id", ids).gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(20000),
+    admin.from("empty_moves").select("driver_id, started_at, ended_at, dispatched").in("driver_id", ids).gte("started_at", since),
+  ]);
+  const hasOpenTrip = new Set(((tr.data ?? []) as any[]).map((t) => t.driver_id as string));
+  const lastTrip = new Map<string, number>();
+  for (const e of (te.data ?? []) as any[]) { const t = Date.parse(e.occurred_at); if (t > (lastTrip.get(e.actor_id) ?? 0)) lastTrip.set(e.actor_id, t); }
+  const lastMove = new Map<string, number>(); const moving = new Set<string>();
+  for (const m of (mv.data ?? []) as any[]) {
+    if (m.dispatched) continue;
+    if (!m.ended_at) moving.add(m.driver_id);
+    const t = Math.max(Date.parse(m.started_at ?? "") || 0, Date.parse(m.ended_at ?? "") || 0);
+    if (t > (lastMove.get(m.driver_id) ?? 0)) lastMove.set(m.driver_id, t);
+  }
+
+  let asked = 0, ended = 0;
+  for (const o of open) {
+    try {
+      const startedMs = Date.parse(o.startedAt);
+      const own = o.events.filter((e) => e.event_type !== SHIFT_IDLE_ASK && e.event_type !== SHIFT_END);
+      const lastShiftEvent = own.reduce((m, e) => Math.max(m, Date.parse(e.occurred_at)), 0);
+      const lastActivityMs = Math.max(lastShiftEvent, lastTrip.get(o.userId) ?? 0, lastMove.get(o.userId) ?? 0) || null;
+      const askedAtMs = o.events.filter((e) => e.event_type === SHIFT_IDLE_ASK).reduce((m, e) => Math.max(m, Date.parse(e.occurred_at)), 0) || null;
+      const d = wrapUp({ nowMs, shiftStartedMs: startedMs, lastActivityMs, askedAtMs, openTrip: hasOpenTrip.has(o.userId), movingEmpty: moving.has(o.userId) });
+      if (d.action === "ask") { if (await ask(o.companyId, o.userId, nowIso)) asked++; }
+      else if (d.action === "end") { if (await closeShift(o.companyId, o.userId, o.startedAt, new Date(d.atMs).toISOString())) ended++; }
+    } catch (e) { console.warn("[auto-end] driver failed:", (e as Error).message); }
+  }
+  return { asked, ended };
 }
 
-async function closeShift(companyId: string, userId: string, startedAt: string, at: string, st: any, vehOf: Map<string, string>, places: ReturnType<typeof Array.prototype.map> & any[], p: NonNullable<Awaited<ReturnType<typeof providerFor>>>): Promise<boolean> {
+async function ask(companyId: string, userId: string, at: string): Promise<boolean> {
   const admin = getServiceSupabase();
-  // The driver's open trip, if any, tells which truck and trailer they had.
+  // The ask event is the claim: a repeated tick sees it and waits for the answer.
+  const ins = await admin.from("shift_events").insert({ event_id: randomUUID(), company_id: companyId, user_id: userId, event_type: SHIFT_IDLE_ASK, occurred_at: at, actor_id: userId, source: "app", payload: { auto: true } });
+  if (ins.error) return false;
+  const { data: subs } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("company_id", companyId).eq("user_id", userId);
+  await sendPush((subs ?? []) as StoredSub[], { title: "Are you still working?", body: "Open the app and tap Still working, or your shift will end in 15 minutes.", url: "/planner/home", tag: `shift-ask-${userId}` });
+  return true;
+}
+
+async function closeShift(companyId: string, userId: string, startedAt: string, at: string): Promise<boolean> {
+  const admin = getServiceSupabase();
   const { data: tr } = await admin.from("trips").select("trip_id, status, truck_id, trailer_id, trip_compartment_loads(disposition), trip_deliveries(arrived_at, left_at, status)").eq("driver_id", userId).in("status", OPEN).order("started_at", { ascending: false }).limit(1);
   const trip = ((tr ?? []) as any[])[0] ?? null;
-  const truckId: string | null = st?.current_truck_id ?? trip?.truck_id ?? null;
-  const trailerId: string | null = st?.current_trailer_id ?? trip?.trailer_id ?? null;
-  const vid = truckId ? vehOf.get(truckId) : undefined;
+  const { data: st } = await admin.from("user_settings").select("current_truck_id, current_trailer_id").eq("user_id", userId).maybeSingle();
+  const truckId: string | null = (st as any)?.current_truck_id ?? trip?.truck_id ?? null;
+  const trailerId: string | null = (st as any)?.current_trailer_id ?? trip?.trailer_id ?? null;
+
+  // Where it is: the latest captured position of the truck (or the trailer when there is no truck).
   let lat: number | null = null, lon: number | null = null, odo: number | null = null;
-  if (vid) {
-    const r = await p.reading(vid, { slim: true }).catch(() => null);
-    lat = r?.lat ?? null; lon = r?.lon ?? null; odo = r?.odometerMi != null ? Math.round(r.odometerMi) : null;
+  const unit = truckId ? { kind: "truck", id: truckId } : trailerId ? { kind: "trailer", id: trailerId } : null;
+  if (unit) {
+    const { data: pos } = await admin.from("equipment_positions").select("lat, lon, odometer").eq("unit_kind", unit.kind).eq("unit_id", unit.id).maybeSingle();
+    const p = pos as { lat: number; lon: number; odometer: number | null } | null;
+    if (p) { lat = p.lat; lon = p.lon; odo = p.odometer != null ? Math.round(Number(p.odometer)) : null; }
   }
+  const { data: locs } = await admin.from("delivery_locations").select("location_id, name, lat, lon, place_kinds").eq("company_id", companyId);
+  const places = ((locs ?? []) as any[]).map((l) => ({ id: String(l.location_id), name: String(l.name), lat: l.lat != null ? Number(l.lat) : null, lon: l.lon != null ? Number(l.lon) : null, kinds: (l.place_kinds ?? []) as string[] }));
   const place = nearestPlace(lat, lon, places as any);
   const label = place?.name ?? null;
 
   // The shift ends first: it is the claim, so a repeated tick finds it closed and does nothing more.
   const ins = await admin.from("shift_events").insert({
-    event_id: randomUUID(), company_id: companyId, user_id: userId, event_type: "shift_end", occurred_at: at, actor_id: userId, source: "geotab",
-    payload: { auto: true, auto_reason: "off_duty_15", truck_id: truckId, trailer_id: trailerId, lat, lon, odometer: odo, place_id: place?.id ?? null, place_text: label, location_source: "geotab", odometer_source: "truck" },
+    event_id: randomUUID(), company_id: companyId, user_id: userId, event_type: SHIFT_END, occurred_at: at, actor_id: userId, source: "app",
+    payload: { auto: true, auto_reason: "no_response", truck_id: truckId, trailer_id: trailerId, lat, lon, odometer: odo, place_id: place?.id ?? null, place_text: label, location_source: "captured", odometer_source: "captured" },
   });
   if (ins.error) return false;
 
-  // A load still aboard is parked where the truck stopped.
-  // A delivery the driver arrived at and never finished is NOT parked: the drop is almost certainly done, the Finish tap is
-  // what's missing. The driver is asked to finish it, and the trip is marked so dispatch can see it.
+  // A load still aboard is parked preloaded where the truck stopped. A delivery arrived at and never finished is not
+  // parked (the Finish tap is what's missing): the driver is asked to finish it and dispatch can see it.
   const aboard = ((trip?.trip_compartment_loads ?? []) as any[]).some((c) => c.disposition === "loaded");
   const midDelivery = !!trip && ((trip.trip_deliveries ?? []) as any[]).some(isOpenDelivery);
   if (trip && midDelivery) {
@@ -101,15 +116,15 @@ async function closeShift(companyId: string, userId: string, startedAt: string, 
     await admin.from("trips").update({ status: "parked", parked_at: at, parked_by: userId, parked_for: "layover", parked_where: label, parked_note: "Parked automatically when the shift ended.", client_updated_at: now }).eq("trip_id", trip.trip_id).in("status", OPEN);
     await admin.from("trip_events").insert({ event_id: randomUUID(), trip_id: trip.trip_id, event_type: "parked", occurred_at: at, actor_id: userId, payload: { auto: true, parked_for: "layover", where: label, from_status: trip.status } });
   }
-  // An empty move still running ends here.
-  // Only a move that has begun ends here; planned (dispatched) ones keep waiting. Filtered in code so this works before the column exists.
-  const { data: openMoves } = await admin.from("empty_moves").select("*").eq("driver_id", userId).is("ended_at", null);
+  // An empty move still running ends here; planned (dispatched) ones keep waiting.
+  const { data: openMoves } = await admin.from("empty_moves").select("move_id, dispatched").eq("driver_id", userId).is("ended_at", null);
   const running = ((openMoves ?? []) as { move_id: string; dispatched?: boolean | null }[]).filter((m) => !m.dispatched).map((m) => m.move_id);
   if (running.length) await admin.from("empty_moves").update({ ended_at: at, end_miles: odo, client_updated_at: new Date().toISOString() }).in("move_id", running);
 
-  // The truck: Readyline / Parked unless its status was already set during this shift.
-  let setStatus = true;
-  if (truckId) {
+  // Equipment: let go of the claim (the pairing stays coupled and free); empty equipment goes to Readyline unless its
+  // status was already set during this shift. A trailer left loaded is the parked trip above, preloaded, where it sits.
+  let setStatus = !aboard;
+  if (truckId && setStatus) {
     const { data: t } = await admin.from("trucks").select("status_updated_at").eq("truck_id", truckId).maybeSingle();
     const su = (t as { status_updated_at?: string | null } | null)?.status_updated_at;
     if (su && Date.parse(su) >= Date.parse(startedAt)) setStatus = false;
@@ -119,9 +134,8 @@ async function closeShift(companyId: string, userId: string, startedAt: string, 
     if (rr.error) console.warn("[auto-end] park failed:", rr.error.message);
   }
 
-  // Tell the driver. They open the app to confirm what the truck did.
   const { data: subs } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("company_id", companyId).eq("user_id", userId);
   const when = new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: process.env.REPORT_TZ || "America/New_York" });
-  await sendPush((subs ?? []) as StoredSub[], { title: midDelivery ? "Finish your delivery" : "Your shift was ended", body: midDelivery ? `We ended your shift at ${when}, but your delivery is still open. Open the app and tap Finish Delivery so it's recorded.` : `We ended your shift at ${when}${label ? ` at ${label}` : ""}. Open the app to confirm your day.`, url: "/planner/home", tag: `auto-end-${userId}` });
+  await sendPush((subs ?? []) as StoredSub[], { title: midDelivery ? "Finish your delivery" : "Your shift was ended", body: midDelivery ? `We ended your shift at ${when}, but your delivery is still open. Open the app and tap Finish Delivery so it's recorded.` : `We ended your shift at ${when}${label ? ` at ${label}` : ""} because we didn't hear back. Open the app to confirm your day.`, url: "/planner/home", tag: `auto-end-${userId}` });
   return true;
 }

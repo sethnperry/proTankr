@@ -271,17 +271,19 @@ export function useHomeBase() {
   // once per status. The driver always confirms the start time. The rules are in lib/shifts/autoStart.ts.
   const [shiftAsk, setShiftAsk] = useState<{ reason: string; atMs: number; source: "app" | "geotab"; then?: () => void; always: boolean; since?: string } | null>(null);
   const shiftKey = (k: string) => `proTankr:u:${userId}:${k}`;
-  const askShiftStart = (reason: string, then: () => void, o?: { always?: boolean }) => {
+  const askShiftStart = (reason: string, then: () => void, o?: { always?: boolean; atMs?: number }) => {
     if (shift.current) { then(); return; }
     let at: number | null = null;
     try { at = Number(localStorage.getItem(shiftKey("shiftSnooze"))) || null; } catch { /* storage blocked */ }
     if (!o?.always && snoozed(at, Date.now())) { then(); return; }
-    setShiftAsk({ reason, atMs: Date.now(), source: "app", then, always: !!o?.always });
+    setShiftAsk({ reason, atMs: o?.atMs ?? Date.now(), source: "app", then, always: !!o?.always });
   };
   const lastShiftEndedMs = useMemo(() => { const e = [...shift.shifts].reverse().find((x) => x.endedAt); return e?.endedAt ? Date.parse(e.endedAt) : null; }, [shift.shifts]);
   const confirmShiftStart = (atMs: number) => { const a = shiftAsk; setShiftAsk(null); shift.start(new Date(atMs).toISOString(), a?.source ?? "app"); a?.then?.(); };
   const skipShiftStart = () => {
     const a = shiftAsk; setShiftAsk(null);
+    // A trip never runs outside a shift: skipping the time window starts the shift now.
+    if (a?.always) shift.start(undefined, "app");
     try {
       if (a?.source === "geotab" && a.since) localStorage.setItem(shiftKey("shiftDeclined"), a.since);
       else if (a && !a.always) localStorage.setItem(shiftKey("shiftSnooze"), String(Date.now()));
@@ -341,7 +343,7 @@ export function useHomeBase() {
     const pl = (ev.payload ?? {}) as { truck_id?: string | null; odometer?: number | null; place_text?: string | null };
     const pl2 = (ev.payload ?? {}) as { truck_id?: string | null; trailer_id?: string | null };
     const t = new Date(s.endedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    setNotice({ text: `Your shift was ended automatically at ${t}${pl.place_text ? ` at ${pl.place_text}` : ""}, when your truck showed off duty. Check your day.`, tripId: null });
+    setNotice({ text: `Your shift was ended automatically at ${t}${pl.place_text ? ` at ${pl.place_text}` : ""} because we didn't hear back. Check your day.`, tripId: null });
     if (pl2.truck_id) rememberLastEquipment(userId, { truckId: pl2.truck_id, trailerId: pl2.trailer_id ?? null }); // the truck the server parked: Begin Trip offers it again
     if (pl.truck_id) void catchUp.begin({ truckId: pl.truck_id, from: s.startedAt, to: s.endedAt, endOdo: pl.odometer ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
