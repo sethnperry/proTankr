@@ -532,6 +532,10 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
   // Plan Review's back arrow (before Begin Loading) asks whether to keep the arrival time or undo it.
   React.useEffect(() => { const h = () => setLeaveArrival(true); window.addEventListener("protankr:leaveArrival", h); return () => window.removeEventListener("protankr:leaveArrival", h); }, []);
   const [standbyOpen, setStandbyOpen] = React.useState(false);
+  // Planned moves count as trips next to dispatched loads.
+  const plannedMoves = userId ? dispatchedMovesFor(emptyMoves.moves, userId) : [];
+  const placeName = (id: string | null, text: string | null) => { const l = id ? locations.find((x) => x.location_id === id) : null; return l ? locationTitle(l) : text || "—"; };
+  const trailerNameOf = (id: string | null) => (id ? ((equipment as { trailerNameById?: Record<string, string> }).trailerNameById?.[id] ?? null) : null);
   return (
     <DashLookProvider value={L}>
     <DashStyles />
@@ -595,7 +599,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
       <div style={{ marginBottom: 14 }}>
       <GaugePanel square top={0} cells={[
           { label: "Expiration", value: String(expTotal), color: expWorst ? EXPIRY_COLOR[expWorst] : LOOK.muted, onClick: () => setExpSheetOpen(true) },
-          { label: "Loads", value: String(dispatchedList.length), color: dispatchedList.length > 0 ? "#93c5fd" : LOOK.muted,
+          { label: "Trips", value: String(dispatchedList.length + plannedMoves.length), color: dispatchedList.length + plannedMoves.length > 0 ? "#93c5fd" : LOOK.muted,
             onClick: () => setLoadsSheetOpen(true) },
           { label: "To Rack", value: String(rackCount),
             color: countColor(rackCount), onClick: () => setRackSheetOpen(true) },
@@ -1208,7 +1212,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           To Rack gauge. */}
 
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
-      <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} onSwap={swapDispatched} onClose={() => setLoadsSheetOpen(false)}
+      <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} moves={plannedMoves.map((m) => ({ id: m.move_id, text: stepText(m, { place: placeName, trailer: trailerNameOf }), when: m.planned_start_at ? new Date(m.planned_start_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }) : null }))} onSwap={swapDispatched} onClose={() => setLoadsSheetOpen(false)}
         onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); void askEquipment(() => beginDispatchedLoad(id)); }} />
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
@@ -1416,6 +1420,10 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", lineHeight: 1.5, margin: "8px 0 14px" }}>
           The truck is going somewhere with no load. You'll confirm the odometer, then the big button reads Arrive. Tap it when you get there and update the equipment status.
         </div>
+        <button type="button" onClick={() => { setMoveConfirm(false); shell.setEquipOpen(true); }}
+          style={{ width: "100%", textAlign: "left", padding: "13px 14px", marginBottom: 12, fontSize: 15, fontWeight: 700, background: "#0f0f10", color: "#fff", border: "1px solid rgba(255,255,255,0.14)", cursor: "pointer" }}>
+          {equipment.currentTruckName ? `Truck ${equipment.currentTruckName} · ${equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Bobtail"}` : "Pick equipment"} ›
+        </button>
         <button type="button" style={{ width: "100%", padding: "16px 0", fontSize: 15, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", border: "none", background: "#fff", color: "#000", cursor: "pointer" }}
           onClick={() => { setMoveConfirm(false); startEmptyMove(); }}>Start empty move</button>
         <button type="button" style={{ width: "100%", padding: "14px 0", marginTop: 10, fontSize: 14, fontWeight: 800, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "#fff", cursor: "pointer" }}

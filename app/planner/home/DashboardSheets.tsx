@@ -78,11 +78,17 @@ export function ExpirationsSheet({ open, groups, onClose, title = "Expirations",
   );
 }
 
-export function LoadsSheet({ open, items, onClose, onRun, onSwap }: { open: boolean; items: DispatchedItem[]; onClose: () => void; onRun?: (tripId: string) => void; onSwap?: (a: string, b: string) => void }) {
+export function LoadsSheet({ open, items, moves = [], onClose, onRun, onSwap }: { open: boolean; items: DispatchedItem[]; moves?: { id: string; text: string; when: string | null }[]; onClose: () => void; onRun?: (tripId: string) => void; onSwap?: (a: string, b: string) => void }) {
   return (
-    <FullscreenModal open={open} title={`Loads (${items.length})`} onClose={onClose} footer={null}>
-      {items.length === 0 && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)" }}>No loads yet. Tap + Add load on the dashboard.</div>}
+    <FullscreenModal open={open} title={`Trips (${items.length + moves.length})`} onClose={onClose} footer={null}>
+      {items.length + moves.length === 0 && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)" }}>Nothing planned yet. Dispatch sends loads and moves here.</div>}
       <DispatchedCard items={items} onRun={onRun} onSwap={onSwap} />
+      {moves.map((m) => (
+        <div key={m.id} style={{ border: "1px solid rgba(255,255,255,0.14)", padding: "12px 14px", marginTop: 8, background: "#121213" }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{m.text}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>Empty move{m.when ? ` · ${m.when}` : ""}. Start it from the big button.</div>
+        </div>
+      ))}
     </FullscreenModal>
   );
 }

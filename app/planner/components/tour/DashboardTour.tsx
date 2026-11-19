@@ -28,8 +28,8 @@ const STEPS: Step[] = [
     demo: <DemoChips hot="expiration" />,
   },
   {
-    title: "Loads chip",
-    what: "How many loads dispatch has sent you that you haven't begun. Tap it to see them and pick which one to run first, even out of order.",
+    title: "Trips chip",
+    what: "How many loads and moves dispatch has sent you that you haven't begun. Tap it to see them and pick which load to run first, even out of order.",
     why: "You always know what is coming next, and you choose the order that fits your clock and your location.",
     demo: <DemoChips hot="loads" />,
   },

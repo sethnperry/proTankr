@@ -26,7 +26,7 @@ export function DemoChips({ hot }: { hot: Hot }) {
   return (
     <GaugePanel top={0} cells={[
       { label: "Expiration", value: "2", color: dim("expiration") ?? "#fb923c" },
-      { label: "Loads", value: "1", color: dim("loads") ?? "#93c5fd" },
+      { label: "Trips", value: "1", color: dim("loads") ?? "#93c5fd" },
       { label: "To Rack", value: "2", unit: "trks", color: dim("rack") ?? "#f87171" },
       { label: "To Drop", value: "2", unit: "loads", color: dim("drop") ?? "#f87171" },
     ]} />
