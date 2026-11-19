@@ -16,6 +16,8 @@ import { cancelReasonsText } from "@/lib/trips/cancelReasons";
 import { ptdCode } from "@/lib/trips/code39";
 import { useTrailerHeaderData } from "../TrailerViews";
 import { PlanLine, type PlanLineComp } from "../PlanLine";
+import { dispatchedPlanFor, type DispatchedPlan } from "./dispatchedPlan";
+import { getTripPlan } from "@/lib/trips/tripPlan";
 import { productColorFor } from "../../utils/productColor";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import { useCompanyRoster } from "@/app/planner/hooks/useCompanyRoster";
@@ -66,6 +68,12 @@ async function fetchChildren(ids: string[], isLive: () => boolean, onPart: (p: P
     if (!isLive()) return;
     onPart({ orders: (o.data ?? []) as TripOrderRow[], pickups: (pk.data ?? []) as TripPickupRow[], deliveries: (dl.data ?? []) as TripDeliveryRow[], comps: (cl.data ?? []) as TripCompartmentLoadRow[] });
   }
+}
+
+/** A dispatched, not-yet-begun load: its plan if known (never "Bobtail": the trailer just isn't picked yet). */
+function DispatchedPlanLine({ plan }: { plan: DispatchedPlan }) {
+  if (plan.comps.length > 0) return <PlanLine letter={plan.letter ?? ""} detail={false} comps={plan.comps} />;
+  return <span style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>{plan.word}</span>;
 }
 
 /** An empty move (bobtail, empty return, reposition) as a two-line card in the trips list. */
@@ -425,6 +433,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
                 <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                   {trip.trailer_id
                     ? <PlanLine letter="" detail={false} comps={codesFor(trip.trailer_id, loadedBy, CODE_STATES.has(trailerStateFor(ts, trip.trailer_id)), residueBy)} />
+                    : trip.status === "dispatched" ? <DispatchedPlanLine plan={dispatchedPlanFor(bundle.pickups.filter((k) => k.trip_id === trip.trip_id), !company ? getTripPlan(userId, trip.trip_id) : null, catalog.data as never, productColorFor)} />
                     : <span style={{ fontSize: 14, fontWeight: 800, color: "#60a5fa" }}>Bobtail</span>}
                 </span>
                 {trip.trailer_id && <span style={{ flexShrink: 0, fontSize: 12, color: TRAILER_COLOR[trailerStateFor(ts, trip.trailer_id)] }}>{trailerStateFor(ts, trip.trailer_id)}</span>}
