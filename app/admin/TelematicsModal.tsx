@@ -23,7 +23,7 @@ const link: React.CSSProperties = { border: "none", background: "transparent", c
 
 type Summary = {
   connected: boolean;
-  database_name?: string; user_name?: string; status?: string; last_error?: string | null; last_ok_at?: string | null;
+  database_name?: string; user_name?: string; status?: string; enabled?: boolean; last_error?: string | null; last_ok_at?: string | null;
   matched?: { vehicleId: string; vehicleName: string | null; truckId: string; truckName: string; by: string }[];
   unmatchedTrucks?: { truckId: string; truckName: string }[];
   unmatchedVehicles?: { id: string; name: string; vin?: string | null; plate?: string | null; group?: string; groups?: string[] }[];
@@ -103,6 +103,11 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
     if (!r.ok) return setErr(r.data?.error ?? "Couldn't save.");
     setSum(r.data);
   });
+  const setEnabled = (enabled: boolean) => run(async () => {
+    const r = await call("POST", companyId, { enabled });
+    if (!r.ok) return setErr(r.data?.error ?? "Couldn't change it.");
+    setSum(r.data);
+  });
   const disconnect = () => run(async () => {
     if (!window.confirm("Disconnect Geotab? Odometer and position stop filling in.")) return;
     await call("DELETE", companyId);
@@ -141,6 +146,23 @@ export default function TelematicsModal({ open, onClose, companyId }: { open: bo
               {sum.last_ok_at ? ` · last reading ${new Date(sum.last_ok_at).toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
             </div>
             {sum.last_error && <div style={{ fontSize: 13, color: "#fbbf24", marginTop: 6 }}>Last problem: {sum.last_error}</div>}
+          </div>
+
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>Use telematics</div>
+                <div style={{ fontSize: 12, color: muted, marginTop: 3, lineHeight: 1.5 }}>
+                  {sum.enabled === false
+                    ? "Off. Nothing reads Geotab: no hours, odometer, fuel level, engine hours, IFTA state miles or alerts. Position comes from the drivers' phones. The connection and vehicle links are kept."
+                    : "On. Hours, odometer, fuel level, engine hours and IFTA state miles come from Geotab. Turn it off to stop all of it without disconnecting."}
+                </div>
+              </div>
+              <button type="button" role="switch" aria-checked={sum.enabled !== false} disabled={busy} aria-busy={busy} onClick={() => void setEnabled(sum.enabled === false)}
+                style={{ ...btn, flex: "0 0 auto", minWidth: 64, background: sum.enabled === false ? "transparent" : "#fff", color: sum.enabled === false ? "#fff" : "#000", border: "1px solid rgba(255,255,255,0.4)" }}>
+                {sum.enabled === false ? "Off" : "On"}
+              </button>
+            </div>
           </div>
 
           <GeotabImport vehicles={sum.unmatchedVehicles ?? []} trailers={(sum.unmatchedTrailers ?? []) as any} linkedTrailers={sum.linkedTrailers ?? []} linkedTrucks={sum.matched?.length ?? 0} add={addBatch} syncLinked={syncLinked} note={note} />

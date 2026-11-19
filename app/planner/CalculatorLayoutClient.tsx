@@ -18,6 +18,7 @@
 // metadata exports to live in a server component -- this client component
 // holds all the actual interactive shell logic.
 
+import { useTelematicsSwitch } from "@/lib/telematics/useTelematicsSwitch";
 import { capturePosition, flushCaptures } from "@/lib/position/capturePosition";
 import { useKeepAwake } from "@/lib/pwa/keepAwake";
 import PlannerHost from "./PlannerHost";
@@ -267,6 +268,7 @@ function ShellChrome({ children }: { children: React.ReactNode }) {
   // consumers elsewhere (page.tsx, PlannerControls.tsx), so the initial
   // render never mismatches between server and client.
   const isLandscape = useIsLandscape();
+  useTelematicsSwitch(shell.companyId || null); // one answer for every Geotab poll: off or not connected stops them all
   useKeepAwake(); // the screen stays on while the app is open, until the driver puts it to sleep
   const terminalId = shell.location.selectedTerminalId ? String(shell.location.selectedTerminalId) : null;
   const outageBanner = useActiveOutageBanner(terminalId, shell.effectiveUserId || null, shell.plannedProductIds);

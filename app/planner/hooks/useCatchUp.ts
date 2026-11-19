@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { tfetch } from "@/lib/telematics/switch";
 import type { TripStore, TripStoreState } from "@/lib/trips/tripStore";
 import { newMove } from "@/lib/moves/emptyMoves";
 import { kindsOf, type DeliveryLocation } from "@/lib/trips/deliveryLocations";
@@ -34,7 +35,7 @@ export function useCatchUp(o: { store: TripStore | null; state: TripStoreState; 
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      const r = token ? await fetch(`/api/telematics/shift-recap?truckId=${encodeURIComponent(win.truckId)}&from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }) : null;
+      const r = token ? await tfetch(`/api/telematics/shift-recap?truckId=${encodeURIComponent(win.truckId)}&from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }) : null;
       const recap = r && r.ok ? ((await r.json()) as Recap) : null;
       if (!recap || !recap.connected) { if (key) localStorage.removeItem(key); then?.(); return; }
       // What the app already knows: whole trips, empty moves, fuel stops.

@@ -199,7 +199,7 @@ async function handle(req: NextRequest) {
   try { await runWeeklyRecaps(); } catch (e) { console.warn("[cron] weekly recap failed:", (e as Error).message); }
   let abandoned: unknown = null;
   try { abandoned = await runAbandonedTrips(); } catch (e) { console.warn("[cron] abandoned trips failed:", (e as Error).message); }
-  const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active");
+  const { data } = await getServiceSupabase().from("telematics_connections").select("company_id").eq("status", "active").eq("enabled", true);
   const out: Record<string, { sent: number; drivers: number } | string> = {};
   for (const c of (data ?? []) as { company_id: string }[]) {
     try { out[c.company_id] = await runCompany(c.company_id); } catch (e) { out[c.company_id] = (e as Error).message; }

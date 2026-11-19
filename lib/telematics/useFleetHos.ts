@@ -5,6 +5,7 @@
 // every three minutes while `enabled` and the tab is visible; stops if the
 // company has no connection.
 
+import { tfetch } from "./switch";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { HosAvailability } from "./types";
@@ -21,7 +22,7 @@ export function useFleetHos(companyId: string | null, enabled: boolean, nonce = 
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;
           if (!token) return;
-          const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}${nonce > 0 ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+          const r = await tfetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}${nonce > 0 ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
           if (!r.ok) throw new Error("telematics answered " + r.status); // a failed answer is not "no connection": keep the last values and ask again
           const j = await r.json();
           if (off) return;

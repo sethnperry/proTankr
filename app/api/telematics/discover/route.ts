@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     const { data: m } = await admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", companyId).eq("truck_id", truckId).maybeSingle();
     const vid = (m as { provider_vehicle_id?: string } | null)?.provider_vehicle_id;
     if (!vid) return NextResponse.json({ error: "This truck isn't linked to a vehicle yet." }, { status: 404 });
-    const p = await providerFor(companyId);
+    const p = await providerFor(companyId, { ignoreSwitch: true });
     if (!p) return NextResponse.json({ error: "No active telematics connection." }, { status: 404 });
     if (req.nextUrl.searchParams.get("mode") === "shipments") {
       const days = Math.min(30, Math.max(1, Number(req.nextUrl.searchParams.get("days")) || 14));

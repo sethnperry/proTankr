@@ -5,6 +5,7 @@
 // every two minutes while `enabled` and the tab is visible. Null when there is
 // no telematics link, no matching Geotab driver, or HOS isn't on for them.
 
+import { tfetch } from "./switch";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { HosAvailability } from "./types";
@@ -27,7 +28,7 @@ export function useMyHos(companyId: string | null, enabled: boolean): HosAvailab
           if (!token) return;
           // First look each time the dashboard opens: link this driver to Geotab if they match.
           if (!linked) { linked = true; await linkMeToTelematics(companyId); }
-          const r = await fetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}&self=1&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "")}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+          const r = await tfetch(`/api/telematics/hos?companyId=${encodeURIComponent(companyId)}&self=1&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "")}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
           if (!r.ok) {
             // A failed answer (Geotab busy, a server hiccup) is not "no telematics": keep the last
             // reading and ask again, instead of going quiet until the app is reopened.

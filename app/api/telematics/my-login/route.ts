@@ -6,6 +6,7 @@
 //      the driver's provider user to this member
 // DELETE {companyId} -> forget it (hours fall back to the company login)
 
+import { connectionOn } from "@/lib/telematics/switch";
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { geotabProvider } from "@/lib/telematics/geotab";
@@ -29,12 +30,13 @@ export async function GET(req: NextRequest) {
   if ("err" in g) return g.err;
   const admin = getServiceSupabase();
   const [conn, mine, prof] = await Promise.all([
-    admin.from("telematics_connections").select("database_name, status").eq("company_id", g.companyId).maybeSingle(),
+    admin.from("telematics_connections").select("database_name, status, enabled").eq("company_id", g.companyId).maybeSingle(),
     admin.from("telematics_driver_credentials").select("user_name, status, last_error").eq("company_id", g.companyId).eq("user_id", g.uid).maybeSingle(),
     admin.from("profiles").select("employee_number").eq("user_id", g.uid).maybeSingle(),
   ]);
-  const c = conn.data as { database_name: string; status: string } | null;
-  if (!c || c.status !== "active") return NextResponse.json({ companyConnected: false });
+  const c = conn.data as { database_name: string; status: string; enabled?: boolean | null } | null;
+  // Switched off counts as not connected: no one is asked to set up their own login for hours.
+  if (!connectionOn(c)) return NextResponse.json({ companyConnected: false });
   const m = mine.data as { user_name: string; status: string; last_error: string | null } | null;
   return NextResponse.json({
     companyConnected: true, database: c.database_name,

@@ -30,7 +30,7 @@ async function handle(req: NextRequest) {
   const backfill = Math.min(45, Math.max(0, Number(req.nextUrl.searchParams.get("backfillDays") ?? 0) || 0));
   const started = Date.now();
   const admin = getServiceSupabase();
-  const { data: conns } = await admin.from("telematics_connections").select("company_id").eq("status", "active");
+  const { data: conns } = await admin.from("telematics_connections").select("company_id").eq("status", "active").eq("enabled", true);
   const out: Record<string, number | string> = {};
   const yesterday = Math.floor(Date.now() / DAY) * DAY - DAY; // start of yesterday (UTC)
 

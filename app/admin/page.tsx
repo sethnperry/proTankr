@@ -1,5 +1,6 @@
 "use client";
 
+import { useTelematicsSwitch } from "@/lib/telematics/useTelematicsSwitch";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { InviteNameField } from "@/lib/ui/driver/InviteNameField";
@@ -1247,6 +1248,7 @@ type AttentionItem = {
 
 export default function AdminPage() {
   const [companyId,     setCompanyId]     = useState<string | null>(null);
+  useTelematicsSwitch(companyId);
   const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [myRole,        setMyRole]        = useState<string>("");

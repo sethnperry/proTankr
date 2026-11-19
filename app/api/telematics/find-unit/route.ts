@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   if (!isCompanyAdmin(await companyRole(uid, companyId))) return NextResponse.json({ error: "Admins only." }, { status: 403 });
   if (q.length < 2) return NextResponse.json({ connected: true, units: [] });
   try {
-    const p = await providerFor(companyId);
+    const p = await providerFor(companyId, { ignoreSwitch: true });
     if (!p) return NextResponse.json({ connected: false, units: [] });
     const [rawVehicles, groups, provTrailers] = await Promise.all([p.listVehicles(), p.listGroups().catch(() => []), p.listTrailers().catch(() => [])]);
     const devices = bestPerName(importableVehicles(rawVehicles));

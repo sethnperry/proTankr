@@ -5,6 +5,7 @@
 // connection. Fetches each time `active` turns on. Returns null when there is
 // no connection, no match or the provider is down, so callers just keep typing.
 
+import { tfetch } from "./switch";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
@@ -23,7 +24,7 @@ export async function fetchTruckReadingResult(truckId: string | null, o?: { slim
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return { reading: null, failed: false };
-    const r = await fetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}${o?.slim ? "&slim=1" : ""}${o?.fresh ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const r = await tfetch(`/api/telematics/vehicle?truckId=${encodeURIComponent(truckId)}${o?.slim ? "&slim=1" : ""}${o?.fresh ? "&fresh=1" : ""}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
     if (!r.ok) return { reading: null, failed: true };
     const j = await r.json();
     return { reading: j?.connected ? (j as TruckReading) : null, failed: false };
@@ -84,7 +85,7 @@ export async function fetchTruckShipments(truckId: string | null, sinceIso: stri
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return [];
-    const r = await fetch(`/api/telematics/shipments?truckId=${encodeURIComponent(truckId)}&since=${encodeURIComponent(sinceIso)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: ctl.signal });
+    const r = await tfetch(`/api/telematics/shipments?truckId=${encodeURIComponent(truckId)}&since=${encodeURIComponent(sinceIso)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: ctl.signal });
     if (!r.ok) return [];
     const j = await r.json();
     return j?.connected ? (j.shipments ?? []) : [];

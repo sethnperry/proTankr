@@ -68,7 +68,12 @@ phone GPS replaces them), and IFTA state miles. Everything else is typed or alre
    roster. The only Geotab surface is the **Track in Geotab** link (`/api/telematics/geotab-link`, reads our own tables, no Geotab call).
    Removed: Update from Geotab, Geotab driver/vehicle/trailer search, add-from-search, the `track-update`, `drivers` and `add-vehicle`
    routes. **Still on Geotab:** the odometer/fuel/hours readings and the import tool.
-4. **One company setting**, `telematics_enabled`, read by `providerFor` and every client hook, with a test pass over a
+4. **Done 2026-11-27 (column is `telematics_connections.enabled`, migration `20261203000000`, applied):** Company Dashboard → Telematics → *Use telematics* On/Off.
+   Server: `providerFor` (and the driver/own-login providers, the hos-alerts and IFTA crons, `my-login`) return nothing when off; the admin tools
+   (connect, import, discover, find a unit) pass `ignoreSwitch`. Browser: `useTelematicsSwitch` sets one flag from `/api/telematics/status`, and
+   `tfetch` (`lib/telematics/switch.ts`) makes no network call and answers `{connected:false}` when off or not connected, so the hours, positions,
+   fleet, engine-hours, truck-reading, shipments, status and shift-recap polls all stop at the source. The connection and vehicle links are kept.
+   Original note: **One company setting**, `telematics_enabled`, read by `providerFor` and every client hook, with a test pass over a
    company that has it off. Keep Hours, Odometer prefill and IFTA behind it as "supplements".
 5. **Track in Geotab** button in the Track modal (deep link to the unit), the only Geotab surface left there.
 

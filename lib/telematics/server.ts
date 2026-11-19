@@ -8,13 +8,19 @@ import { decryptSecret } from "./crypto";
 import { geotabProvider } from "./geotab";
 import { dbStore } from "./cacheStore";
 import type { TelematicsProvider } from "./types";
+import { connectionOn } from "./switch";
 import { matchDrivers, type Member } from "./matchDrivers";
 
-export async function providerFor(companyId: string): Promise<TelematicsProvider | null> {
+/**
+ * The company's tracker connection, or null when there is none OR the company has switched telematics off (see
+ * switch.ts). Every server read of the tracker goes through this, so the switch stops them all at the source. The admin
+ * tools that manage the connection (import, discover, find a unit) pass `{ ignoreSwitch: true }`.
+ */
+export async function providerFor(companyId: string, o?: { ignoreSwitch?: boolean }): Promise<TelematicsProvider | null> {
   const { data } = await getServiceSupabase()
-    .from("telematics_connections").select("database_name, user_name, credentials_enc, status").eq("company_id", companyId).maybeSingle();
-  const c = data as { database_name: string; user_name: string; credentials_enc: string; status: string } | null;
-  if (!c || c.status !== "active") return null;
+    .from("telematics_connections").select("database_name, user_name, credentials_enc, status, enabled").eq("company_id", companyId).maybeSingle();
+  const c = data as { database_name: string; user_name: string; credentials_enc: string; status: string; enabled?: boolean | null } | null;
+  if (!c || !(o?.ignoreSwitch ? c.status === "active" : connectionOn(c))) return null;
   return geotabProvider({ database: c.database_name, userName: c.user_name, password: decryptSecret(c.credentials_enc) }, fetch, dbStore(companyId));
 }
 
@@ -24,9 +30,9 @@ export async function providerForDriver(companyId: string, userId: string): Prom
   const { data } = await admin.from("telematics_driver_credentials").select("user_name, credentials_enc, status").eq("company_id", companyId).eq("user_id", userId).maybeSingle();
   const d = data as { user_name: string; credentials_enc: string; status: string } | null;
   if (d && d.status === "active") {
-    const { data: c } = await admin.from("telematics_connections").select("database_name, status").eq("company_id", companyId).maybeSingle();
-    const conn = c as { database_name: string; status: string } | null;
-    if (conn && conn.status === "active") return geotabProvider({ database: conn.database_name, userName: d.user_name, password: decryptSecret(d.credentials_enc) }, fetch, dbStore(companyId));
+    const { data: c } = await admin.from("telematics_connections").select("database_name, status, enabled").eq("company_id", companyId).maybeSingle();
+    const conn = c as { database_name: string; status: string; enabled?: boolean | null } | null;
+    if (conn && connectionOn(conn)) return geotabProvider({ database: conn.database_name, userName: d.user_name, password: decryptSecret(d.credentials_enc) }, fetch, dbStore(companyId));
   }
   return providerFor(companyId);
 }
@@ -38,10 +44,10 @@ export async function driverOwnProviders(companyId: string, userIds: string[]): 
   const admin = getServiceSupabase();
   const [cr, cn] = await Promise.all([
     admin.from("telematics_driver_credentials").select("user_id, user_name, credentials_enc, status").eq("company_id", companyId).in("user_id", userIds),
-    admin.from("telematics_connections").select("database_name, status").eq("company_id", companyId).maybeSingle(),
+    admin.from("telematics_connections").select("database_name, status, enabled").eq("company_id", companyId).maybeSingle(),
   ]);
-  const conn = cn.data as { database_name: string; status: string } | null;
-  if (!conn || conn.status !== "active") return out;
+  const conn = cn.data as { database_name: string; status: string; enabled?: boolean | null } | null;
+  if (!connectionOn(conn)) return out;
   for (const r of (cr.data ?? []) as { user_id: string; user_name: string; credentials_enc: string; status: string }[]) {
     if (r.status !== "active") continue;
     try { out.set(r.user_id, geotabProvider({ database: conn.database_name, userName: r.user_name, password: decryptSecret(r.credentials_enc) }, fetch, dbStore(companyId))); } catch { /* falls back to the company login */ }

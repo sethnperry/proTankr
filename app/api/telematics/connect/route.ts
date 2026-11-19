@@ -4,6 +4,7 @@
 // POST {companyId, database, userName, password} -> verify the sign-in, store it
 //      encrypted, match vehicles to trucks (admin)
 // POST {companyId, map: [{vehicleId, truckId|null}]} -> manual matches (admin)
+// POST {companyId, enabled: boolean} -> the telematics switch (admin)
 // DELETE {companyId} -> disconnect (admin)
 
 import { NextRequest, NextResponse } from "next/server";
@@ -37,7 +38,7 @@ async function trucksOf(companyId: string): Promise<TruckLite[]> {
 
 async function summary(companyId: string) {
   const admin = getServiceSupabase();
-  const { data: conn } = await admin.from("telematics_connections").select("provider, database_name, user_name, status, last_error, last_ok_at").eq("company_id", companyId).maybeSingle();
+  const { data: conn } = await admin.from("telematics_connections").select("provider, database_name, user_name, status, last_error, last_ok_at, enabled").eq("company_id", companyId).maybeSingle();
   if (!conn) return { connected: false };
   const [trucks, map] = await Promise.all([
     trucksOf(companyId),
@@ -49,7 +50,7 @@ async function summary(companyId: string) {
   let rawVehicles: import("@/lib/telematics/types").ProviderVehicle[] = [];
   let provGroups: import("@/lib/telematics/types").ProviderGroup[] = [];
   try {
-    const p = await providerFor(companyId);
+    const p = await providerFor(companyId, { ignoreSwitch: true });
     if (p) {
       rawVehicles = await p.listVehicles();
       provGroups = await p.listGroups().catch(() => []);
@@ -62,7 +63,7 @@ async function summary(companyId: string) {
   const trows = (tm.data ?? []) as { provider_trailer_id: string; trailer_id: string }[];
   const { data: ourTr } = await admin.from("trailers").select("trailer_id, trailer_name").eq("company_id", companyId).eq("active", true);
   let provTr: { id: string; name: string; groupIds?: string[]; group?: string; groups?: string[] }[] = [];
-  try { const p = await providerFor(companyId); provTr = p ? (await p.listTrailers()).map((t) => ({ ...t, group: pathsFor(t.groupIds, provGroups), groups: groupNames(t.groupIds, provGroups) })) : []; } catch { /* trailer tracking may not be on */ }
+  try { const p = await providerFor(companyId, { ignoreSwitch: true }); provTr = p ? (await p.listTrailers()).map((t) => ({ ...t, group: pathsFor(t.groupIds, provGroups), groups: groupNames(t.groupIds, provGroups) })) : []; } catch { /* trailer tracking may not be on */ }
   const tUsed = new Set(trows.map((r) => r.trailer_id)), tvUsed = new Set(trows.map((r) => r.provider_trailer_id));
   // A trailer's VIN and plate live on the same-named Device in the "Trailer" group.
   const devByName = new Map<string, { vin: string | null; plate: string | null }>();
@@ -78,7 +79,7 @@ async function summary(companyId: string) {
   let drivers: { id: string; name: string }[] = [];
   let members: { user_id: string; display_name: string | null }[] = [];
   try {
-    const p = await providerFor(companyId);
+    const p = await providerFor(companyId, { ignoreSwitch: true });
     drivers = p ? (await p.listDrivers()).map((d) => ({ id: d.id, name: [d.firstName, d.lastName].filter(Boolean).join(" ") || d.name })) : [];
     members = (await rosterMembers(companyId)).map((m) => ({ user_id: m.user_id, display_name: m.display_name }));
   } catch { /* hours of service just shows no drivers */ }
@@ -116,6 +117,13 @@ export async function POST(req: NextRequest) {
   if ("err" in g) return g.err;
   const admin = getServiceSupabase();
 
+  // The company switch: off stops every read of the tracker (server and phones) without disconnecting.
+  if (typeof body.enabled === "boolean") {
+    const { error } = await admin.from("telematics_connections").update({ enabled: body.enabled, updated_at: new Date().toISOString() }).eq("company_id", g.companyId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(await summary(g.companyId));
+  }
+
   if (Array.isArray(body.map)) {
     for (const m of body.map as { vehicleId: string; vehicleName?: string; truckId: string | null }[]) {
       if (!m.vehicleId) continue;
@@ -145,7 +153,7 @@ export async function POST(req: NextRequest) {
   // Bring Geotab equipment in: new units are created, units we already have (same VIN or name) are
   // linked and updated per the chosen fields and mode. syncLinked re-applies that to units already linked.
   if (Array.isArray(body.importVehicles) || Array.isArray(body.importTrailers) || body.syncLinked === true) {
-    const p = await providerFor(g.companyId);
+    const p = await providerFor(g.companyId, { ignoreSwitch: true });
     if (!p) return NextResponse.json({ error: "Geotab isn't connected." }, { status: 400 });
     const o = parseOpts(body.opts);
     const lower = (x: string) => x.trim().toLowerCase();

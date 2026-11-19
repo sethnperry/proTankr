@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
   if (!r.role && !r.superAdmin) return NextResponse.json({ error: "Not in this company." }, { status: 403 });
   try {
     const admin = getServiceSupabase();
-    const { data: c } = await admin.from("telematics_connections").select("provider, status").eq("company_id", companyId).maybeSingle();
-    const conn = c as { provider?: string; status?: string } | null;
+    const { data: c } = await admin.from("telematics_connections").select("provider, status, enabled").eq("company_id", companyId).maybeSingle();
+    const conn = c as { provider?: string; status?: string; enabled?: boolean | null } | null;
     if (!conn || conn.status !== "active") return NextResponse.json({ connected: false });
     const provider = conn.provider ?? "geotab";
     let linked = false;
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       const { data: m } = await admin.from("telematics_vehicle_map").select("provider_vehicle_id").eq("company_id", companyId).eq("truck_id", truckId).maybeSingle();
       linked = !!m;
     }
-    return NextResponse.json({ connected: true, provider, providerName: NAMES[provider] ?? provider, linked, isAdmin: isCompanyAdmin(r) });
+    return NextResponse.json({ connected: true, enabled: conn.enabled !== false, provider, providerName: NAMES[provider] ?? provider, linked, isAdmin: isCompanyAdmin(r) });
   } catch {
     return NextResponse.json({ connected: false });
   }

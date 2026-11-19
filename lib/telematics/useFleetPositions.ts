@@ -5,6 +5,7 @@
 // Polls once a minute while `enabled` and the tab is visible. Stops polling if
 // the company has no connection.
 
+import { tfetch } from "./switch";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { LivePos } from "./progress";
@@ -21,7 +22,7 @@ export function useFleetPositions(companyId: string | null, enabled: boolean): M
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return;
-        const r = await fetch(`/api/telematics/fleet?companyId=${encodeURIComponent(companyId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+        const r = await tfetch(`/api/telematics/fleet?companyId=${encodeURIComponent(companyId)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         if (!r.ok) throw new Error("telematics answered " + r.status); // a failed answer is not "no connection": keep the last values and ask again
         const j = await r.json();
         if (off) return;
