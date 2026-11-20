@@ -4,22 +4,28 @@
 // shift and nothing going on for 30 minutes after their last load (3 hours with a trip still open) gets "Are you still
 // working?" as a push (the app shows the same question on screen). No answer for 15 minutes ends the shift at the
 // moment of the last activity: a load still aboard is parked preloaded where the truck stopped, empty equipment goes to
-// Readyline with no driver linked. Service client; never import from the browser.
+// Readyline with no driver linked. A running empty move is different: the server never closes it (it can't know when the
+// driver stopped or the miles). After 2 quiet hours it asks, and with no answer it only flags the shift "needs
+// confirmation" (shift_needs_confirm); the driver confirms the move's end, odometer and the shift's end when they next
+// open the app. Geotab, when connected and switched on, only helps here: a driver it shows driving is never asked.
+// Service client; never import from the browser.
 
 import { randomUUID } from "node:crypto";
 import { getServiceSupabase } from "@/lib/supabase/serviceClient";
 import { sendPush, type StoredSub } from "@/lib/push/send";
 import { deriveShifts, openShift, SHIFT_END } from "./shiftLogic";
 import { wrapUp } from "./wrapUp";
+import { driverOwnProviders, hosOwnFirst, providerFor } from "@/lib/telematics/server";
 import { nearestPlace } from "./catchUp";
 import type { ShiftEventRow } from "@/lib/trips/types";
 import { isOpenDelivery } from "@/lib/trips/staleDelivery";
 
 export const SHIFT_IDLE_ASK = "shift_idle_ask";
+export const SHIFT_NEEDS_CONFIRM = "shift_needs_confirm";
 const OPEN = ["draft", "loading", "in_transit", "delivering"];
 const DAYS = 3;
 
-export async function runAutoEndShifts(): Promise<{ asked: number; ended: number }> {
+export async function runAutoEndShifts(): Promise<{ asked: number; ended: number; flagged: number }> {
   const admin = getServiceSupabase();
   const nowMs = Date.now(), nowIso = new Date(nowMs).toISOString();
   const since = new Date(nowMs - DAYS * 86400_000).toISOString();
@@ -32,7 +38,7 @@ export async function runAutoEndShifts(): Promise<{ asked: number; ended: number
     const s = openShift(deriveShifts(events, userId, nowIso));
     if (s) open.push({ userId, companyId: events[events.length - 1].company_id, startedAt: s.startedAt, events: s.events });
   }
-  if (!open.length) return { asked: 0, ended: 0 };
+  if (!open.length) return { asked: 0, ended: 0, flagged: 0 };
 
   const ids = open.map((o) => o.userId);
   const [tr, te, mv] = await Promise.all([
@@ -51,20 +57,50 @@ export async function runAutoEndShifts(): Promise<{ asked: number; ended: number
     if (t > (lastMove.get(m.driver_id) ?? 0)) lastMove.set(m.driver_id, t);
   }
 
-  let asked = 0, ended = 0;
+  let asked = 0, ended = 0, flagged = 0;
   for (const o of open) {
     try {
       const startedMs = Date.parse(o.startedAt);
-      const own = o.events.filter((e) => e.event_type !== SHIFT_IDLE_ASK && e.event_type !== SHIFT_END);
+      const own = o.events.filter((e) => e.event_type !== SHIFT_IDLE_ASK && e.event_type !== SHIFT_NEEDS_CONFIRM && e.event_type !== SHIFT_END);
       const lastShiftEvent = own.reduce((m, e) => Math.max(m, Date.parse(e.occurred_at)), 0);
       const lastActivityMs = Math.max(lastShiftEvent, lastTrip.get(o.userId) ?? 0, lastMove.get(o.userId) ?? 0) || null;
       const askedAtMs = o.events.filter((e) => e.event_type === SHIFT_IDLE_ASK).reduce((m, e) => Math.max(m, Date.parse(e.occurred_at)), 0) || null;
-      const d = wrapUp({ nowMs, shiftStartedMs: startedMs, lastActivityMs, askedAtMs, openTrip: hasOpenTrip.has(o.userId), movingEmpty: moving.has(o.userId) });
-      if (d.action === "ask") { if (await ask(o.companyId, o.userId, nowIso)) asked++; }
+      const flaggedAtMs = o.events.filter((e) => e.event_type === SHIFT_NEEDS_CONFIRM).reduce((m, e) => Math.max(m, Date.parse(e.occurred_at)), 0) || null;
+      const d = wrapUp({ nowMs, shiftStartedMs: startedMs, lastActivityMs, askedAtMs, openTrip: hasOpenTrip.has(o.userId), moveRunning: moving.has(o.userId), flaggedAtMs });
+      if (d.action === "ask") {
+        if (await geotabDriving(o.companyId, o.userId)) continue; // moving right now: not the time to ask
+        if (await ask(o.companyId, o.userId, nowIso)) asked++;
+      }
+      else if (d.action === "flag") { if (await flagNeedsConfirm(o.companyId, o.userId, nowIso)) flagged++; }
       else if (d.action === "end") { if (await closeShift(o.companyId, o.userId, o.startedAt, new Date(d.atMs).toISOString())) ended++; }
     } catch (e) { console.warn("[auto-end] driver failed:", (e as Error).message); }
   }
-  return { asked, ended };
+  return { asked, ended, flagged };
+}
+
+/** Geotab (when connected, switched on and the driver is linked) shows this driver driving right now. Never throws. */
+async function geotabDriving(companyId: string, userId: string): Promise<boolean> {
+  try {
+    const p = await providerFor(companyId);
+    if (!p) return false;
+    const { data } = await getServiceSupabase().from("telematics_driver_map").select("provider_user_id").eq("company_id", companyId).eq("user_id", userId).maybeSingle();
+    const pid = (data as { provider_user_id?: string } | null)?.provider_user_id;
+    if (!pid) return false;
+    const own = await driverOwnProviders(companyId, [userId]);
+    const h = await hosOwnFirst(p, own, userId, pid);
+    return h?.status === "D";
+  } catch { return false; }
+}
+
+async function flagNeedsConfirm(companyId: string, userId: string, at: string): Promise<boolean> {
+  const admin = getServiceSupabase();
+  const { data: mv } = await admin.from("empty_moves").select("move_id").eq("driver_id", userId).is("ended_at", null).eq("dispatched", false).order("started_at", { ascending: false }).limit(1);
+  const moveId = ((mv ?? []) as { move_id: string }[])[0]?.move_id ?? null;
+  const ins = await admin.from("shift_events").insert({ event_id: randomUUID(), company_id: companyId, user_id: userId, event_type: SHIFT_NEEDS_CONFIRM, occurred_at: at, actor_id: userId, source: "app", payload: { auto: true, reason: "move_unanswered", move_id: moveId } });
+  if (ins.error) return false;
+  const { data: subs } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("company_id", companyId).eq("user_id", userId);
+  await sendPush((subs ?? []) as StoredSub[], { title: "Confirm your day", body: "Open the app to confirm when your empty move ended and your shift's end.", url: "/planner/home", tag: `shift-confirm-${userId}` });
+  return true;
 }
 
 async function ask(companyId: string, userId: string, at: string): Promise<boolean> {
@@ -116,10 +152,11 @@ async function closeShift(companyId: string, userId: string, startedAt: string, 
     await admin.from("trips").update({ status: "parked", parked_at: at, parked_by: userId, parked_for: "layover", parked_where: label, parked_note: "Parked automatically when the shift ended.", client_updated_at: now }).eq("trip_id", trip.trip_id).in("status", OPEN);
     await admin.from("trip_events").insert({ event_id: randomUUID(), trip_id: trip.trip_id, event_type: "parked", occurred_at: at, actor_id: userId, payload: { auto: true, parked_for: "layover", where: label, from_status: trip.status } });
   }
-  // An empty move still running ends here; planned (dispatched) ones keep waiting.
+  // A move still running here (a race; wrapUp never closes one) ends with NO ending odometer: the last captured reading is usually its
+  // own beginning, and inventing miles is worse than a gap the driver or staff can fill. Planned (dispatched) ones keep waiting.
   const { data: openMoves } = await admin.from("empty_moves").select("move_id, dispatched").eq("driver_id", userId).is("ended_at", null);
   const running = ((openMoves ?? []) as { move_id: string; dispatched?: boolean | null }[]).filter((m) => !m.dispatched).map((m) => m.move_id);
-  if (running.length) await admin.from("empty_moves").update({ ended_at: at, end_miles: odo, client_updated_at: new Date().toISOString() }).in("move_id", running);
+  if (running.length) await admin.from("empty_moves").update({ ended_at: at, end_miles: null, client_updated_at: new Date().toISOString() }).in("move_id", running);
 
   // Equipment: let go of the claim (the pairing stays coupled and free); empty equipment goes to Readyline unless its
   // status was already set during this shift. A trailer left loaded is the parked trip above, preloaded, where it sits.

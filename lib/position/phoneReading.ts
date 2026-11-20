@@ -27,3 +27,16 @@ export function toReading(prev: Fix | null, cur: Fix): PhoneReading | null {
   if (cur.accuracyM != null && cur.accuracyM > MAX_ACCURACY_M) return null;
   return { lat: cur.lat, lon: cur.lon, at: new Date(cur.atMs).toISOString(), speedMph: speedMph(prev, cur), accuracyM: cur.accuracyM };
 }
+
+/** Moving right now: the newest fix is at speed, or the phone has covered a quarter mile within the last ten minutes. */
+export const MOVING_MPH = 8;
+export const MOVED_MILES = 0.25;
+export const MOVING_WINDOW_MS = 10 * 60_000;
+export function movingNow(history: PhoneReading[], nowMs: number): boolean {
+  const recent = history.filter((r) => nowMs - Date.parse(r.at) <= MOVING_WINDOW_MS);
+  if (!recent.length) return false;
+  const newest = recent[recent.length - 1];
+  if (newest.speedMph != null && newest.speedMph >= MOVING_MPH) return true;
+  const oldest = recent[0];
+  return recent.length > 1 && airMiles({ lat: oldest.lat, lon: oldest.lon }, { lat: newest.lat, lon: newest.lon }) >= MOVED_MILES;
+}

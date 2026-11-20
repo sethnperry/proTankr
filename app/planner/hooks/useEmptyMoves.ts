@@ -59,7 +59,7 @@ export function useEmptyMoves(o: { store: TripStore | null; state: TripStoreStat
     void syncNow();
   }, [store, syncNow]);
 
-  const patch = useCallback((moveId: string, fields: Partial<Pick<EmptyMoveRow, "begin_miles" | "end_miles" | "to_place_id" | "to_text" | "from_place_id" | "from_text">>) => {
+  const patch = useCallback((moveId: string, fields: Partial<Pick<EmptyMoveRow, "begin_miles" | "end_miles" | "to_place_id" | "to_text" | "from_place_id" | "from_text" | "notes">>) => {
     if (!store) return;
     store.put("empty_moves", { move_id: moveId, ...fields } as any);
     void syncNow();

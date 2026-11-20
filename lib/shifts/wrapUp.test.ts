@@ -24,8 +24,17 @@ test("activity after the question (an answer, a trip step) cancels the ending an
   const r = wrapUp({ ...base, nowMs: T0, lastActivityMs: T0 - 5 * M, askedAtMs: T0 - 20 * M });
   assert.equal(r.action, "none");
 });
-test("a running empty move is never asked or ended", () => {
-  assert.equal(wrapUp({ ...base, movingEmpty: true, nowMs: T0, lastActivityMs: T0 - 500 * M, askedAtMs: T0 - 100 * M }).action, "none");
+test("a running empty move is asked after 2 hours, never ended: unanswered it is flagged", () => {
+  assert.equal(wrapUp({ ...base, moveRunning: true, nowMs: T0, lastActivityMs: T0 - 119 * M }).action, "none");
+  assert.equal(wrapUp({ ...base, moveRunning: true, nowMs: T0, lastActivityMs: T0 - 120 * M }).action, "ask");
+  const last = T0 - 200 * M;
+  assert.equal(wrapUp({ ...base, moveRunning: true, nowMs: T0, lastActivityMs: last, askedAtMs: T0 - 14 * M }).action, "none");
+  assert.deepEqual(wrapUp({ ...base, moveRunning: true, nowMs: T0, lastActivityMs: last, askedAtMs: T0 - 15 * M }), { action: "flag" });
+});
+test("once flagged it waits for the driver, until there is new activity", () => {
+  const last = T0 - 200 * M;
+  assert.equal(wrapUp({ ...base, moveRunning: true, nowMs: T0, lastActivityMs: last, askedAtMs: T0 - 30 * M, flaggedAtMs: T0 - 10 * M }).action, "none");
+  assert.equal(wrapUp({ ...base, moveRunning: true, nowMs: T0, lastActivityMs: T0 - 1 * M, flaggedAtMs: T0 - 10 * M }).action, "none");
 });
 test("no activity at all counts from the shift start", () => {
   assert.equal(wrapUp({ ...base, shiftStartedMs: T0 - 31 * M, nowMs: T0, lastActivityMs: null }).action, "ask");

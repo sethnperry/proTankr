@@ -77,14 +77,14 @@ function DispatchedPlanLine({ plan }: { plan: DispatchedPlan }) {
 }
 
 /** An empty move (bobtail, empty return, reposition) as a two-line card in the trips list. */
-function MoveCard({ m, who, trailerParts, trailerWord }: { m: EmptyMoveRow; who: string; trailerParts: PlanLineComp[]; trailerWord: string | null }) {
+function MoveCard({ m, who, trailerParts, trailerWord, onOpen }: { m: EmptyMoveRow; who: string; trailerParts: PlanLineComp[]; trailerWord: string | null; onOpen: () => void }) {
   const done = !!m.ended_at;
   const planned = !!m.dispatched && !done;
   const miles = moveMiles(m);
   const from = m.from_text || "—";
   const to = m.to_text || (done ? "—" : "…");
   return (
-    <div style={{ ...card, cursor: "default", display: "block", padding: 12 }}>
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ ...card, cursor: "pointer", display: "block", padding: 12 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
         <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 800 }}>{who}</span>
         <span style={{ minWidth: 0, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
@@ -409,7 +409,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
         </div>
       )}
       {feed.map((f) => {
-        if (f.t === "move") return <MoveCard key={f.m.move_id} m={f.m} who={moveWho(f.m)} trailerParts={codesFor(f.m.trailer_id, {}, false)} trailerWord={f.m.trailer_id && f.m.kind !== "bobtail" ? trailerStateFor(null, f.m.trailer_id) : null} />;
+        if (f.t === "move") return <MoveCard key={f.m.move_id} m={f.m} who={moveWho(f.m)} trailerParts={codesFor(f.m.trailer_id, {}, false)} trailerWord={f.m.trailer_id && f.m.kind !== "bobtail" ? trailerStateFor(null, f.m.trailer_id) : null} onOpen={() => nav.go(f.m.move_id, `/planner/trips/move/${f.m.move_id}`)} />;
         const { trip, order, more, route, loadedBy, residueBy, trailerState: ts, truckLabel } = f.row;
         const s = { ...STATUS[trip.status], label: truckLabel };
         const cancelled = trip.status === "cancelled";

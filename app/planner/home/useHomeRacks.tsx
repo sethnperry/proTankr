@@ -90,7 +90,8 @@ import { remember as rememberRepair, retryPending as retryRepairs, sendRepair } 
 
 import { offDutyAsk } from "@/lib/shifts/dutyStatus";
 import { shiftPrompt } from "@/lib/shifts/shiftLogic";
-import { ASK_AFTER_MIN, ASK_AFTER_OPEN_TRIP_MIN } from "@/lib/shifts/wrapUp";
+import { ASK_AFTER_MIN, ASK_AFTER_MOVE_MIN, ASK_AFTER_OPEN_TRIP_MIN } from "@/lib/shifts/wrapUp";
+import { usePhoneMoving } from "@/lib/position/usePhoneMoving";
 
 import { useOtherCarriers, useStoreDeliveries, useTerminalStatus } from "../hooks/useDashboardCards";
 
@@ -328,7 +329,10 @@ export function useHomeRacks(p: ReturnType<typeof useHomeStamp>) {
   };
   // "Are you still working?": 30 minutes after the last load is done (3 hours with a trip still open). The server sends the
   // same question as a push and ends the shift 15 minutes later if nobody answers (lib/shifts/wrapUp.ts).
-  const wrapIdle = !emptyMoves.current && shiftPrompt(shift.current, new Date().toISOString(), { maxHours: 1e9, lastActivityAt: shift.lastActivityAt, idleMinutes: openTrip ? ASK_AFTER_OPEN_TRIP_MIN : ASK_AFTER_MIN }) === "idle";
+  const wrapDue = shiftPrompt(shift.current, new Date().toISOString(), { maxHours: 1e9, lastActivityAt: shift.lastActivityAt, idleMinutes: emptyMoves.current ? ASK_AFTER_MOVE_MIN : openTrip ? ASK_AFTER_OPEN_TRIP_MIN : ASK_AFTER_MIN }) === "idle";
+  // Before asking, look at the phone: moving means still working. That also records a still-working answer, which stops the push.
+  const phoneMoving = usePhoneMoving(wrapDue, () => shift.keepGoing({ auto: true, moving: true }));
+  const wrapIdle = wrapDue && !phoneMoving;
   const shiftPromptShown = drivingNow ? null : shift.prompt === "long" ? "long" : offAsk && !runningDelay ? "off_duty" : wrapIdle ? "idle" : null;
   const canCancelNow = canCancelLoad(openTrip, onBoard(snap?.compLoads ?? []).length > 0);
   const arriveCardPending = !!dutyStop && !arrival.suggest && !!stopName && !!delayLeg && !hopPickup;

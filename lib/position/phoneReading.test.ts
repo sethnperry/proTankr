@@ -20,3 +20,15 @@ test("a vague fix is dropped", () => {
   assert.equal(toReading(null, fix({ accuracyM: 900 })), null);
   assert.equal(toReading(null, fix({ accuracyM: 20 }))?.lat, 27.95);
 });
+
+import { movingNow, type PhoneReading } from "./phoneReading.ts";
+const rd = (o: Partial<PhoneReading> & { minAgo: number }, now: number): PhoneReading => ({ lat: 27.95, lon: -82.45, at: new Date(now - o.minAgo * 60_000).toISOString(), speedMph: null, accuracyM: 10, ...o });
+
+test("moving: at speed, or a quarter mile over the last ten minutes; not when parked or the fixes are old", () => {
+  const now = Date.parse("2026-11-20T10:00:00Z");
+  assert.equal(movingNow([rd({ minAgo: 0, speedMph: 45 }, now)], now), true);
+  assert.equal(movingNow([rd({ minAgo: 8 }, now), rd({ minAgo: 0, lat: 27.95 + 0.5 / 69 }, now)], now), true);
+  assert.equal(movingNow([rd({ minAgo: 8 }, now), rd({ minAgo: 0, speedMph: 1 }, now)], now), false);
+  assert.equal(movingNow([rd({ minAgo: 30, speedMph: 55 }, now)], now), false);
+  assert.equal(movingNow([], now), false);
+});

@@ -3,6 +3,8 @@
 //
 // What the Driver Dashboard draws. Every value and handler comes from useHome.
 
+import { ConfirmDay } from "../components/shift/ConfirmDay";
+import { requestHosRefresh } from "@/lib/telematics/useMyHos";
 import { releaseEquipment } from "@/lib/equipment/releaseEquipment";
 import { Spinner, busyProps, busyText } from "@/lib/ui/pending";
 // app/planner/home/page.tsx
@@ -300,6 +302,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     mergedHere,
     myDelivery,
     myHos,
+    askTruckStatus,
     myRegion,
     nav,
     nearbyParked,
@@ -590,6 +593,18 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
 
       <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={stillWorking} />
+      <ConfirmDay shift={shift} move={emptyMoves.current} truckId={truckId ?? null} myHos={myHos}
+        onStillMoving={() => shift.keepGoing({ moving: true, confirmed: true })}
+        onConfirm={(a) => {
+          const mv = emptyMoves.current;
+          if (mv) { emptyMoves.end(mv.move_id, a.odometer, undefined, a.moveEndAt); emptyMoves.patch(mv.move_id, { notes: "Ended after the fact: the driver confirmed when it ended and the odometer." }); }
+          if (a.endShift) {
+            const startedAt = shift.current?.startedAt ?? null;
+            shift.end({ odometer: a.odometer, confirmed_late: true, move_id: mv?.move_id ?? null }, a.shiftEndAt);
+            requestHosRefresh({ chaseMin: 15 });
+            void askTruckStatus(startedAt);
+          } else shift.keepGoing({ confirmed: true });
+        }} />
       {/* The shift is over but the ELD still counts the driver as working. ProTankr only reads Geotab (the duty status is the
           driver's to change, in Drive), so say so; this card goes away by itself once the status changes. */}
       {(() => {

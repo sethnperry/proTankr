@@ -1,6 +1,8 @@
 // app/api/telematics/shift-recap/route.ts
 //
-// GET ?truckId=&from=&to= -> { connected, stops, drives, events, odo }
+// GET ?truckId=&from=&to=[&odoOnly=1] -> { connected, stops, drives, events, odo }
+// odoOnly skips the trail and trailer events and answers just the odometer span (one Geotab call): used to default the odometer
+// when a driver confirms when an empty move ended.
 // What the truck did inside a window (max 24 hours), for the end-of-shift catch-up: the stops it made, the drives
 // between them, the trailer hooks and drops, and the odometer change. Any member of the truck's company. Soft fail.
 
@@ -33,6 +35,10 @@ export async function GET(req: NextRequest) {
     const p = vid ? await providerFor(companyId) : null;
     if (!vid || !p) return none();
     const fromIso = new Date(lo).toISOString(), toIso = new Date(to).toISOString();
+    if (sp.get("odoOnly") === "1") {
+      const odo = await p.odometerSpan(vid, fromIso, toIso).catch(() => null);
+      return NextResponse.json({ connected: true, stops: [], drives: [], events: [], odo });
+    }
     const [trail, evs, names, odo] = await Promise.all([
       p.trail(vid, fromIso, toIso).catch(() => []),
       p.trailerEvents(vid, fromIso, toIso).catch(() => []),
