@@ -4,8 +4,8 @@
 // product with the BOL, supplier, API, temp, gross and net off that product's
 // BOL. When one product came on more than one BOL (two suppliers, say), Split
 // Load assigns its compartments to BOL groups and each group gets its own
-// window. The gross and net typed for a group are spread over its
-// compartments by planned gallons, so every compartment still gets a row.
+// window. The gross and net typed for a group are translated onto its
+// compartments (allocateBolGallons below), so every compartment still gets a row.
 // Pure, no React.
 
 export type GroupLine = { comp: number; productId: string; gallons: number };
@@ -88,4 +88,34 @@ export function distributeWhole(total: number, weights: number[]): number[] {
     .sort((a, b) => b.frac - a.frac || a.i - b.i);
   for (let k = 0; left > 0 && k < order.length; k++, left--) base[order[k].i] += 1;
   return base;
+}
+
+export type SpreadComp = {
+  /** What the plan put in this compartment (or, editing a logged load, what was logged). */
+  planned: number;
+  /** The most it is planned to take: the driver's own cap or the safety cap, whichever is lower. Null when unknown. */
+  cap: number | null;
+};
+
+/**
+ * Translate a BOL total onto the compartments it covers. The BOL is always right, so this never refuses a total.
+ * A compartment planned right at its cap loaded to that cap (a known quantity); the total's difference from the plan
+ * lands on the compartments that were not capped (the ones the plan flexes). With nothing capped, or everything capped,
+ * or a total smaller than the capped compartments alone, it falls back to spreading the total by planned gallons.
+ * Whole gallons that sum exactly to round(total).
+ */
+export function allocateBolGallons(total: number, comps: SpreadComp[]): number[] {
+  const weights = comps.map((c) => (Number.isFinite(c.planned) && c.planned > 0 ? c.planned : 0));
+  const T = Math.round(Math.max(0, Number.isFinite(total) ? total : 0));
+  const capped = comps.map((c, i) => c.cap != null && Number.isFinite(c.cap) && weights[i] > 0 && weights[i] >= c.cap - 0.5);
+  const nCapped = capped.filter(Boolean).length;
+  if (nCapped === 0 || nCapped === comps.length) return distributeWhole(T, weights);
+  const cappedSum = comps.reduce((t, _c, i) => t + (capped[i] ? Math.round(weights[i]) : 0), 0);
+  const remaining = T - cappedSum;
+  if (remaining < 0) return distributeWhole(T, weights); // the BOL holds less than the capped compartments alone
+  const freeIdx = comps.map((_c, i) => i).filter((i) => !capped[i]);
+  const freeShares = distributeWhole(remaining, freeIdx.map((i) => weights[i]));
+  const out = comps.map((_c, i) => (capped[i] ? Math.round(weights[i]) : 0));
+  freeIdx.forEach((i, k) => { out[i] = freeShares[k]; });
+  return out;
 }

@@ -14,7 +14,7 @@ import { calculateNetGallons, netMethodForProduct } from "@/lib/trips/netGallons
 import { defaultStepTimes } from "@/lib/trips/tripFlow";
 import { normalizeRef } from "@/lib/trips/refs";
 import { bolProblem } from "@/lib/trips/bols";
-import { buildBolGroups, distributeWhole, initialBolAssignment, type BolAssignment } from "@/lib/trips/bolGroups";
+import { allocateBolGallons, buildBolGroups, distributeWhole, initialBolAssignment, type BolAssignment } from "@/lib/trips/bolGroups";
 import { loadingOffset } from "@/lib/trips/useTripData";
 import type { LoadingModalProps } from "./types";
 
@@ -261,9 +261,14 @@ export function useFinishSequence(props: LoadingModalProps, b: ReturnType<typeof
       }
     }
 
-    // Spread the window's gross (and net) over its compartments by planned gallons.
-    const weights = group.comps.map((c) => lineByComp.get(c)?.gallons ?? 0);
-    const grossShares = distributeWhole(gallonsN, weights);
+    // The BOL's gross (and net) lands on the compartments: the capped ones load to their cap and the compartment the plan
+    // flexes takes the difference (see allocateBolGallons). The BOL is always right: nothing here refuses a total.
+    const grossShares = allocateBolGallons(gallonsN, group.comps.map((c) => {
+      const own = props.capOverrides?.[c], safety = persistedCapForComp?.(c);
+      // Editing a logged load there is no plan to read caps against (the lines are what was logged), so no cap rule applies.
+      const cap = editingReport ? null : [own, safety].filter((x): x is number => typeof x === "number" && Number.isFinite(x)).reduce<number | null>((m, x) => (m == null ? x : Math.min(m, x)), null);
+      return { planned: lineByComp.get(c)?.gallons ?? 0, cap };
+    }));
     const updated = { ...compEntries };
     group.comps.forEach((c, i) => {
       updated[c] = { gallons: grossShares[i], api: apiN, tempF: tempN };
