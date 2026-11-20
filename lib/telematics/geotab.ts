@@ -752,7 +752,8 @@ export function geotabProvider(c: GeotabCreds, f: Fetch = fetch, cache?: CacheSt
     activeShipments: (vehicleId: string) => cached(cache, `ship:${vehicleId}`, 5 * 60_000, () => base.activeShipments(vehicleId)),
     lastDriverOf: (vehicleId: string) => cached(cache, `lastdrv:${vehicleId}`, 2 * 60_000, () => base.lastDriverOf(vehicleId)),
     // Hours are read at most every five minutes; a driver who has been off duty for a while only every fifteen.
-    hos: (id: string, tz?: string) => cached(cache, `hos:${id}:${tz ?? ""}`, (v: Awaited<ReturnType<typeof base.hos>>) => {
+    hos: (id: string, tz?: string, o?: { fresh?: boolean }) => cached(cache, `hos:${id}:${tz ?? ""}`, (v: Awaited<ReturnType<typeof base.hos>>) => {
+      if (o?.fresh) return 0; // ask Geotab now (and store the answer for everyone else)
       const off = v?.status === "OFF" && v.offSince && Date.now() - Date.parse(v.offSince) > 30 * 60_000;
       return off ? 15 * 60_000 : 5 * 60_000;
     }, () => base.hos(id, tz)),

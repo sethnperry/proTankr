@@ -18,6 +18,8 @@
 // Progress (tank picks, readings) is saved to the trip as the driver goes;
 // the rest is kept on the phone until Finish.
 
+import { matchesTracker } from "@/lib/telematics/odometerSync";
+import { TrackerCheck } from "@/app/planner/components/TrackerCheck";
 import { EXTRA_KEY } from "./TripPackageSheet";
 import { useEmailTripPackage } from "@/lib/trips/useTripPackagePrefs";
 import { CustomSelect } from "@/lib/ui/CustomSelect";
@@ -1068,8 +1070,11 @@ export function DeliveryDashboard({
   const milesInput = (
     <div>
       <div style={{ ...miniLabel, marginBottom: 6 }}>Ending miles{otherPlanned > 0 ? " (optional)" : ""}</div>
-      <input value={odometer} onChange={(e) => { setOdometer(e.target.value.replace(/[^0-9.]/g, "")); setErr(null); }}
-        inputMode="decimal" placeholder="Odometer" style={{ ...fieldInput, fontSize: 20, fontWeight: 700 }} />
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <input value={odometer} onChange={(e) => { setOdometer(e.target.value.replace(/[^0-9.]/g, "")); setErr(null); }}
+          inputMode="decimal" placeholder="Odometer" style={{ ...fieldInput, fontSize: 20, fontWeight: 700, flex: 1, minWidth: 0 }} />
+        {matchesTracker(odometer, liveOdometer) && <TrackerCheck size={22} />}
+      </div>
       {beginMiles != null && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Beginning: {beginMiles.toLocaleString("en-US")}</div>}
     </div>
   );
@@ -1324,7 +1329,7 @@ export function DeliveryDashboard({
               </Section>
             )}
 
-            <Section title="Ending miles" summary={miles != null ? miles.toLocaleString("en-US") : isLast ? "Required" : "—"}
+            <Section title="Ending miles" summary={miles != null ? <>{miles.toLocaleString("en-US")}{matchesTracker(odometer, liveOdometer) && <TrackerCheck size={15} />}</> : isLast ? "Required" : "—"}
               summaryColor={miles == null && isLast ? "#fbbf24" : undefined}
               open={section === "miles"} onToggle={() => toggle("miles")} last>
               {milesInput}

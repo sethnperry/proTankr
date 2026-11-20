@@ -15,6 +15,7 @@ export const runtime = "nodejs";
 const STAFF = new Set(["admin", "owner", "dispatch", "lead"]);
 const TTL_MS = 120_000;
 const SELF_TTL_MS = 90_000;
+const FRESH_MIN_MS = 30_000;
 const selfCache = new Map<string, { at: number; hos: HosAvailability | null }>();
 const cache = new Map<string, { at: number; hos: Record<string, HosAvailability> }>();
 
@@ -32,7 +33,10 @@ export async function GET(req: NextRequest) {
     try { if (tzRaw) { new Intl.DateTimeFormat("en-US", { timeZone: tzRaw }); tz = tzRaw; } } catch { /* keep default */ }
     const ck = `${companyId}:${uid}:${tz}`;
     const mine = selfCache.get(ck);
-    if (mine && Date.now() - mine.at < SELF_TTL_MS) return NextResponse.json({ connected: true, hos: mine.hos });
+    // ?fresh=1: a driver chasing a status change (just ended a shift, or came back to the app) skips the caches, but no
+    // more than once every 30 seconds each, so one phone can't spend the company's Geotab quota.
+    const wantFresh = req.nextUrl.searchParams.get("fresh") === "1" && (!mine || Date.now() - mine.at >= FRESH_MIN_MS);
+    if (!wantFresh && mine && Date.now() - mine.at < SELF_TTL_MS) return NextResponse.json({ connected: true, hos: mine.hos });
     try {
       const p = await providerForDriver(companyId, uid);
       if (!p) return NextResponse.json({ connected: false });
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
       let pid = (data as { provider_user_id?: string } | null)?.provider_user_id;
       if (!pid) { try { pid = (await autoLinkDriver(companyId, uid)) ?? undefined; } catch { /* stays unlinked */ } }
       if (!pid) return NextResponse.json({ connected: true, hos: null });
-      const hos = await p.hos(pid, tz);
+      const hos = await p.hos(pid, tz, wantFresh ? { fresh: true } : undefined);
       selfCache.set(ck, { at: Date.now(), hos });
       return NextResponse.json({ connected: true, hos });
     } catch (e) {

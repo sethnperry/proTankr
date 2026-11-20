@@ -6,6 +6,8 @@
 // casing and tote counts at each stop, a photo of the signed manifest and the receiver's signature. Odometer and
 // counts only: no pay. The rules are in lib/freight/freight.ts.
 
+import { matchesTracker } from "@/lib/telematics/odometerSync";
+import { TrackerCheck } from "@/app/planner/components/TrackerCheck";
 import React, { useEffect, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { SignaturePad } from "@/lib/ui/SignaturePad";
@@ -91,7 +93,7 @@ export function FreightSheet({ open, onClose, companyId, userId, truck, coupledT
               {(openLoad.origin_text || openLoad.destination_text) && <div style={{ fontSize: 13, color: MUTE, marginTop: 2 }}>{openLoad.origin_text} → {openLoad.destination_text}</div>}
             </div>
             <div style={lab}>Ending odometer</div>
-            <input style={inp} inputMode="decimal" value={endOdo} onChange={(e) => setEndOdo(e.target.value)} placeholder="Miles" />
+            <div style={{ display: "flex", alignItems: "center" }}><input style={{ ...inp, flex: 1, minWidth: 0 }} inputMode="decimal" value={endOdo} onChange={(e) => setEndOdo(e.target.value)} placeholder="Miles" />{matchesTracker(endOdo, liveOdometer) && <TrackerCheck size={22} />}</div>
             {openLoad.preset === "lts" && (
               <>
                 <div style={lab}>Stops · casings and totes</div>

@@ -20,6 +20,7 @@
 // Arrived → Finish Delivery. The load itself is begun in the Planner, which
 // attaches it to this trip (useLoadWorkflow -> linkLoadToOpenTrip).
 
+import { requestHosRefresh } from "@/lib/telematics/useMyHos";
 import { capturePosition } from "@/lib/position/capturePosition";
 import { useEffect, useMemo } from "react";
 
@@ -159,6 +160,7 @@ export function useHomeStamp(p: ReturnType<typeof useHomeSteps>) {
     parkStampRef.current = { lat: stampCtx.lat, lon: stampCtx.lon, label: stampPlaceLabel, placeId: stampCtx.placeId };
     setStampAsk(null);
     shift.end({ odometer: odo, lat: stampCtx.lat, lon: stampCtx.lon, place_id: stampCtx.placeId, place_text: stampPlaceLabel, location_source: stampCtx.source, odometer_source: stampCtx.guess === odo ? "truck" : "typed" });
+    requestHosRefresh({ chaseMin: 15 }); // the duty status follows the driver's change in Drive within a minute or so
     const m = emptyMoves.current;
     if (m) emptyMoves.end(m.move_id, odo, { id: stampCtx.placeId, text: stampCtx.placeText }, at);
     // Anything the truck did that the app didn't see is asked about first; then the truck's status.

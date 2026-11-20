@@ -87,7 +87,8 @@ export interface TelematicsProvider {
   fleetStatus(): Promise<{ positions: Map<string, VehicleReading>; current: Map<string, string>; historic: Map<string, string> }>;
   /** The vehicle a driver most recently signed in to (last 30 days), if the provider says. */
   lastVehicleOf(driverId: string): Promise<{ vehicleId: string; at: string } | null>;
-  hos(driverId: string, tz?: string): Promise<HosAvailability | null>;
+  /** `fresh` skips the shared cache for this one read (a driver chasing a status change); the route rate-limits who may ask. */
+  hos(driverId: string, tz?: string, o?: { fresh?: boolean }): Promise<HosAvailability | null>;
   /** Raw duty-status log rows for one driver inside a window (used for pay period recaps). */
   dutyLogs(driverId: string, fromIso: string, toIso: string): Promise<any[]>;
   listVehicles(): Promise<ProviderVehicle[]>;

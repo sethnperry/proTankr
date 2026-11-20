@@ -6,6 +6,7 @@
 //
 // All of the Driver Dashboard's state, effects and handlers. Returns what the screen (HomeView) draws.
 
+import { requestHosRefresh } from "@/lib/telematics/useMyHos";
 import { usePending } from "@/lib/ui/pending";
 // app/planner/home/page.tsx
 //
@@ -322,7 +323,7 @@ export function useHomeBase() {
   const [stampAsk, setStampAsk] = useState<{ kind: "cancel"; v: CancelTripSubmit } | { kind: "shift" } | { kind: "move_begin"; plannedId?: string } | { kind: "move_end" } | null>(null);
   const finishShift = () => {
     if (truckId) { setStampAsk({ kind: "shift" }); return; }
-    const startedAt = shift.current?.startedAt ?? null; shift.end(); void askTruckStatus(startedAt);
+    const startedAt = shift.current?.startedAt ?? null; shift.end(); requestHosRefresh({ chaseMin: 15 }); void askTruckStatus(startedAt);
   };
   const requestEnd = () => { if (endNeedsExplanation(shift.current, maxShiftHours)) setExplainOpen(true); else finishShift(); };
   const signature = useDriverSignature(userId);

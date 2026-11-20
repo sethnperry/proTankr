@@ -128,7 +128,7 @@ import { recordShiftEvent } from "@/lib/shifts/shiftEvents";
 import { SAFETY_MEETING_EVENT } from "@/lib/safety/onDuty";
 import { getTripStore } from "@/lib/trips/useTripStore";
 
-import { dutyChip, dutyLabel } from "@/lib/shifts/dutyStatus";
+import { dutyChip, dutyLabel, telematicsLive } from "@/lib/shifts/dutyStatus";
 
 import { TerminalStatusSheet } from "../components/trip/TerminalStatusSheet";
 import { TrackSheet } from "../components/track/TrackSheet";
@@ -590,6 +590,20 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
 
       <DispatchNotices userId={userId || null} />
       <ShiftBar shift={shift.current} prompt={shiftPromptShown} onEnd={requestEnd} onAckLong={shift.ackLong} onKeepGoing={stillWorking} />
+      {/* The shift is over but the ELD still counts the driver as working. ProTankr only reads Geotab (the duty status is the
+          driver's to change, in Drive), so say so; this card goes away by itself once the status changes. */}
+      {(() => {
+        const last = [...shift.shifts].reverse().find((s) => s.endedAt);
+        const endedMs = last?.endedAt ? Date.parse(last.endedAt) : null;
+        if (shift.current || endedMs == null || Date.now() - endedMs > 2 * 3600_000) return null;
+        if (!telematicsLive(myHos, Date.now()) || !myHos || !["D", "ON", "YM"].includes(myHos.status ?? "")) return null;
+        return (
+          <div style={{ ...LOOK.secondary, marginTop: 8, padding: "11px 14px", borderColor: "rgba(251,191,36,0.5)" }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Your shift ended, but your ELD still shows {dutyLabel(myHos.status)}.</div>
+            <div style={{ fontSize: 12, marginTop: 3, color: LOOK.muted }}>Set Off duty in Geotab Drive so your hours stop counting. This updates here within a minute or so.</div>
+          </div>
+        );
+      })()}
 
       <div className="d2-cols">
       <div className="d2-left">

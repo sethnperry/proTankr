@@ -4,6 +4,8 @@
 // Empty move: the truck going somewhere with no load. Begin with where to (nearby places one tap, or any place),
 // end on arrival with the odometer. One open move per driver. Rules: lib/moves/emptyMoves.ts.
 
+import { matchesTracker } from "@/lib/telematics/odometerSync";
+import { TrackerCheck } from "@/app/planner/components/TrackerCheck";
 import React, { useEffect, useMemo, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { LocationPicker } from "../trip/LocationPicker";
@@ -52,7 +54,7 @@ export function EmptyMoveSheet({ open, onClose, truck, hasTrailer, liveOdometer,
           <div style={{ fontSize: 22, fontWeight: 800, margin: "4px 0 2px" }}>To {nameOf(current.to_place_id, current.to_text)}</div>
           <div style={{ color: MUTE, fontSize: 13 }}>Started {new Date(current.started_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {fmt(moveMinutes(current))} so far</div>
           <div style={lab}>Odometer at arrival (required)</div>
-          <input style={inp} inputMode="decimal" value={odo || guess} onChange={(e) => setOdo(e.target.value)} />
+          <div style={{ display: "flex", alignItems: "center" }}><input style={{ ...inp, flex: 1, minWidth: 0 }} inputMode="decimal" value={odo || guess} onChange={(e) => setOdo(e.target.value)} />{matchesTracker(odo || guess, liveOdometer) && <TrackerCheck size={22} />}</div>
           {endProblem && <div style={{ color: "#f87171", fontSize: 13, marginBottom: 6 }}>{endProblem}</div>}
           <button type="button" style={{ ...primary, opacity: endProblem ? 0.4 : 1 }} disabled={!!endProblem} onClick={() => { onEnd(current.move_id, num(odo || guess)); onClose(); }}>Arrived</button>
           {confirmDiscard ? (

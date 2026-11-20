@@ -5,6 +5,8 @@
 // the driver taps Confirm. If it can't, the big number pad opens and the driver types the dash reading. There is no
 // skip: the move and the shift record both need it. "Back" goes back to the screen before (not a skip).
 
+import { matchesTracker } from "@/lib/telematics/odometerSync";
+import { TrackerCheck } from "@/app/planner/components/TrackerCheck";
 import React, { useEffect, useRef, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import ValueEntryOverlay from "../ValueEntryOverlay";
@@ -52,6 +54,7 @@ export function OdometerConfirmSheet({ open, title, lead, placeLabel, loading, g
           <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: MUTE }}>Odometer</div>
           <div className="dash-num" style={{ fontSize: 44, fontWeight: 900, letterSpacing: "0.02em" }}>
             {loading ? "Reading…" : value ? Number(value.replace(/,/g, "")).toLocaleString("en-US") : "Tap to enter"}
+            {!loading && value && matchesTracker(value, guess) && <TrackerCheck size={30} />}
           </div>
           <div style={{ fontSize: 12, color: MUTE, marginTop: 2 }}>{guess != null && value === String(guess) ? "From the truck. Tap the number to change it." : "Tap the number to type it from the dash."}</div>
         </button>

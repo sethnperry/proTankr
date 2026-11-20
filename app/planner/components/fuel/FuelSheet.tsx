@@ -19,6 +19,8 @@
 //   4. Details: receipt photo first, then the store, gallons, amounts. Can be
 //      finished later.
 
+import { matchesTracker } from "@/lib/telematics/odometerSync";
+import { TrackerCheck } from "@/app/planner/components/TrackerCheck";
 import { DocumentScanner } from "../scan/DocumentScanner";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -651,8 +653,11 @@ export default function FuelSheet({
 
         <div style={{ ...box, textAlign: "center" }}>
           <div style={lab}>Odometer</div>
-          <input className="dash-num" inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} placeholder="—"
-            style={{ ...input, border: "none", background: "transparent", textAlign: "center", fontSize: 30, fontWeight: 900, letterSpacing: "0.04em", marginTop: 4, padding: 0 }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <input className="dash-num" inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} placeholder="—"
+              style={{ ...input, border: "none", background: "transparent", textAlign: "center", fontSize: 30, fontWeight: 900, letterSpacing: "0.04em", marginTop: 4, padding: 0, minWidth: 0, width: "auto", maxWidth: "70%" }} />
+            {matchesTracker(odo, liveOdometer) && <TrackerCheck size={24} />}
+          </div>
         </div>
 
         {m.steps.length > 0 && (
@@ -774,7 +779,7 @@ export default function FuelSheet({
           <button type="button" style={{ ...link, marginBottom: 14 }} onClick={() => void openGuide(m.guide_path!).catch(() => {})}>📄 {m.guide_name ?? "Detailed steps"}</button>
         )}
 
-        <Field label="Odometer"><input style={input} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
+        <Field label="Odometer"><div style={{ display: "flex", alignItems: "center" }}><input style={{ ...input, flex: 1, minWidth: 0 }} inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} />{matchesTracker(odo, liveOdometer) && <TrackerCheck size={22} />}</div></Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
           {(["diesel", "diesel_def"] as FuelProducts[]).map((k) => (
             <button key={k} type="button" onClick={() => setProducts(k)}
