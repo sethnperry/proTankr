@@ -129,14 +129,18 @@ export function useSoloState(props: Props) {
   // Combo pop-out (tap a connected combo on the picker) and the three things its buttons open.
   const [detailComboId, setDetailComboId] = useState<string | null>(null);
   const [dropSwapOpen, setDropSwapOpen] = useState(false);
-  // Drop / Swap opened straight from the main Equipment screen: the pair's own pop-out stays hidden behind it.
-  const [dropDirect, setDropDirect] = useState(false);
   const [studPickOpen, setStudPickOpen] = useState(false);
   const [docDraft, setDocDraft] = useState<{ kind: "truck" | "trailer"; id: string; files: File[] } | null>(null);
   const [docUnit, setDocUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   // Drop trailer / Park truck: status (+ optional location) first, then the unlink.
-  const [statusFlow, setStatusFlow] = useState<"drop_trailer" | "park_truck" | null>(null);
+  const [statusFlow, setStatusFlow] = useState<"drop_trailer" | "park_truck" | "park_both" | null>(null);
   const [awaitingTruck, setAwaitingTruck] = useState(false);
+  // STUD flow (park a truck, a trailer or both): which unit to park, the picker waiting for a replacement trailer, the pairing to
+  // confirm, and the question asked when the modal closes with an unfinished hookup.
+  const [studTargetOpen, setStudTargetOpen] = useState(false);
+  const [awaitingTrailer, setAwaitingTrailer] = useState(false);
+  const [pairConfirm, setPairConfirm] = useState<{ truckId: string; trailerId: string; second: "truck" | "trailer" } | null>(null);
+  const [closeAsk, setCloseAsk] = useState<{ kind: "truck_only" | "trailer_only"; then: "picker" | "main" } | null>(null);
   // Loose-unit pop-out, and the unit waiting for its partner after "Couple".
   const [detailUnit, setDetailUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   const [coupleFrom, setCoupleFrom] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
@@ -262,8 +266,6 @@ export function useSoloState(props: Props) {
     setDetailComboId,
     dropSwapOpen,
     setDropSwapOpen,
-    dropDirect,
-    setDropDirect,
     studPickOpen,
     setStudPickOpen,
     docDraft,
@@ -274,6 +276,14 @@ export function useSoloState(props: Props) {
     setStatusFlow,
     awaitingTruck,
     setAwaitingTruck,
+    studTargetOpen,
+    setStudTargetOpen,
+    awaitingTrailer,
+    setAwaitingTrailer,
+    pairConfirm,
+    setPairConfirm,
+    closeAsk,
+    setCloseAsk,
     detailUnit,
     setDetailUnit,
     coupleFrom,

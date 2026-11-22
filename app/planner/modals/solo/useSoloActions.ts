@@ -38,6 +38,9 @@ export function useSoloActions(
     setEditPickerOpen,
     setStatusPickerOpen,
     setStatusTarget,
+    setStatusFlow,
+    setStudTargetOpen,
+    setCloseAsk,
     setAddTruckOpen,
     setAddTrailerOpen,
     removeTarget,
@@ -153,19 +156,19 @@ export function useSoloActions(
       pair: { truckId: t.truck_id, trailerId: r.trailer_id, truckName: t.truck_name, trailerName: r.trailer_name },
     });
   }
+  // STUD from the main screen. It parks equipment you hold: Truck, Trailer or Both (asked only when you hold both). The only
+  // statuses are Deadline and Readyline (it is already in use, by you), a pair always comes apart, and what is left asks for a
+  // replacement or a confirmation (StatusDialog.tsx). No trailer is ever left in use without a truck.
+  function startStud(target: "truck" | "trailer" | "both") {
+    setStudTargetOpen(false);
+    if (target === "both" && selectedTruckId && selectedTrailerId) { setStatusFlow("park_both"); openStatusForPair(selectedTruckId, selectedTrailerId); return; }
+    if (target === "trailer") { setStatusFlow("drop_trailer"); openStatusForTrailer(); return; }
+    setStatusFlow("park_truck"); openStatusForTruck();
+  }
   function openStatus() {
-    if (selectedTruckId && selectedTrailerId) {
-      openStatusForPair(selectedTruckId, selectedTrailerId);
-      return;
-    }
-    if (selectedTruckId) {
-      openStatusForTruck();
-      return;
-    }
-    if (selectedTrailerId) {
-      openStatusForTrailer();
-      return;
-    }
+    if (selectedTruckId && selectedTrailerId) { setStudTargetOpen(true); return; }
+    if (selectedTruckId) { startStud("truck"); return; }
+    if (selectedTrailerId) { startStud("trailer"); return; }
   }
 
   function confirmCommandeer() {
@@ -222,6 +225,12 @@ export function useSoloActions(
   // modal closing. A full pair is already a materialized combo (couple_combo
   // set current_* itself), so it's skipped. No-ops when nothing changed.
   async function handleClose() {
+    // A trailer is never left running without a truck, and a truck without a trailer is confirmed as a bobtail.
+    if (selectedTrailerId && !selectedTruckId) { setCloseAsk({ kind: "trailer_only", then: "main" }); return; }
+    if (selectedTruckId && !selectedTrailerId) {
+      const t = trucks.find((x) => x.truck_id === selectedTruckId);
+      if (!(t?.status_code === "in_use" && (t.sub_status ?? "").toLowerCase() === "bobtail")) { setCloseAsk({ kind: "truck_only", then: "main" }); return; }
+    }
     try {
       if (setCurrentEquipment && !selectedComboId) {
         const t = selectedTruckId ?? null;
@@ -248,6 +257,7 @@ export function useSoloActions(
     openStatusForTrailer,
     openStatusForPair,
     openStatus,
+    startStud,
     confirmCommandeer,
     confirmRemove,
     submitNewTare,

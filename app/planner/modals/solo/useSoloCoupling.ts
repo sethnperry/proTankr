@@ -292,6 +292,7 @@ export function useSoloCoupling(props: Props, s: ReturnType<typeof useSoloState>
     toggleTrailer,
     startCouple,
     boardTapTruck,
+    finishCouple,
     boardTapTrailer,
     confirmDeadline,
     confirmAway,

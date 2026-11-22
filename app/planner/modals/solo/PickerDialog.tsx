@@ -14,6 +14,9 @@ import type { SoloModel } from "./useSoloEquipment";
 export function PickerDialog({ m }: { m: SoloModel }) {
   const {
     awaitingTruck,
+    awaitingTrailer,
+    setPairConfirm,
+    setCloseAsk,
     boardRows,
     boardStatus,
     boardTapTrailer,
@@ -44,6 +47,13 @@ export function PickerDialog({ m }: { m: SoloModel }) {
   } = m;
   const [importOpen, setImportOpen] = useState(false);
   const canImport = myRole === "admin";
+  // Leaving with the hookup unfinished is never silent: a truck alone is confirmed as a bobtail, and a trailer alone has to be
+  // parked or given a truck (a trailer is never in use without power).
+  const requestClose = () => {
+    if (awaitingTrailer && selectedTruckId && !selectedTrailerId) { setCloseAsk({ kind: "truck_only", then: "picker" }); return; }
+    if (awaitingTruck && selectedTrailerId && !selectedTruckId) { setCloseAsk({ kind: "trailer_only", then: "picker" }); return; }
+    setPickerOpen(false);
+  };
   return (
     <>
       {/* ── Select Equipment -- the two-column truck/trailer grid + connector
@@ -55,13 +65,7 @@ export function PickerDialog({ m }: { m: SoloModel }) {
           the status report once this closes. ── */}
       <FullscreenModal
         open={pickerOpen}
-        onClose={() => {
-          setPickerOpen(false);
-          if (awaitingTruck) {
-            setAwaitingTruck(false);
-            setSelectedTrailerId(null);
-          }
-        }}
+        onClose={requestClose}
         title="Select Equipment"
         footer={null}
         headerRight={
@@ -132,7 +136,22 @@ export function PickerDialog({ m }: { m: SoloModel }) {
               equipment.
             </div>
           )}
-          {!selectedTruckId && !selectedTrailerId && !coupleFrom && !awaitingTruck && !loading && (
+          {awaitingTrailer && (
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.3)",
+                background: "rgba(255,255,255,0.06)",
+                padding: "10px 12px",
+                marginBottom: 12,
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
+              <b>Trailer parked.</b> Tap a trailer to hook up to{" "}
+              {trucks.find((t) => t.truck_id === selectedTruckId)?.truck_name ?? "the truck"}, or tap Done to run bobtail.
+            </div>
+          )}
+          {!selectedTruckId && !selectedTrailerId && !coupleFrom && !awaitingTruck && !awaitingTrailer && !loading && (
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 12 }}>
               Tap your truck and trailer pair and choose Select. Otherwise tap your truck, then Couple, then tap your trailer.
             </div>
@@ -148,8 +167,8 @@ export function PickerDialog({ m }: { m: SoloModel }) {
             loading={loading}
             onCombo={(c) => setDetailComboId(c.comboId)}
             pendingId={coupleFrom?.id ?? null}
-            onTruck={(u) => boardTapTruck(u.id)}
-            onTrailer={(u) => boardTapTrailer(u.id)}
+            onTruck={(u) => (awaitingTruck && selectedTrailerId ? setPairConfirm({ truckId: u.id, trailerId: selectedTrailerId, second: "truck" }) : boardTapTruck(u.id))}
+            onTrailer={(u) => (awaitingTrailer && selectedTruckId ? setPairConfirm({ truckId: selectedTruckId, trailerId: u.id, second: "trailer" }) : boardTapTrailer(u.id))}
             canAdd={canAddRemove}
             onAddTruck={() => setAddTruckOpen(true)}
             onAddTrailer={() => setAddTrailerOpen(true)}
@@ -172,13 +191,7 @@ export function PickerDialog({ m }: { m: SoloModel }) {
           )}
           <button
             type="button"
-            onClick={() => {
-              setPickerOpen(false);
-              if (awaitingTruck) {
-                setAwaitingTruck(false);
-                setSelectedTrailerId(null);
-              }
-            }}
+            onClick={requestClose}
             style={{ ...saveBtnStyle, marginTop: canImport ? 10 : 20 }}
           >
             Done

@@ -15,7 +15,7 @@
 import React from "react";
 
 export default function UnitPickerSheet({
-  open, truckName, trailerName, onPickTruck, onPickTrailer, onCancel,
+  open, truckName, trailerName, onPickTruck, onPickTrailer, onPickBoth, onCancel,
   title = "Edit which unit?",
   subtitle = "Opens that unit's file -- documents, permits, and identity fields.",
 }: {
@@ -24,6 +24,8 @@ export default function UnitPickerSheet({
   trailerName: string | null;
   onPickTruck: () => void;
   onPickTrailer: () => void;
+  /** Adds a "Both" choice (the STUD flow parks a pair together). */
+  onPickBoth?: () => void;
   onCancel: () => void;
   /** Overridable so other "pick which unit" flows (e.g. the Update Status
    *  button) can reuse this same sheet with their own copy, defaulting to
@@ -55,6 +57,12 @@ export default function UnitPickerSheet({
         {trailerName && (
           <button type="button" onClick={onPickTrailer} style={optionStyle}>
             Trailer · {trailerName}
+          </button>
+        )}
+
+        {onPickBoth && truckName && trailerName && (
+          <button type="button" onClick={onPickBoth} style={optionStyle}>
+            Both · {truckName} / {trailerName}
           </button>
         )}
 
