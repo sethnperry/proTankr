@@ -129,6 +129,8 @@ export function useSoloState(props: Props) {
   // Combo pop-out (tap a connected combo on the picker) and the three things its buttons open.
   const [detailComboId, setDetailComboId] = useState<string | null>(null);
   const [dropSwapOpen, setDropSwapOpen] = useState(false);
+  // Drop / Swap opened straight from the main Equipment screen: the pair's own pop-out stays hidden behind it.
+  const [dropDirect, setDropDirect] = useState(false);
   const [studPickOpen, setStudPickOpen] = useState(false);
   const [docDraft, setDocDraft] = useState<{ kind: "truck" | "trailer"; id: string; files: File[] } | null>(null);
   const [docUnit, setDocUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
@@ -260,6 +262,8 @@ export function useSoloState(props: Props) {
     setDetailComboId,
     dropSwapOpen,
     setDropSwapOpen,
+    dropDirect,
+    setDropDirect,
     studPickOpen,
     setStudPickOpen,
     docDraft,

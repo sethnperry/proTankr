@@ -35,6 +35,8 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
     setDocDraft,
     setDocUnit,
     setDropSwapOpen,
+    dropDirect,
+    setDropDirect,
     setSelectedTrailerId,
     setPickerOpen,
     setSelectedTruckId,
@@ -83,7 +85,7 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
       {/* ── Combo pop-out: tap a connected combo on the picker ── */}
       {detailRow && (
         <ComboDetailSheet
-          open
+          open={!dropDirect}
           onClose={() => setDetailComboId(null)}
           companyId={companyId}
           truck={detailRow.truck}
@@ -173,6 +175,7 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
               };
               const closeAll = () => {
                 setDropSwapOpen(false);
+                setDropDirect(false);
                 setDetailComboId(null);
               };
               if (!detailMine) {
@@ -229,7 +232,7 @@ export function UnitPopouts({ m }: { m: SoloModel }) {
             })()}
             <button
               type="button"
-              onClick={() => setDropSwapOpen(false)}
+              onClick={() => { setDropSwapOpen(false); if (dropDirect) { setDropDirect(false); setDetailComboId(null); } }}
               style={{
                 width: "100%",
                 padding: "10px 14px",

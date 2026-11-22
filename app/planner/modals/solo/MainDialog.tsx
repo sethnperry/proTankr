@@ -30,6 +30,10 @@ export function MainDialog({ m }: { m: SoloModel }) {
     selectedTruckId,
     serviceLines,
     setPickerOpen,
+    setDetailComboId,
+    setDropSwapOpen,
+    setDropDirect,
+    selectedComboId,
     setScaleHistoryOpen,
     setScaleOpen,
     setServiceHistoryOpen,
@@ -179,6 +183,12 @@ export function MainDialog({ m }: { m: SoloModel }) {
             {tools?.onTruckDown && (
               <button type="button" onClick={() => { handleClose(); tools.onTruckDown?.(); }} style={darkBtn}>
                 <ToolGlyph name="truck" color="#fff" />Truck down
+              </button>
+            )}
+            {selectedCombo && selectedComboId && (
+              <button type="button" style={darkBtn}
+                onClick={() => { setDropDirect(true); setDetailComboId(selectedComboId); setDropSwapOpen(true); }}>
+                <ToolGlyph name="truck" color="#fff" />Drop trailer / Park truck
               </button>
             )}
             <button type="button" onClick={() => setPickerOpen(true)} style={darkBtn}>

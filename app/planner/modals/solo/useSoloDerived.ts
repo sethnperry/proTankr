@@ -103,6 +103,21 @@ export function useSoloDerived(
       ),
     [trucks, trailers, combos, filter],
   ); // eslint-disable-line react-hooks/exhaustive-deps
+  // The same pairs with no region filter: a pop-out opened from the main screen (Drop trailer / Park truck) must find the driver's
+  // own pair even when the picker's filter would hide it.
+  const allBoardRows = useMemo(
+    () =>
+      buildTrackRows(
+        trucks.map((t) => toUnit(t, "truck")),
+        trailers.map((t) => toUnit(t, "trailer")),
+        combos
+          .filter((c) => c.active !== false && c.truck_id && c.trailer_id)
+          .map((c) => ({ comboId: c.combo_id, truckId: String(c.truck_id), trailerId: String(c.trailer_id) })),
+        { region: null, localArea: null, awayOnly: false },
+        "",
+      ),
+    [trucks, trailers, combos],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
   const claimedByCombo = useMemo(() => Object.fromEntries(combos.map((c) => [c.combo_id, c.claimed_by])), [combos]);
   const boardStatus = useEquipmentBoardStatus(
     open,
@@ -111,7 +126,7 @@ export function useSoloDerived(
     combos.length,
     trucks.map((t) => t.truck_id),
   );
-  const detailRow = detailComboId ? (boardRows.combos.find((c) => c.comboId === detailComboId) ?? null) : null;
+  const detailRow = detailComboId ? (boardRows.combos.find((c) => c.comboId === detailComboId) ?? allBoardRows.combos.find((c) => c.comboId === detailComboId) ?? null) : null;
   const detailCombo = detailComboId ? (combos.find((c) => c.combo_id === detailComboId) ?? null) : null;
   const detailMine = !!detailComboId && String(detailComboId) === String(selectedComboId);
 
