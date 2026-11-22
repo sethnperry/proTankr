@@ -3,7 +3,7 @@
 //
 // Applies the plan chosen on Begin Trip, once, the first time the Planner opens for
 // that trip. A saved plan (A-E) is loaded after presets have synced. A dispatch
-// "quick load" instead runs its layout with no caps and CG centered, saving nothing.
+// "quick load" instead runs its layout with CG centered, keeping the driver's caps, saving nothing.
 
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -39,11 +39,7 @@ export function useTripPlanApply(i: Inputs) {
   useEffect(() => {
     if (!effectiveUserId || !tripId || !planSlots.presetsReady || !comboId || compartmentCount === 0) return;
     if (!takeTripQuick(effectiveUserId, tripId)) return;
-    setCompPlan((prev) => {
-      const next: Record<number, CompPlanInput> = {};
-      for (const [k, v] of Object.entries(prev)) next[Number(k)] = { ...v, capOverride: undefined };
-      return next;
-    });
+    // The driver's own compartment caps are a safety limit, not part of a layout: a quick load keeps them.
     setCgSlider(0.5);
     setCaptureBaselineNext(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
