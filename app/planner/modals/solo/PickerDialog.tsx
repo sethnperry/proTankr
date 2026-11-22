@@ -15,6 +15,9 @@ export function PickerDialog({ m }: { m: SoloModel }) {
   const {
     awaitingTruck,
     awaitingTrailer,
+    awaitTrailerId,
+    setAwaitingTrailer,
+    setAwaitTrailerId,
     setPairConfirm,
     setCloseAsk,
     boardRows,
@@ -51,8 +54,11 @@ export function PickerDialog({ m }: { m: SoloModel }) {
   // parked or given a truck (a trailer is never in use without power).
   const requestClose = () => {
     if (awaitingTrailer && selectedTruckId && !selectedTrailerId) { setCloseAsk({ kind: "truck_only", then: "picker" }); return; }
-    if (awaitingTruck && selectedTrailerId && !selectedTruckId) { setCloseAsk({ kind: "trailer_only", then: "picker" }); return; }
+    if (awaitingTruck && awaitTrailerId) { setCloseAsk({ kind: "trailer_only", then: "picker", trailerId: awaitTrailerId }); return; }
     setPickerOpen(false);
+    setAwaitingTruck(false);
+    setAwaitingTrailer(false);
+    setAwaitTrailerId(null);
   };
   return (
     <>
@@ -132,8 +138,8 @@ export function PickerDialog({ m }: { m: SoloModel }) {
               }}
             >
               <b>Truck parked.</b> Tap a truck to hook up to{" "}
-              {trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name ?? "the trailer"}, or tap Done to leave without
-              equipment.
+              {trailers.find((t) => t.trailer_id === awaitTrailerId)?.trailer_name ?? "the trailer"}, or tap Done to park the trailer or
+              choose another way out.
             </div>
           )}
           {awaitingTrailer && (
@@ -167,7 +173,7 @@ export function PickerDialog({ m }: { m: SoloModel }) {
             loading={loading}
             onCombo={(c) => setDetailComboId(c.comboId)}
             pendingId={coupleFrom?.id ?? null}
-            onTruck={(u) => (awaitingTruck && selectedTrailerId ? setPairConfirm({ truckId: u.id, trailerId: selectedTrailerId, second: "truck" }) : boardTapTruck(u.id))}
+            onTruck={(u) => (awaitingTruck && awaitTrailerId ? setPairConfirm({ truckId: u.id, trailerId: awaitTrailerId, second: "truck" }) : boardTapTruck(u.id))}
             onTrailer={(u) => (awaitingTrailer && selectedTruckId ? setPairConfirm({ truckId: selectedTruckId, trailerId: u.id, second: "trailer" }) : boardTapTrailer(u.id))}
             canAdd={canAddRemove}
             onAddTruck={() => setAddTruckOpen(true)}

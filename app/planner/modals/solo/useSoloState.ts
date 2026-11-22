@@ -140,7 +140,10 @@ export function useSoloState(props: Props) {
   const [studTargetOpen, setStudTargetOpen] = useState(false);
   const [awaitingTrailer, setAwaitingTrailer] = useState(false);
   const [pairConfirm, setPairConfirm] = useState<{ truckId: string; trailerId: string; second: "truck" | "trailer" } | null>(null);
-  const [closeAsk, setCloseAsk] = useState<{ kind: "truck_only" | "trailer_only"; then: "picker" | "main" } | null>(null);
+  const [closeAsk, setCloseAsk] = useState<{ kind: "truck_only" | "trailer_only"; then: "picker" | "main"; trailerId?: string | null } | null>(null);
+  // The trailer waiting for a new truck. Kept here, not in the database: the database never holds a trailer without a truck, so
+  // the app's own selection (which refreshes from it) can't be trusted to remember it.
+  const [awaitTrailerId, setAwaitTrailerId] = useState<string | null>(null);
   // Loose-unit pop-out, and the unit waiting for its partner after "Couple".
   const [detailUnit, setDetailUnit] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
   const [coupleFrom, setCoupleFrom] = useState<{ kind: "truck" | "trailer"; id: string } | null>(null);
@@ -284,6 +287,8 @@ export function useSoloState(props: Props) {
     setPairConfirm,
     closeAsk,
     setCloseAsk,
+    awaitTrailerId,
+    setAwaitTrailerId,
     detailUnit,
     setDetailUnit,
     coupleFrom,

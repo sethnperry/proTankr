@@ -6,7 +6,7 @@
 import React from "react";
 
 import type { TruckStatus, TrailerStatus } from "./types";
-import { TRUCK_STATUSES, TRAILER_STATUSES, D } from "./helpers";
+import { TRUCK_STATUSES, PARKED_TRAILER_STATUSES, D } from "./helpers";
 import { BackBtn } from "./BackBtn";
 import { FieldLabel } from "./FieldLabel";
 import { LocationField } from "./LocationField";
@@ -87,7 +87,7 @@ export function DetailsStep({ m }: { m: DecoupleModel }) {
         <div style={{ marginBottom: 14 }}>
           <FieldLabel>Trailer status</FieldLabel>
           <StatusPicker
-            options={TRAILER_STATUSES as any}
+            options={PARKED_TRAILER_STATUSES as any}
             value={trailerStatus as TrailerStatus}
             onChange={(v) => setTrailerStatus(v)}
           />
@@ -138,7 +138,7 @@ export function DetailsStep({ m }: { m: DecoupleModel }) {
         <div style={{ marginBottom: 14 }}>
           <FieldLabel>Status</FieldLabel>
           <StatusPicker
-            options={TRAILER_STATUSES as any}
+            options={PARKED_TRAILER_STATUSES as any}
             value={trailerStatus as TrailerStatus}
             onChange={(v) => setTrailerStatus(v)}
           />
@@ -192,7 +192,7 @@ export function DetailsStep({ m }: { m: DecoupleModel }) {
         <div style={{ marginBottom: 14 }}>
           <FieldLabel>Status</FieldLabel>
           <StatusPicker
-            options={TRAILER_STATUSES as any}
+            options={PARKED_TRAILER_STATUSES as any}
             value={trailerStatus as TrailerStatus}
             onChange={(v) => setTrailerStatus(v)}
           />

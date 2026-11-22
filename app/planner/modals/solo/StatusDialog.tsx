@@ -60,12 +60,15 @@ export function StatusDialog({ m }: { m: SoloModel }) {
     setPairConfirm,
     closeAsk,
     setCloseAsk,
+    awaitTrailerId,
+    setAwaitTrailerId,
     finishCouple,
     openStatusFor,
   } = m;
 
   const truckName = trucks.find((t) => t.truck_id === selectedTruckId)?.truck_name ?? null;
   const trailerName = trailers.find((t) => t.trailer_id === selectedTrailerId)?.trailer_name ?? null;
+  const askTrailerName = trailers.find((t) => t.trailer_id === closeAsk?.trailerId)?.trailer_name ?? null;
   const refreshAll = async () => {
     await onRefreshCurrentEquipment?.();
     await Promise.all([loadEquipment(), onRefreshCombos()]);
@@ -80,7 +83,8 @@ export function StatusDialog({ m }: { m: SoloModel }) {
       const c = ((data ?? []) as any[])[0];
       if (!c) return;
       await supabase.rpc("decouple_combo", { p_combo_id: c.combo_id });
-      if (setCurrentEquipment) await setCurrentEquipment(keep === "truck" ? c.truck_id : null, keep === "trailer" ? c.trailer_id : null);
+      // Only a truck is held on its own (bobtail). A trailer is never held without a truck: it waits in the app (awaitTrailerId).
+      if (setCurrentEquipment) await setCurrentEquipment(keep === "truck" ? c.truck_id : null, null);
     } catch { /* the status already saved; the pair can be split from the picker */ }
   }
 
@@ -105,6 +109,7 @@ export function StatusDialog({ m }: { m: SoloModel }) {
     if (!pc) return;
     setAwaitingTruck(false);
     setAwaitingTrailer(false);
+    setAwaitTrailerId(null);
     setPickerOpen(false);
     finishCouple(pc.truckId, pc.trailerId, pc.second); // the usual confirms (in use, away, new tare) still apply
   }
@@ -166,7 +171,7 @@ export function StatusDialog({ m }: { m: SoloModel }) {
               onSelectComboId("");
               setStatusFlow(null);
               if (keepTruck) { setAwaitingTruck(false); setAwaitingTrailer(true); setPickerOpen(true); }
-              else { setAwaitingTruck(false); setPickerOpen(false); }
+              else { setAwaitingTruck(false); setAwaitTrailerId(null); setPickerOpen(false); }
               void (async () => { await splitPair("trailer", statusTarget.id, keepTruck ? "truck" : null); await refreshAll(); })();
               return;
             }
@@ -177,8 +182,8 @@ export function StatusDialog({ m }: { m: SoloModel }) {
               setSelectedTruckId(null);
               onSelectComboId("");
               setStatusFlow(null);
-              if (keepTrailer) { setAwaitingTrailer(false); setAwaitingTruck(true); setPickerOpen(true); }
-              else { setAwaitingTruck(false); setPickerOpen(false); }
+              if (keepTrailer) { setAwaitingTrailer(false); setAwaitTrailerId(selectedTrailerId); setAwaitingTruck(true); setPickerOpen(true); }
+              else { setAwaitingTruck(false); setAwaitTrailerId(null); setPickerOpen(false); }
               void (async () => { await splitPair("truck", statusTarget.id, keepTrailer ? "trailer" : null); await refreshAll(); })();
               return;
             }
@@ -213,9 +218,9 @@ export function StatusDialog({ m }: { m: SoloModel }) {
 
       {/* Closing with a trailer and no truck: a trailer is never in use without power. */}
       {closeAsk?.kind === "trailer_only" && (
-        <Sheet title="This trailer needs a truck" body={`Trailer ${trailerName ?? ""} can't be in use without power. Park it with a status, or select a truck for it.`}>
-          <button type="button" style={primaryStyle} onClick={() => { setCloseAsk(null); if (selectedTrailerId) { setStatusFlow("drop_trailer"); openStatusFor("trailer", selectedTrailerId); } }}>STUD the trailer</button>
-          <button type="button" style={optStyle} onClick={() => { setCloseAsk(null); setAwaitingTrailer(false); setAwaitingTruck(true); setPickerOpen(true); }}>Select a truck</button>
+        <Sheet title="This trailer needs a truck" body={`Trailer ${askTrailerName ?? ""} can't be in use without power. Park it with a status, or select a truck for it.`}>
+          <button type="button" style={primaryStyle} onClick={() => { const id = closeAsk.trailerId; setCloseAsk(null); if (id) { setStatusFlow("drop_trailer"); openStatusFor("trailer", id); } }}>STUD the trailer</button>
+          <button type="button" style={optStyle} onClick={() => { const id = closeAsk.trailerId ?? null; setCloseAsk(null); setAwaitingTrailer(false); setAwaitTrailerId(id); setAwaitingTruck(true); setPickerOpen(true); }}>Select a truck</button>
           <button type="button" style={optStyle} onClick={() => setCloseAsk(null)}>Cancel</button>
         </Sheet>
       )}

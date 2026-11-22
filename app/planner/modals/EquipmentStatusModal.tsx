@@ -91,6 +91,15 @@ export default function EquipmentStatusModal({
   endShift?: boolean;
 }) {
   const [status, setStatus] = useState<FleetStatus>("in_use");
+  // A trailer that is not coupled to a truck can't be In Use: no trailer is in use without power.
+  const [looseTrailer, setLooseTrailer] = useState(false);
+  useEffect(() => {
+    if (!open || pair || unitKind !== "trailer") { setLooseTrailer(false); return; }
+    let alive = true;
+    void supabase.from("equipment_combos").select("combo_id").eq("trailer_id", unitId).eq("active", true).limit(1)
+      .then(({ data }) => { if (alive) { const loose = !(data && data.length); setLooseTrailer(loose); if (loose) setStatus((s) => (s === "in_use" ? "readyline" : s)); } });
+    return () => { alive = false; };
+  }, [open, pair, unitKind, unitId]);
   const [region, setRegion] = useState("");
   const [localArea, setLocalArea] = useState("");
   const [subStatus, setSubStatus] = useState("");
@@ -281,7 +290,7 @@ export default function EquipmentStatusModal({
         <div>
           <label style={fieldLabel}>Status</label>
           <div style={{ display: "grid", gap: 8 }}>
-            {STATUS_OPTIONS.filter((o) => (!allowed || allowed.includes(o.value)) && !(onParkPreloaded && o.value === "readyline")).map((o) => {
+            {STATUS_OPTIONS.filter((o) => (!allowed || allowed.includes(o.value)) && !(onParkPreloaded && o.value === "readyline") && !(looseTrailer && o.value === "in_use")).map((o) => {
               const sel = status === o.value;
               return (
                 <button

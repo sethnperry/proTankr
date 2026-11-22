@@ -226,7 +226,7 @@ export function useSoloActions(
   // set current_* itself), so it's skipped. No-ops when nothing changed.
   async function handleClose() {
     // A trailer is never left running without a truck, and a truck without a trailer is confirmed as a bobtail.
-    if (selectedTrailerId && !selectedTruckId) { setCloseAsk({ kind: "trailer_only", then: "main" }); return; }
+    if (selectedTrailerId && !selectedTruckId) { setCloseAsk({ kind: "trailer_only", then: "main", trailerId: selectedTrailerId }); return; }
     if (selectedTruckId && !selectedTrailerId) {
       const t = trucks.find((x) => x.truck_id === selectedTruckId);
       if (!(t?.status_code === "in_use" && (t.sub_status ?? "").toLowerCase() === "bobtail")) { setCloseAsk({ kind: "truck_only", then: "main" }); return; }

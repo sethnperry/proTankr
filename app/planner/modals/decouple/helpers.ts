@@ -19,6 +19,9 @@ export const TRAILER_STATUSES: { code: TrailerStatus; label: string; sub: string
   { code: "deadline",  label: "Deadline",  sub: "Down for repairs, inspection, or cleaning — do not couple", warn: true },
 ];
 
+/** A trailer taken off its truck is parked, never "In Use": no trailer is in use without power. */
+export const PARKED_TRAILER_STATUSES = TRAILER_STATUSES.filter((s) => s.code !== "in_use");
+
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
 export const D = {

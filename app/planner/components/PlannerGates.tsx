@@ -61,7 +61,7 @@ export function PlannerGates({ onboardingActive, active, terminalLabel, onOnboar
   }
   return (
     <SetupGate
-      comboSelected={!!equipment.selectedComboId || equipment.isBobtail || equipment.isTrailerOnly}
+      comboSelected={!!equipment.selectedComboId || equipment.isBobtail}
       // Location and terminal are picked where they're needed (Begin Trip's pickup, the terminal sheet), not up front.
       locationSelected
       terminalSelected
