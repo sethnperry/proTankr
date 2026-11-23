@@ -24,6 +24,7 @@ import { cleanOdometer } from "@/lib/moves/emptyMoves";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase/client";
+import { readLastEquipment, resolveLast, lastFromTrips } from "@/lib/equipment/lastEquipment";
 
 import { topUnread, totalUnread, type SquawkCtx, type SquawkType } from "@/lib/squawk/squawk";
 import { playChirp, useMyArea, useSquawkAlerts } from "@/lib/squawk/useSquawk";
@@ -449,5 +450,31 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     }
   };
   useEffect(() => { if (!addingLoad) setPlanEquip(null); }, [addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Adding a load to the day starts on the truck last used (and the trailer coupled to it) when the driver holds nothing, since
+  // parking at the end of a shift lets go of the truck but leaves the pair coupled. Picking in the equipment modal claims the
+  // pair, so the held equipment takes over from this default once that modal closes.
+  useEffect(() => {
+    if (!addingLoad || !userId || equipment.currentTruckName || planEquip) return;
+    let live = true;
+    void (async () => {
+      const { data: combos } = await supabase.from("equipment_combos").select("truck_id, trailer_id, active").eq("active", true);
+      const last = resolveLast(readLastEquipment(userId), lastFromTrips(((trips ?? []) as any[]).map((t) => ({ truck_id: t.truck_id ?? null, trailer_id: t.trailer_id ?? null, started_at: t.started_at ?? null, driver_id: t.driver_id ?? null })), userId), (combos ?? []) as any[]);
+      if (!last || !live) return;
+      const [a, b] = await Promise.all([
+        supabase.from("trucks").select("truck_name").eq("truck_id", last.truckId).maybeSingle(),
+        last.trailerId ? supabase.from("trailers").select("trailer_name").eq("trailer_id", last.trailerId).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      if (!live) return;
+      const tn = (a.data as any)?.truck_name, rn = (b.data as any)?.trailer_name;
+      setPlanEquip((cur) => cur ?? { truckId: last.truckId, trailerId: last.trailerId, label: [tn ? `Truck ${tn}` : "No truck", rn ? `Trailer ${rn}` : "Bobtail"].join(" · ") });
+    })();
+    return () => { live = false; };
+  }, [addingLoad, userId, equipment.currentTruckName]); // eslint-disable-line react-hooks/exhaustive-deps
+  const wasEquipOpen = useRef(false);
+  useEffect(() => {
+    if (shell.equipOpen) { wasEquipOpen.current = true; return; }
+    if (wasEquipOpen.current && addingLoad && equipment.currentTruckName) setPlanEquip(null);
+    wasEquipOpen.current = false;
+  }, [shell.equipOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
 }
