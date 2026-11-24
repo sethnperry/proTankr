@@ -261,6 +261,33 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     setVerifyActive(true);
     setVerifyTripId(trip.trip_id);
   };
+  // /planner/home?edit=<trip>: a dispatched load tapped in the Trips list opens its details for editing. Never begins it.
+  const editParamDone = useRef(false);
+  useEffect(() => {
+    if (editParamDone.current || typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("edit");
+    if (!id) { editParamDone.current = true; return; }
+    if (!dispatchedList.length) return;
+    editParamDone.current = true;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("edit");
+    window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
+    const t = dispatchedList.find((x) => x.trip_id === id);
+    if (!t) return;
+    verifyBaseTerminal.current = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    setPlanEquip(null);
+    setEditDispatchedId(id);
+    setSheetOpen(true);
+    void (async () => {
+      if (!t.planned_truck_id) return;
+      const [a, b] = await Promise.all([
+        supabase.from("trucks").select("truck_name").eq("truck_id", t.planned_truck_id).maybeSingle(),
+        t.planned_trailer_id ? supabase.from("trailers").select("trailer_name").eq("trailer_id", t.planned_trailer_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const tn = (a.data as any)?.truck_name, rn = (b.data as any)?.trailer_name;
+      setPlanEquip({ truckId: t.planned_truck_id, trailerId: t.planned_trailer_id ?? null, label: [tn ? `Truck ${tn}` : "No truck", rn ? `Trailer ${rn}` : "Bobtail"].join(" · ") });
+    })();
+  }, [dispatchedList.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // /planner/home?run=<trip>: tapped from the Trips list. Starts that dispatched load once, the same as its Run button.
   const runParamDone = useRef(false);
   useEffect(() => {
@@ -291,31 +318,39 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     pickAtTap.current = null;
     if (picked) { verifyBaseTerminal.current = "__picked__"; bumpPick((n) => n + 1); }
   }, [shell.termOpen, shell.locOpen, shell.rackPickerOpen, shell.rackResolving, shell.terminalPicks]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A dispatched, not-yet-begun load opened for editing from the Trips list (never begun from there).
+  const [editDispatchedId, setEditDispatchedId] = useState<string | null>(null);
+  const dTrip = editDispatchedId && store ? trips.find((t) => t.trip_id === editDispatchedId && t.status === "dispatched") ?? null : null;
+  const dChildren = useMemo(() => (dTrip && store ? tripChildren(store, dTrip.trip_id) : null), [store, dTrip?.trip_id, trips]); // eslint-disable-line react-hooks/exhaustive-deps
+  const eTrip = dTrip ?? openTrip;
+  const eChildren = dTrip ? dChildren : children;
+  const eEditing = dTrip ? true : editing;
+  const eDeliveries = useMemo(() => (dTrip && store ? store.list("trip_deliveries", (d) => d.trip_id === dTrip.trip_id) : snap?.deliveries ?? []), [store, dTrip?.trip_id, trips, snap]); // eslint-disable-line react-hooks/exhaustive-deps
   const dispatchedPickup = (() => {
-    const pk = editing ? children?.pickup : null;
-    if (!verifyActive || !pk || pk.load_id || pk.arrived_at || !pk.terminal_id) return null;
+    const pk = eEditing ? eChildren?.pickup : null;
+    if ((!verifyActive && !dTrip) || !pk || pk.load_id || pk.arrived_at || !pk.terminal_id) return null;
     const cur = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
     return cur === verifyBaseTerminal.current || cur === null ? pk : null;
   })();
 
   const initialValues = useMemo<StartLoadValues>(() => {
     if (resumeDraft) return resumeDraft;
-    if (openTrip && children && snap && !addingLoad) {
-      const planned = plannedDeliveries(snap.deliveries);
+    if (eTrip && eChildren && (dTrip || snap) && !addingLoad) {
+      const planned = plannedDeliveries(eDeliveries as any);
       return {
-        orderNumber: children.primaryOrder?.order_number ?? "",
-        extraOrderNumbers: children.extraOrders.map((o) => o.order_number ?? ""),
+        orderNumber: eChildren.primaryOrder?.order_number ?? "",
+        extraOrderNumbers: eChildren.extraOrders.map((o) => o.order_number ?? ""),
         // Dispatch's shipper/customer first; blank falls back to the driver's last entries.
-        shipper: openTrip.shipper || (userId ? lastShipperCustomer(trips, userId).shipper : null) || "",
-        customer: openTrip.customer || (userId ? lastShipperCustomer(trips, userId).customer : null) || "",
+        shipper: eTrip.shipper || (userId ? lastShipperCustomer(trips, userId).shipper : null) || "",
+        customer: eTrip.customer || (userId ? lastShipperCustomer(trips, userId).customer : null) || "",
         deliveries: planned.length
           ? planned.map((d) => ({ locationId: d.location_id, oneOffName: d.one_off_name, deliveryType: d.delivery_type }))
           : [{ locationId: null, oneOffName: "", deliveryType: "drop" }],
-        beginMiles: openTrip.begin_miles == null ? "" : String(openTrip.begin_miles),
-        startCity: openTrip.start_city ?? "",
-        startState: openTrip.start_state ?? "",
-        planSlot: getTripPlan(userId, openTrip.trip_id)?.slot ?? null,
-        supplier: getTripSupplier(userId, openTrip.trip_id),
+        beginMiles: eTrip.begin_miles == null ? "" : String(eTrip.begin_miles),
+        startCity: eTrip.start_city ?? "",
+        startState: eTrip.start_state ?? "",
+        planSlot: getTripPlan(userId, eTrip.trip_id)?.slot ?? null,
+        supplier: getTripSupplier(userId, eTrip.trip_id),
         savePlan: null,
       };
     }
@@ -359,7 +394,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       if (star) return { locationId: star.location_id, oneOffName: null, deliveryType: star.delivery_type };
       return { locationId: null, oneOffName: "", deliveryType: "drop" };
     }
-  }, [openTrip, children, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId, resumeDraft, addingLoad]);
+  }, [eTrip, eChildren, snap, trips, userId, truckId, store, locations, storedLocId, location.selectedTerminalId, resumeDraft, addingLoad]);
 
   const submit = async (v: StartLoadValues) => {
     if (!store || !userId || !companyId) {
@@ -377,7 +412,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         setError(`Order ${repeated[0]} is entered twice.`);
         return;
       }
-      const excludeTrip = editing ? openTrip?.trip_id ?? null : null;
+      const excludeTrip = eEditing ? eTrip?.trip_id ?? null : null;
       const localUsed = usedOrderNumbers(trips, store.list("trip_orders", () => true), excludeTrip);
       const taken = conflicts(numbers, localUsed);
       if (!taken.length) taken.push(...(await serverOrderConflicts(companyId, numbers, excludeTrip)));
@@ -412,8 +447,8 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         {
           now: new Date(),
           newId,
-          existing: editing && openTrip && children
-            ? { trip: openTrip, orders: children.orders, pickups: children.pickups, deliveries: store.list("trip_deliveries", (d) => d.trip_id === openTrip.trip_id) }
+          existing: eEditing && eTrip && eChildren
+            ? { trip: eTrip, orders: eChildren.orders, pickups: eChildren.pickups, deliveries: store.list("trip_deliveries", (d) => d.trip_id === eTrip.trip_id) }
             : null,
         },
       );
@@ -433,9 +468,24 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         rows.events = [];
         if (rows.pickups[0] && v.supplier?.supplier_id) Object.assign(rows.pickups[0], { supplier_id: v.supplier.supplier_id });
       }
+      if (dTrip) {
+        // Editing a dispatched load: the details change, it stays dispatched, and nothing about beginning it moves.
+        Object.assign(rows.trip, {
+          truck_id: null, trailer_id: null, begin_miles: null, start_city: null, start_state: null,
+          planned_truck_id: planEquip ? planEquip.truckId : dTrip.planned_truck_id ?? null,
+          planned_trailer_id: planEquip ? planEquip.trailerId : dTrip.planned_trailer_id ?? null,
+          client_updated_at: new Date().toISOString(),
+        });
+        rows.events = [];
+        if (rows.pickups[0] && v.supplier?.supplier_id) Object.assign(rows.pickups[0], { supplier_id: v.supplier.supplier_id });
+        applyStartLoad(store, rows);
+        setEditDispatchedId(null); setSheetOpen(false); setVerifyActive(false);
+        void syncNow();
+        return;
+      }
       applyStartLoad(store, rows);
       // Editing the pickup's supplier saves it on the pickup itself too, not only on this phone.
-      if (editing && !addingLoad && children?.pickup && !children.pickup.load_id) store.put("trip_pickups", { pickup_id: children.pickup.pickup_id, supplier_id: v.supplier?.supplier_id ?? null });
+      if (eEditing && !addingLoad && eChildren?.pickup && !eChildren.pickup.load_id) store.put("trip_pickups", { pickup_id: eChildren.pickup.pickup_id, supplier_id: v.supplier?.supplier_id ?? null });
       // Dispatch's plan: save it as a plan slot when asked (optionally changing it in the Planner first).
       let planSlot = v.planSlot;
       let openPlanner = false;
@@ -468,8 +518,8 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       const prevSupplier = getTripSupplier(userId, rows.trip.trip_id);
       setTripSupplier(userId, rows.trip.trip_id, v.supplier);
       const pickupTid = dispatchedPickup ? String(dispatchedPickup.terminal_id) : location.selectedTerminalId ? String(location.selectedTerminalId) : null;
-      const pickupLoaded = !!(editing && children?.pickup?.load_id);
-      if (!addingLoad && v.supplier && pickupTid && !pickupLoaded && (!editing || !sameSupplier(prevSupplier, v.supplier))) {
+      const pickupLoaded = !!(eEditing && eChildren?.pickup?.load_id);
+      if (!addingLoad && v.supplier && pickupTid && !pickupLoaded && (!eEditing || !sameSupplier(prevSupplier, v.supplier))) {
         seedTerminalPicks(userId, pickupTid, v.supplier);
         if (v.supplier.supplier_id) void linkSupplierToTerminal({ companyId, supplierId: v.supplier.supplier_id, terminalId: pickupTid });
       }
@@ -511,5 +561,5 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
   useEffect(() => {
     if (addingLoad && equipment.currentTruckName && defaultPlanEquip.current) { defaultPlanEquip.current = false; setPlanEquip(null); }
   }, [equipment.currentTruckName, addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { ...p, beginPopOpen, setBeginPopOpen, confirmBeginPop, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
+  return { ...p, editDispatchedId, setEditDispatchedId, dTrip, dChildren, beginPopOpen, setBeginPopOpen, confirmBeginPop, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
 }

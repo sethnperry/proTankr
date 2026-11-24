@@ -190,6 +190,9 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     beginDelivery,
     beginDispatchedLoad,
     beginPopOpen,
+    editDispatchedId,
+    setEditDispatchedId,
+    dChildren,
     setBeginPopOpen,
     confirmBeginPop,
     startEmptyMove,
@@ -1541,11 +1544,11 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
 
       <StartLoadSheet
         breakNote={breakNote}
-        planRequired={!(editing && children?.pickup?.load_id)}
+        planRequired={!editDispatchedId && !(editing && children?.pickup?.load_id)}
         requireShipperCustomer={settings.require_shipper_customer !== false}
         onPlanDetour={planDetour}
         open={sheetOpen}
-        editing={editing}
+        editing={editing || !!editDispatchedId}
         initial={initialValues}
         pickupLabel={dispatchedPickup ? [dispatchedPickup.name, [dispatchedPickup.city, dispatchedPickup.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") : editing && children?.pickup?.load_id ? children.pickup.name ?? pickupLabel : pickupLabel}
         pickupTerminalId={dispatchedPickup ? String(dispatchedPickup.terminal_id) : editing && children?.pickup?.load_id ? (children.pickup.terminal_id ? String(children.pickup.terminal_id) : null) : (location.selectedTerminalId ? String(location.selectedTerminalId) : null)}
@@ -1577,11 +1580,11 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onLocationAdded={() => void locList.reload()}
         busy={busy}
         error={error}
-        onClose={() => { setSheetOpen(false); setAddingLoad(false); setVerifyActive(false); }}
+        onClose={() => { setSheetOpen(false); setAddingLoad(false); setVerifyActive(false); setEditDispatchedId(null); setPlanEquip(null); }}
         onSubmit={submit}
-        forDriver={addingLoad ? "self" : null}
-        planEquipLabel={addingLoad ? (planEquip?.label ?? ([equipment.currentTruckName ? `Truck ${equipment.currentTruckName}` : "No truck", equipment.currentTruckName ? (equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Bobtail") : null].filter(Boolean).join(" · "))) : null}
-        onChangeEquipment={addingLoad ? () => setPlanEquipOpen(true) : undefined}
+        forDriver={addingLoad || editDispatchedId ? "self" : null}
+        planEquipLabel={addingLoad || editDispatchedId ? (planEquip?.label ?? ([equipment.currentTruckName ? `Truck ${equipment.currentTruckName}` : "No truck", equipment.currentTruckName ? (equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Bobtail") : null].filter(Boolean).join(" · "))) : null}
+        onChangeEquipment={addingLoad || editDispatchedId ? () => setPlanEquipOpen(true) : undefined}
         liveMiles={truckReading?.odometerMi ?? null}
         milesStatus={odometerStatus(truckReading ?? null, truckReadingFailed)}
         suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
