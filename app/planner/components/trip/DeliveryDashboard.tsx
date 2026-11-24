@@ -540,9 +540,14 @@ export function DeliveryDashboard({
   }, [delivered.map((c) => `${c.compartment_load_id}:${choice[c.compartment_load_id]}`).join("|"), JSON.stringify(splits), locationTanks, extraTanks]);
   const allTanks = useMemo(() => [...new Set(products.flatMap((p) => p.tanks))], [products]);
 
-  const intoTank = (n: string) => delivered.reduce((t, c) => t + targetsFor(c).filter((x) => x.tank === n).reduce((a, b) => a + b.gallons, 0), 0);
+  // Bio is blended on site from the store's bio tank into the same tank as its diesel, so it adds to the tank's rise (not to the load).
+  const bioOf = (c: TripCompartmentLoadRow) => parseBio(bio[c.compartment_load_id]) ?? 0;
+  const intoTank = (n: string) => delivered.reduce((t, c) => {
+    const ts = targetsFor(c), all = ts.reduce((a, b) => a + b.gallons, 0), b = bioOf(c);
+    return t + ts.filter((x) => x.tank === n).reduce((a, x) => a + x.gallons + (all > 0 ? b * (x.gallons / all) : 0), 0);
+  }, 0);
   const pairsFor = (tanks: string[]) => tanks.map((n) => ({ before: numOrNull(readings[n]?.before ?? ""), after: numOrNull(readings[n]?.after ?? "") }));
-  const discrepancyFor = (p: (typeof products)[number]) => tankDiscrepancy(p.gallons, pairsFor(p.tanks), unit);
+  const discrepancyFor = (p: (typeof products)[number]) => tankDiscrepancy(p.gallons + p.comps.reduce((t, c) => t + bioOf(c), 0), pairsFor(p.tanks), unit);
   const readingsDone = (p: (typeof products)[number]) =>
     p.tanks.length > 0 && pairsFor(p.tanks).every((x) => x.before != null && x.after != null);
 

@@ -96,7 +96,7 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
   }, [open, beganAt]);
   const num = (n: string) => { const v = parseFloat((vol[n] ?? "").replace(/,/g, "")); return Number.isFinite(v) ? v : null; };
   const allTanks = products.flatMap((p) => p.tanks);
-  const loadGallons = products.reduce((n, p) => n + p.gallons, 0);
+  const loadGallons = products.reduce((n, p) => n + p.gallons, 0) + bioTotal; // bio is blended on site into the same tanks
   const u = useMemo(() => ullage(allTanks.map((t) => ({ capacity: t.capacity, volume: num(t.number) })), loadGallons), [products, vol]); // eslint-disable-line react-hooks/exhaustive-deps
   const waited = Math.max(0, Math.round((Date.now() - Date.parse(arrivedAt)) / 60000));
   const finish = () => {
