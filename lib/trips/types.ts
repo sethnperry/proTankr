@@ -173,6 +173,8 @@ export type TripCompartmentLoadRow = Synced & {
   winterized: boolean | null;
   additive_amount: string | null;
   bio_blend: string | null;
+  /** Gallons of bio blended into this compartment at the drop (null = none). */
+  bio_gallons?: number | null;
   loading_driver_id: string | null;
 };
 

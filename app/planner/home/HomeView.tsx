@@ -3,6 +3,7 @@
 //
 // What the Driver Dashboard draws. Every value and handler comes from useHome.
 
+import { isDieselLike } from "@/lib/trips/deliveryDetails";
 import { ConfirmDay } from "../components/shift/ConfirmDay";
 import { requestHosRefresh } from "@/lib/telematics/useMyHos";
 import { releaseEquipment } from "@/lib/equipment/releaseEquipment";
@@ -1644,7 +1645,8 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
           siteName={deliveryName(finishDeliveryRow)} arrivedAt={finishDeliveryRow.arrived_at} beganAt={finishDeliveryRow.begin_at ?? null}
           products={dropProducts}
           slots={[...new Set([...Object.keys(compSizes).map(Number), ...onBoard(snap.compLoads).map((c) => c.comp_number)])].sort((a, b) => a - b)}
-          comps={onBoard(snap.compLoads).map((c) => { const i = productInfo(c.product_id); return { n: c.comp_number, bol: c.bol_number?.trim() || null, gallons: Number(c.gross_gallons ?? c.net_gallons ?? 0), color: i.hex ?? productColorFor(i.name) }; })}
+          comps={onBoard(snap.compLoads).map((c) => { const i = productInfo(c.product_id); return { n: c.comp_number, bol: c.bol_number?.trim() || null, gallons: Number(c.gross_gallons ?? c.net_gallons ?? 0), color: i.hex ?? productColorFor(i.name), id: c.compartment_load_id, code: i.code, diesel: isDieselLike(i.name), bio: c.bio_gallons != null ? String(c.bio_gallons) : "" }; })}
+          onBioSave={(m) => { if (!store) return; for (const c of onBoard(snap.compLoads)) { if (!isDieselLike(productInfo(c.product_id).name)) continue; store.put("trip_compartment_loads", { compartment_load_id: c.compartment_load_id, bio_gallons: m[c.compartment_load_id] ?? null }); } void syncNow?.(); }}
           board={finishDeliveryRow.location_id ? (
             <SiteBoard kind="location" id={finishDeliveryRow.location_id} name={deliveryName(finishDeliveryRow)} hideName trips={fleet.trips} product={productInfo} now={new Date()}
               etaFor={() => null} canOpen={(tid) => fleet.trips.some((f) => f.trip.trip_id === tid && f.trip.driver_id === userId)}

@@ -28,6 +28,8 @@ import { logHere } from "@/lib/errors/client";
 import { useSiteNote } from "@/lib/sites/useSites";
 import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
 import { BolPagesSheet } from "./BolPagesSheet";
+import { BioBlendSheet, type BioComp } from "./BioBlendSheet";
+import { bioLabel, parseBio } from "@/lib/trips/bio";
 import { bolFinishPolicy, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
 import { afterPartial, partialEntry, type PartialDrop } from "@/lib/trips/partialDrops";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
@@ -107,7 +109,7 @@ export type FinishDeliverySubmit = {
   consigneeSignature: string | null;
   signed: boolean;
   endMiles: number | null;
-  bioBlends: { compartment_load_id: string; bio_blend: string | null }[];
+  bioBlends: { compartment_load_id: string; bio_blend: string | null; bio_gallons?: number | null }[];
   details: DeliveryDetails;
 };
 
@@ -313,7 +315,8 @@ export function DeliveryDashboard({
   const [consigneeName, setConsigneeName] = useState("");
   const [consigneeSig, setConsigneeSig] = useState<string | null>(null);
   const [odometer, setOdometer] = useState("");
-  const [bio, setBio] = useState<Record<string, string>>({});
+  const [bio, setBio] = useState<Record<string, string>>({}); // bio gallons by compartment_load_id
+  const [bioOpen, setBioOpen] = useState(false);
   const [additives, setAdditives] = useState<string[]>([]);
   const [additiveNote, setAdditiveNote] = useState("");
   const [issues, setIssues] = useState<string[]>([]);
@@ -439,7 +442,7 @@ export function DeliveryDashboard({
     setConsigneeSig(d?.consigneeSig || delivery.consignee_signature || null);
     setOdometer(d?.odometer ?? "");
     const b: Record<string, string> = { ...(d?.bio ?? {}) };
-    for (const c of compartments) if (b[c.compartment_load_id] == null && c.bio_blend) b[c.compartment_load_id] = c.bio_blend;
+    for (const c of compartments) if (b[c.compartment_load_id] == null && c.bio_gallons != null) b[c.compartment_load_id] = String(c.bio_gallons);
     setBio(b);
     setPartials(d?.partials ?? {});
     setAdditives(d?.additives ?? []);
@@ -924,7 +927,7 @@ export function DeliveryDashboard({
       signed: !!signature || signedMine,
       endMiles: miles,
       bioBlends: delivered.filter((c) => bio[c.compartment_load_id] != null)
-        .map((c) => ({ compartment_load_id: c.compartment_load_id, bio_blend: bio[c.compartment_load_id]?.trim() || null })),
+        .map((c) => ({ compartment_load_id: c.compartment_load_id, bio_blend: null, bio_gallons: parseBio(bio[c.compartment_load_id]) })),
       details: {
         odometer: miles,
         additives,
@@ -969,6 +972,7 @@ export function DeliveryDashboard({
       id: c.compartment_load_id, n: c.comp_number, productId: c.product_id, code: info.code,
       color: info.hex ?? productColorFor(info.name), gallons: gross(c), max: slot.max,
       retained: choice[c.compartment_load_id] === RETAIN, targets: targetsFor(c),
+      bio: parseBio(bio[c.compartment_load_id]) ?? undefined,
     };
   });
   // Only tanks for products on the trailer get a lid.
@@ -1090,7 +1094,8 @@ export function DeliveryDashboard({
       ? `Entered ✓${waterEntered.length ? " · water" : ""}`
       : settings.require_tank_readings || firstDrop ? "Required" : readingsCount ? `${readingsCount} of ${products.length}` : "Optional";
   const bioComps = delivered.filter((c) => isDieselLike(productInfo(c.product_id).name));
-  const bioSummary = bioComps.filter((c) => bio[c.compartment_load_id]).map((c) => `C${c.comp_number} ${bio[c.compartment_load_id]}`).join(" · ") || "None";
+  const bioSummary = bioComps.filter((c) => parseBio(bio[c.compartment_load_id]) != null).map((c) => `C${c.comp_number} ${bioLabel(parseBio(bio[c.compartment_load_id]) as number)}`).join(" · ") || "Tap to enter";
+  const bioPicks: BioComp[] = bioComps.map((c) => { const i = productInfo(c.product_id); return { n: c.comp_number, bol: c.bol_number?.trim() || null, gallons: gross(c), color: i.hex ?? productColorFor(i.name), id: c.compartment_load_id, code: i.code, diesel: true, bio: bio[c.compartment_load_id] ?? "" }; });
   const additiveSummary = additives.map(additiveLabel).join(", ") || "None";
   const issueSummary = issues.map(issueLabel).join(", ") || "None";
   const toggle = (id: string) => setSection((s) => (s === id ? null : id));
@@ -1278,26 +1283,13 @@ export function DeliveryDashboard({
             </Section>
 
             {bioComps.length > 0 && (
-              <Section title="Bio blended" summary={bioSummary} open={section === "bio"} onToggle={() => toggle("bio")}>
-                {bioComps.map((c) => {
-                  const v = bio[c.compartment_load_id] ?? "";
-                  const other = !!v && !(BIO_BLENDS as readonly string[]).includes(v);
-                  const set = (x: string) => setBio((m) => ({ ...m, [c.compartment_load_id]: x }));
-                  return (
-                    <div key={c.compartment_load_id} style={{ marginBottom: 10 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>C{c.comp_number} · {productInfo(c.product_id).code}</div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button type="button" style={pill(!v)} onClick={() => set("")}>None</button>
-                        {BIO_BLENDS.map((b) => <button key={b} type="button" style={pill(v === b)} onClick={() => set(b)}>{b}</button>)}
-                        <button type="button" style={pill(other)} onClick={() => set(other ? v : "B")}>Other</button>
-                      </div>
-                      {other && (
-                        <input value={v} onChange={(e) => set(e.target.value)} placeholder="e.g. B15" style={{ ...fieldInput, marginTop: 6 }} />
-                      )}
-                    </div>
-                  );
-                })}
-              </Section>
+              <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <button type="button" onClick={() => setBioOpen(true)} style={{ ...rowBtn, borderBottom: "none" }}>
+                  <span style={{ fontWeight: 700, flexShrink: 0 }}>Bio blending</span>
+                  <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13, color: bioComps.some((c) => parseBio(bio[c.compartment_load_id]) != null) ? "#4ade80" : muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bioSummary}</span>
+                  <span style={{ color: muted, flexShrink: 0, width: 12, textAlign: "center" }}>›</span>
+                </button>
+              </div>
             )}
 
             <Section title="Additives" summary={additiveSummary} open={section === "add"} onToggle={() => toggle("add")}>
@@ -1508,6 +1500,10 @@ export function DeliveryDashboard({
         submitLabel={step && step.phase === "after" && step.productIdx === products.length - 1 ? "Done" : "Next"}
         onSubmit={goNext}
       />
+
+      <BioBlendSheet open={bioOpen} comps={bioPicks} slots={[...new Set([...trailerComps.map((c) => c.comp_number), ...delivered.map((c) => c.comp_number)])].sort((a, b) => a - b)}
+          onSave={(m) => setBio((cur) => { const next = { ...cur }; for (const c of bioComps) next[c.compartment_load_id] = m[c.compartment_load_id] != null ? String(m[c.compartment_load_id]) : ""; return next; })}
+          onClose={() => setBioOpen(false)} />
 
       {companyId && userId && (
         <BolPagesSheet open={!!bolFor} bol={bolFor} tripId={delivery.trip_id} companyId={companyId} userId={userId}

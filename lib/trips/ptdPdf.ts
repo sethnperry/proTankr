@@ -60,7 +60,7 @@ export function drawPtd(d: PdfDoc, ptd: Ptd, o: { truckName?: string | null; tra
     if (del.status === "planned") d.para("Not delivered yet.", 9, d.ital, MUTE);
     if (del.drops.length) {
       d.table(["Comp", "Product", "Tank", "Gallons", "Before", "After", "Water"],
-        del.drops.map((x) => [`C${x.comp}`, x.product, x.tank ?? "-", x.gallons != null ? gal(x.gallons) : gal(x.net), x.before == null ? "" : `${dec(x.before)}${x.unit === "inches" ? " in" : ""}`, x.after == null ? "" : `${dec(x.after)}${x.unit === "inches" ? " in" : ""}`, x.water == null ? "" : `${dec(x.water)} in`]),
+        del.drops.map((x) => [`C${x.comp}`, x.product, x.tank ?? "-", (x.gallons != null ? gal(x.gallons) : gal(x.net)) + (x.bio ? ` + ${gal(x.bio)} bio` : ""), x.before == null ? "" : `${dec(x.before)}${x.unit === "inches" ? " in" : ""}`, x.after == null ? "" : `${dec(x.after)}${x.unit === "inches" ? " in" : ""}`, x.water == null ? "" : `${dec(x.water)} in`]),
         [0.08, 0.22, 0.1, 0.14, 0.15, 0.15, 0.16], ["l", "l", "l", "r", "r", "r", "r"]);
       for (const x of del.drops) if (x.partial) d.para(`C${x.comp}: ${x.partial}`, 8.5, d.ital, MUTE);
     }

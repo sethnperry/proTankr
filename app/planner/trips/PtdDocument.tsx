@@ -13,6 +13,7 @@ import { fmtMinutes } from "@/lib/trips/billingTime";
 import type { Ptd } from "@/lib/trips/ptd";
 import { SignatureView } from "../components/trip/tripUi";
 import { buildTimeline } from "@/lib/trips/ptdTimeline";
+import { productColorFor } from "@/app/planner/utils/productColor";
 
 const ink = "#111";
 const faint = "#666";
@@ -292,7 +293,7 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
                   {d.drops.map((x, i) => (
                     <tr key={`${i}-${x.comp}-${x.tank ?? ""}`}>
                       <td style={td}>C{x.comp}</td><td style={td}>{x.product}</td><td style={td}>{x.tank ?? "—"}</td>
-                      <td style={tdR}>{x.gallons != null ? gal(x.gallons) : gal(x.net)}</td>
+                      <td style={tdR}>{x.gallons != null ? gal(x.gallons) : gal(x.net)}{x.bio ? <b style={{ color: productColorFor(x.product) }}> + {gal(x.bio)} bio</b> : null}</td>
                       <td style={tdR}>{reading(x.before, x.unit)}</td><td style={tdR}>{reading(x.after, x.unit)}</td>
                       <td style={tdR}>{x.water == null ? "" : `${dec(x.water)} in`}</td>
                     </tr>
@@ -316,6 +317,7 @@ export function PtdDocument({ ptd, truckName, trailerName, viewerId, viewerSigna
                   <div key={`${i}-${x.comp}-${x.tank ?? ""}`} style={{ display: "flex", flexWrap: "wrap", gap: "0 12px", padding: "2px 0", borderBottom: "1px dotted #bbb" }}>
                     <b>C{x.comp} → {x.tank ? `Tank ${x.tank}` : "Tank —"}</b>
                     <span style={{ color: faint }}>{x.product}{x.gallons != null ? ` · ${gal(x.gallons)} gal into this tank` : x.net != null ? ` · ${gal(x.net)} net` : ""}</span>
+                    {x.bio ? <b style={{ color: productColorFor(x.product) }}>+ {gal(x.bio)} bio</b> : null}
                     <Item label="Before" value={reading(x.before, x.unit)} />
                     <Item label="After" value={reading(x.after, x.unit)} />
                     <Item label="Water" value={x.water == null ? "" : `${dec(x.water)} in`} />

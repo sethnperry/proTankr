@@ -612,7 +612,7 @@ export function finishDelivery(
     retained?: DeliveredCompartment[];
     // Noted after the drop: bio blended per compartment, additives, issues,
     // the odometer at this stop.
-    bioBlends?: { compartment_load_id: string; bio_blend: string | null }[];
+    bioBlends?: { compartment_load_id: string; bio_blend: string | null; bio_gallons?: number | null }[];
     details?: DeliveryDetails;
     // Part of a compartment dropped here; the rest stays aboard (they are also in `retained`).
     partials?: PartialDrop[];
@@ -667,7 +667,7 @@ export function finishDelivery(
   }
 
   for (const b of args.bioBlends ?? []) {
-    store.put("trip_compartment_loads", { compartment_load_id: b.compartment_load_id, bio_blend: b.bio_blend });
+    store.put("trip_compartment_loads", { compartment_load_id: b.compartment_load_id, bio_blend: b.bio_blend, bio_gallons: b.bio_gallons ?? null });
   }
 
   const remaining = store.list(

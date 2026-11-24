@@ -24,6 +24,8 @@ export type MapComp = {
   targets: { tank: string; gallons: number }[];
   /** Not dropped here: shown in place but can't be linked. */
   kind?: "empty" | "later";
+  /** Bio gallons blended into this compartment (a BIO tag shows when set). */
+  bio?: number;
 };
 export type MapTank = { tank: string; code: string | null; name?: string | null; color: string | null; productId: string | null; capacity: number | null };
 
@@ -180,6 +182,7 @@ export function TankMap({
               <text x={TRAILER_X + TRAILER_W / 2} y={sy + h / 2 - 5} textAnchor="middle" fontSize={12} fontWeight={800} fill="#fff">C{c.n}</text>
               <text x={TRAILER_X + TRAILER_W / 2} y={sy + h / 2 + 8} textAnchor="middle" fontSize={10} fontWeight={800} fill={c.color}>{c.code}</text>
               <text x={TRAILER_X + TRAILER_W / 2} y={sy + h / 2 + 20} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.6)">{g0(c.gallons)}</text>
+              {c.bio ? <text x={TRAILER_X + TRAILER_W / 2} y={sy + 11} textAnchor="middle" fontSize={8.5} fontWeight={900} fill="#4ade80">BIO +{g0(c.bio)}</text> : null}
             </g>
           );
         })}
@@ -239,7 +242,7 @@ export function TankMap({
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 14, fontWeight: 800 }}>C{c.n}</span>
-                <span style={{ fontSize: 13, color: muted }}>{c.code} · {g0(c.gallons)} gal</span>
+                <span style={{ fontSize: 13, color: muted }}>{c.code} · {g0(c.gallons)} gal{c.bio ? <b style={{ color: "#4ade80" }}> + {g0(c.bio)} BIO</b> : null}</span>
                 <span style={{ flex: 1 }} />
                 <button type="button" onClick={() => onPick(c.id)}
                   style={{ background: "none", border: "none", color: c.retained ? "#93c5fd" : c.targets.length ? "#fff" : "#fbbf24", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: "4px 0" }}>

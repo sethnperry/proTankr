@@ -176,18 +176,22 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
     const here = compartments.filter((c) => loads.find((l) => l.comp_number === c.comp)?.delivery_id === d.delivery_id);
     const used = new Set<string>();
     const splits = deliveryDetailsFor(input.events, d.delivery_id)?.splits ?? [];
+    const bioOf = (comp: number) => {
+      const b = Number(input.compLoads.find((l) => l.comp_number === comp && l.delivery_id === d.delivery_id)?.bio_gallons);
+      return Number.isFinite(b) && b > 0 ? b : null;
+    };
     const drops = here.flatMap((c) => {
       const sp = splits.filter((x) => x.comp === c.comp);
       if (sp.length > 1) {
-        return sp.map((x) => {
+        return sp.map((x, si) => {
           const t = tanks.find((y) => y.tank === x.tank) ?? null;
           if (t) used.add(t.tank);
-          return { comp: c.comp, product: c.product, net: c.net, partial: null as string | null, tank: x.tank, gallons: x.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
+          return { bio: si === 0 ? bioOf(c.comp) : null, comp: c.comp, product: c.product, net: c.net, partial: null as string | null, tank: x.tank, gallons: x.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
         });
       }
       const t = c.tank ? tanks.find((x) => x.tank === c.tank) ?? null : null;
       if (t) used.add(t.tank);
-      return [{ comp: c.comp, product: c.product, net: c.net, partial: null as string | null, tank: c.tank, gallons: null as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" }];
+      return [{ bio: bioOf(c.comp), comp: c.comp, product: c.product, net: c.net, partial: null as string | null, tank: c.tank, gallons: null as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" }];
     });
     // Parts of a compartment dropped here while the rest stayed aboard.
     const partialsHere = partialDrops.filter((p) => p.delivery_id === d.delivery_id);
@@ -195,7 +199,7 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
       const t = p.tank_number ? tanks.find((x) => x.tank === p.tank_number) ?? null : null;
       if (t) used.add(t.tank);
       const how = p.meter_start != null && p.meter_end != null ? `metered ${p.meter_start.toLocaleString("en-US")} to ${p.meter_end.toLocaleString("en-US")}` : "estimated";
-      return { comp: p.comp_number, product: names.product(p.product_id), net: p.net_equiv, partial: `Partial drop, ${how}. ${Math.round(p.remaining).toLocaleString("en-US")} gal left aboard.` as string | null, tank: p.tank_number, gallons: p.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
+      return { bio: null as number | null, comp: p.comp_number, product: names.product(p.product_id), net: p.net_equiv, partial: `Partial drop, ${how}. ${Math.round(p.remaining).toLocaleString("en-US")} gal left aboard.` as string | null, tank: p.tank_number, gallons: p.gallons as number | null, before: t?.before ?? null, after: t?.after ?? null, water: t?.water ?? null, unit: t?.unit ?? "gallons" };
     });
     return { compartments: [...here.map((c) => c.comp), ...partialsHere.map((p) => p.comp_number)], drops: [...drops, ...partialLines], tanks, otherTanks: tanks.filter((t) => !used.has(t.tank)) };
   };
@@ -204,9 +208,9 @@ export function buildPtd(input: PtdInput, names: PtdNames) {
   const deliveryNotes = (d: TripDeliveryRow) => {
     const det = deliveryDetailsFor(input.events, d.delivery_id);
     const bio = input.compLoads
-      .filter((c) => c.delivery_id === d.delivery_id && c.bio_blend)
+      .filter((c) => c.delivery_id === d.delivery_id && (c.bio_blend || Number(c.bio_gallons) > 0))
       .sort((a, b) => a.comp_number - b.comp_number)
-      .map((c) => `C${c.comp_number} ${c.bio_blend}`);
+      .map((c) => Number(c.bio_gallons) > 0 ? `C${c.comp_number} ${Math.round(Number(c.bio_gallons)).toLocaleString("en-US")} gal` : `C${c.comp_number} ${c.bio_blend}`);
     return {
       odometer: det?.odometer ?? null,
       bioBlends: bio,

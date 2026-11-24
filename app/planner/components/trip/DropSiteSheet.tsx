@@ -13,13 +13,15 @@ import ValueEntryOverlay from "@/app/planner/components/ValueEntryOverlay";
 import { ullage } from "@/lib/trips/ullage";
 import { BackArrow } from "@/lib/ui/BackArrow";
 import { StampQuestion, stampClock } from "../StampQuestion";
+import { BioBlendSheet, type BioComp } from "./BioBlendSheet";
+import { bioLabel, parseBio } from "@/lib/trips/bio";
 
 export type DropTank = { number: string; capacity: number | null; last: number | null };
 /** A product on this delivery with every store tank that holds it. */
 export type DropProduct = { id: string | null; name: string; color: string; gallons: number; tanks: DropTank[] };
 
 /** One compartment aboard: its BOL number, gross gallons and product color. */
-export type DropComp = { n: number; bol: string | null; gallons: number; color: string };
+export type DropComp = { n: number; bol: string | null; gallons: number; color: string; id?: string; code?: string; diesel?: boolean; bio?: string };
 
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.12)";
@@ -30,7 +32,7 @@ const primary: React.CSSProperties = { width: "100%", padding: "18px 0", fontSiz
 
 /** One card per BOL: "BOL# 5186517 · 3608/--/4300", every trailer compartment in order, "--" for ones not on that BOL.
  *  Gallons are in the product's color. Helps with blending bio and the like. */
-function BolCard({ slots, comps }: { slots: number[]; comps: DropComp[] }) {
+export function BolCard({ slots, comps }: { slots: number[]; comps: DropComp[] }) {
   if (!comps.length) return null;
   const keys: (string | null)[] = [];
   for (const c of comps) if (!keys.includes(c.bol)) keys.push(c.bol);
@@ -57,7 +59,7 @@ function BolCard({ slots, comps }: { slots: number[]; comps: DropComp[] }) {
   );
 }
 
-export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, comps = [], slots = [], delay, notes, avg, sop, onBegin, onFinish, onUndoArrival, onUndoBegin, onClose }: {
+export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, products, comps = [], slots = [], delay, notes, avg, sop, onBegin, onFinish, onBioSave, onUndoArrival, onUndoBegin, onClose }: {
   open: boolean; siteName: string; arrivedAt: string; beganAt: string | null;
   /** The site board (other trucks, recent drops), drawn by the page. */
   board: React.ReactNode;
@@ -73,9 +75,14 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
   onUndoArrival: () => void; onUndoBegin: () => void;
   /** Before readings (gallons by tank number) the driver confirmed; empty when none. */
   onFinish: (volumes: Record<string, number>) => void;
+  /** Bio gallons the driver saved, by compartment_load_id. */
+  onBioSave?: (bio: Record<string, number>) => void;
   onClose: () => void;
 }) {
   const [leaveAsk, setLeaveAsk] = useState(false);
+  const [bioOpen, setBioOpen] = useState(false);
+  const bioComps = comps.filter((c) => c.id && c.diesel) as BioComp[];
+  const bioTotal = bioComps.reduce((n, c) => n + (parseBio(c.bio) ?? 0), 0);
   const [vol, setVol] = useState<Record<string, string>>({});
   const [done, setDone] = useState<Set<number>>(new Set()); // products whose window was passed with Next or Done
   const [idx, setIdx] = useState<number | null>(null);      // the product whose window is open
@@ -140,7 +147,13 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
           {!beganAt && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Tap Begin Delivery when you start. That sets your delivery start time.</div>}
         </div>
 
-        <BolCard slots={slots.length ? slots : [...new Set(comps.map((c) => c.n))].sort((a, b) => a - b)} comps={comps} />
+        {beganAt && bioComps.length > 0 && onBioSave && (
+          <button type="button" className="dash-press" onClick={() => setBioOpen(true)}
+            style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", background: "#0f0f10", border: `1px solid ${hair}`, marginBottom: 12, color: "#fff", cursor: "pointer" }}>
+            <span style={{ fontSize: 15, fontWeight: 800, flex: 1 }}>Bio blending</span>
+            <span style={{ fontSize: 13, color: bioTotal > 0 ? "#4ade80" : muted }}>{bioTotal > 0 ? `${bioLabel(bioTotal)} gal bio ✓ ›` : "Enter ›"}</span>
+          </button>
+        )}
 
         {!beganAt ? (<>{notes && <div style={{ marginBottom: 12 }}>{notes}</div>}{board}</>) : (
           <>
@@ -172,6 +185,8 @@ export function DropSiteSheet({ open, siteName, arrivedAt, beganAt, board, produ
         onKeep={() => { setLeaveAsk(false); onClose(); }}
         onUndo={() => { setLeaveAsk(false); if (beganAt) onUndoBegin(); else onUndoArrival(); }}
         onStay={() => setLeaveAsk(false)} />
+      <BioBlendSheet open={open && bioOpen} comps={bioComps} slots={slots.length ? slots : [...new Set(comps.map((c) => c.n))].sort((a, b) => a - b)}
+        onSave={(m) => onBioSave?.(m)} onClose={() => setBioOpen(false)} />
       <ValueEntryOverlay
         open={open && !!beganAt && !!cur}
         title={cur ? `${cur.name}${cur.tanks.length === 1 ? ` · Tank ${cur.tanks[0].number}` : ""} · Before` : ""}
