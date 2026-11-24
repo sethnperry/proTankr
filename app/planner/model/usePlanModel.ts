@@ -10,6 +10,7 @@ import { usePlanMath } from "../hooks/usePlanMath";
 import { useUnavailableProducts } from "../hooks/useUnavailableProducts";
 import { usePlanTemperature } from "../hooks/usePlanTemperature";
 import { usePlanInputs } from "../hooks/usePlanInputs";
+import { useDriverPrefs } from "../hooks/useDriverPrefs";
 import { usePlanDirty } from "../hooks/usePlanDirty";
 import { usePlannerEquipment } from "../hooks/usePlannerEquipment";
 import { useTerminalProducts } from "../hooks/useTerminalProducts";
@@ -101,6 +102,9 @@ export function usePlanModel(v: UsePlannerViewModel) {
     plannedProductIdsSigRef.current = sig;
     shell.setPlannedProductIds(new Set(ids));
   }, [compPlan, shell.setPlannedProductIds]);
+
+  // Caps and CG follow the driver, not the equipment (the trailer's safety cap still limits them).
+  useDriverPrefs({ userId: effectiveUserId, authUserId: shell.authUserId, comboId: equipment.selectedComboId, compPlan, setCompPlan, cgSlider, setCgSlider, compartments });
 
   const { overridesSnapshot, baselineOverrides, setBaselineOverrides, setCaptureBaselineNext } = usePlanDirty(compPlan, cgSlider);
   // A terminal or combo switch restores the plan asynchronously; recapture the unsaved-

@@ -118,9 +118,10 @@ export default function PlanCompartmentsSection({
             onCapChange={(g) =>
               setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: g } }))
             }
-            onResetCap={() =>
-              setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: null } }))
-            }
+            onResetCap={() => {
+              window.dispatchEvent(new CustomEvent("protankr:clearDriverCap", { detail: n })); // the driver's own cap for this compartment goes too
+              setCompPlan((prev: any) => ({ ...prev, [n]: { ...(prev[n] ?? { empty: false, productId: "" }), capOverride: null } }));
+            }}
             onChangeProduct={() => {
               setDetailComp(null);
               onChangeProduct(n);
