@@ -116,9 +116,17 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
   canForceCancel?: boolean;
 }) {
   const nav = usePending();
-  const open = onOpen ?? ((id: string) => nav.go(id, `/planner/trips/${id}`));
   const company = mode === "company";
   const { state, store, syncNow } = useTripStore(company ? null : userId);
+  // A driver's own dispatched load opens the Begin pop-out (miles, starting from, equipment) on the dashboard, unless a trip is
+  // already open, when it opens the read-only preview as before.
+  const open = onOpen ?? ((id: string) => {
+    const trips = Object.values(state.rows.trips ?? {}) as { trip_id: string; status: string; driver_id: string | null }[];
+    const t = trips.find((x) => x.trip_id === id);
+    const hasOpen = !!userId && trips.some((x) => x.driver_id === userId && ["draft", "loading", "in_transit", "delivering"].includes(x.status));
+    if (!company && t?.status === "dispatched" && t.driver_id === userId && !hasOpen) nav.go(id, `/planner/home?run=${id}`);
+    else nav.go(id, `/planner/trips/${id}`);
+  });
   const [showHidden, setShowHidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locs, setLocs] = useState<Record<string, string>>({});

@@ -158,6 +158,7 @@ import type { useHome } from "./useHome";
 import { odometerStatus } from "@/lib/telematics/useTruckReading";
 import { staleOpenDelivery } from "@/lib/trips/staleDelivery";
 import { PlanEquipmentSheet } from "../components/PlanEquipmentSheet";
+import { DispatchedBeginSheet } from "../components/trip/DispatchedBeginSheet";
 import { SquawkSheet, DropSiteSheet, StartLoadSheet, LoadedSheet, LocationPicker, AddPickupSheet, FreightSheet, TankCheckSheet, PerDiemSheet, STATUS_LABEL, muted, smallLink, EquipLine, EquipmentToolsRegistrar, InfoRow, SyncDetailsSheet } from "./homeShared";
 
 export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
@@ -188,6 +189,9 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     baseStop,
     beginDelivery,
     beginDispatchedLoad,
+    beginPopOpen,
+    setBeginPopOpen,
+    confirmBeginPop,
     startEmptyMove,
     addingLoad,
     planEquip,
@@ -1583,6 +1587,14 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
       />
 
+      <DispatchedBeginSheet open={beginPopOpen && !shell.equipOpen && !sheetOpen && !!openTrip}
+        miles0={openTrip?.begin_miles == null ? "" : String(openTrip.begin_miles)} city0={openTrip?.start_city ?? ""} state0={openTrip?.start_state ?? ""}
+        liveMiles={truckReading?.odometerMi ?? null}
+        suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}
+        plannedTruckId={openTrip?.planned_truck_id ?? null} plannedTrailerId={openTrip?.planned_trailer_id ?? null} truckId={truckId ?? null} trailerId={trailerId ?? null}
+        onChangeEquipment={() => shell.setEquipOpen(true)}
+        onMore={() => { setBeginPopOpen(false); setSheetOpen(true); }}
+        onConfirm={confirmBeginPop} onClose={() => { setBeginPopOpen(false); setVerifyActive(false); }} />
       <PlanEquipmentSheet open={planEquipOpen} companyId={companyId || null} truckId={(planEquip ?? { truckId: truckId ?? null }).truckId} trailerId={(planEquip ?? { trailerId: trailerId ?? null }).trailerId}
         onPick={setPlanEquip} onClose={() => setPlanEquipOpen(false)} />
       <TripEquipmentSheets {...tripEquip.sheets} />

@@ -213,6 +213,28 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     store.put("trips", { trip_id: b.trip_id, planned_start_at: a.planned_start_at ?? null, dispatch_seq: a.dispatch_seq ?? 0 });
     void syncNow();
   };
+  const [beginPopOpen, setBeginPopOpen] = useState(false);
+  // The pop-out's Begin: miles and starting place go on the trip, and the plan follows what dispatch sent (the driver's own
+  // plan when it matches one, else run once with caps kept).
+  const confirmBeginPop = (v: { miles: string; city: string; state: string }) => {
+    if (!store || !openTrip || !userId) return;
+    const m = cleanOdometer(v.miles) === "" ? null : Number(cleanOdometer(v.miles));
+    store.put("trips", { trip_id: openTrip.trip_id, begin_miles: m != null && Number.isFinite(m) ? m : null, start_city: v.city || null, start_state: v.state || null });
+    const pk = children?.pickup ?? null;
+    const sentLayout = pk && !pk.load_id
+      ? layoutFromProducts(Object.fromEntries([...readPlannedMeta(pk.planned_comps).entries()].map(([n, mm]) => [n, mm.product_id])), Object.keys(compSizes).map(Number))
+      : null;
+    const matched = sentLayout ? findMatchingPlan(sheetPresets, sentLayout) : null;
+    if (pk && !pk.load_id) {
+      if (matched) {
+        setTripPlan(userId, openTrip.trip_id, matched.slot);
+        setTripPlanSnapshot(userId, openTrip.trip_id, { comps: matched.comps });
+      } else setTripQuick(userId, openTrip.trip_id, true);
+    }
+    setBeginPopOpen(false);
+    setVerifyActive(false);
+    void syncNow();
+  };
   const beginDispatchedLoad = (tripId?: string) => {
     const trip = tripId ? dispatchedList.find((t) => t.trip_id === tripId) : dispatchedList[0];
     if (!store || !userId || !trip || openTrip) return;
@@ -239,10 +261,23 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     setVerifyActive(true);
     setVerifyTripId(trip.trip_id);
   };
+  // /planner/home?run=<trip>: tapped from the Trips list. Starts that dispatched load once, the same as its Run button.
+  const runParamDone = useRef(false);
+  useEffect(() => {
+    if (runParamDone.current || typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("run");
+    if (!id) { runParamDone.current = true; return; }
+    if (!dispatchedList.length && !openTrip) return; // trips not loaded yet
+    runParamDone.current = true;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("run");
+    window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
+    if (!openTrip && dispatchedList.some((t) => t.trip_id === id)) void askEquipment(() => beginDispatchedLoad(id));
+  }, [dispatchedList.length, openTrip?.trip_id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (verifyTripId && openTrip?.trip_id === verifyTripId) {
       setVerifyTripId(null);
-      setSheetOpen(true);
+      setBeginPopOpen(true); // a few things to confirm, not the whole trip sheet
     }
   }, [verifyTripId, openTrip?.trip_id]);
   // The dispatched pickup, used while the driver hasn't changed the terminal.
@@ -476,5 +511,5 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
   useEffect(() => {
     if (addingLoad && equipment.currentTruckName && defaultPlanEquip.current) { defaultPlanEquip.current = false; setPlanEquip(null); }
   }, [equipment.currentTruckName, addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
+  return { ...p, beginPopOpen, setBeginPopOpen, confirmBeginPop, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
 }
