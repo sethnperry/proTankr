@@ -136,7 +136,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       const planned = [t.planned_truck_id, t.planned_trailer_id].some(Boolean);
       const eq = [t.planned_truck_id ? `Truck ${plannedNames[t.planned_truck_id] ?? "—"}` : null, t.planned_trailer_id ? `Trailer ${plannedNames[t.planned_trailer_id] ?? "—"}` : null].filter(Boolean).join(" · ");
       return {
-        trip: t, order: ch.primaryOrder?.order_number ?? null, terminal: pk?.name ?? null,
+        trip: t, pickups: ch.pickups, deliveries: ch.deliveries, order: ch.primaryOrder?.order_number ?? null, terminal: pk?.name ?? null,
         place: [pk?.city, pk?.state].filter(Boolean).join(", ") || null,
         supplier: sup, delivery: del ? deliveryName(del) : null,
         plannedEquipment: planned ? eq : null,
@@ -261,6 +261,24 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
     setVerifyActive(true);
     setVerifyTripId(trip.trip_id);
   };
+  // Opens a dispatched load's details for editing. Never begins it.
+  const openDispatchedEdit = (id: string) => {
+    const t = dispatchedList.find((x) => x.trip_id === id);
+    if (!t) return;
+    verifyBaseTerminal.current = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
+    setPlanEquip(null);
+    setEditDispatchedId(id);
+    setSheetOpen(true);
+    void (async () => {
+      if (!t.planned_truck_id) return;
+      const [a, b] = await Promise.all([
+        supabase.from("trucks").select("truck_name").eq("truck_id", t.planned_truck_id).maybeSingle(),
+        t.planned_trailer_id ? supabase.from("trailers").select("trailer_name").eq("trailer_id", t.planned_trailer_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const tn = (a.data as any)?.truck_name, rn = (b.data as any)?.trailer_name;
+      setPlanEquip({ truckId: t.planned_truck_id, trailerId: t.planned_trailer_id ?? null, label: [tn ? `Truck ${tn}` : "No truck", rn ? `Trailer ${rn}` : "Bobtail"].join(" · ") });
+    })();
+  };
   // /planner/home?edit=<trip>: a dispatched load tapped in the Trips list opens its details for editing. Never begins it.
   const editParamDone = useRef(false);
   useEffect(() => {
@@ -278,21 +296,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       params.delete("edit");
       window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
     }
-    const t = dispatchedList.find((x) => x.trip_id === id);
-    if (!t) return;
-    verifyBaseTerminal.current = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
-    setPlanEquip(null);
-    setEditDispatchedId(id);
-    setSheetOpen(true);
-    void (async () => {
-      if (!t.planned_truck_id) return;
-      const [a, b] = await Promise.all([
-        supabase.from("trucks").select("truck_name").eq("truck_id", t.planned_truck_id).maybeSingle(),
-        t.planned_trailer_id ? supabase.from("trailers").select("trailer_name").eq("trailer_id", t.planned_trailer_id).maybeSingle() : Promise.resolve({ data: null }),
-      ]);
-      const tn = (a.data as any)?.truck_name, rn = (b.data as any)?.trailer_name;
-      setPlanEquip({ truckId: t.planned_truck_id, trailerId: t.planned_trailer_id ?? null, label: [tn ? `Truck ${tn}` : "No truck", rn ? `Trailer ${rn}` : "Bobtail"].join(" · ") });
-    })();
+    openDispatchedEdit(id);
   }, [dispatchedList.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // /planner/home?run=<trip>: tapped from the Trips list. Starts that dispatched load once, the same as its Run button.
   const runParamDone = useRef(false);
@@ -567,5 +571,5 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
   useEffect(() => {
     if (addingLoad && equipment.currentTruckName && defaultPlanEquip.current) { defaultPlanEquip.current = false; setPlanEquip(null); }
   }, [equipment.currentTruckName, addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { ...p, editDispatchedId, setEditDispatchedId, dTrip, dChildren, beginPopOpen, setBeginPopOpen, confirmBeginPop, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
+  return { ...p, openDispatchedEdit, editDispatchedId, setEditDispatchedId, dTrip, dChildren, beginPopOpen, setBeginPopOpen, confirmBeginPop, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
 }

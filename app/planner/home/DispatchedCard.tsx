@@ -6,7 +6,7 @@
 // normal trip. Shows what dispatch filled in so the driver types less.
 
 import React from "react";
-import type { TripRow } from "@/lib/trips/types";
+import type { TripDeliveryRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 import { useDashLook } from "./dashLook";
 
 export type DispatchedItem = {
@@ -18,6 +18,8 @@ export type DispatchedItem = {
   delivery: string | null;
   plannedEquipment: string | null;
   equipmentDiffers: boolean;
+  pickups?: TripPickupRow[];
+  deliveries?: TripDeliveryRow[];
 };
 
 const when = (iso: string | null | undefined) => {

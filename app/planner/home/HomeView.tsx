@@ -190,6 +190,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
     beginDelivery,
     beginDispatchedLoad,
     beginPopOpen,
+    openDispatchedEdit,
     editDispatchedId,
     setEditDispatchedId,
     dChildren,
@@ -1249,6 +1250,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
 
       <ExpirationsSheet open={expSheetOpen} groups={expGroups} onClose={() => setExpSheetOpen(false)} />
       <LoadsSheet open={loadsSheetOpen} items={dispatchedItems} moves={plannedMoves.map((m) => ({ id: m.move_id, text: stepText(m, { place: placeName, trailer: trailerNameOf }), when: m.planned_start_at ? new Date(m.planned_start_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }) : null }))} onSwap={swapDispatched} onClose={() => setLoadsSheetOpen(false)}
+        onEdit={(id) => { setLoadsSheetOpen(false); openDispatchedEdit(id); }}
         onRun={openTrip ? undefined : (id) => { setLoadsSheetOpen(false); void askEquipment(() => beginDispatchedLoad(id)); }} />
       <FullscreenModal open={!!unitAlertsOpen} title={unitAlertsOpen === "trailer" ? "Trailer" : "Truck"} onClose={() => setUnitAlertsOpen(null)} footer={null}>
         {(() => {
