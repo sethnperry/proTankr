@@ -1577,7 +1577,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         onSubmit={submit}
         forDriver={addingLoad ? "self" : null}
         planEquipLabel={addingLoad ? (planEquip?.label ?? ([equipment.currentTruckName ? `Truck ${equipment.currentTruckName}` : "No truck", equipment.currentTruckName ? (equipment.currentTrailerName ? `Trailer ${equipment.currentTrailerName}` : "Bobtail") : null].filter(Boolean).join(" · "))) : null}
-        onChangeEquipment={addingLoad ? () => shell.setEquipOpen(true) : undefined}
+        onChangeEquipment={addingLoad ? () => setPlanEquipOpen(true) : undefined}
         liveMiles={truckReading?.odometerMi ?? null}
         milesStatus={odometerStatus(truckReading ?? null, truckReadingFailed)}
         suggestStart={async () => (truckReading?.city ? { city: truckReading.city, state: truckReading.state } : await truckLastKnownPlace(truckId))}

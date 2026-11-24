@@ -466,15 +466,15 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       ]);
       if (!live) return;
       const tn = (a.data as any)?.truck_name, rn = (b.data as any)?.trailer_name;
+      defaultPlanEquip.current = true;
       setPlanEquip((cur) => cur ?? { truckId: last.truckId, trailerId: last.trailerId, label: [tn ? `Truck ${tn}` : "No truck", rn ? `Trailer ${rn}` : "Bobtail"].join(" · ") });
     })();
     return () => { live = false; };
   }, [addingLoad, userId, equipment.currentTruckName]); // eslint-disable-line react-hooks/exhaustive-deps
-  const wasEquipOpen = useRef(false);
+  // The last-used default only stands in for equipment the driver isn't holding: once they hold something, that is the default.
+  const defaultPlanEquip = useRef(false);
   useEffect(() => {
-    if (shell.equipOpen) { wasEquipOpen.current = true; return; }
-    if (wasEquipOpen.current && addingLoad && equipment.currentTruckName) setPlanEquip(null);
-    wasEquipOpen.current = false;
-  }, [shell.equipOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (addingLoad && equipment.currentTruckName && defaultPlanEquip.current) { defaultPlanEquip.current = false; setPlanEquip(null); }
+  }, [equipment.currentTruckName, addingLoad]); // eslint-disable-line react-hooks/exhaustive-deps
   return { ...p, dispatchedList, dispatchedItems, openEquipPicker, askEquipment, parkPreset, alignPlannerToPickup, beginDispatchedLoad, swapDispatched, dispatchedPickup, startPickupChange, initialValues, submit } as const;
 }
