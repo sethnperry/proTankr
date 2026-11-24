@@ -122,7 +122,7 @@ export function TripsBrowser({ mode, userId, companyId, onOpen, region = null, c
   // dashboard's Begin button starts a trip.
   const open = onOpen ?? ((id: string) => {
     const t = (Object.values(state.rows.trips ?? {}) as { trip_id: string; status: string; driver_id: string | null }[]).find((x) => x.trip_id === id);
-    if (!company && t?.status === "dispatched" && t.driver_id === userId) nav.go(id, `/planner/home?edit=${id}`);
+    if (!company && t?.status === "dispatched" && t.driver_id === userId) { try { window.sessionStorage.setItem("proTankr:editDispatched", id); } catch { /* the query below still carries it */ } nav.go(id, `/planner/home?edit=${id}`); }
     else nav.go(id, `/planner/trips/${id}`);
   });
   const [showHidden, setShowHidden] = useState(false);

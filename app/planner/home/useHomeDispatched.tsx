@@ -265,13 +265,19 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
   const editParamDone = useRef(false);
   useEffect(() => {
     if (editParamDone.current || typeof window === "undefined") return;
-    const id = new URLSearchParams(window.location.search).get("edit");
-    if (!id) { editParamDone.current = true; return; }
+    // The id rides in the URL and in session storage: on a client navigation the URL can still be the old one when this runs.
+    let stored: string | null = null;
+    try { stored = window.sessionStorage.getItem("proTankr:editDispatched"); } catch { /* none */ }
+    const id = new URLSearchParams(window.location.search).get("edit") || stored;
+    if (!id) return;
     if (!dispatchedList.length) return;
     editParamDone.current = true;
+    try { window.sessionStorage.removeItem("proTankr:editDispatched"); } catch { /* none */ }
     const params = new URLSearchParams(window.location.search);
-    params.delete("edit");
-    window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
+    if (params.has("edit")) {
+      params.delete("edit");
+      window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
+    }
     const t = dispatchedList.find((x) => x.trip_id === id);
     if (!t) return;
     verifyBaseTerminal.current = location.selectedTerminalId ? String(location.selectedTerminalId) : null;
