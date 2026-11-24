@@ -109,6 +109,9 @@ export function usePlannerIntents(i: Inputs) {
     if (!intent) return;
     shell.consumePlannerIntent(intent.id);
     if (intent.kind === "begin") {
+      // The Planner host stays mounted between trips, so a finished load's report left open when the driver went to the
+      // dashboard is still in memory. Beginning a load must never come back to it: clear it first.
+      if (loadWorkflow.reportLines) loadWorkflow.closeLoadReport();
       void (async () => {
         // Plan Review is already running (the host stays mounted): just show it.
         if (loadWorkflow.activeLoadId) { loadWorkflow.setLoadingOpen(true); return; }
