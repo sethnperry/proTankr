@@ -8,6 +8,8 @@ import React, { useEffect, useState } from "react";
 import { FullscreenModal } from "@/lib/ui/FullscreenModal";
 import { supabase } from "@/lib/supabase/client";
 import { RADIUS } from "@/lib/ui/look";
+import { matchesTracker } from "@/lib/telematics/odometerSync";
+import { TrackerCheck } from "../TrackerCheck";
 
 const muted = "rgba(255,255,255,0.5)";
 const hair = "rgba(255,255,255,0.12)";
@@ -56,7 +58,10 @@ export function DispatchedBeginSheet({ open, miles0, city0, state0, liveMiles, s
           style={{ width: "100%", padding: "12px 0", fontSize: 14, fontWeight: 700, background: "transparent", color: muted, border: `1px solid ${hair}`, cursor: "pointer", borderRadius: RADIUS }}>More details ›</button>
       </div>}>
       <div style={{ ...cap, margin: "4px 0 2px" }}>Beginning miles</div>
-      <input value={miles} onChange={(e) => setMiles(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="Odometer" style={field} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input value={miles} onChange={(e) => setMiles(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="Odometer" style={{ ...field, flex: 1, minWidth: 0 }} />
+        {matchesTracker(miles, liveMiles) && <TrackerCheck size={24} />}
+      </div>
       <div style={{ ...cap, margin: "18px 0 2px" }}>Starting from</div>
       <div style={{ display: "flex", gap: 10 }}>
         <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" style={{ ...field, flex: 1, minWidth: 0 }} />
