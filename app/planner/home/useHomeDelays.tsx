@@ -52,7 +52,7 @@ import { fetchPresets, getTripPlan, setTripPlan, setTripPlanSnapshot, setTripQui
 import { findMatchingPlan, layoutFromProducts } from "@/lib/trips/planMatch";
 
 import { writePicks, type SupplierPick } from "@/lib/suppliers/picks";
-import { saveTripDraft, takeTripDraft, takeDetourSlot } from "@/lib/trips/planDetour";
+import { saveTripDraft, takeTripDraft, takeTripDraftFull, takeDetour, takeDetourSlot } from "@/lib/trips/planDetour";
 import { getTripSupplier, sameSupplier, seedTerminalPicks, setTripSupplier, type TripSupplier } from "@/lib/trips/tripSupplier";
 import { readPicks, groupPicks } from "@/lib/suppliers/picks";
 
@@ -358,14 +358,24 @@ export function useHomeDelays(p: ReturnType<typeof useHomeBase>) {
     params.delete("resume");
     const qs = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
-    const d = takeTripDraft(userId);
-    const slot = takeDetourSlot();
-    if (d) { setResumeDraft({ ...d, planSlot: slot ?? d.planSlot }); setSheetOpen(true); }
+    const full = takeTripDraftFull(userId);
+    const { slot, note } = takeDetour();
+    if (note) setNotice({ text: note, tripId: null });
+    if (full) {
+      setResumeDraft({ ...full.v, planSlot: slot ?? full.v.planSlot });
+      // A dispatched load's own window comes back, not the open trip's: its id is picked up by the dispatched-edit hook.
+      if (full.editTripId) { try { window.sessionStorage.setItem("proTankr:editDispatched", full.editTripId); } catch { /* none */ } }
+      else setSheetOpen(true);
+    }
   }, [userId]);
-  useEffect(() => { if (!sheetOpen && resumeDraft) setResumeDraft(null); }, [sheetOpen, resumeDraft]);
-  const planDetour = (what: "new" | number, v: StartLoadValues) => {
+  useEffect(() => {
+    let pending = false;
+    try { pending = !!window.sessionStorage.getItem("proTankr:editDispatched"); } catch { /* none */ }
+    if (!sheetOpen && resumeDraft && !pending) setResumeDraft(null); // a dispatched load's window is about to open with this draft
+  }, [sheetOpen, resumeDraft]);
+  const planDetour = (what: "new" | number, v: StartLoadValues, editTripId?: string | null) => {
     if (!userId) return;
-    saveTripDraft(userId, v);
+    saveTripDraft(userId, v, editTripId ?? null);
     router.push(`/planner?plan=1&detour=${what === "new" ? "new" : `edit&slot=${what}`}`);
   };
   const editing = !!openTrip && !p.addingLoad;

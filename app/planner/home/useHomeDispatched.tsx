@@ -297,7 +297,7 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
       window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
     }
     openDispatchedEdit(id);
-  }, [dispatchedList.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dispatchedList.length, resumeDraft]); // eslint-disable-line react-hooks/exhaustive-deps
   // /planner/home?run=<trip>: tapped from the Trips list. Starts that dispatched load once, the same as its Run button.
   const runParamDone = useRef(false);
   useEffect(() => {
@@ -489,6 +489,12 @@ export function useHomeDispatched(p: ReturnType<typeof useHomeDelays>) {
         rows.events = [];
         if (rows.pickups[0] && v.supplier?.supplier_id) Object.assign(rows.pickups[0], { supplier_id: v.supplier.supplier_id });
         applyStartLoad(store, rows);
+        // The plan picked for this load, kept on the phone like any trip's plan.
+        if (v.planSlot != null && v.planSlot !== (getTripPlan(userId, dTrip.trip_id)?.slot ?? null)) {
+          setTripPlan(userId, dTrip.trip_id, v.planSlot);
+          const chosen = sheetPresets.find((p) => p.slot === v.planSlot);
+          if (chosen) setTripPlanSnapshot(userId, dTrip.trip_id, { comps: chosen.comps });
+        }
         setEditDispatchedId(null); setSheetOpen(false); setVerifyActive(false);
         void syncNow();
         return;

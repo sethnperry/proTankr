@@ -47,7 +47,7 @@ export async function serverFetchSlots(ctx: ServerCtx): Promise<{ scoped: Record
       .eq("user_id", ctx.authUserId)
       .eq("terminal_id", UNIVERSAL_SCOPE)
       .eq("combo_id", String(ctx.comboId))
-      .in("slot", [0, 1, 2, 3, 4, 5]);
+      .in("slot", [0, ...PLAN_SLOT_NUMBERS]);
     if (error) console.warn("serverFetchSlots (combo-scoped) error:", error.message);
     else
       (data || []).forEach((r: any) => {

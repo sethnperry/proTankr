@@ -1548,7 +1548,7 @@ export function HomeView({ h }: { h: ReturnType<typeof useHome> }) {
         breakNote={breakNote}
         planRequired={!editDispatchedId && !(editing && children?.pickup?.load_id)}
         requireShipperCustomer={settings.require_shipper_customer !== false}
-        onPlanDetour={planDetour}
+        onPlanDetour={(what, v) => planDetour(what, v, editDispatchedId)}
         open={sheetOpen}
         editing={editing || !!editDispatchedId}
         initial={initialValues}

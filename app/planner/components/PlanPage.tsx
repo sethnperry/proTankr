@@ -72,12 +72,14 @@ export default function PlanPage() {
   // plan is replaced by a prompt to pick the missing unit and cannot load.
   // "Plan A saved" notice, fired by the Save Plan button and by the builder finishing.
   const [savedSlot, setSavedSlot] = useState<number | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
     const onSaved = (e: Event) => {
       const slot = Number((e as CustomEvent).detail?.slot);
       if (!Number.isFinite(slot) || slot < 1) return;
       setSavedSlot(slot);
+      setSavedNote((e as CustomEvent).detail?.note ?? null);
       if (t) clearTimeout(t);
       t = setTimeout(() => setSavedSlot(null), 2600);
     };
@@ -107,7 +109,7 @@ export default function PlanPage() {
       )}
       {savedSlot != null && typeof document !== "undefined" && createPortal(
         <div role="status" style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 90, zIndex: 80, background: "#16a34a", color: "#fff", fontSize: 15, fontWeight: 800, padding: "12px 20px", borderRadius: 2, boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
-          ✓ Plan {String.fromCharCode(64 + savedSlot)} saved
+          ✓ {savedNote ?? `Plan ${String.fromCharCode(64 + savedSlot)} saved`}
         </div>,
         document.body,
       )}
@@ -176,7 +178,7 @@ export default function PlanPage() {
               setActiveSlotLetter(to);
               setBaselineOverrides(currentOverrides);
               window.dispatchEvent(new CustomEvent("plan-saved", { detail: { slot: to } }));
-              if (detourActive()) { finishDetour(to); leaveTo(RESUME_URL, "Back to your trip…"); }
+              if (detourActive()) { finishDetour(to, `Plan ${String.fromCharCode(64 + to)} saved`); leaveTo(RESUME_URL, "Back to your trip…"); }
             } else setWizardNew(true);
           }}
           closing={!!leaving}
