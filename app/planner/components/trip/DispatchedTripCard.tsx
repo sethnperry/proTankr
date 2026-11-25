@@ -10,6 +10,10 @@ import { supabase } from "@/lib/supabase/client";
 import { CodeDash } from "@/app/planner/components/CodeDash";
 import { productColorFor } from "@/app/planner/utils/productColor";
 import { readPlannedComps } from "@/lib/trips/addPickupCheck";
+import { getTripPlan } from "@/lib/trips/tripPlan";
+import { dispatchedPlanFor } from "./dispatchedPlan";
+import { PlanLine } from "@/app/planner/components/PlanLine";
+import { useCalculatorShell } from "@/app/planner/CalculatorShellContext";
 import { useProductsCatalog } from "@/lib/queries/useProductsCatalog";
 import type { TripDeliveryRow, TripPickupRow, TripRow } from "@/lib/trips/types";
 
@@ -29,6 +33,7 @@ export function DispatchedTripCard({ trip, pickups, deliveries, locNames: locNam
   locNames?: Record<string, string>;
   onOpen?: () => void; footer?: React.ReactNode;
 }) {
+  const shell = useCalculatorShell();
   const { data: catalog } = useProductsCatalog();
   const products = catalog ?? [];
   const [fetchedNames, setFetchedNames] = useState<Record<string, string>>({});
@@ -112,6 +117,11 @@ export function DispatchedTripCard({ trip, pickups, deliveries, locNames: locNam
       </span>
     </div>
   );
+  // The plan: the driver's pick for this trip (letter) over dispatch's compartment layout, else whichever exists.
+  const local = getTripPlan(shell.effectiveUserId ?? null, trip.trip_id);
+  const planInfo = dispatchedPlanFor(sortedPickups, local, products as any, (n) => productColorFor(n));
+  const planLetter = local ? String.fromCharCode(64 + local.slot) : null;
+  const planComps = planInfo.comps;
   const sortedDeliveries = [...deliveries].sort((a, b) => a.seq - b.seq);
   const suppliers = [...new Set(sortedPickups.map((k) => (k.supplier_id ? supplierNames[k.supplier_id] : null)).filter(Boolean))] as string[];
   return (
@@ -128,10 +138,10 @@ export function DispatchedTripCard({ trip, pickups, deliveries, locNames: locNam
         <Row key={pk.pickup_id} k={`Pickup${sortedPickups.length > 1 ? ` ${i + 1}` : ""}`} sub={[pk.city, pk.state].filter(Boolean).join(", ") || null}>{pk.name ?? "Terminal"}</Row>
       ))}
       {suppliers.length > 0 && <Row k="Supplier">{suppliers.join(", ")}</Row>}
-      <Row k="Plan" sub={productsAboard.length > 0 ? [...planned.entries()].sort((a, b) => a[0] - b[0]).map(([n, pid]) => `C${n} ${codeOf(pid)}`).join(" · ") : null}>
-        {slots.length > 0
-          ? <CodeDash fontSize={17} items={comps.map((c) => ({ comp: c.n, kind: planned.get(c.n) ? "loaded" as const : "empty" as const, code: planned.get(c.n) ? codeOf(planned.get(c.n)!) : null, color: colorOf(planned.get(c.n)) }))} />
-          : <span style={{ color: muted, fontWeight: 600 }}>None from dispatch</span>}
+      <Row k="Plan">
+        {planComps.length > 0
+          ? <span><b>{planLetter ?? "·"}</b>{planLetter ? <span style={{ color: "rgba(255,255,255,0.35)" }}> · </span> : null}<PlanLine letter="" detail={false} comps={planComps} /></span>
+          : <span style={{ color: muted, fontWeight: 600 }}>{planLetter ? `Plan ${planLetter}` : "None yet"}</span>}
       </Row>
       {sortedDeliveries.map((d, i) => (
         <Row key={d.delivery_id} k={`${d.delivery_type === "pump_off" ? "Pump off" : "Delivery"}${sortedDeliveries.length > 1 ? ` ${i + 1}` : ""}`} sub={(d.location_id && places[d.location_id]) || null}>
