@@ -310,9 +310,10 @@ export function StartLoadSheet({
             );
           })}
           {dispatchPlan ? (
-            <Line label="Plan" value="Sent by dispatch" last onTap={() => undefined} sub={null} />
+            <Line label="Plan" value="Sent by dispatch" node={<span><span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Dispatch</span> <span style={{ color: "rgba(255,255,255,0.35)" }}>·</span> <PlanLine letter="" comps={planComps(dispatchPlan)} detail={false} /></span>} last onTap={() => undefined} sub={null} />
           ) : (
             <Line label="Plan" value={chosenPreset ? `${slotLetter(chosenPreset.slot)}${chosenPreset.name ? ` · ${chosenPreset.name}` : ""}` : null}
+              node={chosenPreset ? <span><b>{slotLetter(chosenPreset.slot)}</b> <span style={{ color: "rgba(255,255,255,0.35)" }}>·</span> <PlanLine letter="" comps={planComps(chosenPreset.comps)} detail={false} /></span> : undefined}
               missing onTap={() => setPlanOpen(true)} last />
           )}
         </div>

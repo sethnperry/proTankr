@@ -36,6 +36,8 @@ export function DispatchedTripCard({ trip, pickups, deliveries, locNames: locNam
   const [equip, setEquip] = useState<{ truck: string | null; trailer: string | null }>({ truck: null, trailer: null });
   const [comps, setComps] = useState<{ n: number; size: number }[]>([]);
   const [places, setPlaces] = useState<Record<string, string>>({});
+  const [orders, setOrders] = useState<string[]>([]);
+  const [supplierNames, setSupplierNames] = useState<Record<string, string>>({});
   const truckId = trip.planned_truck_id ?? null;
   const trailerId = trip.planned_trailer_id ?? null;
   const locIds = deliveries.map((d) => d.location_id).filter(Boolean).join(",");
@@ -54,6 +56,24 @@ export function DispatchedTripCard({ trip, pickups, deliveries, locNames: locNam
     })();
     return () => { off = true; };
   }, [truckId, trailerId]);
+
+  const supIds = [...new Set(pickups.map((k) => k.supplier_id).filter(Boolean))].join(",");
+  useEffect(() => {
+    let off = false;
+    void supabase.from("trip_orders").select("order_number, is_primary").eq("trip_id", trip.trip_id).then(({ data }) => {
+      if (off) return;
+      setOrders(((data ?? []) as any[]).sort((a, b) => Number(b.is_primary) - Number(a.is_primary)).map((o) => String(o.order_number ?? "").trim()).filter(Boolean));
+    });
+    return () => { off = true; };
+  }, [trip.trip_id]);
+  useEffect(() => {
+    if (!supIds) return;
+    let off = false;
+    void supabase.from("suppliers").select("supplier_id, name").in("supplier_id", supIds.split(",")).then(({ data }) => {
+      if (!off) setSupplierNames(Object.fromEntries(((data ?? []) as any[]).map((r) => [r.supplier_id, r.name])));
+    });
+    return () => { off = true; };
+  }, [supIds]);
 
   useEffect(() => {
     if (!locIds) return;
@@ -83,41 +103,42 @@ export function DispatchedTripCard({ trip, pickups, deliveries, locNames: locNam
   const equipLine = [equip.truck && `Truck ${equip.truck}`, equip.trailer && `Trailer ${equip.trailer}`].filter(Boolean).join(" · ");
   const productsAboard = [...new Set(planned.values())];
 
+  const Row = ({ k, children, sub }: { k: string; children: React.ReactNode; sub?: React.ReactNode }) => (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "7px 0", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+      <span style={{ ...label, width: 74, flexShrink: 0 }}>{k}</span>
+      <span style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+        <span style={{ display: "block", fontSize: 15, fontWeight: 700, overflowWrap: "anywhere" }}>{children}</span>
+        {sub ? <span style={{ display: "block", fontSize: 12, color: muted, marginTop: 1 }}>{sub}</span> : null}
+      </span>
+    </div>
+  );
+  const sortedDeliveries = [...deliveries].sort((a, b) => a.seq - b.seq);
+  const suppliers = [...new Set(sortedPickups.map((k) => (k.supplier_id ? supplierNames[k.supplier_id] : null)).filter(Boolean))] as string[];
   return (
-      <div role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined} onClick={onOpen} onKeyDown={(e) => { if (onOpen && e.key === "Enter") onOpen(); }} style={{ ...card, cursor: onOpen ? "pointer" : undefined }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ ...label, color: "#93c5fd" }}>Dispatched</span>
-          <span style={{ marginLeft: "auto", fontSize: 12, color: muted }}>{when(trip.planned_start_at)}</span>
-        </div>
-        <div style={{ fontSize: 13, color: muted, marginTop: 6 }}>{equipLine || "Equipment not planned"}</div>
-
-        {sortedPickups.map((pk, i) => (
-          <div key={pk.pickup_id} style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 12 }}>
-            <span style={{ ...label, width: 66 }}>Pickup{sortedPickups.length > 1 ? ` ${i + 1}` : ""}</span>
-            <span style={{ fontSize: 14, color: muted }}>{[pk.city, pk.state].filter(Boolean).join(", ")}</span>
-            <span style={{ marginLeft: "auto", fontSize: 15, fontWeight: 700, textAlign: "right" }}>{pk.name ?? "Terminal"}</span>
-          </div>
-        ))}
-
-        <div style={{ marginTop: 14 }}>
-          {slots.length > 0 ? <CodeDash fontSize={18} items={comps.map((c) => ({ comp: c.n, kind: planned.get(c.n) ? "loaded" as const : "empty" as const, code: planned.get(c.n) ? codeOf(planned.get(c.n)!) : null, color: colorOf(planned.get(c.n)) }))} /> : <div style={{ fontSize: 12, color: muted }}>No compartment plan from dispatch.</div>}
-          {productsAboard.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", marginTop: 8, fontSize: 13 }}>
-              {[...planned.entries()].sort((a, b) => a[0] - b[0]).map(([n, pid]) => (
-                <span key={n} style={{ color: "rgba(255,255,255,0.8)" }}>C{n} {codeOf(pid)}</span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {[...deliveries].sort((a, b) => a.seq - b.seq).map((d, i) => (
-          <div key={d.delivery_id} style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 14 }}>
-            <span style={{ ...label, width: 66 }}>{d.delivery_type === "pump_off" ? "Pump off" : "Delivery"}{deliveries.length > 1 ? ` ${i + 1}` : ""}</span>
-            <span style={{ fontSize: 14, color: muted }}>{(d.location_id && places[d.location_id]) || ""}</span>
-            <span style={{ marginLeft: "auto", fontSize: 15, fontWeight: 700, textAlign: "right" }}>{(d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery"}</span>
-          </div>
-        ))}
-        {footer && <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12 }}>{footer}</div>}
+    <div role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined} onClick={onOpen} onKeyDown={(e) => { if (onOpen && e.key === "Enter") onOpen(); }} style={{ ...card, cursor: onOpen ? "pointer" : undefined }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, paddingBottom: 6 }}>
+        <span style={{ ...label, color: "#93c5fd" }}>Dispatched</span>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: muted }}>{when(trip.planned_start_at)}</span>
       </div>
+      <Row k="Equipment">{equipLine || <span style={{ color: muted, fontWeight: 600 }}>Not planned</span>}</Row>
+      <Row k={orders.length > 1 ? "Orders" : "Order"}>{orders.length ? orders.join(", ") : <span style={{ color: muted, fontWeight: 600 }}>To enter</span>}</Row>
+      {trip.shipper && <Row k="Shipper">{trip.shipper}</Row>}
+      {trip.customer && <Row k="Customer">{trip.customer}</Row>}
+      {sortedPickups.map((pk, i) => (
+        <Row key={pk.pickup_id} k={`Pickup${sortedPickups.length > 1 ? ` ${i + 1}` : ""}`} sub={[pk.city, pk.state].filter(Boolean).join(", ") || null}>{pk.name ?? "Terminal"}</Row>
+      ))}
+      {suppliers.length > 0 && <Row k="Supplier">{suppliers.join(", ")}</Row>}
+      <Row k="Plan" sub={productsAboard.length > 0 ? [...planned.entries()].sort((a, b) => a[0] - b[0]).map(([n, pid]) => `C${n} ${codeOf(pid)}`).join(" · ") : null}>
+        {slots.length > 0
+          ? <CodeDash fontSize={17} items={comps.map((c) => ({ comp: c.n, kind: planned.get(c.n) ? "loaded" as const : "empty" as const, code: planned.get(c.n) ? codeOf(planned.get(c.n)!) : null, color: colorOf(planned.get(c.n)) }))} />
+          : <span style={{ color: muted, fontWeight: 600 }}>None from dispatch</span>}
+      </Row>
+      {sortedDeliveries.map((d, i) => (
+        <Row key={d.delivery_id} k={`${d.delivery_type === "pump_off" ? "Pump off" : "Delivery"}${sortedDeliveries.length > 1 ? ` ${i + 1}` : ""}`} sub={(d.location_id && places[d.location_id]) || null}>
+          {(d.location_id && locNames[d.location_id]) || d.one_off_name || "Delivery"}
+        </Row>
+      ))}
+      {footer && <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10 }}>{footer}</div>}
+    </div>
   );
 }
