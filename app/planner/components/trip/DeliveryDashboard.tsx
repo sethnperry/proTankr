@@ -30,6 +30,7 @@ import { DROP_DELAY_BUILTINS } from "@/lib/trips/delays";
 import { BolPagesSheet } from "./BolPagesSheet";
 import { BioBlendSheet, type BioComp } from "./BioBlendSheet";
 import { bioLabel, parseBio } from "@/lib/trips/bio";
+import { tankAccepts } from "@/lib/trips/tankCompat";
 import { bolFinishPolicy, pagesByBol, unscanned, type BolGroup } from "@/lib/trips/bols";
 import { afterPartial, partialEntry, type PartialDrop } from "@/lib/trips/partialDrops";
 import { cleanOdometer, MAX_ODOMETER } from "@/lib/moves/emptyMoves";
@@ -349,6 +350,8 @@ export function DeliveryDashboard({
   const [allReadings, setAllReadings] = useState(false); // the After window also lists every other tank at the store
   const [showAllTanks, setShowAllTanks] = useState(false); // tanks for products not on this drop stay folded away
   const [newTankFor, setNewTankFor] = useState<string | null>(null);
+  // A product dropped into a tank saved for another one it is always allowed in (E15 into regular): confirmed first.
+  const [crossAsk, setCrossAsk] = useState<{ id: string; tank: string; split: boolean } | null>(null);
   const [newTankText, setNewTankText] = useState("");
   const [wstep, setWstep] = useState<WStep>("tanks");
   // Times window: stamped when it opens, editable.
@@ -547,7 +550,13 @@ export function DeliveryDashboard({
     return t + ts.filter((x) => x.tank === n).reduce((a, x) => a + x.gallons + (all > 0 ? b * (x.gallons / all) : 0), 0);
   }, 0);
   const pairsFor = (tanks: string[]) => tanks.map((n) => ({ before: numOrNull(readings[n]?.before ?? ""), after: numOrNull(readings[n]?.after ?? "") }));
-  const discrepancyFor = (p: (typeof products)[number]) => tankDiscrepancy(p.gallons + p.comps.reduce((t, c) => t + bioOf(c), 0), pairsFor(p.tanks), unit);
+  // Products that share a tank (E15 and regular into one tank) are compared together: the tank's rise is all of what went in.
+  const discrepancyFor = (p: (typeof products)[number]) => {
+    const group = products.filter((q) => q === p || q.tanks.some((n) => p.tanks.includes(n)));
+    const tanks = [...new Set(group.flatMap((q) => q.tanks))];
+    const delivered = group.reduce((t, q) => t + q.gallons + q.comps.reduce((a, c) => a + bioOf(c), 0), 0);
+    return tankDiscrepancy(delivered, pairsFor(tanks), unit);
+  };
   const readingsDone = (p: (typeof products)[number]) =>
     p.tanks.length > 0 && pairsFor(p.tanks).every((x) => x.before != null && x.after != null);
 
@@ -564,7 +573,7 @@ export function DeliveryDashboard({
         const w = waterTanks.includes(n) ? numOrNull(water[n] ?? "") : null;
         if (before == null && after == null && w == null && !saved.has(n)) continue;
         if (out.some((t) => t.tank_number === n)) continue;
-        out.push({ tank_number: n, product_id: p.productId, before_reading: before, after_reading: after, water_reading: w, reading_unit: unit });
+        out.push({ tank_number: n, product_id: tankProduct(n) ?? p.productId, before_reading: before, after_reading: after, water_reading: w, reading_unit: unit });
       }
     }
     // Tanks outside this drop's products, entered through "Enter all tanks".
@@ -605,6 +614,8 @@ export function DeliveryDashboard({
     return null;
   };
 
+  const acceptsProduct = (compPid: string | null, tankPid: string | null) =>
+    !!compPid && !!tankPid && (compPid === tankPid || tankAccepts(productInfo(compPid), productInfo(tankPid)));
   // ── Drop-into picker ───────────────────────────────────────────────────────
   const reorderTanks = (visible: string[]) => {
     const all = sortTankNames(Array.from(new Set([...locationTanks.filter((t) => t.location_id === delivery.location_id).map((t) => t.tank_number.trim()), ...extraTanks.map((t) => t.tank_number.trim()), ...visible])), tankOrder);
@@ -619,6 +630,11 @@ export function DeliveryDashboard({
   const pickTanks = pickRow
     ? (() => {
         const ts = tanksForProduct(pickRow.product_id, locationTanks, extraTanks, tankOrder);
+        // Tanks saved for a product this one is always allowed in (E15 into regular) are offered too.
+        for (const t of locationTanks) {
+          const n = t.tank_number.trim();
+          if (t.location_id === delivery.location_id && t.is_active !== false && n && !ts.includes(n) && t.product_id && acceptsProduct(pickRow.product_id, t.product_id)) ts.push(n);
+        }
         const cur = choice[pickRow.compartment_load_id];
         if (cur && cur !== RETAIN && !ts.includes(cur)) ts.push(cur);
         return ts;
@@ -636,13 +652,16 @@ export function DeliveryDashboard({
   // Tank map: connect a compartment to a tank (replace, or add when splitting).
   const tankProduct = (tank: string): string | null =>
     locationTanks.find((t) => t.tank_number === tank)?.product_id ?? extraTanks.find((t) => t.tank_number === tank)?.product_id ?? null;
-  const linkComp = (id: string, tank: string) => {
+  const linkComp = (id: string, tank: string, confirmed = false) => {
     const row = rows.find((c) => c.compartment_load_id === id);
     if (!row) return;
     const tp = tankProduct(tank);
     if (tp && row.product_id && tp !== row.product_id) {
-      setErr(`Tank ${tank} is saved as ${productInfo(tp).name}. This compartment is ${productInfo(row.product_id).name}.`);
-      return;
+      if (!acceptsProduct(row.product_id, tp)) {
+        setErr(`Tank ${tank} is saved as ${productInfo(tp).name}. This compartment is ${productInfo(row.product_id).name}.`);
+        return;
+      }
+      if (!confirmed) { setCrossAsk({ id, tank, split: splitId === id }); return; }
     }
     setErr(null);
     setArmedId(null);
@@ -991,15 +1010,16 @@ export function DeliveryDashboard({
       seen.set(n, { tank: n, productId: pid, code: info?.code ?? null, name: info?.name ?? null, color: info ? info.hex ?? productColorFor(info.name) : null, capacity: cap });
     };
     // Tanks for this drop's products (or with no product saved), plus any already linked. The rest open on a tap.
-    const neededHere = (pid: string | null) => !pid || productIdsHere.includes(pid);
-    for (const t of locationTanks) if (t.is_active !== false && (showAllTanks ? !t.product_id || hauledIds.has(t.product_id) : neededHere(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
+    // Tanks saved for a product that one of these is always allowed in (E15 into regular) count as needed here.
+    const neededHere = (pid: string | null) => !pid || productIdsHere.includes(pid) || productIdsHere.some((h) => acceptsProduct(h, pid));
+    for (const t of locationTanks) if (t.location_id === delivery.location_id && t.is_active !== false && (showAllTanks || neededHere(t.product_id))) add(t.tank_number, t.product_id, t.capacity_gallons);
     for (const t of extraTanks) if (showAllTanks || neededHere(t.product_id)) add(t.tank_number, t.product_id, null);
     for (const c of rows) for (const x of targetsFor(c)) add(x.tank, c.product_id, null);
     const byName = new Map([...seen.values()].map((m) => [m.tank, m]));
     return sortTankNames([...byName.keys()], tankOrder).map((n) => byName.get(n)!);
   })();
 
-  const hiddenTankCount = locationTanks.filter((t) => t.location_id === delivery.location_id && t.is_active !== false && t.product_id && !productIdsHere.includes(t.product_id) && hauledIds.has(t.product_id)).length;
+  const hiddenTankCount = locationTanks.filter((t) => t.location_id === delivery.location_id && t.is_active !== false && t.product_id && !productIdsHere.includes(t.product_id) && !productIdsHere.some((h) => acceptsProduct(h, t.product_id))).length;
 
   // ── Before getting out ─────────────────────────────────────────────────────
   // Hose length is per tank (fills sit at different distances). Tanks for
@@ -1183,7 +1203,7 @@ export function DeliveryDashboard({
             {rows.length === 0
               ? <div style={{ fontSize: 14, color: muted }}>Nothing aboard for this delivery.</div>
               : (
-                <TankMap comps={mapComps} tanks={mapTanks} kind={pumpOff ? "cap" : "dome"}
+                <TankMap comps={mapComps} tanks={mapTanks} kind={pumpOff ? "cap" : "dome"} accepts={acceptsProduct}
                   armedId={armedId} splitId={splitId} onArm={setArmedId} onLink={linkComp}
                   onPick={(id) => setPickFor(id)} onSplitStart={(id) => setSplitId((s) => (s === id ? null : id))}
                   onSplitGallons={setSplitGallons} onUnlink={unlinkComp} />
@@ -1439,6 +1459,8 @@ export function DeliveryDashboard({
             label={(n) => (/^\d+$/.test(n) ? `Tank ${n}` : n)}
             onChoose={(n) => {
               const id = pickRow.compartment_load_id;
+              const tp = tankProduct(n);
+              if (tp && pickRow.product_id && tp !== pickRow.product_id && !partialMode) { setPickFor(null); setCrossAsk({ id, tank: n, split: false }); return; }
               choose(id, n);
               if (partialMode) { const old = partials[id]; setPGal(old ? String(old.gallons) : ""); setPMs(old?.meterStart != null ? String(old.meterStart) : ""); setPMe(old?.meterEnd != null ? String(old.meterEnd) : ""); setPErr(null); setPartialFor(id); setPartialMode(false); }
             }} onReorder={reorderTanks} />
@@ -1505,6 +1527,23 @@ export function DeliveryDashboard({
         submitLabel={step && step.phase === "after" && step.productIdx === products.length - 1 ? "Done" : "Next"}
         onSubmit={goNext}
       />
+
+      {crossAsk && (() => {
+        const row = rows.find((c) => c.compartment_load_id === crossAsk.id);
+        const from = row ? productInfo(row.product_id).name : "";
+        const into = productInfo(tankProduct(crossAsk.tank)).name;
+        const btn: React.CSSProperties = { width: "100%", padding: "14px 16px", borderRadius: 2, marginTop: 8, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer" };
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 2, padding: 20, maxWidth: 360, width: "100%" }}>
+              <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 6 }}>Drop {from} into Tank {crossAsk.tank}?</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>Tank {crossAsk.tank} is saved as {into}. {from} is always allowed in it. The delivery records it that way.</div>
+              <button type="button" style={{ ...btn, background: "#fff", color: "#000" }} onClick={() => { const a = crossAsk; setCrossAsk(null); if (a.split) { setSplitId(a.id); } linkComp(a.id, a.tank, true); }}>Drop it here</button>
+              <button type="button" style={btn} onClick={() => setCrossAsk(null)}>Cancel</button>
+            </div>
+          </div>
+        );
+      })()}
 
       <BioBlendSheet open={bioOpen} comps={bioPicks} slots={[...new Set([...trailerComps.map((c) => c.comp_number), ...delivered.map((c) => c.comp_number)])].sort((a, b) => a - b)}
           onSave={(m) => setBio((cur) => { const next = { ...cur }; for (const c of bioComps) next[c.compartment_load_id] = m[c.compartment_load_id] != null ? String(m[c.compartment_load_id]) : ""; return next; })}

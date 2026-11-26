@@ -42,11 +42,13 @@ const lidFont = (tag: string) => Math.max(7, Math.min(13, (R * 1.76) / Math.max(
 const g0 = (n: number) => Math.round(n).toLocaleString("en-US");
 
 export function TankMap({
-  comps, tanks, kind, armedId, splitId, onArm, onLink, onPick, onSplitStart, onSplitGallons, onUnlink,
+  comps, tanks, kind, accepts, armedId, splitId, onArm, onLink, onPick, onSplitStart, onSplitGallons, onUnlink,
 }: {
   comps: MapComp[];
   tanks: MapTank[];
   kind: "dome" | "cap";
+  /** True when a compartment's product may go into a tank saved for a different one (E15 into regular). */
+  accepts?: (compProductId: string | null, tankProductId: string | null) => boolean;
   armedId: string | null;
   splitId: string | null;
   onArm: (id: string | null) => void;
@@ -81,7 +83,7 @@ export function TankMap({
   const intoTank = (tank: string) => active.reduce((s, c) => s + c.targets.filter((x) => x.tank === tank).reduce((a, b) => a + b.gallons, 0), 0);
 
   const armed = active.find((c) => c.id === armedId) ?? null;
-  const dim = (t: MapTank) => !!armed && !!t.productId && armed.productId !== t.productId;
+  const dim = (t: MapTank) => !!armed && !!t.productId && armed.productId !== t.productId && !accepts?.(armed.productId, t.productId);
 
   const point = (e: React.PointerEvent) => {
     const el = svgRef.current;
